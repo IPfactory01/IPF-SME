@@ -55,7 +55,7 @@ Each is one focused change with a test. None needs a migration except Q6.
 | Q5 | Expire full report links after delivery (or cap downloads) and rate-limit the report procedures | A forwarded link works forever | Backend schema §6 |
 | Q6 | Store the business check token as a hash | Every other token is hashed | Backend schema §6 (**migration**) |
 | Q7 | Map the shadcn colour roles to the theme, or remove their use | Components that rely on them render without colour | Design brief §4 |
-| Q8 | Show staff who hold only platform roles on the Admin Team screen; decide one permission for the report | Admin Team undercounts; finance can resend but not download | Backend schema §6 |
+| Q8 | ~~Show staff who hold only platform roles on the Admin Team screen~~ (done 9 October); decide one permission for the report | Admin Team undercounts; finance can resend but not download | Backend schema §6 |
 
 ## 4. Paystack (starts the day the test keys are in Vercel)
 
@@ -78,7 +78,7 @@ see where it stands.
 
 | # | Build | Acceptance | Notes |
 |---|---|---|---|
-| 1.0 | **Staff invitations** on the email-and-password sign-in: the Super Admin invites by email with a platform role; the person sets a password from a single-use link | A new analyst can be added and assigned without Google sign-in | Found 9 October: roles can only be granted to existing accounts |
+| 1.0 | ✅ **Built 9 October.** **Staff invitations** on the email-and-password sign-in: the Super Admin invites by email with a platform role; the person sets a password from a single-use link | A new analyst can be added and assigned without Google sign-in | Found 9 October: roles can only be granted to existing accounts |
 | 1.1 | **File storage** on a private Supabase Storage bucket, with short-lived signed links issued by the server after an access check | A file uploaded for client A cannot be read by client B or an unassigned analyst; links expire | Replaces the Manus storage proxy (old R3). New env names only in `.env.example` |
 | 1.2 | ✅ **Built 9 October.** **Engagement table**: created when the Current State Assessment payment is confirmed; linked to the business when the client creates their account | Confirming payment creates exactly one engagement; accepting the invitation links it | **Migration**: dedicated branch per `AGENTS.md` |
 | 1.3 | ✅ **Built 9 October.** **Engagement assignments** (engagement × person × role: lead, analyst, partner, expert) and the scope check | Analysts see only assigned engagements; `view_all_businesses` sees all | Permissions `manage_engagements`, `assign_engagements`, `review_engagements` already exist in `shared/platformPermissions.ts` |
@@ -94,7 +94,7 @@ see where it stands.
 | 2.3 | ✅ **Built 9 October** (text; files wait for 1.1). **Deliverables**: upload, version, share; prescriptions and plans need desk lead approval before sharing | An unapproved prescription cannot be shared; every share is audited |
 | 2.4 | **Email notices** to the client when something is shared with them | Branded email, link to the room, no content in the email body beyond the title |
 
-Built with O1, O2 and O3 as recommended (PRD §10). Still to build here: 2.4 email notices, and the staff seat invitation (one free seat, Full or Contributor), on `account_invitations`.
+Built with O1, O2 and O3 as recommended (PRD §10), and the owner's seat invitation (one included seat, Full or Contributor). Still to build here: 2.4 email notices.
 
 ## 7. Phase 3: data requests (needed by 23 October, getting set up)
 

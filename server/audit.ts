@@ -34,6 +34,10 @@ export const AUDIT_ACTIONS = [
   "engagement_deliverable_accepted",
   "engagement_task_answered",
   "engagement_audience_changed",
+  "account_invitation_created",
+  "account_invitation_revoked",
+  "account_invitation_accepted",
+  "business_member_removed",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

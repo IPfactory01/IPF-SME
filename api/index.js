@@ -219,7 +219,7 @@ var init_ics = __esm({
 // server/_core/app.ts
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { TRPCError as TRPCError21 } from "@trpc/server";
+import { TRPCError as TRPCError23 } from "@trpc/server";
 
 // shared/const.ts
 var COOKIE_NAME = "app_session_id";
@@ -343,6 +343,11 @@ var ENGAGEMENT_TEAM_ROLE_LABELS = { lead: "Engagement lead", analyst: "Analyst",
 var ENGAGEMENT_AUDIENCES = ["team", "owner", "business"];
 var ENGAGEMENT_AUDIENCE_LABELS = { team: "IP Factory only", owner: "Owner only", business: "Owner and their team" };
 var CLIENT_ACCESS_LEVELS = ["full", "contributor"];
+var CLIENT_ACCESS_LABELS = {
+  full: { name: "Full", detail: "Sees everything you share with your team. Cannot pay or add people." },
+  contributor: { name: "Contributor", detail: "Sees only the requests, actions and calls given to them." }
+};
+var TEAM_SEATS_INCLUDED = 1;
 var ENGAGEMENT_SESSION_KINDS = ["assessment_call", "check_in", "review", "other"];
 var ENGAGEMENT_SESSION_KIND_LABELS = { assessment_call: `${CURRENT_STATE.name} call`, check_in: "Weekly check-in", review: "Review", other: "Call" };
 var ENGAGEMENT_SESSION_STATUSES = ["planned", "held", "cancelled"];
@@ -2898,12 +2903,12 @@ var PLATFORM_TO_LEGACY_CAPABILITIES = {
 };
 function resolveAuthority(input) {
   if (!input.active) return { roles: [], permissions: [], legacyCapabilities: [], isSuperAdmin: false };
-  const roles = new Set(input.storedRoles);
-  if (input.legacyAdmin) roles.add("admin");
-  if (input.ownerBridge) roles.add("super_admin");
-  const isSuperAdmin = roles.has("super_admin");
+  const roles2 = new Set(input.storedRoles);
+  if (input.legacyAdmin) roles2.add("admin");
+  if (input.ownerBridge) roles2.add("super_admin");
+  const isSuperAdmin = roles2.has("super_admin");
   const permissions = /* @__PURE__ */ new Set();
-  for (const role of Array.from(roles)) for (const permission of PLATFORM_ROLE_PERMISSIONS[role]) permissions.add(permission);
+  for (const role of Array.from(roles2)) for (const permission of PLATFORM_ROLE_PERMISSIONS[role]) permissions.add(permission);
   for (const capability of input.legacyProfile) {
     const equivalent = LEGACY_CAPABILITY_TO_PLATFORM[capability];
     if (equivalent) permissions.add(equivalent);
@@ -2912,7 +2917,7 @@ function resolveAuthority(input) {
   for (const permission of Array.from(permissions)) for (const capability of PLATFORM_TO_LEGACY_CAPABILITIES[permission] ?? []) legacy.add(capability);
   const order = (list2) => (item) => list2.indexOf(item);
   return {
-    roles: Array.from(roles).sort((a, b) => order(PLATFORM_ROLES)(a) - order(PLATFORM_ROLES)(b)),
+    roles: Array.from(roles2).sort((a, b) => order(PLATFORM_ROLES)(a) - order(PLATFORM_ROLES)(b)),
     permissions: Array.from(permissions).sort((a, b) => order(PLATFORM_PERMISSIONS)(a) - order(PLATFORM_PERMISSIONS)(b)),
     legacyCapabilities: Array.from(legacy).sort((a, b) => order(ADMIN_PERMISSION_IDS)(a) - order(ADMIN_PERMISSION_IDS)(b)),
     isSuperAdmin
@@ -6490,8 +6495,8 @@ function getPaymentInstructionTemplate(templateId) {
   return PAYMENT_INSTRUCTION_TEMPLATES[templateId];
 }
 function paymentInstructionTemplateLibrary() {
-  return PAYMENT_INSTRUCTION_TEMPLATE_IDS.map((id2) => {
-    const template = getPaymentInstructionTemplate(id2);
+  return PAYMENT_INSTRUCTION_TEMPLATE_IDS.map((id3) => {
+    const template = getPaymentInstructionTemplate(id3);
     return { id: template.id, label: template.label, routeLabel: template.routeLabel };
   });
 }
@@ -6849,8 +6854,8 @@ var OFFERINGS = [
   { id: "embedded-support", capability: "implementation", name: "Embedded Performance Support", summary: "Ongoing support across several priorities when the business lacks the capacity to drive them alone.", signals: ["several connected priorities", "needs recurring support rather than a one-off project", "actions not sustained between meetings"] }
 ];
 var OFFERING_IDS = OFFERINGS.map((offering) => offering.id);
-function offeringById(id2) {
-  return OFFERINGS.find((offering) => offering.id === id2);
+function offeringById(id3) {
+  return OFFERINGS.find((offering) => offering.id === id3);
 }
 
 // shared/businessCheck/sectorExamples.ts
@@ -7623,7 +7628,7 @@ function visibleQuestions(section, answers) {
 }
 function questionPath(answers) {
   return sectionPath(answers).flatMap(
-    (id2) => visibleQuestions(SECTIONS[id2], answers).map((question) => ({ section: SECTIONS[id2], question }))
+    (id3) => visibleQuestions(SECTIONS[id3], answers).map((question) => ({ section: SECTIONS[id3], question }))
   );
 }
 function isAnswered(question, answers) {
@@ -7635,7 +7640,7 @@ function isComplete(answers) {
   return questionPath(answers).every(({ question }) => question.optional || isAnswered(question, answers));
 }
 function businessDetails(answers) {
-  const text4 = (id2) => typeof answers[id2] === "string" ? answers[id2].trim() : "";
+  const text4 = (id3) => typeof answers[id3] === "string" ? answers[id3].trim() : "";
   return { businessName: text4("p_name"), description: text4("p_description") };
 }
 function optionsFor(question, answers) {
@@ -7739,7 +7744,7 @@ function businessOutline(answers) {
 var NOT_ASSESSED_NOTE = "Areas marked not assessed weren't part of this check for your business. The Current State Assessment looks at all ten.";
 function areasNotAssessed(answers) {
   if (routeFor(answers) !== "programme") return [];
-  const asked = new Set(sectionPath(answers).map((id2) => SECTIONS[id2].area));
+  const asked = new Set(sectionPath(answers).map((id3) => SECTIONS[id3].area));
   const side = stageOf(answers) === "side";
   const reason = (area) => {
     if (side) return area === 6 ? "Not asked while the business has fewer than three people." : "Not asked while you run the business alongside a job.";
@@ -7779,7 +7784,7 @@ function primaryGap(outline, main) {
 function matchedOfferings(answers, outline, limit = 3) {
   const weights = /* @__PURE__ */ new Map();
   const add = (ids, weight) => {
-    for (const id2 of ids ?? []) weights.set(id2, (weights.get(id2) ?? 0) + weight);
+    for (const id3 of ids ?? []) weights.set(id3, (weights.get(id3) ?? 0) + weight);
   };
   for (const { section, question } of questionPath(answers)) {
     if (section.id === "profile" || section.id === "founder") continue;
@@ -7798,8 +7803,8 @@ function matchedOfferings(answers, outline, limit = 3) {
     lead.push("embedded-support");
   }
   const order = new Map(OFFERINGS.map((offering, index2) => [offering.id, index2]));
-  const ranked = Array.from(weights.entries()).sort((a, b) => b[1] - a[1] || (order.get(a[0]) ?? 0) - (order.get(b[0]) ?? 0)).map(([id2]) => id2).filter((id2) => !lead.includes(id2));
-  return [...lead, ...ranked].map((id2) => offeringById(id2)).filter((offering) => Boolean(offering)).slice(0, limit);
+  const ranked = Array.from(weights.entries()).sort((a, b) => b[1] - a[1] || (order.get(a[0]) ?? 0) - (order.get(b[0]) ?? 0)).map(([id3]) => id3).filter((id3) => !lead.includes(id3));
+  return [...lead, ...ranked].map((id3) => offeringById(id3)).filter((offering) => Boolean(offering)).slice(0, limit);
 }
 function sectionByArea(area) {
   return Object.values(SECTIONS).find((section) => section.area === area && section.id !== "idea")?.id ?? "intent";
@@ -9365,7 +9370,7 @@ function optionLabel(questionId, value) {
   }
   return void 0;
 }
-var answer = (answers, id2) => typeof answers[id2] === "string" ? answers[id2] : void 0;
+var answer = (answers, id3) => typeof answers[id3] === "string" ? answers[id3] : void 0;
 var CASH_RANGE = { under_500k: [0, 5e5], "500k_2m": [5e5, 2e6], "2m_10m": [2e6, 1e7], over_10m: [1e7, null] };
 var OWED_RANGE = { none: [0, 0], under_1m: [0, 1e6], "1m_5m": [1e6, 5e6], over_5m: [5e6, null] };
 var ENQUIRY_RANGE = { under_10: [0, 10], "10_50": [10, 50], "50_200": [50, 200], over_200: [200, null] };
@@ -9853,7 +9858,7 @@ var GAP_ADVICE = {
 };
 function ideaPart(answers, result, intake) {
   const row = outlineRow(result, 1);
-  const readings = ["i_customer", "i_offer", "i_tested", "i_need"].map((id2) => answer(answers, id2) ? IDEA_READINGS[id2][String(answers[id2])] : void 0).filter((text4) => Boolean(text4));
+  const readings = ["i_customer", "i_offer", "i_tested", "i_need"].map((id3) => answer(answers, id3) ? IDEA_READINGS[id3][String(answers[id3])] : void 0).filter((text4) => Boolean(text4));
   return {
     number: 2,
     title: "Where it is going",
@@ -11063,7 +11068,7 @@ var parseJson = (text4) => {
 async function paymentsOf(db, businessCheckId) {
   try {
     const now = /* @__PURE__ */ new Date();
-    return (await paymentRequestsFor(db, [businessCheckId])).map(({ id: id2, item, amountNaira, reference, status, requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }) => ({ id: id2, item, amountNaira, reference, status, displayStatus: effectivePaymentStatus({ status, requestedAt }, now), payBy: paymentDeadline(requestedAt), requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }));
+    return (await paymentRequestsFor(db, [businessCheckId])).map(({ id: id3, item, amountNaira, reference, status, requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }) => ({ id: id3, item, amountNaira, reference, status, displayStatus: effectivePaymentStatus({ status, requestedAt }, now), payBy: paymentDeadline(requestedAt), requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }));
   } catch (error) {
     if (!isMissingPaymentTable(error)) throw error;
     console.error("[Payments] The payment_requests table is missing: apply migration 0006 with pnpm db:migrate.");
@@ -11298,6 +11303,254 @@ var clientRouter = router({
 });
 var engagementRouter = router({ staff: staffRouter, client: clientRouter });
 
+// server/routers/invitations.ts
+import { TRPCError as TRPCError22 } from "@trpc/server";
+import { z as z24 } from "zod";
+
+// server/accountInvitations.ts
+import { randomBytes as randomBytes8, randomUUID as randomUUID2 } from "crypto";
+import { and as and16, desc as desc12, eq as eq20, gt as gt6, inArray as inArray7, isNull as isNull8, ne as ne2 } from "drizzle-orm";
+import { TRPCError as TRPCError21 } from "@trpc/server";
+import { z as z23 } from "zod";
+init_brand();
+var JOIN_PATH = "/join";
+var unavailable3 = () => new TRPCError21({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.unavailable });
+var newInvitationSchema = z23.object({
+  email: z23.string().trim().email("Enter a valid email address.").max(ACCOUNT_EMAIL_MAX_LENGTH).transform(normaliseAccountEmail),
+  fullName: z23.string().trim().min(2, "Enter their full name.").max(ACCOUNT_FULL_NAME_MAX_LENGTH)
+});
+var acceptAccountInvitationSchema = z23.object({
+  token: z23.string().min(20).max(200),
+  email: z23.string().trim().email("Enter a valid email address.").max(ACCOUNT_EMAIL_MAX_LENGTH).transform(normaliseAccountEmail),
+  fullName: z23.string().trim().min(2, "Enter your full name.").max(ACCOUNT_FULL_NAME_MAX_LENGTH),
+  password: z23.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
+  confirmPassword: z23.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1)
+}).superRefine((value, context) => {
+  const policy = validateAccountPassword(value.password);
+  if (policy) context.addIssue({ code: "custom", path: ["password"], message: policy });
+  if (value.password !== value.confirmPassword) context.addIssue({ code: "custom", path: ["confirmPassword"], message: "The password confirmation does not match." });
+});
+function invitationState(invitation, now = /* @__PURE__ */ new Date()) {
+  return invitation.status === "pending" && invitation.expiresAt.getTime() <= now.getTime() ? "expired" : invitation.status;
+}
+async function identityTaken(db, email) {
+  return (await db.select({ id: users.id }).from(users).where(emailEquals(users.email, email)).limit(1)).length > 0 || await emailIsReserved(db, email);
+}
+function buildInvitationEmail(input) {
+  const name = input.fullName.split(" ")[0] || "there";
+  const staff2 = input.kind === "staff";
+  return {
+    subject: staff2 ? `Join the ${BRAND.organisationName} team on ${BRAND.productName}` : `${input.inviterName} invited you to ${input.businessName ?? "their business"} on ${BRAND.productName}`,
+    body: [
+      `Dear ${name},`,
+      "",
+      staff2 ? `${input.inviterName} has invited you to the ${BRAND.organisationName} team on ${BRAND.productName}, where we run our client engagements.` : `${input.inviterName} has invited you to work with them and ${BRAND.organisationName} on ${input.businessName ?? "their business"}. ${input.access ? CLIENT_ACCESS_LABELS[input.access].detail : ""}`.trim(),
+      "Use the secure link below to set your password. It works once and expires in seven days.",
+      "",
+      `Create your account: ${input.url}`,
+      "",
+      "If you were not expecting this, you can ignore this email.",
+      "",
+      BRAND.organisationName
+    ].join("\n")
+  };
+}
+async function issue(db, input) {
+  const token2 = randomBytes8(32).toString("base64url");
+  let invitation;
+  try {
+    invitation = await db.transaction(async (tx) => {
+      await tx.update(accountInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and16(emailEquals(accountInvitations.email, input.email), eq20(accountInvitations.status, "pending")));
+      const [row] = await tx.insert(accountInvitations).values({
+        kind: input.kind,
+        email: input.email,
+        fullName: input.fullName,
+        platformRole: input.platformRole ?? null,
+        businessId: input.businessId ?? null,
+        access: input.access ?? null,
+        tokenHash: sha256(token2),
+        expiresAt: new Date(Date.now() + ONBOARDING_INVITATION_TTL_MS),
+        createdByUserId: input.actorUserId
+      }).returning({ id: accountInvitations.id });
+      await recordAudit(tx, { action: "account_invitation_created", actorUserId: input.actorUserId, targetEmail: input.email, details: { invitationId: row.id, kind: input.kind, ...input.platformRole ? { role: input.platformRole } : {}, ...input.businessId ? { businessId: input.businessId, access: input.access } : {} } });
+      return row;
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) throw new TRPCError21({ code: "CONFLICT", message: "An invitation to this address is already out." });
+    throw error;
+  }
+  const invitationUrl = `${getTrustedApplicationOrigin()}${JOIN_PATH}/${encodeURIComponent(token2)}`;
+  const message = buildInvitationEmail({ kind: input.kind, fullName: input.fullName, url: invitationUrl, inviterName: input.inviterName, businessName: input.businessName, access: input.access });
+  const delivery = await deliverEmail({ to: input.email, subject: message.subject, body: message.body, sender: "business_support" });
+  await db.update(accountInvitations).set({ deliveryStatus: delivery.status }).where(eq20(accountInvitations.id, invitation.id));
+  return { invitationId: invitation.id, invitationUrl, deliveryStatus: delivery.status };
+}
+var staffInvitationSchema = newInvitationSchema.extend({ role: z23.enum(["admin", "desk_lead", "analyst", "partner", "subject_matter_expert", "finance"]) });
+async function inviteStaff(db, actor, rawInput) {
+  if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError21({ code: "FORBIDDEN", message: "Only someone who manages roles can invite staff." });
+  const input = staffInvitationSchema.parse(rawInput);
+  if (await identityTaken(db, input.email)) throw new TRPCError21({ code: "CONFLICT", message: "This email already has an account. Give that person a role instead." });
+  return issue(db, { kind: "staff", email: input.email, fullName: input.fullName, platformRole: input.role, actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName });
+}
+async function listStaffInvitations(db, actor) {
+  if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError21({ code: "FORBIDDEN", message: "Only someone who manages roles can see staff invitations." });
+  const rows = await db.select({ id: accountInvitations.id, email: accountInvitations.email, fullName: accountInvitations.fullName, role: accountInvitations.platformRole, status: accountInvitations.status, expiresAt: accountInvitations.expiresAt, deliveryStatus: accountInvitations.deliveryStatus, createdAt: accountInvitations.createdAt }).from(accountInvitations).where(eq20(accountInvitations.kind, "staff")).orderBy(desc12(accountInvitations.id)).limit(100);
+  return rows.map((row) => ({ ...row, status: invitationState(row) }));
+}
+async function listStaff(db, actor) {
+  if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError21({ code: "FORBIDDEN", message: "Only someone who manages roles can see the team." });
+  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, status: users.status, role: userPlatformRoles.role }).from(userPlatformRoles).innerJoin(users, eq20(userPlatformRoles.userId, users.id)).orderBy(users.name);
+  const people = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const person = people.get(row.userId) ?? { userId: row.userId, name: row.name ?? "", email: row.email ?? "", status: row.status, roles: [] };
+    person.roles.push(row.role);
+    people.set(row.userId, person);
+  }
+  return Array.from(people.values());
+}
+async function revokeStaffInvitation(db, actor, input) {
+  if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError21({ code: "FORBIDDEN", message: "Only someone who manages roles can revoke staff invitations." });
+  return revoke(db, { invitationId: input.invitationId, kind: "staff", actorUserId: actor.id });
+}
+async function revoke(db, input) {
+  const revoked = await db.update(accountInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and16(eq20(accountInvitations.id, input.invitationId), eq20(accountInvitations.kind, input.kind), eq20(accountInvitations.status, "pending"), ...input.businessId ? [eq20(accountInvitations.businessId, input.businessId)] : [])).returning({ id: accountInvitations.id, email: accountInvitations.email });
+  if (revoked.length !== 1) throw new TRPCError21({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
+  await recordAudit(db, { action: "account_invitation_revoked", actorUserId: input.actorUserId, targetEmail: revoked[0].email, details: { invitationId: revoked[0].id, kind: input.kind } });
+  return { success: true };
+}
+var seatInvitationSchema = newInvitationSchema.extend({ access: z23.enum(["full", "contributor"]) });
+function requireOwnerLevel(session) {
+  const business = session.activeBusiness;
+  if (!business || business.role === "member") throw new TRPCError21({ code: "FORBIDDEN", message: "Only the owner can add people to the business." });
+  return business;
+}
+async function listSeats(db, session) {
+  const business = requireOwnerLevel(session);
+  const [members, invitations] = await Promise.all([
+    db.select({ membershipId: businessMemberships.id, userId: users.id, name: users.name, email: users.email, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq20(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq20(businessMemberAccess.membershipId, businessMemberships.id)).where(and16(eq20(businessMemberships.businessId, business.businessId), eq20(businessMemberships.role, "member"), eq20(businessMemberships.status, "active"))),
+    db.select().from(accountInvitations).where(and16(eq20(accountInvitations.kind, "business_member"), eq20(accountInvitations.businessId, business.businessId), eq20(accountInvitations.status, "pending")))
+  ]);
+  const pending = invitations.filter((item) => invitationState(item) === "pending");
+  return {
+    included: TEAM_SEATS_INCLUDED,
+    used: members.length + pending.length,
+    members: members.map((member) => ({ membershipId: member.membershipId, name: member.name ?? "", email: member.email ?? "", access: member.access ?? "full" })),
+    invitations: pending.map((item) => ({ id: item.id, fullName: item.fullName, email: item.email, access: item.access, expiresAt: item.expiresAt, deliveryStatus: item.deliveryStatus }))
+  };
+}
+async function inviteSeat(db, session, rawInput) {
+  const business = requireOwnerLevel(session);
+  const input = seatInvitationSchema.parse(rawInput);
+  const seats = await listSeats(db, session);
+  if (seats.used >= seats.included) throw new TRPCError21({ code: "FORBIDDEN", message: `Your engagement includes ${seats.included === 1 ? "one person" : `${seats.included} people`} from your team. Remove them or their invitation to invite someone else.` });
+  if (await identityTaken(db, input.email)) throw new TRPCError21({ code: "CONFLICT", message: "This email already has an account. Ask IP Factory to help add them." });
+  return issue(db, { kind: "business_member", email: input.email, fullName: input.fullName, businessId: business.businessId, access: input.access, actorUserId: session.user.id, inviterName: session.user.fullName, businessName: business.businessName });
+}
+async function revokeSeatInvitation(db, session, input) {
+  const business = requireOwnerLevel(session);
+  return revoke(db, { invitationId: input.invitationId, kind: "business_member", businessId: business.businessId, actorUserId: session.user.id });
+}
+async function removeSeat(db, session, input) {
+  const business = requireOwnerLevel(session);
+  const removed = await db.update(businessMemberships).set({ status: "removed" }).where(and16(eq20(businessMemberships.id, input.membershipId), eq20(businessMemberships.businessId, business.businessId), eq20(businessMemberships.role, "member"), ne2(businessMemberships.status, "removed"))).returning({ id: businessMemberships.id, userId: businessMemberships.userId });
+  if (removed.length !== 1) throw new TRPCError21({ code: "NOT_FOUND", message: "That person is not on your team." });
+  await recordAudit(db, { action: "business_member_removed", actorUserId: session.user.id, details: { businessId: business.businessId, membershipId: removed[0].id, userId: removed[0].userId } });
+  return { success: true };
+}
+async function setSeatAccess(db, session, input) {
+  const business = requireOwnerLevel(session);
+  const membership = (await db.select({ id: businessMemberships.id }).from(businessMemberships).where(and16(eq20(businessMemberships.id, input.membershipId), eq20(businessMemberships.businessId, business.businessId), eq20(businessMemberships.role, "member"), eq20(businessMemberships.status, "active"))).limit(1))[0];
+  if (!membership) throw new TRPCError21({ code: "NOT_FOUND", message: "That person is not on your team." });
+  await db.insert(businessMemberAccess).values({ membershipId: membership.id, access: input.access, grantedByUserId: session.user.id }).onConflictDoUpdate({ target: businessMemberAccess.membershipId, set: { access: input.access, grantedByUserId: session.user.id } });
+  return { success: true };
+}
+async function previewAccountInvitation(db, req, token2) {
+  if (!consumeRateLimit("onboarding", req, "join-preview", 60)) throw new TRPCError21({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  const invitation = (await db.select().from(accountInvitations).where(eq20(accountInvitations.tokenHash, sha256(token2))).limit(1))[0];
+  if (!invitation || invitationState(invitation) !== "pending") return { available: false };
+  const business = invitation.businessId ? (await db.select({ name: businesses.name }).from(businesses).where(eq20(businesses.id, invitation.businessId)).limit(1))[0] : null;
+  return { available: true, kind: invitation.kind, email: invitation.email, fullName: invitation.fullName, businessName: business?.name ?? null, access: invitation.access };
+}
+async function acceptAccountInvitation(db, req, res, rawInput) {
+  assertSameOrigin(req);
+  const parsed = acceptAccountInvitationSchema.safeParse(rawInput);
+  if (!parsed.success) throw new TRPCError21({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
+  const input = parsed.data;
+  if (!consumeRateLimit("onboarding", req, "join-accept", 10)) throw new TRPCError21({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  const passwordHash = hashAdminPassword(input.password);
+  let created;
+  try {
+    created = await db.transaction(async (tx) => {
+      const invitation = (await tx.select().from(accountInvitations).where(eq20(accountInvitations.tokenHash, sha256(input.token))).limit(1))[0];
+      if (!invitation || invitationState(invitation) !== "pending") throw unavailable3();
+      if (input.email !== normaliseAccountEmail(invitation.email)) throw new TRPCError21({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
+      if (await identityTaken(tx, invitation.email)) throw new TRPCError21({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
+      const [user] = await tx.insert(users).values({ openId: `local:${randomUUID2()}`, name: input.fullName, email: invitation.email, loginMethod: "password", role: "user", status: "active" }).returning({ id: users.id });
+      await tx.insert(userCredentials).values({ userId: user.id, passwordHash });
+      let businessId = null;
+      if (invitation.kind === "staff") {
+        if (!invitation.platformRole || invitation.platformRole === "super_admin") throw unavailable3();
+        await tx.insert(userPlatformRoles).values({ userId: user.id, role: invitation.platformRole, grantedByUserId: invitation.createdByUserId });
+      } else {
+        const business = invitation.businessId ? (await tx.select({ id: businesses.id, status: businesses.status }).from(businesses).where(eq20(businesses.id, invitation.businessId)).limit(1))[0] : void 0;
+        if (!business || business.status !== "active") throw unavailable3();
+        const [membership] = await tx.insert(businessMemberships).values({ businessId: business.id, userId: user.id, role: "member", status: "active" }).returning({ id: businessMemberships.id });
+        await tx.insert(businessMemberAccess).values({ membershipId: membership.id, access: invitation.access ?? "contributor", grantedByUserId: invitation.createdByUserId });
+        businessId = business.id;
+      }
+      const session = await createSession(tx, user.id, businessId);
+      const claimed = await tx.update(accountInvitations).set({ status: "accepted", acceptedAt: databaseNow(), acceptedByUserId: user.id }).where(and16(eq20(accountInvitations.id, invitation.id), eq20(accountInvitations.status, "pending"), gt6(accountInvitations.expiresAt, /* @__PURE__ */ new Date()), isNull8(accountInvitations.acceptedAt))).returning({ id: accountInvitations.id });
+      if (claimed.length !== 1) throw unavailable3();
+      await recordAudit(tx, { action: "account_invitation_accepted", actorUserId: user.id, targetEmail: invitation.email, details: { invitationId: invitation.id, kind: invitation.kind } });
+      return { userId: user.id, email: invitation.email, session, businessId };
+    });
+  } catch (error) {
+    if (isUniqueViolation(error)) throw new TRPCError21({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
+    throw error;
+  }
+  setSessionCookie(req, res, created.session.token);
+  const authority = await loadAuthority(db, { id: created.userId, role: "user", email: created.email, status: "active" });
+  const memberships = created.businessId ? (await db.select({ businessId: businesses.id, businessName: businesses.name }).from(businesses).where(inArray7(businesses.id, [created.businessId]))).map((row) => ({ businessId: row.businessId, businessName: row.businessName, role: "member", status: "active", profileComplete: false, profilePercent: 0 })) : [];
+  return buildView({ id: created.userId, name: input.fullName, email: created.email }, authority, memberships, created.businessId);
+}
+
+// server/routers/invitations.ts
+var id2 = z24.number().int().positive();
+async function guarded2(work) {
+  try {
+    return await work();
+  } catch (error) {
+    if (isMissingEngagementTable(error)) throw new TRPCError22({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
+    throw error;
+  }
+}
+var roles = adminPermissionProcedure("manage_roles");
+var actorOf = (ctx) => ({ id: ctx.user.id, name: ctx.user.name, authority: ctx.authority });
+var invitationsRouter = router({
+  staff: router({
+    team: roles.query(async ({ ctx }) => guarded2(async () => listStaff(await engagementDb(), actorOf(ctx)))),
+    list: roles.query(async ({ ctx }) => guarded2(async () => listStaffInvitations(await engagementDb(), actorOf(ctx)))),
+    invite: roles.input(staffInvitationSchema).mutation(async ({ ctx, input }) => guarded2(async () => inviteStaff(await engagementDb(), actorOf(ctx), input))),
+    revoke: roles.input(z24.object({ invitationId: id2 })).mutation(async ({ ctx, input }) => guarded2(async () => revokeStaffInvitation(await engagementDb(), actorOf(ctx), input)))
+  }),
+  seats: router({
+    list: accountProcedure.query(async ({ ctx }) => guarded2(async () => listSeats(await engagementDb(), ctx.account))),
+    invite: accountProcedure.input(seatInvitationSchema).mutation(async ({ ctx, input }) => guarded2(async () => inviteSeat(await engagementDb(), ctx.account, input))),
+    revoke: accountProcedure.input(z24.object({ invitationId: id2 })).mutation(async ({ ctx, input }) => guarded2(async () => revokeSeatInvitation(await engagementDb(), ctx.account, input))),
+    remove: accountProcedure.input(z24.object({ membershipId: id2 })).mutation(async ({ ctx, input }) => guarded2(async () => removeSeat(await engagementDb(), ctx.account, input))),
+    setAccess: accountProcedure.input(z24.object({ membershipId: id2, access: z24.enum(["full", "contributor"]) })).mutation(async ({ ctx, input }) => guarded2(async () => setSeatAccess(await engagementDb(), ctx.account, input)))
+  }),
+  preview: publicProcedure.input(z24.object({ token: z24.string().min(20).max(200) })).query(async ({ ctx, input }) => {
+    try {
+      return await previewAccountInvitation(await engagementDb(), ctx.req, input.token);
+    } catch (error) {
+      if (isMissingEngagementTable(error)) return { available: false };
+      throw error;
+    }
+  }),
+  accept: publicProcedure.input(z24.unknown()).mutation(async ({ ctx, input }) => guarded2(async () => acceptAccountInvitation(await engagementDb(), ctx.req, ctx.res, input)))
+});
+
 // server/routers.ts
 var appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -11328,11 +11581,12 @@ var appRouter = router({
   fullReport: fullReportRouter,
   platformRoles: platformRolesRouter,
   businessSupport: businessSupportRouter,
-  engagement: engagementRouter
+  engagement: engagementRouter,
+  invitations: invitationsRouter
 });
 
 // server/_core/context.ts
-import { eq as eq20 } from "drizzle-orm";
+import { eq as eq21 } from "drizzle-orm";
 async function createContext(opts) {
   let user = null;
   let authChannel;
@@ -11347,7 +11601,7 @@ async function createContext(opts) {
       const session = await resolveAccountSession(opts.req);
       if (session && session.authority.roles.length > 0) {
         const db = await getDb();
-        const row = db ? (await db.select().from(users).where(eq20(users.id, session.user.id)).limit(1))[0] : void 0;
+        const row = db ? (await db.select().from(users).where(eq21(users.id, session.user.id)).limit(1))[0] : void 0;
         if (row && row.status === "active") {
           user = row;
           authChannel = "account";
@@ -11477,7 +11731,7 @@ function createApp() {
       return res.status(201).json(uploaded);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to upload the file.";
-      const status = error instanceof TRPCError21 && error.code === "UNAUTHORIZED" ? 401 : 500;
+      const status = error instanceof TRPCError23 && error.code === "UNAUTHORIZED" ? 401 : 500;
       console.warn("[Participant upload] Failed:", message);
       return res.status(status).json({ message: status === 401 ? "Kindly sign in to your participant portal again and try again." : "We could not store this file. Kindly try again shortly." });
     }
@@ -11497,7 +11751,7 @@ function createApp() {
       return res.status(201).json(uploaded);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to upload the payment receipt.";
-      const status = error instanceof TRPCError21 && error.code === "UNAUTHORIZED" ? 401 : 500;
+      const status = error instanceof TRPCError23 && error.code === "UNAUTHORIZED" ? 401 : 500;
       console.warn("[Payment receipt upload] Failed:", message);
       return res.status(status).json({ message: status === 401 ? "Kindly sign in to your participant portal again and try again." : "We could not store the receipt. Kindly try again shortly." });
     }

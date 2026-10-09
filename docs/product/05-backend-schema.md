@@ -94,7 +94,7 @@ and the room says it is not set up. Vocabulary and the who-sees-what rules: `sha
 | `engagement_measures` | The fix's one number: name, definition, unit, baseline, target | One per engagement (D3) | Business figures |
 | `engagement_checkins` | One row per fix week: progress, blockers, next step, reading, questions asked, hours by role, AI used | Unique (engagement, week) | Internal: hours are never shown to the client |
 | `business_member_access` | The owner's staff: `full` or `contributor` | One per membership; no row means full (owners and business admins never have one) | — |
-| `account_invitations` | Invitations that create an account for IP Factory staff (with a role) or the owner's staff (with an access level) | Token stored as a hash; single use, expiring, revocable; one pending per email (flow not built yet) | Email and name |
+| `account_invitations` | Invitations that create an account for IP Factory staff (with a role) or the owner's staff (with an access level) | Token stored as a hash; single use, expiring, revocable; one pending per email. Staff: `manage_roles` invites, never Super Admin. Seats: the owner of the business in use, within `TEAM_SEATS_INCLUDED` | Email and name |
 
 ## 3. JUMP-era tables (legacy)
 
@@ -181,8 +181,12 @@ procedure grants assigned-only access.
    trail, so "when did the client see this?" has an answer.
 4. **Finance** sees payments, not engagements: no finance permission opens the room.
 
-Still to build on these tables: staff and seat invitations (`account_invitations`), file uploads (`engagement_files`, a
-private bucket), and the fix's measure and check-in screens (`engagement_measures`, `engagement_checkins`).
+5. **Invitations** (`account_invitations`, `server/accountInvitations.ts`): a staff invitation creates the person with
+   one role; a seat invitation creates the person with a membership and an access level, in the owner's business only,
+   within the included seat. Accepting is one transaction; an existing account is never merged.
+
+Still to build on these tables: file uploads (`engagement_files`, a private bucket), and the fix's measure and
+check-in screens (`engagement_measures`, `engagement_checkins`).
 
 ## 6. Findings to fix
 
@@ -194,7 +198,7 @@ Found while writing this document.
 | Full report links (`full_reports.tokenHash`) never expire and the report procedures have no rate limit | A forwarded link opens the report indefinitely | Add an expiry after delivery (or limit downloads) and a rate limit like onboarding's |
 | The 30 tables from the baseline migration have no foreign keys or indexes beyond primary and unique keys | Slower queries as data grows; orphaned rows possible | Add indexes on `business_checks` (stage, email, createdAt) first |
 | ~~No engagement assignment table~~ | Fixed by 0008: `engagement_team`; `view_assigned_businesses` now opens the engagements a person is on | Done (once 0008 is applied) |
-| `adminAccess.listTeam` lists only legacy admins; staff who hold only platform roles do not appear | The Admin Team screen undercounts staff | Read `user_platform_roles` there |
+| ~~`adminAccess.listTeam` lists only legacy admins~~ | Fixed 9 October: Admin Team now shows a Staff list from `user_platform_roles` above the legacy list | Done |
 | `businessSupport.downloadReport` needs `manage_client_onboarding` while `resendReportLink` needs `manage_payments` | Finance can resend but not download | Decide which permission owns the report |
 | `shared/auth.ts` and `docs/authentication.md` still say platform roles are "not built" and name a `platform_role_assignments` table | Misleading | Update the comments: the table is `user_platform_roles` |
 | File storage still uses the Manus "Forge" storage API (`server/storage.ts`, `BUILT_IN_FORGE_API_*`) | No file uploads for clients on Vercel without Manus credentials | Phase 1.1: private Supabase Storage bucket |

@@ -178,7 +178,8 @@ Rules:
 - **Status: Built (9 October), live once migration 0008 is applied:** where we are (journey, next call, team), what we
   need from you (data requests from the template, "I have sent this"), what we have found (shared notes and
   deliverables, comments, the owner's sign-off, the owner's share-with-my-team choice). **Not built yet:** uploads
-  against a data request (needs file storage), the staff seat invitation, the fix's measure and weekly reading.
+  against a data request (needs file storage), the fix's measure and weekly reading. The owner's **Your team** card
+  invites one person as Full or Contributor, changes their access or removes them.
 
 ### F8. Engagement record and check-ins (internal)
 
@@ -286,6 +287,7 @@ From concept note §13. The platform must make these countable without a spreads
 | The paid assessment is called "Current State Assessment" everywhere: site, emails, admin, the report and these documents | ET |
 | The engagement room follows five principles: the fix is one problem with one measure; show only what the team will keep current; notes and findings are for the owner by default; bookings on Calendly, conversation on WhatsApp, internal tasks in ClickUp; one free staff seat, no paid seats in the pilot | ET ("proceed", 9 October) |
 | Data requests and actions sit in one list; the client marks what they sent, the team marks it received or asks for more | Built as recommended |
+| New staff join by invitation with one role and set their own password; Super Admin is never granted by invitation; an existing account is never merged | Built as recommended |
 
 ## 10. Open decisions
 

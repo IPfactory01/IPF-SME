@@ -1,5 +1,6 @@
 import AccountLayout from "@/components/AccountLayout";
 import EngagementRoom from "@/components/EngagementRoom";
+import TeamSeats from "@/components/TeamSeats";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
@@ -10,7 +11,13 @@ import { Link } from "wouter";
 /** The engagement room for the business in use, once the Current State Assessment is paid; nothing before that. */
 function Room() {
   const room = trpc.engagement.client.room.useQuery(undefined, { retry: false });
-  return room.data ? <EngagementRoom room={room.data} /> : null;
+  if (!room.data) return null;
+  return (
+    <>
+      <EngagementRoom room={room.data} />
+      {room.data.viewer.kind === "owner" && <TeamSeats />}
+    </>
+  );
 }
 
 /** The signed-in home: the engagement room and the active business for a client, the internal entry point for staff. */

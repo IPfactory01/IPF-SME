@@ -18,6 +18,7 @@ added without being documented here.
 | `/check` | `BusinessCheck.tsx` | Anyone | The free business check, from contact details to the result | Book a call (Calendly) or ask for the full report |
 | `/report/:token` | `FullReportPage.tsx` | Link in the "payment received" email | The 17-question report form, then the download | Report emailed; download on the page |
 | `/onboarding/:token` | `OnboardingPage.tsx` | Link in the client account invitation | Create the client account | `/dashboard` |
+| `/join/:token` | `JoinPage.tsx` | Link in a staff invitation or an owner's seat invitation | Set a password; staff land on `/admin` with their role, the owner's staff on `/dashboard` in that business | `/admin`, `/dashboard` |
 | `/login` | `LoginPage.tsx` | Anyone | Client sign-in with email and password | The landing page (section 6) |
 | `/signup` | Redirect | Anyone | No public sign-up | `/login` |
 | `/dashboard` | `AccountDashboard.tsx` | Signed-in account | Welcome; the engagement room once the Current State Assessment is paid (section 9); business profile completion; a link to the internal area for staff | `/settings/business`, `/admin` |
@@ -150,7 +151,7 @@ action again.
 | **Client Onboarding** | `manage_client_onboarding` | Metrics (checks, portal users, businesses, memberships, pending links); every check; invitations | "Invite to onboard"; copy the link once; revoke a pending invitation |
 | **Engagements** | `view_all_businesses`, or `view_assigned_businesses` for the engagements a person is on | Every engagement in scope: business, stage, team, what the client still owes (overdue in red), next call or calls not booked | Row → drawer: stage; team (add, remove: `assign_engagements`); the one problem; calls (time, link, agenda, client and internal notes, share with the owner or the owner and their team); requests and actions (whose side, person, due date, status, note); deliverables (save, approve: `review_engagements`, share, comment). Changes need `manage_engagements` |
 | **Clients** | `view_all_businesses` | Onboarded businesses and their members | Read only |
-| **Admin Team** | Super Admin | Administrators and invitations | Invite, copy link, revoke, edit powers |
+| **Admin Team** | Super Admin (`manage_roles`) | **Staff**: everyone with a role, and invitations that create a staff account with one role; then the legacy administrators | Invite with a role (never Super Admin), copy the link once, revoke; legacy: invite, revoke, edit powers |
 | **JUMP Programme (Legacy)** | `view_participants` | JUMP registrations, referrals, scheduling, replies | JUMP-era actions |
 
 ## 8. Status models
@@ -206,6 +207,8 @@ flowchart TD
 | "Send" a comment | The comment shows under the deliverable for both sides | Anyone who can see the deliverable |
 | "Share with my team" / "Keep this to myself" | The owner's staff with full access see it, or stop seeing it | Owner (and business admin) only |
 | "Join the call" | Opens the meeting link | Anyone who sees the call |
+| "Invite" in Your team | Emails a single-use link (shown once when email is not set up); the seat counts as used | Owner (and business admin) only; one seat included |
+| Change "What they can see" / "Remove" | Full or Contributor at once; Remove ends their access to the business straight away | Owner (and business admin) only |
 
 ## 10. Known gaps in today's flow
 
@@ -214,7 +217,7 @@ Found while writing this document. Each is small and listed in the implementatio
 | Gap | Effect | Fix |
 |---|---|---|
 | ~~Home's "Client sign in" opens the JUMP participant sign-in~~ | Fixed 9 October: it goes to `/login`; JUMP participants reach their sign-in from `/portal` or the link on `/login` | Done |
-| Staff invitations still use the legacy Google flow, so a new staff member cannot get an email-and-password account | Analysts cannot be added or assigned | Staff invitations on the email-and-password sign-in (implementation plan 1.0) |
+| ~~Staff invitations use the legacy Google flow~~ | Fixed 9 October: Admin Team → Staff invites by email with one role; the person sets a password at `/join/:token` | Done (once migration 0008 is applied) |
 | The `/admin` gate and side menu still say "Registration Desk" and Gmail | Old wording | Rebrand the labels |
 | ~~"Invite to onboard" invites at any stage without a question~~ | Fixed 9 October: before Won it asks to confirm | Done |
 | The JUMP "Email selected" button opens nothing | Legacy only | Remove with the JUMP screens |

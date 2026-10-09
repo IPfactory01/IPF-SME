@@ -70,7 +70,8 @@ export type SectionId =
   | "finance"
   | "risk"
   | "exit"
-  | "transition";
+  | "transition"
+  | "problem";
 
 export type Section = {
   id: SectionId;
@@ -728,6 +729,54 @@ export const SECTIONS: Record<SectionId, Section> = {
           { value: "who_am_i", label: "Who am I after this business? I haven't worked it out", health: "watch", gap: "clarity", offerings: ["org-design"] },
           { value: "how_handover", label: "I want to step back but don't know how to hand over", health: "watch", gap: "knowhow", offerings: ["org-design", "performance-culture"] },
           { value: "no_successor", label: "There is no one ready to take over", health: "stuck", gap: "resources", offerings: ["workforce", "org-design"] },
+        ],
+      },
+    ],
+  },
+  /**
+   * "The problem" block of the concept note (§15): what the owner has tried, what it costs and who decides. Asked last, of
+   * trading businesses only; it prepares the discovery call and never changes the outline, the route or the score.
+   */
+  problem: {
+    id: "problem",
+    title: "The problem to fix",
+    means: "Three short questions about the problem you most want fixed: what you have tried, what it is costing you, and who decides. They help us prepare your free call.",
+    examples: {
+      mixed: "An owner who has tried a new salesperson and lower prices, loses about ₦1,000,000 a month in missed sales, and decides with a co-founder.",
+    },
+    questions: [
+      {
+        id: "pr_tried",
+        kind: "text",
+        prompt: "What have you already tried to fix it?",
+        help: "Optional. A line or two is enough.",
+        optional: true,
+        placeholder: "e.g. We hired a salesperson and cut prices, but sales stayed flat",
+        maxLength: 300,
+        options: [],
+      },
+      {
+        id: "pr_cost",
+        kind: "single",
+        prompt: "Roughly what is this problem costing the business each month?",
+        help: "Lost sales, wasted spending or time, as a best guess.",
+        options: [
+          { value: "under500k", label: "Less than ₦500,000" },
+          { value: "500kto2m", label: "₦500,000 to ₦2,000,000" },
+          { value: "2mto5m", label: "₦2,000,000 to ₦5,000,000" },
+          { value: "over5m", label: "More than ₦5,000,000" },
+          { value: "unknown", label: "I can't put a number on it" },
+        ],
+      },
+      {
+        id: "pr_decider",
+        kind: "single",
+        prompt: "Who decides on spending to fix it?",
+        options: [
+          { value: "me", label: "I decide alone" },
+          { value: "with_partner", label: "I decide with a partner or co-founder" },
+          { value: "board", label: "A board or investors decide" },
+          { value: "someone_else", label: "Someone else decides" },
         ],
       },
     ],

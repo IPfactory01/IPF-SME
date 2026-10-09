@@ -21,8 +21,9 @@
 | Full report: 17-question form, deterministic PDF emailed at once, admin status and download | `test/shared/fullReport/*`, `test/server/fullReport/*` |
 | Client account by invitation after Current State is paid; Won stage | `test/server/clientOnboarding.test.ts`, `test/db/payments.db.test.ts` (whole journey) |
 
-**On the branch, waiting for "push to main":** the original twelve sectors; "Not assessed" areas on the result; the
-report form asking how each product is charged; the invitation page asking someone else signed in to sign out first.
+Also on `main` since 9 October: the original twelve sectors; "Not assessed" areas on the result; the report form asking
+how each product is charged; the invitation page asking someone else signed in to sign out first; the 48-hour payment
+window; the problem questions at the end of the check.
 
 ## 2. Phase 0: operational, no code (this week)
 
@@ -109,6 +110,8 @@ Decisions needed first: O1 transcripts, O2 messages, O3 who releases what (PRD �
 - Referral codes on the new flow: 10% off the next invoice per paying referral, up to 30%, never on a first payment.
 - Transcript import and AI-drafted session notes for review (system actor, audited).
 - A message thread in the room, only if O2 says so.
+- A settings screen for prices and key copy, so Lovelyn can change them without a developer (concept note §14).
+- Two colours on the outline for problems that cross areas (concept note §15).
 - Retire the JUMP-era screens and tables once nothing reads them (see [5. Backend schema](05-backend-schema.md) §4).
 - The January portal: the record with the methods attached (concept note D4).
 

@@ -24,6 +24,24 @@ export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
   confirmed: "Paid",
 };
 
+/**
+ * Payment details hold for 48 hours (concept note §7 and §11: the payment link is sent after the call with a 48-hour
+ * window). Sending the details again starts a new window. After it, an unpaid request shows as passed so the team can
+ * send fresh details or move the business to Lost; money that still arrives can always be confirmed.
+ */
+export const PAYMENT_WINDOW_HOURS = 48;
+
+export const paymentDeadline = (requestedAt: Date | string) => new Date(new Date(requestedAt).getTime() + PAYMENT_WINDOW_HOURS * 3_600_000);
+
+/** What the team sees. Only a request still awaiting payment can pass its window; proof or payment never expires. */
+export type PaymentDisplayStatus = PaymentStatus | "expired";
+
+export function effectivePaymentStatus(request: { status: PaymentStatus; requestedAt: Date | string }, now: Date = new Date()): PaymentDisplayStatus {
+  return request.status === "requested" && now.getTime() > paymentDeadline(request.requestedAt).getTime() ? "expired" : request.status;
+}
+
+export const PAYMENT_DISPLAY_LABELS: Record<PaymentDisplayStatus, string> = { ...PAYMENT_STATUS_LABELS, expired: "48 hours passed" };
+
 /** The reference the owner puts on the transfer, e.g. TS-R-000123 (report) or TS-CS-000123 (Current State). */
 export function paymentReference(item: PaymentItem, businessCheckId: number) {
   return `TS-${PAYMENT_ITEM_DETAILS[item].code}-${String(businessCheckId).padStart(6, "0")}`;

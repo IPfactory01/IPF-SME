@@ -129,6 +129,18 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "answer": "Losing a key person",
           "question": "What worries you most?",
         },
+        {
+          "answer": "A fictional business used to test the business check",
+          "question": "What have you already tried to fix it?",
+        },
+        {
+          "answer": "₦500,000 to ₦2,000,000",
+          "question": "Roughly what is this problem costing the business each month?",
+        },
+        {
+          "answer": "I decide with a partner or co-founder",
+          "question": "Who decides on spending to fix it?",
+        },
       ],
       "title": "Your business check",
     },

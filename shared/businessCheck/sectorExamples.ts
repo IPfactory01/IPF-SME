@@ -38,7 +38,7 @@ export const SECTOR_NOUNS: Record<SectorId, string> = {
   logistics: "logistics",
 };
 
-type AreaSection = Exclude<SectionId, "profile">;
+type AreaSection = Exclude<SectionId, "profile" | "problem">;
 
 export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
   founder: {
@@ -198,3 +198,6 @@ export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
     logistics: "An owner who wants to step back, but whose drivers and clients only answer to them.",
   },
 };
+
+/** True for the sections that carry an example per sector: founder readiness, the idea and the ten problem areas. */
+export const hasSectorExamples = (id: SectionId): id is AreaSection => id in SECTOR_EXAMPLES;

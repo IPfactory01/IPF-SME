@@ -224,6 +224,35 @@ for (const target of targets) {
         expect(audit).toEqual([expect.objectContaining({ item: "current_state", amountNaira: 500_000, from: "opportunity", to: "won" })]);
       });
 
+      it("holds the details for 48 hours; after that the team sees it, can send fresh details, and can still confirm money that arrives", async () => {
+        const { token, email, id } = await finishedCheck("window");
+        mocked.deliverEmail.mockClear();
+        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+        const details = emails().find(sent => sent.to === email)!;
+        expect(details.body).toMatch(/Pay by: .+ \(Lagos time\)/);
+        expect(details.body).toContain("These details hold for 48 hours.");
+        const detailOf = async () => (await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id })).payments![0];
+        const listedOf = async () => (await (await superAdmin.call()).businessSupport.checks()).find((row: { id: number }) => row.id === id)!.payments;
+        expect(await detailOf()).toMatchObject({ status: "requested", displayStatus: "requested" });
+
+        const age = async (hours: number) => db.update(schema.paymentRequests).set({ requestedAt: new Date(Date.now() - hours * 3_600_000) }).where(eq(schema.paymentRequests.id, paymentRequestId));
+        await age(49);
+        expect(await detailOf()).toMatchObject({ status: "requested", displayStatus: "expired" });
+        expect(await listedOf()).toEqual({ current_state: "expired" });
+        // The stage is the team's call: it does not move to Lost on its own.
+        expect((await rowFor(token)).pipelineStage).toBe("opportunity");
+
+        // Sending the details again starts a new window.
+        await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+        expect(await detailOf()).toMatchObject({ displayStatus: "requested" });
+
+        // Money that arrives after the window can still be confirmed.
+        await age(72);
+        expect(await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId })).toMatchObject({ changed: true, invitation: "sent" });
+        expect(await detailOf()).toMatchObject({ status: "confirmed", displayStatus: "confirmed" });
+        expect((await rowFor(token)).pipelineStage).toBe("won");
+      });
+
       it("does not send a second invitation when one is already out", async () => {
         const { id } = await finishedCheck("already-invited");
         await (await superAdmin.call()).onboarding.invite({ businessCheckId: id });

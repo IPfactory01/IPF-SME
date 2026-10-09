@@ -4,10 +4,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { savePdf } from "@/lib/savePdf";
 import { trpc } from "@/lib/trpc";
 import { formatNaira } from "@shared/businessSupport";
-import { PAYMENT_ITEM_DETAILS, PAYMENT_ITEMS, PAYMENT_STATUS_LABELS, type PaymentItem, type PaymentStatus } from "@shared/payments";
+import { PAYMENT_DISPLAY_LABELS, PAYMENT_ITEM_DETAILS, PAYMENT_ITEMS, PAYMENT_WINDOW_HOURS, type PaymentDisplayStatus, type PaymentItem, type PaymentStatus } from "@shared/payments";
 import React, { useState } from "react";
 import { toast } from "sonner";
-import { formatDate } from "./format";
+import { formatDate, formatDateTime } from "./format";
 
 /**
  * Payment by bank transfer until online payment is ready: send the details (the owner is emailed the amount, account
@@ -22,6 +22,9 @@ type Payment = {
   amountNaira: number;
   reference: string;
   status: PaymentStatus;
+  /** "expired" once the details' 48 hours have passed without proof or payment. */
+  displayStatus: PaymentDisplayStatus;
+  payBy: Date | string;
   requestedAt: Date | string;
   deliveryStatus: "Sent" | "Failed" | "Simulated";
   proofReceivedAt: Date | string | null;
@@ -66,18 +69,19 @@ function ReportLine({ businessCheckId, report }: { businessCheckId: number; repo
 
 const SHORT_NAME: Record<PaymentItem, string> = { full_report: "Report", current_state: "Current State" };
 
-const CHIP: Record<PaymentStatus, string> = {
+const CHIP: Record<PaymentDisplayStatus, string> = {
   requested: "border-highlight-ink/30 bg-highlight-ink/5 text-highlight-ink",
   proof_received: "border-health-watch/30 bg-health-watch-tint text-health-watch",
   confirmed: "border-health-clear/30 bg-health-clear-tint text-health-clear",
+  expired: "border-danger-line bg-danger-tint text-danger",
 };
 
 /** The payment state beside a business check in the lists: "Report paid", "Current State: proof received"… */
-export function PaymentChips({ payments, reportRequestedAt }: { payments: Partial<Record<PaymentItem, PaymentStatus>>; reportRequestedAt: Date | string | null }) {
+export function PaymentChips({ payments, reportRequestedAt }: { payments: Partial<Record<PaymentItem, PaymentDisplayStatus>>; reportRequestedAt: Date | string | null }) {
   const chips = PAYMENT_ITEMS.flatMap(item => {
     const status = payments[item];
     if (!status) return item === "full_report" && reportRequestedAt ? [{ item, text: "Report requested", className: CHIP.requested }] : [];
-    const text = status === "confirmed" ? `${SHORT_NAME[item]} paid` : `${SHORT_NAME[item]}: ${PAYMENT_STATUS_LABELS[status].toLowerCase()}`;
+    const text = status === "confirmed" ? `${SHORT_NAME[item]} paid` : `${SHORT_NAME[item]}: ${PAYMENT_DISPLAY_LABELS[status].toLowerCase()}`;
     return [{ item, text, className: CHIP[status] }];
   });
   return <>{chips.map(chip => <span key={chip.item} className={`mt-1 block w-fit border px-1.5 py-0.5 text-[11px] font-medium ${chip.className}`}>{chip.text}</span>)}</>;
@@ -136,8 +140,11 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
       </div>
       {payment ? (
         <div className="mt-1.5 space-y-0.5 text-[13px]">
-          <p><span className={`inline-block border px-1.5 py-0.5 text-[11px] font-medium ${CHIP[payment.status]}`}>{PAYMENT_STATUS_LABELS[payment.status]}</span> <span className="ml-1 text-ink-muted">Reference</span> <span className="font-medium tabular-nums text-ink">{payment.reference}</span></p>
-          <p className="text-ink-muted">Details sent {formatDate(payment.requestedAt)}{payment.deliveryStatus === "Failed" ? " · the email failed" : ""}</p>
+          <p><span className={`inline-block border px-1.5 py-0.5 text-[11px] font-medium ${CHIP[payment.displayStatus]}`}>{PAYMENT_DISPLAY_LABELS[payment.displayStatus]}</span> <span className="ml-1 text-ink-muted">Reference</span> <span className="font-medium tabular-nums text-ink">{payment.reference}</span></p>
+          <p className="text-ink-muted">Details sent {formatDate(payment.requestedAt)}{payment.deliveryStatus === "Failed" ? " · the email failed" : ""}{payment.status === "requested" ? ` · pay by ${formatDateTime(payment.payBy)}` : ""}</p>
+          {payment.displayStatus === "expired" && (
+            <p className="text-danger">The {PAYMENT_WINDOW_HOURS} hours have passed with no payment. Send the details again for a new window, or move the business to Lost. Money that still arrives can be confirmed.</p>
+          )}
           {payment.proofReceivedAt && <p className="text-ink-muted">Proof received {formatDate(payment.proofReceivedAt)}</p>}
           {payment.confirmedAt && <p className="text-ink-muted">Paid, confirmed {formatDate(payment.confirmedAt)}</p>}
           {payment.note && <p className="text-ink">{payment.note}</p>}

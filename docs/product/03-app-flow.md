@@ -77,7 +77,8 @@ Source: `client/src/pages/BusinessCheck.tsx`; rules in `shared/businessCheck/eng
    how they heard. "Start the check" calls `businessCheck.start`, which saves a **Lead**.
 3. **Section intros.** Before each section: what it means and an example for the owner's sector.
 4. **Questions,** one per screen, with a progress rail and the outline filling in on the side. The path depends on the
-   answers (PRD F2). Typed answers (business name, one-line description) are required.
+   answers (PRD F2). Typed answers (business name, one-line description) are required. Trading businesses end with
+   **The problem to fix**: what they have tried (optional), what it costs each month, and who decides.
 5. **Reading your answers** while `businessCheck.submit` runs. If it fails: "Try again".
 6. **Result:** the tally (stuck, watch, clear), "What we found", "What we think it is", the outline with "Start here"
    and the greyed "Not assessed" areas, founder readiness in words, "Where we could help", and **Your next steps**.
@@ -114,6 +115,14 @@ confirmation stays for direct transfers. The same applies to the Current State p
 | "Send payment details" (Current State) | Finance or Super Admin | Payment request for ₦500,000 | Owner: *Payment details for your Current State* | Moves to **Opportunity** if earlier |
 | "Proof received", then "Confirm payment" | Finance or Super Admin | Payment confirmed; an invitation is created unless one is pending or accepted | Owner: *Payment received: your Current State starts* and *Set up your client account on The Shift* | **Won** |
 | "Create account" | Owner | `onboarding.accept`: person, credential, business, owner membership and session in one transaction | — | Invitation: **accepted** |
+
+**The 48-hour window:** every payment details email says when to pay by, 48 hours after it was sent (Lagos time).
+After that the payment shows "48 hours passed": the team sends the details again (a new window) or moves the business
+to Lost. Nothing moves on its own, and money that still arrives can be confirmed.
+
+**Relation to the locked flow in `Instruction.md`:** that flow goes Fit → onboarding invitation. The automatic
+invitation follows the Current State payment instead (the concept note's pay-then-set-up order); a manual invitation
+at Fit is still possible.
 
 The desk lead can also send an invitation by hand from **Client Onboarding** ("Invite to onboard") and revoke a pending
 one.
@@ -161,7 +170,8 @@ stateDiagram-v2
 
 - The first three stages move automatically and only forward; they never overwrite a stage the team has set
   (`advancePipeline`, `shared/businessCheck/pipeline.ts`). The team can move a check to any stage with "Move to".
-- **Payment request:** requested → proof received → confirmed (`shared/payments.ts`).
+- **Payment request:** requested → proof received → confirmed (`shared/payments.ts`). A request still awaiting payment
+  48 hours after the details went out shows as "48 hours passed" (worked out, not stored).
 - **Full report:** awaiting form → delivered (`full_reports.status`).
 - **Client invitation:** pending → accepted, revoked or expired (`client_onboarding_invitations`).
 

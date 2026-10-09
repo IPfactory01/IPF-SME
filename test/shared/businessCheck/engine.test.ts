@@ -80,7 +80,7 @@ describe("business check path", () => {
   });
 
   it("chooses problem areas by stage", () => {
-    expect(sectionPath(operating("under2")).slice(2)).toEqual(["intent", "market", "offer", "model", "sales", "operations", "finance", "risk"]);
+    expect(sectionPath(operating("under2")).slice(2)).toEqual(["intent", "market", "offer", "model", "sales", "operations", "finance", "risk", "problem"]);
     expect(sectionPath(operating("5to10")).slice(2)).toContain("exit");
     expect(sectionPath(operating("2to5")).slice(2)).not.toContain("exit");
     const mature = sectionPath(operating("over10")).slice(2);
@@ -416,5 +416,43 @@ describe("areas not assessed", () => {
       expect(areasNotAssessed(completeWith(answers)).filter((row) => asked.includes(row.area))).toEqual([]);
       expect([...asked, ...areasNotAssessed(completeWith(answers)).map((row) => row.area)].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     }
+  });
+});
+
+describe("the problem to fix", () => {
+  const trading = { p_stage: "operating", p_type: "trader", p_age: "2to5", p_staff: "3to5", p_revenue: "3to5m" } as const;
+
+  it("asks a trading business last what it has tried, what the problem costs and who decides", () => {
+    for (const answers of [trading, { p_stage: "side", p_type: "expert", p_staff: "1to2", p_revenue: "1to3m" }]) {
+      const path = questionPath(completeWith(answers));
+      expect(path.slice(-3).map((step) => step.question.id), answers.p_stage).toEqual(["pr_tried", "pr_cost", "pr_decider"]);
+    }
+    expect(SECTIONS.problem.means).toMatch(/what you have tried, what it is costing you, and who decides/);
+  });
+
+  it("is not asked of an idea, a very small business or one sent to an adviser", () => {
+    expect(sectionPath(completeWith({ p_stage: "idea", p_type: "maker" }))).not.toContain("problem");
+    expect(sectionPath(completeWith({ p_stage: "operating", p_type: "trader", p_age: "under2", p_staff: "0", p_revenue: "under1m" }))).not.toContain("problem");
+    expect(sectionPath(completeWith({ p_stage: "operating", p_type: "maker", p_age: "over10", p_staff: "over50", p_revenue: "over25m" }))).not.toContain("problem");
+  });
+
+  it("lets the owner skip what they have tried, but needs the cost and who decides", () => {
+    const answers = completeWith(trading);
+    expect(isComplete({ ...answers, pr_tried: "" })).toBe(true);
+    const { pr_cost: _cost, ...withoutCost } = answers;
+    expect(isComplete(withoutCost)).toBe(false);
+    expect(nextStep(withoutCost)?.question.id).toBe("pr_cost");
+  });
+
+  it("never changes the outline, the route or the recommendations", () => {
+    const answers = completeWith(trading);
+    const other = { ...answers, pr_tried: "Everything", pr_cost: "over5m", pr_decider: "board" };
+    const strip = (result: ReturnType<typeof evaluate>) => ({ route: result.route, outline: result.outline, primaryArea: result.primaryArea, primaryGap: result.primaryGap, offerings: result.offerings.map((offering) => offering.id) });
+    expect(strip(evaluate(other))).toEqual(strip(evaluate(answers)));
+  });
+
+  it("keeps the example under its intro to the kind of business, not the sector", () => {
+    expect(exampleHeading(SECTIONS.problem, { ...trading, p_sector: "retail" })).toBe("For a business like yours");
+    expect(exampleFor(SECTIONS.problem, { ...trading, p_sector: "retail" })).toMatch(/new salesperson/);
   });
 });

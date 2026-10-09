@@ -10,7 +10,7 @@ import type { CheckSummary } from "./businessCheck";
 import { latestInvitationStatuses } from "./clientOnboarding";
 import { isMissingPaymentTable, paymentRequestsFor, paymentStatusesByCheck } from "./payments";
 import { reportStatusFor } from "./fullReport/service";
-import type { PaymentItem } from "../shared/payments";
+import { effectivePaymentStatus, paymentDeadline, type PaymentItem } from "../shared/payments";
 import { getDb } from "./db";
 
 async function requireDatabase() {
@@ -95,8 +95,9 @@ const parseJson = <T>(text: string | null): T | null => {
 /** A business check's payment requests for the record drawer; `null` when the payment table is not there yet (0006). */
 async function paymentsOf(db: Pick<Database, "select">, businessCheckId: number) {
   try {
+    const now = new Date();
     return (await paymentRequestsFor(db, [businessCheckId])).map(({ id, item, amountNaira, reference, status, requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }) => (
-      { id, item, amountNaira, reference, status, requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }
+      { id, item, amountNaira, reference, status, displayStatus: effectivePaymentStatus({ status, requestedAt }, now), payBy: paymentDeadline(requestedAt), requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }
     ));
   } catch (error) {
     if (!isMissingPaymentTable(error)) throw error;

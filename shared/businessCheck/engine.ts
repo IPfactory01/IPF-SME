@@ -18,7 +18,7 @@
  * - Follow-up questions open only when the owner says an area is not clear.
  */
 import { OFFERINGS, offeringById, type Offering } from "./catalogue";
-import { SECTOR_EXAMPLES, SECTOR_IDS, SECTOR_NOUNS, type SectorId } from "./sectorExamples";
+import { hasSectorExamples, SECTOR_EXAMPLES, SECTOR_IDS, SECTOR_NOUNS, type SectorId } from "./sectorExamples";
 import {
   AREA_NAMES,
   GAP_LABELS,
@@ -79,7 +79,8 @@ export function sectionPath(answers: Answers): SectionId[] {
   if (!stageOf(answers)) return ["profile"];
   if (isLarge(answers)) return ["profile"];
   if (isVerySmall(answers)) return ["profile", "founder"];
-  return ["profile", "founder", ...areaSections(answers)];
+  // A trading business ends with the problem it most wants fixed; an idea has no such problem yet.
+  return ["profile", "founder", ...areaSections(answers), ...(stageOf(answers) === "idea" ? [] : ["problem" as const])];
 }
 
 function followUpsOpen(sectionId: SectionId, answers: Answers) {
@@ -165,7 +166,7 @@ function pickExample(section: Section, answers: Answers): Example | undefined {
   const stage = stageOf(answers);
   const sector = sectorOf(answers);
   if (stage === "idea" && section.examples.idea) return { text: section.examples.idea, heading: "For example" };
-  if (sector && section.id !== "profile") {
+  if (sector && hasSectorExamples(section.id)) {
     const noun = SECTOR_NOUNS[sector];
     return { text: SECTOR_EXAMPLES[section.id][sector], heading: stage === "idea" ? `For a ${noun} idea like yours` : `For a ${noun} business like yours` };
   }

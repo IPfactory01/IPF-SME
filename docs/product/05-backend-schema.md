@@ -60,8 +60,8 @@ erDiagram
 
 | Table | What it holds | Keys and rules | Personal or sensitive data |
 |---|---|---|---|
-| `business_checks` | One free business check: contact, answers, result, summary, pipeline stage, call dates | Unique public token; stage from `PIPELINE_STAGES` | Name, email, WhatsApp, how they heard, business name and description, answers (including revenue band) |
-| `payment_requests` | A bank-transfer request for the full report or Current State | Unique reference (`TS-R-000123`, `TS-CS-000123`); one per check and item; status requested, proof received, confirmed | Amount, reference, the team's note (bank transaction reference). Proof arrives by email and is not stored |
+| `business_checks` | One free business check: contact, answers, result, summary, pipeline stage, call dates | Unique public token; stage from `PIPELINE_STAGES` | Name, email, WhatsApp, how they heard, business name and description, answers (including revenue band and what the problem costs each month) |
+| `payment_requests` | A bank-transfer request for the full report or Current State | Unique reference (`TS-R-000123`, `TS-CS-000123`); one per check and item; status requested, proof received, confirmed. The 48-hour window runs from `requestedAt`, which resets when the details are sent again, so "48 hours passed" is worked out, not stored | Amount, reference, the team's note (bank transaction reference). Proof arrives by email and is not stored |
 | `full_reports` | The paid report: link, form answers, delivery | One per check; unique token hash; status awaiting_intake or delivered; `reportVersion` | **Financial figures**: revenue, costs, margin, prices, cash, money owed, loans, competitors |
 | `client_onboarding_invitations` | The single-use link that creates a client account | Unique token hash; one pending per check; status pending, accepted, revoked, expired; expiry | Email, name and business name at the time |
 

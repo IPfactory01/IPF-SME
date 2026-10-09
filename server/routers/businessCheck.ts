@@ -16,6 +16,7 @@ import { ENV } from "../_core/env";
 import { bookedCallTime, CALENDLY_EVENT_URI, findBookedCall } from "../calendly";
 import { recordAudit } from "../audit";
 import { publicProcedure, router } from "../_core/trpc";
+import { lagosTime } from "../lagosTime";
 
 const WINDOW_MS = 15 * 60 * 1000;
 
@@ -104,8 +105,6 @@ function contactOf(check: BusinessCheck, answers: Answers): CheckContact {
 }
 
 /** A date and time as the team reads it in the office email, e.g. "Wed, 14 Oct 2026, 10:00 am". */
-const lagosTime = (date: Date) =>
-  new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(date);
 
 export const businessCheckRouter = router({
   /** The details screen: records the owner as a lead before the first question. */

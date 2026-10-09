@@ -305,6 +305,17 @@ var PAYMENT_ITEM_DETAILS = {
   current_state: { name: "Current State", amount: PRICES.currentState, code: "CS" }
 };
 var PAYMENT_STATUSES = ["requested", "proof_received", "confirmed"];
+var PAYMENT_STATUS_LABELS = {
+  requested: "Awaiting payment",
+  proof_received: "Proof received",
+  confirmed: "Paid"
+};
+var PAYMENT_WINDOW_HOURS = 48;
+var paymentDeadline = (requestedAt) => new Date(new Date(requestedAt).getTime() + PAYMENT_WINDOW_HOURS * 36e5);
+function effectivePaymentStatus(request, now = /* @__PURE__ */ new Date()) {
+  return request.status === "requested" && now.getTime() > paymentDeadline(request.requestedAt).getTime() ? "expired" : request.status;
+}
+var PAYMENT_DISPLAY_LABELS = { ...PAYMENT_STATUS_LABELS, expired: "48 hours passed" };
 function paymentReference(item, businessCheckId) {
   return `TS-${PAYMENT_ITEM_DETAILS[item].code}-${String(businessCheckId).padStart(6, "0")}`;
 }
@@ -7247,6 +7258,54 @@ var SECTIONS = {
         ]
       }
     ]
+  },
+  /**
+   * "The problem" block of the concept note (§15): what the owner has tried, what it costs and who decides. Asked last, of
+   * trading businesses only; it prepares the discovery call and never changes the outline, the route or the score.
+   */
+  problem: {
+    id: "problem",
+    title: "The problem to fix",
+    means: "Three short questions about the problem you most want fixed: what you have tried, what it is costing you, and who decides. They help us prepare your free call.",
+    examples: {
+      mixed: "An owner who has tried a new salesperson and lower prices, loses about \u20A61,000,000 a month in missed sales, and decides with a co-founder."
+    },
+    questions: [
+      {
+        id: "pr_tried",
+        kind: "text",
+        prompt: "What have you already tried to fix it?",
+        help: "Optional. A line or two is enough.",
+        optional: true,
+        placeholder: "e.g. We hired a salesperson and cut prices, but sales stayed flat",
+        maxLength: 300,
+        options: []
+      },
+      {
+        id: "pr_cost",
+        kind: "single",
+        prompt: "Roughly what is this problem costing the business each month?",
+        help: "Lost sales, wasted spending or time, as a best guess.",
+        options: [
+          { value: "under500k", label: "Less than \u20A6500,000" },
+          { value: "500kto2m", label: "\u20A6500,000 to \u20A62,000,000" },
+          { value: "2mto5m", label: "\u20A62,000,000 to \u20A65,000,000" },
+          { value: "over5m", label: "More than \u20A65,000,000" },
+          { value: "unknown", label: "I can't put a number on it" }
+        ]
+      },
+      {
+        id: "pr_decider",
+        kind: "single",
+        prompt: "Who decides on spending to fix it?",
+        options: [
+          { value: "me", label: "I decide alone" },
+          { value: "with_partner", label: "I decide with a partner or co-founder" },
+          { value: "board", label: "A board or investors decide" },
+          { value: "someone_else", label: "Someone else decides" }
+        ]
+      }
+    ]
   }
 };
 var AREA_NAMES = {
@@ -7304,7 +7363,7 @@ function sectionPath(answers) {
   if (!stageOf(answers)) return ["profile"];
   if (isLarge(answers)) return ["profile"];
   if (isVerySmall(answers)) return ["profile", "founder"];
-  return ["profile", "founder", ...areaSections(answers)];
+  return ["profile", "founder", ...areaSections(answers), ...stageOf(answers) === "idea" ? [] : ["problem"]];
 }
 function followUpsOpen(sectionId, answers) {
   if (stageOf(answers) === "operating" && answers.p_age === "under2") {
@@ -9762,6 +9821,9 @@ async function resendReportLink(db, input) {
   return { success: true, deliveryStatus: delivery.status };
 }
 
+// server/lagosTime.ts
+var lagosTime = (date) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(date);
+
 // server/payments.ts
 var PLACEHOLDER_BANK_DETAILS = { bankName: "Test Bank", accountName: "IP Factory (test account)", accountNumber: "0000000000" };
 function bankDetails() {
@@ -9789,8 +9851,10 @@ function paymentDetailsEmail(input) {
       `Account name: ${bank.accountName}`,
       `Account number: ${bank.accountNumber}`,
       `Reference: ${input.reference}`,
+      `Pay by: ${lagosTime(input.deadline)} (Lagos time)`,
       "",
       "Please put the reference on your transfer, so we can match your payment to you.",
+      `These details hold for ${PAYMENT_WINDOW_HOURS} hours. If you need more time, reply to this email and we will send them again.`,
       "",
       "AFTER YOU PAY",
       "Reply to this email with your proof of payment: a screenshot of the transfer or your bank's receipt. We will confirm by email once the payment arrives.",
@@ -9852,9 +9916,10 @@ function isMissingPaymentTable(error) {
 }
 async function paymentStatusesByCheck(db, businessCheckIds) {
   const byCheck = /* @__PURE__ */ new Map();
+  const now = /* @__PURE__ */ new Date();
   try {
     for (const request of await paymentRequestsFor(db, businessCheckIds)) {
-      byCheck.set(request.businessCheckId, { ...byCheck.get(request.businessCheckId), [request.item]: request.status });
+      byCheck.set(request.businessCheckId, { ...byCheck.get(request.businessCheckId), [request.item]: effectivePaymentStatus(request, now) });
     }
   } catch (error) {
     if (!isMissingPaymentTable(error)) throw error;
@@ -9886,7 +9951,7 @@ async function requestPayment(db, input) {
     });
     return row;
   });
-  const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference });
+  const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference, deadline: paymentDeadline(request.requestedAt) });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
   await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq16(paymentRequests.id, request.id));
   const deliveryProblem = delivery.status === "Failed" ? delivery.reason : null;
@@ -10055,7 +10120,6 @@ function contactOf(check, answers) {
   const { businessName, description } = businessDetails(answers);
   return { fullName: check.fullName, email: check.email, whatsapp: check.whatsapp || void 0, heardFrom: check.heardFrom || void 0, businessName: businessName || void 0, description: description || void 0 };
 }
-var lagosTime = (date) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(date);
 var businessCheckRouter = router({
   /** The details screen: records the owner as a lead before the first question. */
   start: publicProcedure.input(businessCheckStartInput).mutation(async ({ input, ctx }) => {
@@ -10303,7 +10367,8 @@ var parseJson = (text3) => {
 };
 async function paymentsOf(db, businessCheckId) {
   try {
-    return (await paymentRequestsFor(db, [businessCheckId])).map(({ id, item, amountNaira, reference, status, requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }) => ({ id, item, amountNaira, reference, status, requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }));
+    const now = /* @__PURE__ */ new Date();
+    return (await paymentRequestsFor(db, [businessCheckId])).map(({ id, item, amountNaira, reference, status, requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }) => ({ id, item, amountNaira, reference, status, displayStatus: effectivePaymentStatus({ status, requestedAt }, now), payBy: paymentDeadline(requestedAt), requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }));
   } catch (error) {
     if (!isMissingPaymentTable(error)) throw error;
     console.error("[Payments] The payment_requests table is missing: apply migration 0006 with pnpm db:migrate.");

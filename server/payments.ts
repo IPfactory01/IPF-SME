@@ -3,7 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { businessChecks, clientOnboardingInvitations, paymentRequests, type PaymentRequest } from "../drizzle/schema";
 import { BRAND } from "../shared/brand";
 import { CURRENT_STATE, FULL_REPORT, formatNaira } from "../shared/businessSupport";
-import { PAYMENT_ITEM_DETAILS, paymentReference, type PaymentItem, type PaymentStatus } from "../shared/payments";
+import { effectivePaymentStatus, PAYMENT_ITEM_DETAILS, PAYMENT_WINDOW_HOURS, paymentDeadline, paymentReference, type PaymentDisplayStatus, type PaymentItem } from "../shared/payments";
 import type { PipelineStage } from "../shared/businessCheck/pipeline";
 import { ENV } from "./_core/env";
 import type { Database } from "./accountAuth";
@@ -11,6 +11,7 @@ import { recordAudit } from "./audit";
 import { createOnboardingInvitation, effectiveInvitationStatus } from "./clientOnboarding";
 import { deliverEmail } from "./email";
 import { issueReportLink } from "./fullReport/service";
+import { lagosTime } from "./lagosTime";
 
 /**
  * Payment by bank transfer until online payment (Paystack) is ready: the owner is emailed the amount, the account and a
@@ -31,7 +32,7 @@ export function bankDetails() {
 const firstName = (fullName: string) => fullName.trim().split(/\s+/)[0] || "there";
 
 /** The email with the payment details. Plain text; the business support layout turns it into the branded HTML. */
-export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem; reference: string }) {
+export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem; reference: string; deadline: Date }) {
   const bank = bankDetails();
   const { amount } = PAYMENT_ITEM_DETAILS[input.item];
   const report = input.item === "full_report";
@@ -51,8 +52,10 @@ export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem
       `Account name: ${bank.accountName}`,
       `Account number: ${bank.accountNumber}`,
       `Reference: ${input.reference}`,
+      `Pay by: ${lagosTime(input.deadline)} (Lagos time)`,
       "",
       "Please put the reference on your transfer, so we can match your payment to you.",
+      `These details hold for ${PAYMENT_WINDOW_HOURS} hours. If you need more time, reply to this email and we will send them again.`,
       "",
       "AFTER YOU PAY",
       "Reply to this email with your proof of payment: a screenshot of the transfer or your bank's receipt. We will confirm by email once the payment arrives.",
@@ -124,14 +127,15 @@ export function isMissingPaymentTable(error: unknown) {
 }
 
 /**
- * Payment status per business check for the admin console. Never breaks the console: if the payment table is missing
+ * Payment status per business check for the admin console, with "expired" for details whose 48 hours have passed. Never breaks the console: if the payment table is missing
  * (migration 0006 not applied yet) it logs why and shows no payments.
  */
 export async function paymentStatusesByCheck(db: Pick<Database, "select">, businessCheckIds?: number[]) {
-  const byCheck = new Map<number, Partial<Record<PaymentItem, PaymentStatus>>>();
+  const byCheck = new Map<number, Partial<Record<PaymentItem, PaymentDisplayStatus>>>();
+  const now = new Date();
   try {
     for (const request of await paymentRequestsFor(db, businessCheckIds)) {
-      byCheck.set(request.businessCheckId, { ...byCheck.get(request.businessCheckId), [request.item]: request.status });
+      byCheck.set(request.businessCheckId, { ...byCheck.get(request.businessCheckId), [request.item]: effectivePaymentStatus(request, now) });
     }
   } catch (error) {
     if (!isMissingPaymentTable(error)) throw error;
@@ -179,7 +183,8 @@ export async function requestPayment(db: Database, input: { businessCheckId: num
     return row;
   });
 
-  const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference });
+  // The window starts when the details go out; sending them again starts a new one.
+  const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference, deadline: paymentDeadline(request.requestedAt) });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" })
     .catch((error: unknown) => ({ status: "Failed" as const, reason: error instanceof Error ? error.message : "Unknown error" }));
   await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq(paymentRequests.id, request.id));

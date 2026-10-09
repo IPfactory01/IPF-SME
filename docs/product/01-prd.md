@@ -49,7 +49,7 @@ The whole journey is shown up front with prices (concept note D1). Prices live i
 | 1 | Free business check | Free | Ten minutes on a phone; a colour-coded outline of the ten problem areas; one of four gaps; a summary | **Built** |
 | 1a | Full report (optional) | ₦100,000 | A business-plan-depth report, built from the check and a 17-question form, emailed as a PDF the moment the form is finished | **Built** |
 | 2 | Discovery call | Free, 20 minutes at most | An honest answer: can we help, and with what | **Built** (booking and outcome) |
-| 3 | Payment for Current State | From ₦500,000 | Paid after the call. Paystack is the agreed method; until it is set up, bank transfer with manual confirmation | **Built** (manual confirmation, interim) |
+| 3 | Payment for Current State | ₦500,000 (fixed) | Paid after the call, within 48 hours. Paystack is the agreed method; until it is set up, bank transfer with manual confirmation | **Built** (manual confirmation, interim) |
 | 4 | Getting set up (onboarding) | Included | Three working days: client account, welcome note, data request, analyst assigned, both Current State calls booked | **Partly built** (account only) |
 | 5 | Current State | Included in step 3 | Two weeks, one 90-minute call a week; ends with proceed, fix the basics first, or refer to Advisory | **Not built** in the platform |
 | 6 | The six-week fix | ₦1,200,000 | One problem; what to do and the tools; a weekly 45-minute check-in; one measure tracked | **Not built** |
@@ -92,6 +92,10 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
 - The summary is AI-written and checked against the service catalogue; if the AI fails, a rules summary is used. The
   owner's description is the main source for tailoring; when it is unclear or does not fit the sector, the sector wins
   (*branch*). Scoring, routes and colours are deterministic and never changed by the AI.
+- Trading businesses end with **the problem to fix** (concept note §15, block 3): what they have already tried
+  (optional), roughly what the problem costs each month, and who decides on spending to fix it. These prepare the
+  discovery call and never change the outline, the route or the score. Ideas, very small and very large businesses
+  skip it.
 - Progress is saved on the device and on the server; a returning owner resumes where they stopped.
 - Emails: the owner gets their summary; the office gets a notice with every answer.
 - **Status: Built** (`client/src/pages/BusinessCheck.tsx`, `shared/businessCheck/*`, `server/businessCheck.ts`,
@@ -129,6 +133,9 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
   proof or confirm.
 - Bank details come from the hosting settings. Until all three are set, emails show a test account marked
   "TEST DETAILS - DO NOT PAY".
+- **The 48-hour window** (concept note §7): payment details hold for 48 hours, and the email says when to pay by, in
+  Lagos time. After that the team sees "48 hours passed" and either sends the details again (a new 48 hours) or moves
+  the business to Lost. The stage never moves on its own, and money that still arrives can always be confirmed.
 - Confirming Current State moves the business to Won and sends the client account invitation.
 - **Paystack is the agreed way to pay** (concept note §11): the owner pays online and the payment confirms itself, with the
   same effects as "Confirm payment". Manual confirmation is the interim method only because the Paystack account is not
@@ -261,6 +268,12 @@ From concept note §13. The platform must make these countable without a spreads
 | The description is the main source for tailoring the AI summary; the sector wins when the description does not fit | ET |
 | The report form asks how each product is charged, so commission and margin businesses get a true report | ET |
 | The brand palette is fixed and enforced by tests; the IP Factory logo is on every email to clients | ET |
+| Current State is ₦500,000, fixed: no price grades (closes the concept note's Open 1) | ET |
+| Payment details hold for 48 hours; the team sends fresh details or moves the business to Lost | ET |
+| The check asks trading businesses what they have tried, what the problem costs and who decides | ET |
+| The check stays rules-driven: fixed questions and scoring, with AI writing only the summary | ET |
+| Younger businesses are not asked about exit (under 5 years) or owner transition (under 10 years); those areas show as "Not assessed" | ET |
+| The client account invitation goes out when Current State is paid; staff can still invite by hand at any time | ET |
 
 ## 10. Open decisions
 
@@ -269,8 +282,37 @@ From concept note §13. The platform must make these countable without a spreads
 | O1 | **Transcripts in the engagement room.** Notes reach the owner the same day (decided, §7). Should the full transcript also be visible? | Reviewed notes by default; the transcript on request | ET |
 | O2 | **Messages.** The concept note sets one WhatsApp group per client (§17). Do we also need a thread inside the platform? | Keep the WhatsApp group for conversation; record decisions and actions in the room. Add a thread only if handovers between analysts suffer | ET, Lewis |
 | O3 | **Who releases what to the client.** | Analysts share notes and data requests; the desk lead approves every prescription and plan | ET, Lewis |
-| O4 | Current State: one price or two grades (concept note Open 1) | Keep ₦500,000 until the first ten calls show the spread | Lewis, for ET |
 | O5 | Paystack go-live: who opens the business account, and by when | Open it now; the build starts the day the test keys are in Vercel (implementation plan §4) | ET, Lewis |
 | O6 | Ongoing support: content and price after the first fix | Define per client at fix close (D3) | ET |
 | O7 | Who signs client terms (IPF, KIP or the venture) and the P&L owner | — | ET |
 | O8 | File storage for the engagement room (concept note uses one Google Drive folder per client) | A private Supabase Storage bucket, so files sit behind the same access rules as the record | Lewis, Richard |
+| O9 | Where actions live (the concept note says one place for actions: ClickUp) | Actions the client must see (theirs and ours) in the engagement room; the team's internal tasks stay in ClickUp | ET, Lewis |
+
+O4 (one Current State price or two grades) was decided on 9 October: ₦500,000, fixed.
+
+## 11. Where we depart from the concept note
+
+The concept note v0.8.1 stays the strategy. Where the built product differs from it, this is the record, with who
+decided. "Confirmed" means a change made while building and confirmed by ET on 9 October 2026.
+
+| Concept note v0.8.1 | What The Shift does | Status |
+|---|---|---|
+| Built on IP Factory's copy of Jump, on Manus (D5, D7, D8) | Vercel, Supabase and GitHub; Manus remains only for the AI summary and old file storage | Decided |
+| Product name "Operating Partner [working name]" | "The Shift, by IP Factory" | Decided (Lewis, 7 October) |
+| Hero: "You know what your business needs…" | Headline "Find it. Fix it. See the results." | Decided |
+| A Paystack link after the call | Bank transfer with manual confirmation until Paystack is set up; Paystack remains the agreed method | Interim |
+| Full report "by email", from the check | Paid, then a 17-question form; a deterministic PDF sent the moment it is finished | Decided (ET, 8 October) |
+| Discovery calls booked in two blocks a week on the platform | Calendly, embedded on the result | Decided |
+| Client area = the Jump portal (uploads, feedback, files) | Invitation-only client accounts; the engagement room is next. The Jump portal is legacy, so uploads wait for phase 3 | Decided |
+| Call outcome: fit, refer, decline | Pipeline stages: Lead, Qualified lead, Call booked, Opportunity, Won, Lost, Nurture, Referred | Decided |
+| Current State "from ₦500,000", grades to set (Open 1) | ₦500,000, fixed | Decided (ET, 9 October) |
+| An AI trained on ET's logic asks the next question (D8, D11) | A fixed decision tree with fixed scoring; AI writes only the summary, checked against the catalogue | Confirmed |
+| Owners trading 2 to 10 years are asked every area | Exit and value from 5 years, owner transition from 10 years; skipped areas show as "Not assessed" | Confirmed |
+| The problem block: in their words, tried, costing, who decides, hours, how they heard, referral code | All asked, except a referral code (referrals are not built in the new flow yet) | Built (9 October) |
+| Payment link with a 48-hour window | Payment details hold for 48 hours | Built (9 October) |
+| Lovelyn changes prices and copy without a developer | Prices and copy live in the code, so a change needs a developer; a settings screen is planned | Planned (phase 5) |
+| Crossing problems show as two colours on the outline | One colour per area and one main gap | Planned (phase 5) |
+| One Google Drive folder per client | A private Supabase Storage bucket | Proposed (O8) |
+| One place for actions: ClickUp | Client-facing actions in the engagement room; internal tasks in ClickUp | Proposed (O9) |
+| Richard's locked flow: Fit → onboarding invitation | Fit → Current State payment → invitation (the concept note's pay-then-set-up order); a manual invitation is still possible at Fit | Confirmed; `Instruction.md` to be updated by Richard |
+

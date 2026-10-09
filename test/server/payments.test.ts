@@ -3,6 +3,7 @@ import { ENV } from "@server/_core/env";
 import { buildBusinessSupportEmailHtml } from "@server/emailTemplates";
 import { bankDetails, isMissingPaymentTable, paymentConfirmedEmail, paymentDetailsEmail, paymentStatusesByCheck } from "@server/payments";
 import { BRAND } from "@shared/brand";
+import { lagosTime } from "@server/lagosTime";
 
 const saved = { bank: ENV.paymentBankName, name: ENV.paymentAccountName, number: ENV.paymentAccountNumber };
 afterEach(() => {
@@ -34,10 +35,24 @@ describe("the bank account owners pay into", () => {
   });
 });
 
+/** 48 hours after details sent at 3:05 pm Lagos time on Friday 9 October 2026. */
+const DEADLINE = new Date("2026-10-11T14:05:00Z");
+
 describe("the payment details email", () => {
+  it("says when to pay by, in Lagos time, and that the details hold for 48 hours", () => {
+    configure();
+    const email = paymentDetailsEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012", deadline: DEADLINE });
+    expect(lagosTime(DEADLINE)).toMatch(/^Sun, 11 Oct 2026, 3:05\s?pm$/);
+    expect(email.body).toContain(`Pay by: ${lagosTime(DEADLINE)} (Lagos time)`);
+    expect(email.body).toContain("These details hold for 48 hours. If you need more time, reply to this email and we will send them again.");
+    // It sits in the details table with the amount and the reference.
+    expect(buildBusinessSupportEmailHtml(email.body)).toMatch(/>Pay by<\/td><td[^>]*>Sun, 11 Oct 2026/);
+  });
+
+
   it("gives the amount, the account, the reference and how to send proof", () => {
     configure();
-    const email = paymentDetailsEmail({ fullName: "Ada Example", item: "full_report", reference: "TS-R-000012" });
+    const email = paymentDetailsEmail({ fullName: "Ada Example", item: "full_report", reference: "TS-R-000012" , deadline: DEADLINE });
     expect(email.subject).toBe("Payment details for your full business check report");
     for (const line of ["Dear Ada,", "Amount: ₦100,000", "Bank: Example Bank", "Account name: Intellectual Property Factory Ltd", "Account number: 0123456789", "Reference: TS-R-000012", "Reply to this email with your proof of payment", "Your report is emailed to you the moment you finish it."]) {
       expect(email.body).toContain(line);
@@ -47,7 +62,7 @@ describe("the payment details email", () => {
 
   it("says Current State starts once the payment is confirmed", () => {
     configure();
-    const email = paymentDetailsEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012" });
+    const email = paymentDetailsEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012" , deadline: DEADLINE });
     expect(email.subject).toBe("Payment details for your Current State");
     expect(email.body).toContain("Amount: ₦500,000");
     expect(email.body).toContain("Then your Current State starts. Three working days to get set up, then we start.");
@@ -55,7 +70,7 @@ describe("the payment details email", () => {
 
   it("warns in capitals, as a heading, when the details are placeholders", () => {
     clear();
-    const email = paymentDetailsEmail({ fullName: "Ada Example", item: "full_report", reference: "TS-R-000012" });
+    const email = paymentDetailsEmail({ fullName: "Ada Example", item: "full_report", reference: "TS-R-000012" , deadline: DEADLINE });
     expect(email.body).toContain("TEST DETAILS - DO NOT PAY");
     const html = buildBusinessSupportEmailHtml(email.body);
     expect(html).toContain(`color:${BRAND.palette["highlight-ink"]};font-weight:700;">TEST DETAILS - DO NOT PAY<`);

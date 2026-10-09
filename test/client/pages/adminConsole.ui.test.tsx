@@ -664,10 +664,14 @@ describe("full report requests in Business Checks", () => {
 });
 
 describe("payments in Business Checks", () => {
-  const payment = (over: Record<string, unknown> = {}) => ({
-    id: 7, item: "current_state", amountNaira: 500_000, reference: "TS-CS-000001", status: "requested", requestedAt: new Date("2026-10-08T10:00:00Z"),
-    deliveryStatus: "Simulated", proofReceivedAt: null, confirmedAt: null, note: null, ...over,
-  });
+  // As the server sends it: the status the team sees (displayStatus) and the end of the 48-hour window (payBy).
+  const payment = (over: Record<string, unknown> = {}) => {
+    const row = {
+      id: 7, item: "current_state", amountNaira: 500_000, reference: "TS-CS-000001", status: "requested", requestedAt: new Date("2026-10-08T10:00:00Z"),
+      deliveryStatus: "Simulated", proofReceivedAt: null, confirmedAt: null, note: null, ...over,
+    } as Record<string, unknown> & { status: string; requestedAt: Date };
+    return { displayStatus: row.status, payBy: new Date(row.requestedAt.getTime() + 48 * 3_600_000), ...row };
+  };
   const payments = () => within(drawer().getByRole("heading", { name: "Payments" }).closest("section")!);
 
   it("shows where each payment stands beside the stage in the list", () => {
@@ -719,6 +723,27 @@ describe("payments in Business Checks", () => {
     expect(currentState.getByText("Paid")).toBeTruthy();
     expect(currentState.getByText("Paid, confirmed 9 Oct 2026")).toBeTruthy();
     expect(currentState.queryByRole("button")).toBeNull();
+  });
+
+  it("shows the 48-hour window: the pay-by time while it runs, and what to do once it has passed", () => {
+    api.checks = [check({ payments: { current_state: "expired" } })];
+    api.details[1] = detailFor({ payments: [payment()] });
+    renderConsole();
+    expect(within(rowOf("Ada Okafor")).getByText("Current State: 48 hours passed")).toBeTruthy();
+    openRow("Ada Okafor");
+    expect(within(payments().getByRole("listitem", { name: "Current State" })).getByText(/pay by 10 Oct 2026/)).toBeTruthy();
+    cleanup();
+
+    api.details[1] = detailFor({ payments: [payment({ displayStatus: "expired" })] });
+    renderConsole();
+    openRow("Ada Okafor");
+    const currentState = within(payments().getByRole("listitem", { name: "Current State" }));
+    expect(currentState.getByText("48 hours passed")).toBeTruthy();
+    expect(currentState.getByText(/Send the details again for a new window, or move the business to Lost/)).toBeTruthy();
+    // Money that still arrives can be recorded and confirmed.
+    expect(currentState.getByRole("button", { name: "Send the details again" })).toBeTruthy();
+    expect(currentState.getByRole("button", { name: "Proof received" })).toBeTruthy();
+    expect(currentState.getByRole("button", { name: "Confirm payment" })).toBeTruthy();
   });
 
   it("says when the payment table is not in the database yet", () => {

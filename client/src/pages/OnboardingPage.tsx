@@ -19,18 +19,24 @@ export default function OnboardingPage() {
   const { account } = useAccount();
   const utils = trpc.useUtils();
   const preview = trpc.onboarding.preview.useQuery({ token }, { retry: false, refetchOnWindowFocus: false });
+  // Someone else signed in on this browser (often the team, testing) must not be sent to their own area or create
+  // the client's account under their session: they are asked to sign out first.
+  const invitedEmail = preview.data?.available ? preview.data.email : null;
+  const signedInAsSomeoneElse = Boolean(account && invitedEmail && account.user.email.toLowerCase() !== invitedEmail.toLowerCase());
   const [form, setForm] = useState<{ fullName: string; password: string; confirmPassword: string; businessName: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (account) setLocation(account.landingPath);
-  }, [account, setLocation]);
+    if (account && !preview.isLoading && !signedInAsSomeoneElse) setLocation(account.landingPath);
+  }, [account, preview.isLoading, signedInAsSomeoneElse, setLocation]);
 
   useEffect(() => {
     if (preview.data?.available && form === null) {
       setForm({ fullName: preview.data.fullName, password: "", confirmPassword: "", businessName: preview.data.businessName });
     }
   }, [preview.data, form]);
+
+  const signOut = trpc.account.signOut.useMutation({ onSuccess: () => utils.account.me.setData(undefined, null) });
 
   const accept = trpc.onboarding.accept.useMutation({
     onSuccess: view => {
@@ -61,6 +67,23 @@ export default function OnboardingPage() {
   }
 
   const email = preview.data.email;
+  if (account && signedInAsSomeoneElse) {
+    return shell(
+      <Card className="rounded-none border-line-soft bg-white shadow-sm">
+        <CardHeader className="space-y-2 pb-4">
+          <CardTitle className="font-serif text-2xl font-bold tracking-tight">You are signed in as someone else</CardTitle>
+          <CardDescription className="text-sm text-ink-muted">
+            This invitation is for <strong className="text-ink">{email}</strong>, but this browser is signed in as <strong className="text-ink">{account.user.email}</strong>. Sign out to create the account for {email}.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button type="button" disabled={signOut.isPending} onClick={() => signOut.mutate()} size="lg" className="w-full rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">
+            {signOut.isPending ? "Signing out…" : "Sign out and continue"}
+          </Button>
+        </CardContent>
+      </Card>,
+    );
+  }
   const values = form!;
   const set = (key: keyof typeof values) => (event: { target: { value: string } }) => {
     setForm(current => ({ ...current!, [key]: event.target.value }));

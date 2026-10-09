@@ -235,6 +235,27 @@ describe("onboarding screen (invitation only)", () => {
     const location = renderOnboarding();
     await waitFor(() => expect(location.history.at(-1)).toBe("/dashboard"));
   });
+
+  it("does not send someone else who is signed in (the team, testing) to their own area: it asks them to sign out first", async () => {
+    api.state.me = STAFF;
+    api.state.preview = INVITED;
+    const location = renderOnboarding();
+    expect(screen.getByText("You are signed in as someone else")).toBeTruthy();
+    expect(screen.getByText(/This invitation is for/).textContent).toContain("lewis@example.com");
+    expect(screen.queryByLabelText("Password")).toBeNull();
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(location.history.at(-1)).toContain("/onboarding/");
+    fireEvent.click(screen.getByRole("button", { name: "Sign out and continue" }));
+    expect(api.state.signOutCalls).toBe(1);
+    expect(api.state.setData).toEqual([null]);
+  });
+
+  it("waits for the invitation before sending a signed-in visitor anywhere", () => {
+    api.state.me = STAFF;
+    api.state.previewLoading = true;
+    const location = renderOnboarding();
+    expect(location.history.at(-1)).toContain("/onboarding/");
+  });
 });
 
 describe("no public registration", () => {

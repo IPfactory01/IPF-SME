@@ -173,8 +173,8 @@ __export(ics_exports, {
   generateICS: () => generateICS
 });
 function generateICS(options) {
-  const formatDate = (date) => {
-    return date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  const formatDate = (date2) => {
+    return date2.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
   };
   const now = formatDate(/* @__PURE__ */ new Date());
   const dtstart = formatDate(options.startTime);
@@ -219,7 +219,7 @@ var init_ics = __esm({
 // server/_core/app.ts
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { TRPCError as TRPCError19 } from "@trpc/server";
+import { TRPCError as TRPCError21 } from "@trpc/server";
 
 // shared/const.ts
 var COOKIE_NAME = "app_session_id";
@@ -253,7 +253,7 @@ import pg from "pg";
 
 // drizzle/schema.ts
 import { sql } from "drizzle-orm";
-import { index, integer, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, numeric, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 
 // shared/businessCheck/pipeline.ts
 var PIPELINE_STAGES = ["lead", "qualified_lead", "call_booked", "opportunity", "won", "lost", "nurture", "referred"];
@@ -320,6 +320,67 @@ function effectivePaymentStatus(request, now = /* @__PURE__ */ new Date()) {
 var PAYMENT_DISPLAY_LABELS = { ...PAYMENT_STATUS_LABELS, expired: "48 hours passed" };
 function paymentReference(item, businessCheckId) {
   return `TS-${PAYMENT_ITEM_DETAILS[item].code}-${String(businessCheckId).padStart(6, "0")}`;
+}
+
+// shared/engagement.ts
+var ENGAGEMENT_STAGES = ["setting_up", "assessment", "fix", "plan", "closed"];
+var ENGAGEMENT_STAGE_LABELS = {
+  setting_up: "Getting set up",
+  assessment: CURRENT_STATE.name,
+  fix: "The fix",
+  plan: "Your plan",
+  closed: "Closed"
+};
+var ENGAGEMENT_STAGE_SUMMARIES = {
+  setting_up: "Three working days: we send what we need from you, name your team and book both calls.",
+  assessment: CURRENT_STATE.what,
+  fix: "One problem and one number to move. You do the work; we tell you what to do and check it every week.",
+  plan: "The plan in your hands, and what support looks like from here.",
+  closed: "This engagement is closed."
+};
+var ENGAGEMENT_TEAM_ROLES = ["lead", "analyst", "partner", "expert"];
+var ENGAGEMENT_TEAM_ROLE_LABELS = { lead: "Engagement lead", analyst: "Analyst", partner: "Partner", expert: "Specialist" };
+var ENGAGEMENT_AUDIENCES = ["team", "owner", "business"];
+var ENGAGEMENT_AUDIENCE_LABELS = { team: "IP Factory only", owner: "Owner only", business: "Owner and their team" };
+var CLIENT_ACCESS_LEVELS = ["full", "contributor"];
+var ENGAGEMENT_SESSION_KINDS = ["assessment_call", "check_in", "review", "other"];
+var ENGAGEMENT_SESSION_KIND_LABELS = { assessment_call: `${CURRENT_STATE.name} call`, check_in: "Weekly check-in", review: "Review", other: "Call" };
+var ENGAGEMENT_SESSION_STATUSES = ["planned", "held", "cancelled"];
+var ENGAGEMENT_TASK_KINDS = ["data_request", "action"];
+var ENGAGEMENT_TASK_SIDES = ["client", "ipf"];
+var ENGAGEMENT_TASK_STATUSES = ["open", "received", "accepted", "needs_more", "done", "cancelled"];
+var ENGAGEMENT_TASK_STATUS_LABELS = { open: "To do", received: "Sent, we are checking", accepted: "Received", needs_more: "We need a bit more", done: "Done", cancelled: "No longer needed" };
+var ENGAGEMENT_DELIVERABLE_KINDS = ["findings", "problem_statement", "prescription", "tools", "plan", "other"];
+var ENGAGEMENT_DELIVERABLE_KIND_LABELS = { findings: "Findings", problem_statement: "Problem statement", prescription: "Prescription", tools: "Tools", plan: "Plan", other: "Document" };
+var DELIVERABLES_NEEDING_APPROVAL = ["prescription", "plan"];
+var ENGAGEMENT_DELIVERABLE_STATUSES = ["draft", "awaiting_approval", "approved", "shared"];
+var ASSESSMENT_TEMPLATE = {
+  dataRequests: [
+    { title: "Your last 12 months of sales", detail: "Monthly totals are enough: a spreadsheet, your sales book or a bank statement export." },
+    { title: "What you spend each month", detail: "Rent, salaries, stock, transport and anything else that goes out regularly. Estimates are fine." },
+    { title: "Your price list", detail: "What you sell and what you charge for each, or how you work out a price." },
+    { title: "Who works in the business", detail: "Names or roles, what each person does, and who they report to." },
+    { title: "Anything you already track", detail: "Reports, dashboards or notebooks you look at to run the business. Skip this if there is nothing." }
+  ],
+  sessions: [
+    { kind: "assessment_call", title: `${CURRENT_STATE.name} call 1`, durationMinutes: 90 },
+    { kind: "assessment_call", title: `${CURRENT_STATE.name} call 2`, durationMinutes: 90 }
+  ]
+};
+function journeyOf(stage) {
+  const steps = ENGAGEMENT_STAGES.filter((item) => item !== "closed");
+  const at = stage === "closed" ? steps.length : steps.indexOf(stage);
+  return steps.map((item, index2) => ({ stage: item, label: ENGAGEMENT_STAGE_LABELS[item], summary: ENGAGEMENT_STAGE_SUMMARIES[item], state: index2 < at ? "done" : index2 === at ? "current" : "next" }));
+}
+function clientCanSee(audience, viewer) {
+  if (audience === "team") return false;
+  if (viewer.kind === "owner") return true;
+  return audience === "business" && viewer.access === "full";
+}
+function clientCanSeeTask(task, viewer) {
+  if (task.side !== "client") return viewer.kind === "owner" || viewer.access === "full";
+  if (viewer.kind === "owner" || viewer.access === "full") return true;
+  return task.assigneeUserId === viewer.userId;
 }
 
 // drizzle/schema.ts
@@ -855,6 +916,186 @@ var fullReports = pgTable("full_reports", {
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
 });
+var engagementsStageEnum = pgEnum("engagements_stage", ENGAGEMENT_STAGES);
+var engagementAudienceEnum = pgEnum("engagement_audience", ENGAGEMENT_AUDIENCES);
+var engagementTeamRoleEnum = pgEnum("engagement_team_role", ENGAGEMENT_TEAM_ROLES);
+var engagementSessionsKindEnum = pgEnum("engagement_sessions_kind", ENGAGEMENT_SESSION_KINDS);
+var engagementSessionsStatusEnum = pgEnum("engagement_sessions_status", ENGAGEMENT_SESSION_STATUSES);
+var engagementTasksKindEnum = pgEnum("engagement_tasks_kind", ENGAGEMENT_TASK_KINDS);
+var engagementTasksSideEnum = pgEnum("engagement_tasks_side", ENGAGEMENT_TASK_SIDES);
+var engagementTasksStatusEnum = pgEnum("engagement_tasks_status", ENGAGEMENT_TASK_STATUSES);
+var engagementDeliverablesKindEnum = pgEnum("engagement_deliverables_kind", ENGAGEMENT_DELIVERABLE_KINDS);
+var engagementDeliverablesStatusEnum = pgEnum("engagement_deliverables_status", ENGAGEMENT_DELIVERABLE_STATUSES);
+var clientAccessLevelEnum = pgEnum("client_access_level", CLIENT_ACCESS_LEVELS);
+var engagements = pgTable("engagements", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  businessCheckId: integer("businessCheckId").notNull().unique().references(() => businessChecks.id),
+  businessId: integer("businessId").references(() => businesses.id),
+  /** The confirmed Current State Assessment payment that started it. */
+  paymentRequestId: integer("paymentRequestId").references(() => paymentRequests.id),
+  stage: engagementsStageEnum("stage").default("setting_up").notNull(),
+  /** The problem area chosen at the end of the assessment (shared/businessSupport.ts PROBLEM_AREAS number). */
+  problemArea: integer("problemArea"),
+  subProblem: varchar("subProblem", { length: 255 }),
+  /** In the owner's words: exactly one problem per fix. */
+  problemStatement: text("problemStatement"),
+  assessmentStartedAt: timestamp("assessmentStartedAt", { withTimezone: true }),
+  fixStartedAt: timestamp("fixStartedAt", { withTimezone: true }),
+  closedAt: timestamp("closedAt", { withTimezone: true }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [index("engagements_business_idx").on(table2.businessId), index("engagements_stage_idx").on(table2.stage)]);
+var engagementTeam = pgTable("engagement_team", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  userId: integer("userId").notNull().references(() => users.id),
+  role: engagementTeamRoleEnum("role").notNull(),
+  assignedByUserId: integer("assignedByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
+}, (table2) => [unique("engagement_team_engagement_user_unique").on(table2.engagementId, table2.userId), index("engagement_team_user_idx").on(table2.userId)]);
+var engagementSessions = pgTable("engagement_sessions", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  kind: engagementSessionsKindEnum("kind").notNull(),
+  title: varchar("title", { length: 160 }).notNull(),
+  scheduledFor: timestamp("scheduledFor", { withTimezone: true }),
+  durationMinutes: integer("durationMinutes"),
+  meetingLink: varchar("meetingLink", { length: 512 }),
+  agenda: text("agenda"),
+  status: engagementSessionsStatusEnum("status").default("planned").notNull(),
+  /** The notes the client may see once shared; `internalNotes` never leave IP Factory. */
+  clientNotes: text("clientNotes"),
+  internalNotes: text("internalNotes"),
+  notesAudience: engagementAudienceEnum("notesAudience").default("owner").notNull(),
+  notesSharedAt: timestamp("notesSharedAt", { withTimezone: true }),
+  notesSharedByUserId: integer("notesSharedByUserId").references(() => users.id),
+  createdByUserId: integer("createdByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [index("engagement_sessions_engagement_idx").on(table2.engagementId)]);
+var engagementTasks = pgTable("engagement_tasks", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  kind: engagementTasksKindEnum("kind").notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  detail: text("detail"),
+  side: engagementTasksSideEnum("side").notNull(),
+  /** A named person, or null for "the business" (client side) or "the team" (IP Factory side). */
+  assigneeUserId: integer("assigneeUserId").references(() => users.id),
+  dueOn: date("dueOn"),
+  status: engagementTasksStatusEnum("status").default("open").notNull(),
+  /** Why more is needed, or how the client sent it ("by WhatsApp"). */
+  statusNote: varchar("statusNote", { length: 500 }),
+  /** The session the action came out of. */
+  sessionId: integer("sessionId").references(() => engagementSessions.id, { onDelete: "set null" }),
+  createdByUserId: integer("createdByUserId").references(() => users.id),
+  completedAt: timestamp("completedAt", { withTimezone: true }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [index("engagement_tasks_engagement_idx").on(table2.engagementId)]);
+var engagementDeliverables = pgTable("engagement_deliverables", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  kind: engagementDeliverablesKindEnum("kind").notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  summary: text("summary"),
+  status: engagementDeliverablesStatusEnum("status").default("draft").notNull(),
+  audience: engagementAudienceEnum("audience").default("owner").notNull(),
+  approvedByUserId: integer("approvedByUserId").references(() => users.id),
+  approvedAt: timestamp("approvedAt", { withTimezone: true }),
+  sharedByUserId: integer("sharedByUserId").references(() => users.id),
+  sharedAt: timestamp("sharedAt", { withTimezone: true }),
+  /** The client's sign-off. */
+  clientAcceptedByUserId: integer("clientAcceptedByUserId").references(() => users.id),
+  clientAcceptedAt: timestamp("clientAcceptedAt", { withTimezone: true }),
+  createdByUserId: integer("createdByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [index("engagement_deliverables_engagement_idx").on(table2.engagementId)]);
+var engagementFiles = pgTable("engagement_files", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  /** The data request it answers, or the deliverable it belongs to. */
+  taskId: integer("taskId").references(() => engagementTasks.id, { onDelete: "set null" }),
+  deliverableId: integer("deliverableId").references(() => engagementDeliverables.id, { onDelete: "set null" }),
+  storageKey: varchar("storageKey", { length: 512 }).notNull().unique(),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  contentType: varchar("contentType", { length: 128 }).notNull(),
+  sizeBytes: integer("sizeBytes").notNull(),
+  audience: engagementAudienceEnum("audience").default("owner").notNull(),
+  uploadedByUserId: integer("uploadedByUserId").notNull().references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
+}, (table2) => [index("engagement_files_engagement_idx").on(table2.engagementId)]);
+var engagementComments = pgTable("engagement_comments", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  deliverableId: integer("deliverableId").notNull().references(() => engagementDeliverables.id, { onDelete: "cascade" }),
+  authorUserId: integer("authorUserId").notNull().references(() => users.id),
+  body: text("body").notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
+}, (table2) => [index("engagement_comments_deliverable_idx").on(table2.deliverableId)]);
+var engagementMeasures = pgTable("engagement_measures", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().unique().references(() => engagements.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 160 }).notNull(),
+  definition: text("definition"),
+  unit: varchar("unit", { length: 32 }),
+  baselineValue: numeric("baselineValue", { precision: 18, scale: 4 }),
+  targetValue: numeric("targetValue", { precision: 18, scale: 4 }),
+  createdByUserId: integer("createdByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+});
+var engagementCheckins = pgTable("engagement_checkins", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  weekNumber: integer("weekNumber").notNull(),
+  heldOn: date("heldOn"),
+  progress: text("progress"),
+  blockers: text("blockers"),
+  nextStep: text("nextStep"),
+  measureReading: numeric("measureReading", { precision: 18, scale: 4 }),
+  questionsAsked: text("questionsAsked"),
+  hoursLead: numeric("hoursLead", { precision: 5, scale: 2 }),
+  hoursAnalyst: numeric("hoursAnalyst", { precision: 5, scale: 2 }),
+  hoursPartner: numeric("hoursPartner", { precision: 5, scale: 2 }),
+  aiUsed: boolean("aiUsed"),
+  recordedByUserId: integer("recordedByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [unique("engagement_checkins_engagement_week_unique").on(table2.engagementId, table2.weekNumber)]);
+var businessMemberAccess = pgTable("business_member_access", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  membershipId: integer("membershipId").notNull().unique().references(() => businessMemberships.id, { onDelete: "cascade" }),
+  access: clientAccessLevelEnum("access").notNull(),
+  grantedByUserId: integer("grantedByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+});
+var accountInvitationsKindEnum = pgEnum("account_invitations_kind", ["staff", "business_member"]);
+var accountInvitationsStatusEnum = pgEnum("account_invitations_status", ["pending", "accepted", "revoked", "expired"]);
+var accountInvitationsDeliveryStatusEnum = pgEnum("account_invitations_delivery_status", ["Sent", "Failed", "Simulated"]);
+var accountInvitations = pgTable("account_invitations", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  kind: accountInvitationsKindEnum("kind").notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  fullName: varchar("fullName", { length: 255 }).notNull(),
+  /** staff only */
+  platformRole: userPlatformRolesRoleEnum("platformRole"),
+  /** business_member only */
+  businessId: integer("businessId").references(() => businesses.id),
+  access: clientAccessLevelEnum("access"),
+  tokenHash: varchar("tokenHash", { length: 64 }).notNull().unique(),
+  status: accountInvitationsStatusEnum("status").default("pending").notNull(),
+  expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
+  createdByUserId: integer("createdByUserId").notNull().references(() => users.id),
+  acceptedByUserId: integer("acceptedByUserId").references(() => users.id),
+  acceptedAt: timestamp("acceptedAt", { withTimezone: true }),
+  revokedAt: timestamp("revokedAt", { withTimezone: true }),
+  deliveryStatus: accountInvitationsDeliveryStatusEnum("deliveryStatus").default("Simulated").notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [uniqueIndex("account_invitations_one_pending_per_email").on(sql`lower(${table2.email})`).where(sql`${table2.status} = 'pending'`)]);
 
 // server/db.ts
 init_env();
@@ -1361,15 +1602,15 @@ var BULLET_LINE = /^[•*-]\s+/;
 var C = BRAND.palette;
 var SANS = "'Plus Jakarta Sans',Arial,Helvetica,sans-serif";
 var SERIF = "'Playfair Display',Georgia,'Times New Roman',serif";
-function linkify(text3) {
-  return text3.split(URL_IN_TEXT).map((part, index2) => {
+function linkify(text4) {
+  return text4.split(URL_IN_TEXT).map((part, index2) => {
     if (index2 % 2 === 0) return escapeHtml(part);
     const href = safeHref(part);
     return href ? `<a href="${href}" target="_blank" style="color:${C.brand};text-decoration:underline;">${escapeHtml(part)}</a>` : escapeHtml(part);
   }).join("");
 }
 function buildBusinessSupportEmailHtml(body) {
-  const text3 = `font-family:${SANS};font-size:16px;line-height:25px;color:${C["ink-soft"]};word-break:normal;overflow-wrap:break-word;`;
+  const text4 = `font-family:${SANS};font-size:16px;line-height:25px;color:${C["ink-soft"]};word-break:normal;overflow-wrap:break-word;`;
   const blocks2 = body.trim().split(/\n\s*\n/).filter(Boolean);
   const greeting = blocks2[0] && /^dear\s+/i.test(blocks2[0]) ? blocks2.shift() : "";
   const title = blocks2[0]?.split("\n")[0] ?? BRAND.productName;
@@ -1393,7 +1634,7 @@ function buildBusinessSupportEmailHtml(body) {
       if (BULLET_LINE.test(line)) {
         const items = [];
         while (index2 < lines.length && BULLET_LINE.test(lines[index2])) items.push(lines[index2++].replace(BULLET_LINE, ""));
-        html.push(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 20px;">${items.map((item) => `<tr><td valign="top" style="width:18px;padding:0 0 6px;${text3}color:${C.highlight};font-weight:700;">&#8226;</td><td style="padding:0 0 6px;${text3}">${linkify(item)}</td></tr>`).join("")}</table>`);
+        html.push(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 20px;">${items.map((item) => `<tr><td valign="top" style="width:18px;padding:0 0 6px;${text4}color:${C.highlight};font-weight:700;">&#8226;</td><td style="padding:0 0 6px;${text4}">${linkify(item)}</td></tr>`).join("")}</table>`);
         continue;
       }
       let end = index2;
@@ -1412,7 +1653,7 @@ function buildBusinessSupportEmailHtml(body) {
         paragraph2.push(linkify(next));
         index2 += 1;
       }
-      html.push(`<p style="margin:0 0 18px;${text3}">${paragraph2.join("<br />")}</p>`);
+      html.push(`<p style="margin:0 0 18px;${text4}">${paragraph2.join("<br />")}</p>`);
     }
     return html.join("");
   };
@@ -4132,7 +4373,7 @@ function dateKey(year, month, day) {
 function atLagosTime(year, month, day, hour, minute) {
   return new Date(Date.UTC(year, month - 1, day, hour - 1, minute));
 }
-function dateParts(date) {
+function dateParts(date2) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: PROGRAMME_TIMEZONE,
     year: "numeric",
@@ -4140,7 +4381,7 @@ function dateParts(date) {
     day: "2-digit",
     weekday: "short"
   });
-  const parts = Object.fromEntries(formatter.formatToParts(date).map((part) => [part.type, part.value]));
+  const parts = Object.fromEntries(formatter.formatToParts(date2).map((part) => [part.type, part.value]));
   const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
   return {
     year: Number(parts.year),
@@ -4149,8 +4390,8 @@ function dateParts(date) {
     weekday: weekdayMap[parts.weekday] ?? 0
   };
 }
-function addCalendarDays(date, days) {
-  return new Date(date.getTime() + days * 24 * 60 * 60 * 1e3);
+function addCalendarDays(date2, days) {
+  return new Date(date2.getTime() + days * 24 * 60 * 60 * 1e3);
 }
 function overlaps(startAt, endAt, busyRanges) {
   return busyRanges.some((busy) => startAt < busy.end && endAt > busy.start);
@@ -4342,7 +4583,7 @@ function getEngagementBrief(input) {
 }
 function buildConsentConfirmationEmail(input) {
   const brief = getEngagementBrief(input);
-  const date = new Intl.DateTimeFormat("en-GB", {
+  const date2 = new Intl.DateTimeFormat("en-GB", {
     dateStyle: "long",
     timeStyle: "short",
     timeZone: "Africa/Lagos"
@@ -4353,7 +4594,7 @@ function buildConsentConfirmationEmail(input) {
 
 I trust this meets you well and in good health.
 
-This email confirms that on ${date} you read and acknowledged version ${brief.version} of your personalised ${BRAND.programmeName} engagement brief for ${brief.businessName}. Your selected pathway is ${brief.selectedPackage}.
+This email confirms that on ${date2} you read and acknowledged version ${brief.version} of your personalised ${BRAND.programmeName} engagement brief for ${brief.businessName}. Your selected pathway is ${brief.selectedPackage}.
 
 Your private payment guidance remains available in your participant portal. Your Current State Assessment is now open, and eligible session scheduling will open after the 40% commitment payment is confirmed. The assessment is the first step in adding the detail that will shape the advisory work around your business.
 
@@ -4371,7 +4612,7 @@ Facilitator, ${BRAND.programmeName} \u2014 Strategy & Innovation Genius Track`,
 
 I trust this meets you well and in good health.`,
       paragraphs: [
-        `This email confirms that on ${date} you read and acknowledged version ${brief.version} of your personalised ${BRAND.programmeName} engagement brief for ${brief.businessName}.`,
+        `This email confirms that on ${date2} you read and acknowledged version ${brief.version} of your personalised ${BRAND.programmeName} engagement brief for ${brief.businessName}.`,
         "Your private payment guidance remains available in your participant portal. Your Current State Assessment is now open, and eligible session scheduling will open after the 40% commitment payment is confirmed. The assessment is the first step in adding the detail that will shape the advisory work around your business."
       ],
       details: [
@@ -6249,8 +6490,8 @@ function getPaymentInstructionTemplate(templateId) {
   return PAYMENT_INSTRUCTION_TEMPLATES[templateId];
 }
 function paymentInstructionTemplateLibrary() {
-  return PAYMENT_INSTRUCTION_TEMPLATE_IDS.map((id) => {
-    const template = getPaymentInstructionTemplate(id);
+  return PAYMENT_INSTRUCTION_TEMPLATE_IDS.map((id2) => {
+    const template = getPaymentInstructionTemplate(id2);
     return { id: template.id, label: template.label, routeLabel: template.routeLabel };
   });
 }
@@ -6558,9 +6799,9 @@ var pricingRequestsRouter = router({
 });
 
 // server/routers/businessCheck.ts
-import { TRPCError as TRPCError15 } from "@trpc/server";
+import { TRPCError as TRPCError16 } from "@trpc/server";
 import { randomBytes as randomBytes7 } from "crypto";
-import { eq as eq17 } from "drizzle-orm";
+import { eq as eq18 } from "drizzle-orm";
 import { z as z16 } from "zod";
 
 // shared/phone.ts
@@ -6608,8 +6849,8 @@ var OFFERINGS = [
   { id: "embedded-support", capability: "implementation", name: "Embedded Performance Support", summary: "Ongoing support across several priorities when the business lacks the capacity to drive them alone.", signals: ["several connected priorities", "needs recurring support rather than a one-off project", "actions not sustained between meetings"] }
 ];
 var OFFERING_IDS = OFFERINGS.map((offering) => offering.id);
-function offeringById(id) {
-  return OFFERINGS.find((offering) => offering.id === id);
+function offeringById(id2) {
+  return OFFERINGS.find((offering) => offering.id === id2);
 }
 
 // shared/businessCheck/sectorExamples.ts
@@ -7382,7 +7623,7 @@ function visibleQuestions(section, answers) {
 }
 function questionPath(answers) {
   return sectionPath(answers).flatMap(
-    (id) => visibleQuestions(SECTIONS[id], answers).map((question) => ({ section: SECTIONS[id], question }))
+    (id2) => visibleQuestions(SECTIONS[id2], answers).map((question) => ({ section: SECTIONS[id2], question }))
   );
 }
 function isAnswered(question, answers) {
@@ -7394,8 +7635,8 @@ function isComplete(answers) {
   return questionPath(answers).every(({ question }) => question.optional || isAnswered(question, answers));
 }
 function businessDetails(answers) {
-  const text3 = (id) => typeof answers[id] === "string" ? answers[id].trim() : "";
-  return { businessName: text3("p_name"), description: text3("p_description") };
+  const text4 = (id2) => typeof answers[id2] === "string" ? answers[id2].trim() : "";
+  return { businessName: text4("p_name"), description: text4("p_description") };
 }
 function optionsFor(question, answers) {
   const stage = stageOf(answers);
@@ -7498,7 +7739,7 @@ function businessOutline(answers) {
 var NOT_ASSESSED_NOTE = "Areas marked not assessed weren't part of this check for your business. The Current State Assessment looks at all ten.";
 function areasNotAssessed(answers) {
   if (routeFor(answers) !== "programme") return [];
-  const asked = new Set(sectionPath(answers).map((id) => SECTIONS[id].area));
+  const asked = new Set(sectionPath(answers).map((id2) => SECTIONS[id2].area));
   const side = stageOf(answers) === "side";
   const reason = (area) => {
     if (side) return area === 6 ? "Not asked while the business has fewer than three people." : "Not asked while you run the business alongside a job.";
@@ -7538,7 +7779,7 @@ function primaryGap(outline, main) {
 function matchedOfferings(answers, outline, limit = 3) {
   const weights = /* @__PURE__ */ new Map();
   const add = (ids, weight) => {
-    for (const id of ids ?? []) weights.set(id, (weights.get(id) ?? 0) + weight);
+    for (const id2 of ids ?? []) weights.set(id2, (weights.get(id2) ?? 0) + weight);
   };
   for (const { section, question } of questionPath(answers)) {
     if (section.id === "profile" || section.id === "founder") continue;
@@ -7557,8 +7798,8 @@ function matchedOfferings(answers, outline, limit = 3) {
     lead.push("embedded-support");
   }
   const order = new Map(OFFERINGS.map((offering, index2) => [offering.id, index2]));
-  const ranked = Array.from(weights.entries()).sort((a, b) => b[1] - a[1] || (order.get(a[0]) ?? 0) - (order.get(b[0]) ?? 0)).map(([id]) => id).filter((id) => !lead.includes(id));
-  return [...lead, ...ranked].map((id) => offeringById(id)).filter((offering) => Boolean(offering)).slice(0, limit);
+  const ranked = Array.from(weights.entries()).sort((a, b) => b[1] - a[1] || (order.get(a[0]) ?? 0) - (order.get(b[0]) ?? 0)).map(([id2]) => id2).filter((id2) => !lead.includes(id2));
+  return [...lead, ...ranked].map((id2) => offeringById(id2)).filter((offering) => Boolean(offering)).slice(0, limit);
 }
 function sectionByArea(area) {
   return Object.values(SECTIONS).find((section) => section.area === area && section.id !== "idea")?.id ?? "intent";
@@ -7573,7 +7814,7 @@ function evaluate(rawAnswers) {
   const offerings = route === "advisory" ? [] : matchedOfferings(answers, outline);
   return { route, founder, outline, primaryArea: main, primaryGap: gap, offerings, summary: writeSummary({ answers, route, founder, outline, main, gap, offerings }) };
 }
-var lower = (text3) => text3.charAt(0).toLowerCase() + text3.slice(1);
+var lower = (text4) => text4.charAt(0).toLowerCase() + text4.slice(1);
 function writeSummary(input) {
   const { route, founder, outline, main, gap, offerings } = input;
   const style = founder.instinct ? DISC_STYLES[founder.instinct] : void 0;
@@ -7958,8 +8199,8 @@ async function summariseCheck(input) {
       AI_TIMEOUT_MS
     );
     const content = response.choices[0]?.message.content;
-    const text3 = typeof content === "string" ? content : content?.map((part) => "text" in part ? part.text : "").join("");
-    const parsed = aiOutput.parse(JSON.parse(text3 ?? ""));
+    const text4 = typeof content === "string" ? content : content?.map((part) => "text" in part ? part.text : "").join("");
+    const parsed = aiOutput.parse(JSON.parse(text4 ?? ""));
     const offerings = input.result.route === "advisory" ? [] : parsed.offerings.map((item) => ({ item, offering: offeringById(item.id) })).filter((entry) => entry.offering).map(({ item, offering }) => ({ id: offering.id, name: offering.name, why: item.why }));
     return {
       source: "AI",
@@ -8030,25 +8271,470 @@ function officeEmail(input) {
 }
 
 // server/payments.ts
-import { and as and13, desc as desc9, eq as eq16, inArray as inArray4 } from "drizzle-orm";
-import { TRPCError as TRPCError14 } from "@trpc/server";
+import { and as and14, desc as desc10, eq as eq17, inArray as inArray5 } from "drizzle-orm";
+import { TRPCError as TRPCError15 } from "@trpc/server";
 init_brand();
 init_env();
 
+// server/engagements.ts
+import { TRPCError as TRPCError12 } from "@trpc/server";
+import { and as and11, asc, desc as desc8, eq as eq14, inArray as inArray4, isNull as isNull5 } from "drizzle-orm";
+var NOT_FOUND = "This engagement is not available.";
+var notFound = () => new TRPCError12({ code: "NOT_FOUND", message: NOT_FOUND });
+async function engagementDb() {
+  const db = await getDb();
+  if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  return db;
+}
+function isMissingEngagementTable(error) {
+  const code = error?.code ?? error?.cause?.code;
+  return code === "42P01";
+}
+var MIGRATION_MISSING_MESSAGE = "The engagement room is not set up in the database yet (migration 0008).";
+function addWorkingDays(from, days) {
+  const lagos = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos", year: "numeric", month: "2-digit", day: "2-digit" }).format(from);
+  const date2 = /* @__PURE__ */ new Date(`${lagos}T12:00:00Z`);
+  let added = 0;
+  while (added < days) {
+    date2.setUTCDate(date2.getUTCDate() + 1);
+    const weekday = date2.getUTCDay();
+    if (weekday !== 0 && weekday !== 6) added += 1;
+  }
+  return date2.toISOString().slice(0, 10);
+}
+async function startEngagement(db, input) {
+  const now = input.now ?? /* @__PURE__ */ new Date();
+  return db.transaction(async (tx) => {
+    const accepted = (await tx.select({ businessId: clientOnboardingInvitations.businessId }).from(clientOnboardingInvitations).where(and11(eq14(clientOnboardingInvitations.businessCheckId, input.businessCheckId), eq14(clientOnboardingInvitations.status, "accepted"))).orderBy(desc8(clientOnboardingInvitations.id)).limit(1))[0];
+    const [created] = await tx.insert(engagements).values({ businessCheckId: input.businessCheckId, paymentRequestId: input.paymentRequestId, businessId: accepted?.businessId ?? null }).onConflictDoNothing({ target: engagements.businessCheckId }).returning({ id: engagements.id });
+    if (!created) return { engagementId: null, created: false };
+    const dueOn = addWorkingDays(now, 3);
+    await tx.insert(engagementTasks).values(ASSESSMENT_TEMPLATE.dataRequests.map((item) => ({
+      engagementId: created.id,
+      kind: "data_request",
+      side: "client",
+      title: item.title,
+      detail: item.detail,
+      dueOn,
+      createdByUserId: input.actorUserId
+    })));
+    await tx.insert(engagementSessions).values(ASSESSMENT_TEMPLATE.sessions.map((item) => ({
+      engagementId: created.id,
+      kind: item.kind,
+      title: item.title,
+      durationMinutes: item.durationMinutes,
+      createdByUserId: input.actorUserId
+    })));
+    await recordAudit(tx, { action: "engagement_started", actorUserId: input.actorUserId, details: { engagementId: created.id, businessCheckId: input.businessCheckId } });
+    return { engagementId: created.id, created: true };
+  });
+}
+async function startEngagementSafely(db, input) {
+  try {
+    return (await startEngagement(db, input)).created ? "started" : "exists";
+  } catch (error) {
+    if (isMissingEngagementTable(error)) {
+      console.error("[Engagements] The engagements table is missing: apply migration 0008. The payment is confirmed; start the engagement once it is applied.");
+      return "not_set_up";
+    }
+    console.error("[Engagements] Payment confirmed, but the engagement could not be started:", error instanceof Error ? error.message : error);
+    return "failed";
+  }
+}
+async function linkEngagementToBusiness(db, input) {
+  await db.update(engagements).set({ businessId: input.businessId }).where(and11(eq14(engagements.businessCheckId, input.businessCheckId), isNull5(engagements.businessId)));
+}
+var canSeeAll = (actor) => authorityAllows(actor.authority, "view_all_businesses");
+var canSeeAssigned = (actor) => authorityAllows(actor.authority, "view_assigned_businesses");
+async function assignedEngagementIds(db, userId) {
+  const rows = await db.select({ engagementId: engagementTeam.engagementId }).from(engagementTeam).where(eq14(engagementTeam.userId, userId));
+  return rows.map((row) => row.engagementId);
+}
+async function requireStaffEngagement(db, actor, engagementId) {
+  const engagement = (await db.select().from(engagements).where(eq14(engagements.id, engagementId)).limit(1))[0];
+  if (!engagement) throw notFound();
+  if (canSeeAll(actor)) return engagement;
+  if (canSeeAssigned(actor) && (await assignedEngagementIds(db, actor.id)).includes(engagementId)) return engagement;
+  throw notFound();
+}
+function requirePermission(actor, permission, message) {
+  if (!authorityAllows(actor.authority, permission)) throw new TRPCError12({ code: "FORBIDDEN", message });
+}
+var requireManage = (actor) => requirePermission(actor, "manage_engagements", "Your role does not include working on engagements.");
+async function listStaffEngagements(db, actor) {
+  let scope = null;
+  if (!canSeeAll(actor)) {
+    if (!canSeeAssigned(actor)) return [];
+    scope = await assignedEngagementIds(db, actor.id);
+    if (!scope.length) return [];
+  }
+  const rows = await db.select({
+    id: engagements.id,
+    stage: engagements.stage,
+    businessId: engagements.businessId,
+    businessCheckId: engagements.businessCheckId,
+    createdAt: engagements.createdAt,
+    ownerName: businessChecks.fullName,
+    ownerEmail: businessChecks.email,
+    checkBusinessName: businessChecks.businessName,
+    businessName: businesses.name
+  }).from(engagements).innerJoin(businessChecks, eq14(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq14(engagements.businessId, businesses.id)).where(scope ? inArray4(engagements.id, scope) : void 0).orderBy(desc8(engagements.id));
+  if (!rows.length) return [];
+  const ids = rows.map((row) => row.id);
+  const [team, tasks, sessions] = await Promise.all([
+    db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role, name: users.name }).from(engagementTeam).innerJoin(users, eq14(engagementTeam.userId, users.id)).where(inArray4(engagementTeam.engagementId, ids)),
+    db.select({ engagementId: engagementTasks.engagementId, side: engagementTasks.side, status: engagementTasks.status, dueOn: engagementTasks.dueOn }).from(engagementTasks).where(inArray4(engagementTasks.engagementId, ids)),
+    db.select({ engagementId: engagementSessions.engagementId, title: engagementSessions.title, scheduledFor: engagementSessions.scheduledFor, status: engagementSessions.status }).from(engagementSessions).where(inArray4(engagementSessions.engagementId, ids))
+  ]);
+  const now = Date.now();
+  return rows.map((row) => {
+    const open = tasks.filter((task) => task.engagementId === row.id && task.side === "client" && (task.status === "open" || task.status === "needs_more"));
+    const next = sessions.filter((item) => item.engagementId === row.id && item.status === "planned" && item.scheduledFor && item.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime())[0];
+    return {
+      id: row.id,
+      stage: row.stage,
+      stageLabel: ENGAGEMENT_STAGE_LABELS[row.stage],
+      businessName: row.businessName ?? row.checkBusinessName ?? row.ownerName,
+      ownerName: row.ownerName,
+      ownerEmail: row.ownerEmail,
+      hasAccount: row.businessId !== null,
+      createdAt: row.createdAt,
+      team: team.filter((member) => member.engagementId === row.id).map((member) => ({ name: member.name ?? "", role: member.role, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
+      openClientRequests: open.length,
+      overdueClientRequests: open.filter((task) => task.dueOn && task.dueOn < new Date(now).toISOString().slice(0, 10)).length,
+      unscheduledSessions: sessions.filter((item) => item.engagementId === row.id && item.status === "planned" && !item.scheduledFor).length,
+      nextSession: next ? { title: next.title, scheduledFor: next.scheduledFor } : null
+    };
+  });
+}
+async function getStaffEngagement(db, actor, engagementId) {
+  const engagement = await requireStaffEngagement(db, actor, engagementId);
+  const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq14(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq14(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
+  const [team, sessions, tasks, deliverables, comments, clientPeople] = await Promise.all([
+    db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email }).from(engagementTeam).innerJoin(users, eq14(engagementTeam.userId, users.id)).where(eq14(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
+    db.select().from(engagementSessions).where(eq14(engagementSessions.engagementId, engagementId)).orderBy(asc(engagementSessions.id)),
+    db.select().from(engagementTasks).where(eq14(engagementTasks.engagementId, engagementId)).orderBy(asc(engagementTasks.id)),
+    db.select().from(engagementDeliverables).where(eq14(engagementDeliverables.engagementId, engagementId)).orderBy(asc(engagementDeliverables.id)),
+    db.select({ id: engagementComments.id, deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq14(engagementComments.authorUserId, users.id)).where(eq14(engagementComments.engagementId, engagementId)).orderBy(asc(engagementComments.id)),
+    engagement.businessId ? clientPeopleOf(db, engagement.businessId) : Promise.resolve([])
+  ]);
+  return {
+    engagement: { ...engagement, stageLabel: ENGAGEMENT_STAGE_LABELS[engagement.stage] },
+    owner: check ? { name: check.fullName, email: check.email, whatsapp: check.whatsapp } : null,
+    businessName: business?.name ?? check?.businessName ?? check?.fullName ?? "",
+    hasAccount: business !== null,
+    team: team.map((member) => ({ ...member, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
+    clientPeople,
+    sessions,
+    tasks: tasks.map((task) => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status] })),
+    deliverables: deliverables.map((item) => ({ ...item, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item.kind), comments: comments.filter((comment) => comment.deliverableId === item.id) })),
+    can: {
+      manage: authorityAllows(actor.authority, "manage_engagements"),
+      assign: authorityAllows(actor.authority, "assign_engagements"),
+      review: authorityAllows(actor.authority, "review_engagements")
+    }
+  };
+}
+async function clientPeopleOf(db, businessId) {
+  const rows = await db.select({ userId: users.id, name: users.name, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq14(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq14(businessMemberAccess.membershipId, businessMemberships.id)).where(and11(eq14(businessMemberships.businessId, businessId), eq14(businessMemberships.status, "active"))).orderBy(asc(businessMemberships.id));
+  return rows.map((row) => ({ userId: row.userId, name: row.name ?? "", role: row.role, access: row.role === "member" ? row.access ?? "full" : "full" }));
+}
+async function listAssignableStaff(db, actor) {
+  requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
+  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, role: userPlatformRoles.role }).from(userPlatformRoles).innerJoin(users, eq14(userPlatformRoles.userId, users.id)).where(eq14(users.status, "active")).orderBy(asc(users.name));
+  const people = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const person = people.get(row.userId) ?? { userId: row.userId, name: row.name ?? "", email: row.email ?? "", roles: [] };
+    person.roles.push(row.role);
+    people.set(row.userId, person);
+  }
+  return Array.from(people.values()).filter((person) => person.roles.some((role) => role !== "finance"));
+}
+async function assignTeamMember(db, actor, input) {
+  requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
+  await requireStaffEngagement(db, actor, input.engagementId);
+  const staff2 = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq14(userPlatformRoles.userId, users.id)).where(and11(eq14(userPlatformRoles.userId, input.userId), eq14(users.status, "active"))).limit(1))[0];
+  if (!staff2) throw new TRPCError12({ code: "BAD_REQUEST", message: "Only IP Factory staff can join an engagement team." });
+  await db.transaction(async (tx) => {
+    await tx.insert(engagementTeam).values({ engagementId: input.engagementId, userId: input.userId, role: input.role, assignedByUserId: actor.id }).onConflictDoUpdate({ target: [engagementTeam.engagementId, engagementTeam.userId], set: { role: input.role, assignedByUserId: actor.id } });
+    await recordAudit(tx, { action: "engagement_team_assigned", actorUserId: actor.id, details: { engagementId: input.engagementId, userId: input.userId, role: input.role } });
+  });
+  return { success: true };
+}
+async function removeTeamMember(db, actor, input) {
+  requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
+  await requireStaffEngagement(db, actor, input.engagementId);
+  await db.transaction(async (tx) => {
+    await tx.delete(engagementTeam).where(and11(eq14(engagementTeam.engagementId, input.engagementId), eq14(engagementTeam.userId, input.userId)));
+    await recordAudit(tx, { action: "engagement_team_removed", actorUserId: actor.id, details: { engagementId: input.engagementId, userId: input.userId } });
+  });
+  return { success: true };
+}
+async function setEngagementStage(db, actor, input) {
+  requireManage(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (engagement.stage === input.stage) return { success: true, changed: false };
+  const now = /* @__PURE__ */ new Date();
+  await db.transaction(async (tx) => {
+    await tx.update(engagements).set({
+      stage: input.stage,
+      ...input.stage === "assessment" && !engagement.assessmentStartedAt ? { assessmentStartedAt: now } : {},
+      ...input.stage === "fix" && !engagement.fixStartedAt ? { fixStartedAt: now } : {},
+      ...input.stage === "closed" ? { closedAt: now } : { closedAt: null }
+    }).where(eq14(engagements.id, engagement.id));
+    await recordAudit(tx, { action: "engagement_stage_changed", actorUserId: actor.id, details: { engagementId: engagement.id, from: engagement.stage, to: input.stage } });
+  });
+  return { success: true, changed: true };
+}
+async function saveProblem(db, actor, input) {
+  requireManage(actor);
+  await requireStaffEngagement(db, actor, input.engagementId);
+  await db.update(engagements).set({ problemArea: input.problemArea, subProblem: input.subProblem, problemStatement: input.problemStatement }).where(eq14(engagements.id, input.engagementId));
+  return { success: true };
+}
+async function saveSession(db, actor, input) {
+  requireManage(actor);
+  await requireStaffEngagement(db, actor, input.engagementId);
+  const values2 = { kind: input.kind, title: input.title, scheduledFor: input.scheduledFor, durationMinutes: input.durationMinutes, meetingLink: input.meetingLink, agenda: input.agenda, status: input.status };
+  if (input.sessionId) {
+    const updated = await db.update(engagementSessions).set(values2).where(and11(eq14(engagementSessions.id, input.sessionId), eq14(engagementSessions.engagementId, input.engagementId))).returning({ id: engagementSessions.id });
+    if (!updated.length) throw notFound();
+    return { sessionId: input.sessionId };
+  }
+  const [created] = await db.insert(engagementSessions).values({ engagementId: input.engagementId, ...values2, createdByUserId: actor.id }).returning({ id: engagementSessions.id });
+  return { sessionId: created.id };
+}
+async function requireStaffSession(db, actor, sessionId) {
+  const session = (await db.select().from(engagementSessions).where(eq14(engagementSessions.id, sessionId)).limit(1))[0];
+  if (!session) throw notFound();
+  await requireStaffEngagement(db, actor, session.engagementId);
+  return session;
+}
+async function saveSessionNotes(db, actor, input) {
+  requireManage(actor);
+  await requireStaffSession(db, actor, input.sessionId);
+  await db.update(engagementSessions).set({ clientNotes: input.clientNotes, internalNotes: input.internalNotes }).where(eq14(engagementSessions.id, input.sessionId));
+  return { success: true };
+}
+async function shareSessionNotes(db, actor, input) {
+  requireManage(actor);
+  const session = await requireStaffSession(db, actor, input.sessionId);
+  if (!session.clientNotes?.trim()) throw new TRPCError12({ code: "BAD_REQUEST", message: "Write the client's version of the notes before sharing them." });
+  await db.transaction(async (tx) => {
+    await tx.update(engagementSessions).set({ notesAudience: input.audience, notesSharedAt: /* @__PURE__ */ new Date(), notesSharedByUserId: actor.id }).where(eq14(engagementSessions.id, session.id));
+    await recordAudit(tx, { action: "engagement_notes_shared", actorUserId: actor.id, details: { engagementId: session.engagementId, sessionId: session.id, audience: input.audience } });
+  });
+  return { success: true };
+}
+async function saveTask(db, actor, input) {
+  requireManage(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (input.assigneeUserId !== null) {
+    const allowed = input.side === "client" ? engagement.businessId !== null && (await clientPeopleOf(db, engagement.businessId)).some((person) => person.userId === input.assigneeUserId) : (await db.select({ userId: engagementTeam.userId }).from(engagementTeam).where(and11(eq14(engagementTeam.engagementId, engagement.id), eq14(engagementTeam.userId, input.assigneeUserId))).limit(1)).length === 1;
+    if (!allowed) throw new TRPCError12({ code: "BAD_REQUEST", message: input.side === "client" ? "That person is not part of the client's business." : "That person is not on the engagement team." });
+  }
+  if (input.sessionId !== null && !(await db.select({ id: engagementSessions.id }).from(engagementSessions).where(and11(eq14(engagementSessions.id, input.sessionId), eq14(engagementSessions.engagementId, engagement.id))).limit(1)).length) throw notFound();
+  const finished = input.status === "accepted" || input.status === "done";
+  const values2 = { kind: input.kind, title: input.title, detail: input.detail, side: input.side, assigneeUserId: input.assigneeUserId, dueOn: input.dueOn, status: input.status, statusNote: input.statusNote, sessionId: input.sessionId, completedAt: finished ? /* @__PURE__ */ new Date() : null };
+  if (input.taskId) {
+    const updated = await db.update(engagementTasks).set(values2).where(and11(eq14(engagementTasks.id, input.taskId), eq14(engagementTasks.engagementId, engagement.id))).returning({ id: engagementTasks.id });
+    if (!updated.length) throw notFound();
+    return { taskId: input.taskId };
+  }
+  const [created] = await db.insert(engagementTasks).values({ engagementId: engagement.id, ...values2, createdByUserId: actor.id }).returning({ id: engagementTasks.id });
+  return { taskId: created.id };
+}
+async function saveDeliverable(db, actor, input) {
+  requireManage(actor);
+  await requireStaffEngagement(db, actor, input.engagementId);
+  const values2 = { kind: input.kind, title: input.title, summary: input.summary };
+  if (input.deliverableId) {
+    const updated = await db.update(engagementDeliverables).set({ ...values2, status: "draft", approvedAt: null, approvedByUserId: null, sharedAt: null, sharedByUserId: null, clientAcceptedAt: null, clientAcceptedByUserId: null }).where(and11(eq14(engagementDeliverables.id, input.deliverableId), eq14(engagementDeliverables.engagementId, input.engagementId))).returning({ id: engagementDeliverables.id });
+    if (!updated.length) throw notFound();
+    return { deliverableId: input.deliverableId };
+  }
+  const [created] = await db.insert(engagementDeliverables).values({ engagementId: input.engagementId, ...values2, createdByUserId: actor.id }).returning({ id: engagementDeliverables.id });
+  return { deliverableId: created.id };
+}
+async function requireStaffDeliverable(db, actor, deliverableId) {
+  const deliverable = (await db.select().from(engagementDeliverables).where(eq14(engagementDeliverables.id, deliverableId)).limit(1))[0];
+  if (!deliverable) throw notFound();
+  await requireStaffEngagement(db, actor, deliverable.engagementId);
+  return deliverable;
+}
+async function approveDeliverable(db, actor, input) {
+  requirePermission(actor, "review_engagements", "Only the desk lead or a partner can approve this.");
+  const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
+  if (deliverable.status === "shared") throw new TRPCError12({ code: "CONFLICT", message: "This is already shared." });
+  await db.transaction(async (tx) => {
+    await tx.update(engagementDeliverables).set({ status: "approved", approvedAt: /* @__PURE__ */ new Date(), approvedByUserId: actor.id }).where(eq14(engagementDeliverables.id, deliverable.id));
+    await recordAudit(tx, { action: "engagement_deliverable_approved", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind } });
+  });
+  return { success: true };
+}
+async function shareDeliverable(db, actor, input) {
+  requireManage(actor);
+  const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
+  if (DELIVERABLES_NEEDING_APPROVAL.includes(deliverable.kind) && deliverable.status !== "approved" && deliverable.status !== "shared") {
+    throw new TRPCError12({ code: "FORBIDDEN", message: `The desk lead approves every ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind].toLowerCase()} before the client sees it.` });
+  }
+  await db.transaction(async (tx) => {
+    await tx.update(engagementDeliverables).set({ status: "shared", audience: input.audience, sharedAt: /* @__PURE__ */ new Date(), sharedByUserId: actor.id }).where(eq14(engagementDeliverables.id, deliverable.id));
+    await recordAudit(tx, { action: "engagement_deliverable_shared", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind, audience: input.audience } });
+  });
+  return { success: true };
+}
+async function staffComment(db, actor, input) {
+  const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
+  await db.insert(engagementComments).values({ engagementId: deliverable.engagementId, deliverableId: deliverable.id, authorUserId: actor.id, body: input.body });
+  return { success: true };
+}
+async function clientViewerFor(db, session, businessId) {
+  const membership = session.memberships.find((item) => item.businessId === businessId);
+  if (!membership) throw notFound();
+  if (membership.role !== "member") return { kind: "owner" };
+  const access = (await db.select({ access: businessMemberAccess.access }).from(businessMemberAccess).innerJoin(businessMemberships, eq14(businessMemberAccess.membershipId, businessMemberships.id)).where(and11(eq14(businessMemberships.businessId, businessId), eq14(businessMemberships.userId, session.user.id))).limit(1))[0];
+  return { kind: "member", access: access?.access ?? "full", userId: session.user.id };
+}
+async function getClientRoom(db, session) {
+  const business = session.activeBusiness;
+  if (!business) return null;
+  const engagement = (await db.select().from(engagements).where(eq14(engagements.businessId, business.businessId)).orderBy(desc8(engagements.id)).limit(1))[0];
+  if (!engagement) return null;
+  const viewer = await clientViewerFor(db, session, business.businessId);
+  const [team, sessions, tasks, deliverables, comments] = await Promise.all([
+    db.select({ name: users.name, role: engagementTeam.role }).from(engagementTeam).innerJoin(users, eq14(engagementTeam.userId, users.id)).where(eq14(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
+    db.select().from(engagementSessions).where(eq14(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
+    db.select().from(engagementTasks).where(eq14(engagementTasks.engagementId, engagement.id)).orderBy(asc(engagementTasks.id)),
+    db.select().from(engagementDeliverables).where(and11(eq14(engagementDeliverables.engagementId, engagement.id), eq14(engagementDeliverables.status, "shared"))).orderBy(asc(engagementDeliverables.id)),
+    db.select({ deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq14(engagementComments.authorUserId, users.id)).where(eq14(engagementComments.engagementId, engagement.id)).orderBy(asc(engagementComments.id))
+  ]);
+  const visibleDeliverables = deliverables.filter((item) => clientCanSee(item.audience, viewer));
+  const now = Date.now();
+  const scheduled = sessions.filter((item) => item.status !== "cancelled");
+  const next = scheduled.filter((item) => item.status === "planned" && item.scheduledFor && item.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime())[0];
+  const notesVisible = (item) => Boolean(item.notesSharedAt && item.clientNotes && clientCanSee(item.notesAudience, viewer));
+  return {
+    engagementId: engagement.id,
+    businessName: business.businessName,
+    viewer: viewer.kind === "owner" ? { kind: "owner" } : { kind: "member", access: viewer.access },
+    stage: engagement.stage,
+    stageLabel: ENGAGEMENT_STAGE_LABELS[engagement.stage],
+    journey: journeyOf(engagement.stage),
+    problemStatement: viewer.kind === "owner" || viewer.access === "full" ? engagement.problemStatement : null,
+    team: team.map((member) => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
+    nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
+    sessions: scheduled.map((item) => ({
+      id: item.id,
+      title: item.title,
+      scheduledFor: item.scheduledFor,
+      durationMinutes: item.durationMinutes,
+      meetingLink: item.meetingLink,
+      status: item.status,
+      agenda: item.agenda,
+      notes: notesVisible(item) ? item.clientNotes : null,
+      notesSharedAt: notesVisible(item) ? item.notesSharedAt : null,
+      notesAudience: notesVisible(item) ? item.notesAudience : null
+    })),
+    tasks: tasks.filter((task) => task.status !== "cancelled" && clientCanSeeTask(task, viewer)).map((task) => ({
+      id: task.id,
+      kind: task.kind,
+      side: task.side,
+      title: task.title,
+      detail: task.detail,
+      dueOn: task.dueOn,
+      status: task.status,
+      statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status],
+      statusNote: task.statusNote,
+      mine: task.assigneeUserId === session.user.id
+    })),
+    deliverables: visibleDeliverables.map((item) => ({
+      id: item.id,
+      kind: item.kind,
+      kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind],
+      title: item.title,
+      summary: item.summary,
+      sharedAt: item.sharedAt,
+      audience: item.audience,
+      audienceLabel: ENGAGEMENT_AUDIENCE_LABELS[item.audience],
+      accepted: item.clientAcceptedAt !== null,
+      comments: comments.filter((comment) => comment.deliverableId === item.id).map((comment) => ({ body: comment.body, createdAt: comment.createdAt, authorName: comment.authorName ?? "" }))
+    }))
+  };
+}
+async function requireClientEngagement(db, session, engagementId) {
+  const business = session.activeBusiness;
+  if (!business) throw notFound();
+  const engagement = (await db.select().from(engagements).where(and11(eq14(engagements.id, engagementId), eq14(engagements.businessId, business.businessId))).limit(1))[0];
+  if (!engagement || engagement.businessId === null) throw notFound();
+  return { engagement, viewer: await clientViewerFor(db, session, engagement.businessId) };
+}
+async function respondToTask(db, session, input) {
+  const task = (await db.select().from(engagementTasks).where(eq14(engagementTasks.id, input.taskId)).limit(1))[0];
+  if (!task) throw notFound();
+  const { viewer } = await requireClientEngagement(db, session, task.engagementId);
+  if (task.side !== "client" || !clientCanSeeTask(task, viewer)) throw notFound();
+  if (task.status !== "open" && task.status !== "needs_more") throw new TRPCError12({ code: "CONFLICT", message: "This is already with us." });
+  const status = task.kind === "data_request" ? "received" : "done";
+  await db.transaction(async (tx) => {
+    await tx.update(engagementTasks).set({ status, statusNote: input.note, completedAt: status === "done" ? /* @__PURE__ */ new Date() : null }).where(eq14(engagementTasks.id, task.id));
+    await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status } });
+  });
+  return { success: true, status };
+}
+async function requireClientDeliverable(db, session, deliverableId) {
+  const deliverable = (await db.select().from(engagementDeliverables).where(eq14(engagementDeliverables.id, deliverableId)).limit(1))[0];
+  if (!deliverable || deliverable.status !== "shared") throw notFound();
+  const { viewer } = await requireClientEngagement(db, session, deliverable.engagementId);
+  if (!clientCanSee(deliverable.audience, viewer)) throw notFound();
+  return { deliverable, viewer };
+}
+async function clientComment(db, session, input) {
+  const { deliverable } = await requireClientDeliverable(db, session, input.deliverableId);
+  await db.insert(engagementComments).values({ engagementId: deliverable.engagementId, deliverableId: deliverable.id, authorUserId: session.user.id, body: input.body });
+  return { success: true };
+}
+async function acceptDeliverable(db, session, input) {
+  const { deliverable, viewer } = await requireClientDeliverable(db, session, input.deliverableId);
+  if (viewer.kind !== "owner") throw new TRPCError12({ code: "FORBIDDEN", message: "Only the owner can sign this off." });
+  if (deliverable.clientAcceptedAt) return { success: true, changed: false };
+  await db.transaction(async (tx) => {
+    await tx.update(engagementDeliverables).set({ clientAcceptedAt: /* @__PURE__ */ new Date(), clientAcceptedByUserId: session.user.id }).where(eq14(engagementDeliverables.id, deliverable.id));
+    await recordAudit(tx, { action: "engagement_deliverable_accepted", actorUserId: session.user.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id } });
+  });
+  return { success: true, changed: true };
+}
+async function setClientAudience(db, session, input) {
+  if (input.item === "deliverable") {
+    const { deliverable, viewer } = await requireClientDeliverable(db, session, input.id);
+    if (viewer.kind !== "owner") throw new TRPCError12({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
+    await db.update(engagementDeliverables).set({ audience: input.audience }).where(eq14(engagementDeliverables.id, deliverable.id));
+  } else {
+    const item = (await db.select().from(engagementSessions).where(eq14(engagementSessions.id, input.id)).limit(1))[0];
+    if (!item || !item.notesSharedAt) throw notFound();
+    const { viewer } = await requireClientEngagement(db, session, item.engagementId);
+    if (viewer.kind !== "owner") throw new TRPCError12({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
+    await db.update(engagementSessions).set({ notesAudience: input.audience }).where(eq14(engagementSessions.id, item.id));
+  }
+  await recordAudit(db, { action: "engagement_audience_changed", actorUserId: session.user.id, details: { item: input.item, id: input.id, audience: input.audience } });
+  return { success: true };
+}
+
 // server/clientOnboarding.ts
 import { randomBytes as randomBytes5, randomUUID } from "crypto";
-import { and as and11, count, desc as desc8, eq as eq14, gt as gt5, isNull as isNull5 } from "drizzle-orm";
-import { TRPCError as TRPCError12 } from "@trpc/server";
+import { and as and12, count, desc as desc9, eq as eq15, gt as gt5, isNull as isNull6 } from "drizzle-orm";
+import { TRPCError as TRPCError13 } from "@trpc/server";
 init_brand();
 import { z as z14 } from "zod";
 var emailSchema = z14.string().trim().email().max(320);
 function effectiveInvitationStatus(invitation, now = /* @__PURE__ */ new Date()) {
   return invitation.status === "pending" && invitation.expiresAt.getTime() <= now.getTime() ? "expired" : invitation.status;
 }
-var unavailable = () => new TRPCError12({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.unavailable });
+var unavailable = () => new TRPCError13({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.unavailable });
 async function requireDatabase() {
   const db = await getDb();
-  if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 async function identityConflict(db, email) {
@@ -8075,15 +8761,15 @@ function buildOnboardingEmail(input) {
 }
 async function createOnboardingInvitation(input) {
   const db = await requireDatabase();
-  const check = (await db.select().from(businessChecks).where(eq14(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError12({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
+  const check = (await db.select().from(businessChecks).where(eq15(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError13({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
   const email = normaliseAccountEmail(check.email);
-  if (!emailSchema.safeParse(email).success) throw new TRPCError12({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.invalidCheckEmail });
-  if (await identityConflict(db, email)) throw new TRPCError12({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccountAdmin });
+  if (!emailSchema.safeParse(email).success) throw new TRPCError13({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.invalidCheckEmail });
+  if (await identityConflict(db, email)) throw new TRPCError13({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccountAdmin });
   const token2 = randomBytes5(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ONBOARDING_INVITATION_TTL_MS);
   const invitation = await db.transaction(async (tx) => {
-    await tx.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and11(eq14(clientOnboardingInvitations.businessCheckId, check.id), eq14(clientOnboardingInvitations.status, "pending")));
+    await tx.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and12(eq15(clientOnboardingInvitations.businessCheckId, check.id), eq15(clientOnboardingInvitations.status, "pending")));
     const [row] = await tx.insert(clientOnboardingInvitations).values({
       businessCheckId: check.id,
       email,
@@ -8101,7 +8787,7 @@ async function createOnboardingInvitation(input) {
   await db.update(clientOnboardingInvitations).set({
     deliveryStatus: delivery.status,
     deliveryMessageId: delivery.status === "Sent" ? delivery.providerMessageId || null : null
-  }).where(eq14(clientOnboardingInvitations.id, invitation.id));
+  }).where(eq15(clientOnboardingInvitations.id, invitation.id));
   await db.insert(adminAccessAuditEvents).values({
     actorUserId: input.actorUserId,
     action: "client_onboarding_invitation_created",
@@ -8112,8 +8798,8 @@ async function createOnboardingInvitation(input) {
 }
 async function revokeOnboardingInvitation(input) {
   const db = await requireDatabase();
-  const revoked = await db.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and11(eq14(clientOnboardingInvitations.id, input.invitationId), eq14(clientOnboardingInvitations.status, "pending"))).returning({ id: clientOnboardingInvitations.id, email: clientOnboardingInvitations.email });
-  if (revoked.length !== 1) throw new TRPCError12({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
+  const revoked = await db.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and12(eq15(clientOnboardingInvitations.id, input.invitationId), eq15(clientOnboardingInvitations.status, "pending"))).returning({ id: clientOnboardingInvitations.id, email: clientOnboardingInvitations.email });
+  if (revoked.length !== 1) throw new TRPCError13({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
   await db.insert(adminAccessAuditEvents).values({
     actorUserId: input.actorUserId,
     action: "client_onboarding_invitation_revoked",
@@ -8123,27 +8809,27 @@ async function revokeOnboardingInvitation(input) {
   return { success: true };
 }
 async function previewOnboardingInvitation(req, token2) {
-  if (!consumeRateLimit("onboarding", req, "preview", 60)) throw new TRPCError12({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!consumeRateLimit("onboarding", req, "preview", 60)) throw new TRPCError13({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const db = await requireDatabase();
-  const invitation = (await db.select().from(clientOnboardingInvitations).where(eq14(clientOnboardingInvitations.tokenHash, sha256(token2))).limit(1))[0];
+  const invitation = (await db.select().from(clientOnboardingInvitations).where(eq15(clientOnboardingInvitations.tokenHash, sha256(token2))).limit(1))[0];
   if (!invitation || effectiveInvitationStatus(invitation) !== "pending") return { available: false };
   return { available: true, email: invitation.email, fullName: invitation.fullNameSnapshot, businessName: invitation.businessNameSnapshot };
 }
 async function acceptOnboardingInvitation(req, res, rawInput) {
   assertSameOrigin(req);
   const parsed = onboardingAcceptInputSchema.safeParse(rawInput);
-  if (!parsed.success) throw new TRPCError12({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
+  if (!parsed.success) throw new TRPCError13({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
   const input = parsed.data;
-  if (!consumeRateLimit("onboarding", req, "accept", 10)) throw new TRPCError12({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!consumeRateLimit("onboarding", req, "accept", 10)) throw new TRPCError13({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const db = await requireDatabase();
   const passwordHash = hashAdminPassword(input.password);
   let created;
   try {
     created = await db.transaction(async (tx) => {
-      const invitation = (await tx.select().from(clientOnboardingInvitations).where(eq14(clientOnboardingInvitations.tokenHash, sha256(input.token))).limit(1))[0];
+      const invitation = (await tx.select().from(clientOnboardingInvitations).where(eq15(clientOnboardingInvitations.tokenHash, sha256(input.token))).limit(1))[0];
       if (!invitation || effectiveInvitationStatus(invitation) !== "pending") throw unavailable();
-      if (input.email !== invitation.email) throw new TRPCError12({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
-      if (await identityConflict(tx, invitation.email)) throw new TRPCError12({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
+      if (input.email !== invitation.email) throw new TRPCError13({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
+      if (await identityConflict(tx, invitation.email)) throw new TRPCError13({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
       const [user] = await tx.insert(users).values({
         openId: `local:${randomUUID()}`,
         name: input.fullName,
@@ -8165,19 +8851,22 @@ async function acceptOnboardingInvitation(req, res, rawInput) {
         acceptedAt: databaseNow(),
         acceptedByUserId: user.id,
         businessId: business.id
-      }).where(and11(
-        eq14(clientOnboardingInvitations.id, invitation.id),
-        eq14(clientOnboardingInvitations.status, "pending"),
+      }).where(and12(
+        eq15(clientOnboardingInvitations.id, invitation.id),
+        eq15(clientOnboardingInvitations.status, "pending"),
         gt5(clientOnboardingInvitations.expiresAt, /* @__PURE__ */ new Date()),
-        isNull5(clientOnboardingInvitations.acceptedAt)
+        isNull6(clientOnboardingInvitations.acceptedAt)
       )).returning({ id: clientOnboardingInvitations.id });
       if (claimed.length !== 1) throw unavailable();
-      return { userId: user.id, email: invitation.email, business, session };
+      return { userId: user.id, email: invitation.email, business, session, businessCheckId: invitation.businessCheckId };
     });
   } catch (error) {
-    if (isUniqueViolation(error)) throw new TRPCError12({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
+    if (isUniqueViolation(error)) throw new TRPCError13({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
     throw error;
   }
+  await linkEngagementToBusiness(db, { businessCheckId: created.businessCheckId, businessId: created.business.id }).catch((error) => {
+    console.error("[Engagements] Account created, but the engagement could not be linked:", error instanceof Error ? error.message : error);
+  });
   setSessionCookie(req, res, created.session.token);
   return buildView(
     { id: created.userId, name: input.fullName, email: created.email },
@@ -8191,7 +8880,7 @@ async function latestInvitationStatuses(db) {
     businessCheckId: clientOnboardingInvitations.businessCheckId,
     status: clientOnboardingInvitations.status,
     expiresAt: clientOnboardingInvitations.expiresAt
-  }).from(clientOnboardingInvitations).orderBy(desc8(clientOnboardingInvitations.id));
+  }).from(clientOnboardingInvitations).orderBy(desc9(clientOnboardingInvitations.id));
   const latest = /* @__PURE__ */ new Map();
   for (const invitation of invitations) if (!latest.has(invitation.businessCheckId)) latest.set(invitation.businessCheckId, effectiveInvitationStatus(invitation));
   return latest;
@@ -8210,7 +8899,7 @@ async function listOnboardingCandidates() {
       callScheduledFor: businessChecks.callScheduledFor,
       completedAt: businessChecks.completedAt,
       createdAt: businessChecks.createdAt
-    }).from(businessChecks).orderBy(desc8(businessChecks.createdAt)).limit(200),
+    }).from(businessChecks).orderBy(desc9(businessChecks.createdAt)).limit(200),
     latestInvitationStatuses(db)
   ]);
   return checks.map((check) => ({ ...check, invitationStatus: latest.get(check.id) ?? null }));
@@ -8227,7 +8916,7 @@ async function listOnboardingInvitations() {
     acceptedAt: clientOnboardingInvitations.acceptedAt,
     deliveryStatus: clientOnboardingInvitations.deliveryStatus,
     createdAt: clientOnboardingInvitations.createdAt
-  }).from(clientOnboardingInvitations).orderBy(desc8(clientOnboardingInvitations.createdAt)).limit(200);
+  }).from(clientOnboardingInvitations).orderBy(desc9(clientOnboardingInvitations.createdAt)).limit(200);
   return rows.map((row) => ({ ...row, status: effectiveInvitationStatus(row) }));
 }
 async function onboardingMetrics() {
@@ -8241,15 +8930,15 @@ async function onboardingMetrics() {
     businesses: await one(db.select({ n: count() }).from(businesses)),
     memberships: await one(db.select({ n: count() }).from(businessMemberships)),
     platformRoleAssignments: await one(db.select({ n: count() }).from(userPlatformRoles)),
-    pendingInvitations: await one(db.select({ n: count() }).from(clientOnboardingInvitations).where(and11(eq14(clientOnboardingInvitations.status, "pending"), gt5(clientOnboardingInvitations.expiresAt, /* @__PURE__ */ new Date())))),
-    activeSessions: await one(db.select({ n: count() }).from(userSessions).where(and11(isNull5(userSessions.revokedAt), gt5(userSessions.expiresAt, /* @__PURE__ */ new Date()))))
+    pendingInvitations: await one(db.select({ n: count() }).from(clientOnboardingInvitations).where(and12(eq15(clientOnboardingInvitations.status, "pending"), gt5(clientOnboardingInvitations.expiresAt, /* @__PURE__ */ new Date())))),
+    activeSessions: await one(db.select({ n: count() }).from(userSessions).where(and12(isNull6(userSessions.revokedAt), gt5(userSessions.expiresAt, /* @__PURE__ */ new Date()))))
   };
 }
 
 // server/fullReport/service.ts
 import { randomBytes as randomBytes6 } from "node:crypto";
-import { and as and12, eq as eq15 } from "drizzle-orm";
-import { TRPCError as TRPCError13 } from "@trpc/server";
+import { and as and13, eq as eq16 } from "drizzle-orm";
+import { TRPCError as TRPCError14 } from "@trpc/server";
 init_brand();
 
 // shared/fullReport/content.ts
@@ -8652,17 +9341,17 @@ var labelOf = (options, value) => options.find((option) => option.value === valu
 var REPORT_VERSION = 2;
 var HEALTH_RANK2 = { clear: 0, watch: 1, stuck: 2 };
 var worst2 = (...values2) => values2.reduce((current, value) => value && HEALTH_RANK2[value] > HEALTH_RANK2[current] ? value : current, "clear");
-var lower2 = (text3) => /^(I\b|I'|[A-Z][A-Za-z]*[A-Z])/.test(text3) ? text3 : text3.charAt(0).toLowerCase() + text3.slice(1);
-var sentence = (text3) => /[.!?]$/.test(text3) ? text3 : `${text3}.`;
-var upperFirst = (text3) => text3.charAt(0).toUpperCase() + text3.slice(1);
+var lower2 = (text4) => /^(I\b|I'|[A-Z][A-Za-z]*[A-Z])/.test(text4) ? text4 : text4.charAt(0).toLowerCase() + text4.slice(1);
+var sentence = (text4) => /[.!?]$/.test(text4) ? text4 : `${text4}.`;
+var upperFirst = (text4) => text4.charAt(0).toUpperCase() + text4.slice(1);
 var list = (items) => items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 var DATE = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Africa/Lagos" });
-var reportDate = (date) => DATE.format(date);
+var reportDate = (date2) => DATE.format(date2);
 function money(amount) {
   if (amount >= 1e6) {
     const millions = amount / 1e6;
-    const text3 = Number.isInteger(millions) ? String(millions) : millions.toFixed(millions >= 10 ? 1 : 2).replace(/0+$/, "").replace(/\.$/, "");
-    return `\u20A6${text3} million`;
+    const text4 = Number.isInteger(millions) ? String(millions) : millions.toFixed(millions >= 10 ? 1 : 2).replace(/0+$/, "").replace(/\.$/, "");
+    return `\u20A6${text4} million`;
   }
   return formatNaira(amount);
 }
@@ -8676,7 +9365,7 @@ function optionLabel(questionId, value) {
   }
   return void 0;
 }
-var answer = (answers, id) => typeof answers[id] === "string" ? answers[id] : void 0;
+var answer = (answers, id2) => typeof answers[id2] === "string" ? answers[id2] : void 0;
 var CASH_RANGE = { under_500k: [0, 5e5], "500k_2m": [5e5, 2e6], "2m_10m": [2e6, 1e7], over_10m: [1e7, null] };
 var OWED_RANGE = { none: [0, 0], under_1m: [0, 1e6], "1m_5m": [1e6, 5e6], over_5m: [5e6, null] };
 var ENQUIRY_RANGE = { under_10: [0, 10], "10_50": [10, 50], "50_200": [50, 200], over_200: [200, null] };
@@ -9164,7 +9853,7 @@ var GAP_ADVICE = {
 };
 function ideaPart(answers, result, intake) {
   const row = outlineRow(result, 1);
-  const readings = ["i_customer", "i_offer", "i_tested", "i_need"].map((id) => answer(answers, id) ? IDEA_READINGS[id][String(answers[id])] : void 0).filter((text3) => Boolean(text3));
+  const readings = ["i_customer", "i_offer", "i_tested", "i_need"].map((id2) => answer(answers, id2) ? IDEA_READINGS[id2][String(answers[id2])] : void 0).filter((text4) => Boolean(text4));
   return {
     number: 2,
     title: "Where it is going",
@@ -9244,8 +9933,8 @@ function appendix(answers, intake) {
     for (const question of section.questions) {
       const value = answers[question.id];
       if (value === void 0 || value === "" || Array.isArray(value) && !value.length) continue;
-      const text3 = question.kind === "text" ? String(value) : optionLabel(question.id, value) ?? String(value);
-      check.push({ question: question.prompt, answer: text3 });
+      const text4 = question.kind === "text" ? String(value) : optionLabel(question.id, value) ?? String(value);
+      check.push({ question: question.prompt, answer: text4 });
     }
   }
   const intakeAnswers = {
@@ -9305,12 +9994,12 @@ var HEALTH = {
   stuck: { label: "Stuck", fg: C2["health-stuck"], bg: C2["health-stuck-tint"] },
   not_assessed: { label: "Not assessed", fg: C2["ink-muted"], bg: C2["brand-tint-softer"] }
 };
-var displayFont = (text3) => text3.includes("\u20A6") ? SANS_700 : DISPLAY;
+var displayFont = (text4) => text4.includes("\u20A6") ? SANS_700 : DISPLAY;
 function ensure(doc, height) {
   if (doc.y + height > PAGE.height - M.bottom) doc.addPage();
 }
-function eyebrow(doc, text3, color = C2["highlight-ink"]) {
-  doc.font(SANS_700).fontSize(7.5).fillColor(color).text(text3.toUpperCase(), M.left, doc.y, { width: W, characterSpacing: 1.3 });
+function eyebrow(doc, text4, color = C2["highlight-ink"]) {
+  doc.font(SANS_700).fontSize(7.5).fillColor(color).text(text4.toUpperCase(), M.left, doc.y, { width: W, characterSpacing: 1.3 });
   doc.moveDown(0.5);
 }
 function chip(doc, health, x, y) {
@@ -9321,14 +10010,14 @@ function chip(doc, health, x, y) {
   doc.fillColor(style.fg).text(style.label.toUpperCase(), x + 6, y + 3.6, { characterSpacing: 0.8, lineBreak: false });
   return width;
 }
-function paragraph(doc, text3, options = {}) {
-  doc.font(options.font ?? SANS2).fontSize(options.size ?? 10).fillColor(options.color ?? C2["ink-soft"]).text(text3, options.x ?? M.left, doc.y, { width: options.width ?? W, lineGap: 3 });
+function paragraph(doc, text4, options = {}) {
+  doc.font(options.font ?? SANS2).fontSize(options.size ?? 10).fillColor(options.color ?? C2["ink-soft"]).text(text4, options.x ?? M.left, doc.y, { width: options.width ?? W, lineGap: 3 });
   doc.moveDown(0.6);
 }
-function subhead(doc, text3) {
+function subhead(doc, text4) {
   ensure(doc, 30);
   doc.moveDown(0.2);
-  doc.font(SANS_700).fontSize(7.5).fillColor(C2.brand).text(text3.toUpperCase(), M.left, doc.y, { width: W, characterSpacing: 1.1 });
+  doc.font(SANS_700).fontSize(7.5).fillColor(C2.brand).text(text4.toUpperCase(), M.left, doc.y, { width: W, characterSpacing: 1.1 });
   doc.moveDown(0.35);
 }
 function bullets(doc, items) {
@@ -9448,17 +10137,17 @@ function box(doc, accent, draw) {
   doc.x = M.left;
   doc.y = y + height + 12;
 }
-function callout(doc, title, text3, accent = C2["highlight-ink"]) {
+function callout(doc, title, text4, accent = C2["highlight-ink"]) {
   const x = M.left + 16;
   const width = W - 30;
   box(doc, accent, (measure) => {
     doc.font(SANS_700).fontSize(10);
     const titleHeight = doc.heightOfString(title, { width });
     doc.font(SANS2).fontSize(9.5);
-    const textHeight = doc.heightOfString(text3, { width, lineGap: 2.5 });
+    const textHeight = doc.heightOfString(text4, { width, lineGap: 2.5 });
     if (!measure) {
       doc.fillColor(C2.ink).font(SANS_700).fontSize(10).text(title, x, doc.y, { width });
-      doc.fillColor(C2["ink-soft"]).font(SANS2).fontSize(9.5).text(text3, x, doc.y + 4, { width, lineGap: 2.5 });
+      doc.fillColor(C2["ink-soft"]).font(SANS2).fontSize(9.5).text(text4, x, doc.y + 4, { width, lineGap: 2.5 });
     }
     return titleHeight + textHeight + 4;
   });
@@ -9475,7 +10164,7 @@ function reading2(doc, block) {
   subhead(doc, "What your answers show");
   bullets(doc, block.shows);
   subhead(doc, "What it means");
-  for (const text3 of block.meaning) paragraph(doc, text3);
+  for (const text4 of block.meaning) paragraph(doc, text4);
   subhead(doc, "What good looks like");
   paragraph(doc, block.good);
   const x = M.left + 16;
@@ -9483,14 +10172,14 @@ function reading2(doc, block) {
   box(doc, C2.highlight, (measure) => {
     const lines = [["First move", block.move, SANS_600], ["This week", block.thisWeek, SANS2], ["Number to watch", block.watch, SANS2]];
     let total = 0;
-    for (const [label, text3, font] of lines) {
+    for (const [label, text4, font] of lines) {
       doc.font(SANS_700).fontSize(7);
       const labelHeight = doc.heightOfString(label.toUpperCase(), { width, characterSpacing: 0.8 });
       doc.font(font).fontSize(9.5);
-      const textHeight = doc.heightOfString(text3, { width, lineGap: 2.5 });
+      const textHeight = doc.heightOfString(text4, { width, lineGap: 2.5 });
       if (!measure) {
         doc.fillColor(C2.brand).font(SANS_700).fontSize(7).text(label.toUpperCase(), x, doc.y, { width, characterSpacing: 0.8 });
-        doc.fillColor(C2.ink).font(font).fontSize(9.5).text(text3, x, doc.y + 2, { width, lineGap: 2.5 });
+        doc.fillColor(C2.ink).font(font).fontSize(9.5).text(text4, x, doc.y + 2, { width, lineGap: 2.5 });
         doc.y += 6;
       }
       total += labelHeight + textHeight + 8;
@@ -9668,21 +10357,21 @@ var REPORT_ERRORS = {
 var reportUrl = (token2) => `${getTrustedApplicationOrigin()}/report/${encodeURIComponent(token2)}`;
 async function issueReportLink(db, input) {
   const token2 = randomBytes6(32).toString("base64url");
-  const existing = (await db.select().from(fullReports).where(eq15(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
+  const existing = (await db.select().from(fullReports).where(eq16(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
   if (existing?.status === "delivered") return null;
-  if (existing) await db.update(fullReports).set({ tokenHash: sha256(token2) }).where(eq15(fullReports.id, existing.id));
+  if (existing) await db.update(fullReports).set({ tokenHash: sha256(token2) }).where(eq16(fullReports.id, existing.id));
   else await db.insert(fullReports).values({ businessCheckId: input.businessCheckId, paymentRequestId: input.paymentRequestId, tokenHash: sha256(token2) });
   return reportUrl(token2);
 }
 async function recordFor(db, token2) {
-  if (!token2 || token2.length > 200) throw new TRPCError13({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
-  const record = (await db.select().from(fullReports).where(eq15(fullReports.tokenHash, sha256(token2))).limit(1))[0];
-  if (!record) throw new TRPCError13({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
+  if (!token2 || token2.length > 200) throw new TRPCError14({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
+  const record = (await db.select().from(fullReports).where(eq16(fullReports.tokenHash, sha256(token2))).limit(1))[0];
+  if (!record) throw new TRPCError14({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
   return record;
 }
 async function checkFor(db, businessCheckId) {
-  const check = (await db.select().from(businessChecks).where(eq15(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError13({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
+  const check = (await db.select().from(businessChecks).where(eq16(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError14({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
   return check;
 }
 async function reportForm(db, token2) {
@@ -9690,19 +10379,19 @@ async function reportForm(db, token2) {
   const check = await checkFor(db, record.businessCheckId);
   return { status: record.status, fullName: check.fullName, businessName: check.businessName ?? "", email: check.email, deliveredAt: record.deliveredAt };
 }
-function parse(text3) {
-  if (!text3) return null;
+function parse(text4) {
+  if (!text4) return null;
   try {
-    return JSON.parse(text3);
+    return JSON.parse(text4);
   } catch {
     return null;
   }
 }
 async function assemble(db, record) {
   const intake = readIntake(parse(record.intakeJson));
-  if (!intake || !record.intakeSubmittedAt) throw new TRPCError13({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
+  if (!intake || !record.intakeSubmittedAt) throw new TRPCError14({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
   const check = await checkFor(db, record.businessCheckId);
-  const payment = (await db.select({ reference: paymentRequests.reference }).from(paymentRequests).where(eq15(paymentRequests.id, record.paymentRequestId)).limit(1))[0];
+  const payment = (await db.select({ reference: paymentRequests.reference }).from(paymentRequests).where(eq16(paymentRequests.id, record.paymentRequestId)).limit(1))[0];
   const answers = parse(check.answersJson) ?? {};
   const result = parse(check.resultJson) ?? evaluate(answers);
   const report = buildFullReport({
@@ -9747,11 +10436,11 @@ function reportEmail(report, downloadUrl) {
 }
 async function submitReportIntake(db, token2, rawIntake) {
   const record = await recordFor(db, token2);
-  if (record.status === "delivered") throw new TRPCError13({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
+  if (record.status === "delivered") throw new TRPCError14({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
   const parsed = intakeSchema.safeParse(rawIntake);
-  if (!parsed.success) throw new TRPCError13({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Please check your answers." });
-  const [claimed] = await db.update(fullReports).set({ status: "delivered", intakeJson: JSON.stringify(parsed.data), intakeSubmittedAt: /* @__PURE__ */ new Date(), reportVersion: REPORT_VERSION }).where(and12(eq15(fullReports.id, record.id), eq15(fullReports.status, "awaiting_intake"))).returning();
-  if (!claimed) throw new TRPCError13({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
+  if (!parsed.success) throw new TRPCError14({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Please check your answers." });
+  const [claimed] = await db.update(fullReports).set({ status: "delivered", intakeJson: JSON.stringify(parsed.data), intakeSubmittedAt: /* @__PURE__ */ new Date(), reportVersion: REPORT_VERSION }).where(and13(eq16(fullReports.id, record.id), eq16(fullReports.status, "awaiting_intake"))).returning();
+  if (!claimed) throw new TRPCError14({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
   const { report, generatedAt, email } = await assemble(db, claimed);
   const pdf = await renderFullReportPdf(report, generatedAt);
   const message = reportEmail(report, reportUrl(token2));
@@ -9762,7 +10451,7 @@ async function submitReportIntake(db, token2, rawIntake) {
     body: message.body,
     attachments: [{ filename: fileName(report), content: pdf, contentType: "application/pdf" }]
   }).catch(() => ({ status: "Failed" }));
-  await db.update(fullReports).set({ deliveredAt: /* @__PURE__ */ new Date(), deliveryStatus: delivery.status }).where(eq15(fullReports.id, claimed.id));
+  await db.update(fullReports).set({ deliveredAt: /* @__PURE__ */ new Date(), deliveryStatus: delivery.status }).where(eq16(fullReports.id, claimed.id));
   await recordAudit(db, { action: "full_report_delivered", targetEmail: email, details: { businessCheckId: claimed.businessCheckId, reference: report.reference, delivery: delivery.status } });
   await deliverEmail({
     sender: "business_support",
@@ -9783,24 +10472,24 @@ async function submitReportIntake(db, token2, rawIntake) {
 }
 async function downloadReport(db, token2) {
   const record = await recordFor(db, token2);
-  if (record.status !== "delivered") throw new TRPCError13({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
+  if (record.status !== "delivered") throw new TRPCError14({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
   const { report, generatedAt } = await assemble(db, record);
   return { fileName: fileName(report), pdf: (await renderFullReportPdf(report, generatedAt)).toString("base64") };
 }
 async function adminDownloadReport(db, businessCheckId) {
-  const record = (await db.select().from(fullReports).where(eq15(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
-  if (!record || record.status !== "delivered") throw new TRPCError13({ code: "NOT_FOUND", message: "This report has not been sent yet." });
+  const record = (await db.select().from(fullReports).where(eq16(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
+  if (!record || record.status !== "delivered") throw new TRPCError14({ code: "NOT_FOUND", message: "This report has not been sent yet." });
   const { report, generatedAt } = await assemble(db, record);
   return { fileName: fileName(report), pdf: (await renderFullReportPdf(report, generatedAt)).toString("base64") };
 }
 async function reportStatusFor(db, businessCheckId) {
-  const record = (await db.select({ status: fullReports.status, createdAt: fullReports.createdAt, deliveredAt: fullReports.deliveredAt, deliveryStatus: fullReports.deliveryStatus }).from(fullReports).where(eq15(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
+  const record = (await db.select({ status: fullReports.status, createdAt: fullReports.createdAt, deliveredAt: fullReports.deliveredAt, deliveryStatus: fullReports.deliveryStatus }).from(fullReports).where(eq16(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
   return record ?? null;
 }
 async function resendReportLink(db, input) {
-  const record = (await db.select().from(fullReports).where(eq15(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
-  if (!record) throw new TRPCError13({ code: "NOT_FOUND", message: "Confirm the report payment first: that sends the form link." });
-  if (record.status === "delivered") throw new TRPCError13({ code: "CONFLICT", message: "The report has already been sent." });
+  const record = (await db.select().from(fullReports).where(eq16(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
+  if (!record) throw new TRPCError14({ code: "NOT_FOUND", message: "Confirm the report payment first: that sends the form link." });
+  if (record.status === "delivered") throw new TRPCError14({ code: "CONFLICT", message: "The report has already been sent." });
   const check = await checkFor(db, input.businessCheckId);
   const link = await issueReportLink(db, { businessCheckId: check.id, paymentRequestId: record.paymentRequestId });
   const firstName2 = check.fullName.trim().split(/\s+/)[0] || "there";
@@ -9824,7 +10513,7 @@ async function resendReportLink(db, input) {
 }
 
 // server/lagosTime.ts
-var lagosTime = (date) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(date);
+var lagosTime = (date2) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(date2);
 
 // server/payments.ts
 var PLACEHOLDER_BANK_DETAILS = { bankName: "Test Bank", accountName: "IP Factory (test account)", accountNumber: "0000000000" };
@@ -9910,7 +10599,7 @@ function paymentConfirmedEmail(input) {
 async function paymentRequestsFor(db, businessCheckIds) {
   if (businessCheckIds && !businessCheckIds.length) return [];
   const query = db.select().from(paymentRequests);
-  return (businessCheckIds ? query.where(inArray4(paymentRequests.businessCheckId, businessCheckIds)) : query).orderBy(paymentRequests.id);
+  return (businessCheckIds ? query.where(inArray5(paymentRequests.businessCheckId, businessCheckIds)) : query).orderBy(paymentRequests.id);
 }
 function isMissingPaymentTable(error) {
   const code = error?.code ?? error?.cause?.code;
@@ -9930,21 +10619,21 @@ async function paymentStatusesByCheck(db, businessCheckIds) {
   return byCheck;
 }
 async function loadCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq16(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError14({ code: "NOT_FOUND", message: "That business check does not exist." });
+  const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq17(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError15({ code: "NOT_FOUND", message: "That business check does not exist." });
   return check;
 }
 var BEFORE_OPPORTUNITY = ["lead", "qualified_lead", "call_booked"];
 async function requestPayment(db, input) {
   const check = await loadCheck(db, input.businessCheckId);
-  const existing = (await db.select().from(paymentRequests).where(and13(eq16(paymentRequests.businessCheckId, check.id), eq16(paymentRequests.item, input.item))).limit(1))[0];
-  if (existing?.status === "confirmed") throw new TRPCError14({ code: "CONFLICT", message: "This has already been paid." });
+  const existing = (await db.select().from(paymentRequests).where(and14(eq17(paymentRequests.businessCheckId, check.id), eq17(paymentRequests.item, input.item))).limit(1))[0];
+  if (existing?.status === "confirmed") throw new TRPCError15({ code: "CONFLICT", message: "This has already been paid." });
   const reference = paymentReference(input.item, check.id);
   const amountNaira = PAYMENT_ITEM_DETAILS[input.item].amount;
   const stageTo = input.item === "current_state" && BEFORE_OPPORTUNITY.includes(check.pipelineStage) ? "opportunity" : check.pipelineStage;
   const request = await db.transaction(async (tx) => {
     const [row] = await tx.insert(paymentRequests).values({ businessCheckId: check.id, item: input.item, amountNaira, reference, requestedByUserId: input.actorUserId }).onConflictDoUpdate({ target: [paymentRequests.businessCheckId, paymentRequests.item], set: { amountNaira, requestedByUserId: input.actorUserId, requestedAt: /* @__PURE__ */ new Date() } }).returning();
-    if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq16(businessChecks.id, check.id));
+    if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq17(businessChecks.id, check.id));
     await recordAudit(tx, {
       action: "payment_details_sent",
       actorUserId: input.actorUserId,
@@ -9955,34 +10644,34 @@ async function requestPayment(db, input) {
   });
   const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference, deadline: paymentDeadline(request.requestedAt) });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
-  await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq16(paymentRequests.id, request.id));
+  await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq17(paymentRequests.id, request.id));
   const deliveryProblem = delivery.status === "Failed" ? delivery.reason : null;
   return { paymentRequestId: request.id, reference, status: request.status, deliveryStatus: delivery.status, deliveryProblem, pipelineStage: stageTo };
 }
 async function loadRequest(db, paymentRequestId) {
-  const request = (await db.select().from(paymentRequests).where(eq16(paymentRequests.id, paymentRequestId)).limit(1))[0];
-  if (!request) throw new TRPCError14({ code: "NOT_FOUND", message: "That payment request does not exist." });
+  const request = (await db.select().from(paymentRequests).where(eq17(paymentRequests.id, paymentRequestId)).limit(1))[0];
+  if (!request) throw new TRPCError15({ code: "NOT_FOUND", message: "That payment request does not exist." });
   return request;
 }
 async function markProofReceived(db, input) {
   const request = await loadRequest(db, input.paymentRequestId);
-  if (request.status === "confirmed") throw new TRPCError14({ code: "CONFLICT", message: "This payment is already confirmed." });
+  if (request.status === "confirmed") throw new TRPCError15({ code: "CONFLICT", message: "This payment is already confirmed." });
   if (request.status === "proof_received") return { success: true, changed: false };
   const check = await loadCheck(db, request.businessCheckId);
   await db.transaction(async (tx) => {
-    await tx.update(paymentRequests).set({ status: "proof_received", proofReceivedAt: /* @__PURE__ */ new Date() }).where(eq16(paymentRequests.id, request.id));
+    await tx.update(paymentRequests).set({ status: "proof_received", proofReceivedAt: /* @__PURE__ */ new Date() }).where(eq17(paymentRequests.id, request.id));
     await recordAudit(tx, { action: "payment_proof_received", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference } });
   });
   return { success: true, changed: true };
 }
 async function confirmPayment(db, input) {
   const request = await loadRequest(db, input.paymentRequestId);
-  if (request.status === "confirmed") return { success: true, changed: false, invitation: null };
+  if (request.status === "confirmed") return { success: true, changed: false, invitation: null, engagement: null };
   const check = await loadCheck(db, request.businessCheckId);
   const stageTo = request.item === "current_state" ? "won" : check.pipelineStage;
   await db.transaction(async (tx) => {
-    await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note: input.note || null }).where(eq16(paymentRequests.id, request.id));
-    if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq16(businessChecks.id, check.id));
+    await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note: input.note || null }).where(eq17(paymentRequests.id, request.id));
+    if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq17(businessChecks.id, check.id));
     await recordAudit(tx, {
       action: "payment_confirmed",
       actorUserId: input.actorUserId,
@@ -9994,11 +10683,15 @@ async function confirmPayment(db, input) {
   const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink });
   await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" }).catch(() => void 0);
   let invitation = null;
-  if (request.item === "current_state") invitation = await inviteToClientAccount(db, check.id, input.actorUserId);
-  return { success: true, changed: true, invitation };
+  let engagement = null;
+  if (request.item === "current_state") {
+    engagement = await startEngagementSafely(db, { businessCheckId: check.id, paymentRequestId: request.id, actorUserId: input.actorUserId });
+    invitation = await inviteToClientAccount(db, check.id, input.actorUserId);
+  }
+  return { success: true, changed: true, invitation, engagement };
 }
 async function inviteToClientAccount(db, businessCheckId, actorUserId) {
-  const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt }).from(clientOnboardingInvitations).where(eq16(clientOnboardingInvitations.businessCheckId, businessCheckId)).orderBy(desc9(clientOnboardingInvitations.id)).limit(1))[0];
+  const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt }).from(clientOnboardingInvitations).where(eq17(clientOnboardingInvitations.businessCheckId, businessCheckId)).orderBy(desc10(clientOnboardingInvitations.id)).limit(1))[0];
   const status = latest ? effectiveInvitationStatus(latest) : null;
   if (status === "accepted") return "has_account";
   if (status === "pending") return "already_invited";
@@ -10006,7 +10699,7 @@ async function inviteToClientAccount(db, businessCheckId, actorUserId) {
     await createOnboardingInvitation({ businessCheckId, actorUserId });
     return "sent";
   } catch (error) {
-    if (error instanceof TRPCError14 && error.code === "CONFLICT") return "has_account";
+    if (error instanceof TRPCError15 && error.code === "CONFLICT") return "has_account";
     console.error("[Payments] Payment confirmed, but the client account invitation could not be sent:", error instanceof Error ? error.message : error);
     return "failed";
   }
@@ -10103,15 +10796,15 @@ var businessCheckStartInput = z16.object({
   whatsapp: z16.string().trim().regex(INTERNATIONAL_PHONE, "Kindly check the WhatsApp number.").optional(),
   heardFrom: z16.string().trim().max(64).optional()
 });
-var unavailable2 = (what) => new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: `We could not ${what} just now. Kindly try again shortly.` });
+var unavailable2 = (what) => new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: `We could not ${what} just now. Kindly try again shortly.` });
 async function database(what) {
   const db = await getDb();
   if (!db) throw unavailable2(what);
   return db;
 }
 async function findCheck(db, token2) {
-  const [check] = await db.select().from(businessChecks).where(eq17(businessChecks.publicToken, token2)).limit(1);
-  if (!check) throw new TRPCError15({ code: "NOT_FOUND", message: "We could not find that business check. Kindly start again." });
+  const [check] = await db.select().from(businessChecks).where(eq18(businessChecks.publicToken, token2)).limit(1);
+  if (!check) throw new TRPCError16({ code: "NOT_FOUND", message: "We could not find that business check. Kindly start again." });
   return check;
 }
 function answerColumns(answers) {
@@ -10127,7 +10820,7 @@ var businessCheckRouter = router({
   start: publicProcedure.input(businessCheckStartInput).mutation(async ({ input, ctx }) => {
     const ip = (ctx.req.ip || "unknown").toLowerCase();
     if (!allowStartFromIp(ip) || !allowStart(`${ip}:${input.email.toLowerCase()}`)) {
-      throw new TRPCError15({ code: "TOO_MANY_REQUESTS", message: "Kindly wait a few minutes before starting another business check." });
+      throw new TRPCError16({ code: "TOO_MANY_REQUESTS", message: "Kindly wait a few minutes before starting another business check." });
     }
     const db = await database("start your business check");
     const token2 = randomBytes7(24).toString("base64url");
@@ -10145,11 +10838,11 @@ var businessCheckRouter = router({
   }),
   /** Saves answers as the owner goes, so an unfinished check still tells the team where they were. */
   saveProgress: publicProcedure.input(z16.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }) => {
-    if (!allowSave(input.token)) throw new TRPCError15({ code: "TOO_MANY_REQUESTS", message: "Too many updates. Your answers are still kept on this device." });
+    if (!allowSave(input.token)) throw new TRPCError16({ code: "TOO_MANY_REQUESTS", message: "Too many updates. Your answers are still kept on this device." });
     const db = await database("save your progress");
     const check = await findCheck(db, input.token);
     if (check.completedAt) return { saved: false };
-    await db.update(businessChecks).set(answerColumns(cleanAnswers(input.answers))).where(eq17(businessChecks.id, check.id));
+    await db.update(businessChecks).set(answerColumns(cleanAnswers(input.answers))).where(eq18(businessChecks.id, check.id));
     return { saved: true };
   }),
   /** Finishes the check: works out the result on the server, writes the summary and emails both sides once. */
@@ -10161,7 +10854,7 @@ var businessCheckRouter = router({
     }
     const answers = cleanAnswers(input.answers);
     if (!isComplete(answers)) {
-      throw new TRPCError15({ code: "BAD_REQUEST", message: "Some questions are still unanswered. Kindly go back and complete them." });
+      throw new TRPCError16({ code: "BAD_REQUEST", message: "Some questions are still unanswered. Kindly go back and complete them." });
     }
     const result = evaluate(answers);
     const contact = contactOf(check, answers);
@@ -10184,7 +10877,7 @@ var businessCheckRouter = router({
       summarySource: source,
       notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent",
       completedAt: databaseNow()
-    }).where(eq17(businessChecks.id, check.id));
+    }).where(eq18(businessChecks.id, check.id));
     return { token: check.publicToken, result, summary, summarySource: source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: ownerDelivery.status === "Sent" ? "Sent" : ownerDelivery.status === "Failed" ? "Failed" : "Simulated" };
   }),
   /** The owner asks for the free call or the full report from the result screen. */
@@ -10197,15 +10890,15 @@ var businessCheckRouter = router({
   })).mutation(async ({ input }) => {
     const db = await database("record your request");
     const check = await findCheck(db, input.token);
-    if (!check.completedAt) throw new TRPCError15({ code: "BAD_REQUEST", message: "Kindly finish the business check first." });
+    if (!check.completedAt) throw new TRPCError16({ code: "BAD_REQUEST", message: "Kindly finish the business check first." });
     const bookedFor = input.choice === "call" && input.calendlyEventUri ? await bookedCallTime(input.calendlyEventUri, check.email) ?? await findBookedCall(check.email) : null;
     if (bookedFor) {
-      await db.update(businessChecks).set({ callScheduledFor: bookedFor }).where(eq17(businessChecks.id, check.id));
+      await db.update(businessChecks).set({ callScheduledFor: bookedFor }).where(eq18(businessChecks.id, check.id));
       await recordAudit(db, { action: "business_check_call_booked", targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: bookedFor.toISOString(), source: "calendly" } });
     }
     const already = input.choice === "call" ? check.callRequestedAt : check.reportRequestedAt;
     if (!already) {
-      await db.update(businessChecks).set(input.choice === "call" ? { callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") } : { reportRequestedAt: databaseNow() }).where(eq17(businessChecks.id, check.id));
+      await db.update(businessChecks).set(input.choice === "call" ? { callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") } : { reportRequestedAt: databaseNow() }).where(eq18(businessChecks.id, check.id));
       const what = input.choice === "call" ? "a free discovery call" : "the full business check report";
       let payment = "";
       if (input.choice === "report") {
@@ -10213,7 +10906,7 @@ var businessCheckRouter = router({
           const sent = await requestPayment(db, { businessCheckId: check.id, item: "full_report", actorUserId: null });
           payment = sent.deliveryStatus === "Failed" ? `Payment details: ${sent.reference}, but the email to the owner failed (${sent.deliveryProblem ?? "no reason given"}). Send them again from admin once that is fixed.` : `Payment details sent: ${sent.reference}`;
         } catch (error) {
-          const paid = error instanceof TRPCError15 && error.code === "CONFLICT";
+          const paid = error instanceof TRPCError16 && error.code === "CONFLICT";
           if (!paid) console.error("[BusinessCheck] Could not send the report payment details:", error instanceof Error ? error.message : error);
           payment = paid ? "Payment: already paid" : "Payment details: NOT SENT. Send them from the admin console.";
         }
@@ -10286,12 +10979,12 @@ var clientOnboardingRouter = router({
 
 // server/routers/platformRoles.ts
 import { z as z19 } from "zod";
-import { TRPCError as TRPCError16 } from "@trpc/server";
+import { TRPCError as TRPCError17 } from "@trpc/server";
 var manageRoles = adminPermissionProcedure("manage_roles");
 var roleInput = z19.object({ userId: z19.number().int().positive(), role: z19.enum(PLATFORM_ROLES) });
 async function database2() {
   const db = await getDb();
-  if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 var platformRolesRouter = router({
@@ -10304,11 +10997,11 @@ var platformRolesRouter = router({
 import { z as z20 } from "zod";
 
 // server/businessSupportAdmin.ts
-import { and as and14, desc as desc10, eq as eq18, inArray as inArray5, isNotNull as isNotNull2, isNull as isNull6, sql as sql6 } from "drizzle-orm";
-import { TRPCError as TRPCError17 } from "@trpc/server";
+import { and as and15, desc as desc11, eq as eq19, inArray as inArray6, isNotNull as isNotNull2, isNull as isNull7, sql as sql7 } from "drizzle-orm";
+import { TRPCError as TRPCError18 } from "@trpc/server";
 async function requireDatabase2() {
   const db = await getDb();
-  if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 var CHECK_COLUMNS = {
@@ -10337,7 +11030,7 @@ async function syncCalendlyBookings(db, rows) {
   await Promise.all(waiting.map(async (row) => {
     const time = await findBookedCall(row.email);
     if (!time) return;
-    await db.update(businessChecks).set({ callScheduledFor: time }).where(and14(eq18(businessChecks.id, row.id), isNull6(businessChecks.callScheduledFor)));
+    await db.update(businessChecks).set({ callScheduledFor: time }).where(and15(eq19(businessChecks.id, row.id), isNull7(businessChecks.callScheduledFor)));
     await recordAudit(db, { action: "business_check_call_booked", targetEmail: row.email, details: { businessCheckId: row.id, scheduledFor: time.toISOString(), source: "calendly_lookup" } });
     found.set(row.id, time);
   }));
@@ -10345,7 +11038,7 @@ async function syncCalendlyBookings(db, rows) {
 }
 async function listBusinessChecks(db) {
   const [rows, invitations] = await Promise.all([
-    db.select(CHECK_COLUMNS).from(businessChecks).orderBy(desc10(businessChecks.createdAt)).limit(500),
+    db.select(CHECK_COLUMNS).from(businessChecks).orderBy(desc11(businessChecks.createdAt)).limit(500),
     latestInvitationStatuses(db)
   ]);
   const payments2 = await paymentStatusesByCheck(db);
@@ -10353,16 +11046,16 @@ async function listBusinessChecks(db) {
 }
 async function listDiscoveryCalls(db) {
   const [rows, invitations] = await Promise.all([
-    db.select(CHECK_COLUMNS).from(businessChecks).where(isNotNull2(businessChecks.callRequestedAt)).orderBy(desc10(businessChecks.callRequestedAt)).limit(500),
+    db.select(CHECK_COLUMNS).from(businessChecks).where(isNotNull2(businessChecks.callRequestedAt)).orderBy(desc11(businessChecks.callRequestedAt)).limit(500),
     latestInvitationStatuses(db)
   ]);
   const payments2 = await paymentStatusesByCheck(db);
   return (await syncCalendlyBookings(db, rows)).map((row) => ({ ...row, invitationStatus: invitations.get(row.id) ?? null, payments: payments2.get(row.id) ?? {} }));
 }
-var parseJson = (text3) => {
-  if (!text3) return null;
+var parseJson = (text4) => {
+  if (!text4) return null;
   try {
-    return JSON.parse(text3);
+    return JSON.parse(text4);
   } catch {
     return null;
   }
@@ -10370,7 +11063,7 @@ var parseJson = (text3) => {
 async function paymentsOf(db, businessCheckId) {
   try {
     const now = /* @__PURE__ */ new Date();
-    return (await paymentRequestsFor(db, [businessCheckId])).map(({ id, item, amountNaira, reference, status, requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }) => ({ id, item, amountNaira, reference, status, displayStatus: effectivePaymentStatus({ status, requestedAt }, now), payBy: paymentDeadline(requestedAt), requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }));
+    return (await paymentRequestsFor(db, [businessCheckId])).map(({ id: id2, item, amountNaira, reference, status, requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }) => ({ id: id2, item, amountNaira, reference, status, displayStatus: effectivePaymentStatus({ status, requestedAt }, now), payBy: paymentDeadline(requestedAt), requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }));
   } catch (error) {
     if (!isMissingPaymentTable(error)) throw error;
     console.error("[Payments] The payment_requests table is missing: apply migration 0006 with pnpm db:migrate.");
@@ -10392,8 +11085,8 @@ async function getBusinessCheckDetail(db, businessCheckId) {
     heardFrom: businessChecks.heardFrom,
     resultJson: businessChecks.resultJson,
     summaryJson: businessChecks.summaryJson
-  }).from(businessChecks).where(eq18(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!row) throw new TRPCError17({ code: "NOT_FOUND", message: "That business check does not exist." });
+  }).from(businessChecks).where(eq19(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!row) throw new TRPCError18({ code: "NOT_FOUND", message: "That business check does not exist." });
   const { resultJson, summaryJson, ...fields } = row;
   const result = parseJson(resultJson);
   const summary = parseJson(summaryJson);
@@ -10411,7 +11104,7 @@ async function getBusinessCheckDetail(db, businessCheckId) {
 }
 var HISTORY_ACTIONS = ["business_check_stage_changed", "business_check_call_outcome", "business_check_call_scheduled", "business_check_call_booked", "payment_details_sent", "payment_proof_received", "payment_confirmed", "full_report_link_sent", "full_report_delivered"];
 async function stageHistoryFor(db, businessCheckId) {
-  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq18(users.id, adminAccessAuditEvents.actorUserId)).where(and14(inArray5(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql6`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc10(adminAccessAuditEvents.createdAt), desc10(adminAccessAuditEvents.id)).limit(100);
+  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq19(users.id, adminAccessAuditEvents.actorUserId)).where(and15(inArray6(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql7`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc11(adminAccessAuditEvents.createdAt), desc11(adminAccessAuditEvents.id)).limit(100);
   return events.map((event) => {
     const details = parseJson(event.details) ?? {};
     return { id: event.id, action: event.action, from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, by: event.by ?? null, at: event.at };
@@ -10419,12 +11112,12 @@ async function stageHistoryFor(db, businessCheckId) {
 }
 var SETTABLE_STAGES = PIPELINE_STAGES.filter((stage) => stage !== "lead");
 async function setPipelineStage(db, input) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq18(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError17({ code: "NOT_FOUND", message: "That business check does not exist." });
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq19(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError18({ code: "NOT_FOUND", message: "That business check does not exist." });
   if (check.pipelineStage === input.stage) return { success: true, pipelineStage: check.pipelineStage, changed: false };
-  if (check.pipelineStage === "won") throw new TRPCError17({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
+  if (check.pipelineStage === "won") throw new TRPCError18({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ pipelineStage: input.stage }).where(eq18(businessChecks.id, check.id));
+    await tx.update(businessChecks).set({ pipelineStage: input.stage }).where(eq19(businessChecks.id, check.id));
     await recordAudit(tx, {
       action: "business_check_stage_changed",
       actorUserId: input.actorUserId,
@@ -10435,16 +11128,16 @@ async function setPipelineStage(db, input) {
   return { success: true, pipelineStage: input.stage, changed: true };
 }
 async function requestedCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq18(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError17({ code: "NOT_FOUND", message: "That business check does not exist." });
-  if (!check.callRequestedAt) throw new TRPCError17({ code: "BAD_REQUEST", message: "This business check has not asked for a discovery call." });
-  if (check.pipelineStage === "won") throw new TRPCError17({ code: "CONFLICT", message: "This business has already been won, so its call outcome can no longer be changed here." });
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq19(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError18({ code: "NOT_FOUND", message: "That business check does not exist." });
+  if (!check.callRequestedAt) throw new TRPCError18({ code: "BAD_REQUEST", message: "This business check has not asked for a discovery call." });
+  if (check.pipelineStage === "won") throw new TRPCError18({ code: "CONFLICT", message: "This business has already been won, so its call outcome can no longer be changed here." });
   return check;
 }
 async function scheduleDiscoveryCall(db, input) {
   const check = await requestedCheck(db, input.businessCheckId);
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq18(businessChecks.id, check.id));
+    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq19(businessChecks.id, check.id));
     await recordAudit(tx, { action: "business_check_call_scheduled", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: input.scheduledFor.toISOString() } });
   });
   return { success: true };
@@ -10455,7 +11148,7 @@ async function recordDiscoveryCallOutcome(db, input) {
   const check = await requestedCheck(db, input.businessCheckId);
   const stage = OUTCOME_STAGE[input.outcome];
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ pipelineStage: stage }).where(eq18(businessChecks.id, check.id));
+    await tx.update(businessChecks).set({ pipelineStage: stage }).where(eq19(businessChecks.id, check.id));
     await recordAudit(tx, { action: "business_check_call_outcome", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, outcome: input.outcome, from: check.pipelineStage, to: stage } });
   });
   return { success: true, pipelineStage: stage };
@@ -10473,7 +11166,7 @@ async function listClients(db) {
     membershipStatus: businessMemberships.status,
     joinedAt: businessMemberships.createdAt,
     businessCreatedAt: businesses.createdAt
-  }).from(businessMemberships).innerJoin(businesses, eq18(businessMemberships.businessId, businesses.id)).innerJoin(users, eq18(businessMemberships.userId, users.id)).orderBy(desc10(businesses.createdAt), businessMemberships.id).limit(500);
+  }).from(businessMemberships).innerJoin(businesses, eq19(businessMemberships.businessId, businesses.id)).innerJoin(users, eq19(businessMemberships.userId, users.id)).orderBy(desc11(businesses.createdAt), businessMemberships.id).limit(500);
 }
 async function businessSupportDb() {
   return requireDatabase2();
@@ -10506,10 +11199,10 @@ var businessSupportRouter = router({
 
 // server/routers/fullReport.ts
 import { z as z21 } from "zod";
-import { TRPCError as TRPCError18 } from "@trpc/server";
+import { TRPCError as TRPCError19 } from "@trpc/server";
 async function database3() {
   const db = await getDb();
-  if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach your report just now. Please try again in a minute." });
+  if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach your report just now. Please try again in a minute." });
   return db;
 }
 var token = z21.string().trim().min(1).max(200);
@@ -10519,6 +11212,91 @@ var fullReportRouter = router({
   submit: publicProcedure.input(z21.object({ token, intake: z21.unknown() })).mutation(async ({ input }) => submitReportIntake(await database3(), input.token, input.intake)),
   download: publicProcedure.input(z21.object({ token })).mutation(async ({ input }) => downloadReport(await database3(), input.token))
 });
+
+// server/routers/engagement.ts
+import { TRPCError as TRPCError20 } from "@trpc/server";
+import { z as z22 } from "zod";
+var id = z22.number().int().positive();
+var text3 = (max) => z22.string().trim().max(max);
+var optionalText2 = (max) => text3(max).transform((value) => value || null).nullable();
+var sharedAudience = z22.enum(["owner", "business"]);
+async function guarded(work) {
+  try {
+    return await work();
+  } catch (error) {
+    if (isMissingEngagementTable(error)) throw new TRPCError20({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
+    throw error;
+  }
+}
+var staff = adminProcedure.use(async ({ ctx, next }) => {
+  const authority = await loadAuthority(await engagementDb(), ctx.user);
+  if (!authorityAllows(authority, "view_all_businesses") && !authorityAllows(authority, "view_assigned_businesses")) {
+    throw new TRPCError20({ code: "FORBIDDEN", message: "Your role does not include engagements." });
+  }
+  return next({ ctx: { ...ctx, actor: { id: ctx.user.id, authority } } });
+});
+var staffRouter = router({
+  list: staff.query(async ({ ctx }) => {
+    try {
+      return { setUp: true, items: await listStaffEngagements(await engagementDb(), ctx.actor) };
+    } catch (error) {
+      if (!isMissingEngagementTable(error)) throw error;
+      return { setUp: false, items: [] };
+    }
+  }),
+  detail: staff.input(z22.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => getStaffEngagement(await engagementDb(), ctx.actor, input.engagementId))),
+  assignableStaff: staff.query(async ({ ctx }) => listAssignableStaff(await engagementDb(), ctx.actor)),
+  assign: staff.input(z22.object({ engagementId: id, userId: id, role: z22.enum(ENGAGEMENT_TEAM_ROLES) })).mutation(async ({ ctx, input }) => guarded(async () => assignTeamMember(await engagementDb(), ctx.actor, input))),
+  removeMember: staff.input(z22.object({ engagementId: id, userId: id })).mutation(async ({ ctx, input }) => guarded(async () => removeTeamMember(await engagementDb(), ctx.actor, input))),
+  setStage: staff.input(z22.object({ engagementId: id, stage: z22.enum(ENGAGEMENT_STAGES) })).mutation(async ({ ctx, input }) => guarded(async () => setEngagementStage(await engagementDb(), ctx.actor, input))),
+  saveProblem: staff.input(z22.object({ engagementId: id, problemArea: z22.number().int().min(0).max(10).nullable(), subProblem: optionalText2(255), problemStatement: optionalText2(4e3) })).mutation(async ({ ctx, input }) => guarded(async () => saveProblem(await engagementDb(), ctx.actor, input))),
+  saveSession: staff.input(z22.object({
+    engagementId: id,
+    sessionId: id.optional(),
+    kind: z22.enum(ENGAGEMENT_SESSION_KINDS),
+    title: text3(160).min(1, "Give the call a title."),
+    scheduledFor: z22.coerce.date().nullable(),
+    durationMinutes: z22.number().int().min(5).max(480).nullable(),
+    meetingLink: z22.string().trim().url("Paste the full meeting link, starting https://").max(512).nullable().or(z22.literal("").transform(() => null)),
+    agenda: optionalText2(4e3),
+    status: z22.enum(ENGAGEMENT_SESSION_STATUSES)
+  })).mutation(async ({ ctx, input }) => guarded(async () => saveSession(await engagementDb(), ctx.actor, input))),
+  saveNotes: staff.input(z22.object({ sessionId: id, clientNotes: optionalText2(2e4), internalNotes: optionalText2(2e4) })).mutation(async ({ ctx, input }) => guarded(async () => saveSessionNotes(await engagementDb(), ctx.actor, input))),
+  shareNotes: staff.input(z22.object({ sessionId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareSessionNotes(await engagementDb(), ctx.actor, input))),
+  saveTask: staff.input(z22.object({
+    engagementId: id,
+    taskId: id.optional(),
+    kind: z22.enum(ENGAGEMENT_TASK_KINDS),
+    title: text3(200).min(1, "Say what is needed."),
+    detail: optionalText2(2e3),
+    side: z22.enum(ENGAGEMENT_TASK_SIDES),
+    assigneeUserId: id.nullable(),
+    dueOn: z22.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+    status: z22.enum(ENGAGEMENT_TASK_STATUSES),
+    statusNote: optionalText2(500),
+    sessionId: id.nullable()
+  })).mutation(async ({ ctx, input }) => guarded(async () => saveTask(await engagementDb(), ctx.actor, input))),
+  saveDeliverable: staff.input(z22.object({ engagementId: id, deliverableId: id.optional(), kind: z22.enum(ENGAGEMENT_DELIVERABLE_KINDS), title: text3(200).min(1, "Give it a title."), summary: optionalText2(2e4) })).mutation(async ({ ctx, input }) => guarded(async () => saveDeliverable(await engagementDb(), ctx.actor, input))),
+  approveDeliverable: staff.input(z22.object({ deliverableId: id })).mutation(async ({ ctx, input }) => guarded(async () => approveDeliverable(await engagementDb(), ctx.actor, input))),
+  shareDeliverable: staff.input(z22.object({ deliverableId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareDeliverable(await engagementDb(), ctx.actor, input))),
+  comment: staff.input(z22.object({ deliverableId: id, body: text3(4e3).min(1) })).mutation(async ({ ctx, input }) => guarded(async () => staffComment(await engagementDb(), ctx.actor, input)))
+});
+var clientRouter = router({
+  /** Null when the business has no engagement yet, or the room is not set up in the database yet. */
+  room: accountProcedure.query(async ({ ctx }) => {
+    try {
+      return await getClientRoom(await engagementDb(), ctx.account);
+    } catch (error) {
+      if (isMissingEngagementTable(error)) return null;
+      throw error;
+    }
+  }),
+  respondToTask: accountProcedure.input(z22.object({ taskId: id, note: optionalText2(500) })).mutation(async ({ ctx, input }) => guarded(async () => respondToTask(await engagementDb(), ctx.account, input))),
+  comment: accountProcedure.input(z22.object({ deliverableId: id, body: text3(4e3).min(1, "Write your comment first.") })).mutation(async ({ ctx, input }) => guarded(async () => clientComment(await engagementDb(), ctx.account, input))),
+  accept: accountProcedure.input(z22.object({ deliverableId: id })).mutation(async ({ ctx, input }) => guarded(async () => acceptDeliverable(await engagementDb(), ctx.account, input))),
+  setAudience: accountProcedure.input(z22.object({ item: z22.enum(["notes", "deliverable"]), id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => setClientAudience(await engagementDb(), ctx.account, input)))
+});
+var engagementRouter = router({ staff: staffRouter, client: clientRouter });
 
 // server/routers.ts
 var appRouter = router({
@@ -10549,11 +11327,12 @@ var appRouter = router({
   onboarding: clientOnboardingRouter,
   fullReport: fullReportRouter,
   platformRoles: platformRolesRouter,
-  businessSupport: businessSupportRouter
+  businessSupport: businessSupportRouter,
+  engagement: engagementRouter
 });
 
 // server/_core/context.ts
-import { eq as eq19 } from "drizzle-orm";
+import { eq as eq20 } from "drizzle-orm";
 async function createContext(opts) {
   let user = null;
   let authChannel;
@@ -10568,7 +11347,7 @@ async function createContext(opts) {
       const session = await resolveAccountSession(opts.req);
       if (session && session.authority.roles.length > 0) {
         const db = await getDb();
-        const row = db ? (await db.select().from(users).where(eq19(users.id, session.user.id)).limit(1))[0] : void 0;
+        const row = db ? (await db.select().from(users).where(eq20(users.id, session.user.id)).limit(1))[0] : void 0;
         if (row && row.status === "active") {
           user = row;
           authChannel = "account";
@@ -10698,7 +11477,7 @@ function createApp() {
       return res.status(201).json(uploaded);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to upload the file.";
-      const status = error instanceof TRPCError19 && error.code === "UNAUTHORIZED" ? 401 : 500;
+      const status = error instanceof TRPCError21 && error.code === "UNAUTHORIZED" ? 401 : 500;
       console.warn("[Participant upload] Failed:", message);
       return res.status(status).json({ message: status === 401 ? "Kindly sign in to your participant portal again and try again." : "We could not store this file. Kindly try again shortly." });
     }
@@ -10718,7 +11497,7 @@ function createApp() {
       return res.status(201).json(uploaded);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to upload the payment receipt.";
-      const status = error instanceof TRPCError19 && error.code === "UNAUTHORIZED" ? 401 : 500;
+      const status = error instanceof TRPCError21 && error.code === "UNAUTHORIZED" ? 401 : 500;
       console.warn("[Payment receipt upload] Failed:", message);
       return res.status(status).json({ message: status === 401 ? "Kindly sign in to your participant portal again and try again." : "We could not store the receipt. Kindly try again shortly." });
     }

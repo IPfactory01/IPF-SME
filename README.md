@@ -13,7 +13,9 @@ Live at https://ipf-sme.vercel.app (Vercel, deploying `main`).
 - **Client accounts:** created by invitation once the Current State Assessment is paid; one identity per person, businesses as
   workspaces, client isolation enforced on the server.
 - **Admin console:** leads, pipeline, payments, reports, onboarding, staff roles and permissions, audit trail.
-- **Next:** the engagement room for clients (Current State Assessment, the six-week fix, the plan).
+- **Engagement room:** starts when the Current State Assessment is paid; the team's Engagements section and the client's room
+  on `/dashboard` (where we are, what we need from you, what we have found). Needs migration 0008.
+- **Next:** file uploads, staff and seat invitations, and the fix's measure and weekly check-in screens.
 
 **Product documents:** [`docs/product/`](docs/product/README.md) holds the PRD, technical requirements, app flow, design
 brief, backend schema and implementation plan. Start there.

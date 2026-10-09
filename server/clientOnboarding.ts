@@ -39,6 +39,7 @@ import { getDb } from "./db";
 import { databaseNow, emailEquals } from "./dbHelpers";
 import { deliverEmail } from "./email";
 import { hashAdminPassword, sha256 } from "./adminSecurity";
+import { linkEngagementToBusiness } from "./engagements";
 import { NO_AUTHORITY } from "./platformAccess";
 import { getTrustedApplicationOrigin } from "./security";
 
@@ -212,13 +213,17 @@ export async function acceptOnboardingInvitation(req: Request, res: Response, ra
         isNull(clientOnboardingInvitations.acceptedAt),
       )).returning({ id: clientOnboardingInvitations.id });
       if (claimed.length !== 1) throw unavailable();
-      return { userId: user.id, email: invitation.email, business, session };
+      return { userId: user.id, email: invitation.email, business, session, businessCheckId: invitation.businessCheckId };
     });
   } catch (error) {
     if (isUniqueViolation(error)) throw new TRPCError({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
     throw error;
   }
 
+  // Outside the account transaction: a missing engagement table (migration 0008) must never stop an owner signing up.
+  await linkEngagementToBusiness(db, { businessCheckId: created.businessCheckId, businessId: created.business.id }).catch(error => {
+    console.error("[Engagements] Account created, but the engagement could not be linked:", error instanceof Error ? error.message : error);
+  });
   setSessionCookie(req, res, created.session.token);
   // A new client has no platform role: platform roles are never granted by onboarding.
   return buildView(

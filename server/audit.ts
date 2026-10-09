@@ -24,6 +24,16 @@ export const AUDIT_ACTIONS = [
   "account_password_changed",
   "platform_role_granted",
   "platform_role_revoked",
+  "engagement_started",
+  "engagement_team_assigned",
+  "engagement_team_removed",
+  "engagement_stage_changed",
+  "engagement_notes_shared",
+  "engagement_deliverable_approved",
+  "engagement_deliverable_shared",
+  "engagement_deliverable_accepted",
+  "engagement_task_answered",
+  "engagement_audience_changed",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

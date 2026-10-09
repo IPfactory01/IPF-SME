@@ -21,6 +21,12 @@
 | Full report: 17-question form, deterministic PDF emailed at once, admin status and download | `test/shared/fullReport/*`, `test/server/fullReport/*` |
 | Client account by invitation after Current State Assessment is paid; Won stage | `test/server/clientOnboarding.test.ts`, `test/db/payments.db.test.ts` (whole journey) |
 
+**The engagement room v1 (9 October, live once migration 0008 is applied):** the engagement starts with the template
+when the Current State Assessment is paid; the team's Engagements section (team, stage, the one problem, calls and notes,
+requests and actions, deliverables with approval); the client's room on `/dashboard` (where we are, what we need from
+you, what we have found). Tests: `test/db/engagements.db.test.ts`, `test/server/engagements.test.ts`,
+`test/client/components/engagement*.ui.test.tsx`.
+
 Also on `main` since 9 October: the original twelve sectors; "Not assessed" areas on the result; the report form asking
 how each product is charged; the invitation page asking someone else signed in to sign out first; the 48-hour payment
 window; the problem questions at the end of the check.
@@ -34,6 +40,7 @@ window; the problem questions at the end of the check.
 | 0.3 | Push the branch to `main` | ET ("push to main") | The four branch changes |
 | 0.4 | Name the finance person and grant roles to the analysts on the platform | Lewis | Phase 1 assignments |
 | 0.5 | Open IP Factory's Paystack business account; put the test keys, then the live keys, in Vercel (`PAYSTACK_PUBLIC_KEY`, `PAYSTACK_SECRET_KEY`) | ET, Lewis | Online payment (section 4) |
+| 0.6 | **Apply migration 0008** (`drizzle/supabase/apply-0008-engagement-room.sql` in the Supabase SQL Editor, or `pnpm db:migrate`) before the first Current State Assessment payment is confirmed | Lewis | The engagement room |
 
 ## 3. Quick fixes found while writing these documents (this week, small)
 
@@ -73,28 +80,28 @@ see where it stands.
 |---|---|---|---|
 | 1.0 | **Staff invitations** on the email-and-password sign-in: the Super Admin invites by email with a platform role; the person sets a password from a single-use link | A new analyst can be added and assigned without Google sign-in | Found 9 October: roles can only be granted to existing accounts |
 | 1.1 | **File storage** on a private Supabase Storage bucket, with short-lived signed links issued by the server after an access check | A file uploaded for client A cannot be read by client B or an unassigned analyst; links expire | Replaces the Manus storage proxy (old R3). New env names only in `.env.example` |
-| 1.2 | **Engagement table**: created when the Current State Assessment payment is confirmed; linked to the business when the client creates their account | Confirming payment creates exactly one engagement; accepting the invitation links it | **Migration**: dedicated branch per `AGENTS.md` |
-| 1.3 | **Engagement assignments** (engagement × person × role: lead, analyst, partner, expert) and the scope check | Analysts see only assigned engagements; `view_all_businesses` sees all | Permissions `manage_engagements`, `assign_engagements`, `review_engagements` already exist in `shared/platformPermissions.ts` |
-| 1.4 | **Internal engagement page**: stage, team, and the getting-set-up checklist (welcome note sent, data request sent, WhatsApp group created, analyst assigned, both Current State Assessment calls booked) | The desk lead can run onboarding from one screen in three working days | Concept note §7 onboarding |
-| 1.5 | **Client room v1: "Where are we?"** on `/dashboard`: the journey with the current step, the next session date, the named team | A client sees only their own engagement | Replaces the profile-only dashboard |
+| 1.2 | ✅ **Built 9 October.** **Engagement table**: created when the Current State Assessment payment is confirmed; linked to the business when the client creates their account | Confirming payment creates exactly one engagement; accepting the invitation links it | **Migration**: dedicated branch per `AGENTS.md` |
+| 1.3 | ✅ **Built 9 October.** **Engagement assignments** (engagement × person × role: lead, analyst, partner, expert) and the scope check | Analysts see only assigned engagements; `view_all_businesses` sees all | Permissions `manage_engagements`, `assign_engagements`, `review_engagements` already exist in `shared/platformPermissions.ts` |
+| 1.4 | ✅ **Built 9 October** (the Engagements section). **Internal engagement page**: stage, team, and the getting-set-up checklist (welcome note sent, data request sent, WhatsApp group created, analyst assigned, both Current State Assessment calls booked) | The desk lead can run onboarding from one screen in three working days | Concept note §7 onboarding |
+| 1.5 | ✅ **Built 9 October.** **Client room v1: "Where are we?"** on `/dashboard`: the journey with the current step, the next session date, the named team | A client sees only their own engagement | Replaces the profile-only dashboard |
 
 ## 6. Phase 2: sessions, notes and deliverables (needed by 23 October, the first Current State Assessment call)
 
 | # | Build | Acceptance |
 |---|---|---|
-| 2.1 | **Sessions**: date, type (Current State Assessment call 1 and 2, check-in, review), attendees, link | Both Current State Assessment calls can be booked from the engagement page |
-| 2.2 | **Notes and actions** per session: client version and internal version; actions with owner and due date | Notes are shared with the client the same day; internal notes are never visible to the client |
-| 2.3 | **Deliverables**: upload, version, share; prescriptions and plans need desk lead approval before sharing | An unapproved prescription cannot be shared; every share is audited |
+| 2.1 | ✅ **Built 9 October** (booked on Calendly, recorded in the room). **Sessions**: date, type (Current State Assessment call 1 and 2, check-in, review), attendees, link | Both Current State Assessment calls can be booked from the engagement page |
+| 2.2 | ✅ **Built 9 October.** **Notes and actions** per session: client version and internal version; actions with owner and due date | Notes are shared with the client the same day; internal notes are never visible to the client |
+| 2.3 | ✅ **Built 9 October** (text; files wait for 1.1). **Deliverables**: upload, version, share; prescriptions and plans need desk lead approval before sharing | An unapproved prescription cannot be shared; every share is audited |
 | 2.4 | **Email notices** to the client when something is shared with them | Branded email, link to the room, no content in the email body beyond the title |
 
-Decisions needed first: O1 transcripts, O2 messages, O3 who releases what (PRD §10).
+Built with O1, O2 and O3 as recommended (PRD §10). Still to build here: 2.4 email notices, and the staff seat invitation (one free seat, Full or Contributor), on `account_invitations`.
 
 ## 7. Phase 3: data requests (needed by 23 October, getting set up)
 
 | # | Build | Acceptance |
 |---|---|---|
-| 3.1 | **Data request list** from a template (the concept note's onboarding list), per engagement, with due dates | The desk lead sends a list in one step |
-| 3.2 | **Client upload** against each request; status requested → received → accepted (or "needs more") | The analyst sees what is missing at a glance; the client sees what is still owed |
+| 3.1 | ✅ **Built 9 October** (the template starts every engagement). **Data request list** from a template (the concept note's onboarding list), per engagement, with due dates | The desk lead sends a list in one step |
+| 3.2 | Partly built: the client marks what they sent and the team accepts or asks for more; the upload waits for 1.1. **Client upload** against each request; status requested → received → accepted (or "needs more") | The analyst sees what is missing at a glance; the client sees what is still owed |
 
 ## 8. Phase 4: the fix, check-ins and the record (needed by 6 November)
 

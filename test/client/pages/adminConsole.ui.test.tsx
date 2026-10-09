@@ -120,9 +120,9 @@ afterEach(cleanup);
 
 describe("which sections each person sees (decided from what the server resolved)", () => {
   it("shows the Super Admin every section, in funnel order, opening on Business Checks", () => {
-    expect(visibleAdminSections(SUPER).map(section => section.id)).toEqual(["checks", "calls", "onboarding", "clients", "team", "jump"]);
+    expect(visibleAdminSections(SUPER).map(section => section.id)).toEqual(["checks", "calls", "onboarding", "engagements", "clients", "team", "jump"]);
     renderConsole();
-    expect(tabs()).toEqual(["Business Checks", "Discovery Calls", "Client Onboarding", "Clients", "Admin Team", "JUMP Programme (Legacy)"]);
+    expect(tabs()).toEqual(["Business Checks", "Discovery Calls", "Client Onboarding", "Engagements", "Clients", "Admin Team", "JUMP Programme (Legacy)"]);
     expect(screen.getByRole("button", { name: "Business Checks" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("heading", { name: "Business Checks" })).toBeTruthy();
     expect(screen.queryByText("JUMP REGISTRATION DESK")).toBeNull();
@@ -147,7 +147,9 @@ describe("which sections each person sees (decided from what the server resolved
   it("shows an administrator only what they were granted", () => {
     const onboarding = { permissions: ["manage_client_onboarding"], platformPermissions: ["manage_client_onboarding"] };
     expect(visibleAdminSections(onboarding).map(section => section.id)).toEqual(["checks", "calls", "onboarding"]);
-    expect(visibleAdminSections({ permissions: [], platformPermissions: ["view_all_businesses"] }).map(section => section.id)).toEqual(["clients"]);
+    expect(visibleAdminSections({ permissions: [], platformPermissions: ["view_all_businesses"] }).map(section => section.id)).toEqual(["engagements", "clients"]);
+    // An analyst sees the engagements they are on, and nothing of the funnel or the client list.
+    expect(visibleAdminSections({ permissions: [], platformPermissions: ["view_assigned_businesses", "manage_engagements"] }).map(section => section.id)).toEqual(["engagements"]);
     expect(visibleAdminSections({ permissions: ["view_participants"] }).map(section => section.id)).toEqual(["jump"]);
     expect(visibleAdminSections({ permissions: [] })).toEqual([]);
     expect(visibleAdminSections(undefined)).toEqual([]);

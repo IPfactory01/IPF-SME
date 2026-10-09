@@ -98,11 +98,13 @@ for (const target of targets) {
     });
 
     describe("schema", () => {
-      it("creates exactly the 38 expected tables", async () => {
+      it("creates exactly the 49 expected tables", async () => {
         const rows = await harness.query(sql`select table_name from information_schema.tables where table_schema = current_schema() and table_type = 'BASE TABLE'`);
         const created = rows.map(row => String(row.table_name)).sort();
-        // 30 from the MySQL migration + user_credentials, user_sessions, businesses, business_memberships, client_onboarding_invitations, user_platform_roles, payment_requests, full_reports.
-        expect(expectedTableNames).toHaveLength(38);
+        // 30 from the MySQL migration + user_credentials, user_sessions, businesses, business_memberships, client_onboarding_invitations, user_platform_roles, payment_requests, full_reports,
+        // and the engagement room (0008): engagements, engagement_team, engagement_sessions, engagement_tasks, engagement_deliverables, engagement_files, engagement_comments,
+        // engagement_measures, engagement_checkins, business_member_access, account_invitations.
+        expect(expectedTableNames).toHaveLength(49);
         expect(expectedTableNames.filter(name => !created.includes(name))).toEqual([]);
         expect(created.filter(name => !expectedTableNames.includes(name))).toEqual([]);
       });
@@ -110,7 +112,7 @@ for (const target of targets) {
       it("creates every column with the declared type, nullability and default", async () => {
         const rows = await harness.query(sql`select table_name, column_name, data_type, udt_name, is_nullable, column_default, is_identity, character_maximum_length from information_schema.columns where table_schema = current_schema()`);
         const byKey = new Map(rows.map(row => [`${row.table_name}.${row.column_name}`, row]));
-        const dataTypes: Record<string, string> = { PgInteger: "integer", PgVarchar: "character varying", PgText: "text", PgTimestamp: "timestamp with time zone", PgEnumColumn: "USER-DEFINED" };
+        const dataTypes: Record<string, string> = { PgInteger: "integer", PgVarchar: "character varying", PgText: "text", PgTimestamp: "timestamp with time zone", PgEnumColumn: "USER-DEFINED", PgBoolean: "boolean", PgDateString: "date", PgNumeric: "numeric" };
         for (const table of allTables) {
           const config = getTableConfig(table);
           for (const column of config.columns) {
@@ -175,7 +177,7 @@ for (const target of targets) {
           }
         }
         expect(declared).toBe(rows.length); // no foreign key exists that the schema does not declare
-        expect(declared).toBe(17);
+        expect(declared).toBe(51);
       });
 
       it("stores a declared name longer than 63 bytes truncated, which is why lookups must use pgIdentifier", async () => {
@@ -227,10 +229,10 @@ for (const target of targets) {
         expect(await db.select().from(schema.businessMemberships).where(eq(schema.businessMemberships.userId, user.id))).toHaveLength(0);
       });
 
-      it("creates all 55 enum types with their exact labels in order", async () => {
+      it("creates all 69 enum types with their exact labels in order", async () => {
         const rows = await harness.query(sql`select t.typname, array_agg(e.enumlabel::text order by e.enumsortorder) as labels from pg_type t join pg_enum e on e.enumtypid = t.oid join pg_namespace n on n.oid = t.typnamespace where n.nspname = current_schema() group by t.typname`);
         const actual = new Map(rows.map(row => [String(row.typname), row.labels as string[]]));
-        expect(enums).toHaveLength(55);
+        expect(enums).toHaveLength(69);
         for (const definition of enums) expect(actual.get(definition.enumName), definition.enumName).toEqual([...definition.enumValues]);
         expect(actual.size).toBe(enums.length);
       });

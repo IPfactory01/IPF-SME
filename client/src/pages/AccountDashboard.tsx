@@ -1,11 +1,19 @@
 import AccountLayout from "@/components/AccountLayout";
+import EngagementRoom from "@/components/EngagementRoom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { trpc } from "@/lib/trpc";
 import { BUSINESS_ROLE_LABELS } from "@shared/businessCapabilities";
 import React from "react";
 import { Link } from "wouter";
 
-/** The signed-in home: the active business for a client, the internal entry point for staff without a business. */
+/** The engagement room for the business in use, once the Current State Assessment is paid; nothing before that. */
+function Room() {
+  const room = trpc.engagement.client.room.useQuery(undefined, { retry: false });
+  return room.data ? <EngagementRoom room={room.data} /> : null;
+}
+
+/** The signed-in home: the engagement room and the active business for a client, the internal entry point for staff. */
 export default function AccountDashboard() {
   return (
     <AccountLayout>
@@ -16,6 +24,8 @@ export default function AccountDashboard() {
         return (
           <>
             <h1 className="font-serif text-3xl font-bold tracking-tight">Welcome, {firstName}</h1>
+
+            {business && <Room />}
 
             {business ? (
               <Card className="rounded-none border-line-soft bg-white shadow-sm">

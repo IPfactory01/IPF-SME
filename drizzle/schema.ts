@@ -1,7 +1,20 @@
 import { sql } from "drizzle-orm";
-import { type AnyPgColumn, index, integer, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, boolean, date, index, integer, numeric, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { PIPELINE_STAGES } from "../shared/businessCheck/pipeline";
 import { PAYMENT_ITEMS, PAYMENT_STATUSES } from "../shared/payments";
+import {
+  CLIENT_ACCESS_LEVELS,
+  ENGAGEMENT_AUDIENCES,
+  ENGAGEMENT_DELIVERABLE_KINDS,
+  ENGAGEMENT_DELIVERABLE_STATUSES,
+  ENGAGEMENT_SESSION_KINDS,
+  ENGAGEMENT_SESSION_STATUSES,
+  ENGAGEMENT_STAGES,
+  ENGAGEMENT_TASK_KINDS,
+  ENGAGEMENT_TASK_SIDES,
+  ENGAGEMENT_TASK_STATUSES,
+  ENGAGEMENT_TEAM_ROLES,
+} from "../shared/engagement";
 
 /**
  * Users provisioned through Manus OAuth. The live database is authoritative;
@@ -763,3 +776,224 @@ export const fullReports = pgTable("full_reports", {
 });
 
 export type FullReportRecord = typeof fullReports.$inferSelect;
+
+// ---- The engagement room (migration 0008). Additive only: no existing table changes, so sign-in, onboarding and
+// payments keep working on a database that does not have these tables yet. Vocabulary: shared/engagement.ts.
+
+export const engagementsStageEnum = pgEnum("engagements_stage", ENGAGEMENT_STAGES);
+export const engagementAudienceEnum = pgEnum("engagement_audience", ENGAGEMENT_AUDIENCES);
+export const engagementTeamRoleEnum = pgEnum("engagement_team_role", ENGAGEMENT_TEAM_ROLES);
+export const engagementSessionsKindEnum = pgEnum("engagement_sessions_kind", ENGAGEMENT_SESSION_KINDS);
+export const engagementSessionsStatusEnum = pgEnum("engagement_sessions_status", ENGAGEMENT_SESSION_STATUSES);
+export const engagementTasksKindEnum = pgEnum("engagement_tasks_kind", ENGAGEMENT_TASK_KINDS);
+export const engagementTasksSideEnum = pgEnum("engagement_tasks_side", ENGAGEMENT_TASK_SIDES);
+export const engagementTasksStatusEnum = pgEnum("engagement_tasks_status", ENGAGEMENT_TASK_STATUSES);
+export const engagementDeliverablesKindEnum = pgEnum("engagement_deliverables_kind", ENGAGEMENT_DELIVERABLE_KINDS);
+export const engagementDeliverablesStatusEnum = pgEnum("engagement_deliverables_status", ENGAGEMENT_DELIVERABLE_STATUSES);
+export const clientAccessLevelEnum = pgEnum("client_access_level", CLIENT_ACCESS_LEVELS);
+
+/**
+ * One engagement per paying client: created when the Current State Assessment payment is confirmed, linked to the
+ * client's business when the owner accepts the account invitation (whichever happens second does the linking).
+ */
+export const engagements = pgTable("engagements", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  businessCheckId: integer("businessCheckId").notNull().unique().references(() => businessChecks.id),
+  businessId: integer("businessId").references(() => businesses.id),
+  /** The confirmed Current State Assessment payment that started it. */
+  paymentRequestId: integer("paymentRequestId").references(() => paymentRequests.id),
+  stage: engagementsStageEnum("stage").default("setting_up").notNull(),
+  /** The problem area chosen at the end of the assessment (shared/businessSupport.ts PROBLEM_AREAS number). */
+  problemArea: integer("problemArea"),
+  subProblem: varchar("subProblem", { length: 255 }),
+  /** In the owner's words: exactly one problem per fix. */
+  problemStatement: text("problemStatement"),
+  assessmentStartedAt: timestamp("assessmentStartedAt", { withTimezone: true }),
+  fixStartedAt: timestamp("fixStartedAt", { withTimezone: true }),
+  closedAt: timestamp("closedAt", { withTimezone: true }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [index("engagements_business_idx").on(table.businessId), index("engagements_stage_idx").on(table.stage)]);
+
+export type Engagement = typeof engagements.$inferSelect;
+
+/** Who from IP Factory works on an engagement. Analysts, partners and specialists see only engagements they are on. */
+export const engagementTeam = pgTable("engagement_team", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  userId: integer("userId").notNull().references(() => users.id),
+  role: engagementTeamRoleEnum("role").notNull(),
+  assignedByUserId: integer("assignedByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+}, table => [unique("engagement_team_engagement_user_unique").on(table.engagementId, table.userId), index("engagement_team_user_idx").on(table.userId)]);
+
+/** Calls, booked on Calendly or by hand and recorded here, with the notes: a client version and an internal one. */
+export const engagementSessions = pgTable("engagement_sessions", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  kind: engagementSessionsKindEnum("kind").notNull(),
+  title: varchar("title", { length: 160 }).notNull(),
+  scheduledFor: timestamp("scheduledFor", { withTimezone: true }),
+  durationMinutes: integer("durationMinutes"),
+  meetingLink: varchar("meetingLink", { length: 512 }),
+  agenda: text("agenda"),
+  status: engagementSessionsStatusEnum("status").default("planned").notNull(),
+  /** The notes the client may see once shared; `internalNotes` never leave IP Factory. */
+  clientNotes: text("clientNotes"),
+  internalNotes: text("internalNotes"),
+  notesAudience: engagementAudienceEnum("notesAudience").default("owner").notNull(),
+  notesSharedAt: timestamp("notesSharedAt", { withTimezone: true }),
+  notesSharedByUserId: integer("notesSharedByUserId").references(() => users.id),
+  createdByUserId: integer("createdByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [index("engagement_sessions_engagement_idx").on(table.engagementId)]);
+
+/** Data requests (what we need from the client) and actions (who does what by when), in one list. */
+export const engagementTasks = pgTable("engagement_tasks", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  kind: engagementTasksKindEnum("kind").notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  detail: text("detail"),
+  side: engagementTasksSideEnum("side").notNull(),
+  /** A named person, or null for "the business" (client side) or "the team" (IP Factory side). */
+  assigneeUserId: integer("assigneeUserId").references(() => users.id),
+  dueOn: date("dueOn"),
+  status: engagementTasksStatusEnum("status").default("open").notNull(),
+  /** Why more is needed, or how the client sent it ("by WhatsApp"). */
+  statusNote: varchar("statusNote", { length: 500 }),
+  /** The session the action came out of. */
+  sessionId: integer("sessionId").references(() => engagementSessions.id, { onDelete: "set null" }),
+  createdByUserId: integer("createdByUserId").references(() => users.id),
+  completedAt: timestamp("completedAt", { withTimezone: true }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [index("engagement_tasks_engagement_idx").on(table.engagementId)]);
+
+/** What IP Factory hands over: findings, the problem statement, the prescription, tools and the plan. */
+export const engagementDeliverables = pgTable("engagement_deliverables", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  kind: engagementDeliverablesKindEnum("kind").notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  summary: text("summary"),
+  status: engagementDeliverablesStatusEnum("status").default("draft").notNull(),
+  audience: engagementAudienceEnum("audience").default("owner").notNull(),
+  approvedByUserId: integer("approvedByUserId").references(() => users.id),
+  approvedAt: timestamp("approvedAt", { withTimezone: true }),
+  sharedByUserId: integer("sharedByUserId").references(() => users.id),
+  sharedAt: timestamp("sharedAt", { withTimezone: true }),
+  /** The client's sign-off. */
+  clientAcceptedByUserId: integer("clientAcceptedByUserId").references(() => users.id),
+  clientAcceptedAt: timestamp("clientAcceptedAt", { withTimezone: true }),
+  createdByUserId: integer("createdByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [index("engagement_deliverables_engagement_idx").on(table.engagementId)]);
+
+/** Files in private storage, served only through short-lived links after the same access check as the record. */
+export const engagementFiles = pgTable("engagement_files", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  /** The data request it answers, or the deliverable it belongs to. */
+  taskId: integer("taskId").references(() => engagementTasks.id, { onDelete: "set null" }),
+  deliverableId: integer("deliverableId").references(() => engagementDeliverables.id, { onDelete: "set null" }),
+  storageKey: varchar("storageKey", { length: 512 }).notNull().unique(),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  contentType: varchar("contentType", { length: 128 }).notNull(),
+  sizeBytes: integer("sizeBytes").notNull(),
+  audience: engagementAudienceEnum("audience").default("owner").notNull(),
+  uploadedByUserId: integer("uploadedByUserId").notNull().references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+}, table => [index("engagement_files_engagement_idx").on(table.engagementId)]);
+
+/** Feedback on a deliverable, from the client or the team. */
+export const engagementComments = pgTable("engagement_comments", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  deliverableId: integer("deliverableId").notNull().references(() => engagementDeliverables.id, { onDelete: "cascade" }),
+  authorUserId: integer("authorUserId").notNull().references(() => users.id),
+  body: text("body").notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+}, table => [index("engagement_comments_deliverable_idx").on(table.deliverableId)]);
+
+/** The fix's one number (D3): recorded in fix week 1. */
+export const engagementMeasures = pgTable("engagement_measures", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().unique().references(() => engagements.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 160 }).notNull(),
+  definition: text("definition"),
+  unit: varchar("unit", { length: 32 }),
+  baselineValue: numeric("baselineValue", { precision: 18, scale: 4 }),
+  targetValue: numeric("targetValue", { precision: 18, scale: 4 }),
+  createdByUserId: integer("createdByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+});
+
+/** One row per fix week: the five-question check-in, the reading, the questions asked and the hours by role (concept note §17). */
+export const engagementCheckins = pgTable("engagement_checkins", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  weekNumber: integer("weekNumber").notNull(),
+  heldOn: date("heldOn"),
+  progress: text("progress"),
+  blockers: text("blockers"),
+  nextStep: text("nextStep"),
+  measureReading: numeric("measureReading", { precision: 18, scale: 4 }),
+  questionsAsked: text("questionsAsked"),
+  hoursLead: numeric("hoursLead", { precision: 5, scale: 2 }),
+  hoursAnalyst: numeric("hoursAnalyst", { precision: 5, scale: 2 }),
+  hoursPartner: numeric("hoursPartner", { precision: 5, scale: 2 }),
+  aiUsed: boolean("aiUsed"),
+  recordedByUserId: integer("recordedByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [unique("engagement_checkins_engagement_week_unique").on(table.engagementId, table.weekNumber)]);
+
+/**
+ * What the owner's staff may see. Kept beside the membership rather than on it, so this migration changes no existing
+ * table. No row means full access (the owner and business admins never have one).
+ */
+export const businessMemberAccess = pgTable("business_member_access", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  membershipId: integer("membershipId").notNull().unique().references(() => businessMemberships.id, { onDelete: "cascade" }),
+  access: clientAccessLevelEnum("access").notNull(),
+  grantedByUserId: integer("grantedByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+});
+
+export const accountInvitationsKindEnum = pgEnum("account_invitations_kind", ["staff", "business_member"]);
+export const accountInvitationsStatusEnum = pgEnum("account_invitations_status", ["pending", "accepted", "revoked", "expired"]);
+export const accountInvitationsDeliveryStatusEnum = pgEnum("account_invitations_delivery_status", ["Sent", "Failed", "Simulated"]);
+
+/**
+ * Invitations that create an email-and-password account: IP Factory staff (with a platform role) and the owner's
+ * staff (with a membership and an access level). Same rules as the client invitation: only the SHA-256 of the token
+ * is stored; single use, expiring, revocable, bound to the email.
+ */
+export const accountInvitations = pgTable("account_invitations", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  kind: accountInvitationsKindEnum("kind").notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  fullName: varchar("fullName", { length: 255 }).notNull(),
+  /** staff only */
+  platformRole: userPlatformRolesRoleEnum("platformRole"),
+  /** business_member only */
+  businessId: integer("businessId").references(() => businesses.id),
+  access: clientAccessLevelEnum("access"),
+  tokenHash: varchar("tokenHash", { length: 64 }).notNull().unique(),
+  status: accountInvitationsStatusEnum("status").default("pending").notNull(),
+  expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
+  createdByUserId: integer("createdByUserId").notNull().references(() => users.id),
+  acceptedByUserId: integer("acceptedByUserId").references(() => users.id),
+  acceptedAt: timestamp("acceptedAt", { withTimezone: true }),
+  revokedAt: timestamp("revokedAt", { withTimezone: true }),
+  deliveryStatus: accountInvitationsDeliveryStatusEnum("deliveryStatus").default("Simulated").notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [uniqueIndex("account_invitations_one_pending_per_email").on(sql`lower(${table.email})`).where(sql`${table.status} = 'pending'`)]);
+
+export type AccountInvitation = typeof accountInvitations.$inferSelect;

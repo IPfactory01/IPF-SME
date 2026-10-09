@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import BusinessChecksView from "./BusinessChecksView";
 import ClientsView from "./ClientsView";
 import DiscoveryCallsView from "./DiscoveryCallsView";
+import EngagementsView from "./EngagementsView";
 import { roleDisplay } from "./format";
 
 type Access = AdminAccessView & { email?: string | null; name?: string | null; platformRoles?: readonly string[] };
@@ -12,6 +13,7 @@ const TITLES: Record<AdminSectionId, string> = {
   checks: "Business Checks",
   calls: "Discovery Calls",
   onboarding: "Client Onboarding",
+  engagements: "Engagements",
   clients: "Clients",
   team: "Administration Team",
   jump: "JUMP Programme (Legacy)",
@@ -70,6 +72,7 @@ export default function BusinessSupportConsole({ access, team, jump }: { access:
             {active?.id === "checks" && <BusinessChecksView onOpenSection={setChosen} />}
             {active?.id === "calls" && <DiscoveryCallsView onOpenSection={setChosen} />}
             {active?.id === "onboarding" && <ClientOnboardingPanel />}
+            {active?.id === "engagements" && <EngagementsView />}
             {active?.id === "clients" && <ClientsView />}
             {active?.id === "team" && team}
             {active?.id === "jump" && <div className="p-4">{jump}</div>}

@@ -16,6 +16,7 @@ run `pnpm db:verify` (read-only, needs `MIGRATION_DATABASE_URL`). It reports PAS
 | `0005_business_check_call_scheduled` | applied (confirmed 9 October 2026: recorded in `drizzle.__drizzle_migrations`) | `business_checks.callScheduledFor` (nullable timestamptz): the time an administrator agreed the discovery call for. `ALTER TABLE "business_checks" ADD COLUMN "callScheduledFor" timestamp with time zone;` |
 | `0006_payment_requests` | 9 October 2026 | `payment_requests` (one row per business check and item: full report or Current State Assessment; amount, transfer reference, status requested / proof received / confirmed, who sent and confirmed it); 3 enum types (53 total); 3 foreign keys (15 total); unique index per check and item. Additive: one new table, nothing existing changes. |
 | `0007_full_reports` | 9 October 2026 | `full_reports` (one per business check: the Report Intake link hash, status awaiting intake / delivered, the intake answers, when it was submitted and sent, the report version); 2 enum types (55 total); 2 foreign keys (17 total). Additive. |
+| `0008_engagement_room` | **Not applied yet** | The engagement room: `engagements`, `engagement_team`, `engagement_sessions`, `engagement_tasks`, `engagement_deliverables`, `engagement_files`, `engagement_comments`, `engagement_measures`, `engagement_checkins`, `business_member_access`, `account_invitations`; 14 enum types (69 total); 34 foreign keys (51 total). Additive: no existing table changes. |
 
 After `0003`, `pnpm db:verify` passed 27/27 (35 tables, 49 enums). After `0004` it expects 36 tables, 50 enums and 12 foreign keys.
 Until `0004` is applied, `db:verify` fails and workspace switching, platform roles and the new account context cannot work against
@@ -34,6 +35,18 @@ request still reaches info@ipfactory.co with "Payment details: NOT SENT". Apply 
 **`0007` and deployment order.** Same shape as `0006`: a new table only. Apply `0006` and `0007` together with one
 `pnpm db:migrate`. Until `0007` is applied, confirming a report payment fails at the point of issuing the report form
 link (the payment itself stays recorded), and the admin record shows no report status.
+
+**`0008` and deployment order.** New tables only, and no existing query reads them, so the code can reach production
+before `0008` is applied: confirming a Current State Assessment payment still confirms it, sends the emails and the
+invitation (the hosting log says `[Engagements] The engagements table is missing: apply migration 0008`), onboarding
+still creates the account, a client's dashboard shows no room, and the admin Engagements section says the room is not set
+up yet. **Apply it before the first Current State Assessment payment is confirmed**; an engagement is not created
+retrospectively for a payment confirmed before then.
+
+**How to apply `0008`.** `pnpm db:migrate`, or paste `drizzle/supabase/apply-0008-engagement-room.sql` into the Supabase
+SQL Editor and press Run: it stops, changing nothing, unless exactly `0000` to `0007` are recorded and no engagement table
+exists, then creates the tables and records `0008` with the file hash and journal timestamp, so `pnpm db:verify` passes
+afterwards. Tested on a copy at `0007`: same result as `pnpm db:migrate`, and a second run is refused.
 
 **How `0006` and `0007` were applied.** On 9 October 2026, from the Supabase SQL Editor, with a guarded script that does
 what `pnpm db:migrate` does in one transaction: it refused to run unless exactly `0000` to `0005` were recorded and neither

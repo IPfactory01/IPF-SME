@@ -57,6 +57,13 @@
       "when": 1791537920380,
       "tag": "0007_full_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791582319780,
+      "tag": "0008_engagement_room",
+      "breakpoints": true
     }
   ]
 }

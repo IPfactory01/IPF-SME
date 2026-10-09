@@ -6,8 +6,8 @@ section 2 or 3.
 
 **The model in one line:** a **person** (`users`) has one identity; they can belong to **businesses** through
 **memberships** (client side) and hold **platform roles** (IP Factory side). A **business check** is the lead record
-that payments, the full report and the client invitation hang off. The **engagement** layer is not built yet
-(section 5).
+that payments, the full report and the client invitation hang off. The **engagement** starts when the Current State
+Assessment is paid and joins the client's business when they create their account (section 2, migration 0008).
 
 ```mermaid
 erDiagram
@@ -21,6 +21,14 @@ erDiagram
   payment_requests ||--o| full_reports : "paid by"
   business_checks ||--o{ client_onboarding_invitations : "invites"
   client_onboarding_invitations }o--o| businesses : "creates"
+  business_checks ||--o| engagements : "paid assessment"
+  businesses ||--o{ engagements : "joins on account"
+  engagements ||--o{ engagement_team : "IP Factory team"
+  engagements ||--o{ engagement_sessions : "calls and notes"
+  engagements ||--o{ engagement_tasks : "requests and actions"
+  engagements ||--o{ engagement_deliverables : "what we hand over"
+  engagement_deliverables ||--o{ engagement_comments : "feedback"
+  business_memberships ||--o| business_member_access : "staff access level"
 ```
 
 ---
@@ -34,7 +42,7 @@ erDiagram
 - Enum values are stable identifiers. Labels shown to people come from shared code (`shared/payments.ts`,
   `shared/businessCheck/pipeline.ts`), so a label can change without a migration.
 - Schema changes go through `drizzle/schema.ts` then `pnpm db:generate`; never by hand. Migrations `0000` to `0007` are
-  applied to Supabase (`docs/database-migrations.md`).
+  applied to Supabase; `0008` (the engagement room) is written and waits to be applied (`docs/database-migrations.md`).
 
 ## 2. Tables of The Shift (current platform)
 
@@ -67,6 +75,26 @@ erDiagram
 
 The full report PDF is **not stored**: it is rebuilt from the stored form answers whenever it is emailed or downloaded,
 so the same answers always give the same document.
+
+### The engagement room (migration 0008)
+
+Additive only: no existing table changes, so sign-in, onboarding and payments work on a database without these tables,
+and the room says it is not set up. Vocabulary and the who-sees-what rules: `shared/engagement.ts`; the server side:
+`server/engagements.ts`.
+
+| Table | What it holds | Keys and rules | Personal or sensitive data |
+|---|---|---|---|
+| `engagements` | One per paid client: the business check, the Current State Assessment payment, the business (once the owner has an account), stage, the one problem (area, sub-problem, statement), dates | Unique business check; created by confirming the payment; linked by accepting the invitation, whichever comes second | The problem statement, in the owner's words |
+| `engagement_team` | Who from IP Factory works on it: lead, analyst, partner, specialist | Unique (engagement, person); only people with an internal role | Who works for which client |
+| `engagement_sessions` | Calls: kind, title, time, length, link, agenda, status; the client's version of the notes and the internal notes | Notes reach the client only once shared, with an audience (`owner` by default) | **Session notes**: what the owner said on the call |
+| `engagement_tasks` | Data requests and actions in one list: whose side, which person, due date, status (to do, sent, received, needs more, done) | A client-side task with no person belongs to the whole business | What the client was asked for |
+| `engagement_deliverables` | Findings, problem statement, prescription, tools, plan: status draft, awaiting approval, approved, shared; audience; the owner's sign-off | A prescription or plan cannot be shared before approval (review_engagements); editing a shared one takes it back to draft | **Findings** about the business and its people |
+| `engagement_comments` | Feedback on a deliverable, from the client or the team | Only on a deliverable the writer can see | Comments |
+| `engagement_files` | Files in private storage: the data request or deliverable they belong to, audience | Unique storage key; served only through short-lived links after the same access check (storage not connected yet) | **Client files**: accounts, staff lists |
+| `engagement_measures` | The fix's one number: name, definition, unit, baseline, target | One per engagement (D3) | Business figures |
+| `engagement_checkins` | One row per fix week: progress, blockers, next step, reading, questions asked, hours by role, AI used | Unique (engagement, week) | Internal: hours are never shown to the client |
+| `business_member_access` | The owner's staff: `full` or `contributor` | One per membership; no row means full (owners and business admins never have one) | — |
+| `account_invitations` | Invitations that create an account for IP Factory staff (with a role) or the owner's staff (with an access level) | Token stored as a hash; single use, expiring, revocable; one pending per email (flow not built yet) | Email and name |
 
 ## 3. JUMP-era tables (legacy)
 
@@ -120,7 +148,9 @@ procedure grants assigned-only access.
 | Client invitations | ⚪ by the invitation token | — | — | — | ✅ `manage_client_onboarding` | — | ✅ |
 | Business profile | — | ⚪ view; owner and business_admin edit | — | — | ✅ `view_all_businesses` (Clients tab) | — | ✅ |
 | Roles and permissions | — | — | — | — | — | — | ✅ `manage_roles` |
-| Engagement room (planned) | — | ⚪ shared items only | Assigned | Assigned | ✅ | Payments only | ✅ |
+| Engagement room: the team's side | — | — | Assigned only (`view_assigned_businesses`); works on it (`manage_engagements`) | Assigned only; partners approve (`review_engagements`) | ✅ all; assigns the team, approves prescriptions and plans | — | ✅ |
+| Engagement room: the client's side | — | ⚪ owner: everything shared; full staff: what the owner shares with them; contributors: their own requests and actions | — | — | — | — | — |
+| Session notes and findings | — | ⚪ owner by default; the owner widens to their staff | ✅ when assigned | ✅ when assigned | ✅ | — | ✅ |
 
 ### How client isolation is enforced
 
@@ -136,31 +166,23 @@ procedure grants assigned-only access.
 - A client's session never becomes a staff identity: the context builds a staff user only for a person with a platform
   role (`server/_core/context.ts`).
 
-## 5. Planned: the engagement layer
+## 5. How the engagement room decides access
 
-Not built. The shape below follows the concept note's engagement record (§17) and the PRD (F7, F8). It is the starting
-point for phase 1 of the [implementation plan](06-implementation-plan.md); names may change in review.
+1. **The team: permission and assignment.** Seeing an engagement needs `view_all_businesses`, or
+   `view_assigned_businesses` and a row in `engagement_team`. Changing it also needs `manage_engagements`;
+   changing the team needs `assign_engagements`; approving a prescription or plan needs `review_engagements`. An
+   engagement outside someone's scope and one that does not exist get the same "not available".
+2. **The client: membership and audience.** The room shows the engagement of the business the person is working in;
+   no client procedure accepts a business id. Each note, deliverable and file carries an audience: `team` (never
+   leaves IP Factory), `owner` (default for notes and findings, because owners speak frankly on our calls) or
+   `business` (the owner's staff with full access). Contributors see only the requests and actions given to them.
+   Only owner-level people sign off or change an audience.
+3. **"Shared" is stored** with who and when, and every share, approval, sign-off and audience change is in the audit
+   trail, so "when did the client see this?" has an answer.
+4. **Finance** sees payments, not engagements: no finance permission opens the room.
 
-| Table | Holds | Visible to the client? |
-|---|---|---|
-| `engagements` | One per paid client: business, the business check it came from, the Current State Assessment payment, stage (setting up, Current State Assessment, fix, plan, day 30, closed), problem area, sub-problem, problem statement, dates | Stage and dates: yes |
-| `engagement_assignments` | Engagement × person × role (lead, analyst, partner, expert) | Names and roles: yes |
-| `engagement_sessions` | Calls: type, date, attendees, link | Yes |
-| `engagement_notes` | Per session: client version and internal version; status draft or shared; who shared it and when | Client version once shared |
-| `engagement_actions` | Who does what by when; status | Yes |
-| `engagement_files` | Storage key, name, type, size, uploaded by, the request it answers, shared flag, approval | Shared files only |
-| `engagement_data_requests` | The data request list: item, due date, status requested, received, accepted | Yes |
-| `engagement_measures` | Measure name, definition, baseline, target | Yes |
-| `engagement_checkins` | Weekly row: progress, blockers, next step, measure reading, questions asked, hours by role, AI used | Reading and next step: yes; hours: no |
-| `engagement_closes` | Final value, moved, extension weeks, plan delivered, next problem area, ongoing support defined, day-30 check | Summary: yes |
-
-Rules to build in from the start:
-
-1. Every procedure checks both the permission and the assignment (`AGENTS.md`: "Server-side authorisation must check
-   both").
-2. Files sit in a private bucket; the server hands out short-lived signed links only after the same check.
-3. "Shared" is a stored state with who and when, so the audit trail can answer "when did the client see this?".
-4. Finance sees payments and invoices for an engagement, not its notes or files.
+Still to build on these tables: staff and seat invitations (`account_invitations`), file uploads (`engagement_files`, a
+private bucket), and the fix's measure and check-in screens (`engagement_measures`, `engagement_checkins`).
 
 ## 6. Findings to fix
 
@@ -171,7 +193,7 @@ Found while writing this document.
 | `business_checks.publicToken` is stored in plain text and works as a bearer token for that check | Someone with database read access could resume or submit another person's check | Store a hash, as every other token does; migrate existing rows |
 | Full report links (`full_reports.tokenHash`) never expire and the report procedures have no rate limit | A forwarded link opens the report indefinitely | Add an expiry after delivery (or limit downloads) and a rate limit like onboarding's |
 | The 30 tables from the baseline migration have no foreign keys or indexes beyond primary and unique keys | Slower queries as data grows; orphaned rows possible | Add indexes on `business_checks` (stage, email, createdAt) first |
-| No engagement assignment table, so `view_assigned_businesses` grants nothing today | Analysts cannot be given scoped access yet | Phase 1.3 |
+| ~~No engagement assignment table~~ | Fixed by 0008: `engagement_team`; `view_assigned_businesses` now opens the engagements a person is on | Done (once 0008 is applied) |
 | `adminAccess.listTeam` lists only legacy admins; staff who hold only platform roles do not appear | The Admin Team screen undercounts staff | Read `user_platform_roles` there |
 | `businessSupport.downloadReport` needs `manage_client_onboarding` while `resendReportLink` needs `manage_payments` | Finance can resend but not download | Decide which permission owns the report |
 | `shared/auth.ts` and `docs/authentication.md` still say platform roles are "not built" and name a `platform_role_assignments` table | Misleading | Update the comments: the table is `user_platform_roles` |

@@ -20,7 +20,7 @@ added without being documented here.
 | `/onboarding/:token` | `OnboardingPage.tsx` | Link in the client account invitation | Create the client account | `/dashboard` |
 | `/login` | `LoginPage.tsx` | Anyone | Client sign-in with email and password | The landing page (section 6) |
 | `/signup` | Redirect | Anyone | No public sign-up | `/login` |
-| `/dashboard` | `AccountDashboard.tsx` | Signed-in account | Today: welcome, business profile completion, a link to the internal area for staff. Planned: the engagement room (section 9) | `/settings/business`, `/admin` |
+| `/dashboard` | `AccountDashboard.tsx` | Signed-in account | Welcome; the engagement room once the Current State Assessment is paid (section 9); business profile completion; a link to the internal area for staff | `/settings/business`, `/admin` |
 | `/settings/business` | `BusinessSettingsPage.tsx` | Signed-in account (owners and business admins can save) | Business name, description, year founded, sector, website | — |
 | `/settings/account` | `AccountSettingsPage.tsx` | Signed-in account | Name and password | — |
 | `/admin/login` | `AdminLoginPage.tsx` | Staff | Staff sign-in with email and password | `/admin` |
@@ -64,7 +64,7 @@ flowchart TD
   I2 -->|Team confirms| J[Won: client account invitation emailed]
   J --> K[/onboarding/:token: create account/]
   K --> M[/dashboard/]
-  M -.->|Planned| N[Engagement room: Current State Assessment, fix, plan]
+  M --> N[Engagement room: Current State Assessment, fix, plan]
 ```
 
 ## 3. The free business check, screen by screen
@@ -148,6 +148,7 @@ action again.
 | **Business Checks** | `manage_client_onboarding` | Metrics (total, completed, call requested, ready to onboard, reports requested); stage filter; search; table with payment chips | Row → detail drawer: contact, the check, findings, outline, recommended support, funnel, **Payments** (send details, proof received, confirm), **Full report** (resend link, download), **Move to** a stage, stage history, next step |
 | **Discovery Calls** | `manage_client_onboarding` | Call requests and booked calls | Schedule or reschedule; record outcome (Opportunity, Refer, Lost); "Continue to Client Onboarding" |
 | **Client Onboarding** | `manage_client_onboarding` | Metrics (checks, portal users, businesses, memberships, pending links); every check; invitations | "Invite to onboard"; copy the link once; revoke a pending invitation |
+| **Engagements** | `view_all_businesses`, or `view_assigned_businesses` for the engagements a person is on | Every engagement in scope: business, stage, team, what the client still owes (overdue in red), next call or calls not booked | Row → drawer: stage; team (add, remove: `assign_engagements`); the one problem; calls (time, link, agenda, client and internal notes, share with the owner or the owner and their team); requests and actions (whose side, person, due date, status, note); deliverables (save, approve: `review_engagements`, share, comment). Changes need `manage_engagements` |
 | **Clients** | `view_all_businesses` | Onboarded businesses and their members | Read only |
 | **Admin Team** | Super Admin | Administrators and invitations | Invite, copy link, revoke, edit powers |
 | **JUMP Programme (Legacy)** | `view_participants` | JUMP registrations, referrals, scheduling, replies | JUMP-era actions |
@@ -175,27 +176,36 @@ stateDiagram-v2
 - **Full report:** awaiting form → delivered (`full_reports.status`).
 - **Client invitation:** pending → accepted, revoked or expired (`client_onboarding_invitations`).
 
-## 9. Planned: the engagement room (not built)
+## 9. The engagement room
 
-The flow below is the target for phases 1 to 4 of the [implementation plan](06-implementation-plan.md). It is written
-here so the build follows an agreed path.
+Built on 9 October for the Current State Assessment; live once migration 0008 is applied. The fix's measure and weekly
+check-in screens come next (implementation plan, phase 4).
 
 ```mermaid
 flowchart TD
-  P[Current State Assessment payment confirmed] --> E1[Engagement created; desk lead assigns the team]
-  E1 --> E2[Getting set up, three working days: welcome note, data request, WhatsApp group, both calls booked]
-  E2 --> E3[Client room: Where are we? What do you need from me?]
-  E3 --> CS1[Current State Assessment call 1] --> CS2[Current State Assessment call 2]
-  CS1 -->|notes the same day| E4[Client room: What did we agree?]
-  CS2 --> PS[Problem statement and measure agreed]
-  PS -->|desk lead approves| FX[Six-week fix: prescription, tools, weekly check-in, measure reading]
-  FX --> PL[The plan: shared after desk lead approval]
-  PL --> D30[Day 30: still in use? measure held?]
+  P[Current State Assessment payment confirmed] --> E1[Engagement created from the template: five data requests due in three working days, both calls]
+  E1 --> E2[Desk lead names the team in Engagements]
+  E1 --> A[Owner accepts the invitation: the engagement joins their business]
+  A --> R[Client room on /dashboard]
+  E2 --> B[Calls booked on Calendly, recorded with time, link and agenda]
+  B --> R
+  R -->|I have sent this| T[Team marks it received, or asks for more]
+  B --> N[Notes saved: client version and internal version]
+  N -->|Share with the owner| R
+  D[Deliverable saved as a draft] -->|prescription or plan: desk lead approves| S[Shared with the owner, or the owner and their team]
+  D -->|findings, problem statement| S
+  S --> R
+  R -->|owner| SO[Sign off, comment, share with my team]
 ```
 
-Client view at each step: the current step and date, what is owed (data requests), what was agreed (notes, actions,
-measure) and what they have received (deliverables). Team view: the same engagement with internal notes, hours and
-the record.
+| The client clicks | What happens | Who can |
+|---|---|---|
+| "I have sent this" (with how they sent it) | The request shows "Sent, we are checking" for the client and the team | Owner, full staff, and a contributor for their own requests |
+| "Mark as done" | The action is done | As above |
+| "Sign this off" | The deliverable shows signed off for the team; audited | Owner (and business admin) only |
+| "Send" a comment | The comment shows under the deliverable for both sides | Anyone who can see the deliverable |
+| "Share with my team" / "Keep this to myself" | The owner's staff with full access see it, or stop seeing it | Owner (and business admin) only |
+| "Join the call" | Opens the meeting link | Anyone who sees the call |
 
 ## 10. Known gaps in today's flow
 

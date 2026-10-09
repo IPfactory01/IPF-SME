@@ -154,8 +154,7 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
 
 ### F7. Client dashboard: the engagement room
 
-What the client sees while the engagement runs. Today `/dashboard` shows only the business profile. Requirements,
-built around the four questions an owner asks:
+What the client sees while the engagement runs, on `/dashboard`. Built around the questions an owner asks:
 
 | The owner asks | The room shows | Concept note |
 |---|---|---|
@@ -169,10 +168,17 @@ Rules:
 - Nothing reaches the client until a team member shares it. Deliverables (prescriptions, plans) need the desk lead's
   sign-off first (concept note: "Lewis signs off every prescription").
 - Session notes reach the owner the same day (ET's precision rule, §7).
-- A client sees only their own business. Staff see only the clients assigned to them unless they hold
-  `view_all_engagements`.
+- A client sees only their own business. Staff see only the engagements they are on unless they hold
+  `view_all_businesses`.
+- Session notes and findings go to the owner by default; the owner decides what their staff see (decided 9 October:
+  owners speak frankly on our calls). One staff seat is included, as Full or Contributor (`shared/engagement.ts`).
+- Bookings stay on Calendly and are recorded in the room; conversation stays on WhatsApp; the team's internal tasks stay
+  in ClickUp.
 - AI-drafted notes and summaries are system output and are reviewed by a person before sharing.
-- **Status: Not built.** Decisions needed are in section 10.
+- **Status: Built (9 October), live once migration 0008 is applied:** where we are (journey, next call, team), what we
+  need from you (data requests from the template, "I have sent this"), what we have found (shared notes and
+  deliverables, comments, the owner's sign-off, the owner's share-with-my-team choice). **Not built yet:** uploads
+  against a data request (needs file storage), the staff seat invitation, the fix's measure and weekly reading.
 
 ### F8. Engagement record and check-ins (internal)
 
@@ -183,7 +189,10 @@ check-in row (progress, blockers, next step, measure reading, questions asked, h
 value, moved, extension, plan delivered, next problem area, ongoing support defined, day-30 check).
 
 - The record is what the January portal is built on, and the evidence for the pilot's pass marks (§13).
-- **Status: Not built.** Identity, business check and funnel fields exist; the rest is the next build phase.
+- **Status: Partly built (9 October).** The engagement starts with the template when the Current State Assessment is
+  paid; the admin Engagements section holds the stage, the team, the one problem, the calls with client and internal
+  notes, requests and actions, and deliverables with approval. The tables for the measure and the weekly check-in exist;
+  their screens are next.
 
 ### F9. Internal workspace (admin console)
 
@@ -193,7 +202,7 @@ value, moved, extension, plan delivered, next problem area, ongoing support defi
 - Staff sign-in with email and password; staff invitations; capability-based permissions; audit trail.
 - The JUMP-era views (registrations, participants, scheduling, receipts) remain for history and are not part of the new
   flow.
-- **Status: Built** for leads, pipeline, payments, report and staff. Engagement views are **not built** (F8).
+- **Status: Built** for leads, pipeline, payments, report, staff and engagements (F8, once migration 0008 is applied).
 
 ### F10. Emails
 
@@ -275,21 +284,23 @@ From concept note §13. The platform must make these countable without a spreads
 | Younger businesses are not asked about exit (under 5 years) or owner transition (under 10 years); those areas show as "Not assessed" | ET |
 | The client account invitation goes out when the Current State Assessment is paid; staff can still invite by hand at any time | ET |
 | The paid assessment is called "Current State Assessment" everywhere: site, emails, admin, the report and these documents | ET |
+| The engagement room follows five principles: the fix is one problem with one measure; show only what the team will keep current; notes and findings are for the owner by default; bookings on Calendly, conversation on WhatsApp, internal tasks in ClickUp; one free staff seat, no paid seats in the pilot | ET ("proceed", 9 October) |
+| Data requests and actions sit in one list; the client marks what they sent, the team marks it received or asks for more | Built as recommended |
 
 ## 10. Open decisions
 
 | # | Decision | Recommendation | Owner |
 |---|---|---|---|
-| O1 | **Transcripts in the engagement room.** Notes reach the owner the same day (decided, §7). Should the full transcript also be visible? | Reviewed notes by default; the transcript on request | ET |
-| O2 | **Messages.** The concept note sets one WhatsApp group per client (§17). Do we also need a thread inside the platform? | Keep the WhatsApp group for conversation; record decisions and actions in the room. Add a thread only if handovers between analysts suffer | ET, Lewis |
-| O3 | **Who releases what to the client.** | Analysts share notes and data requests; the desk lead approves every prescription and plan | ET, Lewis |
+| O1 | **Transcripts in the engagement room.** Notes reach the owner the same day (decided, §7). Should the full transcript also be visible? | Reviewed notes by default; the transcript on request. **Built that way (9 October); say if transcripts should show** | ET |
+| O3 | **Who releases what to the client.** | Analysts share notes and data requests; the desk lead approves every prescription and plan. **Built that way and enforced on the server (9 October)** | ET, Lewis |
 | O5 | Paystack go-live: who opens the business account, and by when | Open it now; the build starts the day the test keys are in Vercel (implementation plan §4) | ET, Lewis |
 | O6 | Ongoing support: content and price after the first fix | Define per client at fix close (D3) | ET |
 | O7 | Who signs client terms (IPF, KIP or the venture) and the P&L owner | — | ET |
-| O8 | File storage for the engagement room (concept note uses one Google Drive folder per client) | A private Supabase Storage bucket, so files sit behind the same access rules as the record | Lewis, Richard |
-| O9 | Where actions live (the concept note says one place for actions: ClickUp) | Actions the client must see (theirs and ours) in the engagement room; the team's internal tasks stay in ClickUp | ET, Lewis |
+| O8 | File storage for the engagement room (concept note uses one Google Drive folder per client) | A private Supabase Storage bucket, so files sit behind the same access rules as the record. **Proceeding (ET, 9 October); needs the bucket and its keys in Vercel** | Lewis, Richard |
 
 O4 (one Current State Assessment price or two grades) was decided on 9 October: ₦500,000, fixed.
+O2 and O9 were decided on 9 October as recommended: conversation stays in the client's WhatsApp group, decisions and
+actions are recorded in the room, and the team's internal tasks stay in ClickUp.
 
 ## 11. Where we depart from the concept note
 

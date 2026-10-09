@@ -134,7 +134,7 @@ for (const target of targets) {
         expect(status.platformPermissions).toEqual(expect.arrayContaining(["manage_client_onboarding", "view_all_businesses", "manage_roles"]));
         // The real server answer is what the page uses to choose its sections.
         const sections = visibleAdminSections(status).map(section => section.id);
-        expect(sections).toEqual(["checks", "calls", "onboarding", "clients", "team", "jump"]);
+        expect(sections).toEqual(["checks", "calls", "onboarding", "engagements", "clients", "team", "jump"]);
         expect(sections[0]).toBe("checks");
       });
 
@@ -157,7 +157,7 @@ for (const target of targets) {
         // ...and storing the role (what `pnpm owner:bootstrap` now does) is the fix, independent of any environment variable.
         await db.insert(schema.userPlatformRoles).values({ userId: unmatched.id, role: "super_admin" });
         const fixed = await (await (await signInStaff(unmatched)).call()).adminAccess.status();
-        expect(visibleAdminSections(fixed).map(section => section.id)).toEqual(["checks", "calls", "onboarding", "clients", "team", "jump"]);
+        expect(visibleAdminSections(fixed).map(section => section.id)).toEqual(["checks", "calls", "onboarding", "engagements", "clients", "team", "jump"]);
       });
 
       it("stores the role for the real owner idempotently, and bootstrap does so too", async () => {
@@ -563,7 +563,7 @@ for (const target of targets) {
         const d = await deskLead.call();
         await expect(d.businessSupport.clients()).resolves.toBeDefined();
         await expect(d.businessSupport.checks()).rejects.toMatchObject({ code: "FORBIDDEN" });
-        expect(visibleAdminSections(await d.adminAccess.status()).map(section => section.id)).toEqual(["clients"]);
+        expect(visibleAdminSections(await d.adminAccess.status()).map(section => section.id)).toEqual(["engagements", "clients"]);
         expect(visibleAdminSections(await a.adminAccess.status()).map(section => section.id)).toEqual(["checks", "calls", "onboarding"]);
       });
 

@@ -8,6 +8,7 @@ import type { PipelineStage } from "../shared/businessCheck/pipeline";
 import { ENV } from "./_core/env";
 import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
+import { startEngagementSafely, type EngagementStart } from "./engagements";
 import { createOnboardingInvitation, effectiveInvitationStatus } from "./clientOnboarding";
 import { deliverEmail } from "./email";
 import { issueReportLink } from "./fullReport/service";
@@ -221,7 +222,7 @@ export type CurrentStateInvitation = "sent" | "already_invited" | "has_account" 
  */
 export async function confirmPayment(db: Database, input: { paymentRequestId: number; actorUserId: number; note?: string }) {
   const request = await loadRequest(db, input.paymentRequestId);
-  if (request.status === "confirmed") return { success: true, changed: false, invitation: null } as const;
+  if (request.status === "confirmed") return { success: true, changed: false, invitation: null, engagement: null } as const;
   const check = await loadCheck(db, request.businessCheckId);
   const stageTo: PipelineStage = request.item === "current_state" ? "won" : check.pipelineStage;
   await db.transaction(async tx => {
@@ -243,8 +244,13 @@ export async function confirmPayment(db: Database, input: { paymentRequestId: nu
   await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" }).catch(() => undefined);
 
   let invitation: CurrentStateInvitation | null = null;
-  if (request.item === "current_state") invitation = await inviteToClientAccount(db, check.id, input.actorUserId);
-  return { success: true, changed: true, invitation } as const;
+  let engagement: EngagementStart | null = null;
+  if (request.item === "current_state") {
+    // The engagement first, so an owner who accepts the invitation at once lands in a room that exists.
+    engagement = await startEngagementSafely(db, { businessCheckId: check.id, paymentRequestId: request.id, actorUserId: input.actorUserId });
+    invitation = await inviteToClientAccount(db, check.id, input.actorUserId);
+  }
+  return { success: true, changed: true, invitation, engagement } as const;
 }
 
 /** The Current State Assessment starts in the client account: invite the owner unless an invitation is already out or accepted. */

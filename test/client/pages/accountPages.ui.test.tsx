@@ -52,6 +52,8 @@ vi.mock("@/lib/trpc", () => ({
       },
     },
     useUtils: () => ({ account: { me: { setData: (_: unknown, value: unknown) => api.state.setData.push(value), invalidate: () => undefined }, business: { invalidate: () => undefined } } }),
+    // No engagement yet: the dashboard shows the business card only (the room has its own tests).
+    engagement: { client: { room: { useQuery: () => ({ data: null, isLoading: false }) } } },
     account: {
       me: { useQuery: () => ({ data: api.state.me, isLoading: api.state.loading, refetch: () => undefined }) },
       signIn: {

@@ -223,7 +223,9 @@ export const businessCheckRouter = router({
         if (input.choice === "report") {
           try {
             const sent = await requestPayment(db, { businessCheckId: check.id, item: "full_report", actorUserId: null });
-            payment = `Payment details sent: ${sent.reference}${sent.deliveryStatus === "Failed" ? " (the email failed: send them again from admin)" : ""}`;
+            payment = sent.deliveryStatus === "Failed"
+              ? `Payment details: ${sent.reference}, but the email to the owner failed (${sent.deliveryProblem ?? "no reason given"}). Send them again from admin once that is fixed.`
+              : `Payment details sent: ${sent.reference}`;
           } catch (error) {
             const paid = error instanceof TRPCError && error.code === "CONFLICT";
             if (!paid) console.error("[BusinessCheck] Could not send the report payment details:", error instanceof Error ? error.message : error);

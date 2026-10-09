@@ -7,9 +7,9 @@ export function completeWith(answers: Answers, pickIndex = 0): Answers {
   for (let guard = 0; guard < 100; guard++) {
     const step = nextStep(filled);
     if (!step) return filled;
-    // Typed answers (the business's name and description) are optional: skip them.
+    // Typed answers (the business's name and description) are required: give fictional ones.
     if (step.question.kind === "text") {
-      filled[step.question.id] = "";
+      filled[step.question.id] = step.question.id === "p_name" ? "Example Business" : "A fictional business used to test the business check";
       continue;
     }
     const options = step.question.options;

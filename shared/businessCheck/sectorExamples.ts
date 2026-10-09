@@ -13,6 +13,8 @@ export type SectorId =
   | "food and drink"
   | "retail"
   | "services"
+  | "professional services"
+  | "oil, gas and mining"
   | "technology"
   | "real estate"
   | "health"
@@ -21,14 +23,16 @@ export type SectorId =
   | "agriculture"
   | "logistics";
 
-export const SECTOR_IDS: readonly SectorId[] = ["fashion", "food and drink", "retail", "services", "technology", "real estate", "health", "education", "manufacturing", "agriculture", "logistics"];
+export const SECTOR_IDS: readonly SectorId[] = ["fashion", "food and drink", "retail", "services", "professional services", "oil, gas and mining", "technology", "real estate", "health", "education", "manufacturing", "agriculture", "logistics"];
 
 /** How the sector reads inside "For a … business like yours". */
 export const SECTOR_NOUNS: Record<SectorId, string> = {
   fashion: "fashion",
   "food and drink": "food and drink",
   retail: "retail",
-  services: "service",
+  services: "personal services",
+  "professional services": "professional services",
+  "oil, gas and mining": "mining and energy",
   technology: "technology",
   "real estate": "real estate",
   health: "health",
@@ -46,6 +50,8 @@ export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
     "food and drink": "A caterer whose jollof is the talk of every party may still find it hard to price a corporate contract or chase payment from the client's accounts department.",
     retail: "A shop owner who knows every customer on the street by name may still lose track of stock, cash and what each shelf really earns.",
     services: "A brilliant hairstylist may find managing staff, rotas and no-shows harder than the work itself.",
+    "professional services": "A respected adviser can win clients on reputation alone and still find it hard to price the work, chase fees or build a team that delivers without them.",
+    "oil, gas and mining": "A trader with strong contacts at the mine or the depot may still find the paperwork, finance and compliance of a bigger operation the hardest part.",
     technology: "A strong developer can build a great product and still find selling it to a bank or a school the hardest part.",
     "real estate": "An agent who can close any inspection may still struggle to build a team that sells without them.",
     health: "A respected pharmacist or doctor may run an excellent practice and still find the books, the staff and the HMO paperwork the hardest part.",
@@ -58,7 +64,9 @@ export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
     fashion: "A planned clothing line deciding whether to start with made-to-order pieces for friends or a small ready-to-wear drop on Instagram.",
     "food and drink": "A planned zobo or juice brand deciding whether to start with office deliveries or supermarket shelves.",
     retail: "A planned cosmetics or provisions shop deciding whether to sell online first or rent a stall.",
-    services: "A planned bookkeeping or cleaning service deciding whether to serve churches, schools or small shops first.",
+    services: "A planned cleaning or events service deciding whether to serve churches, schools or small shops first.",
+    "professional services": "A planned advisory firm deciding whether to serve a few large corporate clients or many smaller businesses first.",
+    "oil, gas and mining": "A planned mineral-trading business deciding whether to start with one mineral and one buyer, or several at once.",
     technology: "A planned app deciding whether to start with a few businesses that pay or chase thousands of free users.",
     "real estate": "A planned property business deciding whether to start with lettings, short-lets or sales.",
     health: "A planned pharmacy or wellness service deciding whether to start in one neighbourhood or online.",
@@ -72,6 +80,8 @@ export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
     "food and drink": "A small chops business deciding whether to stay in events or open a kitchen that supplies offices and cafés every day.",
     retail: "A provisions store deciding whether to open a second branch or move into wholesale for smaller shops.",
     services: "A cleaning company choosing between more homes in Lekki and a few large office contracts.",
+    "professional services": "A consultancy choosing between staying a trusted adviser to a few clients or building a firm with partners, a brand and a team.",
+    "oil, gas and mining": "A mining services company choosing between chasing every licence-holder and specialising in the one service it does best.",
     technology: "A software start-up choosing between building for SMEs across Nigeria or a handful of big corporate clients.",
     "real estate": "A property firm deciding whether to keep brokering sales or start developing its own small estates.",
     health: "A clinic deciding whether to add a lab and pharmacy or open a second location.",
@@ -85,6 +95,8 @@ export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
     "food and drink": "A bakery realising that schools and offices buy steadily every week, while walk-in sales only spike at weekends.",
     retail: "A phone-accessories shop in Computer Village finding that the stall opposite undercuts it on its five best-sellers.",
     services: "A laundry finding that its most profitable customers are hotels and short-let apartments, not households.",
+    "professional services": "An advisory firm finding that its best-paying clients are traders and exporters who need deals closed, not general advice.",
+    "oil, gas and mining": "A gold or tin trader learning that export buyers pay more for verified, documented supply than local buyers pay for volume.",
     technology: "A payments app learning that market traders use it far more than the salaried workers it was built for.",
     "real estate": "An agency discovering that diaspora buyers pay faster and haggle less than local buyers.",
     health: "A diagnostic centre finding that most of its revenue comes from HMO referrals, not walk-in patients.",
@@ -98,6 +110,8 @@ export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
     "food and drink": "A restaurant with a sixty-item menu where ten dishes bring in most of the sales.",
     retail: "A supermarket stocking hundreds of lines while a handful carry the month.",
     services: "An events company offering planning, décor, catering and ushers, and hard to recommend for any one of them.",
+    "professional services": "A firm offering advice, introductions and deal support, and unable to say in one line what clients hire it for.",
+    "oil, gas and mining": "A supplier to oil and gas operators offering everything from logistics to equipment hire, and known for none of it.",
     technology: "A software company that builds a different custom app for every client and has no product it can sell twice.",
     "real estate": "A firm doing sales, lettings, facility management and valuations, with no clear reason to pick it over the others.",
     health: "A clinic offering every service while patients only come for one or two tests.",
@@ -111,6 +125,8 @@ export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
     "food and drink": "A restaurant can be full every night and still lose money when diesel, gas and food prices rise faster than the menu.",
     retail: "A provisions store can sell out every week and still earn little if the margin on each item is thin and credit sales stay unpaid.",
     services: "A salon can be busy all day and still struggle if its prices have not moved since before the naira fell.",
+    "professional services": "A brokerage that closes large deals but earns nothing between them, because every fee depends on a transaction completing.",
+    "oil, gas and mining": "A mineral trader with large volumes and thin margins, where transport, royalties and the dollar price decide whether a deal makes money.",
     technology: "A tech company can win new subscribers every month and still lose money if winning each one costs more than they ever pay.",
     "real estate": "A developer can sell every unit off-plan and still lose money when cement and iron-rod prices jump mid-build.",
     health: "A hospital can see more patients than ever and still struggle when HMO tariffs stay fixed while drug prices rise.",
@@ -124,6 +140,8 @@ export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
     "food and drink": "A small chops vendor who gets most orders from WhatsApp status and has quiet weeks with no warning.",
     retail: "A store waiting for walk-ins while competitors sell on Jumia, Instagram and WhatsApp.",
     services: "A cleaning company that wins work only by word of mouth, with no plan to reach new estates or offices.",
+    "professional services": "A firm whose new clients all come from the founder's network, with nothing that brings in work when the network goes quiet.",
+    "oil, gas and mining": "A supplier that wins contracts only through personal contacts at a few operators, with nothing in place when a contact moves on.",
     technology: "A start-up with thousands of downloads but very few paying users.",
     "real estate": "An agent with plenty of enquiries that never turn into inspections, let alone sales.",
     health: "A clinic that gets patients by referral only and has no way to reach companies for staff health checks.",
@@ -137,6 +155,8 @@ export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
     "food and drink": "A kitchen where the food tastes different depending on who is cooking that day.",
     retail: "A supermarket where the stock count never matches the books.",
     services: "A salon that runs smoothly only on the days the owner is in.",
+    "professional services": "A practice where every proposal, contract and client call still waits for the founder.",
+    "oil, gas and mining": "A site or depot that runs only when the owner is there to sign off every load.",
     technology: "A start-up where every customer complaint still ends up on the founder's phone.",
     "real estate": "A firm where only the owner knows the terms agreed with each landlord.",
     health: "A clinic where patient records are on paper and nobody can find last month's results.",
@@ -149,7 +169,9 @@ export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
     fashion: "A designer who adds a round figure to the cost of fabric and forgets labour, power and the free adjustments.",
     "food and drink": "A food business that is profitable on paper but cannot pay suppliers because corporate clients pay in sixty days.",
     retail: "A trader who prices by adding ₦500 to cost without counting transport, damage and theft.",
-    services: "A consultancy paid late on every invoice that borrows each month to cover salaries.",
+    services: "An events company paid late by corporate clients that borrows each month to pay its vendors.",
+    "professional services": "A consultancy paid late on every invoice that borrows each month to cover salaries.",
+    "oil, gas and mining": "A trader who must pay miners upfront in cash while buyers pay 60 days after delivery.",
     technology: "A start-up that knows its monthly users but not how many months of cash it has left.",
     "real estate": "A developer whose money is tied up in half-finished units while interest on the loan keeps running.",
     health: "A hospital owed millions by HMOs while it pays its suppliers and staff on time every month.",
@@ -162,7 +184,9 @@ export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
     fashion: "A label that has never registered its brand name, while copies of its designs turn up in Balogun market.",
     "food and drink": "A food brand selling well without NAFDAC registration for its best product.",
     retail: "A shop whose entire stock sits uninsured in one store, with no records for tax.",
-    services: "A firm where one senior person holds every important client relationship.",
+    services: "A salon where one senior stylist holds the loyal clients, and could leave with them.",
+    "professional services": "An intermediary whose fee rests on a handshake, with no signed mandate if the deal closes without them.",
+    "oil, gas and mining": "A trader working without the right mining or export permits, where one inspection could stop every shipment.",
     technology: "A start-up holding customer data without the protections the Nigeria Data Protection Act requires.",
     "real estate": "A firm selling plots without checking the title documents or the C of O.",
     health: "A pharmacy or clinic running on a lapsed licence, or keeping poor records of controlled drugs.",
@@ -175,7 +199,9 @@ export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
     fashion: "A label worth little to an investor because buyers come for the designer personally.",
     "food and drink": "A restaurant chain whose recipes and supplier deals exist only in the owner's head.",
     retail: "A chain of stores with strong sales but no accounts an investor could trust.",
-    services: "A practice worth little to a buyer because clients come for the founder personally.",
+    services: "A salon worth little to a buyer because clients come for the owner personally.",
+    "professional services": "A practice worth little to a buyer because clients come for the founder personally.",
+    "oil, gas and mining": "A mining services company worth little to an investor because the licences, contracts and relationships all sit with the founder.",
     technology: "A start-up that wants investment but has no clean record of revenue, users or who owns what.",
     "real estate": "A property company whose value sits in assets with incomplete documents.",
     health: "A hospital that could attract a partner but has never had its books audited.",
@@ -188,7 +214,9 @@ export const SECTOR_EXAMPLES: Record<AreaSection, Record<SectorId, string>> = {
     fashion: "A designer of fifteen years who wants to step back from every fitting, but whose clients still ask for them by name.",
     "food and drink": "A founder whose restaurant runs on their own recipes and who now wants a head chef to take over.",
     retail: "A trader whose children may take over the shops, with no plan for how or when.",
-    services: "A senior professional whose clients still ask for them by name after twenty years.",
+    services: "An events planner whose clients still ask for them by name after twenty years.",
+    "professional services": "A senior professional whose clients still ask for them by name after twenty years.",
+    "oil, gas and mining": "A founder who built the business on personal relationships with operators, and has no one ready to hold them.",
     technology: "A founder who built the product and now needs to be the chief executive, not the lead developer.",
     "real estate": "A founder ready to hand day-to-day sales to a younger team without losing key clients.",
     health: "A medical director nearing retirement with no successor ready to run the hospital.",

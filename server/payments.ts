@@ -180,9 +180,12 @@ export async function requestPayment(db: Database, input: { businessCheckId: num
   });
 
   const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference });
-  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" }).catch(() => ({ status: "Failed" as const }));
+  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" })
+    .catch((error: unknown) => ({ status: "Failed" as const, reason: error instanceof Error ? error.message : "Unknown error" }));
   await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq(paymentRequests.id, request.id));
-  return { paymentRequestId: request.id, reference, status: request.status, deliveryStatus: delivery.status, pipelineStage: stageTo };
+  // Why an email failed, for the office notice (for example Resend refusing addresses before the domain is verified).
+  const deliveryProblem = delivery.status === "Failed" ? delivery.reason : null;
+  return { paymentRequestId: request.id, reference, status: request.status, deliveryStatus: delivery.status, deliveryProblem, pipelineStage: stageTo };
 }
 
 async function loadRequest(db: Pick<Database, "select">, paymentRequestId: number): Promise<PaymentRequest> {

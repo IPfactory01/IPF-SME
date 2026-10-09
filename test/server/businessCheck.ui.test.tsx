@@ -173,14 +173,18 @@ describe("business check page", { timeout: 20_000 }, () => {
     await pick(/questions/i);
 
     await pick(/I have an idea and haven't started/);
-    await type("Does the idea have a name yet?", "Zobo Express");
+    await type("What will the business be called?", "Zobo Express");
     await pick(/^Continue/);
     expect(await screen.findByText("How will the business make money?")).toBeTruthy();
     expect(screen.getByText("Outline for Zobo Express")).toBeTruthy();
     await pick(/We make things/);
     await pick("Food and drink");
     expect(await screen.findByText("In one line, what is the idea?")).toBeTruthy();
-    await pick(/^Skip/);
+    // Required: there is no Skip, and Continue waits for an answer.
+    expect(screen.queryByRole("button", { name: /^Skip/ })).toBeNull();
+    expect((screen.getByRole("button", { name: /^Continue/ }) as HTMLButtonElement).disabled).toBe(true);
+    await type("In one line, what is the idea?", "Zobo drinks delivered to offices in Lekki");
+    await pick(/^Continue/);
 
     // Founder readiness opens with its meaning and an example for someone leaving a job.
     expect(await screen.findByText("Founder readiness", { selector: "h2" })).toBeTruthy();
@@ -199,7 +203,7 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(screen.getByText(/juice brand/)).toBeTruthy();
     expect(screen.queryByText("How long has it been trading?")).toBeNull();
     const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).answers;
-    expect(saved).toMatchObject({ p_stage: "idea", p_name: "Zobo Express", p_description: "" });
+    expect(saved).toMatchObject({ p_stage: "idea", p_name: "Zobo Express", p_description: "Zobo drinks delivered to offices in Lekki" });
   });
 
   it("saves progress to the server shortly after each answer", async () => {

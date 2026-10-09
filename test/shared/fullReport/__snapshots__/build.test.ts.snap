@@ -26,6 +26,10 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "question": "Which sector is it in?",
         },
         {
+          "answer": "A fictional business used to test the business check",
+          "question": "In one line, what does the business do?",
+        },
+        {
           "answer": "1 to 2",
           "question": "How many people work in it, including contract staff?",
         },
@@ -274,6 +278,10 @@ exports[`the full report > is deterministic: the same answers give the same repo
             {
               "label": "Business",
               "value": "Adunni Fabrics",
+            },
+            {
+              "label": "What it does",
+              "value": "A fictional business used to test the business check.",
             },
             {
               "label": "Where it sells",

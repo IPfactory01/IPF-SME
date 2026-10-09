@@ -45,9 +45,9 @@ function completeWith(answers: Answers, pickIndex = 0): Answers {
   for (let guard = 0; guard < 100; guard++) {
     const step = nextStep(filled);
     if (!step) return filled;
-    // Typed answers (the business's name and description) are optional: skip them.
+    // Typed answers (the business's name and description) are required: give fictional ones.
     if (step.question.kind === "text") {
-      filled[step.question.id] = "";
+      filled[step.question.id] = step.question.id === "p_name" ? "Example Business" : "A fictional business used to test the business check";
       continue;
     }
     const options = step.question.options;
@@ -148,11 +148,11 @@ describe("stage first", () => {
     const stage = nextStep({})!.question;
     expect(stage.id).toBe("p_stage");
     expect(stage.options.map((option) => option.value)).toEqual(["operating", "side", "idea"]);
-    // The business's name comes straight after the stage (optional), then years trading for anyone who trades.
+    // The business's name comes straight after the stage (required), then years trading for anyone who trades.
     expect(nextStep({ p_stage: "operating" })?.question.id).toBe("p_name");
-    expect(nextStep({ p_stage: "operating", p_name: "" })?.question.id).toBe("p_age");
+    expect(nextStep({ p_stage: "operating", p_name: "Ada Foods" })?.question.id).toBe("p_age");
     expect(nextStep({ p_stage: "side", p_name: "Ada Foods" })?.question.id).toBe("p_age");
-    expect(nextStep({ p_stage: "idea", p_name: "" })?.question.id).toBe("p_type");
+    expect(nextStep({ p_stage: "idea", p_name: "Zobo Express" })?.question.id).toBe("p_type");
   });
 
   it("words questions for the owner's stage", () => {
@@ -210,6 +210,31 @@ describe("section copy", () => {
   });
 });
 
+describe("sector examples", () => {
+  it("speaks to professional services and to oil, gas and mining in their own terms, not a salon's", () => {
+    const professional = { p_stage: "operating", p_type: "expert", p_sector: "professional services" } as const;
+    expect(exampleHeading(SECTIONS.founder, professional)).toBe("For a professional services business like yours");
+    expect(exampleFor(SECTIONS.founder, professional)).toMatch(/adviser/);
+    const mining = { p_stage: "operating", p_type: "trader", p_sector: "oil, gas and mining" } as const;
+    expect(exampleHeading(SECTIONS.founder, mining)).toBe("For a mining and energy business like yours");
+    expect(exampleFor(SECTIONS.risk, mining)).toMatch(/permits/);
+    expect(exampleHeading(SECTIONS.founder, { p_stage: "operating", p_sector: "services" })).toBe("For a personal services business like yours");
+    for (const section of Object.values(SECTIONS).filter((item) => item.id !== "profile")) {
+      for (const sector of ["professional services", "services"]) {
+        if (section.id === "idea") continue;
+        const wrongWorld = sector === "professional services" ? /salon|hairstylist|stylist/i : /consultancy|practice|adviser/i;
+        expect(exampleFor(section, { p_stage: "operating", p_sector: sector }), `${section.id}/${sector}`).not.toMatch(wrongWorld);
+      }
+    }
+  });
+
+  it("lists the sectors with the stored values unchanged, and Professional services next to Personal services", () => {
+    const sector = SECTIONS.profile.questions.find((question) => question.id === "p_sector")!;
+    expect(sector.options.map((option) => option.value)).toEqual(["fashion", "food and drink", "retail", "professional services", "services", "oil, gas and mining", "technology", "real estate", "health", "education", "manufacturing", "agriculture", "logistics", "other"]);
+    expect(sector.options.find((option) => option.value === "services")!.label).toBe("Personal services: beauty, events, cleaning, repairs");
+  });
+});
+
 describe("typed answers: the business's name and what it does", () => {
   const nameQuestion = SECTIONS.profile.questions.find((question) => question.id === "p_name")!;
 
@@ -218,18 +243,21 @@ describe("typed answers: the business's name and what it does", () => {
     expect(ids.slice(0, 2)).toEqual(["p_stage", "p_name"]);
     expect(ids.indexOf("p_description")).toBe(ids.indexOf("p_sector") + 1);
     expect(promptFor(nameQuestion, { p_stage: "operating" })).toBe("What is the business called?");
-    expect(promptFor(nameQuestion, { p_stage: "idea" })).toBe("Does the idea have a name yet?");
+    expect(promptFor(nameQuestion, { p_stage: "idea" })).toBe("What will the business be called?");
   });
 
-  it("treats them as optional: skipping stores an empty answer and the check can still be complete", () => {
-    const skipped = completeWith(operating("2to5"));
-    expect(skipped.p_name).toBe("");
-    expect(isComplete(skipped)).toBe(true);
-    const missing = { ...skipped };
-    delete missing.p_name;
-    delete missing.p_description;
-    expect(isComplete(missing)).toBe(true);
-    expect(nextStep(missing)?.question.id).toBe("p_name");
+  it("requires both: a blank or missing name or description is asked again, and the check is not complete without them", () => {
+    const answered = completeWith(operating("2to5"));
+    expect(isComplete(answered)).toBe(true);
+    for (const id of ["p_name", "p_description"] as const) {
+      const question = SECTIONS.profile.questions.find((item) => item.id === id)!;
+      expect(question.optional, id).toBeFalsy();
+      for (const blank of [undefined, "", "   "]) {
+        const missing = { ...answered, [id]: blank };
+        expect(isComplete(missing), `${id}=${JSON.stringify(blank)}`).toBe(false);
+        expect(nextStep(missing)?.question.id).toBe(id);
+      }
+    }
   });
 
   it("tidies typed text and keeps it within its limit", () => {
@@ -265,7 +293,7 @@ describe("examples for the owner's sector", () => {
     expect(exampleHeading(SECTIONS.offer, fashion)).toBe("For a fashion business like yours");
     const food = { ...fashion, p_sector: "food and drink" };
     expect(exampleFor(SECTIONS.risk, food)).toMatch(/NAFDAC/);
-    expect(exampleHeading(SECTIONS.sales, { ...fashion, p_sector: "services" })).toBe("For a service business like yours");
+    expect(exampleHeading(SECTIONS.sales, { ...fashion, p_sector: "services" })).toBe("For a personal services business like yours");
     expect(exampleFor(SECTIONS.founder, { ...fashion, p_stage: "side" })).toMatch(/designer/);
   });
 

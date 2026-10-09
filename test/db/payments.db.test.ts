@@ -143,6 +143,17 @@ for (const target of targets) {
         expect((await rowFor(token)).pipelineStage).toBe("qualified_lead");
       });
 
+      it("tells the office why the owner's payment email failed", async () => {
+        const { token, email, visitor } = await finishedCheck("report-failed-email");
+        mocked.deliverEmail.mockImplementation(async (input: EmailCall) => input.to === email
+          ? { status: "Failed", reason: "You can only send testing emails to your own email address" }
+          : { status: "Simulated", reason: "test_sender" });
+        mocked.deliverEmail.mockClear();
+        await (await visitor.call()).businessCheck.requestNext({ token, choice: "report" });
+        const toOffice = emails().find(sent => sent.to === "info@ipfactory.co" && /asked for the full business check report/.test(sent.subject))!;
+        expect(toOffice.body).toMatch(/Payment details: TS-R-\d{6}, but the email to the owner failed \(You can only send testing emails to your own email address\)\. Send them again from admin once that is fixed\./);
+      });
+
       it("records proof, confirms once, emails the owner and never reopens a confirmed payment", async () => {
         const { token, email, visitor, id } = await finishedCheck("report-paid");
         await (await visitor.call()).businessCheck.requestNext({ token, choice: "report" });

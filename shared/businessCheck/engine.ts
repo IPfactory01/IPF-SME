@@ -109,8 +109,8 @@ export function questionPath(answers: Answers): Step[] {
 
 export function isAnswered(question: Question, answers: Answers) {
   const value = answers[question.id];
-  // A typed answer counts once given, even if skipped (""), so it is asked only once.
-  if (question.kind === "text") return typeof value === "string";
+  // An optional typed answer counts once given, even if skipped (""), so it is asked only once; a required one needs text.
+  if (question.kind === "text") return typeof value === "string" && (question.optional === true || value.trim().length > 0);
   return Array.isArray(value) ? value.length > 0 : Boolean(value);
 }
 

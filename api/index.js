@@ -6600,12 +6600,14 @@ function offeringById(id) {
 }
 
 // shared/businessCheck/sectorExamples.ts
-var SECTOR_IDS = ["fashion", "food and drink", "retail", "services", "technology", "real estate", "health", "education", "manufacturing", "agriculture", "logistics"];
+var SECTOR_IDS = ["fashion", "food and drink", "retail", "services", "professional services", "oil, gas and mining", "technology", "real estate", "health", "education", "manufacturing", "agriculture", "logistics"];
 var SECTOR_NOUNS = {
   fashion: "fashion",
   "food and drink": "food and drink",
   retail: "retail",
-  services: "service",
+  services: "personal services",
+  "professional services": "professional services",
+  "oil, gas and mining": "mining and energy",
   technology: "technology",
   "real estate": "real estate",
   health: "health",
@@ -6641,9 +6643,8 @@ var SECTIONS = {
         id: "p_name",
         kind: "text",
         prompt: "What is the business called?",
-        ideaPrompt: "Does the idea have a name yet?",
-        help: "Optional. We use it to put your outline together.",
-        optional: true,
+        ideaPrompt: "What will the business be called?",
+        help: "We use it to put your outline together. For an idea, a working name is fine.",
         placeholder: "e.g. Ada Foods",
         ideaPlaceholder: "e.g. Zobo Express",
         maxLength: 120,
@@ -6678,15 +6679,30 @@ var SECTIONS = {
         id: "p_sector",
         kind: "select",
         prompt: "Which sector is it in?",
-        options: ["Fashion", "Food and drink", "Retail", "Services", "Technology", "Real estate", "Health", "Education", "Manufacturing", "Agriculture", "Logistics", "Other"].map((label) => ({ value: label.toLowerCase(), label }))
+        // Values are stored identifiers ("services" predates the split into personal and professional services).
+        options: [
+          { value: "fashion", label: "Fashion" },
+          { value: "food and drink", label: "Food and drink" },
+          { value: "retail", label: "Retail" },
+          { value: "professional services", label: "Professional services: consulting, legal, accounting, finance, brokerage" },
+          { value: "services", label: "Personal services: beauty, events, cleaning, repairs" },
+          { value: "oil, gas and mining", label: "Oil, gas and mining" },
+          { value: "technology", label: "Technology" },
+          { value: "real estate", label: "Real estate" },
+          { value: "health", label: "Health" },
+          { value: "education", label: "Education" },
+          { value: "manufacturing", label: "Manufacturing" },
+          { value: "agriculture", label: "Agriculture" },
+          { value: "logistics", label: "Logistics" },
+          { value: "other", label: "Other" }
+        ]
       },
       {
         id: "p_description",
         kind: "text",
         prompt: "In one line, what does the business do?",
         ideaPrompt: "In one line, what is the idea?",
-        help: "Optional. It helps us read your answers in context.",
-        optional: true,
+        help: "It helps us read your answers in the context of your business.",
         placeholder: "e.g. We make and supply school uniforms in Abuja",
         ideaPlaceholder: "e.g. Healthy lunch deliveries for offices in Lekki",
         maxLength: 300,
@@ -7328,7 +7344,7 @@ function questionPath(answers) {
 }
 function isAnswered(question, answers) {
   const value = answers[question.id];
-  if (question.kind === "text") return typeof value === "string";
+  if (question.kind === "text") return typeof value === "string" && (question.optional === true || value.trim().length > 0);
   return Array.isArray(value) ? value.length > 0 : Boolean(value);
 }
 function isComplete(answers) {
@@ -9801,9 +9817,10 @@ async function requestPayment(db, input) {
     return row;
   });
   const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference });
-  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" }).catch(() => ({ status: "Failed" }));
+  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
   await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq16(paymentRequests.id, request.id));
-  return { paymentRequestId: request.id, reference, status: request.status, deliveryStatus: delivery.status, pipelineStage: stageTo };
+  const deliveryProblem = delivery.status === "Failed" ? delivery.reason : null;
+  return { paymentRequestId: request.id, reference, status: request.status, deliveryStatus: delivery.status, deliveryProblem, pipelineStage: stageTo };
 }
 async function loadRequest(db, paymentRequestId) {
   const request = (await db.select().from(paymentRequests).where(eq16(paymentRequests.id, paymentRequestId)).limit(1))[0];
@@ -10058,7 +10075,7 @@ var businessCheckRouter = router({
       if (input.choice === "report") {
         try {
           const sent = await requestPayment(db, { businessCheckId: check.id, item: "full_report", actorUserId: null });
-          payment = `Payment details sent: ${sent.reference}${sent.deliveryStatus === "Failed" ? " (the email failed: send them again from admin)" : ""}`;
+          payment = sent.deliveryStatus === "Failed" ? `Payment details: ${sent.reference}, but the email to the owner failed (${sent.deliveryProblem ?? "no reason given"}). Send them again from admin once that is fixed.` : `Payment details sent: ${sent.reference}`;
         } catch (error) {
           const paid = error instanceof TRPCError15 && error.code === "CONFLICT";
           if (!paid) console.error("[BusinessCheck] Could not send the report payment details:", error instanceof Error ? error.message : error);

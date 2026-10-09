@@ -20,7 +20,7 @@ function complete(answers: Answers) {
   const filled = { ...answers };
   for (let step = nextStep(filled); step; step = nextStep(filled)) {
     if (step.question.kind === "text") {
-      filled[step.question.id] = "";
+      filled[step.question.id] = step.question.id === "p_name" ? "Example Stores" : "We sell provisions in Lagos";
       continue;
     }
     const option = step.question.options[1] ?? step.question.options[0];

@@ -266,9 +266,14 @@ for (const target of targets) {
         const before = (await (await owner.call()).engagement.client.room())!;
         expect(before.sessions[0].notes).toBeNull();
 
+        mocked.deliverEmail.mockClear();
         await (await superAdmin.call()).engagement.staff.shareNotes({ sessionId, audience: "owner" });
         const room = (await (await owner.call()).engagement.client.room())!;
         expect(room.sessions[0]).toMatchObject({ notes: "We agreed to look at pricing first.", notesAudience: "owner" });
+        // The owner is told by email: the title and a link, never the notes themselves.
+        const notice = emails().find(sent => sent.subject === "New in your room: Current State Assessment call 1")!;
+        expect(notice.body).toContain("/dashboard");
+        expect(notice.body).not.toContain("pricing");
         expect(JSON.stringify(room)).not.toContain("under-reporting");
       });
 
@@ -279,7 +284,11 @@ for (const target of targets) {
         const detail = await (await superAdmin.call()).engagement.staff.detail({ engagementId });
         const sessionId = detail.sessions[0].id;
         await (await superAdmin.call()).engagement.staff.saveNotes({ sessionId, clientNotes: "Frank notes for the owner.", internalNotes: null });
+        mocked.deliverEmail.mockClear();
         await (await superAdmin.call()).engagement.staff.shareNotes({ sessionId, audience: "owner" });
+        // Owner-only: the owner's staff are not emailed about something they cannot see.
+        expect(emails().map(sent => sent.to)).not.toContain(full.user.email);
+        expect(emails().map(sent => sent.to)).not.toContain(contributor.user.email);
         const task = detail.tasks[1];
         await (await superAdmin.call()).engagement.staff.saveTask({ ...task, engagementId, taskId: task.id, assigneeUserId: contributor.user.id, sessionId: null });
 
@@ -326,7 +335,9 @@ for (const target of targets) {
         const { owner, engagementId, businessId } = await client("signoff");
         const full = await member(businessId, "full");
         const { deliverableId } = await (await superAdmin.call()).engagement.staff.saveDeliverable({ engagementId, kind: "problem_statement", title: "The one problem", summary: "Prices do not cover costs." });
+        mocked.deliverEmail.mockClear();
         await (await superAdmin.call()).engagement.staff.shareDeliverable({ deliverableId, audience: "business" });
+        expect(emails().filter(sent => sent.subject === "New in your room: The one problem").map(sent => sent.to)).toContain(full.user.email);
 
         await (await full.browser.call()).engagement.client.comment({ deliverableId, body: "Transport is missing from costs." });
         await expect((await full.browser.call()).engagement.client.accept({ deliverableId })).rejects.toMatchObject({ code: "FORBIDDEN" });

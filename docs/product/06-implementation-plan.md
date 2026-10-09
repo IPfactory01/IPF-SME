@@ -92,9 +92,9 @@ see where it stands.
 | 2.1 | ✅ **Built 9 October** (booked on Calendly, recorded in the room). **Sessions**: date, type (Current State Assessment call 1 and 2, check-in, review), attendees, link | Both Current State Assessment calls can be booked from the engagement page |
 | 2.2 | ✅ **Built 9 October.** **Notes and actions** per session: client version and internal version; actions with owner and due date | Notes are shared with the client the same day; internal notes are never visible to the client |
 | 2.3 | ✅ **Built 9 October** (text; files wait for 1.1). **Deliverables**: upload, version, share; prescriptions and plans need desk lead approval before sharing | An unapproved prescription cannot be shared; every share is audited |
-| 2.4 | **Email notices** to the client when something is shared with them | Branded email, link to the room, no content in the email body beyond the title |
+| 2.4 | ✅ **Built 9 October.** **Email notices** to the client when something is shared with them | Branded email, link to the room, no content in the email body beyond the title |
 
-Built with O1, O2 and O3 as recommended (PRD §10), and the owner's seat invitation (one included seat, Full or Contributor). Still to build here: 2.4 email notices.
+Built with O1, O2 and O3 as recommended (PRD §10), and the owner's seat invitation (one included seat, Full or Contributor). 2.4 email notices are built too.
 
 ## 7. Phase 3: data requests (needed by 23 October, getting set up)
 

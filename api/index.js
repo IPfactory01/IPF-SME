@@ -8284,6 +8284,7 @@ init_env();
 // server/engagements.ts
 import { TRPCError as TRPCError12 } from "@trpc/server";
 import { and as and11, asc, desc as desc8, eq as eq14, inArray as inArray4, isNull as isNull5 } from "drizzle-orm";
+init_brand();
 var NOT_FOUND = "This engagement is not available.";
 var notFound = () => new TRPCError12({ code: "NOT_FOUND", message: NOT_FOUND });
 async function engagementDb() {
@@ -8456,6 +8457,38 @@ async function listAssignableStaff(db, actor) {
   }
   return Array.from(people.values()).filter((person) => person.roles.some((role) => role !== "finance"));
 }
+function sharedNoticeEmail(input) {
+  const name = input.fullName.split(" ")[0] || "there";
+  return {
+    subject: `New in your room: ${input.title}`,
+    body: [
+      `Dear ${name},`,
+      "",
+      `We have shared ${input.what} with you on ${BRAND.productName}: ${input.title}.`,
+      "",
+      `Open your room: ${input.url}`,
+      "",
+      BRAND.organisationName
+    ].join("\n")
+  };
+}
+async function clientRecipients(db, businessId, audience) {
+  const people = await db.select({ name: users.name, email: users.email, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq14(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq14(businessMemberAccess.membershipId, businessMemberships.id)).where(and11(eq14(businessMemberships.businessId, businessId), eq14(businessMemberships.status, "active"), eq14(users.status, "active")));
+  return people.filter((person) => person.email && clientCanSee(audience, person.role === "member" ? { kind: "member", access: person.access ?? "full", userId: 0 } : { kind: "owner" }));
+}
+async function notifyShared(db, engagementId, audience, what, title) {
+  try {
+    const engagement = (await db.select({ businessId: engagements.businessId }).from(engagements).where(eq14(engagements.id, engagementId)).limit(1))[0];
+    if (!engagement?.businessId) return;
+    const url = `${getTrustedApplicationOrigin()}/dashboard`;
+    for (const person of await clientRecipients(db, engagement.businessId, audience)) {
+      const message = sharedNoticeEmail({ fullName: person.name ?? "", what, title, url });
+      await deliverEmail({ to: person.email, subject: message.subject, body: message.body, sender: "business_support" });
+    }
+  } catch (error) {
+    console.error("[Engagements] Shared, but the client could not be emailed:", error instanceof Error ? error.message : error);
+  }
+}
 async function assignTeamMember(db, actor, input) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
   await requireStaffEngagement(db, actor, input.engagementId);
@@ -8530,6 +8563,7 @@ async function shareSessionNotes(db, actor, input) {
     await tx.update(engagementSessions).set({ notesAudience: input.audience, notesSharedAt: /* @__PURE__ */ new Date(), notesSharedByUserId: actor.id }).where(eq14(engagementSessions.id, session.id));
     await recordAudit(tx, { action: "engagement_notes_shared", actorUserId: actor.id, details: { engagementId: session.engagementId, sessionId: session.id, audience: input.audience } });
   });
+  await notifyShared(db, session.engagementId, input.audience, "the notes from a call", session.title);
   return { success: true };
 }
 async function saveTask(db, actor, input) {
@@ -8588,6 +8622,7 @@ async function shareDeliverable(db, actor, input) {
     await tx.update(engagementDeliverables).set({ status: "shared", audience: input.audience, sharedAt: /* @__PURE__ */ new Date(), sharedByUserId: actor.id }).where(eq14(engagementDeliverables.id, deliverable.id));
     await recordAudit(tx, { action: "engagement_deliverable_shared", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind, audience: input.audience } });
   });
+  await notifyShared(db, deliverable.engagementId, input.audience, `your ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind].toLowerCase()}`, deliverable.title);
   return { success: true };
 }
 async function staffComment(db, actor, input) {

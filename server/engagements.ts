@@ -41,6 +41,9 @@ import {
 import type { AccountSession, Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { getDb } from "./db";
+import { deliverEmail } from "./email";
+import { getTrustedApplicationOrigin } from "./security";
+import { BRAND } from "../shared/brand";
 
 /**
  * The engagement room (shared/engagement.ts). Every function here decides access on the server: the team by
@@ -268,6 +271,50 @@ export async function listAssignableStaff(db: Database, actor: StaffActor) {
   return Array.from(people.values()).filter(person => person.roles.some(role => role !== "finance"));
 }
 
+// ---- Telling the client ------------------------------------------------------------------------------------------
+
+/** The email for something newly shared: its title and a link to the room, never the content itself (plan 2.4). */
+export function sharedNoticeEmail(input: { fullName: string; what: string; title: string; url: string }) {
+  const name = input.fullName.split(" ")[0] || "there";
+  return {
+    subject: `New in your room: ${input.title}`,
+    body: [
+      `Dear ${name},`,
+      "",
+      `We have shared ${input.what} with you on ${BRAND.productName}: ${input.title}.`,
+      "",
+      `Open your room: ${input.url}`,
+      "",
+      BRAND.organisationName,
+    ].join("\n"),
+  };
+}
+
+/** Everyone on the client's side who can see an item shared with `audience`, with their email. */
+async function clientRecipients(db: Pick<Database, "select">, businessId: number, audience: Exclude<EngagementAudience, "team">) {
+  const people = await db.select({ name: users.name, email: users.email, role: businessMemberships.role, access: businessMemberAccess.access })
+    .from(businessMemberships)
+    .innerJoin(users, eq(businessMemberships.userId, users.id))
+    .leftJoin(businessMemberAccess, eq(businessMemberAccess.membershipId, businessMemberships.id))
+    .where(and(eq(businessMemberships.businessId, businessId), eq(businessMemberships.status, "active"), eq(users.status, "active")));
+  return people.filter(person => person.email && clientCanSee(audience, person.role === "member" ? { kind: "member", access: person.access ?? "full", userId: 0 } : { kind: "owner" }));
+}
+
+/** Emails each client who can now see the item. Delivery problems are logged and never undo the share. */
+async function notifyShared(db: Pick<Database, "select">, engagementId: number, audience: Exclude<EngagementAudience, "team">, what: string, title: string) {
+  try {
+    const engagement = (await db.select({ businessId: engagements.businessId }).from(engagements).where(eq(engagements.id, engagementId)).limit(1))[0];
+    if (!engagement?.businessId) return;
+    const url = `${getTrustedApplicationOrigin()}/dashboard`;
+    for (const person of await clientRecipients(db, engagement.businessId, audience)) {
+      const message = sharedNoticeEmail({ fullName: person.name ?? "", what, title, url });
+      await deliverEmail({ to: person.email!, subject: message.subject, body: message.body, sender: "business_support" });
+    }
+  } catch (error) {
+    console.error("[Engagements] Shared, but the client could not be emailed:", error instanceof Error ? error.message : error);
+  }
+}
+
 // ---- The team's side: changes --------------------------------------------------------------------------------------
 
 export async function assignTeamMember(db: Database, actor: StaffActor, input: { engagementId: number; userId: number; role: EngagementTeamRole }) {
@@ -357,6 +404,7 @@ export async function shareSessionNotes(db: Database, actor: StaffActor, input: 
     await tx.update(engagementSessions).set({ notesAudience: input.audience, notesSharedAt: new Date(), notesSharedByUserId: actor.id }).where(eq(engagementSessions.id, session.id));
     await recordAudit(tx, { action: "engagement_notes_shared", actorUserId: actor.id, details: { engagementId: session.engagementId, sessionId: session.id, audience: input.audience } });
   });
+  await notifyShared(db, session.engagementId, input.audience, "the notes from a call", session.title);
   return { success: true } as const;
 }
 
@@ -431,6 +479,7 @@ export async function shareDeliverable(db: Database, actor: StaffActor, input: {
     await tx.update(engagementDeliverables).set({ status: "shared", audience: input.audience, sharedAt: new Date(), sharedByUserId: actor.id }).where(eq(engagementDeliverables.id, deliverable.id));
     await recordAudit(tx, { action: "engagement_deliverable_shared", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind, audience: input.audience } });
   });
+  await notifyShared(db, deliverable.engagementId, input.audience, `your ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind].toLowerCase()}`, deliverable.title);
   return { success: true } as const;
 }
 

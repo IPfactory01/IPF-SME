@@ -275,6 +275,11 @@ describe("no public registration", () => {
     expect(screen.queryByText(/create your account/i)).toBeNull();
     expect(document.querySelector('a[href="/signup"]')).toBeNull();
   });
+
+  it("points JUMP participants to their own portal", () => {
+    renderAt("/login", <LoginPage />);
+    expect(screen.getByRole("link", { name: "Go to the participant portal" }).getAttribute("href")).toBe("/portal");
+  });
 });
 
 describe("sign-in screen", () => {

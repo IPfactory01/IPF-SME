@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { CURRENT_STATE } from "@shared/businessSupport";
 import React, { useState } from "react";
 import { toast } from "sonner";
 
@@ -33,13 +34,19 @@ export default function ClientOnboardingPanel() {
     },
     onError: error => toast.error(error.message),
   });
+  /** Won means the Current State Assessment is paid; inviting anyone earlier is allowed but has to be deliberate. */
+  const inviteCandidate = (item: { id: number; fullName: string; pipelineStage: string }) => {
+    const stage = STAGE_NAMES[item.pipelineStage] ?? item.pipelineStage;
+    if (item.pipelineStage !== "won" && !window.confirm(`${item.fullName} is at ${stage}: the ${CURRENT_STATE.name} is not paid yet. Invite them to set up a client account anyway?`)) return;
+    invite.mutate({ businessCheckId: item.id });
+  };
   const revoke = trpc.onboarding.revoke.useMutation({ onSuccess: () => { toast.success("Invitation revoked."); refresh(); }, onError: error => toast.error(error.message) });
 
   const stats = metrics.data;
   return (
     <div className="space-y-6 p-6">
       <p role="note" className="border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
-        Payment confirmation is not automated yet. Confirm the client is approved to proceed before generating an onboarding link.
+        The invitation goes out by itself when the {CURRENT_STATE.name} payment is confirmed. Invite by hand only to resend or for an agreed exception.
       </p>
       <p className="text-sm text-ink-muted">
         The link creates the client's account and business workspace. It works once, is tied to their email, and expires in seven days.
@@ -70,7 +77,7 @@ export default function ClientOnboardingPanel() {
             {candidates.data?.map(item => (
               <tr key={item.id} className="border-b border-line-soft">
                 <td className="py-2 pr-3">{item.fullName}</td><td className="pr-3">{item.businessName ?? "-"}</td><td className="pr-3">{item.email}</td><td className="pr-3">{item.callRequestedAt ? `Requested ${formatDate(item.callRequestedAt)}` : "Not requested"}</td><td className="pr-3">{STAGE_NAMES[item.pipelineStage] ?? item.pipelineStage}</td><td className="pr-3">{item.invitationStatus ? INVITATION_NAMES[item.invitationStatus] ?? item.invitationStatus : "None"}</td>
-                <td className="text-right"><Button type="button" size="sm" disabled={invite.isPending} className="rounded-none bg-brand text-xs text-white" onClick={() => invite.mutate({ businessCheckId: item.id })}>Invite to onboard</Button></td>
+                <td className="text-right"><Button type="button" size="sm" disabled={invite.isPending} className="rounded-none bg-brand text-xs text-white" onClick={() => inviteCandidate(item)}>Invite to onboard</Button></td>
               </tr>
             ))}
             {candidates.data?.length === 0 && <tr><td colSpan={7} className="py-4 text-ink-muted">No business checks yet.</td></tr>}

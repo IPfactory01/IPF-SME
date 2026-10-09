@@ -42,9 +42,9 @@ Each is one focused change with a test. None needs a migration except Q6.
 | # | Fix | Why | Source |
 |---|---|---|---|
 | Q1 | Map `--font-sans` and `--font-serif` to Plus Jakarta Sans and Playfair Display; check with screenshots | The site shows the system font and Georgia, not the brand fonts | Design brief §3 |
-| Q2 | Point Home's "Client sign in" at `/login` | A returning client lands in the JUMP participant sign-in | App flow §10 |
-| Q3 | Rebrand the staff invitation and password-reset emails, the `/admin` gate and the side menu | They still say JUMP, Gmail and "Registration Desk" | App flow §10 |
-| Q4 | Show "Invite to onboard" only for Opportunity and Won, or ask to confirm | A lead could be invited before paying | App flow §10 |
+| Q2 | ~~Point Home's "Client sign in" at `/login`~~ **Done 9 October**; JUMP participants still reach their sign-in from `/portal` and from a link on `/login` | A returning client landed in the JUMP participant sign-in | App flow §10 |
+| Q3 | **Replaced by 1.0 below.** The JUMP and Gmail wording sits in the legacy Google staff flow, which cannot create a new staff account on Vercel; staff invitations on the email-and-password sign-in replace it | Rewording a flow that is being replaced adds nothing | App flow §10 |
+| Q4 | ~~Ask to confirm "Invite to onboard" before the assessment is paid~~ **Done 9 October**: Won invites at once; any earlier stage asks first | A lead could be invited before paying | App flow §10 |
 | Q5 | Expire full report links after delivery (or cap downloads) and rate-limit the report procedures | A forwarded link works forever | Backend schema §6 |
 | Q6 | Store the business check token as a hash | Every other token is hashed | Backend schema §6 (**migration**) |
 | Q7 | Map the shadcn colour roles to the theme, or remove their use | Components that rely on them render without colour | Design brief §4 |
@@ -71,6 +71,7 @@ see where it stands.
 
 | # | Build | Acceptance | Notes |
 |---|---|---|---|
+| 1.0 | **Staff invitations** on the email-and-password sign-in: the Super Admin invites by email with a platform role; the person sets a password from a single-use link | A new analyst can be added and assigned without Google sign-in | Found 9 October: roles can only be granted to existing accounts |
 | 1.1 | **File storage** on a private Supabase Storage bucket, with short-lived signed links issued by the server after an access check | A file uploaded for client A cannot be read by client B or an unassigned analyst; links expire | Replaces the Manus storage proxy (old R3). New env names only in `.env.example` |
 | 1.2 | **Engagement table**: created when the Current State Assessment payment is confirmed; linked to the business when the client creates their account | Confirming payment creates exactly one engagement; accepting the invitation links it | **Migration**: dedicated branch per `AGENTS.md` |
 | 1.3 | **Engagement assignments** (engagement × person × role: lead, analyst, partner, expert) and the scope check | Analysts see only assigned engagements; `view_all_businesses` sees all | Permissions `manage_engagements`, `assign_engagements`, `review_engagements` already exist in `shared/platformPermissions.ts` |

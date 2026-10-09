@@ -203,8 +203,8 @@ Found while writing this document. Each is small and listed in the implementatio
 
 | Gap | Effect | Fix |
 |---|---|---|
-| Home's "Client sign in" opens the JUMP participant sign-in, not `/login` | A client who returns to the site cannot find their sign-in | Point it at `/login` |
-| Staff invitation and password-reset emails still say JUMP and Gmail | Confusing for new staff | Rebrand the two staff emails |
+| ~~Home's "Client sign in" opens the JUMP participant sign-in~~ | Fixed 9 October: it goes to `/login`; JUMP participants reach their sign-in from `/portal` or the link on `/login` | Done |
+| Staff invitations still use the legacy Google flow, so a new staff member cannot get an email-and-password account | Analysts cannot be added or assigned | Staff invitations on the email-and-password sign-in (implementation plan 1.0) |
 | The `/admin` gate and side menu still say "Registration Desk" and Gmail | Old wording | Rebrand the labels |
-| "Invite to onboard" shows on every check, whatever its stage | A lead could be invited before paying | Show it only for Opportunity and Won, or ask to confirm |
+| ~~"Invite to onboard" invites at any stage without a question~~ | Fixed 9 October: before Won it asks to confirm | Done |
 | The JUMP "Email selected" button opens nothing | Legacy only | Remove with the JUMP screens |

@@ -7,7 +7,7 @@ import { CtaButton, Faq, Hero, Journey, NAV, StuckPicker, useActiveSection, useS
 import { Reveal, ScrollProgress, Stagger, staggerChild } from "@/components/motion";
 import { motion } from "framer-motion";
 import { ArrowRight, CheckCircle2, KeyRound, MailCheck, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
 
@@ -97,12 +97,12 @@ export default function Home() {
           </nav>
           <div className="flex items-center gap-2 sm:gap-3">
             <Button
+              asChild
               variant="outline"
               size="sm"
-              onClick={() => { setIsParticipantSignInOpen(true); setIsPasswordHelpMode(false); setPasswordLinkSent(false); setSignInError(""); }}
               className="rounded-none border-brand-line text-brand hover:bg-brand-tint text-xs uppercase tracking-wider font-semibold"
             >
-              Client sign in
+              <a href="/login">Client sign in</a>
             </Button>
             <Button onClick={handleStartCheck} className="group hidden sm:inline-flex bg-ink text-paper hover:bg-charcoal font-medium text-xs uppercase tracking-widest px-5 py-2.5 rounded-none transition-transform active:scale-95">
               Free business check <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
@@ -204,12 +204,12 @@ export default function Home() {
         </Reveal>
       </section>
 
-      {/* Participant Sign In Modal */}
+      {/* JUMP participant sign-in, opened from the JUMP portal (/?participant_signin=1); clients sign in at /login */}
       <Dialog open={isParticipantSignInOpen} onOpenChange={setIsParticipantSignInOpen}>
         <DialogContent className="max-w-md bg-paper border border-line text-ink">
           <DialogHeader>
-            <DialogTitle className="font-serif text-xl font-bold">Client sign in</DialogTitle>
-            <DialogDescription className="text-xs text-ink-soft">Sign in with the email address and password for your client area on {BRAND.productName}.</DialogDescription>
+            <DialogTitle className="font-serif text-xl font-bold">{BRAND.programmeShortName} participant sign in</DialogTitle>
+            <DialogDescription className="text-xs text-ink-soft">Sign in with the email address and password for your {BRAND.programmeName} participant portal. {BRAND.productName} clients sign in at <a href="/login" className="font-semibold text-brand underline underline-offset-2">client sign in</a>.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>

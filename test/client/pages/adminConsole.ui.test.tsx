@@ -520,9 +520,32 @@ describe("Discovery Call record drawer", () => {
 describe("Client Onboarding view", () => {
   const open = () => { renderConsole(); openSection("Client Onboarding"); };
 
-  it("warns that payment is not automated before any link is generated", () => {
+  it("says the invitation goes out by itself once the assessment is paid", () => {
     open();
-    expect(screen.getByRole("note").textContent).toBe("Payment confirmation is not automated yet. Confirm the client is approved to proceed before generating an onboarding link.");
+    expect(screen.getByRole("note").textContent).toBe("The invitation goes out by itself when the Current State Assessment payment is confirmed. Invite by hand only to resend or for an agreed exception.");
+  });
+
+  it("invites a Won business at once, without asking", () => {
+    api.candidates = [check({ pipelineStage: "won" })];
+    const confirm = vi.spyOn(window, "confirm");
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "Invite to onboard" }));
+    expect(confirm).not.toHaveBeenCalled();
+    expect(api.mutations.invite).toEqual([{ businessCheckId: 1 }]);
+    confirm.mockRestore();
+  });
+
+  it("asks before inviting anyone who has not paid, and sends nothing if the admin says no", () => {
+    api.candidates = [check({ pipelineStage: "opportunity" })];
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "Invite to onboard" }));
+    expect(confirm).toHaveBeenCalledWith("Ada Okafor is at Opportunity: the Current State Assessment is not paid yet. Invite them to set up a client account anyway?");
+    expect(api.mutations.invite).toEqual([]);
+    confirm.mockReturnValue(true);
+    fireEvent.click(screen.getByRole("button", { name: "Invite to onboard" }));
+    expect(api.mutations.invite).toEqual([{ businessCheckId: 1 }]);
+    confirm.mockRestore();
   });
 
   it("shows the call, the stage, the email and the link state for each business check", () => {
@@ -535,6 +558,7 @@ describe("Client Onboarding view", () => {
   });
 
   it("generates a link and, when no email went out, says to copy it and send it manually", () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     open();
     fireEvent.click(screen.getAllByRole("button", { name: "Invite to onboard" })[0]);
     expect(api.mutations.invite).toEqual([{ businessCheckId: 1 }]);
@@ -544,15 +568,18 @@ describe("Client Onboarding view", () => {
     expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Hide" }));
     expect(screen.queryByLabelText("Onboarding link")).toBeNull();
+    confirm.mockRestore();
   });
 
   it("does not tell the admin to send it manually when the email really went out", () => {
     api.inviteResult = { ...api.inviteResult, deliveryStatus: "Sent" };
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     open();
     fireEvent.click(screen.getAllByRole("button", { name: "Invite to onboard" })[0]);
     const status = screen.getByRole("status").textContent!;
     expect(status).toContain("also emailed to the client");
     expect(status).not.toContain("Email not sent");
+    confirm.mockRestore();
   });
 
   it("separates the people and workspaces from the prospects in the counts", () => {

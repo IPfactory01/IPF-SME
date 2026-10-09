@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAccount } from "@/hooks/useAccount";
 import { trpc } from "@/lib/trpc";
+import { BRAND } from "@shared/brand";
 import React, { useEffect, useState, type FormEvent } from "react";
 import { useLocation } from "wouter";
 
@@ -60,6 +61,7 @@ export default function LoginPage() {
           </CardContent>
         </Card>
         <p className="text-center text-sm text-ink-muted">Client access is created during onboarding.</p>
+        <p className="text-center text-xs text-ink-muted">On the {BRAND.programmeName} programme? <a href="/portal" className="font-semibold text-brand underline underline-offset-2">Go to the participant portal</a>.</p>
       </div>
     </main>
   );

@@ -63,6 +63,17 @@ describe("business check summary", () => {
     expect(outputSchema.schema.properties.offerings.items.properties.id.enum).toContain("growth-strategy");
   });
 
+  it("tells the AI to tailor from the description, and to trust the chosen sector when the description does not fit it", async () => {
+    invokeLLM.mockResolvedValue(reply({ found: "x".repeat(30), think: "y".repeat(30), next: "Book the free call.", offerings: [] }));
+    const fashion = complete({ p_stage: "operating", p_type: "maker", p_sector: "fashion", p_age: "2to5", p_staff: "3to5", p_revenue: "3to5m" });
+    await summariseCheck({ answers: fashion, result: evaluate(fashion), contact: { ...contact, description: "asdf qwerty" } });
+    const [{ messages }] = invokeLLM.mock.calls[0];
+    expect(messages[0].content).toContain("one-line description is your main source");
+    expect(messages[0].content).toContain("does not fit the sector they chose, the sector is the source of truth");
+    expect(messages[1].content).toContain("In their words: asdf qwerty");
+    expect(messages[1].content).toContain("Which sector is it in? → Fashion");
+  });
+
   it("falls back to the rules summary when the AI answer is unusable", async () => {
     invokeLLM.mockResolvedValue({ choices: [{ message: { role: "assistant", content: "not json" } }] });
     const result = evaluate(answers);
@@ -95,6 +106,22 @@ describe("business check summary", () => {
     // Calls are booked in the booking app, not arranged by replying.
     expect(email.body).not.toMatch(/Reply to this email and we will find a time/);
     expect(email.body).toContain("Book it from your result page");
+  });
+
+  it("lists the areas the check left out as not assessed, in area order, and says Current State covers all ten", () => {
+    const side = complete({ p_stage: "side", p_type: "expert", p_staff: "3to5", p_revenue: "1to3m" });
+    const result = evaluate(side);
+    const body = ownerEmail({ contact, result, summary: { ...result.summary, offerings: [] }, answers: side }).body;
+    const outline = body.split("YOUR BUSINESS OUTLINE\n")[1].split("\n\n")[0].split("\n");
+    expect(outline.filter((line) => line.startsWith("• ")).map((line) => line.split(":")[0])).toEqual([
+      "• Founder readiness", "• Strategic intent", "• Market and industry", "• Service and offering", "• Business model", "• Market entry and sales",
+      "• Operations and people", "• Financials", "• Risk and compliance", "• Exit and value", "• Owner transition",
+    ]);
+    expect(outline).toContain("• Business model: not assessed");
+    expect(outline.at(-1)).toBe("Areas marked not assessed weren't part of this check for your business. Current State looks at all ten.");
+    const mature = complete({ p_stage: "operating", p_type: "trader", p_age: "over10", p_staff: "3to5", p_revenue: "3to5m" });
+    const matureResult = evaluate(mature);
+    expect(ownerEmail({ contact, result: matureResult, summary: { ...matureResult.summary, offerings: [] }, answers: mature }).body).not.toMatch(/not assessed/);
   });
 
   it("lays out the owner and office emails as IP Factory email, with no JUMP branding", () => {

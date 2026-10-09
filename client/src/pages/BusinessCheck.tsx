@@ -10,6 +10,7 @@ import { trpc } from "@/lib/trpc";
 import { BRAND } from "@shared/brand";
 import { CAPABILITIES, offeringById } from "@shared/businessCheck/catalogue";
 import {
+  areasNotAssessed,
   businessDetails,
   businessOutline,
   cleanAnswers,
@@ -17,6 +18,7 @@ import {
   exampleHeading,
   isAnswered,
   nextStep,
+  NOT_ASSESSED_NOTE,
   optionsFor,
   placeholderFor,
   promptFor,
@@ -715,6 +717,9 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
     onSuccess: (data) => setRequested((current) => ({ ...current, [data.choice]: true })),
   });
   const tally = (["stuck", "watch", "clear"] as const).map((health) => ({ health, count: result.outline.filter((row) => row.health === health).length }));
+  // Areas the check left out for this business sit in the outline, greyed, so the whole method shows.
+  const notAssessed = areasNotAssessed(answers);
+  const outlineRows = notAssessed.length ? [...result.outline, ...notAssessed].sort((a, b) => a.area - b.area) : result.outline;
   const booking = bookingTarget(response.discoveryCallUrl, { name: contact.fullName, email: contact.email, host: window.location.host });
   const recordCall = (eventUri?: string) => {
     if (!requested.call && !requestNext.isPending) requestNext.mutate({ token: response.token, choice: "call", ...(eventUri ? { calendlyEventUri: eventUri } : {}) });
@@ -784,10 +789,22 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
         <motion.section variants={itemMotion}>
           <SectionHeading>Your business outline</SectionHeading>
           <motion.ul className="grid gap-2" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.07, delayChildren: 0.2 } } }} initial="hidden" whileInView="show" viewport={{ once: true }}>
-            {result.outline.map((row) => {
+            {outlineRows.map((row) => {
+              const rowMotion = { hidden: { opacity: 0, x: -20 }, show: { opacity: 1, x: 0, transition: { duration: 0.45, ease: EASE } } };
+              if (!("health" in row)) {
+                return (
+                  <motion.li key={row.area} variants={rowMotion} className="flex flex-col gap-1 border border-dashed border-line bg-paper px-4 py-3 text-ink-muted sm:flex-row sm:items-center sm:justify-between">
+                    <span className="flex items-start gap-2.5">
+                      <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full border border-line-strong" />
+                      <span><span className="font-semibold">{row.area}. {row.name}</span><span className="block text-xs text-ink-faint">{row.reason}</span></span>
+                    </span>
+                    <span className="text-xs uppercase tracking-wider text-ink-faint">Not assessed</span>
+                  </motion.li>
+                );
+              }
               const isMain = result.primaryArea?.area === row.area;
               return (
-                <motion.li key={row.area} variants={{ hidden: { opacity: 0, x: -20 }, show: { opacity: 1, x: 0, transition: { duration: 0.45, ease: EASE } } }} whileHover={{ x: 4 }} className={`flex flex-col gap-1 border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${HEALTH_STYLE[row.health].row} ${isMain ? "ring-2 ring-offset-2 ring-brand" : ""}`}>
+                <motion.li key={row.area} variants={rowMotion} whileHover={{ x: 4 }} className={`flex flex-col gap-1 border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${HEALTH_STYLE[row.health].row} ${isMain ? "ring-2 ring-offset-2 ring-brand" : ""}`}>
                   <span className="flex items-center gap-2.5 font-semibold"><span className={`h-2.5 w-2.5 rounded-full ${HEALTH_STYLE[row.health].dot}`} />{row.area}. {row.name}{isMain && <span className="ml-1 bg-brand px-2 py-0.5 text-[10px] uppercase tracking-wider text-paper">Start here</span>}</span>
                   <span className="text-xs uppercase tracking-wider">{HEALTH_STYLE[row.health].label}{row.gap && row.health !== "clear" ? ` · ${GAP_LABELS[row.gap].name}` : ""}</span>
                 </motion.li>
@@ -797,6 +814,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
           {result.primaryGap && (
             <p className="mt-4 text-sm leading-relaxed text-ink-soft"><span className="font-semibold text-ink">Main gap: {GAP_LABELS[result.primaryGap].name}.</span> {GAP_LABELS[result.primaryGap].meaning}</p>
           )}
+          {notAssessed.length > 0 && <p className="mt-2 text-sm leading-relaxed text-ink-muted">{NOT_ASSESSED_NOTE}</p>}
         </motion.section>
       )}
 

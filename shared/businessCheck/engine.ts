@@ -315,6 +315,30 @@ export function businessOutline(answers: Answers): AreaRead[] {
   return rows;
 }
 
+export type AreaNotAssessed = { area: number; name: string; reason: string };
+
+/** Under the outline when some areas were left out, so the owner sees the whole method. */
+export const NOT_ASSESSED_NOTE = "Areas marked not assessed weren't part of this check for your business. Current State looks at all ten.";
+
+/**
+ * The problem areas (1 to 10) the check left out for a trading business on the programme route,
+ * each with the reason, in the owner's terms. Ideas, very small and very large businesses take a
+ * different route, so nothing is listed for them.
+ */
+export function areasNotAssessed(answers: Answers): AreaNotAssessed[] {
+  if (routeFor(answers) !== "programme") return [];
+  const asked = new Set(sectionPath(answers).map((id) => SECTIONS[id].area));
+  const side = stageOf(answers) === "side";
+  const reason = (area: number) => {
+    if (side) return area === 6 ? "Not asked while the business has fewer than three people." : "Not asked while you run the business alongside a job.";
+    return area === 10 ? "Asked once the business has traded for ten years." : "Asked once the business has traded for five years.";
+  };
+  return Object.keys(AREA_NAMES)
+    .map(Number)
+    .filter((area) => area > 0 && !asked.has(area))
+    .map((area) => ({ area, name: AREA_NAMES[area], reason: reason(area) }));
+}
+
 function statusPrefix(sectionId: SectionId) {
   return `s${SECTIONS[sectionId].area}`;
 }

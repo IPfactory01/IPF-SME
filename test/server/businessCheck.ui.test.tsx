@@ -263,6 +263,17 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(screen.getByText(/Nobody in the business reliably makes the hard call/)).toBeTruthy();
   });
 
+  it("shows the areas the check left out, greyed with the reason, so the whole method is visible", () => {
+    resultFor();
+    expect(screen.getByText("9. Exit and value")).toBeTruthy();
+    expect(screen.getByText("Asked once the business has traded for five years.")).toBeTruthy();
+    expect(screen.getByText("10. Owner transition")).toBeTruthy();
+    expect(screen.getAllByText("Not assessed")).toHaveLength(2);
+    expect(screen.getByText("Areas marked not assessed weren't part of this check for your business. Current State looks at all ten.")).toBeTruthy();
+    const rows = Array.from(document.querySelectorAll("li")).map((item) => item.textContent ?? "").filter((text) => /^\d+\. /.test(text));
+    expect(rows.map((text) => Number(text.split(".")[0]))).toEqual([...rows.map((text) => Number(text.split(".")[0]))].sort((a, b) => a - b));
+  });
+
   it("gives the ₦100,000 full report its own offer, with what is inside, and records the request", async () => {
     resultFor();
     expect(screen.getByText("The summary tells you where you stand. The full report tells you what to do about it.")).toBeTruthy();

@@ -159,7 +159,7 @@ export const businessCheckRouter = router({
     const { summary, source } = await summariseCheck({ answers, result, contact });
 
     const office = officeEmail({ contact, answers, summary, source, result });
-    const owner = ownerEmail({ contact, summary, result });
+    const owner = ownerEmail({ contact, summary, result, answers });
     // A delivery problem never blocks the check: the result is saved either way and the page says whether email went out.
     const failed = { status: "Failed" as const };
     const [officeDelivery, ownerDelivery] = await Promise.all([

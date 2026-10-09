@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { OFFERING_IDS } from "@shared/businessCheck/catalogue";
 import {
+  areasNotAssessed,
   cleanAnswers,
   evaluate,
   exampleFor,
@@ -375,5 +376,45 @@ describe("rules summary wording", () => {
     expect(summaryFor("C")).toContain("you lead as an analyst");
     expect(summaryFor("D")).toContain("you lead as a driver");
     expect(summaryFor("S")).toContain("you lead as a steady hand");
+  });
+});
+
+describe("areas not assessed", () => {
+  const areas = (answers: Answers) => areasNotAssessed(completeWith(answers)).map((row) => row.area);
+
+  it("names the areas a side business is not asked about, and why", () => {
+    const side = areasNotAssessed(completeWith({ p_stage: "side", p_type: "expert", p_staff: "3to5", p_revenue: "1to3m" }));
+    expect(side.map((row) => `${row.area}. ${row.name}`)).toEqual(["2. Market and industry", "4. Business model", "8. Risk and compliance", "9. Exit and value", "10. Owner transition"]);
+    expect(new Set(side.map((row) => row.reason))).toEqual(new Set(["Not asked while you run the business alongside a job."]));
+    const small = areasNotAssessed(completeWith({ p_stage: "side", p_type: "expert", p_staff: "1to2", p_revenue: "1to3m" }));
+    expect(small.find((row) => row.area === 6)?.reason).toBe("Not asked while the business has fewer than three people.");
+  });
+
+  it("names exit and owner transition for a younger full-time business, by years traded", () => {
+    const young = areasNotAssessed(completeWith({ p_stage: "operating", p_type: "trader", p_age: "2to5", p_staff: "3to5", p_revenue: "3to5m" }));
+    expect(young).toEqual([
+      { area: 9, name: "Exit and value", reason: "Asked once the business has traded for five years." },
+      { area: 10, name: "Owner transition", reason: "Asked once the business has traded for ten years." },
+    ]);
+    expect(areas({ p_stage: "operating", p_type: "trader", p_age: "5to10", p_staff: "3to5", p_revenue: "3to5m" })).toEqual([10]);
+    expect(areas({ p_stage: "operating", p_type: "trader", p_age: "over10", p_staff: "3to5", p_revenue: "3to5m" })).toEqual([]);
+  });
+
+  it("lists nothing for an idea, a very small business or one sent to an adviser", () => {
+    expect(areas({ p_stage: "idea", p_type: "maker" })).toEqual([]);
+    expect(areas({ p_stage: "operating", p_type: "trader", p_age: "under2", p_staff: "0", p_revenue: "under1m" })).toEqual([]);
+    expect(areas({ p_stage: "operating", p_type: "maker", p_age: "over10", p_staff: "over50", p_revenue: "over25m" })).toEqual([]);
+  });
+
+  it("never lists an area the owner was asked about", () => {
+    for (const answers of [
+      { p_stage: "side", p_type: "expert", p_staff: "1to2", p_revenue: "1to3m" },
+      { p_stage: "operating", p_type: "trader", p_age: "under2", p_staff: "3to5", p_revenue: "3to5m" },
+    ]) {
+      const result = evaluate(completeWith(answers));
+      const asked = result.outline.map((row) => row.area);
+      expect(areasNotAssessed(completeWith(answers)).filter((row) => asked.includes(row.area))).toEqual([]);
+      expect([...asked, ...areasNotAssessed(completeWith(answers)).map((row) => row.area)].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    }
   });
 });

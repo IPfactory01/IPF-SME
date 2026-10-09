@@ -10,6 +10,13 @@ Read this before changing anything. It applies to every agent and person working
 4. **No secrets in code, tests, docs or commits.** Read configuration with `process.env` (server) through `server/_core/env.ts`. Real values live in `.env` (git-ignored) locally and in the hosting provider's settings in production. `.env.example` lists names only.
 5. **No real personal data in the repository.** Tests use fictional people and `@example.com` addresses.
 
+## Product documents
+
+Before changing the product, read the relevant document in `docs/product/` (index: `docs/product/README.md`): what it
+does and why (PRD), how it is built, what each click does, how it must look, where data lives and who can see it, and
+what is built next. When a change alters what a document says, update the document in the same commit.
+`test/docs/productDocs.test.ts` fails if a route, table, price or role permission is added without being documented.
+
 ## Commands
 
 | Command | What it does |
@@ -39,7 +46,8 @@ drizzle/          PostgreSQL schema (schema.ts) and migrations (migrations/); my
 api/index.js      GENERATED server bundle for Vercel. Never edit; `pnpm build` regenerates it
 test/             All tests, mirroring the source folders: test/client, test/server, test/shared,
                   test/db (database contract tests), test/fixtures
-docs/             Operational and migration notes; docs/vercel-env-inventory.md lists every env variable
+docs/             docs/product/: the six product documents (PRD, technical requirements, app flow, design brief,
+                  backend schema, implementation plan); operational notes; docs/vercel-env-inventory.md lists every env variable
 ```
 
 - **Hosting:** Vercel. Static client from `vite build`; all server routes go through one function, `api/index.js`, via the rewrites in `vercel.json`.

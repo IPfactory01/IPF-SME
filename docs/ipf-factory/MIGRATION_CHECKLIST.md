@@ -1,5 +1,8 @@
 # IP Factory (IPF) — Migration Checklist & Baseline Audit
 
+> **History.** This note describes the move from JUMP and the Manus launch (October 2026). The current product, its
+> plan and its open decisions are in [`docs/product/`](../product/README.md).
+
 **Prepared:** 6 October 2026 · **Updated:** 6 October 2026 (decisions revised for concept note v0.8.1: v0.1 on Manus on 9 Oct, ipf-gradient brand; see §0 and `LAUNCH_ON_MANUS.md`)
 **Scope:** Take-over audit of the migrated JUMP 2026 platform and the plan to turn it into the IP Factory Business Support client area.
 **Companion to:** `IPF_FACTORY_HANDOVER_PLAN.md` (the seven-step route). This document is the engineering view of Steps 2, 4 and 5.

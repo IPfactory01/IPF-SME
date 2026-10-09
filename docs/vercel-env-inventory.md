@@ -38,7 +38,7 @@ Requirement groups: **A** basic API, **B** database, **C** registration, **D** p
 | `GOOGLE_REFRESH_TOKEN` | env.ts → gmail.ts, calendar; scripts | Server | Required (F fallback, H) | Refresh token for Gmail send and Calendar | Secret. |
 | `JUMP_GMAIL_REFRESH_TOKEN` | env.ts → workspaceMailbox.ts | Server | Optional (F) | Workspace mailbox send / reply sync | Secret. |
 | `GOOGLE_CALENDAR_ID` | env.ts, scripts | Server | Optional (H) | Calendar to create sessions in | Defaults to `primary`. |
-| `PAYSTACK_PUBLIC_KEY` | env.ts | Server | Optional | Paystack (read into ENV; no call site found in server code) | Confirm whether payments are used before setting. |
+| `PAYSTACK_PUBLIC_KEY` | env.ts → routers/registration.ts | Server | Optional | Paystack, JUMP-era only: `initializePaystack` and `verifyPaystack` call the Paystack API, but no client code calls them. The Shift pays by bank transfer | Leave unset until Paystack is chosen for The Shift (PRD O5). |
 | `PAYSTACK_SECRET_KEY` | env.ts | Server | Optional | As above | Secret. |
 | `VITE_ANALYTICS_ENDPOINT` | security.ts (CSP), vite.config.ts | Both | Optional | Self-hosted analytics script origin | Build time; also server-read for CSP, so set for both. |
 | `VITE_ANALYTICS_WEBSITE_ID` | vite.config.ts | Client | Optional | Analytics site id | Build time. |

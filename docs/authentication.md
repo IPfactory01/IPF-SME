@@ -239,6 +239,10 @@ for the Manus-hosted preview. Builds made on Vercel (`VERCEL` set, including `ve
 
 ## Path to platform roles (not built yet)
 
+> **Update, 9 October 2026:** the roles table exists as `user_platform_roles`, with list, grant and revoke procedures
+> (`server/routers/platformRoles.ts`). Engagement assignments are still to be built. Current state:
+> `docs/product/05-backend-schema.md`.
+
 Add a `platform_role_assignments` table (`userId`, role from `PLATFORM_ROLES` in `shared/auth.ts`, optional scope), then
 migrate admin checks from `users.role = 'admin'` to permissions derived from those assignments. Internal people reach
 clients through `engagement_assignments` (engagement x user x role). Business membership roles never become platform roles.

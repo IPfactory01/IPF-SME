@@ -1,15 +1,25 @@
 # IP Factory (IPF) — Business Support Platform
 
-Participant registration, portal and programme-administration platform for IP Factory (Intellectual Property Factory) business support. Migrated from the JUMP 2026 platform; the existing, tested functionality is being preserved and rebranded rather than rebuilt.
-
-> **Migration in progress.** See [`docs/ipf-factory/MIGRATION_CHECKLIST.md`](docs/ipf-factory/MIGRATION_CHECKLIST.md) for the audit, the phased plan and open decisions. v0.1 launches on Manus (IPF workspace); hosting moves off Manus afterwards, so Manus-specific code is kept but isolated.
+The platform behind **The Shift, by IP Factory**: support for business owners. Find it. Fix it. See the results.
+Live at https://ipf-sme.vercel.app (Vercel, deploying `main`).
 
 ## What it does
 
-- **Public site & registration** — landing page, staged diagnostic registration, pricing enquiries, referrals.
-- **Participant portal** — email/password sign-in with lockout, engagement brief and consent, Current State Assessment, programme tracker, session booking, payment guidance, receipt and assignment uploads, working-diagnostic PDF.
-- **Admin dashboard** — capability-scoped administrators (Super Admin + invited admins with a second password factor), registrations, pathway reconciliation, payment-receipt review, email history and inbound replies, scheduling, information-session attendance.
-- **Communications** — transactional email via Resend (Gmail API fallback), monitoring BCC, `.ics` invitations, 24-hour session reminders.
+- **Free business check:** ten minutes on a phone; a colour-coded outline of the ten places a business gets stuck, one
+  of four gaps, and a summary. Saved as a lead from the first screen.
+- **Full report (₦100,000):** paid by bank transfer, then a 17-question form; a deterministic PDF report is emailed the
+  moment the form is finished.
+- **Discovery call and Current State payment:** Calendly booking, call outcome, payment details, proof and confirmation.
+- **Client accounts:** created by invitation once Current State is paid; one identity per person, businesses as
+  workspaces, client isolation enforced on the server.
+- **Admin console:** leads, pipeline, payments, reports, onboarding, staff roles and permissions, audit trail.
+- **Next:** the engagement room for clients (Current State, the six-week fix, the plan).
+
+**Product documents:** [`docs/product/`](docs/product/README.md) holds the PRD, technical requirements, app flow, design
+brief, backend schema and implementation plan. Start there.
+
+The code base began as a copy of the JUMP 2026 platform. JUMP-era screens and tables are still present and are marked
+as legacy in the documents; `docs/ipf-factory/` records that migration.
 
 ## Stack
 

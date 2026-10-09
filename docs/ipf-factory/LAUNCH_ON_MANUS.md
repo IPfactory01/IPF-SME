@@ -1,5 +1,8 @@
 # v0.1 on Manus: launch notes for Lewis and Richard
 
+> **History.** This note describes the move from JUMP and the Manus launch (October 2026). The current product, its
+> plan and its open decisions are in [`docs/product/`](../product/README.md).
+
 **Updated:** 6 October 2026 · **Source of scope:** Concept Note and Launch Blueprint v0.8.1 (v0.1 frozen 5 Oct)
 
 This repository (`IP-factory/SME-Programme`, branch `claude/ipf-factory-sme-takeover-fugq1o`) holds the Jump code base, rebranded for IP Factory, with the v0.8.1 home-page copy. The decision of 6 October is **one code base**: v0.1 launches on Manus on Friday 9 October from this work, and hosting moves off Manus afterwards. The code is kept fully Manus-compatible.

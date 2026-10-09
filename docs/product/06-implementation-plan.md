@@ -1,0 +1,109 @@
+# 6. Implementation plan
+
+**What gets built, and in what order.** Last reviewed 9 October 2026. This replaces the "Phase 2 plan" in
+`docs/ipf-factory/MIGRATION_CHECKLIST.md` §9, which was written for Manus and v0.6.
+
+**The sequencing rule:** build each part just ahead of the first paying client who needs it. The pilot calendar
+(concept note §9) sets the pace: the first clients pay in week 2 (from 16 October), Current State starts in week 3
+(from 23 October) and the first fixes start in week 5 (from 6 November).
+
+---
+
+## 1. Where we are
+
+| Done (live on `main`) | Tests |
+|---|---|
+| Public site in the owner's words, journey and prices | `test/shared/businessSupport.test.ts`, `test/shared/brand.test.ts` |
+| Free business check: details first, decision tree, outline, four gaps, AI summary with rules fallback, saved progress | `test/shared/businessCheck/*`, golden snapshots |
+| Discovery call booking (Calendly) and outcome (Fit, Refer, Decline, Nurture) | `test/server/businessCheck*`, `test/db/*` |
+| Staff sign-in, roles and permissions, invitations, audit trail | `test/server/accountAuth.test.ts`, `test/shared/platformPermissions.test.ts`, `test/db/*` |
+| Payments by bank transfer: details, proof, confirmation (full report, Current State) | `test/server/payments.test.ts`, `test/db/payments.db.test.ts` |
+| Full report: 17-question form, deterministic PDF emailed at once, admin status and download | `test/shared/fullReport/*`, `test/server/fullReport/*` |
+| Client account by invitation after Current State is paid; Won stage | `test/server/clientOnboarding.test.ts`, `test/db/payments.db.test.ts` (whole journey) |
+
+**On the branch, waiting for "push to main":** the original twelve sectors; "Not assessed" areas on the result; the
+report form asking how each product is charged; the invitation page asking someone else signed in to sign out first.
+
+## 2. Phase 0: operational, no code (this week)
+
+| # | Task | Owner | Blocks |
+|---|---|---|---|
+| 0.1 | Add the Resend DNS records for `ipfactory.co`; then set `EMAIL_FROM` to `IP Factory <info@ipfactory.co>` in Vercel | DG, then Lewis | Every email to an owner |
+| 0.2 | Set `PAYMENT_BANK_NAME`, `PAYMENT_ACCOUNT_NAME`, `PAYMENT_ACCOUNT_NUMBER` in Vercel (until then emails say "TEST DETAILS - DO NOT PAY") | ET, Lewis | Real payments |
+| 0.3 | Push the branch to `main` | ET ("push to main") | The four branch changes |
+| 0.4 | Name the finance person and grant roles to the analysts on the platform | Lewis | Phase 1 assignments |
+
+## 3. Quick fixes found while writing these documents (this week, small)
+
+Each is one focused change with a test. None needs a migration except Q6.
+
+| # | Fix | Why | Source |
+|---|---|---|---|
+| Q1 | Map `--font-sans` and `--font-serif` to Plus Jakarta Sans and Playfair Display; check with screenshots | The site shows the system font and Georgia, not the brand fonts | Design brief §3 |
+| Q2 | Point Home's "Client sign in" at `/login` | A returning client lands in the JUMP participant sign-in | App flow §10 |
+| Q3 | Rebrand the staff invitation and password-reset emails, the `/admin` gate and the side menu | They still say JUMP, Gmail and "Registration Desk" | App flow §10 |
+| Q4 | Show "Invite to onboard" only for Opportunity and Won, or ask to confirm | A lead could be invited before paying | App flow §10 |
+| Q5 | Expire full report links after delivery (or cap downloads) and rate-limit the report procedures | A forwarded link works forever | Backend schema §6 |
+| Q6 | Store the business check token as a hash | Every other token is hashed | Backend schema §6 (**migration**) |
+| Q7 | Map the shadcn colour roles to the theme, or remove their use | Components that rely on them render without colour | Design brief §4 |
+| Q8 | Show staff who hold only platform roles on the Admin Team screen; decide one permission for the report | Admin Team undercounts; finance can resend but not download | Backend schema §6 |
+
+## 4. Phase 1: foundation for the engagement room (needed by 23 October)
+
+Goal: when a client pays for Current State, an engagement exists, a team is assigned, and both the client and the team can
+see where it stands.
+
+| # | Build | Acceptance | Notes |
+|---|---|---|---|
+| 1.1 | **File storage** on a private Supabase Storage bucket, with short-lived signed links issued by the server after an access check | A file uploaded for client A cannot be read by client B or an unassigned analyst; links expire | Replaces the Manus storage proxy (old R3). New env names only in `.env.example` |
+| 1.2 | **Engagement table**: created when the Current State payment is confirmed; linked to the business when the client creates their account | Confirming payment creates exactly one engagement; accepting the invitation links it | **Migration**: dedicated branch per `AGENTS.md` |
+| 1.3 | **Engagement assignments** (engagement × person × role: lead, analyst, partner, expert) and the scope check | Analysts see only assigned engagements; `view_all_businesses` sees all | Permissions `manage_engagements`, `assign_engagements`, `review_engagements` already exist in `shared/platformPermissions.ts` |
+| 1.4 | **Internal engagement page**: stage, team, and the getting-set-up checklist (welcome note sent, data request sent, WhatsApp group created, analyst assigned, both Current State calls booked) | The desk lead can run onboarding from one screen in three working days | Concept note §7 onboarding |
+| 1.5 | **Client room v1: "Where are we?"** on `/dashboard`: the journey with the current step, the next session date, the named team | A client sees only their own engagement | Replaces the profile-only dashboard |
+
+## 5. Phase 2: sessions, notes and deliverables (needed by 23 October, the first Current State call)
+
+| # | Build | Acceptance |
+|---|---|---|
+| 2.1 | **Sessions**: date, type (Current State call 1 and 2, check-in, review), attendees, link | Both Current State calls can be booked from the engagement page |
+| 2.2 | **Notes and actions** per session: client version and internal version; actions with owner and due date | Notes are shared with the client the same day; internal notes are never visible to the client |
+| 2.3 | **Deliverables**: upload, version, share; prescriptions and plans need desk lead approval before sharing | An unapproved prescription cannot be shared; every share is audited |
+| 2.4 | **Email notices** to the client when something is shared with them | Branded email, link to the room, no content in the email body beyond the title |
+
+Decisions needed first: O1 transcripts, O2 messages, O3 who releases what (PRD §10).
+
+## 6. Phase 3: data requests (needed by 23 October, getting set up)
+
+| # | Build | Acceptance |
+|---|---|---|
+| 3.1 | **Data request list** from a template (the concept note's onboarding list), per engagement, with due dates | The desk lead sends a list in one step |
+| 3.2 | **Client upload** against each request; status requested → received → accepted (or "needs more") | The analyst sees what is missing at a glance; the client sees what is still owed |
+
+## 7. Phase 4: the fix, check-ins and the record (needed by 6 November)
+
+| # | Build | Acceptance |
+|---|---|---|
+| 4.1 | **Problem statement** from Current State: chosen problem area, sub-problem, the owner's words | Exactly one problem per fix (D3) |
+| 4.2 | **Measure**: name, definition, baseline, target, recorded in fix week 1 | The client can see the measure and where it stands |
+| 4.3 | **Weekly check-in**: the five-question template, measure reading, questions asked, hours by role, AI used | A check-in cannot be closed without last week's actions reviewed |
+| 4.4 | **Close and day 30**: final value, moved, extension weeks, plan delivered, next problem area, ongoing support defined, day-30 check | The PRD §7 pass marks are countable from the record |
+| 4.5 | **Monday scorecard** for the desk: funnel, active fixes, measures, record completeness, hours | Replaces the spreadsheet export |
+
+## 8. Phase 5: later (v0.2)
+
+- Paystack payment links in place of bank transfer (O5).
+- Referral codes on the new flow: 10% off the next invoice per paying referral, up to 30%, never on a first payment.
+- Transcript import and AI-drafted session notes for review (system actor, audited).
+- A message thread in the room, only if O2 says so.
+- Retire the JUMP-era screens and tables once nothing reads them (see [5. Backend schema](05-backend-schema.md) §4).
+- The January portal: the record with the methods attached (concept note D4).
+
+## 9. How each phase is delivered
+
+1. A short design note in the PR description that names the tables, procedures and permissions it adds.
+2. Tests first for the access rules: a client cannot reach another client; an analyst cannot reach an unassigned
+   engagement.
+3. Migrations on a dedicated branch, applied to Supabase by the guarded script method used for 0006 and 0007
+   (`docs/database-migrations.md`).
+4. `pnpm verify` passes; a preview link or screenshots for review; "push to main" only on the owner's word.
+5. These documents are updated in the same PR when the product changes.

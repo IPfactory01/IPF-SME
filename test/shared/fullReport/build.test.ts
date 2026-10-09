@@ -33,6 +33,13 @@ describe("the full report", () => {
     }
   });
 
+  it("still builds for a check saved with a sector the check no longer offers", () => {
+    const report = build("smallOperatingTrader", {}, { p_sector: "professional services" });
+    expect(report.descriptor).toMatch(/^A business that /);
+    expect(text(report)).not.toMatch(/undefined|NaN|\bnull\b/);
+    expect(part(report, 1).blocks.flatMap((block) => (block.kind === "facts" ? block.rows.map((row) => row.label) : []))).not.toContain("Sector");
+  });
+
   it("dates the report from the intake and carries the reference", () => {
     const report = build("smallOperatingTrader");
     expect(report).toMatchObject({ reference: "TS-R-000012", date: "9 October 2026", businessName: "Adunni Fabrics", ownerName: "Adunni Example" });

@@ -211,27 +211,26 @@ describe("section copy", () => {
 });
 
 describe("sector examples", () => {
-  it("speaks to professional services and to oil, gas and mining in their own terms, not a salon's", () => {
-    const professional = { p_stage: "operating", p_type: "expert", p_sector: "professional services" } as const;
-    expect(exampleHeading(SECTIONS.founder, professional)).toBe("For a professional services business like yours");
-    expect(exampleFor(SECTIONS.founder, professional)).toMatch(/adviser/);
-    const mining = { p_stage: "operating", p_type: "trader", p_sector: "oil, gas and mining" } as const;
-    expect(exampleHeading(SECTIONS.founder, mining)).toBe("For a mining and energy business like yours");
-    expect(exampleFor(SECTIONS.risk, mining)).toMatch(/permits/);
-    expect(exampleHeading(SECTIONS.founder, { p_stage: "operating", p_sector: "services" })).toBe("For a personal services business like yours");
+  it("words Services for any service business, so an adviser is not shown a salon", () => {
+    const adviser = { p_stage: "operating", p_type: "expert", p_sector: "services" } as const;
+    expect(exampleHeading(SECTIONS.founder, adviser)).toBe("For a service business like yours");
+    expect(exampleFor(SECTIONS.founder, adviser)).toMatch(/adviser/);
     for (const section of Object.values(SECTIONS).filter((item) => item.id !== "profile")) {
-      for (const sector of ["professional services", "services"]) {
-        if (section.id === "idea") continue;
-        const wrongWorld = sector === "professional services" ? /salon|hairstylist|stylist/i : /consultancy|practice|adviser/i;
-        expect(exampleFor(section, { p_stage: "operating", p_sector: sector }), `${section.id}/${sector}`).not.toMatch(wrongWorld);
-      }
+      expect(exampleFor(section, adviser), section.id).not.toMatch(/salon|hairstylist|stylist/i);
     }
   });
 
-  it("lists the sectors with the stored values unchanged, and Professional services next to Personal services", () => {
+  it("lists the twelve sectors the check has always offered", () => {
     const sector = SECTIONS.profile.questions.find((question) => question.id === "p_sector")!;
-    expect(sector.options.map((option) => option.value)).toEqual(["fashion", "food and drink", "retail", "professional services", "services", "oil, gas and mining", "technology", "real estate", "health", "education", "manufacturing", "agriculture", "logistics", "other"]);
-    expect(sector.options.find((option) => option.value === "services")!.label).toBe("Personal services: beauty, events, cleaning, repairs");
+    expect(sector.options.map((option) => option.label)).toEqual(["Fashion", "Food and drink", "Retail", "Services", "Technology", "Real estate", "Health", "Education", "Manufacturing", "Agriculture", "Logistics", "Other"]);
+    expect(sector.options.map((option) => option.value)).toEqual(["fashion", "food and drink", "retail", "services", "technology", "real estate", "health", "education", "manufacturing", "agriculture", "logistics", "other"]);
+  });
+
+  it("asks the sector again when a check in progress holds one no longer offered", () => {
+    const inProgress = { p_stage: "operating", p_name: "Example Advisory", p_age: "2to5", p_type: "expert", p_sector: "professional services" };
+    expect(cleanAnswers(inProgress)).not.toHaveProperty("p_sector");
+    expect(nextStep(cleanAnswers(inProgress))?.question.id).toBe("p_sector");
+    expect(exampleHeading(SECTIONS.founder, inProgress)).toBe("For a business like yours");
   });
 });
 
@@ -293,7 +292,7 @@ describe("examples for the owner's sector", () => {
     expect(exampleHeading(SECTIONS.offer, fashion)).toBe("For a fashion business like yours");
     const food = { ...fashion, p_sector: "food and drink" };
     expect(exampleFor(SECTIONS.risk, food)).toMatch(/NAFDAC/);
-    expect(exampleHeading(SECTIONS.sales, { ...fashion, p_sector: "services" })).toBe("For a personal services business like yours");
+    expect(exampleHeading(SECTIONS.sales, { ...fashion, p_sector: "services" })).toBe("For a service business like yours");
     expect(exampleFor(SECTIONS.founder, { ...fashion, p_stage: "side" })).toMatch(/designer/);
   });
 

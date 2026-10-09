@@ -6600,14 +6600,12 @@ function offeringById(id) {
 }
 
 // shared/businessCheck/sectorExamples.ts
-var SECTOR_IDS = ["fashion", "food and drink", "retail", "services", "professional services", "oil, gas and mining", "technology", "real estate", "health", "education", "manufacturing", "agriculture", "logistics"];
+var SECTOR_IDS = ["fashion", "food and drink", "retail", "services", "technology", "real estate", "health", "education", "manufacturing", "agriculture", "logistics"];
 var SECTOR_NOUNS = {
   fashion: "fashion",
   "food and drink": "food and drink",
   retail: "retail",
-  services: "personal services",
-  "professional services": "professional services",
-  "oil, gas and mining": "mining and energy",
+  services: "service",
   technology: "technology",
   "real estate": "real estate",
   health: "health",
@@ -6679,23 +6677,7 @@ var SECTIONS = {
         id: "p_sector",
         kind: "select",
         prompt: "Which sector is it in?",
-        // Values are stored identifiers ("services" predates the split into personal and professional services).
-        options: [
-          { value: "fashion", label: "Fashion" },
-          { value: "food and drink", label: "Food and drink" },
-          { value: "retail", label: "Retail" },
-          { value: "professional services", label: "Professional services: consulting, legal, accounting, finance, brokerage" },
-          { value: "services", label: "Personal services: beauty, events, cleaning, repairs" },
-          { value: "oil, gas and mining", label: "Oil, gas and mining" },
-          { value: "technology", label: "Technology" },
-          { value: "real estate", label: "Real estate" },
-          { value: "health", label: "Health" },
-          { value: "education", label: "Education" },
-          { value: "manufacturing", label: "Manufacturing" },
-          { value: "agriculture", label: "Agriculture" },
-          { value: "logistics", label: "Logistics" },
-          { value: "other", label: "Other" }
-        ]
+        options: ["Fashion", "Food and drink", "Retail", "Services", "Technology", "Real estate", "Health", "Education", "Manufacturing", "Agriculture", "Logistics", "Other"].map((label) => ({ value: label.toLowerCase(), label }))
       },
       {
         id: "p_description",

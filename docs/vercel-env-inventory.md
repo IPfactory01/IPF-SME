@@ -38,8 +38,8 @@ Requirement groups: **A** basic API, **B** database, **C** registration, **D** p
 | `GOOGLE_REFRESH_TOKEN` | env.ts → gmail.ts, calendar; scripts | Server | Required (F fallback, H) | Refresh token for Gmail send and Calendar | Secret. |
 | `JUMP_GMAIL_REFRESH_TOKEN` | env.ts → workspaceMailbox.ts | Server | Optional (F) | Workspace mailbox send / reply sync | Secret. |
 | `GOOGLE_CALENDAR_ID` | env.ts, scripts | Server | Optional (H) | Calendar to create sessions in | Defaults to `primary`. |
-| `PAYSTACK_PUBLIC_KEY` | env.ts → routers/registration.ts | Server | Optional | Paystack, JUMP-era only: `initializePaystack` and `verifyPaystack` call the Paystack API, but no client code calls them. The Shift pays by bank transfer | Leave unset until Paystack is chosen for The Shift (PRD O5). |
-| `PAYSTACK_SECRET_KEY` | env.ts | Server | Optional | As above | Secret. |
+| `PAYSTACK_PUBLIC_KEY` | env.ts → routers/registration.ts | Server | Required once Paystack goes live | Paystack: the agreed payment method for The Shift, not set up yet. Today only JUMP-era `initializePaystack` and `verifyPaystack` read it, and no client code calls them | Set (test keys first) as soon as IP Factory's Paystack business account is open. Until then payments are confirmed manually. |
+| `PAYSTACK_SECRET_KEY` | env.ts | Server | Required once Paystack goes live | As above; also verifies Paystack webhook signatures | Secret. |
 | `VITE_ANALYTICS_ENDPOINT` | security.ts (CSP), vite.config.ts | Both | Optional | Self-hosted analytics script origin | Build time; also server-read for CSP, so set for both. |
 | `VITE_ANALYTICS_WEBSITE_ID` | vite.config.ts | Client | Optional | Analytics site id | Build time. |
 | `VALIDATE_RESEND_CREDENTIALS`, `VALIDATE_RESEND_SENDER`, `VALIDATE_GOOGLE_CALENDAR` | opt-in tests only | Test | Never in production | Run live-integration tests | Leave unset on Vercel. |

@@ -99,6 +99,10 @@ every answer.
 
 The form can be submitted once. After that the same link shows "Your report has been sent" with a download button.
 
+**Interim steps:** "Proof received" and "Confirm payment" are manual only because Paystack is not set up yet. With
+Paystack, the owner pays online and the payment confirms itself, with the same emails and status changes; manual
+confirmation stays for direct transfers. The same applies to the Current State payment in section 5.
+
 ## 5. From the call to a client account
 
 | Step | Who | What happens | Email | Stage |

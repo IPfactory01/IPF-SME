@@ -49,7 +49,7 @@ The whole journey is shown up front with prices (concept note D1). Prices live i
 | 1 | Free business check | Free | Ten minutes on a phone; a colour-coded outline of the ten problem areas; one of four gaps; a summary | **Built** |
 | 1a | Full report (optional) | ₦100,000 | A business-plan-depth report, built from the check and a 17-question form, emailed as a PDF the moment the form is finished | **Built** |
 | 2 | Discovery call | Free, 20 minutes at most | An honest answer: can we help, and with what | **Built** (booking and outcome) |
-| 3 | Payment for Current State | From ₦500,000 | Paid after the call, by bank transfer until Paystack is set up | **Built** (bank transfer) |
+| 3 | Payment for Current State | From ₦500,000 | Paid after the call. Paystack is the agreed method; until it is set up, bank transfer with manual confirmation | **Built** (manual confirmation, interim) |
 | 4 | Getting set up (onboarding) | Included | Three working days: client account, welcome note, data request, analyst assigned, both Current State calls booked | **Partly built** (account only) |
 | 5 | Current State | Included in step 3 | Two weeks, one 90-minute call a week; ends with proceed, fix the basics first, or refer to Advisory | **Not built** in the platform |
 | 6 | The six-week fix | ₦1,200,000 | One problem; what to do and the tools; a weekly 45-minute check-in; one measure tracked | **Not built** |
@@ -122,7 +122,7 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
   **Lost**; "Move to" sets any other stage, such as **Nurture** (pipeline stages in `shared/businessCheck/pipeline.ts`).
 - **Status: Built.**
 
-### F5. Payments (bank transfer until Paystack)
+### F5. Payments (manual confirmation until Paystack is set up)
 
 - Items: full report (₦100,000) and Current State (₦500,000). References `TS-R-` and `TS-CS-` with a six-digit number.
 - Statuses: awaiting payment → proof received → paid. Only `manage_payments` (finance, Super Admin) can send details, mark
@@ -130,7 +130,11 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
 - Bank details come from the hosting settings. Until all three are set, emails show a test account marked
   "TEST DETAILS - DO NOT PAY".
 - Confirming Current State moves the business to Won and sends the client account invitation.
-- **Status: Built.** Paystack links (concept note §11) are **not built**.
+- **Paystack is the agreed way to pay** (concept note §11): the owner pays online and the payment confirms itself, with the
+  same effects as "Confirm payment". Manual confirmation is the interim method only because the Paystack account is not
+  set up yet; once it is, manual confirmation stays as a fallback for direct transfers.
+- **Status: Built** (manual confirmation). **Paystack: not built**, waiting for the account and its keys
+  ([implementation plan §4](06-implementation-plan.md)).
 
 ### F6. Client account and onboarding
 
@@ -210,7 +214,7 @@ value, moved, extension, plan delivered, next problem area, ongoing support defi
 
 From concept note §15: subscription pricing for ongoing support; cohort pricing made cheaper by AI; a recruitment partner
 pool; head-of-operations placements; the AI tool as a separate product; internal AI workflow work; the training timetable
-on the site. Also not in v0.1: Paystack payments, instalments, second-business creation, team members inside a client
+on the site. Also not in v0.1: instalments, second-business creation, team members inside a client
 business, and an in-platform message thread (see section 10).
 
 ## 7. What success looks like (the numbers the platform must report)
@@ -249,7 +253,7 @@ From concept note §13. The platform must make these countable without a spreads
 | The full report is fully deterministic: no consultant or analyst reviews it; it goes out the moment the form is finished | ET |
 | The report form (intake) comes after payment; no five-day turnaround | ET |
 | The full report is independent of Current State and is not credited against it | ET |
-| Payments by bank transfer until Paystack: details by email, proof, team confirms; placeholder details until real ones are set | ET |
+| Manual payment confirmation (details by email, proof, the team confirms) is the interim method because Paystack is not set up yet; placeholder details until real ones are set | ET |
 | Built up to the start of Current State; the engagement itself is the next phase | ET |
 | The business name and one-line description are required in the check | ET |
 | The twelve original sector options stay; Services examples are worded for any service firm | ET |
@@ -266,7 +270,7 @@ From concept note §13. The platform must make these countable without a spreads
 | O2 | **Messages.** The concept note sets one WhatsApp group per client (§17). Do we also need a thread inside the platform? | Keep the WhatsApp group for conversation; record decisions and actions in the room. Add a thread only if handovers between analysts suffer | ET, Lewis |
 | O3 | **Who releases what to the client.** | Analysts share notes and data requests; the desk lead approves every prescription and plan | ET, Lewis |
 | O4 | Current State: one price or two grades (concept note Open 1) | Keep ₦500,000 until the first ten calls show the spread | Lewis, for ET |
-| O5 | Paystack: when it replaces bank transfer | After the sending domain is verified and the first five payments are reconciled by hand | ET |
+| O5 | Paystack go-live: who opens the business account, and by when | Open it now; the build starts the day the test keys are in Vercel (implementation plan §4) | ET, Lewis |
 | O6 | Ongoing support: content and price after the first fix | Define per client at fix close (D3) | ET |
 | O7 | Who signs client terms (IPF, KIP or the venture) and the P&L owner | — | ET |
 | O8 | File storage for the engagement room (concept note uses one Google Drive folder per client) | A private Supabase Storage bucket, so files sit behind the same access rules as the record | Lewis, Richard |

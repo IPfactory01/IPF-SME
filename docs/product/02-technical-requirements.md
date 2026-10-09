@@ -68,10 +68,10 @@ Vercel (production) and in a git-ignored `.env` (local). `.env.example` lists na
 | Core | `DATABASE_URL`, `DATABASE_SSL_CA`, `JWT_SECRET`, `NODE_ENV`, `APP_ORIGIN`, `APP_ALTERNATE_ORIGINS`, `VERCEL_URL` |
 | Email | `RESEND_API_KEY`, `EMAIL_FROM`, `EMAIL_REPLY_TO` |
 | Booking | `DISCOVERY_CALL_URL` (falls back to `BRAND.discoveryCallUrl`), `CALENDLY_API_TOKEN` (optional) |
-| Payments | `PAYMENT_BANK_NAME`, `PAYMENT_ACCOUNT_NAME`, `PAYMENT_ACCOUNT_NUMBER` (test details shown until all three are set) |
+| Payments | `PAYMENT_BANK_NAME`, `PAYMENT_ACCOUNT_NAME`, `PAYMENT_ACCOUNT_NUMBER` (test details shown until all three are set); `PAYSTACK_PUBLIC_KEY`, `PAYSTACK_SECRET_KEY` (not set yet: Paystack is the agreed method, waiting for the account) |
 | Staff | `OWNER_ADMIN_EMAIL` (the Super Admin), `CRON_SECRET` |
 | AI and files (Manus, to be replaced) | `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY` |
-| JUMP legacy | `VITE_APP_ID`, `OAUTH_SERVER_URL`, `OWNER_OPEN_ID`, `GOOGLE_*`, `JUMP_GMAIL_REFRESH_TOKEN`, `PAYSTACK_*` |
+| JUMP legacy | `VITE_APP_ID`, `OAUTH_SERVER_URL`, `OWNER_OPEN_ID`, `GOOGLE_*`, `JUMP_GMAIL_REFRESH_TOKEN` |
 | Migrations and tests | `MIGRATION_DATABASE_URL`, `TEST_DATABASE_URL`, `VALIDATE_*` |
 
 **Rules:** no secret in code, tests, documents or commits; nobody pastes a secret into a chat. The Resend key, for
@@ -85,7 +85,7 @@ example, exists only in Resend (shown once at creation) and in Vercel.
 | **Calendly** | Discovery call booking | Inline embed with name and email prefilled (`shared/booking.ts`); optional API read of the booked time (`server/calendly.ts`) | Live |
 | **AI (LLM)** | The business check summary only | Manus "Forge" chat completions endpoint (`server/_core/llm.ts`) with a 25-second limit; falls back to the rules summary | Works only with Manus credentials; to move to the Anthropic API |
 | **File storage** | JUMP uploads only today | Manus "Forge" presigned S3 (`server/storage.ts`), served through `/manus-storage/*` | To be replaced by a private Supabase Storage bucket (implementation plan 1.1) |
-| **Paystack** | Not used by The Shift | JUMP-era procedures exist in `server/routers/registration.ts`; no client code calls them | The Shift uses bank transfer until O5 is decided |
+| **Paystack** | The agreed way for owners to pay (concept note §11) | Not set up yet. JUMP-era `initializePaystack` and `verifyPaystack` in `server/routers/registration.ts` show the API calls; The Shift needs its own checkout and a signed webhook that confirms the payment request | Waiting for IP Factory's Paystack business account and keys. Until then, bank transfer with manual confirmation (`server/payments.ts`) |
 | **Google (OAuth, Calendar, Gmail)** | JUMP-era sign-in, sessions and mailbox sync | `server/_core/oauth.ts`, `server/calendar.ts`, `server/workspaceMailbox.ts` | Legacy |
 
 ## 7. Authentication and sessions

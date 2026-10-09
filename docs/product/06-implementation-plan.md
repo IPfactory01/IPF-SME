@@ -32,6 +32,7 @@ report form asking how each product is charged; the invitation page asking someo
 | 0.2 | Set `PAYMENT_BANK_NAME`, `PAYMENT_ACCOUNT_NAME`, `PAYMENT_ACCOUNT_NUMBER` in Vercel (until then emails say "TEST DETAILS - DO NOT PAY") | ET, Lewis | Real payments |
 | 0.3 | Push the branch to `main` | ET ("push to main") | The four branch changes |
 | 0.4 | Name the finance person and grant roles to the analysts on the platform | Lewis | Phase 1 assignments |
+| 0.5 | Open IP Factory's Paystack business account; put the test keys, then the live keys, in Vercel (`PAYSTACK_PUBLIC_KEY`, `PAYSTACK_SECRET_KEY`) | ET, Lewis | Online payment (section 4) |
 
 ## 3. Quick fixes found while writing these documents (this week, small)
 
@@ -48,7 +49,21 @@ Each is one focused change with a test. None needs a migration except Q6.
 | Q7 | Map the shadcn colour roles to the theme, or remove their use | Components that rely on them render without colour | Design brief §4 |
 | Q8 | Show staff who hold only platform roles on the Admin Team screen; decide one permission for the report | Admin Team undercounts; finance can resend but not download | Backend schema §6 |
 
-## 4. Phase 1: foundation for the engagement room (needed by 23 October)
+## 4. Paystack (starts the day the test keys are in Vercel)
+
+Manual confirmation is the interim method only because Paystack is not set up. The confirmation logic already exists
+(`confirmPayment` in `server/payments.ts`), so Paystack plugs into it rather than replacing it.
+
+| # | Build | Acceptance |
+|---|---|---|
+| P1 | **Checkout:** a "Pay now" link in the payment email (and on the result page for the full report) that opens Paystack for the exact amount and reference | The owner can pay the full report or Current State by card or bank on Paystack |
+| P2 | **Webhook:** Paystack's signed notification confirms the payment request automatically, after checking the signature, the amount, the currency and the reference | The same emails and effects as "Confirm payment": the report link, or Won plus the client invitation. A forged or mismatched notification changes nothing |
+| P3 | **Admin:** payments show "Paid by Paystack" with Paystack's reference; manual "Proof received" and "Confirm payment" stay for direct transfers | The team can tell at a glance how each payment arrived |
+| P4 | **Copy:** payment emails lead with "Pay now"; bank details stay as the alternative | No email asks for proof when the owner paid on Paystack |
+
+Tests mock Paystack: no real keys in tests. Webhook signatures are checked with `PAYSTACK_SECRET_KEY`.
+
+## 5. Phase 1: foundation for the engagement room (needed by 23 October)
 
 Goal: when a client pays for Current State, an engagement exists, a team is assigned, and both the client and the team can
 see where it stands.
@@ -61,7 +76,7 @@ see where it stands.
 | 1.4 | **Internal engagement page**: stage, team, and the getting-set-up checklist (welcome note sent, data request sent, WhatsApp group created, analyst assigned, both Current State calls booked) | The desk lead can run onboarding from one screen in three working days | Concept note §7 onboarding |
 | 1.5 | **Client room v1: "Where are we?"** on `/dashboard`: the journey with the current step, the next session date, the named team | A client sees only their own engagement | Replaces the profile-only dashboard |
 
-## 5. Phase 2: sessions, notes and deliverables (needed by 23 October, the first Current State call)
+## 6. Phase 2: sessions, notes and deliverables (needed by 23 October, the first Current State call)
 
 | # | Build | Acceptance |
 |---|---|---|
@@ -72,14 +87,14 @@ see where it stands.
 
 Decisions needed first: O1 transcripts, O2 messages, O3 who releases what (PRD §10).
 
-## 6. Phase 3: data requests (needed by 23 October, getting set up)
+## 7. Phase 3: data requests (needed by 23 October, getting set up)
 
 | # | Build | Acceptance |
 |---|---|---|
 | 3.1 | **Data request list** from a template (the concept note's onboarding list), per engagement, with due dates | The desk lead sends a list in one step |
 | 3.2 | **Client upload** against each request; status requested → received → accepted (or "needs more") | The analyst sees what is missing at a glance; the client sees what is still owed |
 
-## 7. Phase 4: the fix, check-ins and the record (needed by 6 November)
+## 8. Phase 4: the fix, check-ins and the record (needed by 6 November)
 
 | # | Build | Acceptance |
 |---|---|---|
@@ -89,16 +104,15 @@ Decisions needed first: O1 transcripts, O2 messages, O3 who releases what (PRD �
 | 4.4 | **Close and day 30**: final value, moved, extension weeks, plan delivered, next problem area, ongoing support defined, day-30 check | The PRD §7 pass marks are countable from the record |
 | 4.5 | **Monday scorecard** for the desk: funnel, active fixes, measures, record completeness, hours | Replaces the spreadsheet export |
 
-## 8. Phase 5: later (v0.2)
+## 9. Phase 5: later (v0.2)
 
-- Paystack payment links in place of bank transfer (O5).
 - Referral codes on the new flow: 10% off the next invoice per paying referral, up to 30%, never on a first payment.
 - Transcript import and AI-drafted session notes for review (system actor, audited).
 - A message thread in the room, only if O2 says so.
 - Retire the JUMP-era screens and tables once nothing reads them (see [5. Backend schema](05-backend-schema.md) §4).
 - The January portal: the record with the methods attached (concept note D4).
 
-## 9. How each phase is delivered
+## 10. How each phase is delivered
 
 1. A short design note in the PR description that names the tables, procedures and permissions it adds.
 2. Tests first for the access rules: a client cannot reach another client; an analyst cannot reach an unassigned

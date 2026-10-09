@@ -1,9 +1,9 @@
-import { FULL_REPORT, formatNaira, PRICES } from "./businessSupport";
+import { CURRENT_STATE, FULL_REPORT, formatNaira, PRICES } from "./businessSupport";
 
 /**
  * Paying for The Shift before online payment (Paystack) is ready: the team emails payment details, the owner pays by
- * bank transfer and replies with proof, and the team confirms the money arrived. Confirming the Current State payment
- * is what starts Current State.
+ * bank transfer and replies with proof, and the team confirms the money arrived. Confirming the Current State
+ * Assessment payment is what starts the Current State Assessment.
  */
 
 export const PAYMENT_ITEMS = ["full_report", "current_state"] as const;
@@ -11,7 +11,7 @@ export type PaymentItem = (typeof PAYMENT_ITEMS)[number];
 
 export const PAYMENT_ITEM_DETAILS: Record<PaymentItem, { name: string; amount: number; code: string }> = {
   full_report: { name: FULL_REPORT.name, amount: PRICES.fullReport, code: "R" },
-  current_state: { name: "Current State", amount: PRICES.currentState, code: "CS" },
+  current_state: { name: CURRENT_STATE.name, amount: PRICES.currentState, code: "CS" },
 };
 
 /** requested: details emailed · proof_received: the owner sent proof, not yet checked · confirmed: the money arrived. */
@@ -42,13 +42,13 @@ export function effectivePaymentStatus(request: { status: PaymentStatus; request
 
 export const PAYMENT_DISPLAY_LABELS: Record<PaymentDisplayStatus, string> = { ...PAYMENT_STATUS_LABELS, expired: "48 hours passed" };
 
-/** The reference the owner puts on the transfer, e.g. TS-R-000123 (report) or TS-CS-000123 (Current State). */
+/** The reference the owner puts on the transfer, e.g. TS-R-000123 (report) or TS-CS-000123 (Current State Assessment). */
 export function paymentReference(item: PaymentItem, businessCheckId: number) {
   return `TS-${PAYMENT_ITEM_DETAILS[item].code}-${String(businessCheckId).padStart(6, "0")}`;
 }
 
-/** "₦100,000 for your full business check report", as it appears in email. */
+/** "₦100,000 for your full business check report" or "₦500,000 for your Current State Assessment". */
 export function describePayment(item: PaymentItem) {
   const { name, amount } = PAYMENT_ITEM_DETAILS[item];
-  return `${formatNaira(amount)} for ${item === "full_report" ? name.charAt(0).toLowerCase() + name.slice(1) : name}`;
+  return `${formatNaira(amount)} for ${item === "full_report" ? name.charAt(0).toLowerCase() + name.slice(1) : `your ${name}`}`;
 }

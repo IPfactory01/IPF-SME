@@ -67,8 +67,10 @@ export const FULL_REPORT = {
   formMinutes: 12,
 } as const;
 
-/** What happens once Current State is paid for (the journey copy and the payment confirmation email). */
+/** What happens once the Current State Assessment is paid for (the journey copy and the payment confirmation email). */
 export const CURRENT_STATE = {
+  /** The name everywhere: site, emails, admin, report. */
+  name: "Current State Assessment",
   what: "Two weeks and two calls to see where your business really stands and name the one problem to fix first.",
   start: "Three working days to get set up, then we start.",
 } as const;
@@ -90,7 +92,7 @@ export function formatNaira(amount: number) {
 export const JOURNEY: readonly JourneyStep[] = [
   { id: "business-check", name: "Free business check", body: `Ten minutes. You get a first read on where you are stuck. Want the full report? ${formatNaira(PRICES.fullReport)}, by email.` },
   { id: "discovery-call", name: "A free 20-minute call", body: "We tell you honestly whether we can help." },
-  { id: "current-state", name: "Current State", body: `${CURRENT_STATE.what} ${formatNaira(PRICES.currentState)}, paid after the call. ${CURRENT_STATE.start}` },
+  { id: "current-state", name: CURRENT_STATE.name, body: `${CURRENT_STATE.what} ${formatNaira(PRICES.currentState)}, paid after the call. ${CURRENT_STATE.start}` },
   { id: "fix", name: "The six-week fix", body: `One problem. You do the work; we tell you what to do, give you the tools and check it every week. ${formatNaira(PRICES.fix)}.` },
   { id: "plan", name: "Your plan", body: `We stop at about ${formatNaira(PRICES.standardEngagementCap)} with a plan in your hands. Want us to stay? We agree what that looks like.` },
 ];

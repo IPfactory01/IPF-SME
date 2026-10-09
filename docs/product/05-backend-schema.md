@@ -16,7 +16,7 @@ erDiagram
   users ||--o{ user_platform_roles : "internal roles"
   users ||--o{ business_memberships : "member of"
   businesses ||--o{ business_memberships : "has members"
-  business_checks ||--o{ payment_requests : "report, Current State"
+  business_checks ||--o{ payment_requests : "report, Current State Assessment"
   business_checks ||--o| full_reports : "paid report"
   payment_requests ||--o| full_reports : "paid by"
   business_checks ||--o{ client_onboarding_invitations : "invites"
@@ -61,7 +61,7 @@ erDiagram
 | Table | What it holds | Keys and rules | Personal or sensitive data |
 |---|---|---|---|
 | `business_checks` | One free business check: contact, answers, result, summary, pipeline stage, call dates | Unique public token; stage from `PIPELINE_STAGES` | Name, email, WhatsApp, how they heard, business name and description, answers (including revenue band and what the problem costs each month) |
-| `payment_requests` | A bank-transfer request for the full report or Current State | Unique reference (`TS-R-000123`, `TS-CS-000123`); one per check and item; status requested, proof received, confirmed. The 48-hour window runs from `requestedAt`, which resets when the details are sent again, so "48 hours passed" is worked out, not stored | Amount, reference, the team's note (bank transaction reference). Proof arrives by email and is not stored |
+| `payment_requests` | A bank-transfer request for the full report or Current State Assessment | Unique reference (`TS-R-000123`, `TS-CS-000123`); one per check and item; status requested, proof received, confirmed. The 48-hour window runs from `requestedAt`, which resets when the details are sent again, so "48 hours passed" is worked out, not stored | Amount, reference, the team's note (bank transaction reference). Proof arrives by email and is not stored |
 | `full_reports` | The paid report: link, form answers, delivery | One per check; unique token hash; status awaiting_intake or delivered; `reportVersion` | **Financial figures**: revenue, costs, margin, prices, cash, money owed, loans, competitors |
 | `client_onboarding_invitations` | The single-use link that creates a client account | Unique token hash; one pending per check; status pending, accepted, revoked, expired; expiry | Email, name and business name at the time |
 
@@ -143,7 +143,7 @@ point for phase 1 of the [implementation plan](06-implementation-plan.md); names
 
 | Table | Holds | Visible to the client? |
 |---|---|---|
-| `engagements` | One per paid client: business, the business check it came from, the Current State payment, stage (setting up, Current State, fix, plan, day 30, closed), problem area, sub-problem, problem statement, dates | Stage and dates: yes |
+| `engagements` | One per paid client: business, the business check it came from, the Current State Assessment payment, stage (setting up, Current State Assessment, fix, plan, day 30, closed), problem area, sub-problem, problem statement, dates | Stage and dates: yes |
 | `engagement_assignments` | Engagement × person × role (lead, analyst, partner, expert) | Names and roles: yes |
 | `engagement_sessions` | Calls: type, date, attendees, link | Yes |
 | `engagement_notes` | Per session: client version and internal version; status draft or shared; who shared it and when | Client version once shared |

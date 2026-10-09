@@ -549,7 +549,7 @@ export function buildFullReport(input: ReportInput): FullReport {
     finding: result.offerings.length ? "If you want support with the plan, these are the services that fit what you told us." : "If you want support with the plan, start with a free 20-minute call.",
     blocks: [
       ...(result.offerings.length ? [{ kind: "table" as const, columns: ["Service", "What it does"], widths: [0.38, 0.62], rows: result.offerings.map((offering) => [offering.name, offering.summary]) }] : []),
-      { kind: "callout", title: `Current State · ${formatNaira(PRICES.currentState)}`, text: `${CURRENT_STATE.what} ${CURRENT_STATE.start} It starts with a free 20-minute call, where we tell you honestly whether we can help.` },
+      { kind: "callout", title: `${CURRENT_STATE.name} · ${formatNaira(PRICES.currentState)}`, text: `${CURRENT_STATE.what} ${CURRENT_STATE.start} It starts with a free 20-minute call, where we tell you honestly whether we can help.` },
     ],
   });
 

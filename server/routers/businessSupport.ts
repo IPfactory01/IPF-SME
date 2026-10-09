@@ -45,7 +45,7 @@ export const businessSupportRouter = router({
     .input(z.object({ businessCheckId: z.number().int().positive(), stage: z.enum(SETTABLE_STAGES as [Exclude<PipelineStage, "lead">, ...Exclude<PipelineStage, "lead">[]]), note: z.string().trim().max(500).optional() }))
     .mutation(async ({ ctx, input }) => setPipelineStage(await businessSupportDb(), { ...input, note: input.note || undefined, actorUserId: ctx.user.id })),
   clients: clients.query(async () => listClients(await businessSupportDb())),
-  /** Emails the owner the payment details for the full report or Current State (again, if already sent). */
+  /** Emails the owner the payment details for the full report or the Current State Assessment (again, if already sent). */
   requestPayment: payments
     .input(z.object({ businessCheckId: z.number().int().positive(), item: z.enum(PAYMENT_ITEMS) }))
     .mutation(async ({ ctx, input }) => requestPayment(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
@@ -61,7 +61,7 @@ export const businessSupportRouter = router({
   resendReportLink: payments
     .input(z.object({ businessCheckId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => resendReportLink(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
-  /** The money is in the account. For Current State this wins the business and sends the client account invitation. */
+  /** The money is in the account. For the Current State Assessment this wins the business and sends the client account invitation. */
   confirmPayment: payments
     .input(z.object({ paymentRequestId: z.number().int().positive(), note: z.string().trim().max(500).optional() }))
     .mutation(async ({ ctx, input }) => confirmPayment(await businessSupportDb(), { ...input, note: input.note || undefined, actorUserId: ctx.user.id })),

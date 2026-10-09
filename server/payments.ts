@@ -15,8 +15,8 @@ import { lagosTime } from "./lagosTime";
 
 /**
  * Payment by bank transfer until online payment (Paystack) is ready: the owner is emailed the amount, the account and a
- * reference; they reply with proof; the team confirms the money arrived. Confirming the Current State payment wins the
- * business and sends the client account invitation, which is where Current State starts.
+ * reference; they reply with proof; the team confirms the money arrived. Confirming the Current State Assessment payment
+ * wins the business and sends the client account invitation, which is where the Current State Assessment starts.
  */
 
 export const PLACEHOLDER_BANK_DETAILS = { bankName: "Test Bank", accountName: "IP Factory (test account)", accountNumber: "0000000000" } as const;
@@ -37,13 +37,13 @@ export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem
   const { amount } = PAYMENT_ITEM_DETAILS[input.item];
   const report = input.item === "full_report";
   return {
-    subject: report ? "Payment details for your full business check report" : "Payment details for your Current State",
+    subject: report ? "Payment details for your full business check report" : `Payment details for your ${CURRENT_STATE.name}`,
     body: [
       `Dear ${firstName(input.fullName)},`,
       "",
       report
         ? "Thank you for asking for your full business check report. Here is how to pay for it."
-        : "Thank you for choosing to start your Current State with us. Here is how to pay for it.",
+        : `Thank you for choosing to start your ${CURRENT_STATE.name} with us. Here is how to pay for it.`,
       "",
       ...(bank.placeholder ? ["TEST DETAILS - DO NOT PAY", "These are placeholder details while we test this email. Please do not make a transfer to them.", ""] : []),
       "HOW TO PAY",
@@ -61,7 +61,7 @@ export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem
       "Reply to this email with your proof of payment: a screenshot of the transfer or your bank's receipt. We will confirm by email once the payment arrives.",
       report
         ? `Then we send you a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your report is emailed to you the moment you finish it.`
-        : `Then your Current State starts. ${CURRENT_STATE.start}`,
+        : `Then your ${CURRENT_STATE.name} starts. ${CURRENT_STATE.start}`,
       "",
       BRAND.organisationName,
     ].join("\n"),
@@ -95,17 +95,17 @@ export function paymentConfirmedEmail(input: { fullName: string; item: PaymentIt
     };
   }
   return {
-    subject: "Payment received: your Current State starts",
+    subject: `Payment received: your ${CURRENT_STATE.name} starts`,
     body: [
       `Dear ${firstName(input.fullName)},`,
       "",
       received,
       "",
-      `Your Current State starts now. ${CURRENT_STATE.start}`,
+      `Your ${CURRENT_STATE.name} starts now. ${CURRENT_STATE.start}`,
       "",
       "WHAT HAPPENS NEXT",
-      `• We email you a link to set up your client account on ${BRAND.productName}. Your Current State lives there.`,
-      "• We agree the time of your first Current State call with you.",
+      `• We email you a link to set up your client account on ${BRAND.productName}. Your ${CURRENT_STATE.name} lives there.`,
+      `• We agree the time of your first ${CURRENT_STATE.name} call with you.`,
       `• ${CURRENT_STATE.what}`,
       "",
       BRAND.organisationName,
@@ -151,7 +151,7 @@ async function loadCheck(db: Pick<Database, "select">, businessCheckId: number) 
   return check;
 }
 
-/** Stages before the team's own decisions: sending Current State payment details makes the business an Opportunity. */
+/** Stages before the team's own decisions: sending Current State Assessment payment details makes the business an Opportunity. */
 const BEFORE_OPPORTUNITY: readonly PipelineStage[] = ["lead", "qualified_lead", "call_booked"];
 
 /**
@@ -212,11 +212,11 @@ export async function markProofReceived(db: Database, input: { paymentRequestId:
   return { success: true, changed: true } as const;
 }
 
-/** What happened to the client account invitation when a Current State payment was confirmed. */
+/** What happened to the client account invitation when a Current State Assessment payment was confirmed. */
 export type CurrentStateInvitation = "sent" | "already_invited" | "has_account" | "failed";
 
 /**
- * Confirms the money arrived (the team checked the account), emails the owner, and for Current State wins the business
+ * Confirms the money arrived (the team checked the account), emails the owner, and for the Current State Assessment wins the business
  * and sends the client account invitation unless one is already out or accepted. A confirmed payment is final.
  */
 export async function confirmPayment(db: Database, input: { paymentRequestId: number; actorUserId: number; note?: string }) {
@@ -247,7 +247,7 @@ export async function confirmPayment(db: Database, input: { paymentRequestId: nu
   return { success: true, changed: true, invitation } as const;
 }
 
-/** Current State starts in the client account: invite the owner unless an invitation is already out or accepted. */
+/** The Current State Assessment starts in the client account: invite the owner unless an invitation is already out or accepted. */
 async function inviteToClientAccount(db: Pick<Database, "select">, businessCheckId: number, actorUserId: number): Promise<CurrentStateInvitation> {
   const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt })
     .from(clientOnboardingInvitations).where(eq(clientOnboardingInvitations.businessCheckId, businessCheckId))

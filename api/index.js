@@ -284,6 +284,8 @@ var FULL_REPORT = {
   formMinutes: 12
 };
 var CURRENT_STATE = {
+  /** The name everywhere: site, emails, admin, report. */
+  name: "Current State Assessment",
   what: "Two weeks and two calls to see where your business really stands and name the one problem to fix first.",
   start: "Three working days to get set up, then we start."
 };
@@ -293,7 +295,7 @@ function formatNaira(amount) {
 var JOURNEY = [
   { id: "business-check", name: "Free business check", body: `Ten minutes. You get a first read on where you are stuck. Want the full report? ${formatNaira(PRICES.fullReport)}, by email.` },
   { id: "discovery-call", name: "A free 20-minute call", body: "We tell you honestly whether we can help." },
-  { id: "current-state", name: "Current State", body: `${CURRENT_STATE.what} ${formatNaira(PRICES.currentState)}, paid after the call. ${CURRENT_STATE.start}` },
+  { id: "current-state", name: CURRENT_STATE.name, body: `${CURRENT_STATE.what} ${formatNaira(PRICES.currentState)}, paid after the call. ${CURRENT_STATE.start}` },
   { id: "fix", name: "The six-week fix", body: `One problem. You do the work; we tell you what to do, give you the tools and check it every week. ${formatNaira(PRICES.fix)}.` },
   { id: "plan", name: "Your plan", body: `We stop at about ${formatNaira(PRICES.standardEngagementCap)} with a plan in your hands. Want us to stay? We agree what that looks like.` }
 ];
@@ -302,7 +304,7 @@ var JOURNEY = [
 var PAYMENT_ITEMS = ["full_report", "current_state"];
 var PAYMENT_ITEM_DETAILS = {
   full_report: { name: FULL_REPORT.name, amount: PRICES.fullReport, code: "R" },
-  current_state: { name: "Current State", amount: PRICES.currentState, code: "CS" }
+  current_state: { name: CURRENT_STATE.name, amount: PRICES.currentState, code: "CS" }
 };
 var PAYMENT_STATUSES = ["requested", "proof_received", "confirmed"];
 var PAYMENT_STATUS_LABELS = {
@@ -7493,7 +7495,7 @@ function businessOutline(answers) {
   }
   return rows;
 }
-var NOT_ASSESSED_NOTE = "Areas marked not assessed weren't part of this check for your business. Current State looks at all ten.";
+var NOT_ASSESSED_NOTE = "Areas marked not assessed weren't part of this check for your business. The Current State Assessment looks at all ten.";
 function areasNotAssessed(answers) {
   if (routeFor(answers) !== "programme") return [];
   const asked = new Set(sectionPath(answers).map((id) => SECTIONS[id].area));
@@ -9119,7 +9121,7 @@ function buildFullReport(input) {
     finding: result.offerings.length ? "If you want support with the plan, these are the services that fit what you told us." : "If you want support with the plan, start with a free 20-minute call.",
     blocks: [
       ...result.offerings.length ? [{ kind: "table", columns: ["Service", "What it does"], widths: [0.38, 0.62], rows: result.offerings.map((offering) => [offering.name, offering.summary]) }] : [],
-      { kind: "callout", title: `Current State \xB7 ${formatNaira(PRICES.currentState)}`, text: `${CURRENT_STATE.what} ${CURRENT_STATE.start} It starts with a free 20-minute call, where we tell you honestly whether we can help.` }
+      { kind: "callout", title: `${CURRENT_STATE.name} \xB7 ${formatNaira(PRICES.currentState)}`, text: `${CURRENT_STATE.what} ${CURRENT_STATE.start} It starts with a free 20-minute call, where we tell you honestly whether we can help.` }
     ]
   });
   const position = idea ? `${businessName} is an idea not yet trading. Of the ${areaHealth.size + (outlineRow(result, 0) ? 1 : 0)} areas we looked at, ${tallyText(tally)}.` : `${businessName} ${MODEL[typeKey]}${answers.p_age ? ` and has traded for ${AGE[String(answers.p_age)]}` : ""}. Of the ${areaHealth.size + (outlineRow(result, 0) ? 1 : 0)} areas we looked at, ${tallyText(tally)}.`;
@@ -9838,11 +9840,11 @@ function paymentDetailsEmail(input) {
   const { amount } = PAYMENT_ITEM_DETAILS[input.item];
   const report = input.item === "full_report";
   return {
-    subject: report ? "Payment details for your full business check report" : "Payment details for your Current State",
+    subject: report ? "Payment details for your full business check report" : `Payment details for your ${CURRENT_STATE.name}`,
     body: [
       `Dear ${firstName(input.fullName)},`,
       "",
-      report ? "Thank you for asking for your full business check report. Here is how to pay for it." : "Thank you for choosing to start your Current State with us. Here is how to pay for it.",
+      report ? "Thank you for asking for your full business check report. Here is how to pay for it." : `Thank you for choosing to start your ${CURRENT_STATE.name} with us. Here is how to pay for it.`,
       "",
       ...bank.placeholder ? ["TEST DETAILS - DO NOT PAY", "These are placeholder details while we test this email. Please do not make a transfer to them.", ""] : [],
       "HOW TO PAY",
@@ -9858,7 +9860,7 @@ function paymentDetailsEmail(input) {
       "",
       "AFTER YOU PAY",
       "Reply to this email with your proof of payment: a screenshot of the transfer or your bank's receipt. We will confirm by email once the payment arrives.",
-      report ? `Then we send you a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your report is emailed to you the moment you finish it.` : `Then your Current State starts. ${CURRENT_STATE.start}`,
+      report ? `Then we send you a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your report is emailed to you the moment you finish it.` : `Then your ${CURRENT_STATE.name} starts. ${CURRENT_STATE.start}`,
       "",
       BRAND.organisationName
     ].join("\n")
@@ -9888,17 +9890,17 @@ function paymentConfirmedEmail(input) {
     };
   }
   return {
-    subject: "Payment received: your Current State starts",
+    subject: `Payment received: your ${CURRENT_STATE.name} starts`,
     body: [
       `Dear ${firstName(input.fullName)},`,
       "",
       received,
       "",
-      `Your Current State starts now. ${CURRENT_STATE.start}`,
+      `Your ${CURRENT_STATE.name} starts now. ${CURRENT_STATE.start}`,
       "",
       "WHAT HAPPENS NEXT",
-      `\u2022 We email you a link to set up your client account on ${BRAND.productName}. Your Current State lives there.`,
-      "\u2022 We agree the time of your first Current State call with you.",
+      `\u2022 We email you a link to set up your client account on ${BRAND.productName}. Your ${CURRENT_STATE.name} lives there.`,
+      `\u2022 We agree the time of your first ${CURRENT_STATE.name} call with you.`,
       `\u2022 ${CURRENT_STATE.what}`,
       "",
       BRAND.organisationName
@@ -10490,7 +10492,7 @@ var businessSupportRouter = router({
   /** Moves a business check to any later stage (Opportunity, Won, Lost, Nurture, Referred…), with an optional note. */
   setStage: prospects.input(z20.object({ businessCheckId: z20.number().int().positive(), stage: z20.enum(SETTABLE_STAGES), note: z20.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => setPipelineStage(await businessSupportDb(), { ...input, note: input.note || void 0, actorUserId: ctx.user.id })),
   clients: clients.query(async () => listClients(await businessSupportDb())),
-  /** Emails the owner the payment details for the full report or Current State (again, if already sent). */
+  /** Emails the owner the payment details for the full report or the Current State Assessment (again, if already sent). */
   requestPayment: payments.input(z20.object({ businessCheckId: z20.number().int().positive(), item: z20.enum(PAYMENT_ITEMS) })).mutation(async ({ ctx, input }) => requestPayment(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
   /** The owner sent proof of payment; the money is not confirmed yet. */
   markProofReceived: payments.input(z20.object({ paymentRequestId: z20.number().int().positive() })).mutation(async ({ ctx, input }) => markProofReceived(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
@@ -10498,7 +10500,7 @@ var businessSupportRouter = router({
   downloadReport: prospects.input(z20.object({ businessCheckId: z20.number().int().positive() })).mutation(async ({ input }) => adminDownloadReport(await businessSupportDb(), input.businessCheckId)),
   /** Sends the owner a new link to the Report Intake. */
   resendReportLink: payments.input(z20.object({ businessCheckId: z20.number().int().positive() })).mutation(async ({ ctx, input }) => resendReportLink(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
-  /** The money is in the account. For Current State this wins the business and sends the client account invitation. */
+  /** The money is in the account. For the Current State Assessment this wins the business and sends the client account invitation. */
   confirmPayment: payments.input(z20.object({ paymentRequestId: z20.number().int().positive(), note: z20.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => confirmPayment(await businessSupportDb(), { ...input, note: input.note || void 0, actorUserId: ctx.user.id }))
 });
 

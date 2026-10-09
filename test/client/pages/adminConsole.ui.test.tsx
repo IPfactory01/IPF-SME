@@ -681,18 +681,18 @@ describe("payments in Business Checks", () => {
     ];
     renderConsole();
     expect(within(rowOf("Ada Okafor")).getByText("Report paid")).toBeTruthy();
-    expect(within(rowOf("Ada Okafor")).getByText("Current State: proof received")).toBeTruthy();
+    expect(within(rowOf("Ada Okafor")).getByText("Current State Assessment: proof received")).toBeTruthy();
     expect(within(rowOf("Bola Quiet")).getByText("Report: awaiting payment")).toBeTruthy();
     expect(within(rowOf("Bola Quiet")).queryByText("Report requested")).toBeNull();
   });
 
-  it("sends Current State payment details from the record", () => {
+  it("sends Current State Assessment payment details from the record", () => {
     renderConsole();
     openRow("Ada Okafor");
     expect(payments().getByText("Your full business check report")).toBeTruthy();
     expect(payments().getByText("₦500,000")).toBeTruthy();
     expect(payments().getAllByText("Payment details not sent.")).toHaveLength(2);
-    const currentState = within(payments().getByRole("listitem", { name: "Current State" }));
+    const currentState = within(payments().getByRole("listitem", { name: "Current State Assessment" }));
     fireEvent.click(currentState.getByRole("button", { name: "Send payment details" }));
     expect(api.mutations.requestPayment).toEqual([{ businessCheckId: 1, item: "current_state" }]);
   });
@@ -701,7 +701,7 @@ describe("payments in Business Checks", () => {
     api.details[1] = detailFor({ payments: [payment()] });
     renderConsole();
     openRow("Ada Okafor");
-    const currentState = within(payments().getByRole("listitem", { name: "Current State" }));
+    const currentState = within(payments().getByRole("listitem", { name: "Current State Assessment" }));
     expect(currentState.getByText("Awaiting payment")).toBeTruthy();
     expect(currentState.getByText("TS-CS-000001")).toBeTruthy();
     fireEvent.click(currentState.getByRole("button", { name: "Proof received" }));
@@ -709,7 +709,7 @@ describe("payments in Business Checks", () => {
 
     fireEvent.click(currentState.getByRole("button", { name: "Confirm payment" }));
     expect(api.mutations.confirmPayment).toEqual([]);
-    expect(currentState.getByText(/the business moves to Won and they get a link to set up their client account, where Current State starts/)).toBeTruthy();
+    expect(currentState.getByText(/the business moves to Won and they get a link to set up their client account, where the Current State Assessment starts/)).toBeTruthy();
     fireEvent.change(currentState.getByLabelText("Note (optional)"), { target: { value: " GTB ref 123 " } });
     fireEvent.click(currentState.getByRole("button", { name: "Yes, the money is in" }));
     expect(api.mutations.confirmPayment).toEqual([{ paymentRequestId: 7, note: "GTB ref 123" }]);
@@ -719,7 +719,7 @@ describe("payments in Business Checks", () => {
     api.details[1] = detailFor({ payments: [payment({ status: "confirmed", confirmedAt: new Date("2026-10-09T10:00:00Z"), note: "GTB ref 123" })] });
     renderConsole();
     openRow("Ada Okafor");
-    const currentState = within(payments().getByRole("listitem", { name: "Current State" }));
+    const currentState = within(payments().getByRole("listitem", { name: "Current State Assessment" }));
     expect(currentState.getByText("Paid")).toBeTruthy();
     expect(currentState.getByText("Paid, confirmed 9 Oct 2026")).toBeTruthy();
     expect(currentState.queryByRole("button")).toBeNull();
@@ -729,15 +729,15 @@ describe("payments in Business Checks", () => {
     api.checks = [check({ payments: { current_state: "expired" } })];
     api.details[1] = detailFor({ payments: [payment()] });
     renderConsole();
-    expect(within(rowOf("Ada Okafor")).getByText("Current State: 48 hours passed")).toBeTruthy();
+    expect(within(rowOf("Ada Okafor")).getByText("Current State Assessment: 48 hours passed")).toBeTruthy();
     openRow("Ada Okafor");
-    expect(within(payments().getByRole("listitem", { name: "Current State" })).getByText(/pay by 10 Oct 2026/)).toBeTruthy();
+    expect(within(payments().getByRole("listitem", { name: "Current State Assessment" })).getByText(/pay by 10 Oct 2026/)).toBeTruthy();
     cleanup();
 
     api.details[1] = detailFor({ payments: [payment({ displayStatus: "expired" })] });
     renderConsole();
     openRow("Ada Okafor");
-    const currentState = within(payments().getByRole("listitem", { name: "Current State" }));
+    const currentState = within(payments().getByRole("listitem", { name: "Current State Assessment" }));
     expect(currentState.getByText("48 hours passed")).toBeTruthy();
     expect(currentState.getByText(/Send the details again for a new window, or move the business to Lost/)).toBeTruthy();
     // Money that still arrives can be recorded and confirmed.

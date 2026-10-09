@@ -1,7 +1,7 @@
 /**
  * Paying for The Shift by bank transfer until online payment is ready: the full report's payment details go out when
- * the owner asks for it; the team sends Current State payment details after the call, notes proof and confirms the
- * money; confirming Current State wins the business and sends the client account invitation. Real application code on
+ * the owner asks for it; the team sends Current State Assessment payment details after the call, notes proof and confirms the
+ * money; confirming Current State Assessment wins the business and sends the client account invitation. Real application code on
  * PostgreSQL (PGlite on every run, plus TEST_DATABASE_URL via `pnpm test:db`). Email and the language model are stubbed.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -181,7 +181,7 @@ for (const target of targets) {
       });
     });
 
-    describe("Current State", () => {
+    describe("Current State Assessment", () => {
       it("is requested by the team after the call, moving the business to Opportunity, and re-sending keeps one request", async () => {
         const { token, email, visitor, id } = await finishedCheck("current-state");
         await (await visitor.call()).businessCheck.requestNext({ token, choice: "call" });
@@ -191,7 +191,7 @@ for (const target of targets) {
         expect(sent).toMatchObject({ reference: `TS-CS-${String(id).padStart(6, "0")}`, pipelineStage: "opportunity" });
         expect((await rowFor(token)).pipelineStage).toBe("opportunity");
         const details = emails().find(sent => sent.to === email)!;
-        expect(details.subject).toBe("Payment details for your Current State");
+        expect(details.subject).toBe("Payment details for your Current State Assessment");
         expect(details.body).toContain("Amount: ₦500,000");
 
         await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
@@ -205,7 +205,7 @@ for (const target of targets) {
         ]));
       });
 
-      it("once paid, wins the business and sends the client account invitation, which is where Current State starts", async () => {
+      it("once paid, wins the business and sends the client account invitation, which is where the Current State Assessment starts", async () => {
         const { token, email, id } = await finishedCheck("current-state-paid");
         const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
         mocked.deliverEmail.mockClear();
@@ -217,8 +217,8 @@ for (const target of targets) {
         expect(invitations).toHaveLength(1);
         expect(invitations[0].status).toBe("pending");
         const subjects = emails().filter(sent => sent.to === email).map(sent => sent.subject);
-        expect(subjects).toEqual(["Payment received: your Current State starts", "Set up your client account on The Shift"]);
-        const confirmation = emails().find(sent => sent.subject === "Payment received: your Current State starts")!;
+        expect(subjects).toEqual(["Payment received: your Current State Assessment starts", "Set up your client account on The Shift"]);
+        const confirmation = emails().find(sent => sent.subject === "Payment received: your Current State Assessment starts")!;
         expect(confirmation.body).toContain("Three working days to get set up, then we start.");
         const audit = (await auditsFor("payment_confirmed", id)).map((event: { details: string }) => JSON.parse(event.details));
         expect(audit).toEqual([expect.objectContaining({ item: "current_state", amountNaira: 500_000, from: "opportunity", to: "won" })]);
@@ -263,8 +263,8 @@ for (const target of targets) {
       });
     });
 
-    describe("the whole journey up to Current State", () => {
-      it("takes an owner from the free check to a client account with Current State started", async () => {
+    describe("the whole journey up to Current State Assessment", () => {
+      it("takes an owner from the free check to a client account with Current State Assessment started", async () => {
         // 1. The owner takes the free check and asks for the call and the full report.
         const { token, email, visitor, id } = await finishedCheck("journey");
         await (await visitor.call()).businessCheck.requestNext({ token, choice: "call" });
@@ -280,7 +280,7 @@ for (const target of targets) {
         await (await browser().call()).fullReport.submit({ token: decodeURIComponent(formLink.split("/report/")[1]), intake: sampleIntake });
         expect(emails().some(sent => sent.to === email && sent.subject.startsWith("Your full business check report") && sent.attachments?.length === 1)).toBe(true);
 
-        // 3. After the call, the team sends the Current State details; the owner pays; the team confirms.
+        // 3. After the call, the team sends the Current State Assessment details; the owner pays; the team confirms.
         const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
         expect((await rowFor(token)).pipelineStage).toBe("opportunity");
         await (await superAdmin.call()).businessSupport.markProofReceived({ paymentRequestId });

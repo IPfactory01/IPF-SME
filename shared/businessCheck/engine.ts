@@ -319,7 +319,7 @@ export function businessOutline(answers: Answers): AreaRead[] {
 export type AreaNotAssessed = { area: number; name: string; reason: string };
 
 /** Under the outline when some areas were left out, so the owner sees the whole method. */
-export const NOT_ASSESSED_NOTE = "Areas marked not assessed weren't part of this check for your business. Current State looks at all ten.";
+export const NOT_ASSESSED_NOTE = "Areas marked not assessed weren't part of this check for your business. The Current State Assessment looks at all ten.";
 
 /**
  * The problem areas (1 to 10) the check left out for a trading business on the programme route,

@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { PRICES } from "@shared/businessSupport";
 import { describePayment, effectivePaymentStatus, PAYMENT_DISPLAY_LABELS, PAYMENT_ITEM_DETAILS, PAYMENT_STATUS_LABELS, PAYMENT_WINDOW_HOURS, paymentDeadline, paymentReference } from "@shared/payments";
 
-describe("what an owner can pay for before Current State", () => {
+describe("what an owner can pay for before Current State Assessment", () => {
   it("takes its prices from the one price list", () => {
     expect(PAYMENT_ITEM_DETAILS.full_report.amount).toBe(PRICES.fullReport);
     expect(PAYMENT_ITEM_DETAILS.current_state.amount).toBe(PRICES.currentState);
     expect(describePayment("full_report")).toBe("₦100,000 for your full business check report");
-    expect(describePayment("current_state")).toBe("₦500,000 for Current State");
+    expect(describePayment("current_state")).toBe("₦500,000 for your Current State Assessment");
   });
 
   it("gives each business check one short, distinct transfer reference per item", () => {

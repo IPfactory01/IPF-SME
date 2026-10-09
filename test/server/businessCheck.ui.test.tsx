@@ -269,7 +269,7 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(screen.getByText("Asked once the business has traded for five years.")).toBeTruthy();
     expect(screen.getByText("10. Owner transition")).toBeTruthy();
     expect(screen.getAllByText("Not assessed")).toHaveLength(2);
-    expect(screen.getByText("Areas marked not assessed weren't part of this check for your business. Current State looks at all ten.")).toBeTruthy();
+    expect(screen.getByText("Areas marked not assessed weren't part of this check for your business. The Current State Assessment looks at all ten.")).toBeTruthy();
     const rows = Array.from(document.querySelectorAll("li")).map((item) => item.textContent ?? "").filter((text) => /^\d+\. /.test(text));
     expect(rows.map((text) => Number(text.split(".")[0]))).toEqual([...rows.map((text) => Number(text.split(".")[0]))].sort((a, b) => a - b));
   });

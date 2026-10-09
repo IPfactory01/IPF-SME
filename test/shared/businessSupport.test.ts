@@ -1,12 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { formatNaira, JOURNEY, PRICES, PROBLEM_AREAS } from "@shared/businessSupport";
+import { CURRENT_STATE, formatNaira, JOURNEY, PRICES, PROBLEM_AREAS } from "@shared/businessSupport";
+import { PAYMENT_ITEM_DETAILS } from "@shared/payments";
 
-describe("Current State price", () => {
+describe("Current State Assessment price", () => {
   it("is a flat ₦500,000 on the site, not a starting price (decided 7 October)", async () => {
     const { JOURNEY } = await import("@shared/businessSupport");
     const step = JOURNEY.find((item) => item.id === "current-state")!;
     expect(step.body).toContain("₦500,000, paid after the call");
     expect(step.body).not.toMatch(/from ₦500,000/i);
+  });
+});
+
+describe("Current State Assessment name", () => {
+  it("is one name, from one place, on the site and in payments (decided 9 October)", () => {
+    expect(CURRENT_STATE.name).toBe("Current State Assessment");
+    expect(JOURNEY.find((step) => step.id === "current-state")!.name).toBe(CURRENT_STATE.name);
+    expect(PAYMENT_ITEM_DETAILS.current_state.name).toBe(CURRENT_STATE.name);
+    const copy = JOURNEY.map((step) => `${step.name} ${step.body}`).join(" ");
+    expect(copy).not.toMatch(/Current State(?! Assessment)/);
   });
 });
 

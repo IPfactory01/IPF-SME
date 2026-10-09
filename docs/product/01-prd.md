@@ -2,7 +2,7 @@
 
 **Product:** The Shift, by IP Factory (`BRAND.productEndorsement` in `shared/brand.ts`)
 **Promise:** Find it. Fix it. See the results.
-**Status:** v0.1 live at https://ipf-sme.vercel.app, built up to the start of Current State. Last reviewed 9 October 2026.
+**Status:** v0.1 live at https://ipf-sme.vercel.app, built up to the start of the Current State Assessment. Last reviewed 9 October 2026.
 **Source:** *Business Support Concept Note and Launch Blueprint v0.8.1* (6 October 2026), referred to below as "the concept note" with its section numbers, plus the decisions taken while building (section 9).
 
 This document says what the product does, feature by feature, and the status of each feature. How it is built is in
@@ -34,7 +34,7 @@ One person has one identity; roles and assignments are added to it (see `AGENTS.
 | **Client (business owner)** | A paying owner with a client account | One place to see where the engagement is, what we need from them, what was agreed and what they have received |
 | **Desk lead** | Lewis Osako | Run the desk: every lead, call, payment, engagement and sign-off |
 | **Analyst** | Richard Kehinde, Collins Tobenna, Olamide Akin-Alamu, Lovelyn Nzubechukwu | Their assigned clients only: preparation, check-ins, the record |
-| **Partner** | Mr Tarfa (ET), Victor Anagor | Current State calls and key reviews for clients above ₦10,000,000 a month |
+| **Partner** | Mr Tarfa (ET), Victor Anagor | Current State Assessment calls and key reviews for clients above ₦10,000,000 a month |
 | **Subject-matter expert** | Group co-founders and partners | Access to one engagement or problem area when invited |
 | **Finance** | To be named | Payment requests, proof, confirmation and reconciliation, without the diagnostic detail |
 | **Admin / Super Admin** | Lewis (Super Admin), Richard (admin) per D5 | Staff, roles, permissions and platform settings |
@@ -49,9 +49,9 @@ The whole journey is shown up front with prices (concept note D1). Prices live i
 | 1 | Free business check | Free | Ten minutes on a phone; a colour-coded outline of the ten problem areas; one of four gaps; a summary | **Built** |
 | 1a | Full report (optional) | ₦100,000 | A business-plan-depth report, built from the check and a 17-question form, emailed as a PDF the moment the form is finished | **Built** |
 | 2 | Discovery call | Free, 20 minutes at most | An honest answer: can we help, and with what | **Built** (booking and outcome) |
-| 3 | Payment for Current State | ₦500,000 (fixed) | Paid after the call, within 48 hours. Paystack is the agreed method; until it is set up, bank transfer with manual confirmation | **Built** (manual confirmation, interim) |
-| 4 | Getting set up (onboarding) | Included | Three working days: client account, welcome note, data request, analyst assigned, both Current State calls booked | **Partly built** (account only) |
-| 5 | Current State | Included in step 3 | Two weeks, one 90-minute call a week; ends with proceed, fix the basics first, or refer to Advisory | **Not built** in the platform |
+| 3 | Payment for Current State Assessment | ₦500,000 (fixed) | Paid after the call, within 48 hours. Paystack is the agreed method; until it is set up, bank transfer with manual confirmation | **Built** (manual confirmation, interim) |
+| 4 | Getting set up (onboarding) | Included | Three working days: client account, welcome note, data request, analyst assigned, both Current State Assessment calls booked | **Partly built** (account only) |
+| 5 | Current State Assessment | Included in step 3 | Two weeks, one 90-minute call a week; ends with proceed, fix the basics first, or refer to Advisory | **Not built** in the platform |
 | 6 | The six-week fix | ₦1,200,000 | One problem; what to do and the tools; a weekly 45-minute check-in; one measure tracked | **Not built** |
 | 7 | The plan | Standard engagement stops at about ₦2,500,000 | A plan in the owner's hands; ongoing support agreed per client | **Not built** |
 | — | Day-30 follow-up | Included | Check that the output is still in use and the measure held | **Not built** |
@@ -68,7 +68,7 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
   works with prices, the ten places a business gets stuck, who it is for, who you work with, questions, the ask.
 - Copy rules: second person, short sentences, naira in full, no consulting words, never "door", "sprint", "playbook"
   or "retainer" (§3 front matter; `AGENTS.md`).
-- No "book a Current State" button: the call comes first and the payment request follows it.
+- No "book a Current State Assessment" button: the call comes first and the payment request follows it.
 - **Status: Built** (`client/src/pages/Home.tsx`, content from `shared/businessSupport.ts`). Gap: the "Client sign in"
   link still opens the JUMP participant sign-in instead of `/login` ([App flow §10](03-app-flow.md)).
 
@@ -88,7 +88,7 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
 - Result: a colour-coded outline (clear, watch, stuck) with a "Start here" area, one of four gaps (clarity, know-how,
   resources, strategy), founder readiness in words, up to three services from the catalogue that fit, the full report
   offer, and the call booking. Areas the check did not ask about are shown greyed as "Not assessed" with the reason,
-  and "Current State looks at all ten" (*branch*).
+  and "The Current State Assessment looks at all ten" (*branch*).
 - The summary is AI-written and checked against the service catalogue; if the AI fails, a rules summary is used. The
   owner's description is the main source for tailoring; when it is unclear or does not fit the sector, the sector wins
   (*branch*). Scoring, routes and colours are deterministic and never changed by the AI.
@@ -103,7 +103,7 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
 
 ### F3. Full report (₦100,000)
 
-- Independent of Current State: it is simply the report, and it is never credited against later fees.
+- Independent of Current State Assessment: it is simply the report, and it is never credited against later fees.
 - Request from the result page → payment details emailed (with a reference such as `TS-R-000123`) → owner sends proof
   → the team marks proof received and confirms payment → the owner is emailed a private link to a 17-question form.
 - The form is about 12 minutes. Question 3 asks how each product is charged: a set price, a percentage of the deal
@@ -128,7 +128,7 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
 
 ### F5. Payments (manual confirmation until Paystack is set up)
 
-- Items: full report (₦100,000) and Current State (₦500,000). References `TS-R-` and `TS-CS-` with a six-digit number.
+- Items: full report (₦100,000) and Current State Assessment (₦500,000). References `TS-R-` and `TS-CS-` with a six-digit number.
 - Statuses: awaiting payment → proof received → paid. Only `manage_payments` (finance, Super Admin) can send details, mark
   proof or confirm.
 - Bank details come from the hosting settings. Until all three are set, emails show a test account marked
@@ -136,7 +136,7 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
 - **The 48-hour window** (concept note §7): payment details hold for 48 hours, and the email says when to pay by, in
   Lagos time. After that the team sees "48 hours passed" and either sends the details again (a new 48 hours) or moves
   the business to Lost. The stage never moves on its own, and money that still arrives can always be confirmed.
-- Confirming Current State moves the business to Won and sends the client account invitation.
+- Confirming Current State Assessment moves the business to Won and sends the client account invitation.
 - **Paystack is the agreed way to pay** (concept note §11): the owner pays online and the payment confirms itself, with the
   same effects as "Confirm payment". Manual confirmation is the interim method only because the Paystack account is not
   set up yet; once it is, manual confirmation stays as a fallback for direct transfers.
@@ -159,10 +159,10 @@ built around the four questions an owner asks:
 
 | The owner asks | The room shows | Concept note |
 |---|---|---|
-| **Where are we?** | The journey (getting set up, Current State week 1 and 2, the fix week 1 to 6, the plan, day 30), the next session and its date, the named team | §7 |
+| **Where are we?** | The journey (getting set up, Current State Assessment week 1 and 2, the fix week 1 to 6, the plan, day 30), the next session and its date, the named team | §7 |
 | **What do you need from me?** | Data requests with due dates, an upload against each, and a status (requested, received, accepted) | §7 onboarding: data request list |
 | **What did we agree?** | Each session with its notes, decisions and actions (who does what by when); in the fix, the measure with its baseline, target and weekly reading | §7: notes reach the owner the same day; §17 check-in rows |
-| **What have I got?** | Deliverables: the problem statement, Current State findings, the prescription and tools, the plan, the full report, invoices and receipts | §8, §17 |
+| **What have I got?** | Deliverables: the problem statement, Current State Assessment findings, the prescription and tools, the plan, the full report, invoices and receipts | §8, §17 |
 
 Rules:
 
@@ -177,7 +177,7 @@ Rules:
 ### F8. Engagement record and check-ins (internal)
 
 One record per client from the free check to day 30 (concept note §17): identity, business check, funnel, onboarding and
-Current State (analyst, data request sent and received, calls, chosen problem area, sub-problem, problem statement,
+Current State Assessment (analyst, data request sent and received, calls, chosen problem area, sub-problem, problem statement,
 partner involved), fix (measure name and definition, baseline, target, method version, tools issued), one weekly
 check-in row (progress, blockers, next step, measure reading, questions asked, hours by role, AI used) and close (final
 value, moved, extension, plan delivered, next problem area, ongoing support defined, day-30 check).
@@ -232,7 +232,7 @@ From concept note §13. The platform must make these countable without a spreads
 |---|---|---|
 | Free business checks completed | 150 by 10 December | `business_checks` (available today) |
 | Discovery calls held | 60 over nine weeks | Pipeline stage and Calendly booking (available today) |
-| Paying clients | 20 by 10 December | `payment_requests` confirmed for Current State (available today) |
+| Paying clients | 20 by 10 December | `payment_requests` confirmed for the Current State Assessment (available today) |
 | Fixes whose measure moved by week 6 | 70% or more | Engagement record (F8, not built) |
 | Outputs still in use at day 30 | 80% or more | Engagement record (F8, not built) |
 | Engagements fully logged | 100% | Engagement record (F8, not built) |
@@ -245,7 +245,7 @@ From concept note §13. The platform must make these countable without a spreads
 | Problem area | One of the ten places a business gets stuck, numbered 0 to 10 (`PROBLEM_AREAS`). Never "door" on the site |
 | Gap | What is missing: clarity, know-how, resources or strategy |
 | Outline | The colour-coded list of problem areas on the result: clear, watch, stuck |
-| Current State | The paid two-week assessment that names the one problem to fix first |
+| Current State Assessment | The paid two-week assessment that names the one problem to fix first |
 | Fix | Up to six weeks of weekly work on one problem, ending with a plan. Never "sprint" on the site |
 | Measure | The one number watched together |
 | Ongoing support | Help beyond the plan, defined per client. Never "retainer"; not priced |
@@ -259,21 +259,22 @@ From concept note §13. The platform must make these countable without a spreads
 | The full report is a condensed business plan: twelve parts, delivered as a PDF | ET |
 | The full report is fully deterministic: no consultant or analyst reviews it; it goes out the moment the form is finished | ET |
 | The report form (intake) comes after payment; no five-day turnaround | ET |
-| The full report is independent of Current State and is not credited against it | ET |
+| The full report is independent of the Current State Assessment and is not credited against it | ET |
 | Manual payment confirmation (details by email, proof, the team confirms) is the interim method because Paystack is not set up yet; placeholder details until real ones are set | ET |
-| Built up to the start of Current State; the engagement itself is the next phase | ET |
+| Built up to the start of the Current State Assessment; the engagement itself is the next phase | ET |
 | The business name and one-line description are required in the check | ET |
 | The twelve original sector options stay; Services examples are worded for any service firm | ET |
-| Areas the check leaves out are shown greyed as "Not assessed", with "Current State looks at all ten" | ET |
+| Areas the check leaves out are shown greyed as "Not assessed", with "The Current State Assessment looks at all ten" | ET |
 | The description is the main source for tailoring the AI summary; the sector wins when the description does not fit | ET |
 | The report form asks how each product is charged, so commission and margin businesses get a true report | ET |
 | The brand palette is fixed and enforced by tests; the IP Factory logo is on every email to clients | ET |
-| Current State is ₦500,000, fixed: no price grades (closes the concept note's Open 1) | ET |
+| The Current State Assessment is ₦500,000, fixed: no price grades (closes the concept note's Open 1) | ET |
 | Payment details hold for 48 hours; the team sends fresh details or moves the business to Lost | ET |
 | The check asks trading businesses what they have tried, what the problem costs and who decides | ET |
 | The check stays rules-driven: fixed questions and scoring, with AI writing only the summary | ET |
 | Younger businesses are not asked about exit (under 5 years) or owner transition (under 10 years); those areas show as "Not assessed" | ET |
-| The client account invitation goes out when Current State is paid; staff can still invite by hand at any time | ET |
+| The client account invitation goes out when the Current State Assessment is paid; staff can still invite by hand at any time | ET |
+| The paid assessment is called "Current State Assessment" everywhere: site, emails, admin, the report and these documents | ET |
 
 ## 10. Open decisions
 
@@ -288,7 +289,7 @@ From concept note §13. The platform must make these countable without a spreads
 | O8 | File storage for the engagement room (concept note uses one Google Drive folder per client) | A private Supabase Storage bucket, so files sit behind the same access rules as the record | Lewis, Richard |
 | O9 | Where actions live (the concept note says one place for actions: ClickUp) | Actions the client must see (theirs and ours) in the engagement room; the team's internal tasks stay in ClickUp | ET, Lewis |
 
-O4 (one Current State price or two grades) was decided on 9 October: ₦500,000, fixed.
+O4 (one Current State Assessment price or two grades) was decided on 9 October: ₦500,000, fixed.
 
 ## 11. Where we depart from the concept note
 
@@ -306,6 +307,7 @@ decided. "Confirmed" means a change made while building and confirmed by ET on 9
 | Client area = the Jump portal (uploads, feedback, files) | Invitation-only client accounts; the engagement room is next. The Jump portal is legacy, so uploads wait for phase 3 | Decided |
 | Call outcome: fit, refer, decline | Pipeline stages: Lead, Qualified lead, Call booked, Opportunity, Won, Lost, Nurture, Referred | Decided |
 | Current State "from ₦500,000", grades to set (Open 1) | ₦500,000, fixed | Decided (ET, 9 October) |
+| The step is called "Current State" | "Current State Assessment" everywhere | Decided (ET, 9 October) |
 | An AI trained on ET's logic asks the next question (D8, D11) | A fixed decision tree with fixed scoring; AI writes only the summary, checked against the catalogue | Confirmed |
 | Owners trading 2 to 10 years are asked every area | Exit and value from 5 years, owner transition from 10 years; skipped areas show as "Not assessed" | Confirmed |
 | The problem block: in their words, tried, costing, who decides, hours, how they heard, referral code | All asked, except a referral code (referrals are not built in the new flow yet) | Built (9 October) |
@@ -314,5 +316,5 @@ decided. "Confirmed" means a change made while building and confirmed by ET on 9
 | Crossing problems show as two colours on the outline | One colour per area and one main gap | Planned (phase 5) |
 | One Google Drive folder per client | A private Supabase Storage bucket | Proposed (O8) |
 | One place for actions: ClickUp | Client-facing actions in the engagement room; internal tasks in ClickUp | Proposed (O9) |
-| Richard's locked flow: Fit → onboarding invitation | Fit → Current State payment → invitation (the concept note's pay-then-set-up order); a manual invitation is still possible at Fit | Confirmed; `Instruction.md` to be updated by Richard |
+| Richard's locked flow: Fit → onboarding invitation | Fit → Current State Assessment payment → invitation (the concept note's pay-then-set-up order); a manual invitation is still possible at Fit | Confirmed; `Instruction.md` to be updated by Richard |
 

@@ -90,7 +90,7 @@ export function buildOnboardingEmail(input: { fullName: string; businessName: st
  * returned URL, which goes to the authorised admin and the client's email: it is never stored or logged.
  *
  * NOTE: there is no canonical persisted "discovery call = fit" field, so it is not enforced here, and none is faked. The
- * caller is an authorised administrator (see docs/authentication.md). A confirmed Current State payment
+ * caller is an authorised administrator (see docs/authentication.md). A confirmed Current State Assessment payment
  * (server/payments.ts, payment_requests) calls this automatically; an administrator can still invite by hand.
  */
 export async function createOnboardingInvitation(input: { businessCheckId: number; actorUserId: number }) {

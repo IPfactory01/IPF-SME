@@ -4,7 +4,7 @@
 `docs/ipf-factory/MIGRATION_CHECKLIST.md` §9, which was written for Manus and v0.6.
 
 **The sequencing rule:** build each part just ahead of the first paying client who needs it. The pilot calendar
-(concept note §9) sets the pace: the first clients pay in week 2 (from 16 October), Current State starts in week 3
+(concept note §9) sets the pace: the first clients pay in week 2 (from 16 October), the Current State Assessment starts in week 3
 (from 23 October) and the first fixes start in week 5 (from 6 November).
 
 ---
@@ -17,9 +17,9 @@
 | Free business check: details first, decision tree, outline, four gaps, AI summary with rules fallback, saved progress | `test/shared/businessCheck/*`, golden snapshots |
 | Discovery call booking (Calendly) and outcome (Fit, Refer, Decline, Nurture) | `test/server/businessCheck*`, `test/db/*` |
 | Staff sign-in, roles and permissions, invitations, audit trail | `test/server/accountAuth.test.ts`, `test/shared/platformPermissions.test.ts`, `test/db/*` |
-| Payments by bank transfer: details, proof, confirmation (full report, Current State) | `test/server/payments.test.ts`, `test/db/payments.db.test.ts` |
+| Payments by bank transfer: details, proof, confirmation (full report, Current State Assessment) | `test/server/payments.test.ts`, `test/db/payments.db.test.ts` |
 | Full report: 17-question form, deterministic PDF emailed at once, admin status and download | `test/shared/fullReport/*`, `test/server/fullReport/*` |
-| Client account by invitation after Current State is paid; Won stage | `test/server/clientOnboarding.test.ts`, `test/db/payments.db.test.ts` (whole journey) |
+| Client account by invitation after Current State Assessment is paid; Won stage | `test/server/clientOnboarding.test.ts`, `test/db/payments.db.test.ts` (whole journey) |
 
 Also on `main` since 9 October: the original twelve sectors; "Not assessed" areas on the result; the report form asking
 how each product is charged; the invitation page asking someone else signed in to sign out first; the 48-hour payment
@@ -57,7 +57,7 @@ Manual confirmation is the interim method only because Paystack is not set up. T
 
 | # | Build | Acceptance |
 |---|---|---|
-| P1 | **Checkout:** a "Pay now" link in the payment email (and on the result page for the full report) that opens Paystack for the exact amount and reference | The owner can pay the full report or Current State by card or bank on Paystack |
+| P1 | **Checkout:** a "Pay now" link in the payment email (and on the result page for the full report) that opens Paystack for the exact amount and reference | The owner can pay the full report or Current State Assessment by card or bank on Paystack |
 | P2 | **Webhook:** Paystack's signed notification confirms the payment request automatically, after checking the signature, the amount, the currency and the reference | The same emails and effects as "Confirm payment": the report link, or Won plus the client invitation. A forged or mismatched notification changes nothing |
 | P3 | **Admin:** payments show "Paid by Paystack" with Paystack's reference; manual "Proof received" and "Confirm payment" stay for direct transfers | The team can tell at a glance how each payment arrived |
 | P4 | **Copy:** payment emails lead with "Pay now"; bank details stay as the alternative | No email asks for proof when the owner paid on Paystack |
@@ -66,22 +66,22 @@ Tests mock Paystack: no real keys in tests. Webhook signatures are checked with 
 
 ## 5. Phase 1: foundation for the engagement room (needed by 23 October)
 
-Goal: when a client pays for Current State, an engagement exists, a team is assigned, and both the client and the team can
+Goal: when a client pays for the Current State Assessment, an engagement exists, a team is assigned, and both the client and the team can
 see where it stands.
 
 | # | Build | Acceptance | Notes |
 |---|---|---|---|
 | 1.1 | **File storage** on a private Supabase Storage bucket, with short-lived signed links issued by the server after an access check | A file uploaded for client A cannot be read by client B or an unassigned analyst; links expire | Replaces the Manus storage proxy (old R3). New env names only in `.env.example` |
-| 1.2 | **Engagement table**: created when the Current State payment is confirmed; linked to the business when the client creates their account | Confirming payment creates exactly one engagement; accepting the invitation links it | **Migration**: dedicated branch per `AGENTS.md` |
+| 1.2 | **Engagement table**: created when the Current State Assessment payment is confirmed; linked to the business when the client creates their account | Confirming payment creates exactly one engagement; accepting the invitation links it | **Migration**: dedicated branch per `AGENTS.md` |
 | 1.3 | **Engagement assignments** (engagement × person × role: lead, analyst, partner, expert) and the scope check | Analysts see only assigned engagements; `view_all_businesses` sees all | Permissions `manage_engagements`, `assign_engagements`, `review_engagements` already exist in `shared/platformPermissions.ts` |
-| 1.4 | **Internal engagement page**: stage, team, and the getting-set-up checklist (welcome note sent, data request sent, WhatsApp group created, analyst assigned, both Current State calls booked) | The desk lead can run onboarding from one screen in three working days | Concept note §7 onboarding |
+| 1.4 | **Internal engagement page**: stage, team, and the getting-set-up checklist (welcome note sent, data request sent, WhatsApp group created, analyst assigned, both Current State Assessment calls booked) | The desk lead can run onboarding from one screen in three working days | Concept note §7 onboarding |
 | 1.5 | **Client room v1: "Where are we?"** on `/dashboard`: the journey with the current step, the next session date, the named team | A client sees only their own engagement | Replaces the profile-only dashboard |
 
-## 6. Phase 2: sessions, notes and deliverables (needed by 23 October, the first Current State call)
+## 6. Phase 2: sessions, notes and deliverables (needed by 23 October, the first Current State Assessment call)
 
 | # | Build | Acceptance |
 |---|---|---|
-| 2.1 | **Sessions**: date, type (Current State call 1 and 2, check-in, review), attendees, link | Both Current State calls can be booked from the engagement page |
+| 2.1 | **Sessions**: date, type (Current State Assessment call 1 and 2, check-in, review), attendees, link | Both Current State Assessment calls can be booked from the engagement page |
 | 2.2 | **Notes and actions** per session: client version and internal version; actions with owner and due date | Notes are shared with the client the same day; internal notes are never visible to the client |
 | 2.3 | **Deliverables**: upload, version, share; prescriptions and plans need desk lead approval before sharing | An unapproved prescription cannot be shared; every share is audited |
 | 2.4 | **Email notices** to the client when something is shared with them | Branded email, link to the room, no content in the email body beyond the title |
@@ -99,7 +99,7 @@ Decisions needed first: O1 transcripts, O2 messages, O3 who releases what (PRD �
 
 | # | Build | Acceptance |
 |---|---|---|
-| 4.1 | **Problem statement** from Current State: chosen problem area, sub-problem, the owner's words | Exactly one problem per fix (D3) |
+| 4.1 | **Problem statement** from Current State Assessment: chosen problem area, sub-problem, the owner's words | Exactly one problem per fix (D3) |
 | 4.2 | **Measure**: name, definition, baseline, target, recorded in fix week 1 | The client can see the measure and where it stands |
 | 4.3 | **Weekly check-in**: the five-question template, measure reading, questions asked, hours by role, AI used | A check-in cannot be closed without last week's actions reviewed |
 | 4.4 | **Close and day 30**: final value, moved, extension weeks, plan delivered, next problem area, ongoing support defined, day-30 check | The PRD §7 pass marks are countable from the record |

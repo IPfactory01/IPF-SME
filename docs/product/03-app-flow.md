@@ -57,14 +57,14 @@ flowchart TD
   G3 --> G4[/report/:token: 17 questions/]
   G4 -->|Submit| G5[PDF emailed at once and downloadable]
   F --> H[Discovery call, 20 minutes]
-  H -->|Team records Opportunity| I[Current State payment details emailed]
+  H -->|Team records Opportunity| I[Current State Assessment payment details emailed]
   H -->|Refer| R[Referred]
   H -->|Lost| L[Lost]
   I --> I2[Owner pays and sends proof]
   I2 -->|Team confirms| J[Won: client account invitation emailed]
   J --> K[/onboarding/:token: create account/]
   K --> M[/dashboard/]
-  M -.->|Planned| N[Engagement room: Current State, fix, plan]
+  M -.->|Planned| N[Engagement room: Current State Assessment, fix, plan]
 ```
 
 ## 3. The free business check, screen by screen
@@ -102,7 +102,7 @@ The form can be submitted once. After that the same link shows "Your report has 
 
 **Interim steps:** "Proof received" and "Confirm payment" are manual only because Paystack is not set up yet. With
 Paystack, the owner pays online and the payment confirms itself, with the same emails and status changes; manual
-confirmation stays for direct transfers. The same applies to the Current State payment in section 5.
+confirmation stays for direct transfers. The same applies to the Current State Assessment payment in section 5.
 
 ## 5. From the call to a client account
 
@@ -112,8 +112,8 @@ confirmation stays for direct transfers. The same applies to the Current State p
 | "Schedule discovery call" | Desk lead | Records the agreed time | — | — |
 | "Record call outcome" | Desk lead | **Opportunity** (fit), **Refer** or **Lost** | — | **Opportunity**, **Referred** or **Lost** |
 | "Move to" | Desk lead | Any other stage, with a note (for example **Nurture**) | — | As chosen |
-| "Send payment details" (Current State) | Finance or Super Admin | Payment request for ₦500,000 | Owner: *Payment details for your Current State* | Moves to **Opportunity** if earlier |
-| "Proof received", then "Confirm payment" | Finance or Super Admin | Payment confirmed; an invitation is created unless one is pending or accepted | Owner: *Payment received: your Current State starts* and *Set up your client account on The Shift* | **Won** |
+| "Send payment details" (Current State Assessment) | Finance or Super Admin | Payment request for ₦500,000 | Owner: *Payment details for your Current State Assessment* | Moves to **Opportunity** if earlier |
+| "Proof received", then "Confirm payment" | Finance or Super Admin | Payment confirmed; an invitation is created unless one is pending or accepted | Owner: *Payment received: your Current State Assessment starts* and *Set up your client account on The Shift* | **Won** |
 | "Create account" | Owner | `onboarding.accept`: person, credential, business, owner membership and session in one transaction | — | Invitation: **accepted** |
 
 **The 48-hour window:** every payment details email says when to pay by, 48 hours after it was sent (Lagos time).
@@ -121,7 +121,7 @@ After that the payment shows "48 hours passed": the team sends the details again
 to Lost. Nothing moves on its own, and money that still arrives can be confirmed.
 
 **Relation to the locked flow in `Instruction.md`:** that flow goes Fit → onboarding invitation. The automatic
-invitation follows the Current State payment instead (the concept note's pay-then-set-up order); a manual invitation
+invitation follows the Current State Assessment payment instead (the concept note's pay-then-set-up order); a manual invitation
 at Fit is still possible.
 
 The desk lead can also send an invitation by hand from **Client Onboarding** ("Invite to onboard") and revoke a pending
@@ -159,10 +159,10 @@ stateDiagram-v2
   [*] --> lead: details given
   lead --> qualified_lead: check finished
   qualified_lead --> call_booked: call booked or requested
-  call_booked --> opportunity: outcome Opportunity, or Current State details sent
+  call_booked --> opportunity: outcome Opportunity, or Current State Assessment details sent
   call_booked --> referred: outcome Refer
   call_booked --> lost: outcome Lost
-  opportunity --> won: Current State payment confirmed
+  opportunity --> won: Current State Assessment payment confirmed
   opportunity --> lost
   lead --> nurture: Move to
   qualified_lead --> nurture: Move to
@@ -182,10 +182,10 @@ here so the build follows an agreed path.
 
 ```mermaid
 flowchart TD
-  P[Current State payment confirmed] --> E1[Engagement created; desk lead assigns the team]
+  P[Current State Assessment payment confirmed] --> E1[Engagement created; desk lead assigns the team]
   E1 --> E2[Getting set up, three working days: welcome note, data request, WhatsApp group, both calls booked]
   E2 --> E3[Client room: Where are we? What do you need from me?]
-  E3 --> CS1[Current State call 1] --> CS2[Current State call 2]
+  E3 --> CS1[Current State Assessment call 1] --> CS2[Current State Assessment call 2]
   CS1 -->|notes the same day| E4[Client room: What did we agree?]
   CS2 --> PS[Problem statement and measure agreed]
   PS -->|desk lead approves| FX[Six-week fix: prescription, tools, weekly check-in, measure reading]

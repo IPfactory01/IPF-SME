@@ -3,7 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { savePdf } from "@/lib/savePdf";
 import { trpc } from "@/lib/trpc";
-import { formatNaira } from "@shared/businessSupport";
+import { CURRENT_STATE, formatNaira } from "@shared/businessSupport";
 import { PAYMENT_DISPLAY_LABELS, PAYMENT_ITEM_DETAILS, PAYMENT_ITEMS, PAYMENT_WINDOW_HOURS, type PaymentDisplayStatus, type PaymentItem, type PaymentStatus } from "@shared/payments";
 import React, { useState } from "react";
 import { toast } from "sonner";
@@ -12,7 +12,7 @@ import { formatDate, formatDateTime } from "./format";
 /**
  * Payment by bank transfer until online payment is ready: send the details (the owner is emailed the amount, account
  * and reference), note when proof arrives, and confirm when the money is in the account. The server checks the
- * permission (manage_payments) and records every step; confirming Current State wins the business and sends the client
+ * permission (manage_payments) and records every step; confirming the Current State Assessment wins the business and sends the client
  * account invitation.
  */
 
@@ -67,7 +67,7 @@ function ReportLine({ businessCheckId, report }: { businessCheckId: number; repo
   );
 }
 
-const SHORT_NAME: Record<PaymentItem, string> = { full_report: "Report", current_state: "Current State" };
+const SHORT_NAME: Record<PaymentItem, string> = { full_report: "Report", current_state: CURRENT_STATE.name };
 
 const CHIP: Record<PaymentDisplayStatus, string> = {
   requested: "border-highlight-ink/30 bg-highlight-ink/5 text-highlight-ink",
@@ -76,7 +76,7 @@ const CHIP: Record<PaymentDisplayStatus, string> = {
   expired: "border-danger-line bg-danger-tint text-danger",
 };
 
-/** The payment state beside a business check in the lists: "Report paid", "Current State: proof received"… */
+/** The payment state beside a business check in the lists: "Report paid", "Current State Assessment: proof received"… */
 export function PaymentChips({ payments, reportRequestedAt }: { payments: Partial<Record<PaymentItem, PaymentDisplayStatus>>; reportRequestedAt: Date | string | null }) {
   const chips = PAYMENT_ITEMS.flatMap(item => {
     const status = payments[item];
@@ -88,7 +88,7 @@ export function PaymentChips({ payments, reportRequestedAt }: { payments: Partia
 }
 
 const INVITATION_RESULT = {
-  sent: "Payment confirmed. Current State starts: the client account invitation is on its way.",
+  sent: `Payment confirmed. The ${CURRENT_STATE.name} starts: the client account invitation is on its way.`,
   already_invited: "Payment confirmed. A client account invitation was already out, so no new one was sent.",
   has_account: "Payment confirmed. They already have a client account.",
 } as const;
@@ -171,7 +171,7 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
         <div className="mt-3 space-y-2 border-t border-line-soft pt-3">
           <p className="text-[13px] text-ink">
             Only confirm once you have seen {formatNaira(payment.amountNaira)} with reference {payment.reference} in the account. The owner is emailed
-            {item === "current_state" ? ", the business moves to Won and they get a link to set up their client account, where Current State starts." : " with a link to a short form; their report is emailed the moment they finish it."}
+            {item === "current_state" ? ", the business moves to Won and they get a link to set up their client account, where the Current State Assessment starts." : " with a link to a short form; their report is emailed the moment they finish it."}
           </p>
           <div className="space-y-1">
             <Label htmlFor={`payment-note-${payment.id}`} className="text-xs text-ink-muted">Note (optional)</Label>
@@ -187,7 +187,7 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
   );
 }
 
-/** Both things an owner can pay for before Current State, in journey order. */
+/** Both things an owner can pay for before the Current State Assessment, in journey order. */
 export function PaymentsPanel({ businessCheckId, payments, report = null }: { businessCheckId: number; payments: Payment[] | null | undefined; report?: ReportState }) {
   if (payments === null) return <p className="text-sm text-ink-muted">Payments are not set up in the database yet (migration 0006).</p>;
   return (

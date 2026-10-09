@@ -9,11 +9,11 @@ Live at https://ipf-sme.vercel.app (Vercel, deploying `main`).
   of four gaps, and a summary. Saved as a lead from the first screen.
 - **Full report (₦100,000):** paid by bank transfer, then a 17-question form; a deterministic PDF report is emailed the
   moment the form is finished.
-- **Discovery call and Current State payment:** Calendly booking, call outcome, payment details, proof and confirmation.
-- **Client accounts:** created by invitation once Current State is paid; one identity per person, businesses as
+- **Discovery call and Current State Assessment payment:** Calendly booking, call outcome, payment details, proof and confirmation.
+- **Client accounts:** created by invitation once the Current State Assessment is paid; one identity per person, businesses as
   workspaces, client isolation enforced on the server.
 - **Admin console:** leads, pipeline, payments, reports, onboarding, staff roles and permissions, audit trail.
-- **Next:** the engagement room for clients (Current State, the six-week fix, the plan).
+- **Next:** the engagement room for clients (Current State Assessment, the six-week fix, the plan).
 
 **Product documents:** [`docs/product/`](docs/product/README.md) holds the PRD, technical requirements, app flow, design
 brief, backend schema and implementation plan. Start there.

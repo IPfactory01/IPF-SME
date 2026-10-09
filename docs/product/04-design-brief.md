@@ -145,7 +145,7 @@ from the plain-text body so both versions say the same thing:
 
 When the engagement room is built (PRD F7), it follows this brief and adds:
 
-- A **journey bar** across the top: getting set up, Current State, the fix, the plan, day 30; the current step in
+- A **journey bar** across the top: getting set up, Current State Assessment, the fix, the plan, day 30; the current step in
   `brand`, done steps with a check, future steps muted.
 - **Four cards** answering the owner's questions: Where are we? What do you need from me? What did we agree? What have
   I got? Each card shows at most three items and a "See all" link.

@@ -60,12 +60,12 @@ describe("the payment details email", () => {
     expect(email.body).not.toContain("DO NOT PAY");
   });
 
-  it("says Current State starts once the payment is confirmed", () => {
+  it("says Current State Assessment starts once the payment is confirmed", () => {
     configure();
     const email = paymentDetailsEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012" , deadline: DEADLINE });
-    expect(email.subject).toBe("Payment details for your Current State");
+    expect(email.subject).toBe("Payment details for your Current State Assessment");
     expect(email.body).toContain("Amount: ₦500,000");
-    expect(email.body).toContain("Then your Current State starts. Three working days to get set up, then we start.");
+    expect(email.body).toContain("Then your Current State Assessment starts. Three working days to get set up, then we start.");
   });
 
   it("warns in capitals, as a heading, when the details are placeholders", () => {
@@ -89,12 +89,26 @@ describe("the payment confirmed email", () => {
     expect(email.body).not.toMatch(/working days/);
   });
 
-  it("starts Current State and says what happens next", () => {
+  it("starts Current State Assessment and says what happens next", () => {
     const email = paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012" });
-    expect(email.subject).toBe("Payment received: your Current State starts");
+    expect(email.subject).toBe("Payment received: your Current State Assessment starts");
     expect(email.body).toContain("WHAT HAPPENS NEXT");
     expect(email.body).toContain("• We email you a link to set up your client account on The Shift.");
     expect(`${email.subject}\n${email.body}`).not.toMatch(/JUMP|Emmanuel Tarfa/);
+  });
+});
+
+describe("the name of the paid assessment", () => {
+  it("is always Current State Assessment in payment emails, never the short Current State (decided 9 October)", () => {
+    const emails = [
+      paymentDetailsEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012", deadline: DEADLINE }),
+      paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012" }),
+    ];
+    for (const email of emails) {
+      const text = `${email.subject}\n${email.body}`;
+      expect(text).toContain("Current State Assessment");
+      expect(text).not.toMatch(/Current State(?! Assessment)/);
+    }
   });
 });
 

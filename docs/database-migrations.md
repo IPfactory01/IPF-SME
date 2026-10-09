@@ -13,9 +13,9 @@ run `pnpm db:verify` (read-only, needs `MIGRATION_DATABASE_URL`). It reports PAS
 | `0002_universal_accounts_and_businesses` | 2026-10-07 | `user_credentials`, `user_sessions`, `businesses`, `business_memberships`; `users.status`; unique `lower(email)` index on `users`; 4 enum types (47 total) |
 | `0003_client_onboarding_invitations` | applied (confirmed by `db:verify`) | `client_onboarding_invitations` (token hash, status, expiry, links to the business check, issuer, accepted user and business); 2 enum types (49 total); partial unique index (one pending invitation per business check) |
 | `0004_platform_roles_and_active_workspace` | applied (confirmed by `db:verify`) | `user_platform_roles` (userId, role, grantedByUserId; unique per user and role; 7-value role enum, 50 enums total); `user_sessions.activeBusinessId` (nullable, set null if the business is deleted) |
-| `0005_business_check_call_scheduled` | **NOT YET APPLIED** | `business_checks.callScheduledFor` (nullable timestamptz): the time an administrator agreed the discovery call for. `ALTER TABLE "business_checks" ADD COLUMN "callScheduledFor" timestamp with time zone;` |
-| `0006_payment_requests` | **NOT YET APPLIED** | `payment_requests` (one row per business check and item: full report or Current State; amount, transfer reference, status requested / proof received / confirmed, who sent and confirmed it); 3 enum types (53 total); 3 foreign keys (15 total); unique index per check and item. Additive: one new table, nothing existing changes. |
-| `0007_full_reports` | **NOT YET APPLIED** | `full_reports` (one per business check: the Report Intake link hash, status awaiting intake / delivered, the intake answers, when it was submitted and sent, the report version); 2 enum types (55 total); 2 foreign keys (17 total). Additive. |
+| `0005_business_check_call_scheduled` | applied (confirmed 9 October 2026: recorded in `drizzle.__drizzle_migrations`) | `business_checks.callScheduledFor` (nullable timestamptz): the time an administrator agreed the discovery call for. `ALTER TABLE "business_checks" ADD COLUMN "callScheduledFor" timestamp with time zone;` |
+| `0006_payment_requests` | 9 October 2026 | `payment_requests` (one row per business check and item: full report or Current State; amount, transfer reference, status requested / proof received / confirmed, who sent and confirmed it); 3 enum types (53 total); 3 foreign keys (15 total); unique index per check and item. Additive: one new table, nothing existing changes. |
+| `0007_full_reports` | 9 October 2026 | `full_reports` (one per business check: the Report Intake link hash, status awaiting intake / delivered, the intake answers, when it was submitted and sent, the report version); 2 enum types (55 total); 2 foreign keys (17 total). Additive. |
 
 After `0003`, `pnpm db:verify` passed 27/27 (35 tables, 49 enums). After `0004` it expects 36 tables, 50 enums and 12 foreign keys.
 Until `0004` is applied, `db:verify` fails and workspace switching, platform roles and the new account context cannot work against
@@ -34,3 +34,9 @@ request still reaches info@ipfactory.co with "Payment details: NOT SENT". Apply 
 **`0007` and deployment order.** Same shape as `0006`: a new table only. Apply `0006` and `0007` together with one
 `pnpm db:migrate`. Until `0007` is applied, confirming a report payment fails at the point of issuing the report form
 link (the payment itself stays recorded), and the admin record shows no report status.
+
+**How `0006` and `0007` were applied.** On 9 October 2026, from the Supabase SQL Editor, with a guarded script that does
+what `pnpm db:migrate` does in one transaction: it refused to run unless exactly `0000` to `0005` were recorded and neither
+table existed, ran the two migration files unchanged, and recorded both in `drizzle.__drizzle_migrations` with the file
+hashes and journal timestamps. Result: both tables present, 8 migrations recorded, so `pnpm db:verify` and the next
+`pnpm db:migrate` stay in step. Future migrations should still go through `pnpm db:migrate`.

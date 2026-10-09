@@ -75,7 +75,7 @@ export default function EngagementRoom({ room }: { room: Room }) {
         {ours.length > 0 && (
           <div className="mt-4">
             <p className={KICKER}>What we owe you</p>
-            <ul className="mt-1 space-y-1 text-sm">{ours.map(task => <li key={task.id} className="flex justify-between gap-3"><span>{task.title}</span><span className="text-ink-muted">{dueText(task.dueOn)}</span></li>)}</ul>
+            <ul className="mt-1 space-y-1 text-sm">{ours.map(task => <li key={task.id} className="flex justify-between gap-3"><span>{task.title}</span><span className="whitespace-nowrap text-ink-muted">{dueText(task.dueOn)}</span></li>)}</ul>
           </div>
         )}
       </section>

@@ -12,7 +12,7 @@ import { Router, useLocation } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import App from "../App";
 import "../index.css";
-import { previewLink } from "./previewLink";
+import { previewLink, previewSession } from "./previewLink";
 
 // Asset paths are site-absolute in the app; make them relative to wherever the preview is served.
 for (const key of ["logoUrl", "logoOnDarkUrl", "markUrl"] as const) {
@@ -38,7 +38,8 @@ const PAGES = [
   { path: "/check", label: "Business check" },
   { path: "/report/preview", label: "Report form" },
   { path: "/admin/login", label: "Admin sign-in" },
-  { path: "/portal", label: "Client portal" },
+  { path: "/dashboard", label: "Client room" },
+  { path: "/portal", label: "JUMP portal" },
 ];
 
 function PreviewBar() {
@@ -55,7 +56,13 @@ function PreviewBar() {
           <button
             key={page.path}
             type="button"
-            onClick={() => { setLocation(page.path); window.scrollTo({ top: 0 }); }}
+            onClick={() => {
+              // The client room shows a signed-in sample owner; everywhere else the visitor is signed out.
+              previewSession.signedIn = page.path === "/dashboard";
+              void queryClient.invalidateQueries();
+              setLocation(page.path);
+              window.scrollTo({ top: 0 });
+            }}
             className={location === page.path ? "font-semibold text-paper underline underline-offset-4" : "text-on-dark-muted hover:text-paper"}
           >
             {page.label}

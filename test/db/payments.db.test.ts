@@ -323,7 +323,7 @@ for (const target of targets) {
         expect(emails().find(item => item.to === "info@ipfactory.co")!.subject).toMatch(/^Full report sent: /);
 
         const row = await reportRow(id);
-        expect(row).toMatchObject({ status: "delivered", reportVersion: 1, deliveryStatus: "Simulated" });
+        expect(row).toMatchObject({ status: "delivered", reportVersion: 2, deliveryStatus: "Simulated" });
         expect(JSON.parse(row.intakeJson)).toEqual(sampleIntake);
         expect(row.deliveredAt).toBeInstanceOf(Date);
         expect(await auditsFor("full_report_delivered", id)).toHaveLength(1);

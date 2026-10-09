@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { evaluate } from "@shared/businessCheck/engine";
-import { buildFullReport, reportMetrics, type FullReport } from "@shared/fullReport/build";
-import type { ReportIntake } from "@shared/fullReport/intake";
+import { buildFullReport, chargeText, reportMetrics, type FullReport } from "@shared/fullReport/build";
+import { readIntake, type ReportIntake } from "@shared/fullReport/intake";
 import { businessCheckProfiles } from "../../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../../fixtures/reportIntake";
 
@@ -38,6 +38,49 @@ describe("the full report", () => {
     expect(report.descriptor).toMatch(/^A business that /);
     expect(text(report)).not.toMatch(/undefined|NaN|\bnull\b/);
     expect(part(report, 1).blocks.flatMap((block) => (block.kind === "facts" ? block.rows.map((row) => row.label) : []))).not.toContain("Sector");
+  });
+
+  it("shows a commission as a percentage of the deal, and reads the margin as a share of each fee", () => {
+    const report = build("smallOperatingTrader", {
+      products: [
+        { name: "Deal advisory", basis: "percent", price: null, percent: 2.5, dealSize: 50_000_000 },
+        { name: "Market studies", basis: "price", price: 1_500_000, percent: null, dealSize: null },
+        { name: "Introductions", basis: "percent", price: null, percent: 1, dealSize: null },
+      ],
+      topEarner: 0,
+    });
+    const table = part(report, 1).blocks.find((block) => block.kind === "table");
+    expect(table).toMatchObject({ columns: ["What you sell", "Price or fee", ""], rows: [
+      ["Deal advisory", "2.5% of the deal, about ₦1,250,000 on a ₦50,000,000 deal", "Top earner"],
+      ["Market studies", "₦1,500,000", ""],
+      ["Introductions", "1% of the deal", ""],
+    ] });
+    expect(text(report)).toContain("You earn a percentage of each deal, so your income rises and falls with the number and size of deals, not with a price list.");
+    expect(text(report)).toContain('"label":"Gross margin","value":"25% to 50%","note":"Left from each fee after direct costs"');
+    expect(text(report)).toContain("keeping about 25% to 50% of each fee after direct costs");
+    expect(text(report)).not.toMatch(/Left from each sale|of each sale after direct costs/);
+    const intakeRows = report.appendix[1].rows;
+    expect(intakeRows.find((row) => row.question.startsWith("Out of every ₦100 you earn in commission and fees"))).toBeTruthy();
+    expect(intakeRows.find((row) => row.question.startsWith("Your top three"))!.answer).toBe("Deal advisory (2.5% of the deal, about ₦1,250,000 on a ₦50,000,000 deal); Market studies (₦1,500,000); Introductions (1% of the deal)");
+  });
+
+  it("quotes a typed margin as typed, and judges it by the same bands", () => {
+    const report = build("smallOperatingTrader", { costShare: "over_75", marginPercent: 20 });
+    expect(reportMetrics({ ...sampleIntake, costShare: "over_75", marginPercent: 20 }, {}).margin).toEqual({ text: "20%", health: "stuck" });
+    expect(text(report)).toContain("Gross margin, from your answer: 20% (₦80 of every ₦100 goes on direct costs).");
+    expect(text(report)).toContain('"label":"Gross margin","value":"20%"');
+    expect(text(report)).not.toContain("under 25%");
+    expect(report.appendix[1].rows.find((row) => row.question.startsWith("Out of every ₦100"))!.answer).toBe("A margin of 20%");
+    expect(reportMetrics({ ...sampleIntake, costShare: "25_50", marginPercent: 62.5 }, {}).margin).toEqual({ text: "62.5%", health: "clear" });
+  });
+
+  it("builds the same report from a form sent before the charge choice and the margin box existed", () => {
+    const { marginPercent: _margin, ...older } = sampleIntake;
+    const stored = JSON.parse(JSON.stringify({ ...older, products: sampleIntake.products.map(({ name, price }) => ({ name, price })) }));
+    const answers = { ...businessCheckProfiles.smallOperatingTrader, p_name: "Adunni Fabrics" } as Record<string, string>;
+    const input = { reference: "TS-R-000012", date: DATE, contact: { fullName: "Adunni Example", businessName: "Adunni Fabrics" }, answers, result: evaluate(answers) };
+    expect(buildFullReport({ ...input, intake: readIntake(stored)! })).toEqual(buildFullReport({ ...input, intake: sampleIntake }));
+    expect(chargeText({ name: "Aso-oke sets", basis: "varies", price: null, percent: null, dealSize: null })).toBe("Varies");
   });
 
   it("dates the report from the intake and carries the reference", () => {

@@ -8398,6 +8398,11 @@ var PRICE_POSITION = choice([
   { value: "lower", label: "Lower than theirs" },
   { value: "not_sure", label: "I'm not sure" }
 ]);
+var CHARGE_BASIS = choice([
+  { value: "price", label: "A set price" },
+  { value: "percent", label: "A percentage of the deal" },
+  { value: "varies", label: "It varies" }
+]);
 var COST_SHARE = choice([
   { value: "under_25", label: "Less than \u20A625" },
   { value: "25_50", label: "\u20A625 to \u20A650" },
@@ -8478,16 +8483,47 @@ var LOANS = choice([
 var values = (options) => options.map((option) => option.value);
 var text2 = (max) => z15.string().trim().max(max);
 var naira2 = z15.number().int().min(0).max(1e11).nullable();
+var percentage = z15.number().positive("Enter a percentage above 0.").max(100, "Enter a percentage of 100 or less.");
+var product = z15.preprocess(
+  (value) => value && typeof value === "object" && !("basis" in value) ? { ...value, basis: value.price == null ? "varies" : "price" } : value,
+  z15.object({
+    name: text2(80).min(1, "Name the product or service."),
+    basis: z15.enum(values(CHARGE_BASIS)),
+    price: naira2.default(null),
+    /** For a commission or success fee: the percentage of the deal, and optionally a typical deal size in naira. */
+    percent: percentage.nullable().default(null),
+    dealSize: naira2.default(null)
+  }).superRefine((item, context) => {
+    if (item.basis === "price" && item.price === null) context.addIssue({ code: "custom", path: ["price"], message: `Enter the price of ${item.name || "each product"}, or choose It varies.` });
+    if (item.basis === "percent" && item.percent === null) context.addIssue({ code: "custom", path: ["percent"], message: `Enter the percentage of the deal you earn on ${item.name || "each service"}.` });
+  }).transform((item) => ({
+    name: item.name,
+    basis: item.basis,
+    price: item.basis === "price" ? item.price : null,
+    percent: item.basis === "percent" ? item.percent : null,
+    dealSize: item.basis === "percent" ? item.dealSize : null
+  }))
+);
+var earnsByDeal = (products) => products.some((item) => item.basis === "percent");
+function costShareForMargin(margin) {
+  if (margin > 75) return "under_25";
+  if (margin >= 50) return "25_50";
+  if (margin >= 25) return "50_75";
+  return "over_75";
+}
+var formatPercent = (value) => `${Number(value.toFixed(2))}%`;
 var intakeSchema = z15.object({
   location: text2(120).min(2, "Tell us where you sell from."),
   registration: z15.enum(values(REGISTRATION)),
-  products: z15.array(z15.object({ name: text2(80).min(1, "Name the product or service."), price: naira2 })).min(1, "Add at least one product or service.").max(3),
+  products: z15.array(product).min(1, "Add at least one product or service.").max(3),
   bestCustomer: text2(200).min(2, "Describe your best customer in a line."),
   competitors: z15.array(text2(80).min(1)).max(3),
   pricePosition: z15.enum(values(PRICE_POSITION)),
   /** Which of the products earns the most, by its position in `products`; null for "not sure". */
   topEarner: z15.number().int().min(0).max(2).nullable(),
   costShare: z15.enum(values(COST_SHARE)),
+  /** The gross margin, when the owner typed it instead of choosing a band; it then decides the band. */
+  marginPercent: z15.number().min(0, "Enter a margin of 0 or more.").max(100, "Enter a margin of 100 or less.").nullable().default(null),
   topCustomerShare: z15.enum(values(TOP_CUSTOMER_SHARE)),
   channels: z15.array(z15.enum(values(CHANNELS))).min(1, "Choose at least one way customers find you.").max(CHANNELS.length),
   enquiries: z15.enum(values(ENQUIRIES)),
@@ -8507,30 +8543,52 @@ var intakeSchema = z15.object({
   if (intake.topEarner !== null && intake.topEarner >= intake.products.length) {
     context.addIssue({ code: "custom", path: ["topEarner"], message: "Choose one of the products you listed." });
   }
-});
+}).transform((intake) => intake.marginPercent === null ? intake : { ...intake, costShare: costShareForMargin(intake.marginPercent) });
+function readIntake(stored) {
+  if (!stored || typeof stored !== "object") return null;
+  const parsed = intakeSchema.safeParse(stored);
+  return parsed.success ? parsed.data : stored;
+}
 var INTAKE_QUESTIONS = [
   { id: "location", group: "Your business today", prompt: "Where do you sell from?", hint: "For example: a shop in Yaba, Lagos, and online across Nigeria." },
   { id: "registration", group: "Your business today", prompt: "How is the business registered?" },
-  { id: "products", group: "Your business today", prompt: "Your top three products or services, and the price of each.", hint: "Prices in naira. Leave a price blank if it varies." },
+  { id: "products", group: "Your business today", prompt: "Your top three products or services, and how you charge for each.", hint: "A set price in naira, a percentage of the deal (a commission or success fee), or a price that varies." },
   { id: "bestCustomer", group: "Your market", prompt: "Describe your best customer in one line.", hint: "Who they are, where they are and why they buy from you." },
   { id: "competitors", group: "Your market", prompt: "Name up to three competitors.", hint: "Businesses your customers compare you with." },
   { id: "pricePosition", group: "Your market", prompt: "Are your prices higher, about the same or lower than theirs?" },
   { id: "topEarner", group: "What you sell", prompt: "Which of your products or services earns you the most?" },
-  { id: "costShare", group: "What you sell", prompt: "Out of every \u20A6100 a customer pays you, how much goes on materials, stock or the direct labour to deliver it?" },
+  {
+    id: "costShare",
+    group: "What you sell",
+    prompt: "Out of every \u20A6100 a customer pays you, how much goes on materials, stock or the direct labour to deliver it?",
+    dealPrompt: "Out of every \u20A6100 you earn in commission and fees, how much goes on delivering the deal?",
+    dealHint: "For example: agents' or introducers' cuts, travel and subcontractors."
+  },
   { id: "topCustomerShare", group: "What you sell", prompt: "How much of your sales come from your three biggest customers?" },
   { id: "channels", group: "How customers buy", prompt: "Where do new customers come from?", hint: "Choose all that apply." },
   { id: "enquiries", group: "How customers buy", prompt: "About how many people ask about buying in a month, and how many of every 10 buy?" },
   { id: "repeat", group: "How customers buy", prompt: "Do customers come back?" },
   { id: "roles", group: "How it runs", prompt: "Who does what? List the roles, including yours.", hint: "For example: me (sales and buying), one shop attendant, a part-time bookkeeper." },
   { id: "tools", group: "How it runs", prompt: "Which tools do you use to run the business?", hint: "Choose all that apply." },
-  { id: "lastMonthRevenue", group: "The numbers", prompt: "Last month: how much came in, and what did running the business cost?", hint: "Your best estimate in naira. Costs include stock, salaries, rent and everything else." },
+  {
+    id: "lastMonthRevenue",
+    group: "The numbers",
+    prompt: "Last month: how much came in, and what did running the business cost?",
+    hint: "Your best estimate in naira. Costs include stock, salaries, rent and everything else.",
+    dealHint: "Count only your commission and fees, not the deal money you pass on to others. Costs include salaries, rent, travel and everything else."
+  },
   { id: "cash", group: "The numbers", prompt: "Cash in the bank today, money customers owe you, and any loans." },
   { id: "goal", group: "Your goal", prompt: "What would make the next 12 months a success?", hint: "In your words. A number helps: a sales level, a new shop, a hire." }
 ];
+function intakeWording(question, byDeal) {
+  const prompt = byDeal && "dealPrompt" in question ? question.dealPrompt : question.prompt;
+  const hint = byDeal && "dealHint" in question ? question.dealHint : "hint" in question ? question.hint : void 0;
+  return { prompt, hint };
+}
 var labelOf = (options, value) => options.find((option) => option.value === value)?.label ?? value;
 
 // shared/fullReport/build.ts
-var REPORT_VERSION = 1;
+var REPORT_VERSION = 2;
 var HEALTH_RANK2 = { clear: 0, watch: 1, stuck: 2 };
 var worst2 = (...values2) => values2.reduce((current, value) => value && HEALTH_RANK2[value] > HEALTH_RANK2[current] ? value : current, "clear");
 var lower2 = (text3) => /^(I\b|I'|[A-Z][A-Za-z]*[A-Z])/.test(text3) ? text3 : text3.charAt(0).toLowerCase() + text3.slice(1);
@@ -8583,8 +8641,10 @@ function reportMetrics(intake, answers) {
   const owedMonths = owed && revenue ? owed[1] === null ? owed[0] / revenue : (owed[0] + owed[1]) / 2 / revenue : null;
   const band = REVENUE_BAND[String(answers.p_revenue)];
   const revenueVsTypical = band && revenue !== null ? revenue < band[0] ? "below" : band[1] !== null && revenue > band[1] ? "above" : "within" : null;
-  const margin = MARGIN_BAND[intake.costShare];
-  return { revenue, costs, result, resultMargin, cover: cover2, coverMid, newCustomers, owedMonths, revenueVsTypical, margin };
+  const typedMargin = intake.marginPercent ?? null;
+  const margin = typedMargin !== null ? { text: formatPercent(typedMargin), health: MARGIN_BAND[costShareForMargin(typedMargin)].health } : MARGIN_BAND[intake.costShare];
+  const per = earnsByDeal(intake.products) ? "fee" : "sale";
+  return { revenue, costs, result, resultMargin, cover: cover2, coverMid, newCustomers, owedMonths, revenueVsTypical, margin, per };
 }
 function coverText(cover2) {
   if (!cover2) return "Not known";
@@ -8598,6 +8658,16 @@ function customersText(range) {
   if (!range) return "Not known";
   if (range.high === null) return `More than ${range.low}`;
   return range.low === range.high ? `About ${range.low}` : `${range.low} to ${range.high}`;
+}
+function costShareWords(intake) {
+  return intake.marginPercent != null ? `\u20A6${Number((100 - intake.marginPercent).toFixed(2))}` : lower2(labelOf(COST_SHARE, intake.costShare));
+}
+function chargeText(product2) {
+  if (product2.basis === "percent" && product2.percent !== null) {
+    const fee = product2.dealSize ? Math.round(product2.dealSize * product2.percent / 100) : null;
+    return `${formatPercent(product2.percent)} of the deal${fee !== null ? `, about ${formatNaira(fee)} on a ${formatNaira(product2.dealSize)} deal` : ""}`;
+  }
+  return product2.basis === "price" && product2.price !== null ? formatNaira(product2.price) : "Varies";
 }
 function statusOf(area, answers) {
   const value = answer(answers, `s${area}_status`);
@@ -8671,7 +8741,7 @@ function buildFullReport(input) {
   const typeKey = answer(answers, "p_type") ?? "mixed";
   const idea = answers.p_stage === "idea";
   const descriptor = idea ? `A ${sector ? `${SECTOR_NOUNS[sector]} ` : ""}business idea, not yet trading` : `A ${sector ? `${SECTOR_NOUNS[sector]} ` : ""}business that ${MODEL[typeKey]}${answers.p_age ? `, trading for ${AGE[String(answers.p_age)]}` : ""}`;
-  const products = intake.products.map((product, index2) => ({ ...product, top: intake.topEarner === index2 }));
+  const products = intake.products.map((product2, index2) => ({ ...product2, top: intake.topEarner === index2 }));
   const topProduct = intake.topEarner !== null ? intake.products[intake.topEarner]?.name : void 0;
   const competitorsKnown = intake.competitors.length > 0;
   const marketHealth = worst2(!competitorsKnown ? "watch" : void 0, intake.pricePosition === "not_sure" ? "watch" : void 0);
@@ -8703,8 +8773,9 @@ function buildFullReport(input) {
     intakeHealth: offerHealth,
     intakeFinding: topProduct ? `${topProduct} earns you the most, so the offer should be built around it.` : "You are not yet sure which product earns you the most, so the offer is not built around a clear winner.",
     shows: [
-      `What you sell: ${list(intake.products.map((product) => product.name))}.`,
+      `What you sell: ${list(intake.products.map((product2) => product2.name))}.`,
       topProduct ? `Your top earner: ${topProduct}.` : "You are not sure which product earns the most.",
+      ...earnsByDeal(intake.products) ? ["You earn a percentage of each deal, so your income rises and falls with the number and size of deals, not with a price list."] : [],
       ...answer(answers, "s3_detail") ? [`Where the offer falls short: ${lower2(optionLabel("s3_detail", answers.s3_detail) ?? "")}.`] : []
     ]
   });
@@ -8715,9 +8786,9 @@ function buildFullReport(input) {
     intake,
     metrics: metrics2,
     intakeHealth: worst2(marginHealth, concentrationHealth),
-    intakeFinding: metrics2.margin ? `About ${metrics2.margin.text} of each sale is left after direct costs${metrics2.margin.health === "stuck" ? ", too little to cover the rest of the business" : ""}.` : "You do not yet know how much of each sale is left after direct costs.",
+    intakeFinding: metrics2.margin ? `About ${metrics2.margin.text} of each ${metrics2.per} is left after direct costs${metrics2.margin.health === "stuck" ? ", too little to cover the rest of the business" : ""}.` : `You do not yet know how much of each ${metrics2.per} is left after direct costs.`,
     shows: [
-      metrics2.margin ? `Gross margin, from your answer: ${metrics2.margin.text} (${lower2(labelOf(COST_SHARE, intake.costShare))} of every \u20A6100 goes on direct costs).` : "You are not sure how much of each sale goes on direct costs.",
+      metrics2.margin ? `Gross margin, from your answer: ${metrics2.margin.text} (${costShareWords(intake)} of every \u20A6100 goes on direct costs).` : `You are not sure how much of each ${metrics2.per} goes on direct costs.`,
       `Sales from your three biggest customers: ${lower2(labelOf(TOP_CUSTOMER_SHARE, intake.topCustomerShare))}.`,
       `Your prices against competitors: ${lower2(labelOf(PRICE_POSITION, intake.pricePosition))}.`,
       ...answer(answers, "s4_detail") ? [`What sounds most like you: ${lower2(optionLabel("s4_detail", answers.s4_detail) ?? "")}.`] : []
@@ -8840,7 +8911,7 @@ function buildFullReport(input) {
         { label: "Last month", value: intake.lastMonthRevenue !== null ? `${formatNaira(intake.lastMonthRevenue)} came in` : "Not known" },
         ...answers.p_trend ? [{ label: "Last 12 months", value: optionLabel("p_trend", answers.p_trend) ?? "" }] : []
       ] },
-      { kind: "table", columns: ["What you sell", "Price", ""], widths: [0.6, 0.25, 0.15], rows: products.map((product) => [product.name, product.price !== null ? formatNaira(product.price) : "Varies", product.top ? "Top earner" : ""]) },
+      earnsByDeal(intake.products) ? { kind: "table", columns: ["What you sell", "Price or fee", ""], widths: [0.42, 0.43, 0.15], rows: products.map((product2) => [product2.name, chargeText(product2), product2.top ? "Top earner" : ""]) } : { kind: "table", columns: ["What you sell", "Price", ""], widths: [0.6, 0.25, 0.15], rows: products.map((product2) => [product2.name, chargeText(product2), product2.top ? "Top earner" : ""]) },
       ...metrics2.revenueVsTypical && metrics2.revenueVsTypical !== "within" ? [{ kind: "paragraph", text: `Last month's ${formatNaira(intake.lastMonthRevenue)} is ${metrics2.revenueVsTypical} the typical month you described in the check (${lower2(typicalMonth ?? "")}). Use a typical month when you plan.` }] : [],
       { kind: "heading", text: "You and your team" },
       { kind: "facts", rows: [
@@ -8874,7 +8945,7 @@ function buildFullReport(input) {
     health: worst2(offer.health, model.health),
     blocks: [
       { kind: "metrics", items: [
-        { label: "Gross margin", value: metrics2.margin?.text ?? "Not known", note: "Left from each sale after direct costs" },
+        { label: "Gross margin", value: metrics2.margin?.text ?? "Not known", note: `Left from each ${metrics2.per} after direct costs` },
         { label: "Top three customers", value: labelOf(TOP_CUSTOMER_SHARE, intake.topCustomerShare), note: "Share of your sales" },
         { label: "Your prices", value: labelOf(PRICE_POSITION, intake.pricePosition), note: "Against competitors" }
       ] },
@@ -8883,9 +8954,9 @@ function buildFullReport(input) {
       { kind: "heading", text: "Your business model on one page" },
       { kind: "facts", rows: [
         { label: "Best customer", value: sentence(intake.bestCustomer) },
-        { label: "What they buy", value: `${list(intake.products.map((product) => product.name))}.` },
+        { label: "What they buy", value: `${list(intake.products.map((product2) => product2.name))}.` },
         { label: "How they find you", value: sentence(upperFirst(list(intake.channels.map((value) => lower2(labelOf(CHANNELS, value)))))) },
-        { label: "How you earn", value: `${MODEL[typeKey].charAt(0).toUpperCase()}${MODEL[typeKey].slice(1)}${metrics2.margin ? `, keeping about ${metrics2.margin.text} of each sale after direct costs` : ""}.` },
+        { label: "How you earn", value: `${MODEL[typeKey].charAt(0).toUpperCase()}${MODEL[typeKey].slice(1)}${metrics2.margin ? `, keeping about ${metrics2.margin.text} of each ${metrics2.per} after direct costs` : ""}.` },
         { label: "Biggest cost", value: labelOf(BIGGEST_COST, intake.biggestCost) },
         { label: "Who runs it", value: sentence(intake.roles) }
       ] }
@@ -9007,7 +9078,7 @@ function buildFullReport(input) {
       watch: mainArea !== void 0 ? idea && mainArea === 1 ? IDEA_CONTENT.watch : AREA_CONTENT[mainArea].watch : "Monthly sales against your goal",
       keyNumbers: parts[7].blocks[0].kind === "metrics" ? [
         ...parts[7].blocks[0].items.slice(0, 2),
-        { label: "Gross margin", value: metrics2.margin?.text ?? "Not known", note: "Left from each sale after direct costs" },
+        { label: "Gross margin", value: metrics2.margin?.text ?? "Not known", note: `Left from each ${metrics2.per} after direct costs` },
         parts[7].blocks[0].items[2]
       ] : [],
       tally
@@ -9066,7 +9137,7 @@ function swot(result, intake, metrics2) {
   ].slice(0, 4);
   const weaknesses = [
     ...result.outline.filter((row) => row.health === "stuck" && row.area !== 0).map((row) => `${row.name} is stuck`),
-    ...metrics2.margin?.health === "stuck" ? ["A thin gross margin (under 25%)"] : [],
+    ...metrics2.margin?.health === "stuck" ? [`A thin gross margin (${metrics2.margin.text})`] : [],
     ...!intake.competitors.length ? ["Competitors not yet known"] : []
   ].slice(0, 4);
   const opportunities = [
@@ -9119,12 +9190,12 @@ function appendix(answers, intake) {
   const intakeAnswers = {
     location: intake.location,
     registration: labelOf(REGISTRATION, intake.registration),
-    products: intake.products.map((product) => `${product.name}${product.price !== null ? ` (${formatNaira(product.price)})` : ""}`).join("; "),
+    products: intake.products.map((product2) => `${product2.name}${chargeText(product2) !== "Varies" ? ` (${chargeText(product2)})` : ""}`).join("; "),
     bestCustomer: intake.bestCustomer,
     competitors: intake.competitors.length ? intake.competitors.join("; ") : "None named",
     pricePosition: labelOf(PRICE_POSITION, intake.pricePosition),
     topEarner: intake.topEarner !== null ? intake.products[intake.topEarner]?.name ?? "" : "Not sure",
-    costShare: labelOf(COST_SHARE, intake.costShare),
+    costShare: intake.marginPercent != null ? `A margin of ${formatPercent(intake.marginPercent)}` : labelOf(COST_SHARE, intake.costShare),
     topCustomerShare: labelOf(TOP_CUSTOMER_SHARE, intake.topCustomerShare),
     channels: intake.channels.map((value) => labelOf(CHANNELS, value)).join("; "),
     enquiries: `${labelOf(ENQUIRIES, intake.enquiries)}; ${intake.conversion !== null ? `${intake.conversion} of every 10 buy` : "not sure how many buy"}`,
@@ -9137,7 +9208,7 @@ function appendix(answers, intake) {
   };
   return [
     { title: "Your business check", rows: check },
-    { title: "Your Report Intake", rows: INTAKE_QUESTIONS.map((question) => ({ question: question.prompt, answer: intakeAnswers[question.id] })) }
+    { title: "Your Report Intake", rows: INTAKE_QUESTIONS.map((question) => ({ question: intakeWording(question, earnsByDeal(intake.products)).prompt, answer: intakeAnswers[question.id] })) }
   ];
 }
 
@@ -9567,7 +9638,7 @@ function parse(text3) {
   }
 }
 async function assemble(db, record) {
-  const intake = parse(record.intakeJson);
+  const intake = readIntake(parse(record.intakeJson));
   if (!intake || !record.intakeSubmittedAt) throw new TRPCError13({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
   const check = await checkFor(db, record.businessCheckId);
   const payment = (await db.select({ reference: paymentRequests.reference }).from(paymentRequests).where(eq15(paymentRequests.id, record.paymentRequestId)).limit(1))[0];

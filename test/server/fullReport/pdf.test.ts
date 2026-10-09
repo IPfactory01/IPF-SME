@@ -29,6 +29,17 @@ describe("the full report PDF", () => {
     expect(raw).toContain("/Subtype /Image");
   }, 20_000);
 
+  it("lays out a business paid by the deal, with the fee wording in the products table", async () => {
+    const answers = { ...businessCheckProfiles.smallOperatingTrader, p_name: "Example Advisory" };
+    const intake = { ...sampleIntake, products: [
+      { name: "Deal advisory for mining and energy buyers", basis: "percent" as const, price: null, percent: 2.5, dealSize: 50_000_000 },
+      { name: "Market entry studies", basis: "price" as const, price: 1_500_000, percent: null, dealSize: null },
+    ], topEarner: 0, marginPercent: 62.5, costShare: "25_50" as const };
+    const report = buildFullReport({ reference: "TS-R-000013", date: DATE, contact: { fullName: "Bola Example" }, answers, result: evaluate(answers), intake });
+    const pdf = await renderFullReportPdf(report, DATE);
+    expect(pdf.toString("latin1").startsWith("%PDF-")).toBe(true);
+  }, 20_000);
+
   it("renders every kind of business without failing", async () => {
     for (const profile of Object.keys(businessCheckProfiles)) {
       const answers = businessCheckProfiles[profile];

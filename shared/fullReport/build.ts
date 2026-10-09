@@ -4,8 +4,8 @@ import { AREA_NAMES, GAP_LABELS, SECTIONS, type Answers, type Health } from "../
 import { CURRENT_STATE, formatNaira, PRICES } from "../businessSupport";
 import { AREA_CONTENT, AREA_DEFAULT_MOVE, IDEA_CONTENT, IDEA_READINGS, type DetailReading } from "./content";
 import {
-  BIGGEST_COST, CASH, CHANNELS, COST_SHARE, ENQUIRIES, INTAKE_QUESTIONS, labelOf, LOANS, OWED, PRICE_POSITION, REGISTRATION, REPEAT, TOOLS, TOP_CUSTOMER_SHARE,
-  type ReportIntake,
+  BIGGEST_COST, CASH, CHANNELS, COST_SHARE, costShareForMargin, earnsByDeal, ENQUIRIES, formatPercent, INTAKE_QUESTIONS, intakeWording, labelOf, LOANS, OWED, PRICE_POSITION,
+  REGISTRATION, REPEAT, TOOLS, TOP_CUSTOMER_SHARE, type ReportIntake, type ReportProduct,
 } from "./intake";
 
 /**
@@ -17,7 +17,8 @@ import {
  * describe the business today, the diagnosis, a 90-day plan, how we can help, and the owner's answers.
  */
 
-export const REPORT_VERSION = 1;
+/** 2: products can be charged as a percentage of the deal, and the owner can type their margin. */
+export const REPORT_VERSION = 2;
 
 export type ReportHealth = Health | "not_assessed";
 
@@ -144,8 +145,12 @@ export function reportMetrics(intake: ReportIntake, answers: Answers) {
   const owedMonths = owed && revenue ? (owed[1] === null ? owed[0] / revenue : (owed[0] + owed[1]) / 2 / revenue) : null;
   const band = REVENUE_BAND[String(answers.p_revenue)];
   const revenueVsTypical = band && revenue !== null ? (revenue < band[0] ? "below" : band[1] !== null && revenue > band[1] ? "above" : "within") : null;
-  const margin = MARGIN_BAND[intake.costShare];
-  return { revenue, costs, result, resultMargin, cover, coverMid, newCustomers, owedMonths, revenueVsTypical, margin };
+  // A typed margin is quoted as typed; otherwise the band the owner chose.
+  const typedMargin = intake.marginPercent ?? null;
+  const margin = typedMargin !== null ? { text: formatPercent(typedMargin), health: MARGIN_BAND[costShareForMargin(typedMargin)].health } : MARGIN_BAND[intake.costShare];
+  /** What the margin is a share of: a business paid by the deal keeps part of each fee, not each sale. */
+  const per = earnsByDeal(intake.products) ? "fee" : "sale";
+  return { revenue, costs, result, resultMargin, cover, coverMid, newCustomers, owedMonths, revenueVsTypical, margin, per };
 }
 
 function coverText(cover: ReportMetrics["cover"]) {
@@ -161,6 +166,20 @@ function customersText(range: ReportMetrics["newCustomers"]) {
   if (!range) return "Not known";
   if (range.high === null) return `More than ${range.low}`;
   return range.low === range.high ? `About ${range.low}` : `${range.low} to ${range.high}`;
+}
+
+/** "₦50 to ₦75", or the exact share when the owner typed their margin ("₦80" for a 20% margin). */
+function costShareWords(intake: ReportIntake) {
+  return intake.marginPercent != null ? `₦${Number((100 - intake.marginPercent).toFixed(2))}` : lower(labelOf(COST_SHARE, intake.costShare));
+}
+
+/** How a product is charged, in words: "₦18,000", "2% of the deal, about ₦1,000,000 on a ₦50,000,000 deal" or "Varies". */
+export function chargeText(product: ReportProduct) {
+  if (product.basis === "percent" && product.percent !== null) {
+    const fee = product.dealSize ? Math.round((product.dealSize * product.percent) / 100) : null;
+    return `${formatPercent(product.percent)} of the deal${fee !== null ? `, about ${formatNaira(fee)} on a ${formatNaira(product.dealSize!)} deal` : ""}`;
+  }
+  return product.basis === "price" && product.price !== null ? formatNaira(product.price) : "Varies";
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -276,14 +295,15 @@ export function buildFullReport(input: ReportInput): FullReport {
     shows: [
       `What you sell: ${list(intake.products.map((product) => product.name))}.`,
       topProduct ? `Your top earner: ${topProduct}.` : "You are not sure which product earns the most.",
+      ...(earnsByDeal(intake.products) ? ["You earn a percentage of each deal, so your income rises and falls with the number and size of deals, not with a price list."] : []),
       ...(answer(answers, "s3_detail") ? [`Where the offer falls short: ${lower(optionLabel("s3_detail", answers.s3_detail) ?? "")}.`] : []),
     ],
   });
   const model = reading({
     area: 4, answers, result, intake, metrics, intakeHealth: worst(marginHealth, concentrationHealth),
-    intakeFinding: metrics.margin ? `About ${metrics.margin.text} of each sale is left after direct costs${metrics.margin.health === "stuck" ? ", too little to cover the rest of the business" : ""}.` : "You do not yet know how much of each sale is left after direct costs.",
+    intakeFinding: metrics.margin ? `About ${metrics.margin.text} of each ${metrics.per} is left after direct costs${metrics.margin.health === "stuck" ? ", too little to cover the rest of the business" : ""}.` : `You do not yet know how much of each ${metrics.per} is left after direct costs.`,
     shows: [
-      metrics.margin ? `Gross margin, from your answer: ${metrics.margin.text} (${lower(labelOf(COST_SHARE, intake.costShare))} of every ₦100 goes on direct costs).` : "You are not sure how much of each sale goes on direct costs.",
+      metrics.margin ? `Gross margin, from your answer: ${metrics.margin.text} (${costShareWords(intake)} of every ₦100 goes on direct costs).` : `You are not sure how much of each ${metrics.per} goes on direct costs.`,
       `Sales from your three biggest customers: ${lower(labelOf(TOP_CUSTOMER_SHARE, intake.topCustomerShare))}.`,
       `Your prices against competitors: ${lower(labelOf(PRICE_POSITION, intake.pricePosition))}.`,
       ...(answer(answers, "s4_detail") ? [`What sounds most like you: ${lower(optionLabel("s4_detail", answers.s4_detail) ?? "")}.`] : []),
@@ -394,7 +414,9 @@ export function buildFullReport(input: ReportInput): FullReport {
         { label: "Last month", value: intake.lastMonthRevenue !== null ? `${formatNaira(intake.lastMonthRevenue)} came in` : "Not known" },
         ...(answers.p_trend ? [{ label: "Last 12 months", value: optionLabel("p_trend", answers.p_trend) ?? "" }] : []),
       ] },
-      { kind: "table", columns: ["What you sell", "Price", ""], widths: [0.6, 0.25, 0.15], rows: products.map((product) => [product.name, product.price !== null ? formatNaira(product.price) : "Varies", product.top ? "Top earner" : ""]) },
+      earnsByDeal(intake.products)
+        ? { kind: "table", columns: ["What you sell", "Price or fee", ""], widths: [0.42, 0.43, 0.15], rows: products.map((product) => [product.name, chargeText(product), product.top ? "Top earner" : ""]) }
+        : { kind: "table", columns: ["What you sell", "Price", ""], widths: [0.6, 0.25, 0.15], rows: products.map((product) => [product.name, chargeText(product), product.top ? "Top earner" : ""]) },
       ...(metrics.revenueVsTypical && metrics.revenueVsTypical !== "within" ? [{ kind: "paragraph" as const, text: `Last month's ${formatNaira(intake.lastMonthRevenue!)} is ${metrics.revenueVsTypical} the typical month you described in the check (${lower(typicalMonth ?? "")}). Use a typical month when you plan.` }] : []),
       { kind: "heading", text: "You and your team" },
       { kind: "facts", rows: [
@@ -420,7 +442,7 @@ export function buildFullReport(input: ReportInput): FullReport {
     number: 4, title: "What you sell and how it makes money", method: "Service description and business model", finding: offerModelWorst.finding, health: worst(offer.health, model.health),
     blocks: [
       { kind: "metrics", items: [
-        { label: "Gross margin", value: metrics.margin?.text ?? "Not known", note: "Left from each sale after direct costs" },
+        { label: "Gross margin", value: metrics.margin?.text ?? "Not known", note: `Left from each ${metrics.per} after direct costs` },
         { label: "Top three customers", value: labelOf(TOP_CUSTOMER_SHARE, intake.topCustomerShare), note: "Share of your sales" },
         { label: "Your prices", value: labelOf(PRICE_POSITION, intake.pricePosition), note: "Against competitors" },
       ] },
@@ -430,7 +452,7 @@ export function buildFullReport(input: ReportInput): FullReport {
         { label: "Best customer", value: sentence(intake.bestCustomer) },
         { label: "What they buy", value: `${list(intake.products.map((product) => product.name))}.` },
         { label: "How they find you", value: sentence(upperFirst(list(intake.channels.map((value) => lower(labelOf(CHANNELS, value)))))) },
-        { label: "How you earn", value: `${MODEL[typeKey].charAt(0).toUpperCase()}${MODEL[typeKey].slice(1)}${metrics.margin ? `, keeping about ${metrics.margin.text} of each sale after direct costs` : ""}.` },
+        { label: "How you earn", value: `${MODEL[typeKey].charAt(0).toUpperCase()}${MODEL[typeKey].slice(1)}${metrics.margin ? `, keeping about ${metrics.margin.text} of each ${metrics.per} after direct costs` : ""}.` },
         { label: "Biggest cost", value: labelOf(BIGGEST_COST, intake.biggestCost) },
         { label: "Who runs it", value: sentence(intake.roles) },
       ] },
@@ -550,7 +572,7 @@ export function buildFullReport(input: ReportInput): FullReport {
       watch: mainArea !== undefined ? (idea && mainArea === 1 ? IDEA_CONTENT.watch : AREA_CONTENT[mainArea].watch) : "Monthly sales against your goal",
       keyNumbers: parts[7].blocks[0].kind === "metrics" ? [
         ...parts[7].blocks[0].items.slice(0, 2),
-        { label: "Gross margin", value: metrics.margin?.text ?? "Not known", note: "Left from each sale after direct costs" },
+        { label: "Gross margin", value: metrics.margin?.text ?? "Not known", note: `Left from each ${metrics.per} after direct costs` },
         parts[7].blocks[0].items[2],
       ] : [],
       tally,
@@ -606,7 +628,7 @@ function swot(result: CheckResult, intake: ReportIntake, metrics: ReportMetrics)
   ].slice(0, 4);
   const weaknesses = [
     ...result.outline.filter((row) => row.health === "stuck" && row.area !== 0).map((row) => `${row.name} is stuck`),
-    ...(metrics.margin?.health === "stuck" ? ["A thin gross margin (under 25%)"] : []),
+    ...(metrics.margin?.health === "stuck" ? [`A thin gross margin (${metrics.margin.text})`] : []),
     ...(!intake.competitors.length ? ["Competitors not yet known"] : []),
   ].slice(0, 4);
   const opportunities = [
@@ -665,12 +687,12 @@ function appendix(answers: Answers, intake: ReportIntake): FullReport["appendix"
   const intakeAnswers: Record<string, string> = {
     location: intake.location,
     registration: labelOf(REGISTRATION, intake.registration),
-    products: intake.products.map((product) => `${product.name}${product.price !== null ? ` (${formatNaira(product.price)})` : ""}`).join("; "),
+    products: intake.products.map((product) => `${product.name}${chargeText(product) !== "Varies" ? ` (${chargeText(product)})` : ""}`).join("; "),
     bestCustomer: intake.bestCustomer,
     competitors: intake.competitors.length ? intake.competitors.join("; ") : "None named",
     pricePosition: labelOf(PRICE_POSITION, intake.pricePosition),
     topEarner: intake.topEarner !== null ? intake.products[intake.topEarner]?.name ?? "" : "Not sure",
-    costShare: labelOf(COST_SHARE, intake.costShare),
+    costShare: intake.marginPercent != null ? `A margin of ${formatPercent(intake.marginPercent)}` : labelOf(COST_SHARE, intake.costShare),
     topCustomerShare: labelOf(TOP_CUSTOMER_SHARE, intake.topCustomerShare),
     channels: intake.channels.map((value) => labelOf(CHANNELS, value)).join("; "),
     enquiries: `${labelOf(ENQUIRIES, intake.enquiries)}; ${intake.conversion !== null ? `${intake.conversion} of every 10 buy` : "not sure how many buy"}`,
@@ -683,6 +705,6 @@ function appendix(answers: Answers, intake: ReportIntake): FullReport["appendix"
   };
   return [
     { title: "Your business check", rows: check },
-    { title: "Your Report Intake", rows: INTAKE_QUESTIONS.map((question) => ({ question: question.prompt, answer: intakeAnswers[question.id] })) },
+    { title: "Your Report Intake", rows: INTAKE_QUESTIONS.map((question) => ({ question: intakeWording(question, earnsByDeal(intake.products)).prompt, answer: intakeAnswers[question.id] })) },
   ];
 }

@@ -144,7 +144,7 @@ exports[`the full report > is deterministic: the same answers give the same repo
         },
         {
           "answer": "Ankara fabric (6 yards) (₦18,000); Lace fabric (5 yards) (₦65,000); Aso-oke sets",
-          "question": "Your top three products or services, and the price of each.",
+          "question": "Your top three products or services, and how you charge for each.",
         },
         {
           "answer": "Tailors in Surulere who buy every week for their clients' events",
@@ -931,6 +931,6 @@ exports[`the full report > is deterministic: the same answers give the same repo
     },
   ],
   "reference": "TS-R-000012",
-  "version": 1,
+  "version": 2,
 }
 `;

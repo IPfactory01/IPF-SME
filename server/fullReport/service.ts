@@ -6,7 +6,7 @@ import { BRAND } from "../../shared/brand";
 import { evaluate, type CheckResult } from "../../shared/businessCheck/engine";
 import type { Answers } from "../../shared/businessCheck/questions";
 import { buildFullReport, REPORT_VERSION, type FullReport } from "../../shared/fullReport/build";
-import { intakeSchema, type ReportIntake } from "../../shared/fullReport/intake";
+import { intakeSchema, readIntake, type ReportIntake } from "../../shared/fullReport/intake";
 import { ENV } from "../_core/env";
 import type { Database } from "../accountAuth";
 import { sha256 } from "../adminSecurity";
@@ -71,7 +71,7 @@ function parse<T>(text: string | null): T | null {
 
 /** Rebuilds the report from what was stored when the intake was submitted: the same report every time. */
 async function assemble(db: Pick<Database, "select">, record: FullReportRecord): Promise<{ report: FullReport; generatedAt: Date; email: string; fullName: string }> {
-  const intake = parse<ReportIntake>(record.intakeJson);
+  const intake = readIntake(parse<unknown>(record.intakeJson));
   if (!intake || !record.intakeSubmittedAt) throw new TRPCError({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
   const check = await checkFor(db, record.businessCheckId);
   const payment = (await db.select({ reference: paymentRequests.reference }).from(paymentRequests).where(eq(paymentRequests.id, record.paymentRequestId)).limit(1))[0];

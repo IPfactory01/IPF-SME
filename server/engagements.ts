@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   businessChecks,
+  fullReports,
   businessMemberAccess,
   businessMemberships,
   businesses,
@@ -588,8 +589,9 @@ export async function getClientRoom(db: Database, session: AccountSession) {
   ]);
   const fullView = viewer.kind === "owner" || viewer.access === "full";
   // Where the engagement came from: the check's main finding and readiness, and the Debrief once the team shares it.
-  const check = (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt })
+  const check = (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor })
     .from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  const report = (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq(fullReports.businessCheckId, engagement.businessCheckId)).limit(1))[0] ?? null;
   const debrief = fullView ? await sharedDebriefFor(db, engagement.businessCheckId) : null;
   const visibleDeliverables = deliverables.filter(item => clientCanSee(item.audience, viewer));
   const clientFiles = (where: "taskId" | "deliverableId", id: number) => files
@@ -610,7 +612,9 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     assessmentStartedAt: engagement.assessmentStartedAt,
     fixStartedAt: engagement.fixStartedAt,
     closedAt: engagement.closedAt,
-    check: check ? { primaryArea: check.primaryArea, readiness: check.readiness, completedAt: check.completedAt, reportRequestedAt: check.reportRequestedAt } : null,
+    createdAt: engagement.createdAt,
+    check: check ? { primaryArea: check.primaryArea, readiness: check.readiness, completedAt: check.completedAt, reportRequestedAt: check.reportRequestedAt, callRequestedAt: check.callRequestedAt, callScheduledFor: check.callScheduledFor } : null,
+    report: report ? { requestedAt: report.createdAt, deliveredAt: report.deliveredAt } : null,
     debrief,
     problemStatement: fullView ? engagement.problemStatement : null,
     // The one number: the business's own result, so the owner and their full-access staff; never the hours behind it.

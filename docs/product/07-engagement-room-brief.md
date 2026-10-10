@@ -1,7 +1,7 @@
 # 07. The engagement room: brief
 
-*Agreed with ET on 10 October 2026. The screens are being mocked in the preview before any production change; the
-room that is live today (design brief §9) stays until the mock is approved.*
+*Agreed with ET on 10 October 2026; the mock was approved the same day ("it feels a bit better, we iterate as we go") and
+the room was rebuilt to it (`client/src/components/EngagementRoom.tsx`, design brief §9). Iterate from here.*
 
 ## 1. Objective
 

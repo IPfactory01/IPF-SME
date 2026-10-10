@@ -154,27 +154,28 @@ from the plain-text body so both versions say the same thing:
   {reference}" and "n / N".
 - Short tables never split across pages; values shrink to fit their tile.
 
-## 9. Screens of the engagement room (built 10 October)
+## 9. Screens of the engagement room (built 10 October, to the room brief)
 
-The room wears the site's dress, not the admin's. Built on 10 October (`client/src/components/AccountLayout.tsx`,
-`EngagementRoom.tsx`, `pages/AccountDashboard.tsx`):
+The room follows document 07, in the site's dress (`client/src/components/AccountLayout.tsx`, `EngagementRoom.tsx`):
 
 - **The signed-in shell** carries the mark, the product name and the gradient rule, with the site's nav underline;
   `container` width for the room, a reading width for the settings pages; the endorsement in the footer.
-- **The top answers "where are we?" in one look:** the greeting as an eyebrow in `highlight-ink`, the business name in
-  Playfair Display black, the stage and its one-line summary, the team; on the right the next call in a `brand-tint`
-  panel with "Join the call", and a shortcut to what to send first ("2 things to send · first by Tue 27 Oct"). The
-  logo's colours sit softly behind it, as on the site's hero.
-- **The journey bar** runs along the bottom of that panel: done steps with a check, the current step in `brand` with
-  "Now", future steps muted.
-- **Two columns on a desktop, one on a phone:** the work on the left (what we need from you, what we have found), the
-  context on the right (the one number we watch, your calls, the owner's seat card).
-- **The measure** is one large number: this week's reading in the health colour of its direction (`health-clear` the
-  right way, `health-watch` the wrong way), the move since the start in words, then where it started and where it is
-  going, then week by week.
-- **Status words, never icons alone:** "Booked", "Held", "To book", "Received", "Signed off", "Shared 23 Oct".
-- **Empty states carry a date** when one is known: "Notes from Current State Assessment call 1 reach you the same day,
-  Fri 23 Oct."
+- **One column, phone first,** at most 42 rem wide: a page that reads top to bottom, not a tray of cards.
+- **Now** is the headline: the stage with its week and day ("Current State Assessment · Week 1 of 2", "Day 4 of 14"
+  on a gradient progress line), one sentence on what the stage is for. The greeting and the business name are the
+  eyebrow in `highlight-ink`. The logo's colours sit softly behind, as on the site's hero.
+- **Next action**, in a `brand-tint` panel: one Data Request ("Data Request 3 of 9", its date, Upload or Mark as
+  submitted) or one Sign-off; never a list.
+- **Next Session**, one line with Join.
+- **The Engagement timeline, numbered 1 to 7:** done steps with a check in `brand`, the current step in `highlight-ink`
+  with "Now", future steps muted; each opens, the current one on load. The Current State Assessment step holds the
+  Work Plan by week, each row numbered with who (You in `brand-tint`, IP Factory in grey, Together in `health-clear`),
+  when, status and the action in place.
+- **The Measure of Success** is one large number: this week's reading in the health colour of its direction
+  (`health-clear` the right way, `health-watch` the wrong way), the move since the start in words, then where it
+  started and where it is going, then week by week.
+- **Status words, never icons alone:** "Done · Fri 9 Oct", "Shared Fri 30 Oct", "To be booked", "Received",
+  "Sign-off given".
 - Account and business details live in the settings pages; the room shows nothing administrative.
 
 ## 10. Tests that guard the brand

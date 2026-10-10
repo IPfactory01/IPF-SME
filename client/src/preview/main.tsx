@@ -13,7 +13,6 @@ import { memoryLocation } from "wouter/memory-location";
 import App from "../App";
 import "../index.css";
 import { previewLink, previewSession } from "./previewLink";
-import RoomMock from "./RoomMock";
 
 // Asset paths are site-absolute in the app; make them relative to wherever the preview is served.
 for (const key of ["logoUrl", "logoOnDarkUrl", "markUrl"] as const) {
@@ -40,7 +39,6 @@ const PAGES = [
   { path: "/report/preview", label: "Report form" },
   { path: "/admin/login", label: "Admin sign-in" },
   { path: "/dashboard", label: "Client room" },
-  { path: "/room-v2", label: "Room v2 (mock)" },
   { path: "/portal", label: "JUMP portal" },
 ];
 
@@ -60,7 +58,7 @@ function PreviewBar() {
             type="button"
             onClick={() => {
               // The client room shows a signed-in sample owner; everywhere else the visitor is signed out.
-              previewSession.signedIn = page.path === "/dashboard" || page.path === "/room-v2";
+              previewSession.signedIn = page.path === "/dashboard";
               void queryClient.invalidateQueries();
               setLocation(page.path);
               window.scrollTo({ top: 0 });
@@ -75,17 +73,11 @@ function PreviewBar() {
   );
 }
 
-/** The room mock lives only in the preview; every other path is the real app. */
-function PreviewRoot() {
-  const [location] = useLocation();
-  return location === "/room-v2" ? <RoomMock /> : <App />;
-}
-
 createRoot(document.getElementById("root")!).render(
   <trpc.Provider client={trpcClient} queryClient={queryClient}>
     <QueryClientProvider client={queryClient}>
       <Router hook={hook}>
-        <PreviewRoot />
+        <App />
         <PreviewBar />
       </Router>
     </QueryClientProvider>

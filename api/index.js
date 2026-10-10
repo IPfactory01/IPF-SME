@@ -8926,7 +8926,8 @@ async function getClientRoom(db, session) {
     checkinsOf(db, engagement.id)
   ]);
   const fullView = viewer.kind === "owner" || viewer.access === "full";
-  const check = (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt }).from(businessChecks).where(eq15(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  const check = (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor }).from(businessChecks).where(eq15(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  const report = (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq15(fullReports.businessCheckId, engagement.businessCheckId)).limit(1))[0] ?? null;
   const debrief = fullView ? await sharedDebriefFor(db, engagement.businessCheckId) : null;
   const visibleDeliverables = deliverables.filter((item) => clientCanSee(item.audience, viewer));
   const clientFiles = (where, id3) => files.filter((file) => file[where] === id3 && clientFileVisible(file, viewer, session.user.id)).map((file) => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === session.user.id, fromTeam: file.fromTeam }));
@@ -8945,7 +8946,9 @@ async function getClientRoom(db, session) {
     assessmentStartedAt: engagement.assessmentStartedAt,
     fixStartedAt: engagement.fixStartedAt,
     closedAt: engagement.closedAt,
-    check: check ? { primaryArea: check.primaryArea, readiness: check.readiness, completedAt: check.completedAt, reportRequestedAt: check.reportRequestedAt } : null,
+    createdAt: engagement.createdAt,
+    check: check ? { primaryArea: check.primaryArea, readiness: check.readiness, completedAt: check.completedAt, reportRequestedAt: check.reportRequestedAt, callRequestedAt: check.callRequestedAt, callScheduledFor: check.callScheduledFor } : null,
+    report: report ? { requestedAt: report.createdAt, deliveredAt: report.deliveredAt } : null,
     debrief,
     problemStatement: fullView ? engagement.problemStatement : null,
     // The one number: the business's own result, so the owner and their full-access staff; never the hours behind it.

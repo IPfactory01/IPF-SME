@@ -21,7 +21,7 @@ added without being documented here.
 | `/join/:token` | `JoinPage.tsx` | Link in a staff invitation or an owner's seat invitation | Set a password; staff land on `/admin` with their role, the owner's staff on `/dashboard` in that business | `/admin`, `/dashboard` |
 | `/login` | `LoginPage.tsx` | Anyone | Client sign-in with email and password | The landing page (section 6) |
 | `/signup` | Redirect | Anyone | No public sign-up | `/login` |
-| `/dashboard` | `AccountDashboard.tsx` | Signed-in account | The engagement room once the Current State Assessment is paid (section 9): the business name, the stage, the next call, what to send first and the journey across the top; what we need from you and what we have found on the left; the one number, your calls and the owner's seat card on the right. Before that: a welcome, when the room opens, and a prompt to finish the business profile. Staff: a link to the internal area | `/settings/business`, `/admin` |
+| `/dashboard` | `AccountDashboard.tsx` | Signed-in account | The engagement room once the Current State Assessment is paid (section 9), as the room brief (document 07) describes: now (the stage, its week and day), the next action (one Data Request or Sign-off, with its button), the next Session with Join, the Engagement timeline numbered 1 to 7 (Business Check, Debrief, Full Report, Current State Assessment with the Work Plan by week, Findings, The Fix with the Measure of Success, Day-30 Review) with the current step open, the team and the owner's seat card. Before that: a welcome, when the room opens, and a prompt to finish the business profile. Staff: a link to the internal area | `/settings/business`, `/admin` |
 | `/settings/business` | `BusinessSettingsPage.tsx` | Signed-in account (owners and business admins can save) | Business name, description, year founded, sector, website | — |
 | `/settings/account` | `AccountSettingsPage.tsx` | Signed-in account | Name and password | — |
 | `/admin/login` | `AdminLoginPage.tsx` | Staff | Staff sign-in with email and password | `/admin` |
@@ -205,13 +205,14 @@ flowchart TD
 |---|---|---|
 | "Upload a file" on a request | The browser sends the file straight to the private bucket with a one-off link, then the server records it and the request shows "Sent, we are checking"; a file that did not arrive is not recorded | Owner, full staff, and a contributor for their own requests; only when storage is set up |
 | "Download" on a file | The server checks who is asking and issues a five-minute link | Whoever may see the item it sits on, or who uploaded it |
-| "I have sent this" / "I sent it another way" (with how they sent it) | The request shows "Sent, we are checking" for the client and the team | Owner, full staff, and a contributor for their own requests |
+| "Mark as submitted" / "Sent another way" (with how they sent it), in the next action or on the Work Plan row | The Data Request shows "Sent, we are checking" for the client and the team | Owner, full staff, and a contributor for their own requests |
 | "Mark as done" | The action is done | As above |
-| "Sign this off" | The deliverable shows signed off for the team; audited | Owner (and business admin) only |
+| "Sign off the Findings" (or the Prescription, or Your Plan) | The Deliverable shows Sign-off given for the team; audited. Until then it is the next action once nothing else is outstanding | Owner (and business admin) only |
 | "Send" a comment | The comment shows under the deliverable for both sides | Anyone who can see the deliverable |
 | "Share with my team" / "Keep this to myself" | The owner's staff with full access see it, or stop seeing it | Owner (and business admin) only |
-| "Join the call" | Opens the meeting link | Anyone who sees the call |
-| The one number we watch (no click: shown once the team sets it) | Where it started, this week's reading, where it is going, and each week's reading with the next step; never the hours or the team's notes | Owner and full-access staff |
+| "Join the Session" | Opens the meeting link, from the next Session line or the Work Plan row | Anyone who sees the Session |
+| A step in the timeline | Opens that step: the Business Check's main finding and readiness; the Debrief once shared; the Full Report's delivery; the Work Plan by week with who (You, IP Factory, Together), when, status and the Session notes; the Findings and the Problem Statement; the Measure of Success week by week; Your Plan. The current step is open on load | Everyone who sees the room; the Debrief and the Problem Statement only the owner and full-access staff |
+| The Measure of Success (no click: shown in The Fix once the team sets it) | This week's reading, large, in the health colour of its direction; where it started and where it is going; each week's reading with the next step; never the hours or the team's notes | Owner and full-access staff |
 | "Invite" in Your team | Emails a single-use link (shown once when email is not set up); the seat counts as used | Owner (and business admin) only; one seat included |
 | Change "What they can see" / "Remove" | Full or Contributor at once; Remove ends their access to the business straight away | Owner (and business admin) only |
 

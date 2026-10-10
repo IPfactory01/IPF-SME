@@ -186,7 +186,8 @@ Rules:
   site's dress (design brief §9): the business, the stage, the next call and what to send first at the top, the journey bar,
   two columns on a desktop; account details moved to the settings pages. **Built 10 October (migration 0009):** the Debrief
   record (written up in the admin, shared to the owner as a separate step) and the Work Plan (every request, action and call
-  placed in a week, in order, tagged internal or external), the two things the room brief (document 07) needs.
+  placed in a week, in order, tagged internal or external), the two things the room brief (document 07) needs. **Rebuilt 10 October to the room brief:** now, the next
+  action, the next Session, the Engagement timeline 1 to 7 with the Work Plan by week, in the method's vocabulary.
 
 ### F8. Engagement record and check-ins (internal)
 

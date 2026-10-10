@@ -15,6 +15,7 @@ import {
   ENGAGEMENT_TASK_STATUSES,
   ENGAGEMENT_TEAM_ROLE_LABELS,
   ENGAGEMENT_TEAM_ROLES,
+  FINDINGS_OUTLINE,
   type EngagementDeliverableKind,
   type EngagementSessionKind,
   type EngagementSessionStatus,
@@ -306,6 +307,9 @@ function DeliverableCard({ item, data, engagementId, onDone }: { item?: Delivera
       </div>
       <label className={LABEL} htmlFor={`deliverable-summary-${id}`}>What it says</label>
       <textarea id={`deliverable-summary-${id}`} className={FIELD} rows={5} disabled={!data.can.manage} value={summary} onChange={event => setSummary(event.target.value)} />
+      {!item && kind === "findings" && !summary.trim() && data.can.manage && (
+        <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setSummary(FINDINGS_OUTLINE)}>Start from the standard findings outline</Button>
+      )}
       <div className="flex flex-wrap gap-2">
         {data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={save.isPending || !changed || !title.trim()} onClick={() => save.mutate({ engagementId, deliverableId: item?.id, kind, title, summary })}>{item ? "Save changes" : "Save as a draft"}</Button>}
         {onDone && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={onDone}>Cancel</Button>}

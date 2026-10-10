@@ -3,6 +3,7 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { FINDINGS_OUTLINE } from "@shared/engagement";
 
 const api = vi.hoisted(() => ({
   list: { setUp: true, items: [] as unknown[] } as { setUp: boolean; items: unknown[] },
@@ -74,6 +75,18 @@ describe("the team's engagements", () => {
   it("shows no such panel when every paid assessment has its engagement", () => {
     render(<EngagementsView />);
     expect(screen.queryByRole("region", { name: "Paid, but no engagement yet" })).toBeNull();
+  });
+
+  it("offers the standard outline for a new findings deliverable, and only then", () => {
+    api.detail = detail({ manage: true, assign: false, review: false }, []);
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const drawer = within(screen.getByRole("dialog"));
+    fireEvent.click(drawer.getByRole("button", { name: "Add a deliverable" }));
+    const card = within(drawer.getByLabelText("New deliverable"));
+    fireEvent.click(card.getByRole("button", { name: "Start from the standard findings outline" }));
+    expect((card.getByLabelText("What it says") as HTMLTextAreaElement).value).toBe(FINDINGS_OUTLINE);
+    expect(card.queryByRole("button", { name: "Start from the standard findings outline" })).toBeNull();
   });
 
   it("says so when the database is not ready, instead of failing", () => {

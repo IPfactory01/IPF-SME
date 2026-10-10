@@ -157,6 +157,8 @@ for (const target of targets) {
         expect(new Set(tasks.map((task: { kind: string; side: string; status: string; dueOn: string }) => `${task.kind}/${task.side}/${task.status}/${task.dueOn}`))).toEqual(new Set([`data_request/client/open/${addWorkingDays(new Date(), 3)}`]));
         const sessions = await db.select().from(schema.engagementSessions).where(eq(schema.engagementSessions.engagementId, engagement.id));
         expect(sessions.map((item: { title: string; scheduledFor: Date | null }) => [item.title, item.scheduledFor])).toEqual([["Current State Assessment call 1", null], ["Current State Assessment call 2", null]]);
+        // Each call carries its agenda from the template, so the client sees what the call is for before it is booked.
+        expect(sessions.map((item: { agenda: string | null }) => item.agenda)).toEqual(ASSESSMENT_TEMPLATE.sessions.map(item => item.agenda));
       });
 
       it("joins the owner's business when they create their account", async () => {

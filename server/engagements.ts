@@ -104,7 +104,7 @@ export async function startEngagement(db: Database, input: { businessCheckId: nu
       engagementId: created.id, kind: "data_request" as const, side: "client" as const, title: item.title, detail: item.detail, dueOn, createdByUserId: input.actorUserId,
     })));
     await tx.insert(engagementSessions).values(ASSESSMENT_TEMPLATE.sessions.map(item => ({
-      engagementId: created.id, kind: item.kind, title: item.title, durationMinutes: item.durationMinutes, createdByUserId: input.actorUserId,
+      engagementId: created.id, kind: item.kind, title: item.title, durationMinutes: item.durationMinutes, agenda: item.agenda, createdByUserId: input.actorUserId,
     })));
     await recordAudit(tx, { action: "engagement_started", actorUserId: input.actorUserId, details: { engagementId: created.id, businessCheckId: input.businessCheckId } });
     return { engagementId: created.id, created: true } as const;

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { isMissingEngagementTable, startEngagementSafely } from "@server/engagements";
-import { clientCanSee, clientCanSeeTask, ENGAGEMENT_STAGE_LABELS, journeyOf, type ClientViewer } from "@shared/engagement";
+import { ASSESSMENT_TEMPLATE, clientCanSee, clientCanSeeTask, ENGAGEMENT_STAGE_LABELS, FINDINGS_OUTLINE, journeyOf, type ClientViewer } from "@shared/engagement";
 
 const owner: ClientViewer = { kind: "owner" };
 const full: ClientViewer = { kind: "member", access: "full", userId: 7 };
@@ -49,5 +49,36 @@ describe("before migration 0008 is applied", () => {
     const broken = { transaction: () => Promise.reject(new Error("connection lost")) };
     expect(await startEngagementSafely(broken as never, { businessCheckId: 1, paymentRequestId: 1, actorUserId: 1 })).toBe("failed");
     error.mockRestore();
+  });
+});
+
+describe("the Current State Assessment template (from IP Factory's assessment proposals, 10 October)", () => {
+  it("asks for the six pre-call questions, the numbers, the people, the bank statements and what is owed", () => {
+    const titles = ASSESSMENT_TEMPLATE.dataRequests.map(item => item.title);
+    expect(titles[0]).toBe("Six quick questions before your first call");
+    expect(titles).toEqual(expect.arrayContaining(["Your sales for the last 12 months", "What you spend each month", "Your price list", "Who works in the business", "Bank statements for the last 6 months", "Money owed to you, and money you owe", "Anything you already track"]));
+    expect(titles).toHaveLength(8);
+    for (const item of ASSESSMENT_TEMPLATE.dataRequests) {
+      expect(item.title.length).toBeLessThanOrEqual(60);
+      expect(item.detail.length).toBeGreaterThan(10);
+    }
+    expect(ASSESSMENT_TEMPLATE.dataRequests[0].detail.match(/\d\./g)).toHaveLength(6);
+  });
+
+  it("gives both calls a timed 90-minute agenda that ends with what happens next", () => {
+    expect(ASSESSMENT_TEMPLATE.sessions).toHaveLength(2);
+    for (const session of ASSESSMENT_TEMPLATE.sessions) {
+      expect(session.durationMinutes).toBe(90);
+      expect(session.agenda).toMatch(/^.+\n0 to 10 min:/);
+      expect(session.agenda).toMatch(/\n8[05] to 90:/);
+    }
+    expect(ASSESSMENT_TEMPLATE.sessions[1].agenda).toContain("the one problem to fix first");
+  });
+
+  it("keeps the template in the site's words: no internal terms, second person", () => {
+    const copy = [...ASSESSMENT_TEMPLATE.dataRequests.flatMap(item => [item.title, item.detail]), ...ASSESSMENT_TEMPLATE.sessions.map(item => item.agenda), FINDINGS_OUTLINE].join(" ");
+    expect(copy).not.toMatch(/\b(door|sprint|playbook|retainer|workstream|RACI|stakeholder)\b/i);
+    expect(FINDINGS_OUTLINE.split("\n\n")).toHaveLength(7);
+    expect(FINDINGS_OUTLINE.startsWith("1. The one problem to fix first")).toBe(true);
   });
 });

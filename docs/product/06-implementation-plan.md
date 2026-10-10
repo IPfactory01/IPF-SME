@@ -100,7 +100,7 @@ Built with O1, O2 and O3 as recommended (PRD §10), and the owner's seat invitat
 
 | # | Build | Acceptance |
 |---|---|---|
-| 3.1 | ✅ **Built 9 October** (the template starts every engagement). **Data request list** from a template (the concept note's onboarding list), per engagement, with due dates | The desk lead sends a list in one step |
+| 3.1 | ✅ **Built 9 October**; list, agendas and findings outline drawn from IP Factory's assessment proposals on 10 October. **Data request list** from a template (the concept note's onboarding list), per engagement, with due dates | The desk lead sends a list in one step |
 | 3.2 | Partly built: the client marks what they sent and the team accepts or asks for more; the upload waits for 1.1. **Client upload** against each request; status requested → received → accepted (or "needs more") | The analyst sees what is missing at a glance; the client sees what is still owed |
 
 ## 8. Phase 4: the fix, check-ins and the record (needed by 6 November)

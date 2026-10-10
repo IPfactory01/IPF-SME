@@ -179,12 +179,14 @@ stateDiagram-v2
 
 ## 9. The engagement room
 
-Built on 9 October for the Current State Assessment; live once migration 0008 is applied. The fix's measure and weekly
+Built on 9 October for the Current State Assessment; live once migration 0008 is applied. The template (data requests, the six
+pre-call questions, both call agendas and the findings outline) follows IP Factory's own assessment proposals, cut down
+for two weeks and two calls (`shared/engagement.ts`, 10 October). The fix's measure and weekly
 check-in screens come next (implementation plan, phase 4).
 
 ```mermaid
 flowchart TD
-  P[Current State Assessment payment confirmed] --> E1[Engagement created from the template: five data requests due in three working days, both calls]
+  P[Current State Assessment payment confirmed] --> E1[Engagement created from the template: eight data requests due in three working days, both calls with their agendas]
   E1 --> E2[Desk lead names the team in Engagements]
   E1 --> A[Owner accepts the invitation: the engagement joins their business]
   A --> R[Client room on /dashboard]

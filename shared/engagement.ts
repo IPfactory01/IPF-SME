@@ -93,22 +93,47 @@ export const ENGAGEMENT_DELIVERABLE_STATUSES = ["draft", "awaiting_approval", "a
 export type EngagementDeliverableStatus = (typeof ENGAGEMENT_DELIVERABLE_STATUSES)[number];
 
 /**
- * What a new engagement starts with (the Current State Assessment template). The data requests are the concept
- * note's onboarding list, so the first call is analysis, not collection. The team edits, adds or cancels items.
+ * What a new engagement starts with (the Current State Assessment template), drawn from how IP Factory's own
+ * assessment proposals scope the work, cut down for a two-week, two-call engagement. The data requests follow the
+ * concept note's onboarding list, so the first call is analysis, not collection. The team edits, adds or cancels items.
  */
 export const ASSESSMENT_TEMPLATE = {
   dataRequests: [
-    { title: "Your last 12 months of sales", detail: "Monthly totals are enough: a spreadsheet, your sales book or a bank statement export." },
-    { title: "What you spend each month", detail: "Rent, salaries, stock, transport and anything else that goes out regularly. Estimates are fine." },
-    { title: "Your price list", detail: "What you sell and what you charge for each, or how you work out a price." },
-    { title: "Who works in the business", detail: "Names or roles, what each person does, and who they report to." },
-    { title: "Anything you already track", detail: "Reports, dashboards or notebooks you look at to run the business. Skip this if there is nothing." },
+    { title: "Six quick questions before your first call", detail: "A few words each is enough. 1. What do you sell, and who buys it? 2. At month end, how do you know whether you made money? 3. Does more than one business run through the same account? 4. Which decisions wait for you? 5. What happens when you are away for a week? 6. If you could fix one thing in three months, what would it be?" },
+    { title: "Your sales for the last 12 months", detail: "Month by month. A sales book, a till report or photos of your records all work." },
+    { title: "What you spend each month", detail: "Rent, salaries, stock, power, fuel and loan repayments. A rough list is fine." },
+    { title: "Your price list", detail: "What you charge for each product or service, and the discounts you give." },
+    { title: "Who works in the business", detail: "Each role, what they do and what they are paid. Names are optional." },
+    { title: "Bank statements for the last 6 months", detail: "The business account, and any personal account that business money passes through." },
+    { title: "Money owed to you, and money you owe", detail: "Unpaid customer bills, supplier debts and loans." },
+    { title: "Anything you already track", detail: "Spreadsheets, notebooks or app reports. Send them as they are." },
   ],
   sessions: [
-    { kind: "assessment_call" as const, title: `${CURRENT_STATE.name} call 1`, durationMinutes: 90 },
-    { kind: "assessment_call" as const, title: `${CURRENT_STATE.name} call 2`, durationMinutes: 90 },
+    {
+      kind: "assessment_call" as const,
+      title: `${CURRENT_STATE.name} call 1`,
+      durationMinutes: 90,
+      agenda: "Your business today.\n0 to 10 min: welcome, and what the two weeks look like.\n10 to 35: your business in your words, starting from your six answers.\n35 to 65: the numbers: sales, costs and prices, and the gaps we fill together.\n65 to 85: how the business runs: a normal week, who does what, what waits for you.\n85 to 90: what is still missing, and the date of call 2.",
+    },
+    {
+      kind: "assessment_call" as const,
+      title: `${CURRENT_STATE.name} call 2`,
+      durationMinutes: 90,
+      agenda: "The one problem to fix first.\n0 to 10 min: what we looked at, and what we could not check.\n10 to 40: what we found: the numbers, how the business runs, the problems we see.\n40 to 60: the one problem to fix first, tested against your view.\n60 to 80: what to do about it: the first steps, the tools, and who owns each.\n80 to 90: what happens next, and when it will all be in your room.",
+    },
   ],
 } as const;
+
+/** The standard shape of the findings deliverable. The team starts from it and edits; headings only, no content. */
+export const FINDINGS_OUTLINE = [
+  "1. The one problem to fix first",
+  "2. Your business at a glance",
+  "3. What the numbers say: sales, costs, profit by product or service, cash, money owed",
+  "4. How the business runs: who does what, and what waits for you",
+  "5. Your customers and prices",
+  "6. Other problems we found, for later",
+  "7. What we looked at, and what we could not check",
+].join("\n\n");
 
 /** The client's journey, in order, with where they are now. */
 export function journeyOf(stage: EngagementStage) {

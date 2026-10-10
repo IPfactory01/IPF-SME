@@ -42,7 +42,7 @@ erDiagram
 - Enum values are stable identifiers. Labels shown to people come from shared code (`shared/payments.ts`,
   `shared/businessCheck/pipeline.ts`), so a label can change without a migration.
 - Schema changes go through `drizzle/schema.ts` then `pnpm db:generate`; never by hand. Migrations `0000` to `0007` are
-  applied to Supabase; `0008` (the engagement room) is written and waits to be applied (`docs/database-migrations.md`).
+  applied to Supabase; `0008` (the engagement room) was applied on 10 October (`docs/database-migrations.md`).
 
 ## 2. Tables of The Shift (current platform)
 

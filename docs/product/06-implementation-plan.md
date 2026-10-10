@@ -40,7 +40,7 @@ window; the problem questions at the end of the check.
 | 0.3 | Push the branch to `main` | ET ("push to main") | The four branch changes |
 | 0.4 | Name the finance person and grant roles to the analysts on the platform | Lewis | Phase 1 assignments |
 | 0.5 | Open IP Factory's Paystack business account; put the test keys, then the live keys, in Vercel (`PAYSTACK_PUBLIC_KEY`, `PAYSTACK_SECRET_KEY`) | ET, Lewis | Online payment (section 4) |
-| 0.6 | **Apply migration 0008** (`drizzle/supabase/apply-0008-engagement-room.sql` in the Supabase SQL Editor, or `pnpm db:migrate`) before the first Current State Assessment payment is confirmed | Lewis | The engagement room |
+| 0.6 | ✅ **Done 10 October.** **Apply migration 0008** (`drizzle/supabase/apply-0008-engagement-room.sql` in the Supabase SQL Editor, or `pnpm db:migrate`) before the first Current State Assessment payment is confirmed | Lewis | The engagement room |
 | 0.7 | Create the private storage bucket `engagement-files` in Supabase → Storage; set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Vercel; upload one test file from a client account | Lewis | File uploads in the room |
 
 ## 3. Quick fixes found while writing these documents (this week, small)

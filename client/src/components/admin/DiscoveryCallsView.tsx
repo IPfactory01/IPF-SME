@@ -34,14 +34,14 @@ export default function DiscoveryCallsView({ onOpenSection }: { onOpenSection: (
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Summary">
-        <AdminMetricCard label="Call requests" value={rows.length} />
+        <AdminMetricCard label="Debrief requests" value={rows.length} />
         <AdminMetricCard label="No time yet" value={rows.filter(row => row.status === "call_requested").length} />
         <AdminMetricCard label="Booked" value={rows.filter(row => row.callScheduledFor).length} />
         <AdminMetricCard label="Opportunity" value={rows.filter(row => row.status === "fit").length} />
       </dl>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <Input aria-label="Search discovery calls" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search name, business, email or WhatsApp" className="h-9 rounded-none sm:max-w-xs" />
+        <Input aria-label="Search Debriefs" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search name, business, email or WhatsApp" className="h-9 rounded-none sm:max-w-xs" />
         <select aria-label="Filter by status" value={status} onChange={event => setStatus(event.target.value)} className="h-9 border border-line bg-white px-2 text-sm">
           <option value="all">All</option>
           {STATUS_FILTERS.map(item => <option key={item} value={item}>{FUNNEL_STATUS_LABELS[item].label}</option>)}
@@ -65,7 +65,7 @@ export default function DiscoveryCallsView({ onOpenSection }: { onOpenSection: (
               {visible.map(row => (
                 <ClickableRow key={row.id} onOpen={() => setOpenId(row.id)} selected={row.id === openId}>
                   <td className={TD}>
-                    <RowButton label={`Open discovery call for ${row.fullName}`}>
+                    <RowButton label={`Open the Debrief for ${row.fullName}`}>
                       <ProspectCell fullName={row.fullName} email={row.email} whatsapp={row.whatsapp} businessName={row.businessName} />
                     </RowButton>
                   </td>
@@ -77,7 +77,7 @@ export default function DiscoveryCallsView({ onOpenSection }: { onOpenSection: (
                   <td className={TD}><StatusBadge status={row.status} /></td>
                 </ClickableRow>
               ))}
-              {visible.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-sm text-ink-muted">{rows.length === 0 ? "No one has asked for a discovery call yet." : "No discovery calls match."}</td></tr>}
+              {visible.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-sm text-ink-muted">{rows.length === 0 ? "No one has asked for a Debrief yet." : "No Debriefs match."}</td></tr>}
             </tbody>
           </table>
         </div>
@@ -86,7 +86,7 @@ export default function DiscoveryCallsView({ onOpenSection }: { onOpenSection: (
       <RecordDrawer
         open={opened !== null}
         onOpenChange={open => !open && setOpenId(null)}
-        title={opened?.fullName ?? "Discovery call"}
+        title={opened?.fullName ?? "Debrief"}
         description={opened?.businessName ?? "No business name given"}
       >
         {opened && <DiscoveryCallDetail row={opened} onOpenSection={onOpenSection} onClose={() => setOpenId(null)} />}

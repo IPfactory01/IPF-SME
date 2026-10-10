@@ -6,7 +6,7 @@ describe("what an owner can pay for before Current State Assessment", () => {
   it("takes its prices from the one price list", () => {
     expect(PAYMENT_ITEM_DETAILS.full_report.amount).toBe(PRICES.fullReport);
     expect(PAYMENT_ITEM_DETAILS.current_state.amount).toBe(PRICES.currentState);
-    expect(describePayment("full_report")).toBe("₦100,000 for your full business check report");
+    expect(describePayment("full_report")).toBe("₦100,000 for your Full Report");
     expect(describePayment("current_state")).toBe("₦500,000 for your Current State Assessment");
   });
 

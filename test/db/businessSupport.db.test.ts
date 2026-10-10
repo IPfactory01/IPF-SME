@@ -233,7 +233,7 @@ for (const target of targets) {
         expect(stored.pipelineStage).toBe("call_booked");
         expect(stored.callScheduledFor).toBeNull();
         expect(mocked.deliverEmail).toHaveBeenCalledTimes(1);
-        expect(mocked.deliverEmail.mock.calls[0][0].subject).toMatch(/asked for a free discovery call/);
+        expect(mocked.deliverEmail.mock.calls[0][0].subject).toMatch(/asked for a free Debrief/);
 
         const call = (await (await superAdmin.call()).businessSupport.discoveryCalls()).find((item: { email: string }) => item.email === email)!;
         expect(call).toMatchObject({ pipelineStage: "call_booked", callScheduledFor: null, whatsapp: "+2348000000001" });

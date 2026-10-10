@@ -79,7 +79,7 @@ describe("joining by invitation", () => {
   it("tells the owner's staff whose business it is and what they will see", () => {
     api.preview = { available: true, kind: "business_member", email: "chidi@example.com", fullName: "Chidi", businessName: "Ada Foods", access: "contributor" };
     renderJoin();
-    expect(screen.getByText(/invited to work on Ada Foods with IP Factory\. Sees only the requests, actions and calls given to them\./)).toBeTruthy();
+    expect(screen.getByText(/invited to work on Ada Foods with IP Factory\. Sees only the Data Requests, actions and Sessions given to them\./)).toBeTruthy();
   });
 
   it("checks the password before calling the server, and shows an unusable link plainly", () => {

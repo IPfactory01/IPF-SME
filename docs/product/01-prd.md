@@ -220,7 +220,7 @@ value, moved, extension, plan delivered, next problem area, ongoing support defi
   button. Sent from `EMAIL_FROM` (default `IP Factory <info@ipfactory.co>`), replies to info@ipfactory.co.
 - Sent: business check summary (owner) and notice (office); payment details; payment confirmed; report form link;
   report delivered with the PDF; client account invitation; staff and seat invitations (`/join`) and password reset;
-  "New in your room" when notes or a deliverable are shared (the title and a link only, to the people who can see it).
+  "Engagement update" when Session notes or a Deliverable are shared (the title and a link only, to the people who can see it).
 - Delivery uses Resend. Until the `ipfactory.co` sending domain is verified, Resend refuses most outside addresses;
   every failure is recorded and the office notice says so.
 - **Status: Built.** Domain verification is an operational task (DG).

@@ -100,7 +100,7 @@ describe("business check summary", () => {
     expect(describeAnswers(answers)).toContain("[Founder readiness]");
     const result = evaluate(answers);
     const email = ownerEmail({ contact, result, summary: { ...result.summary, offerings: [] } });
-    expect(email.body).toContain("WHAT WE FOUND");
+    expect(email.body).toContain("FINDINGS");
     expect(email.body).toContain("₦100,000");
     expect(email.body).toContain("Dear Ada,");
     // Calls are booked in the booking app, not arranged by replying.
@@ -118,7 +118,7 @@ describe("business check summary", () => {
       "• Operations and people", "• Financials", "• Risk and compliance", "• Exit and value", "• Owner transition",
     ]);
     expect(outline).toContain("• Business model: not assessed");
-    expect(outline.at(-1)).toBe("Areas marked not assessed weren't part of this check for your business. The Current State Assessment looks at all ten.");
+    expect(outline.at(-1)).toBe("Areas marked not assessed weren't part of this Business Check for your business. The Current State Assessment looks at all ten.");
     const mature = complete({ p_stage: "operating", p_type: "trader", p_age: "over10", p_staff: "3to5", p_revenue: "3to5m" });
     const matureResult = evaluate(mature);
     expect(ownerEmail({ contact, result: matureResult, summary: { ...matureResult.summary, offerings: [] }, answers: mature }).body).not.toMatch(/not assessed/);
@@ -131,7 +131,7 @@ describe("business check summary", () => {
     expect(owner).toContain("The Shift");
     expect(owner).toContain("by IP Factory");
     expect(owner).toContain("Dear Ada,");
-    expect(owner).toMatch(/text-transform:uppercase;[^>]*>WHAT WE FOUND</);
+    expect(owner).toMatch(/text-transform:uppercase;[^>]*>FINDINGS</);
     expect(owner).toContain("&#8226;");
     expect(owner).toContain("₦100,000");
     const office = buildBusinessSupportEmailHtml(officeEmail({ contact, answers, summary, source: "Rules", result }).body);

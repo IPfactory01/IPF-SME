@@ -193,13 +193,13 @@ function StageAndTeam({ data, engagementId }: { data: Detail; engagementId: numb
 
 function Problem({ data, engagementId }: { data: Detail; engagementId: number }) {
   const refresh = useRefresh(engagementId);
-  const save = trpc.engagement.staff.saveProblem.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Problem saved."); } });
+  const save = trpc.engagement.staff.saveProblem.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Problem Statement saved."); } });
   const [area, setArea] = useState(data.engagement.problemArea === null ? "" : String(data.engagement.problemArea));
   const [sub, setSub] = useState(data.engagement.subProblem ?? "");
   const [statement, setStatement] = useState(data.engagement.problemStatement ?? "");
   return (
-    <DetailSection title="The one problem">
-      <p className="text-xs text-ink-muted">Agreed at the end of the Current State Assessment. One problem per fix.</p>
+    <DetailSection title="Problem Statement">
+      <p className="text-xs text-ink-muted">Agreed at the end of the Current State Assessment. One problem per Fix.</p>
       <label className={LABEL} htmlFor="problem-area">Problem area</label>
       <select id="problem-area" className={FIELD} disabled={!data.can.manage} value={area} onChange={event => setArea(event.target.value)}>
         <option value="">Not chosen yet</option>
@@ -207,9 +207,9 @@ function Problem({ data, engagementId }: { data: Detail; engagementId: number })
       </select>
       <label className={LABEL} htmlFor="sub-problem">Sub-problem</label>
       <input id="sub-problem" className={FIELD} disabled={!data.can.manage} value={sub} maxLength={255} onChange={event => setSub(event.target.value)} />
-      <label className={LABEL} htmlFor="problem-statement">Problem statement, in the owner's words</label>
+      <label className={LABEL} htmlFor="problem-statement">The Problem Statement, in the owner's words</label>
       <textarea id="problem-statement" className={FIELD} rows={3} disabled={!data.can.manage} value={statement} onChange={event => setStatement(event.target.value)} />
-      {data.can.manage && <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending} onClick={() => save.mutate({ engagementId, problemArea: area === "" ? null : Number(area), subProblem: sub, problemStatement: statement })}>Save the problem</Button>}
+      {data.can.manage && <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending} onClick={() => save.mutate({ engagementId, problemArea: area === "" ? null : Number(area), subProblem: sub, problemStatement: statement })}>Save the Problem Statement</Button>}
     </DetailSection>
   );
 }
@@ -217,10 +217,10 @@ function Problem({ data, engagementId }: { data: Detail; engagementId: number })
 function Sessions({ data, engagementId }: { data: Detail; engagementId: number }) {
   const [adding, setAdding] = useState(false);
   return (
-    <DetailSection title="Calls">
+    <DetailSection title="Sessions">
       <p className="text-xs text-ink-muted">Book on Calendly or by hand, then record the time here so the client sees it. Notes reach the client only when you share them.</p>
       {data.sessions.map(session => <SessionCard key={session.id} session={session} engagementId={engagementId} canManage={data.can.manage} />)}
-      {adding ? <SessionCard engagementId={engagementId} canManage={data.can.manage} onDone={() => setAdding(false)} /> : data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add a call</Button>}
+      {adding ? <SessionCard engagementId={engagementId} canManage={data.can.manage} onDone={() => setAdding(false)} /> : data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add a Session</Button>}
     </DetailSection>
   );
 }
@@ -237,13 +237,13 @@ function SessionCard({ session, engagementId, canManage, onDone }: { session?: S
   const [status, setStatus] = useState<EngagementSessionStatus>(session?.status ?? "planned");
   const [clientNotes, setClientNotes] = useState(session?.clientNotes ?? "");
   const [internalNotes, setInternalNotes] = useState(session?.internalNotes ?? "");
-  const save = trpc.engagement.staff.saveSession.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Call saved."); onDone?.(); } });
+  const save = trpc.engagement.staff.saveSession.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Session saved."); onDone?.(); } });
   const saveNotes = trpc.engagement.staff.saveNotes.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Notes saved. The client cannot see them until you share."); } });
   const share = trpc.engagement.staff.shareNotes.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Notes shared."); } });
   const id = session?.id ?? "new";
   const notesChanged = (session?.clientNotes ?? "") !== clientNotes || (session?.internalNotes ?? "") !== internalNotes;
   return (
-    <div className="space-y-2 border border-line bg-paper-raised p-3" aria-label={session?.title ?? "New call"}>
+    <div className="space-y-2 border border-line bg-paper-raised p-3" aria-label={session?.title ?? "New Session"}>
       <div className="grid gap-2 sm:grid-cols-2">
         <div><label className={LABEL} htmlFor={`title-${id}`}>Title</label><input id={`title-${id}`} className={FIELD} disabled={!canManage} value={title} onChange={event => setTitle(event.target.value)} /></div>
         <div><label className={LABEL} htmlFor={`kind-${id}`}>Kind</label><select id={`kind-${id}`} className={FIELD} disabled={!canManage} value={kind} onChange={event => setKind(event.target.value as EngagementSessionKind)}>{ENGAGEMENT_SESSION_KINDS.map(item => <option key={item} value={item}>{ENGAGEMENT_SESSION_KIND_LABELS[item]}</option>)}</select></div>
@@ -260,7 +260,7 @@ function SessionCard({ session, engagementId, canManage, onDone }: { session?: S
         <div className="flex gap-2">
           <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !title.trim()} onClick={() => save.mutate({
             engagementId, sessionId: session?.id, kind, title, scheduledFor: combineDateAndTime(date, time), durationMinutes: duration ? Number(duration) : null, meetingLink: link.trim() || null, agenda, status,
-          })}>Save the call</Button>
+          })}>Save the Session</Button>
           {onDone && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={onDone}>Cancel</Button>}
         </div>
       )}
@@ -394,7 +394,7 @@ function DeliverableCard({ item, data, engagementId, onDone }: { item?: Delivera
       <label className={LABEL} htmlFor={`deliverable-summary-${id}`}>What it says</label>
       <textarea id={`deliverable-summary-${id}`} className={FIELD} rows={5} disabled={!data.can.manage} value={summary} onChange={event => setSummary(event.target.value)} />
       {!item && kind === "findings" && !summary.trim() && data.can.manage && (
-        <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setSummary(FINDINGS_OUTLINE)}>Start from the standard findings outline</Button>
+        <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setSummary(FINDINGS_OUTLINE)}>Start from the standard Findings outline</Button>
       )}
       <div className="flex flex-wrap gap-2">
         {data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={save.isPending || !changed || !title.trim()} onClick={() => save.mutate({ engagementId, deliverableId: item?.id, kind, title, summary })}>{item ? "Save changes" : "Save as a draft"}</Button>}
@@ -434,14 +434,14 @@ function TheFix({ data, engagementId }: { data: Detail; engagementId: number }) 
   const [baseline, setBaseline] = useState(measure?.baselineValue === null || measure?.baselineValue === undefined ? "" : String(measure.baselineValue));
   const [target, setTarget] = useState(measure?.targetValue === null || measure?.targetValue === undefined ? "" : String(measure.targetValue));
   const [adding, setAdding] = useState(false);
-  const save = trpc.engagement.staff.saveMeasure.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("The number is saved. The client can see it."); } });
+  const save = trpc.engagement.staff.saveMeasure.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("The Measure of Success is saved. The client can see it."); } });
   const nextWeek = (data.checkins.at(-1)?.weekNumber ?? 0) + 1;
   const canManage = data.can.manage;
   return (
-    <DetailSection title="The fix: the one number and the weekly check-in">
-      <p className="text-xs text-ink-muted">One problem, one number. Set the number in fix week 1 with where it starts and where it should get to; the client sees it. Then one check-in a week, recorded in order: week {FIX_WEEKS} is the last unless the fix is extended.</p>
+    <DetailSection title="The Fix: the Measure of Success and the Weekly Check-in">
+      <p className="text-xs text-ink-muted">One problem, one Measure of Success. Set it in week 1 of The Fix with where it starts and where it should get to; the client sees it. Then one Weekly Check-in, recorded in order: week {FIX_WEEKS} is the last unless The Fix is extended.</p>
       <div className="grid gap-2 sm:grid-cols-2">
-        <div className="sm:col-span-2"><label className={LABEL} htmlFor="measure-name">The number we watch</label><input id="measure-name" className={FIELD} disabled={!canManage} value={name} maxLength={160} placeholder="e.g. Cash in the bank at the end of the week" onChange={event => setName(event.target.value)} /></div>
+        <div className="sm:col-span-2"><label className={LABEL} htmlFor="measure-name">Measure of Success</label><input id="measure-name" className={FIELD} disabled={!canManage} value={name} maxLength={160} placeholder="e.g. Cash in the bank at the end of the week" onChange={event => setName(event.target.value)} /></div>
         <div className="sm:col-span-2"><label className={LABEL} htmlFor="measure-definition">How it is measured (the client sees this)</label><textarea id="measure-definition" className={FIELD} rows={2} disabled={!canManage} value={definition} onChange={event => setDefinition(event.target.value)} /></div>
         <div><label className={LABEL} htmlFor="measure-unit">Unit</label><input id="measure-unit" className={FIELD} disabled={!canManage} value={unit} maxLength={32} placeholder="₦, %, days, orders…" onChange={event => setUnit(event.target.value)} /></div>
         <div className="grid grid-cols-2 gap-2">
@@ -449,7 +449,7 @@ function TheFix({ data, engagementId }: { data: Detail; engagementId: number }) 
           <div><label className={LABEL} htmlFor="measure-target">Where it should get to</label><input id="measure-target" type="number" step="any" className={FIELD} disabled={!canManage} value={target} onChange={event => setTarget(event.target.value)} /></div>
         </div>
       </div>
-      {canManage && <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !name.trim()} onClick={() => save.mutate({ engagementId, name, definition, unit, baselineValue: numberOrNull(baseline), targetValue: numberOrNull(target) })}>{measure ? "Save the number" : "Set the number"}</Button>}
+      {canManage && <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !name.trim()} onClick={() => save.mutate({ engagementId, name, definition, unit, baselineValue: numberOrNull(baseline), targetValue: numberOrNull(target) })}>{measure ? "Save the Measure of Success" : "Set the Measure of Success"}</Button>}
       {data.checkins.map(checkin => <CheckinCard key={checkin.weekNumber} checkin={checkin} engagementId={engagementId} canManage={canManage} unit={measure?.unit ?? null} />)}
       {adding ? (
         <CheckinCard weekNumber={nextWeek} engagementId={engagementId} canManage={canManage} unit={measure?.unit ?? null} onDone={() => setAdding(false)} />
@@ -487,7 +487,7 @@ function CheckinCard({ checkin, weekNumber, engagementId, canManage, unit, onDon
         <div><label className={LABEL} htmlFor={`${id}-hours-analyst`}>Analyst hours</label><input id={`${id}-hours-analyst`} type="number" step="0.25" min={0} className={FIELD} disabled={!canManage} value={hours.analyst} onChange={event => setHours(current => ({ ...current, analyst: event.target.value }))} /></div>
         <div><label className={LABEL} htmlFor={`${id}-hours-partner`}>Partner hours</label><input id={`${id}-hours-partner`} type="number" step="0.25" min={0} className={FIELD} disabled={!canManage} value={hours.partner} onChange={event => setHours(current => ({ ...current, partner: event.target.value }))} /></div>
       </div>
-      <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={!canManage} checked={aiUsed} onChange={event => setAiUsed(event.target.checked)} />AI was used in preparing this check-in</label>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={!canManage} checked={aiUsed} onChange={event => setAiUsed(event.target.checked)} />AI was used in preparing this Weekly Check-in</label>
       <p className="text-xs text-ink-muted">The client sees the reading and the next step. Hours, questions and what got in the way stay with the team.</p>
       {canManage && (
         <div className="flex gap-2">

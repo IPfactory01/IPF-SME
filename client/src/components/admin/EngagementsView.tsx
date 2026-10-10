@@ -38,13 +38,13 @@ export default function EngagementsView() {
   }
   return (
     <div className="space-y-4 p-6">
-      <p className="text-sm text-ink-muted">An engagement starts when the Current State Assessment is paid. Open one to name the team, book the calls, send what you need from the client and share what you found.</p>
+      <p className="text-sm text-ink-muted">An engagement starts when the Current State Assessment is paid. Open one to name the team, book the Sessions, send the Data Requests and share the Findings.</p>
       {storage.data && <StorageLine status={storage.data} onCheck={() => void storage.refetch()} />}
       {storage.error && <p role="status" aria-label="File uploads" className="border border-health-watch bg-health-watch-tint p-3 text-sm text-health-watch">Could not check file storage: {storage.error.message}</p>}
       {awaiting.data && awaiting.data.length > 0 && (
         <section aria-labelledby="awaiting-start" className="space-y-2 border border-danger-line bg-danger-tint p-4">
           <h2 id="awaiting-start" className="text-sm font-semibold text-danger">Paid, but no engagement yet</h2>
-          <p className="text-xs text-ink">These Current State Assessments were paid before the room was set up, or the start failed. Start each one: it gets the usual requests and calls, and joins the client's account if they have one.</p>
+          <p className="text-xs text-ink">These Current State Assessments were paid before the room was set up, or the start failed. Start each one: it gets the standard Work Plan and both Sessions, and joins the client's account if they have one.</p>
           <ul className="space-y-1">
             {awaiting.data.map(item => (
               <li key={item.businessCheckId} className="flex flex-wrap items-center justify-between gap-2 border-t border-danger-line pt-2 text-sm">
@@ -58,7 +58,7 @@ export default function EngagementsView() {
       {list.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
         <div className="overflow-x-auto border border-line bg-white">
           <table className="w-full">
-            <thead><tr className="border-b border-line"><th className={TH}>Business</th><th className={TH}>Stage</th><th className={TH}>Team</th><th className={TH}>From the client</th><th className={TH}>Next call</th></tr></thead>
+            <thead><tr className="border-b border-line"><th className={TH}>Business</th><th className={TH}>Stage</th><th className={TH}>Team</th><th className={TH}>Data Requests</th><th className={TH}>Next Session</th></tr></thead>
             <tbody>
               {list.data?.items.map(row => (
                 <ClickableRow key={row.id} onOpen={() => setOpenId(row.id)} selected={row.id === openId}>
@@ -85,7 +85,7 @@ function waitingOn(row: Row) {
   if (!row.openClientRequests) return "Nothing outstanding";
   return (
     <>
-      <span className="block">{row.openClientRequests} to send</span>
+      <span className="block">{row.openClientRequests} outstanding</span>
       {row.overdueClientRequests ? <span className="block text-xs text-danger">{row.overdueClientRequests} overdue</span> : null}
     </>
   );
@@ -105,7 +105,7 @@ function StorageLine({ status, onCheck }: { status: StorageStatus; onCheck: () =
     <section role="status" aria-label="File uploads" className={`flex flex-wrap items-start justify-between gap-3 border p-3 text-sm ${tone}`}>
       <div className="space-y-1">
         <p className="font-semibold">{on ? "File uploads: on." : status.bucketPublic ? "File uploads: on, but the bucket is public." : "File uploads: off."}</p>
-        {on && <p className="text-xs text-ink">Clients can upload against each request. The team can attach files to deliverables.</p>}
+        {on && <p className="text-xs text-ink">Clients can upload against each Data Request. The team can attach files to deliverables.</p>}
         {status.bucketPublic && <p className="text-xs text-ink">Anyone with a link could read client files. In Supabase → Storage, open {status.bucket} and switch "Public bucket" off.</p>}
         {status.missing.length > 0 && (
           <div className="text-xs text-ink">

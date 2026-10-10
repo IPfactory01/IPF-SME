@@ -41,11 +41,11 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Summary">
-        <AdminMetricCard label="Total checks" value={rows.length} />
+        <AdminMetricCard label="Business Checks" value={rows.length} />
         <AdminMetricCard label="Completed" value={rows.filter(row => row.completedAt).length} />
-        <AdminMetricCard label="Call requested" value={rows.filter(row => row.callRequestedAt).length} />
+        <AdminMetricCard label="Debriefs requested" value={rows.filter(row => row.callRequestedAt).length} />
         <AdminMetricCard label="Ready to onboard" value={rows.filter(row => isReadyToOnboard(row.status)).length} />
-        <AdminMetricCard label="Reports requested" value={rows.filter(row => row.reportRequestedAt).length} />
+        <AdminMetricCard label="Full Reports requested" value={rows.filter(row => row.reportRequestedAt).length} />
       </dl>
 
       <div role="tablist" aria-label="Pipeline stage" className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
@@ -68,7 +68,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <Input aria-label="Search business checks" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search name, business, email or WhatsApp" className="h-9 rounded-none sm:max-w-xs" />
+        <Input aria-label="Search Business Checks" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search name, business, email or WhatsApp" className="h-9 rounded-none sm:max-w-xs" />
         <span className="text-xs text-ink-muted sm:ml-auto">{visible.length} of {rows.length}</span>
       </div>
 
@@ -112,7 +112,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
                   </td>
                 </ClickableRow>
               ))}
-              {visible.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-sm text-ink-muted">No business checks match.</td></tr>}
+              {visible.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-sm text-ink-muted">No Business Checks match.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -121,7 +121,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
       <RecordDrawer
         open={opened !== null}
         onOpenChange={open => !open && setOpenId(null)}
-        title={opened?.fullName ?? "Business check"}
+        title={opened?.fullName ?? "Business Check"}
         description={opened?.businessName ?? "No business name given"}
       >
         {opened && <BusinessCheckDetail businessCheckId={opened.id} onOpenSection={onOpenSection} onClose={() => setOpenId(null)} />}

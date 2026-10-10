@@ -113,9 +113,9 @@ describe("business support email layout", () => {
   const body = [
     "Dear Ada,",
     "",
-    "Thank you for taking the IP Factory business check. Here is your summary.",
+    "Thank you for taking the IP Factory Business Check. Here is your summary.",
     "",
-    "WHAT WE FOUND",
+    "FINDINGS",
     "Sales are steady but cash is tight.",
     "",
     "YOUR BUSINESS OUTLINE",
@@ -141,7 +141,7 @@ describe("business support email layout", () => {
     expect(html).toContain(">The Shift<");
     expect(html).toContain("The Shift, by IP Factory");
     expect(html).toContain("mailto:info@ipfactory.co");
-    expect(html).toContain("<title>Thank you for taking the IP Factory business check. Here is your summary.</title>");
+    expect(html).toContain("<title>Thank you for taking the IP Factory Business Check. Here is your summary.</title>");
     expect(html).toMatch(/Georgia[^>]*>Dear Ada,<\/p>/);
     expect(html).not.toMatch(/JUMP|Genius Track|Emmanuel Tarfa/);
   });
@@ -150,7 +150,7 @@ describe("business support email layout", () => {
     const used = new Set(html.match(/#[0-9A-Fa-f]{6}/g)!.map((hex) => hex.toUpperCase()));
     const palette = new Set(Object.values(BRAND.palette).map((hex) => hex.toUpperCase()));
     expect([...used].filter((hex) => !palette.has(hex))).toEqual([]);
-    expect(html).toMatch(new RegExp(`color:${BRAND.palette["highlight-ink"]};font-weight:700;">WHAT WE FOUND<`));
+    expect(html).toMatch(new RegExp(`color:${BRAND.palette["highlight-ink"]};font-weight:700;">FINDINGS<`));
     expect(html).toMatch(new RegExp(`bgcolor="${BRAND.palette.highlight}"[^>]*><a [^>]*color:${BRAND.palette["brand-deep"]};[^>]*>Pick a time<`));
     for (const colour of [BRAND.palette["brand-plum"], BRAND.palette["highlight-ink"], BRAND.palette.highlight]) {
       expect(html).toContain(`height="4" bgcolor="${colour}"`);
@@ -158,7 +158,7 @@ describe("business support email layout", () => {
   });
 
   it("turns capitals into headings, bullets into a list and a lone address line into a button", () => {
-    expect(html).toMatch(/text-transform:uppercase;[^>]*>WHAT WE FOUND<\/div>/);
+    expect(html).toMatch(/text-transform:uppercase;[^>]*>FINDINGS<\/div>/);
     expect(html).toMatch(/&#8226;<\/td><td[^>]*>Strategy: clear<\/td>/);
     expect(html).toMatch(/<a href="https:\/\/calendly\.com\/example\/discovery"[^>]*>Pick a time<\/a>/);
   });

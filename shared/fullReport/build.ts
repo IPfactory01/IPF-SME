@@ -538,7 +538,7 @@ export function buildFullReport(input: ReportInput): FullReport {
     number: 10, title: "What to fix first: your 90-day plan", method: "Recommendation",
     finding: moves.length ? `${moves.length === 1 ? "One move" : `${["", "One", "Two", "Three"][moves.length]} moves`} over 90 days, starting with ${moves[0].area.toLowerCase()}.` : "Keep doing what works, and review the numbers monthly.",
     blocks: [
-      { kind: "table", columns: ["When", "Move", "This week", "Number to watch"], widths: [0.13, 0.37, 0.3, 0.2], rows: moves.map((move) => [move.month, move.move, move.thisWeek, move.watch]) },
+      { kind: "table", columns: ["When", "Move", "This week", "Measure of Success"], widths: [0.13, 0.37, 0.3, 0.2], rows: moves.map((move) => [move.month, move.move, move.thisWeek, move.watch]) },
       { kind: "paragraph", text: `Your goal for the year, in your words: “${intake.goal.replace(/[.\s]+$/, "")}.” Check each month whether these moves are bringing it closer, and drop anything that is not.` },
     ],
   });
@@ -546,10 +546,10 @@ export function buildFullReport(input: ReportInput): FullReport {
   // ---- How we can help -----------------------------------------------------------------------
   parts.push({
     number: 11, title: "How we can help", method: "Services that fit",
-    finding: result.offerings.length ? "If you want support with the plan, these are the services that fit what you told us." : "If you want support with the plan, start with a free 20-minute call.",
+    finding: result.offerings.length ? "If you want support with the plan, these are the services that fit what you told us." : "If you want support with the plan, start with a free Debrief.",
     blocks: [
       ...(result.offerings.length ? [{ kind: "table" as const, columns: ["Service", "What it does"], widths: [0.38, 0.62], rows: result.offerings.map((offering) => [offering.name, offering.summary]) }] : []),
-      { kind: "callout", title: `${CURRENT_STATE.name} · ${formatNaira(PRICES.currentState)}`, text: `${CURRENT_STATE.what} ${CURRENT_STATE.start} It starts with a free 20-minute call, where we tell you honestly whether we can help.` },
+      { kind: "callout", title: `${CURRENT_STATE.name} · ${formatNaira(PRICES.currentState)}`, text: `${CURRENT_STATE.what} ${CURRENT_STATE.start} It starts with a free Debrief, where we tell you honestly whether we can help.` },
     ],
   });
 
@@ -579,7 +579,7 @@ export function buildFullReport(input: ReportInput): FullReport {
     },
     parts,
     appendix: appendix(answers, intake),
-    method: `Built by The Shift's fixed rules from the business check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on ${reportDate(input.date)}. It is not an audit, a valuation, or financial, legal or tax advice.`,
+    method: `Built by The Shift's fixed rules from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on ${reportDate(input.date)}. It is not an audit, a valuation, or financial, legal or tax advice.`,
   };
 
   function healthWord(health: Health) {
@@ -704,7 +704,7 @@ function appendix(answers: Answers, intake: ReportIntake): FullReport["appendix"
     goal: intake.goal,
   };
   return [
-    { title: "Your business check", rows: check },
+    { title: "Your Business Check", rows: check },
     { title: "Your Report Intake", rows: INTAKE_QUESTIONS.map((question) => ({ question: intakeWording(question, earnsByDeal(intake.products)).prompt, answer: intakeAnswers[question.id] })) },
   ];
 }

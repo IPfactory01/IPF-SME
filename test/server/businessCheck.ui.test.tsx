@@ -60,12 +60,12 @@ const preload = (state: Record<string, unknown>) =>
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ started: true, seen: [], history: [], contact: { fullName: "Ada Example", email: "ada@example.com", whatsapp: "", heardFrom: "" }, ...state }));
 
 async function giveDetails() {
-  await pick(/take the check/i);
+  await pick(/take the business check/i);
   expect(await screen.findByText("First, who are we talking to?")).toBeTruthy();
   const boxes = screen.getAllByRole("textbox");
   fireEvent.change(boxes[0], { target: { value: "Ada Example" } });
   fireEvent.change(boxes[1], { target: { value: "ada@example.com" } });
-  await pick(/start the check/i);
+  await pick(/start the business check/i);
 }
 
 // The idea-stage test walks a whole question path in jsdom and takes about 4.5 s even on a quiet machine, so the default
@@ -83,10 +83,10 @@ describe("business check page", { timeout: 20_000 }, () => {
 
   it("asks who the owner is first, records them as a lead, then starts the questions", async () => {
     render(React.createElement(BusinessCheck));
-    await pick(/take the check/i);
+    await pick(/take the business check/i);
     expect(await screen.findByText("First, who are we talking to?")).toBeTruthy();
     expect(screen.getByText(/so our team can follow up if you don't finish/)).toBeTruthy();
-    const start = screen.getByRole("button", { name: /start the check/i }) as HTMLButtonElement;
+    const start = screen.getByRole("button", { name: /start the business check/i }) as HTMLButtonElement;
     expect(start.disabled).toBe(true);
 
     const boxes = screen.getAllByRole("textbox");
@@ -110,11 +110,11 @@ describe("business check page", { timeout: 20_000 }, () => {
     };
     const number = () => screen.getByLabelText("WhatsApp number") as HTMLInputElement;
     const country = () => screen.getByLabelText("Country code") as HTMLSelectElement;
-    const startButton = () => screen.getByRole("button", { name: /start the check/i }) as HTMLButtonElement;
+    const startButton = () => screen.getByRole("button", { name: /start the business check/i }) as HTMLButtonElement;
 
     it("shows Nigeria's flag and +234 in the same box by default, with Nigeria first in the list", async () => {
       render(React.createElement(BusinessCheck));
-      await pick(/take the check/i);
+      await pick(/take the business check/i);
       await screen.findByText("First, who are we talking to?");
       expect(country().value).toBe("NG");
       expect(number().closest("div")!.textContent).toContain("🇳🇬+234");
@@ -124,7 +124,7 @@ describe("business check page", { timeout: 20_000 }, () => {
 
     it("drops a leading 0 as it is typed and says why", async () => {
       render(React.createElement(BusinessCheck));
-      await pick(/take the check/i);
+      await pick(/take the business check/i);
       await screen.findByText("First, who are we talking to?");
       fireEvent.change(number(), { target: { value: "08031234567" } });
       expect(number().value).toBe("8031234567");
@@ -133,7 +133,7 @@ describe("business check page", { timeout: 20_000 }, () => {
 
     it("sends the number with the chosen country's code", async () => {
       render(React.createElement(BusinessCheck));
-      await pick(/take the check/i);
+      await pick(/take the business check/i);
       await screen.findByText("First, who are we talking to?");
       fillRequired();
       fireEvent.change(country(), { target: { value: "GB" } });
@@ -145,7 +145,7 @@ describe("business check page", { timeout: 20_000 }, () => {
 
     it("blocks a Nigerian number of the wrong length, and still lets the owner skip the number", async () => {
       render(React.createElement(BusinessCheck));
-      await pick(/take the check/i);
+      await pick(/take the business check/i);
       await screen.findByText("First, who are we talking to?");
       fillRequired();
       fireEvent.change(number(), { target: { value: "803123" } });
@@ -250,8 +250,8 @@ describe("business check page", { timeout: 20_000 }, () => {
 
   it("shows the summary, the outline, founder readiness in words and the services that fit", () => {
     resultFor();
-    expect(screen.getByText("What we found")).toBeTruthy();
-    expect(screen.getByText(/Your business check · Ada Foods/)).toBeTruthy();
+    expect(screen.getByText("Findings")).toBeTruthy();
+    expect(screen.getByText(/Your Business Check · Ada Foods/)).toBeTruthy();
     expect(screen.getByText("Think text for the test.")).toBeTruthy();
     expect(screen.getByText("7. Financials")).toBeTruthy();
     expect(screen.getByText("Finance & Capital")).toBeTruthy();
@@ -269,27 +269,27 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(screen.getByText("Asked once the business has traded for five years.")).toBeTruthy();
     expect(screen.getByText("10. Owner transition")).toBeTruthy();
     expect(screen.getAllByText("Not assessed")).toHaveLength(2);
-    expect(screen.getByText("Areas marked not assessed weren't part of this check for your business. The Current State Assessment looks at all ten.")).toBeTruthy();
+    expect(screen.getByText("Areas marked not assessed weren't part of this Business Check for your business. The Current State Assessment looks at all ten.")).toBeTruthy();
     const rows = Array.from(document.querySelectorAll("li")).map((item) => item.textContent ?? "").filter((text) => /^\d+\. /.test(text));
     expect(rows.map((text) => Number(text.split(".")[0]))).toEqual([...rows.map((text) => Number(text.split(".")[0]))].sort((a, b) => a - b));
   });
 
   it("gives the ₦100,000 full report its own offer, with what is inside, and records the request", async () => {
     resultFor();
-    expect(screen.getByText("The summary tells you where you stand. The full report tells you what to do about it.")).toBeTruthy();
-    expect(screen.getByText("Your full business check report")).toBeTruthy();
+    expect(screen.getByText("The Business Check summary tells you where you stand. The Full Report tells you what to do about it.")).toBeTruthy();
+    expect(screen.getByText("Your Full Report")).toBeTruthy();
     expect(screen.getByText("₦100,000", { selector: "p" })).toBeTruthy();
     expect(screen.getByText(/The root cause behind each red and amber/)).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /get my full report/i }));
     expect(api.calls.requestNext).toEqual([{ token: TOKEN, choice: "report" }]);
-    expect(await screen.findByText(/The payment details are on their way to ada@example.com. Once your payment is confirmed, you answer a short form and your report arrives straight away/)).toBeTruthy();
+    expect(await screen.findByText(/The payment details are on their way to ada@example.com. Once your payment is confirmed, you complete the Report Intake and your Full Report arrives straight away/)).toBeTruthy();
   });
 
   it("without a booking page configured, records the call request and never promises a WhatsApp call-back", async () => {
     resultFor("");
     // With no booking page, the button says what it does: it requests a call, it does not book one.
-    expect(screen.queryByRole("button", { name: /book my free call/i })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /request my free 20-minute call/i }));
+    expect(screen.queryByRole("button", { name: /book my free debrief/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /request my free debrief/i }));
     expect(api.calls.requestNext).toEqual([{ token: TOKEN, choice: "call" }]);
     expect(await screen.findByText("Thank you. Your request has been sent to the IPF team. We'll email you to agree a time.")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/WhatsApp/);
@@ -297,8 +297,8 @@ describe("business check page", { timeout: 20_000 }, () => {
 
   it("books the call in an embedded Calendly calendar, and counts it as booked only when Calendly confirms", async () => {
     resultFor("https://calendly.com/ip-factory/discovery-call");
-    fireEvent.click(screen.getByRole("button", { name: /book my free call/i }));
-    const calendar = (await screen.findByTitle("Book your free call")) as HTMLIFrameElement;
+    fireEvent.click(screen.getByRole("button", { name: /book my free debrief/i }));
+    const calendar = (await screen.findByTitle("Book your free Debrief")) as HTMLIFrameElement;
     const src = new URL(calendar.src);
     expect(src.origin + src.pathname).toBe("https://calendly.com/ip-factory/discovery-call");
     expect(src.searchParams.get("name")).toBe("Ada Example");
@@ -316,7 +316,7 @@ describe("business check page", { timeout: 20_000 }, () => {
 
   it("offers the same calendar in a new tab when the embedded one is blocked, and records the request without claiming a booking", async () => {
     resultFor("https://calendly.com/ip-factory/discovery-call");
-    fireEvent.click(screen.getByRole("button", { name: /book my free call/i }));
+    fireEvent.click(screen.getByRole("button", { name: /book my free debrief/i }));
     const link = (await screen.findByRole("link", { name: "Calendar not showing? Open it in a new tab" })) as HTMLAnchorElement;
     const href = new URL(link.href);
     expect(href.origin + href.pathname).toBe("https://calendly.com/ip-factory/discovery-call");
@@ -355,7 +355,7 @@ describe("business check page", { timeout: 20_000 }, () => {
       preload({ token: TOKEN, answers, response: responseWith({ emailStatus: "Simulated" }) });
       api.replies.requestNext = () => ({ success: true, choice: "call" });
       render(React.createElement(BusinessCheck));
-      fireEvent.click(screen.getByRole("button", { name: /request my free 20-minute call/i }));
+      fireEvent.click(screen.getByRole("button", { name: /request my free debrief/i }));
       expect(await screen.findByText("Thank you. Your request has been sent to the IPF team. We'll email you to agree a time.")).toBeTruthy();
       expect(document.body.textContent).not.toMatch(/within one working day|your slot|is booked|has been booked|WhatsApp/i);
     });

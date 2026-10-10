@@ -96,7 +96,7 @@ describe("the team's engagements", () => {
     api.detail = detail({ manage: true, assign: true, review: true });
     render(<EngagementsView />);
     const tableRow = screen.getByText("Ada Foods").closest("tr")!;
-    for (const text of ["Getting set up", "No one yet", "5 to send", "2 overdue", "2 not booked"]) expect(tableRow.textContent).toContain(text);
+    for (const text of ["Getting set up", "No one yet", "5 outstanding", "2 overdue", "2 not booked"]) expect(tableRow.textContent).toContain(text);
   });
 
   it("says whether file uploads are on, and if not exactly which setting or bucket is still missing", () => {
@@ -158,9 +158,9 @@ describe("the team's engagements", () => {
     const drawer = within(screen.getByRole("dialog"));
     fireEvent.click(drawer.getByRole("button", { name: "Add a deliverable" }));
     const card = within(drawer.getByLabelText("New deliverable"));
-    fireEvent.click(card.getByRole("button", { name: "Start from the standard findings outline" }));
+    fireEvent.click(card.getByRole("button", { name: "Start from the standard Findings outline" }));
     expect((card.getByLabelText("What it says") as HTMLTextAreaElement).value).toBe(FINDINGS_OUTLINE);
-    expect(card.queryByRole("button", { name: "Start from the standard findings outline" })).toBeNull();
+    expect(card.queryByRole("button", { name: "Start from the standard Findings outline" })).toBeNull();
   });
 
   it("says so when the database is not ready, instead of failing", () => {
@@ -233,18 +233,18 @@ describe("the fix on the team's side", () => {
     render(<EngagementsView />);
     fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
     const drawer = within(screen.getByRole("dialog"));
-    fireEvent.change(drawer.getByLabelText("The number we watch"), { target: { value: "Cash in the bank on Friday" } });
+    fireEvent.change(drawer.getByLabelText("Measure of Success"), { target: { value: "Cash in the bank on Friday" } });
     fireEvent.change(drawer.getByLabelText("Unit"), { target: { value: "₦" } });
     fireEvent.change(drawer.getByLabelText("Where it starts"), { target: { value: "150000" } });
     fireEvent.change(drawer.getByLabelText("Where it should get to"), { target: { value: "400000" } });
-    fireEvent.click(drawer.getByRole("button", { name: "Set the number" }));
+    fireEvent.click(drawer.getByRole("button", { name: "Set the Measure of Success" }));
     expect(api.calls.saveMeasure).toEqual([{ engagementId: 4, name: "Cash in the bank on Friday", definition: "", unit: "₦", baselineValue: 150000, targetValue: 400000 }]);
 
     fireEvent.click(drawer.getByRole("button", { name: "Record week 1" }));
     const week = within(drawer.getByLabelText("Week 1"));
     fireEvent.change(week.getByLabelText("What moved this week?"), { target: { value: "Daily cash count started." } });
     fireEvent.change(week.getByLabelText("What is the next step, and by when?"), { target: { value: "Chase late invoices by Friday." } });
-    fireEvent.change(week.getByLabelText("What does the number say this week?"), { target: { value: "160000" } });
+    fireEvent.change(week.getByLabelText("What does the Measure of Success say this week?"), { target: { value: "160000" } });
     fireEvent.change(week.getByLabelText("Analyst hours"), { target: { value: "2.5" } });
     fireEvent.click(week.getByRole("button", { name: "Record week 1" }));
     expect(api.calls.saveCheckin).toEqual([expect.objectContaining({ engagementId: 4, weekNumber: 1, progress: "Daily cash count started.", nextStep: "Chase late invoices by Friday.", measureReading: 160000, hoursAnalyst: 2.5, hoursLead: null, aiUsed: false })]);

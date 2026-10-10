@@ -105,6 +105,19 @@ screenshots before it ships, because every page's line lengths change.
 
 ## 6. Words
 
+**Name the method (ET, 10 October 2026).** Every stage, artefact and ritual has a proper name, used the same way on the
+site, in the admin, in the room and in email, from one list in `shared/method.ts`: Business Check, Debrief, Full Report,
+Report Intake, Current State Assessment, Work Plan, Data Request, Session, Findings, Problem Statement, Prescription,
+The Fix, Weekly Check-in, Measure of Success, Day-30 Review, Sign-off, Deliverables, Engagement, Your Plan.
+
+- **Term first, meaning second.** The name is the heading; the sentence under it says what it means in plain English
+  (`METHOD_MEANING`). Never a plain phrase in place of the name: "Findings", not "What we found"; "Data Requests · 2
+  outstanding", not "2 things to send"; "Mark as submitted", not "I have sent this".
+- **Nouns, not nudges.** Headings name the artefact, buttons name the act.
+- **Brand lines are exempt.** "Find it. Fix it. See the results." and "The Shift" do not change; "fix" as a verb stays
+  lower case.
+- Capitalised as names, including inside a sentence ("your Business Check results", "both Sessions").
+
 The site speaks the business owner's language (concept note, front matter):
 
 - Second person, short sentences, one idea per sentence. British English.

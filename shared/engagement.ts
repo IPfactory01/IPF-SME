@@ -19,16 +19,16 @@ export type EngagementStage = (typeof ENGAGEMENT_STAGES)[number];
 export const ENGAGEMENT_STAGE_LABELS: Record<EngagementStage, string> = {
   setting_up: "Getting set up",
   assessment: CURRENT_STATE.name,
-  fix: "The fix",
-  plan: "Your plan",
+  fix: "The Fix",
+  plan: "Your Plan",
   closed: "Closed",
 };
 
 /** What each stage means for the client, in the room's journey. */
 export const ENGAGEMENT_STAGE_SUMMARIES: Record<EngagementStage, string> = {
-  setting_up: "Three working days: we send what we need from you, name your team and book both calls.",
+  setting_up: "Three working days: we send your Data Requests, name your team and book both Sessions.",
   assessment: CURRENT_STATE.what,
-  fix: "One problem and one number to move. You do the work; we tell you what to do and check it every week.",
+  fix: "One problem and one Measure of Success. You do the work; we give you the Prescription and check it at a Weekly Check-in.",
   plan: "The plan in your hands, and what support looks like from here.",
   closed: "This engagement is closed.",
 };
@@ -52,7 +52,7 @@ export const CLIENT_ACCESS_LEVELS = ["full", "contributor"] as const;
 export type ClientAccessLevel = (typeof CLIENT_ACCESS_LEVELS)[number];
 export const CLIENT_ACCESS_LABELS: Record<ClientAccessLevel, { name: string; detail: string }> = {
   full: { name: "Full", detail: "Sees everything you share with your team. Cannot pay or add people." },
-  contributor: { name: "Contributor", detail: "Sees only the requests, actions and calls given to them." },
+  contributor: { name: "Contributor", detail: "Sees only the Data Requests, actions and Sessions given to them." },
 };
 
 /** Seats for the owner's staff included at no cost. A setting, not a price: paid seats are not part of the pilot. */
@@ -60,7 +60,7 @@ export const TEAM_SEATS_INCLUDED = 1;
 
 export const ENGAGEMENT_SESSION_KINDS = ["assessment_call", "check_in", "review", "other"] as const;
 export type EngagementSessionKind = (typeof ENGAGEMENT_SESSION_KINDS)[number];
-export const ENGAGEMENT_SESSION_KIND_LABELS: Record<EngagementSessionKind, string> = { assessment_call: `${CURRENT_STATE.name} call`, check_in: "Weekly check-in", review: "Review", other: "Call" };
+export const ENGAGEMENT_SESSION_KIND_LABELS: Record<EngagementSessionKind, string> = { assessment_call: `${CURRENT_STATE.name} Session`, check_in: "Weekly Check-in", review: "Review", other: "Session" };
 
 export const ENGAGEMENT_SESSION_STATUSES = ["planned", "held", "cancelled"] as const;
 export type EngagementSessionStatus = (typeof ENGAGEMENT_SESSION_STATUSES)[number];
@@ -97,7 +97,7 @@ export const OPEN_TASK_STATUSES: readonly EngagementTaskStatus[] = ["open", "nee
 
 export const ENGAGEMENT_DELIVERABLE_KINDS = ["findings", "problem_statement", "prescription", "tools", "plan", "other"] as const;
 export type EngagementDeliverableKind = (typeof ENGAGEMENT_DELIVERABLE_KINDS)[number];
-export const ENGAGEMENT_DELIVERABLE_KIND_LABELS: Record<EngagementDeliverableKind, string> = { findings: "Findings", problem_statement: "Problem statement", prescription: "Prescription", tools: "Tools", plan: "Plan", other: "Document" };
+export const ENGAGEMENT_DELIVERABLE_KIND_LABELS: Record<EngagementDeliverableKind, string> = { findings: "Findings", problem_statement: "Problem Statement", prescription: "Prescription", tools: "Tools", plan: "Plan", other: "Document" };
 
 /** O3: the desk lead approves every prescription and plan before the client sees it. */
 export const DELIVERABLES_NEEDING_APPROVAL: readonly EngagementDeliverableKind[] = ["prescription", "plan"];
@@ -113,7 +113,7 @@ export type EngagementDeliverableStatus = (typeof ENGAGEMENT_DELIVERABLE_STATUSE
 export const ASSESSMENT_TEMPLATE = {
   /** What we need from the client, by week. Week 1 is due in three working days, week 2 in eight. */
   dataRequests: [
-    { week: 1, order: 1, factor: "internal" as const, title: "Six quick questions before your first call", detail: "A few words each is enough. 1. What do you sell, and who buys it? 2. At month end, how do you know whether you made money? 3. Does more than one business run through the same account? 4. Which decisions wait for you? 5. What happens when you are away for a week? 6. If you could fix one thing in three months, what would it be?" },
+    { week: 1, order: 1, factor: "internal" as const, title: "Six quick questions before your first Session", detail: "A few words each is enough. 1. What do you sell, and who buys it? 2. At month end, how do you know whether you made money? 3. Does more than one business run through the same account? 4. Which decisions wait for you? 5. What happens when you are away for a week? 6. If you could fix one thing in three months, what would it be?" },
     { week: 1, order: 2, factor: "internal" as const, title: "Your sales for the last 12 months", detail: "Month by month. A sales book, a till report or photos of your records all work." },
     { week: 1, order: 3, factor: "internal" as const, title: "What you spend each month", detail: "Rent, salaries, stock, power, fuel and loan repayments. A rough list is fine." },
     { week: 1, order: 4, factor: "internal" as const, title: "Your price list", detail: "What you charge for each product or service, and the discounts you give." },
@@ -133,15 +133,15 @@ export const ASSESSMENT_TEMPLATE = {
       week: 1,
       order: 7,
       kind: "assessment_call" as const,
-      title: `${CURRENT_STATE.name} call 1`,
+      title: `${CURRENT_STATE.name} Session 1`,
       durationMinutes: 90,
-      agenda: "Your business today.\n0 to 10 min: welcome, and what the two weeks look like.\n10 to 35: your business in your words, starting from your six answers.\n35 to 65: the numbers: sales, costs and prices, and the gaps we fill together.\n65 to 85: how the business runs: a normal week, who does what, what waits for you.\n85 to 90: what is still missing, and the date of call 2.",
+      agenda: "Your business today.\n0 to 10 min: welcome, and what the two weeks look like.\n10 to 35: your business in your words, starting from your six answers.\n35 to 65: the numbers: sales, costs and prices, and the gaps we fill together.\n65 to 85: how the business runs: a normal week, who does what, what waits for you.\n85 to 90: what is still missing, and the date of Session 2.",
     },
     {
       week: 2,
       order: 6,
       kind: "assessment_call" as const,
-      title: `${CURRENT_STATE.name} call 2`,
+      title: `${CURRENT_STATE.name} Session 2`,
       durationMinutes: 90,
       agenda: "The one problem to fix first.\n0 to 10 min: what we looked at, and what we could not check.\n10 to 40: what we found: the numbers, how the business runs, the problems we see.\n40 to 60: the one problem to fix first, tested against your view.\n60 to 80: what to do about it: the first steps, the tools, and who owns each.\n80 to 90: what happens next, and when it will all be in your room.",
     },
@@ -150,7 +150,7 @@ export const ASSESSMENT_TEMPLATE = {
 
 /** The standard shape of the findings deliverable. The team starts from it and edits; headings only, no content. */
 export const FINDINGS_OUTLINE = [
-  "1. The one problem to fix first",
+  "1. Problem Statement: the one problem to fix first",
   "2. Your business at a glance",
   "3. What the numbers say: sales, costs, profit by product or service, cash, money owed",
   "4. How the business runs: who does what, and what waits for you",
@@ -240,7 +240,7 @@ export const CHECKIN_QUESTIONS = [
   { key: "progress", label: "What moved this week?" },
   { key: "blockers", label: "What got in the way?" },
   { key: "nextStep", label: "What is the next step, and by when?" },
-  { key: "measureReading", label: "What does the number say this week?" },
+  { key: "measureReading", label: "What does the Measure of Success say this week?" },
   { key: "questionsAsked", label: "What did the owner ask?" },
 ] as const;
 

@@ -107,7 +107,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
             On {BRAND.productName}, we get in with you, name the real problem, show you exactly what to do, give you the tools, and check your work every week until the number moves.
           </p>
           <div className="flex flex-col items-center gap-4">
-            <CtaButton onClick={onStart} className="w-full max-w-sm">Start with a free business check</CtaButton>
+            <CtaButton onClick={onStart} className="w-full max-w-sm">Start with a free Business Check</CtaButton>
             <p className="text-sm text-ink-muted">Ten minutes, on your phone.</p>
           </div>
         </motion.div>
@@ -119,7 +119,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
           animate={{ opacity: 1 }}
           transition={{ delay: 1.4, duration: 0.8 }}
           className="group mx-auto mt-14 flex w-full max-w-xl flex-col items-center gap-2"
-          aria-label="Start the business check"
+          aria-label="Start the Business Check"
         >
           <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-faint">Sound familiar?</span>
           <span className="relative block h-24 w-full overflow-hidden sm:h-10">
@@ -229,7 +229,7 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
         <Reveal className="mb-12 text-center">
           <span className="mb-3 block text-xs font-semibold uppercase tracking-widest text-ink-muted">Where businesses get stuck</span>
           <h2 className="font-serif text-4xl font-bold tracking-tight sm:text-5xl">Pick yours.</h2>
-          <p className="mt-3 text-ink-muted">Not sure which one it is? That is what the free check finds out.</p>
+          <p className="mt-3 text-ink-muted">Not sure which one it is? That is what the free Business Check finds out.</p>
         </Reveal>
         <motion.div layout className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
           {areas.map((area, index) => {
@@ -259,7 +259,7 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
                           <p className="mt-1.5 leading-relaxed text-ink-700">{area.together}</p>
                         </div>
                         <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-highlight-ink">The number we watch</p>
+                          <p className="text-[11px] font-semibold uppercase tracking-wider text-highlight-ink">Measure of Success</p>
                           <p className="mt-1.5 leading-relaxed text-ink-700">{area.measure}</p>
                         </div>
                         <button type="button" onClick={onStart} className="group inline-flex w-fit items-center gap-2 bg-ink px-5 py-3 text-xs font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-charcoal">
@@ -280,9 +280,9 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
 
 const QUESTIONS = [
   { q: "Do you do the work for me?", a: "No. You do; we make sure you know what to do and that it gets done." },
-  { q: "What if the number doesn't move in six weeks?", a: "We extend, at no charge, for up to two weeks before anything else is paid." },
+  { q: "What if the Measure of Success doesn't move in six weeks?", a: "We extend, at no charge, for up to two weeks before anything else is paid." },
   { q: "What do you do with my information?", a: `It stays between you and your ${BRAND.organisationName} team. We only use anonymised cases, and only with your consent.` },
-  { q: "What happens after the fix?", a: "You have a plan. If you want us to stay, we agree what that looks like and what it costs." },
+  { q: "What happens after The Fix?", a: "You have a plan. If you want us to stay, we agree what that looks like and what it costs." },
 ];
 
 export function Faq() {

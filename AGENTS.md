@@ -208,6 +208,7 @@ is deferred.
 ## Conventions
 
 - Copy: British English, second person, short sentences, naira in full (₦100,000). On the site, never "door", "sprint", "playbook" or "retainer". The business check sits between consulting terms and plain English: keep the term, say what it means.
+- Name the method: the stages, artefacts and rituals have proper names in `shared/method.ts` (Business Check, Debrief, Full Report, Current State Assessment, Work Plan, Data Request, Session, Findings, Problem Statement, Prescription, The Fix, Weekly Check-in, Measure of Success, Day-30 Review, Sign-off). Use them everywhere, capitalised, with a plain sentence underneath; never a plain phrase in their place ("Findings", not "what we found"). Brand lines are exempt.
 - Colours come from the theme tokens in `client/src/index.css`; do not hard-code hex values in components.
 - React effects must not return a value other than a cleanup function (the claude.ai preview frame breaks if they do).
 - Keep changes focused. Match the surrounding code's style and comment density.

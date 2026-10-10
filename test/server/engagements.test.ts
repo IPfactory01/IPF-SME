@@ -55,7 +55,7 @@ describe("before migration 0008 is applied", () => {
 describe("the Current State Assessment template (from IP Factory's assessment proposals, 10 October)", () => {
   it("asks for the six pre-call questions, the numbers, the people, the bank statements and what is owed", () => {
     const titles = ASSESSMENT_TEMPLATE.dataRequests.map(item => item.title);
-    expect(titles[0]).toBe("Six quick questions before your first call");
+    expect(titles[0]).toBe("Six quick questions before your first Session");
     expect(titles).toEqual(expect.arrayContaining(["Your sales for the last 12 months", "What you spend each month", "Your price list", "Who works in the business", "Bank statements for the last 6 months", "Money owed to you, and money you owe", "Anything you already track", "Ten customers: why they buy, and why some stopped"]));
     expect(titles).toHaveLength(9);
     for (const item of ASSESSMENT_TEMPLATE.dataRequests) {
@@ -95,6 +95,6 @@ describe("the Current State Assessment template (from IP Factory's assessment pr
     const copy = [...ASSESSMENT_TEMPLATE.dataRequests.flatMap(item => [item.title, item.detail]), ...ASSESSMENT_TEMPLATE.sessions.map(item => item.agenda), FINDINGS_OUTLINE].join(" ");
     expect(copy).not.toMatch(/\b(door|sprint|playbook|retainer|workstream|RACI|stakeholder)\b/i);
     expect(FINDINGS_OUTLINE.split("\n\n")).toHaveLength(7);
-    expect(FINDINGS_OUTLINE.startsWith("1. The one problem to fix first")).toBe(true);
+    expect(FINDINGS_OUTLINE.startsWith("1. Problem Statement: the one problem to fix first")).toBe(true);
   });
 });

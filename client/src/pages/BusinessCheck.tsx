@@ -123,7 +123,7 @@ export default function BusinessCheck() {
       setDirection(1);
       update({ token });
     },
-    onError: (err) => setError(err.message || "We could not start your business check. Kindly try again."),
+    onError: (err) => setError(err.message || "We could not start your Business Check. Kindly try again."),
   });
   const saveProgress = trpc.businessCheck.saveProgress.useMutation();
   const submit = trpc.businessCheck.submit.useMutation({
@@ -235,7 +235,7 @@ export default function BusinessCheck() {
         <div className="container flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-3" aria-label={`${BRAND.organisationName} home`}>
             <img src={BRAND.markUrl} alt={BRAND.organisationName} className="h-9 w-auto" />
-            <span className="border-l border-line pl-3 text-xs font-semibold uppercase tracking-widest text-ink-muted">Business check</span>
+            <span className="border-l border-line pl-3 text-xs font-semibold uppercase tracking-widest text-ink-muted">Business Check</span>
           </Link>
           <Link href="/" className="text-xs font-semibold uppercase tracking-wider text-brand hover:text-brand-deep">Back to site</Link>
         </div>
@@ -332,7 +332,7 @@ function Intro({ hasProgress, onStart, onRestart }: { hasProgress: boolean; onSt
         <h1 className="font-serif text-4xl font-black leading-[1.08] sm:text-6xl">
           {PROMISE[0]} {PROMISE[1]} <span className="font-normal italic">{PROMISE[2]}</span>
         </h1>
-        <p className="mt-4 text-xs font-semibold uppercase tracking-[0.25em] text-highlight-ink">The free business check</p>
+        <p className="mt-4 text-xs font-semibold uppercase tracking-[0.25em] text-highlight-ink">The free Business Check</p>
         <p className="mt-6 text-lg leading-relaxed text-ink-600">
           Some owners know exactly what is wrong. Many can only feel it: busy every day, money in and out, and no clear picture of why it isn't working. This check is for both.
         </p>
@@ -356,7 +356,7 @@ function Intro({ hasProgress, onStart, onRestart }: { hasProgress: boolean; onSt
       </ol>
 
       <motion.div variants={itemMotion} className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <PrimaryButton onClick={onStart} large>{hasProgress ? "Continue where you left off" : "Take the check"}</PrimaryButton>
+        <PrimaryButton onClick={onStart} large>{hasProgress ? "Continue where you left off" : "Take the Business Check"}</PrimaryButton>
         {hasProgress && (
           <button type="button" onClick={onRestart} className="text-sm font-semibold text-brand underline underline-offset-4">Start again</button>
         )}
@@ -637,7 +637,7 @@ function DetailsScreen({ contact, pending, error, onChange, onBack, onSubmit }: 
       </AnimatePresence>
       <motion.div variants={itemMotion} className="flex items-center justify-between gap-4">
         <BackButton onClick={onBack} />
-        <PrimaryButton type="submit" disabled={!valid || pending}>{pending ? "Starting…" : "Start the check"}</PrimaryButton>
+        <PrimaryButton type="submit" disabled={!valid || pending}>{pending ? "Starting…" : "Start the Business Check"}</PrimaryButton>
       </motion.div>
     </motion.form>
   );
@@ -748,7 +748,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
   return (
     <motion.div className="space-y-10" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.12 } } }} initial="hidden" animate="show">
       <motion.div variants={itemMotion}>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">Your business check{businessName ? ` · ${businessName}` : ""}</p>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">Your Business Check{businessName ? ` · ${businessName}` : ""}</p>
         <h1 className="font-serif text-4xl font-black leading-tight sm:text-5xl">Here is what we see.</h1>
         <p className="mt-3 flex items-center gap-2 text-sm text-ink-muted"><Mail className="h-4 w-4" />{response.emailStatus === "Sent" ? `A copy has been sent to ${contact.email}.` : "Your result has been saved. Email delivery is not active yet."}</p>
       </motion.div>
@@ -765,7 +765,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
       )}
 
       <motion.section variants={itemMotion} className="grid gap-4 md:grid-cols-2">
-        <SummaryCard title="What we found" body={summary.found} />
+        <SummaryCard title="Findings" body={summary.found} />
         <SummaryCard title="What we think it is" body={summary.think} accent />
       </motion.section>
 
@@ -781,7 +781,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
           <span className="mt-1 block font-serif text-xl font-bold text-ink">{FULL_REPORT.pitch}</span>
         </span>
         <span className="inline-flex shrink-0 items-center gap-2 font-semibold text-highlight-ink">
-          Get the full report · {formatNaira(PRICES.fullReport)} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+          Get the Full Report · {formatNaira(PRICES.fullReport)} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
         </span>
       </motion.button>
 
@@ -886,7 +886,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
                   </motion.p>
                 ) : (
                   <motion.button key="book" type="button" onClick={bookCall} disabled={requestNext.isPending} exit={{ opacity: 0, scale: 0.96 }} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} className="group mt-6 inline-flex h-14 w-full items-center justify-center bg-highlight px-8 text-sm font-semibold uppercase tracking-widest text-brand-deep shadow-[0_18px_40px_-18px_rgba(54,183,224,0.9)] transition-colors hover:bg-highlight-hover disabled:opacity-60">
-                    <CalendarDays className="mr-2 h-4 w-4" /> {booking.kind === "calendly" && calendarOpen ? "Choose a time below" : booking.kind === "none" ? "Request my free 20-minute call" : "Book my free call"}
+                    <CalendarDays className="mr-2 h-4 w-4" /> {booking.kind === "calendly" && calendarOpen ? "Choose a time below" : booking.kind === "none" ? "Request my free Debrief" : "Book my free Debrief"}
                   </motion.button>
                 )}
               </AnimatePresence>
@@ -895,7 +895,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
 
           {/* The paid full report */}
           <div className="flex flex-col border-2 border-highlight-ink bg-paper-raised p-6 sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">The full report</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">The Full Report</p>
             <p className="mt-3 font-serif text-2xl font-bold leading-snug text-ink">{FULL_REPORT.name}</p>
             <p className="mt-3 font-serif text-5xl font-black tracking-tight text-ink">{formatNaira(PRICES.fullReport)}</p>
             <ul className="mt-5 flex-1 space-y-2.5">
@@ -908,11 +908,11 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
               {requested.report ? (
                 <motion.p key="requested" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="mt-6 flex items-start gap-3 border border-highlight-ink/40 bg-paper p-4 text-sm leading-relaxed text-ink-700">
                   <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-highlight-ink" />
-                  Thank you. The payment details are on their way to {contact.email}. Once your payment is confirmed, you answer a short form and your report arrives straight away.
+                  Thank you. The payment details are on their way to {contact.email}. Once your payment is confirmed, you complete the Report Intake and your Full Report arrives straight away.
                 </motion.p>
               ) : (
                 <motion.button key="get" type="button" onClick={() => requestNext.mutate({ token: response.token, choice: "report" })} disabled={requestNext.isPending} exit={{ opacity: 0, scale: 0.96 }} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} className="group mt-6 inline-flex h-14 w-full items-center justify-center bg-highlight-ink px-8 text-sm font-semibold uppercase tracking-widest text-paper shadow-[0_18px_40px_-18px_rgba(203,55,86,0.8)] transition-opacity hover:opacity-90 disabled:opacity-60">
-                  <FileText className="mr-2 h-4 w-4" /> Get my full report
+                  <FileText className="mr-2 h-4 w-4" /> Get my Full Report
                 </motion.button>
               )}
             </AnimatePresence>
@@ -923,13 +923,13 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
           {booking.kind === "calendly" && calendarOpen && !requested.call && (
             <motion.div key="calendar" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.45, ease: EASE }} className="mt-4 overflow-hidden border border-line bg-paper-raised">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line px-5 py-3">
-                <p className="text-sm font-semibold text-ink">Choose a time for your free call</p>
+                <p className="text-sm font-semibold text-ink">Choose a time for your free Debrief</p>
                 {/* Some browsers, blockers and networks stop embedded calendars; the same calendar opens in a new tab. */}
                 <a href={booking.openUrl} target="_blank" rel="noopener noreferrer" onClick={() => { setOpenedInTab(true); recordCall(); }} className="text-xs font-semibold text-brand underline underline-offset-2 hover:text-brand-deep">
                   Calendar not showing? Open it in a new tab
                 </a>
               </div>
-              <iframe title="Book your free call" src={booking.embedUrl} className="h-[720px] w-full" />
+              <iframe title="Book your free Debrief" src={booking.embedUrl} className="h-[720px] w-full" />
             </motion.div>
           )}
         </AnimatePresence>
@@ -938,7 +938,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
 
       <motion.p variants={itemMotion} className="text-xs leading-relaxed text-ink-faint">
         {response.summarySource === "AI" ? "This summary was written by AI from your answers and checked against the services we offer. The outline itself comes from fixed rules, so the same answers always give the same outline." : "This summary was written from your answers using fixed rules, so the same answers always give the same result."}{" "}
-        <button type="button" onClick={onRestart} className="inline-flex items-center gap-1 font-semibold text-brand underline underline-offset-2"><RotateCcw className="h-3 w-3" />Take the check again</button>
+        <button type="button" onClick={onRestart} className="inline-flex items-center gap-1 font-semibold text-brand underline underline-offset-2"><RotateCcw className="h-3 w-3" />Take the Business Check again</button>
       </motion.p>
     </motion.div>
   );

@@ -89,7 +89,7 @@ async function database(what: string) {
 
 async function findCheck(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, token: string) {
   const [check] = await db.select().from(businessChecks).where(eq(businessChecks.publicToken, token)).limit(1);
-  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "We could not find that business check. Kindly start again." });
+  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "We could not find that Business Check. Kindly start again." });
   return check;
 }
 
@@ -111,9 +111,9 @@ export const businessCheckRouter = router({
   start: publicProcedure.input(businessCheckStartInput).mutation(async ({ input, ctx }) => {
     const ip = (ctx.req.ip || "unknown").toLowerCase();
     if (!allowStartFromIp(ip) || !allowStart(`${ip}:${input.email.toLowerCase()}`)) {
-      throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Kindly wait a few minutes before starting another business check." });
+      throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Kindly wait a few minutes before starting another Business Check." });
     }
-    const db = await database("start your business check");
+    const db = await database("start your Business Check");
     const token = randomBytes(24).toString("base64url");
     await db.insert(businessChecks).values({
       publicToken: token,
@@ -141,7 +141,7 @@ export const businessCheckRouter = router({
 
   /** Finishes the check: works out the result on the server, writes the summary and emails both sides once. */
   submit: publicProcedure.input(z.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }): Promise<BusinessCheckResponse> => {
-    const db = await database("record your business check");
+    const db = await database("record your Business Check");
     const check = await findCheck(db, input.token);
     if (check.completedAt && check.resultJson && check.summaryJson && check.summarySource) {
       // Already submitted (a double click or a retry): return what was recorded, without emailing again.
@@ -194,7 +194,7 @@ export const businessCheckRouter = router({
     .mutation(async ({ input }) => {
       const db = await database("record your request");
       const check = await findCheck(db, input.token);
-      if (!check.completedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "Kindly finish the business check first." });
+      if (!check.completedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "Kindly finish the Business Check first." });
 
       // A Calendly booking: record when the call is, so the admin console shows it as booked.
       // If the booking itself cannot be read, look for the owner's booking by email instead.
@@ -216,7 +216,7 @@ export const businessCheckRouter = router({
             ? { callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }
             : { reportRequestedAt: databaseNow() })
           .where(eq(businessChecks.id, check.id));
-        const what = input.choice === "call" ? "a free discovery call" : "the full business check report";
+        const what = input.choice === "call" ? "a free Debrief" : "the Full Report";
         // The owner is emailed the report's payment details straight away; the office notice says whether that worked.
         let payment = "";
         if (input.choice === "report") {
@@ -234,7 +234,7 @@ export const businessCheckRouter = router({
         await deliverEmail({
           sender: "business_support",
           to: BUSINESS_SUPPORT_MAILBOX,
-          subject: `Business check: ${check.businessName || check.fullName} asked for ${what}`,
+          subject: `Business Check: ${check.businessName || check.fullName} asked for ${what}`,
           body: [
             `${check.fullName} asked for ${what}.`,
             "",
@@ -245,7 +245,7 @@ export const businessCheckRouter = router({
             ...(payment ? [payment] : []),
             ...(bookedFor ? [`Booked on Calendly for: ${lagosTime(bookedFor)} (Lagos time)`] : []),
             "",
-            `Business check #${check.id}, completed ${lagosTime(check.completedAt)} (Lagos time).`,
+            `Business Check #${check.id}, completed ${lagosTime(check.completedAt)} (Lagos time).`,
           ].join("\n"),
         });
       }

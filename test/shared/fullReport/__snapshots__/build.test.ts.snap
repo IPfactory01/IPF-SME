@@ -142,7 +142,7 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "question": "Who decides on spending to fix it?",
         },
       ],
-      "title": "Your business check",
+      "title": "Your Business Check",
     },
     {
       "rows": [
@@ -221,7 +221,7 @@ exports[`the full report > is deterministic: the same answers give the same repo
   "businessName": "Adunni Fabrics",
   "date": "9 October 2026",
   "descriptor": "A retail business that buys and sells goods, trading for two to five years",
-  "method": "Built by The Shift's fixed rules from the business check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on 9 October 2026. It is not an audit, a valuation, or financial, legal or tax advice.",
+  "method": "Built by The Shift's fixed rules from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on 9 October 2026. It is not an audit, a valuation, or financial, legal or tax advice.",
   "onePage": {
     "fixFirst": {
       "area": "Financials",
@@ -863,7 +863,7 @@ exports[`the full report > is deterministic: the same answers give the same repo
             "When",
             "Move",
             "This week",
-            "Number to watch",
+            "Measure of Success",
           ],
           "kind": "table",
           "rows": [
@@ -932,7 +932,7 @@ exports[`the full report > is deterministic: the same answers give the same repo
         },
         {
           "kind": "callout",
-          "text": "Two weeks and two calls to see where your business really stands and name the one problem to fix first. Three working days to get set up, then we start. It starts with a free 20-minute call, where we tell you honestly whether we can help.",
+          "text": "Two weeks and two sessions that test the internal and external factors of your business, to locate the one problem to fix first and what to do about it. Three working days to get set up, then we start. It starts with a free Debrief, where we tell you honestly whether we can help.",
           "title": "Current State Assessment · ₦500,000",
         },
       ],

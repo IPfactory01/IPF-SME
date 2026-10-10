@@ -47,7 +47,7 @@ exports[`Free Business Check golden profiles > advisoryRouteBusiness keeps its p
     "route": "advisory",
     "summary": {
       "found": "Your business is at a scale where a short questionnaire would miss most of what matters.",
-      "next": "Book the free call. We will come prepared with questions for a business of your size.",
+      "next": "Book the free Debrief. We will come prepared with questions for a business of your size.",
       "think": "The right first step is a conversation with a senior adviser, who will look at the business as a whole.",
     },
   },
@@ -56,7 +56,7 @@ exports[`Free Business Check golden profiles > advisoryRouteBusiness keeps its p
     "source": "Rules",
     "summary": {
       "found": "Your business is at a scale where a short questionnaire would miss most of what matters.",
-      "next": "Book the free call. We will come prepared with questions for a business of your size.",
+      "next": "Book the free Debrief. We will come prepared with questions for a business of your size.",
       "offerings": [],
       "think": "The right first step is a conversation with a senior adviser, who will look at the business as a whole.",
     },
@@ -283,7 +283,7 @@ exports[`Free Business Check golden profiles > growingMaker keeps its pinned que
     "route": "programme",
     "summary": {
       "found": "Founder readiness reads as nascent. Under pressure you lead as a driver: you decide quickly and push for results. No area came out as stuck.",
-      "next": "Book the free 20-minute call. We will tell you honestly whether we can help, and what to fix first.",
+      "next": "Book the free 20-minute Debrief. We will tell you honestly whether we can help, and what to fix first.",
       "think": "The place to start is founder readiness, and the gap looks like resources: you know what to do and how, but lack the people, time or money to get it done.",
     },
   },
@@ -292,7 +292,7 @@ exports[`Free Business Check golden profiles > growingMaker keeps its pinned que
     "source": "Rules",
     "summary": {
       "found": "Founder readiness reads as nascent. Under pressure you lead as a driver: you decide quickly and push for results. No area came out as stuck.",
-      "next": "Book the free 20-minute call. We will tell you honestly whether we can help, and what to fix first.",
+      "next": "Book the free 20-minute Debrief. We will tell you honestly whether we can help, and what to fix first.",
       "offerings": [],
       "think": "The place to start is founder readiness, and the gap looks like resources: you know what to do and how, but lack the people, time or money to get it done.",
     },
@@ -397,7 +397,7 @@ exports[`Free Business Check golden profiles > ideaStageFounder keeps its pinned
     "route": "idea",
     "summary": {
       "found": "Founder readiness reads as advanced. Under pressure you lead as a steady hand: you keep things calm and people rely on you. On the idea itself, some basics are still open: who buys first, what you sell first, or whether anyone has paid yet.",
-      "next": "Book the free call to agree a go or no-go test and a first-90-days plan.",
+      "next": "Book the free Debrief to agree a go or no-go test and a first-90-days plan.",
       "think": "The main gap is clarity: it isn't yet clear what is really wrong, or what good would look like. Before money is committed, test the idea and the founder together.",
     },
   },
@@ -406,7 +406,7 @@ exports[`Free Business Check golden profiles > ideaStageFounder keeps its pinned
     "source": "Rules",
     "summary": {
       "found": "Founder readiness reads as advanced. Under pressure you lead as a steady hand: you keep things calm and people rely on you. On the idea itself, some basics are still open: who buys first, what you sell first, or whether anyone has paid yet.",
-      "next": "Book the free call to agree a go or no-go test and a first-90-days plan.",
+      "next": "Book the free Debrief to agree a go or no-go test and a first-90-days plan.",
       "offerings": [],
       "think": "The main gap is clarity: it isn't yet clear what is really wrong, or what good would look like. Before money is committed, test the idea and the founder together.",
     },
@@ -689,7 +689,7 @@ exports[`Free Business Check golden profiles > smallOperatingTrader keeps its pi
     "route": "programme",
     "summary": {
       "found": "Founder readiness reads as intermediate. Under pressure you lead as an influencer: you sell, persuade and rally people. You described 7 areas as stuck: Strategic intent, Service and offering, Business model, Market entry and sales, Operations and people, Financials, Risk and compliance. Market and industry needs watching.",
-      "next": "Book the free 20-minute call. We will tell you honestly whether we can help, and what to fix first.",
+      "next": "Book the free 20-minute Debrief. We will tell you honestly whether we can help, and what to fix first.",
       "think": "The place to start is financials, and the gap looks like clarity: it isn't yet clear what is really wrong, or what good would look like. That points to Embedded Performance Support, Business Model & Commercial Strategy, Financial Performance & Decision Support.",
     },
   },
@@ -698,7 +698,7 @@ exports[`Free Business Check golden profiles > smallOperatingTrader keeps its pi
     "source": "Rules",
     "summary": {
       "found": "Founder readiness reads as intermediate. Under pressure you lead as an influencer: you sell, persuade and rally people. You described 7 areas as stuck: Strategic intent, Service and offering, Business model, Market entry and sales, Operations and people, Financials, Risk and compliance. Market and industry needs watching.",
-      "next": "Book the free 20-minute call. We will tell you honestly whether we can help, and what to fix first.",
+      "next": "Book the free 20-minute Debrief. We will tell you honestly whether we can help, and what to fix first.",
       "offerings": [
         {
           "id": "embedded-support",
@@ -941,7 +941,7 @@ exports[`Free Business Check golden profiles > weakFounderReadiness keeps its pi
     "route": "programme",
     "summary": {
       "found": "Founder readiness reads as nascent. Under pressure you lead as a steady hand: you keep things calm and people rely on you. Nobody in the business reliably makes the hard call yet; that role needs an owner. No area came out as stuck.",
-      "next": "Book the free 20-minute call. We will tell you honestly whether we can help, and what to fix first.",
+      "next": "Book the free 20-minute Debrief. We will tell you honestly whether we can help, and what to fix first.",
       "think": "The place to start is founder readiness, and the gap looks like know-how: you know what needs to happen, but not yet how to do it well.",
     },
   },
@@ -950,7 +950,7 @@ exports[`Free Business Check golden profiles > weakFounderReadiness keeps its pi
     "source": "Rules",
     "summary": {
       "found": "Founder readiness reads as nascent. Under pressure you lead as a steady hand: you keep things calm and people rely on you. Nobody in the business reliably makes the hard call yet; that role needs an owner. No area came out as stuck.",
-      "next": "Book the free 20-minute call. We will tell you honestly whether we can help, and what to fix first.",
+      "next": "Book the free 20-minute Debrief. We will tell you honestly whether we can help, and what to fix first.",
       "offerings": [],
       "think": "The place to start is founder readiness, and the gap looks like know-how: you know what needs to happen, but not yet how to do it well.",
     },

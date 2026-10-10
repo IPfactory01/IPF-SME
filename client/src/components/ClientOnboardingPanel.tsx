@@ -4,7 +4,7 @@ import { CURRENT_STATE } from "@shared/businessSupport";
 import React, { useState } from "react";
 import { toast } from "sonner";
 
-const STAGE_NAMES: Record<string, string> = { lead: "Lead", qualified_lead: "Qualified lead", call_booked: "Call requested", opportunity: "Opportunity", won: "Won", lost: "Lost", nurture: "Nurture", referred: "Referred" };
+const STAGE_NAMES: Record<string, string> = { lead: "Lead", qualified_lead: "Qualified lead", call_booked: "Debrief requested", opportunity: "Opportunity", won: "Won", lost: "Lost", nurture: "Nurture", referred: "Referred" };
 const INVITATION_NAMES: Record<string, string> = { pending: "Link sent, waiting", accepted: "Accepted", revoked: "Revoked", expired: "Expired" };
 
 const formatDate = (value: Date | string | null) => (value ? new Date(value).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-");
@@ -53,7 +53,7 @@ export default function ClientOnboardingPanel() {
       </p>
       {stats && (
         <dl className="grid grid-cols-2 gap-3 text-sm md:grid-cols-5">
-          {[["Business checks", stats.businessChecks], ["Portal users", stats.portalUsers], ["Businesses", stats.businesses], ["Memberships", stats.memberships], ["Pending links", stats.pendingInvitations]].map(([label, value]) => (
+          {[["Business Checks", stats.businessChecks], ["Portal users", stats.portalUsers], ["Businesses", stats.businesses], ["Memberships", stats.memberships], ["Pending links", stats.pendingInvitations]].map(([label, value]) => (
             <div key={label as string} className="border border-line bg-white p-3"><dt className="text-xs uppercase tracking-wider text-ink-muted">{label}</dt><dd className="font-serif text-2xl">{value}</dd></div>
           ))}
         </dl>
@@ -71,16 +71,16 @@ export default function ClientOnboardingPanel() {
       )}
 
       <section>
-        <h3 className="mb-2 font-serif text-lg">Business checks</h3>
+        <h3 className="mb-2 font-serif text-lg">Business Checks</h3>
         {candidates.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
-          <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-line text-xs uppercase tracking-wider text-ink-muted"><th className="py-2 pr-3">Name</th><th className="pr-3">Business</th><th className="pr-3">Email</th><th className="pr-3">Call</th><th className="pr-3">Stage</th><th className="pr-3">Onboarding link</th><th /></tr></thead><tbody>
+          <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-line text-xs uppercase tracking-wider text-ink-muted"><th className="py-2 pr-3">Name</th><th className="pr-3">Business</th><th className="pr-3">Email</th><th className="pr-3">Debrief</th><th className="pr-3">Stage</th><th className="pr-3">Onboarding link</th><th /></tr></thead><tbody>
             {candidates.data?.map(item => (
               <tr key={item.id} className="border-b border-line-soft">
                 <td className="py-2 pr-3">{item.fullName}</td><td className="pr-3">{item.businessName ?? "-"}</td><td className="pr-3">{item.email}</td><td className="pr-3">{item.callRequestedAt ? `Requested ${formatDate(item.callRequestedAt)}` : "Not requested"}</td><td className="pr-3">{STAGE_NAMES[item.pipelineStage] ?? item.pipelineStage}</td><td className="pr-3">{item.invitationStatus ? INVITATION_NAMES[item.invitationStatus] ?? item.invitationStatus : "None"}</td>
                 <td className="text-right"><Button type="button" size="sm" disabled={invite.isPending} className="rounded-none bg-brand text-xs text-white" onClick={() => inviteCandidate(item)}>Invite to onboard</Button></td>
               </tr>
             ))}
-            {candidates.data?.length === 0 && <tr><td colSpan={7} className="py-4 text-ink-muted">No business checks yet.</td></tr>}
+            {candidates.data?.length === 0 && <tr><td colSpan={7} className="py-4 text-ink-muted">No Business Checks yet.</td></tr>}
           </tbody></table></div>
         )}
       </section>

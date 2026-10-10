@@ -6,10 +6,10 @@ export const PIPELINE_STAGES = ["lead", "qualified_lead", "call_booked", "opport
 export type PipelineStage = (typeof PIPELINE_STAGES)[number];
 
 export const PIPELINE_LABELS: Record<PipelineStage, { name: string; meaning: string }> = {
-  lead: { name: "Lead", meaning: "Gave their details and started the check" },
-  qualified_lead: { name: "Qualified lead", meaning: "Finished the check" },
-  call_booked: { name: "Call booked", meaning: "Asked for the free discovery call" },
-  opportunity: { name: "Opportunity", meaning: "After the call: we can help; payment details sent" },
+  lead: { name: "Lead", meaning: "Gave their details and started the Business Check" },
+  qualified_lead: { name: "Qualified lead", meaning: "Finished the Business Check" },
+  call_booked: { name: "Debrief booked", meaning: "Asked for the free Debrief" },
+  opportunity: { name: "Opportunity", meaning: "After the Debrief: we can help; payment details sent" },
   won: { name: "Won", meaning: "Paid" },
   lost: { name: "Lost", meaning: "Link expired, or they said no" },
   nurture: { name: "Nurture", meaning: "Not now: too early or too small; follow up later" },

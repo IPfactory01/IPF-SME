@@ -343,7 +343,7 @@ export async function listAssignableStaff(db: Database, actor: StaffActor) {
 export function sharedNoticeEmail(input: { fullName: string; what: string; title: string; url: string }) {
   const name = input.fullName.split(" ")[0] || "there";
   return {
-    subject: `New in your room: ${input.title}`,
+    subject: `Engagement update: ${input.title}`,
     body: [
       `Dear ${name},`,
       "",
@@ -470,7 +470,7 @@ export async function shareSessionNotes(db: Database, actor: StaffActor, input: 
     await tx.update(engagementSessions).set({ notesAudience: input.audience, notesSharedAt: new Date(), notesSharedByUserId: actor.id }).where(eq(engagementSessions.id, session.id));
     await recordAudit(tx, { action: "engagement_notes_shared", actorUserId: actor.id, details: { engagementId: session.engagementId, sessionId: session.id, audience: input.audience } });
   });
-  await notifyShared(db, session.engagementId, input.audience, "the notes from a call", session.title);
+  await notifyShared(db, session.engagementId, input.audience, "the Session notes", session.title);
   return { success: true } as const;
 }
 
@@ -539,13 +539,13 @@ export async function shareDeliverable(db: Database, actor: StaffActor, input: {
   requireManage(actor);
   const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
   if (DELIVERABLES_NEEDING_APPROVAL.includes(deliverable.kind) && deliverable.status !== "approved" && deliverable.status !== "shared") {
-    throw new TRPCError({ code: "FORBIDDEN", message: `The desk lead approves every ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind].toLowerCase()} before the client sees it.` });
+    throw new TRPCError({ code: "FORBIDDEN", message: `The desk lead approves every ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]} before the client sees it.` });
   }
   await db.transaction(async tx => {
     await tx.update(engagementDeliverables).set({ status: "shared", audience: input.audience, sharedAt: new Date(), sharedByUserId: actor.id }).where(eq(engagementDeliverables.id, deliverable.id));
     await recordAudit(tx, { action: "engagement_deliverable_shared", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind, audience: input.audience } });
   });
-  await notifyShared(db, deliverable.engagementId, input.audience, `your ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind].toLowerCase()}`, deliverable.title);
+  await notifyShared(db, deliverable.engagementId, input.audience, `your ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]}`, deliverable.title);
   return { success: true } as const;
 }
 
@@ -911,7 +911,7 @@ export async function saveCheckin(db: Database, actor: StaffActor, input: Checki
   if (input.weekNumber > 1) {
     const previous = await db.select({ id: engagementCheckins.id }).from(engagementCheckins)
       .where(and(eq(engagementCheckins.engagementId, input.engagementId), eq(engagementCheckins.weekNumber, input.weekNumber - 1))).limit(1);
-    if (!previous.length) throw new TRPCError({ code: "CONFLICT", message: `Record week ${input.weekNumber - 1} first: a check-in cannot start without last week's record.` });
+    if (!previous.length) throw new TRPCError({ code: "CONFLICT", message: `Record week ${input.weekNumber - 1} first: a Weekly Check-in cannot start without last week's record.` });
   }
   const values = {
     heldOn: input.heldOn, progress: input.progress, blockers: input.blockers, nextStep: input.nextStep, measureReading: asNumeric(input.measureReading), questionsAsked: input.questionsAsked,

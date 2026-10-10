@@ -38,12 +38,12 @@ export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem
   const { amount } = PAYMENT_ITEM_DETAILS[input.item];
   const report = input.item === "full_report";
   return {
-    subject: report ? "Payment details for your full business check report" : `Payment details for your ${CURRENT_STATE.name}`,
+    subject: report ? "Payment details for your Full Report" : `Payment details for your ${CURRENT_STATE.name}`,
     body: [
       `Dear ${firstName(input.fullName)},`,
       "",
       report
-        ? "Thank you for asking for your full business check report. Here is how to pay for it."
+        ? "Thank you for asking for your Full Report. Here is how to pay for it."
         : `Thank you for choosing to start your ${CURRENT_STATE.name} with us. Here is how to pay for it.`,
       "",
       ...(bank.placeholder ? ["TEST DETAILS - DO NOT PAY", "These are placeholder details while we test this email. Please do not make a transfer to them.", ""] : []),
@@ -61,7 +61,7 @@ export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem
       "AFTER YOU PAY",
       "Reply to this email with your proof of payment: a screenshot of the transfer or your bank's receipt. We will confirm by email once the payment arrives.",
       report
-        ? `Then we send you a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your report is emailed to you the moment you finish it.`
+        ? `Then we send you the Report Intake, a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your Full Report is emailed to you the moment you finish it.`
         : `Then your ${CURRENT_STATE.name} starts. ${CURRENT_STATE.start}`,
       "",
       BRAND.organisationName,
@@ -75,7 +75,7 @@ export function paymentConfirmedEmail(input: { fullName: string; item: PaymentIt
   const received = `Thank you. We have received your payment of ${formatNaira(amount)} (reference ${input.reference}).`;
   if (input.item === "full_report") {
     return {
-      subject: "Payment received: your full business check report",
+      subject: "Payment received: your Full Report",
       body: [
         `Dear ${firstName(input.fullName)},`,
         "",
@@ -83,13 +83,13 @@ export function paymentConfirmedEmail(input: { fullName: string; item: PaymentIt
         "",
         ...(input.reportLink
           ? [
-              `One step left: answer a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your report is built from your answers and emailed to you the moment you finish.`,
+              `One step left: complete the Report Intake, a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your Full Report is built from your answers and emailed to you the moment you finish.`,
               "",
-              `Complete your report form: ${input.reportLink}`,
+              `Complete your Report Intake: ${input.reportLink}`,
               "",
               "The link is yours alone; please do not share it.",
             ]
-          : ["Your report has already been sent to you. Reply to this email if you cannot find it."]),
+          : ["Your Full Report has already been sent to you. Reply to this email if you cannot find it."]),
         "",
         BRAND.organisationName,
       ].join("\n"),
@@ -106,7 +106,7 @@ export function paymentConfirmedEmail(input: { fullName: string; item: PaymentIt
       "",
       "WHAT HAPPENS NEXT",
       `• We email you a link to set up your client account on ${BRAND.productName}. Your ${CURRENT_STATE.name} lives there.`,
-      `• We agree the time of your first ${CURRENT_STATE.name} call with you.`,
+      `• We agree the time of your first ${CURRENT_STATE.name} Session with you.`,
       `• ${CURRENT_STATE.what}`,
       "",
       BRAND.organisationName,
@@ -148,7 +148,7 @@ export async function paymentStatusesByCheck(db: Pick<Database, "select">, busin
 async function loadCheck(db: Pick<Database, "select">, businessCheckId: number) {
   const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage })
     .from(businessChecks).where(eq(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That business check does not exist." });
+  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   return check;
 }
 

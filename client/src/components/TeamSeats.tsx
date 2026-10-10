@@ -36,7 +36,7 @@ export default function TeamSeats() {
     <section aria-labelledby="your-team" className="border border-line-soft bg-white p-5 shadow-sm">
       <p className="text-xs font-semibold uppercase tracking-widest text-ink-muted">Your team</p>
       <h2 id="your-team" className="mt-1 font-serif text-xl font-bold tracking-tight">Bring in one person from your business</h2>
-      <p className="mt-1 text-sm text-ink-muted">Your engagement includes {included === 1 ? "one person" : `${included} people`} besides you, at no cost. Notes and findings stay with you unless you share them.</p>
+      <p className="mt-1 text-sm text-ink-muted">Your engagement includes {included === 1 ? "one person" : `${included} people`} besides you, at no cost. Session notes and Findings stay with you unless you share them.</p>
       <ul className="mt-4 space-y-3">
         {members.map(member => (
           <li key={member.membershipId} className="flex flex-col gap-2 border border-line-soft p-3 sm:flex-row sm:items-center sm:justify-between">

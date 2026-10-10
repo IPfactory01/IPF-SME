@@ -3,7 +3,7 @@ import { advancePipeline, PIPELINE_LABELS, PIPELINE_STAGES } from "@shared/busin
 
 describe("pipeline stages", () => {
   it("uses the agreed stage names, in order", () => {
-    expect(PIPELINE_STAGES.map((stage) => PIPELINE_LABELS[stage].name)).toEqual(["Lead", "Qualified lead", "Call booked", "Opportunity", "Won", "Lost", "Nurture", "Referred"]);
+    expect(PIPELINE_STAGES.map((stage) => PIPELINE_LABELS[stage].name)).toEqual(["Lead", "Qualified lead", "Debrief booked", "Opportunity", "Won", "Lost", "Nurture", "Referred"]);
   });
 
   it("moves forward automatically through lead, qualified lead and call booked", () => {

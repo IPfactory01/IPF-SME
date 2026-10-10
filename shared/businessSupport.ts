@@ -54,15 +54,15 @@ export const PRICES = {
 
 /** The paid full report offered on the business check result. Independent of the discovery call. */
 export const FULL_REPORT = {
-  name: "Your full business check report",
-  pitch: "The summary tells you where you stand. The full report tells you what to do about it.",
+  name: "Your Full Report",
+  pitch: "The Business Check summary tells you where you stand. The Full Report tells you what to do about it.",
   includes: [
     "Every area of your outline in depth: what your answers show and what it means for your business",
     "The root cause behind each red and amber, and how they connect",
-    "What to fix first, in order, with the one number to watch for each",
+    "What to fix first, in order, with the Measure of Success for each",
     "The services that fit your business, and what each step would involve",
   ],
-  delivery: "Built from your answers. After payment you answer a short form, and the report is emailed to you the moment you finish.",
+  delivery: "Built from your answers. After payment you complete the Report Intake, and the Full Report is emailed to you the moment you finish.",
   /** The Report Intake after payment (shared/fullReport/intake.ts): about this long. */
   formMinutes: 12,
 } as const;
@@ -71,7 +71,7 @@ export const FULL_REPORT = {
 export const CURRENT_STATE = {
   /** The name everywhere: site, emails, admin, report. */
   name: "Current State Assessment",
-  what: "Two weeks and two calls to see where your business really stands and name the one problem to fix first.",
+  what: "Two weeks and two sessions that test the internal and external factors of your business, to locate the one problem to fix first and what to do about it.",
   start: "Three working days to get set up, then we start.",
 } as const;
 
@@ -90,9 +90,9 @@ export function formatNaira(amount: number) {
 
 /** The whole journey, shown up front with prices (D1). */
 export const JOURNEY: readonly JourneyStep[] = [
-  { id: "business-check", name: "Free business check", body: `Ten minutes. You get a first read on where you are stuck. Want the full report? ${formatNaira(PRICES.fullReport)}, by email.` },
-  { id: "discovery-call", name: "A free 20-minute call", body: "We tell you honestly whether we can help." },
-  { id: "current-state", name: CURRENT_STATE.name, body: `${CURRENT_STATE.what} ${formatNaira(PRICES.currentState)}, paid after the call. ${CURRENT_STATE.start}` },
-  { id: "fix", name: "The six-week fix", body: `One problem. You do the work; we tell you what to do, give you the tools and check it every week. ${formatNaira(PRICES.fix)}.` },
-  { id: "plan", name: "Your plan", body: `We stop at about ${formatNaira(PRICES.standardEngagementCap)} with a plan in your hands. Want us to stay? We agree what that looks like.` },
+  { id: "business-check", name: "Free Business Check", body: `Ten minutes. A first read on where you are stuck. Want the Full Report? ${formatNaira(PRICES.fullReport)}, by email.` },
+  { id: "discovery-call", name: "Debrief: a free 20-minute call", body: "We walk through your Business Check results, hear the problem in your words and tell you honestly whether we can help." },
+  { id: "current-state", name: CURRENT_STATE.name, body: `${CURRENT_STATE.what} ${formatNaira(PRICES.currentState)}, paid after the Debrief. ${CURRENT_STATE.start}` },
+  { id: "fix", name: "The Fix: six weeks", body: `One problem, one Measure of Success. You do the work; we give you the Prescription and the tools, and check it at a Weekly Check-in. ${formatNaira(PRICES.fix)}.` },
+  { id: "plan", name: "Your Plan", body: `We stop at about ${formatNaira(PRICES.standardEngagementCap)} with a plan in your hands. Want us to stay? We agree what that looks like.` },
 ];

@@ -50,7 +50,7 @@ export function ContactLines({ email, whatsapp }: { email: string; whatsapp: str
  */
 const stageName = (stage: string | null) => (stage && stage in PIPELINE_LABELS ? stageDisplayName(stage as PipelineStage) : stage ?? "-");
 const PAYMENT_HISTORY = { payment_details_sent: "Payment details sent", payment_proof_received: "Proof of payment received", payment_confirmed: "Payment confirmed" } as const;
-const REPORT_HISTORY = { full_report_link_sent: "Report form link sent again", full_report_delivered: "Full report sent" } as const;
+const REPORT_HISTORY = { full_report_link_sent: "Report Intake link sent again", full_report_delivered: "Full Report sent" } as const;
 /** "lead" is where every check starts, so the team never moves a check back to it. */
 const MOVABLE_STAGES = PIPELINE_STAGES.filter((stage): stage is Exclude<PipelineStage, "lead"> => stage !== "lead");
 
@@ -103,7 +103,7 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
   const nextStep: { label: string; section: AdminSectionId; primary: boolean } | null =
     isReadyToOnboard(status) ? { label: "Continue to Client Onboarding", section: "onboarding", primary: true }
     : status === "onboarding" ? { label: "View the onboarding link", section: "onboarding", primary: false }
-    : status === "call_requested" || status === "call_scheduled" ? { label: "Go to Discovery Call", section: "calls", primary: false }
+    : status === "call_requested" || status === "call_scheduled" ? { label: "Go to the Debrief", section: "calls", primary: false }
     : null;
   const go = (section: AdminSectionId) => {
     onClose();
@@ -111,17 +111,17 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
   };
 
   const history = [
-    { label: check.completedAt ? "Check completed" : "Check started", at: check.completedAt ?? check.createdAt },
-    ...(check.callRequestedAt ? [{ label: "Call requested", at: check.callRequestedAt }] : []),
-    ...(check.reportRequestedAt ? [{ label: "Full report requested", at: check.reportRequestedAt }] : []),
-    ...(check.callScheduledFor ? [{ label: "Call booked for", at: check.callScheduledFor, withTime: true }] : []),
+    { label: check.completedAt ? "Business Check completed" : "Business Check started", at: check.completedAt ?? check.createdAt },
+    ...(check.callRequestedAt ? [{ label: "Debrief requested", at: check.callRequestedAt }] : []),
+    ...(check.reportRequestedAt ? [{ label: "Full Report requested", at: check.reportRequestedAt }] : []),
+    ...(check.callScheduledFor ? [{ label: "Debrief booked for", at: check.callScheduledFor, withTime: true }] : []),
   ];
 
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={status} />
-        {!check.completedAt && <span className="text-xs text-ink-muted">The owner has not finished the check.</span>}
+        {!check.completedAt && <span className="text-xs text-ink-muted">The owner has not finished the Business Check.</span>}
       </div>
 
       <DetailSection title="Contact"><ContactLines email={check.email} whatsapp={check.whatsapp} /></DetailSection>
@@ -132,19 +132,19 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
           <DetailField label="Main area">{mainArea ?? "-"}</DetailField>
           <DetailField label="Readiness">{check.readiness ? READINESS_LABELS[check.readiness] : "-"}</DetailField>
           <DetailField label="Route">{check.route ? ROUTE_LABELS[check.route] ?? check.route : "-"}</DetailField>
-          <DetailField label={`Full report (${formatNaira(PRICES.fullReport)})`}>{check.reportRequestedAt ? `Requested ${formatDate(check.reportRequestedAt)}` : "Not requested"}</DetailField>
+          <DetailField label={`Full Report (${formatNaira(PRICES.fullReport)})`}>{check.reportRequestedAt ? `Requested ${formatDate(check.reportRequestedAt)}` : "Not requested"}</DetailField>
         </dl>
       </DetailSection>
 
       {check.summary ? (
-        <DetailSection title="What we found">
+        <DetailSection title="Findings">
           <div className="space-y-3 text-sm leading-relaxed text-ink">
             <p>{check.summary.found}</p>
             <p><span className="font-medium">What we think it is: </span>{check.summary.think}</p>
           </div>
         </DetailSection>
       ) : (
-        <DetailSection title="What we found"><p className="text-sm text-ink-muted">No result yet.</p></DetailSection>
+        <DetailSection title="Findings"><p className="text-sm text-ink-muted">No result yet.</p></DetailSection>
       )}
 
       {check.outline && check.outline.length > 0 && (
@@ -206,7 +206,7 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
                     : event.action === "business_check_call_booked"
                     ? <>Booked on Calendly{event.scheduledFor ? ` for ${formatDateTime(event.scheduledFor)}` : ""}</>
                     : event.action === "business_check_call_scheduled"
-                    ? <>Call time recorded{event.scheduledFor ? ` for ${formatDateTime(event.scheduledFor)}` : ""}</>
+                    ? <>Debrief time recorded{event.scheduledFor ? ` for ${formatDateTime(event.scheduledFor)}` : ""}</>
                     : <><span className="font-medium">{stageName(event.to)}</span> <span className="text-ink-muted">from {stageName(event.from)}</span></>}
                 </p>
                 <p className="text-xs text-ink-muted">{event.by ?? (event.action === "payment_details_sent" || event.action === "full_report_delivered" ? "Sent automatically" : "Team")} · {formatDateTime(event.at)}</p>
@@ -214,7 +214,7 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
               </li>
             ))}
           </ol>
-        ) : <p className="text-sm text-ink-muted">No changes by the team yet. The first stages move by themselves as the owner goes through the check.</p>}
+        ) : <p className="text-sm text-ink-muted">No changes by the team yet. The first stages move by themselves as the owner goes through the Business Check.</p>}
       </DetailSection>
 
       {/* Only the action that fits where this prospect is. A check with nothing to do next shows no actions. */}

@@ -49,7 +49,7 @@ const OUTPUT_SCHEMA = {
     properties: {
       found: { type: "string", description: "What we found: 2 to 4 sentences." },
       think: { type: "string", description: "What we think it is: 2 to 4 sentences naming the main problem and the gap." },
-      next: { type: "string", description: "One sentence inviting the owner to the free discovery call." },
+      next: { type: "string", description: "One sentence inviting the owner to the free Debrief." },
       offerings: {
         type: "array",
         maxItems: 3,
@@ -105,7 +105,7 @@ const CATALOGUE_TEXT = OFFERINGS.map(
   (offering) => `- ${offering.id} | ${CAPABILITIES[offering.capability]} | ${offering.name}: ${offering.summary} When: ${offering.signals.join("; ")}.`,
 ).join("\n");
 
-const SYSTEM_PROMPT = `You write the short result of the ${BRAND.organisationName} free business check for a Nigerian small or growing business owner.
+const SYSTEM_PROMPT = `You write the short result of the ${BRAND.organisationName} free Business Check for a Nigerian small or growing business owner.
 
 Voice: between consulting language and plain English. Use proper terms (strategic intent, unit cost, margin, route to market) but say what they mean in context. Second person. Short sentences. Warm, direct, honest. No hype, no jargon piles, no "door", "sprint", "playbook" or "retainer". Naira in full (₦). British spelling.
 
@@ -115,7 +115,7 @@ The owner's one-line description is your main source for making the result speci
 
 Then check the result against our service catalogue (below) and choose up to three offerings that fit what the owner described, most relevant first, using only these ids. Prefer the ones the rules matched unless the answers clearly point elsewhere. For an idea-stage founder or a very small business, recommend at most one offering and only if it truly fits; the founder comes first. For route "advisory" recommend none.
 
-"found" says what the answers show (2 to 4 sentences, specific to this business and its sector). "think" says what we think the real problem is and why (2 to 4 sentences). "next" invites them to book the free 20-minute discovery call, in one sentence. Each "why" ties the offering to something the owner said, in one sentence.
+"found" says what the answers show (2 to 4 sentences, specific to this business and its sector). "think" says what we think the real problem is and why (2 to 4 sentences). "next" invites them to book the free 20-minute Debrief, in one sentence. Each "why" ties the offering to something the owner said, in one sentence.
 
 Service catalogue:
 ${CATALOGUE_TEXT}`;
@@ -184,13 +184,13 @@ export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary
     ? [...assessed, ...notAssessed.map((row) => ({ area: row.area, line: `• ${row.name}: not assessed` }))].sort((a, b) => a.area - b.area)
     : assessed;
   const firstName = contact.fullName.split(/\s+/)[0];
-  const subject = `Your business check: what we found`;
+  const subject = `Your Business Check: Findings`;
   const body = [
     `Dear ${firstName},`,
     "",
-    `Thank you for taking the ${BRAND.organisationName} business check. Here is your summary.`,
+    `Thank you for taking the ${BRAND.organisationName} Business Check. Here is your summary.`,
     "",
-    "WHAT WE FOUND",
+    "FINDINGS",
     summary.found,
     "",
     "WHAT WE THINK IT IS",
@@ -205,7 +205,7 @@ export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary
     summary.next,
     ENV.discoveryCallUrl ? `Pick a time here: ${ENV.discoveryCallUrl}` : "Book it from your result page on our website.",
     "",
-    `Want the full written report? It costs ${formatNaira(PRICES.fullReport)} and comes by email. Reply "report" and we will email you the payment details.`,
+    `Want the Full Report? It costs ${formatNaira(PRICES.fullReport)} and comes by email. Reply "report" and we will email you the payment details.`,
     "",
     `${BRAND.organisationName}`,
   ].join("\n");
@@ -214,9 +214,9 @@ export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary
 
 export function officeEmail(input: { contact: CheckContact; answers: Answers; summary: CheckSummary; source: "AI" | "Rules"; result: CheckResult }) {
   const { contact, result } = input;
-  const subject = `Business check: ${contact.businessName || contact.fullName} (${result.route}${result.primaryArea ? `, ${result.primaryArea.name}` : ""})`;
+  const subject = `Business Check: ${contact.businessName || contact.fullName} (${result.route}${result.primaryArea ? `, ${result.primaryArea.name}` : ""})`;
   const body = [
-    `A business check was completed.`,
+    `A Business Check was completed.`,
     "",
     `Name: ${contact.fullName}`,
     `Email: ${contact.email}`,

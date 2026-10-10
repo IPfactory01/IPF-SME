@@ -158,7 +158,7 @@ for (const target of targets) {
         // The Work Plan: week 1 due in three working days, week 2 in eight; the team's actions sit beside the client's requests.
         expect(new Set(tasks.map((task: { kind: string; side: string; status: string; dueOn: string }) => `${task.kind}/${task.side}/${task.status}/${task.dueOn}`))).toEqual(new Set([`data_request/client/open/${addWorkingDays(new Date(), 3)}`, `data_request/client/open/${addWorkingDays(new Date(), 8)}`, `action/ipf/open/${addWorkingDays(new Date(), 3)}`, `action/ipf/open/${addWorkingDays(new Date(), 8)}`]));
         const sessions = await db.select().from(schema.engagementSessions).where(eq(schema.engagementSessions.engagementId, engagement.id));
-        expect(sessions.map((item: { title: string; scheduledFor: Date | null }) => [item.title, item.scheduledFor])).toEqual([["Current State Assessment call 1", null], ["Current State Assessment call 2", null]]);
+        expect(sessions.map((item: { title: string; scheduledFor: Date | null }) => [item.title, item.scheduledFor])).toEqual([["Current State Assessment Session 1", null], ["Current State Assessment Session 2", null]]);
         // Each call carries its agenda from the template, so the client sees what the call is for before it is booked.
         expect(sessions.map((item: { agenda: string | null }) => item.agenda)).toEqual(ASSESSMENT_TEMPLATE.sessions.map(item => item.agenda));
       });
@@ -302,7 +302,7 @@ for (const target of targets) {
 
         const room = (await (await owner.call()).engagement.client.room())!;
         expect(room).toMatchObject({ engagementId, stage: "setting_up", stageLabel: "Getting set up", viewer: { kind: "owner" }, team: [{ name: "Lewis Lead", roleLabel: "Engagement lead" }] });
-        expect(room.journey.map(step => [step.label, step.state])).toEqual([["Getting set up", "current"], ["Current State Assessment", "next"], ["The fix", "next"], ["Your plan", "next"]]);
+        expect(room.journey.map(step => [step.label, step.state])).toEqual([["Getting set up", "current"], ["Current State Assessment", "next"], ["The Fix", "next"], ["Your Plan", "next"]]);
         expect(room.tasks).toHaveLength(ASSESSMENT_TEMPLATE.dataRequests.length + ASSESSMENT_TEMPLATE.teamActions.length);
 
         const first = room.tasks[0];
@@ -335,7 +335,7 @@ for (const target of targets) {
         const room = (await (await owner.call()).engagement.client.room())!;
         expect(room.sessions[0]).toMatchObject({ notes: "We agreed to look at pricing first.", notesAudience: "owner" });
         // The owner is told by email: the title and a link, never the notes themselves.
-        const notice = emails().find(sent => sent.subject === "New in your room: Current State Assessment call 1")!;
+        const notice = emails().find(sent => sent.subject === "Engagement update: Current State Assessment Session 1")!;
         expect(notice.body).toContain("/dashboard");
         expect(notice.body).not.toContain("pricing");
         expect(JSON.stringify(room)).not.toContain("under-reporting");
@@ -485,7 +485,7 @@ for (const target of targets) {
         expect(await db.select().from(schema.engagementMeasures).where(eq(schema.engagementMeasures.engagementId, engagementId))).toHaveLength(1);
 
         const week = (weekNumber: number, reading: number) => ({ engagementId, weekNumber, heldOn: `2026-11-${String(6 + 7 * weekNumber).padStart(2, "0")}`, progress: "Moved.", blockers: "Power cuts.", nextStep: `Step for week ${weekNumber + 1}.`, measureReading: reading, questionsAsked: "How do I price delivery?", hoursLead: 0.5, hoursAnalyst: 2.5, hoursPartner: null, aiUsed: true });
-        await expect((await analyst.call()).engagement.staff.saveCheckin(week(2, 200000))).rejects.toMatchObject({ code: "CONFLICT", message: "Record week 1 first: a check-in cannot start without last week's record." });
+        await expect((await analyst.call()).engagement.staff.saveCheckin(week(2, 200000))).rejects.toMatchObject({ code: "CONFLICT", message: "Record week 1 first: a Weekly Check-in cannot start without last week's record." });
         await (await analyst.call()).engagement.staff.saveCheckin(week(1, 160000));
         await (await analyst.call()).engagement.staff.saveCheckin(week(2, 200000));
         await (await analyst.call()).engagement.staff.saveCheckin({ ...week(2, 210000) });
@@ -531,7 +531,7 @@ for (const target of targets) {
         const { deliverableId } = await (await superAdmin.call()).engagement.staff.saveDeliverable({ engagementId, kind: "problem_statement", title: "The one problem", summary: "Prices do not cover costs." });
         mocked.deliverEmail.mockClear();
         await (await superAdmin.call()).engagement.staff.shareDeliverable({ deliverableId, audience: "business" });
-        expect(emails().filter(sent => sent.subject === "New in your room: The one problem").map(sent => sent.to)).toContain(full.user.email);
+        expect(emails().filter(sent => sent.subject === "Engagement update: The one problem").map(sent => sent.to)).toContain(full.user.email);
 
         await (await full.browser.call()).engagement.client.comment({ deliverableId, body: "Transport is missing from costs." });
         await expect((await full.browser.call()).engagement.client.accept({ deliverableId })).rejects.toMatchObject({ code: "FORBIDDEN" });

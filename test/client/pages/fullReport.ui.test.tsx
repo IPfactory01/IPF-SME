@@ -24,7 +24,7 @@ vi.mock("@/lib/trpc", () => ({
           isPending: false,
           mutate: (input: unknown) => {
             api.submitCalls.push(input);
-            options.onSuccess?.({ delivered: true, deliveryStatus: "Simulated", fileName: "Adunni-Fabrics-full-business-check-report.pdf", pdf: "JVBERi0=" });
+            options.onSuccess?.({ delivered: true, deliveryStatus: "Simulated", fileName: "Adunni-Fabrics-full-report.pdf", pdf: "JVBERi0=" });
           },
         }),
       },
@@ -104,7 +104,7 @@ describe("the report form", () => {
 
   it("tells the owner what happens, and numbers all 17 questions", () => {
     renderPage();
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Adunni, seventeen questions and your report is done");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Adunni, seventeen questions and your Full Report is done");
     expect(screen.getByText(/emailed to/).textContent).toContain("adunni@example.com");
     expect(screen.getByText(/the moment you finish/)).toBeTruthy();
     expect(screen.getAllByRole("group").filter(element => element.tagName === "FIELDSET")).toHaveLength(17);
@@ -113,7 +113,7 @@ describe("the report form", () => {
 
   it("names the question to fix, and sends nothing until the form is complete", () => {
     renderPage();
-    fireEvent.click(screen.getByRole("button", { name: /send me my report/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send me my full report/i }));
     expect(screen.getByRole("alert").textContent).toBe("Question 1: Tell us where you sell from.");
     expect(api.submitCalls).toEqual([]);
   });
@@ -122,10 +122,10 @@ describe("the report form", () => {
     renderPage();
     fill();
     sampleIntake.competitors.forEach((_, index) => type(`Competitor ${index + 1}`, ""));
-    fireEvent.click(screen.getByRole("button", { name: /send me my report/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send me my full report/i }));
     expect(screen.getByRole("alert").textContent).toBe("Question 5: Name at least one competitor, or tick that you don't know who they are.");
     fireEvent.click(screen.getByLabelText("I don't know who they are"));
-    fireEvent.click(screen.getByRole("button", { name: /send me my report/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send me my full report/i }));
     expect(api.submitCalls).toEqual([{ token: "TOKEN123", intake: { ...sampleIntake, competitors: [] } }]);
   });
 
@@ -133,18 +133,18 @@ describe("the report form", () => {
     renderPage();
     fill();
     expect(screen.getByText("of 17 answered").textContent).toContain("17 of 17 answered");
-    fireEvent.click(screen.getByRole("button", { name: /send me my report/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send me my full report/i }));
     expect(api.submitCalls).toEqual([{ token: "TOKEN123", intake: sampleIntake }]);
-    expect(screen.getByRole("heading", { name: "Your report is on its way" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /download your report/i }));
-    expect(api.saved).toEqual([["Adunni-Fabrics-full-business-check-report.pdf", "JVBERi0="]]);
+    expect(screen.getByRole("heading", { name: "Your Full Report is on its way" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /download your full report/i }));
+    expect(api.saved).toEqual([["Adunni-Fabrics-full-report.pdf", "JVBERi0="]]);
   });
 
   it("asks how each product is charged, and names the one whose price is missing", () => {
     renderPage();
     fill();
     type("Price of product or service 2", "");
-    fireEvent.click(screen.getByRole("button", { name: /send me my report/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send me my full report/i }));
     expect(screen.getByRole("alert").textContent).toBe("Question 3: Enter the price of Lace fabric (5 yards), or choose It varies.");
     expect(api.submitCalls).toEqual([]);
     // The charge choice shows for a line only once it has a name.
@@ -163,7 +163,7 @@ describe("the report form", () => {
     type("Typical deal size for product or service 1", "50,000,000");
     expect(screen.getByRole("group", { name: "Out of every ₦100 you earn in commission and fees, how much goes on delivering the deal?" })).toBeTruthy();
     expect(screen.getByText(/Count only your commission and fees, not the deal money you pass on to others/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: /send me my report/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send me my full report/i }));
     const [{ intake }] = api.submitCalls as { intake: typeof sampleIntake }[];
     expect(intake.products[0]).toEqual({ name: "Deal advisory for mining buyers", basis: "percent", price: null, percent: 2.5, dealSize: 50_000_000 });
   });
@@ -172,7 +172,7 @@ describe("the report form", () => {
     renderPage();
     fill();
     choose("How you charge for product or service 1", "A percentage of the deal");
-    fireEvent.click(screen.getByRole("button", { name: /send me my report/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send me my full report/i }));
     expect(screen.getByRole("alert").textContent).toBe("Question 3: Enter the percentage of the deal you earn on Ankara fabric (6 yards).");
   });
 
@@ -185,16 +185,16 @@ describe("the report form", () => {
     choose("Direct cost share", "₦25 to ₦50");
     expect((screen.getByLabelText("Your margin") as HTMLInputElement).value).toBe("");
     fireEvent.change(screen.getByLabelText("Your margin"), { target: { value: "20" } });
-    fireEvent.click(screen.getByRole("button", { name: /send me my report/i }));
+    fireEvent.click(screen.getByRole("button", { name: /send me my full report/i }));
     expect(api.submitCalls).toEqual([{ token: "TOKEN123", intake: { ...sampleIntake, costShare: "over_75", marginPercent: 20 } }]);
   });
 
   it("offers the report again once it has been sent", () => {
     api.form = { status: "delivered", fullName: "Adunni Example", businessName: "Adunni Fabrics", email: "adunni@example.com", deliveredAt: new Date() };
     renderPage();
-    expect(screen.getByRole("heading", { name: "Your report has been sent" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: /send me my report/i })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /download your report/i }));
+    expect(screen.getByRole("heading", { name: "Your Full Report has been sent" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /send me my full report/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /download your full report/i }));
     expect(api.downloadCalls).toEqual([{ token: "TOKEN123" }]);
     expect(api.saved).toEqual([["report.pdf", "JVBERi0="]]);
   });

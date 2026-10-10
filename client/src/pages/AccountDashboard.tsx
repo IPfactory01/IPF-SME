@@ -50,7 +50,7 @@ function Dashboard({ account }: { account: AccountSessionView }) {
             <CardTitle className="font-serif text-xl font-bold tracking-tight">Finish your business profile</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm">
-            <p className="text-ink-muted">Your profile is {business.profilePercent}% complete. The rest helps your team prepare for your first call.</p>
+            <p className="text-ink-muted">Your profile is {business.profilePercent}% complete. The rest helps your team prepare for your first Session.</p>
             <div className="h-2 w-full bg-line-soft" role="progressbar" aria-label="Business profile completion" aria-valuenow={business.profilePercent} aria-valuemin={0} aria-valuemax={100}>
               <div className="h-2 bg-brand" style={{ width: `${business.profilePercent}%` }} />
             </div>

@@ -23,9 +23,9 @@ import { renderFullReportPdf } from "./pdf";
  */
 
 export const REPORT_ERRORS = {
-  unavailable: "This report link is not valid. Use the link in your payment confirmation email, or reply to it for help.",
-  alreadySent: "Your report has already been sent. You can download it again below.",
-  notReady: "Your report is not ready yet. Complete the form first.",
+  unavailable: "This Full Report link is not valid. Use the link in your payment confirmation email, or reply to it for help.",
+  alreadySent: "Your Full Report has already been sent. You can download it again below.",
+  notReady: "Your Full Report is not ready yet. Complete the Report Intake first.",
 } as const;
 
 const reportUrl = (token: string) => `${getTrustedApplicationOrigin()}/report/${encodeURIComponent(token)}`;
@@ -89,17 +89,17 @@ async function assemble(db: Pick<Database, "select">, record: FullReportRecord):
   return { report, generatedAt: record.intakeSubmittedAt, email: check.email, fullName: check.fullName };
 }
 
-const fileName = (report: FullReport) => `${report.businessName.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "Business"}-full-business-check-report.pdf`;
+const fileName = (report: FullReport) => `${report.businessName.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "Business"}-full-report.pdf`;
 
 /** The email that carries the report: the one-page answer in words, and the PDF attached. */
 export function reportEmail(report: FullReport, downloadUrl: string) {
   const firstName = report.ownerName.split(/\s+/)[0] || "there";
   return {
-    subject: `Your full business check report: ${report.businessName}`,
+    subject: `Your Full Report: ${report.businessName}`,
     body: [
       `Dear ${firstName},`,
       "",
-      `Your full business check report for ${report.businessName} is attached.`,
+      `Your Full Report for ${report.businessName} is attached.`,
       "",
       "WHERE YOU STAND",
       report.onePage.position,
@@ -110,12 +110,12 @@ export function reportEmail(report: FullReport, downloadUrl: string) {
       "YOUR FIRST MOVES",
       ...report.onePage.moves.map((move) => `• ${move.month}: ${move.move}`),
       "",
-      "THE ONE NUMBER TO WATCH",
+      "MEASURE OF SUCCESS",
       report.onePage.watch,
       "",
       `Download it again: ${downloadUrl}`,
       "",
-      `If you would like help with the plan, reply to this email or book a free 20-minute call: ${ENV.discoveryCallUrl}`,
+      `If you would like help with the plan, reply to this email or book a free Debrief: ${ENV.discoveryCallUrl}`,
       "",
       BRAND.organisationName,
     ].join("\n"),
@@ -154,9 +154,9 @@ export async function submitReportIntake(db: Database, token: string, rawIntake:
   await deliverEmail({
     sender: "business_support",
     to: BUSINESS_SUPPORT_MAILBOX,
-    subject: `Full report sent: ${report.businessName}`,
+    subject: `Full Report sent: ${report.businessName}`,
     body: [
-      `The full business check report for ${report.businessName} (${report.ownerName}) was built from their Report Intake and emailed to them.`,
+      `The Full Report for ${report.businessName} (${report.ownerName}) was built from their Report Intake and emailed to them.`,
       "",
       `Email: ${email}`,
       `Reference: ${report.reference}`,
@@ -180,7 +180,7 @@ export async function downloadReport(db: Pick<Database, "select">, token: string
 /** The report for the admin console, by business check. */
 export async function adminDownloadReport(db: Pick<Database, "select">, businessCheckId: number) {
   const record = (await db.select().from(fullReports).where(eq(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
-  if (!record || record.status !== "delivered") throw new TRPCError({ code: "NOT_FOUND", message: "This report has not been sent yet." });
+  if (!record || record.status !== "delivered") throw new TRPCError({ code: "NOT_FOUND", message: "This Full Report has not been sent yet." });
   const { report, generatedAt } = await assemble(db, record);
   return { fileName: fileName(report), pdf: (await renderFullReportPdf(report, generatedAt)).toString("base64") };
 }
@@ -195,22 +195,22 @@ export async function reportStatusFor(db: Pick<Database, "select">, businessChec
 /** Sends the Report Intake link again (a new link; the old one stops working), for an owner who lost the email. */
 export async function resendReportLink(db: Database, input: { businessCheckId: number; actorUserId: number }) {
   const record = (await db.select().from(fullReports).where(eq(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
-  if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Confirm the report payment first: that sends the form link." });
-  if (record.status === "delivered") throw new TRPCError({ code: "CONFLICT", message: "The report has already been sent." });
+  if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Confirm the Full Report payment first: that sends the Report Intake link." });
+  if (record.status === "delivered") throw new TRPCError({ code: "CONFLICT", message: "The Full Report has already been sent." });
   const check = await checkFor(db, input.businessCheckId);
   const link = await issueReportLink(db, { businessCheckId: check.id, paymentRequestId: record.paymentRequestId });
   const firstName = check.fullName.trim().split(/\s+/)[0] || "there";
   const delivery = await deliverEmail({
     sender: "business_support",
     to: check.email,
-    subject: "Your report form",
+    subject: "Your Report Intake",
     body: [
       `Dear ${firstName},`,
       "",
-      "Here is the link to your report form again. Any earlier link no longer works.",
-      "Your full business check report is emailed to you the moment you finish the form.",
+      "Here is the link to your Report Intake again. Any earlier link no longer works.",
+      "Your Full Report is emailed to you the moment you finish it.",
       "",
-      `Complete your report form: ${link}`,
+      `Complete your Report Intake: ${link}`,
       "",
       BRAND.organisationName,
     ].join("\n"),

@@ -130,7 +130,7 @@ for (const target of targets) {
         expect(payment).toMatchObject({ item: "full_report", amountNaira: 100_000, reference, status: "requested", requestedByUserId: null, deliveryStatus: "Simulated" });
 
         const toOwner = emails().find(sent => sent.to === email)!;
-        expect(toOwner).toMatchObject({ subject: "Payment details for your full business check report", sender: "business_support" });
+        expect(toOwner).toMatchObject({ subject: "Payment details for your Full Report", sender: "business_support" });
         expect(toOwner.body).toContain("Amount: ₦100,000");
         expect(toOwner.body).toContain(`Reference: ${reference}`);
         expect(toOwner.body).toContain("Reply to this email with your proof of payment");
@@ -150,7 +150,7 @@ for (const target of targets) {
           : { status: "Simulated", reason: "test_sender" });
         mocked.deliverEmail.mockClear();
         await (await visitor.call()).businessCheck.requestNext({ token, choice: "report" });
-        const toOffice = emails().find(sent => sent.to === "info@ipfactory.co" && /asked for the full business check report/.test(sent.subject))!;
+        const toOffice = emails().find(sent => sent.to === "info@ipfactory.co" && /asked for the Full Report/.test(sent.subject))!;
         expect(toOffice.body).toMatch(/Payment details: TS-R-\d{6}, but the email to the owner failed \(You can only send testing emails to your own email address\)\. Send them again from admin once that is fixed\./);
       });
 
@@ -168,8 +168,8 @@ for (const target of targets) {
         expect(confirmed).toMatchObject({ changed: true, invitation: null });
         expect((await paymentsOf(id))[0]).toMatchObject({ status: "confirmed", note: "GTB ref 123456" });
         const receipt = emails().find(sent => sent.to === email)!;
-        expect(receipt.subject).toBe("Payment received: your full business check report");
-        expect(receipt.body).toMatch(/Complete your report form: https?:\/\/\S+\/report\/\S+/);
+        expect(receipt.subject).toBe("Payment received: your Full Report");
+        expect(receipt.body).toMatch(/Complete your Report Intake: https?:\/\/\S+\/report\/\S+/);
         expect((await rowFor(token)).pipelineStage).toBe("qualified_lead");
 
         // Confirming again changes nothing and sends nothing; the details cannot be re-sent for a paid item.
@@ -271,14 +271,14 @@ for (const target of targets) {
         expect((await rowFor(token)).pipelineStage).toBe("call_booked");
         await (await visitor.call()).businessCheck.requestNext({ token, choice: "report" });
         const report = (await paymentsOf(id)).find((row: { item: string }) => row.item === "full_report");
-        expect(emails().some(sent => sent.to === email && sent.subject === "Payment details for your full business check report")).toBe(true);
+        expect(emails().some(sent => sent.to === email && sent.subject === "Payment details for your Full Report")).toBe(true);
 
         // 2. They pay for the report and reply with proof; the team confirms; they answer the form and get the report.
         await (await superAdmin.call()).businessSupport.markProofReceived({ paymentRequestId: report.id });
         await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: report.id });
-        const formLink = emails().find(sent => sent.to === email && sent.subject === "Payment received: your full business check report")!.body.match(/Complete your report form: (\S+)/)![1];
+        const formLink = emails().find(sent => sent.to === email && sent.subject === "Payment received: your Full Report")!.body.match(/Complete your Report Intake: (\S+)/)![1];
         await (await browser().call()).fullReport.submit({ token: decodeURIComponent(formLink.split("/report/")[1]), intake: sampleIntake });
-        expect(emails().some(sent => sent.to === email && sent.subject.startsWith("Your full business check report") && sent.attachments?.length === 1)).toBe(true);
+        expect(emails().some(sent => sent.to === email && sent.subject.startsWith("Your Full Report") && sent.attachments?.length === 1)).toBe(true);
 
         // 3. After the call, the team sends the Current State Assessment details; the owner pays; the team confirms.
         const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
@@ -320,8 +320,8 @@ for (const target of targets) {
         const [payment] = await paymentsOf(check.id);
         mocked.deliverEmail.mockClear();
         await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: payment.id });
-        const confirmation = emails().find(sent => sent.to === check.email && sent.subject === "Payment received: your full business check report")!;
-        const link = confirmation.body.match(/Complete your report form: (\S+)/)![1];
+        const confirmation = emails().find(sent => sent.to === check.email && sent.subject === "Payment received: your Full Report")!;
+        const link = confirmation.body.match(/Complete your Report Intake: (\S+)/)![1];
         return { ...check, reportToken: decodeURIComponent(link.split("/report/")[1]) };
       }
       const reportRow = async (businessCheckId: number) => (await db.select().from(schema.fullReports).where(eq(schema.fullReports.businessCheckId, businessCheckId)))[0];
@@ -344,12 +344,12 @@ for (const target of targets) {
         expect(Buffer.from(sent.pdf, "base64").subarray(0, 5).toString()).toBe("%PDF-");
 
         const toOwner = emails().find(item => item.to === email)!;
-        expect(toOwner.subject).toMatch(/^Your full business check report: /);
+        expect(toOwner.subject).toMatch(/^Your Full Report: /);
         expect(toOwner.sender).toBe("business_support");
         expect(toOwner.body).toContain("FIX THIS FIRST");
-        expect(toOwner.attachments).toEqual([expect.objectContaining({ contentType: "application/pdf", filename: expect.stringMatching(/-full-business-check-report\.pdf$/) })]);
+        expect(toOwner.attachments).toEqual([expect.objectContaining({ contentType: "application/pdf", filename: expect.stringMatching(/-full-report\.pdf$/) })]);
         expect(toOwner.attachments![0].content.subarray(0, 5).toString()).toBe("%PDF-");
-        expect(emails().find(item => item.to === "info@ipfactory.co")!.subject).toMatch(/^Full report sent: /);
+        expect(emails().find(item => item.to === "info@ipfactory.co")!.subject).toMatch(/^Full Report sent: /);
 
         const row = await reportRow(id);
         expect(row).toMatchObject({ status: "delivered", reportVersion: 2, deliveryStatus: "Simulated" });
@@ -382,8 +382,8 @@ for (const target of targets) {
 
         mocked.deliverEmail.mockClear();
         await (await superAdmin.call()).businessSupport.resendReportLink({ businessCheckId: id });
-        const resent = emails().find(item => item.to === email && item.subject === "Your report form")!;
-        const newToken = decodeURIComponent(resent.body.match(/Complete your report form: (\S+)/)![1].split("/report/")[1]);
+        const resent = emails().find(item => item.to === email && item.subject === "Your Report Intake")!;
+        const newToken = decodeURIComponent(resent.body.match(/Complete your Report Intake: (\S+)/)![1].split("/report/")[1]);
         expect(newToken).not.toBe(reportToken);
         await expect((await browser().call()).fullReport.form({ token: reportToken })).rejects.toMatchObject({ code: "NOT_FOUND" });
 

@@ -200,7 +200,7 @@ export default function FullReportPage() {
   });
   const download = trpc.fullReport.download.useMutation({ onSuccess: (result) => savePdf(result.fileName, result.pdf), onError: (error) => setProblem(error.message) });
 
-  if (form.isLoading) return <Shell><p className="text-sm text-ink-muted">Opening your report form…</p></Shell>;
+  if (form.isLoading) return <Shell><p className="text-sm text-ink-muted">Opening your Report Intake…</p></Shell>;
   if (form.error || !form.data) {
     return (
       <Shell>
@@ -217,14 +217,14 @@ export default function FullReportPage() {
       <Shell>
         <div className="space-y-4">
           <CheckCircle2 className="h-10 w-10 text-highlight-ink" aria-hidden />
-          <h1 className="font-serif text-3xl font-bold">{sent ? "Your report is on its way" : "Your report has been sent"}</h1>
-          <p className="text-ink-soft">We have emailed your full business check report{businessName ? ` for ${businessName}` : ""} to <span className="font-medium text-ink">{email}</span>. You can also download it here.</p>
+          <h1 className="font-serif text-3xl font-bold">{sent ? "Your Full Report is on its way" : "Your Full Report has been sent"}</h1>
+          <p className="text-ink-soft">We have emailed your Full Report{businessName ? ` for ${businessName}` : ""} to <span className="font-medium text-ink">{email}</span>. You can also download it here.</p>
           <Button type="button" className="h-12 rounded-none bg-ink px-6 text-sm font-semibold uppercase tracking-wider text-paper hover:bg-charcoal" disabled={download.isPending}
             onClick={() => (sent ? savePdf(sent.fileName, sent.pdf) : download.mutate({ token }))}>
-            <Download className="mr-2 h-4 w-4" aria-hidden /> Download your report
+            <Download className="mr-2 h-4 w-4" aria-hidden /> Download your Full Report
           </Button>
           {problem && <p role="alert" className="text-sm text-danger-strong">{problem}</p>}
-          <p className="text-sm text-ink-muted">If you would like help with the plan in your report, reply to the email or book a free 20-minute call.</p>
+          <p className="text-sm text-ink-muted">If you would like help with the plan in your Full Report, reply to the email or book a free Debrief.</p>
         </div>
       </Shell>
     );
@@ -266,10 +266,10 @@ export default function FullReportPage() {
 
   return (
     <Shell>
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">Your report form</p>
-      <h1 className="mt-2 font-serif text-3xl font-bold sm:text-4xl">{firstName ? `${firstName}, seventeen questions` : "Seventeen questions"} and your report is done</h1>
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">Your Report Intake</p>
+      <h1 className="mt-2 font-serif text-3xl font-bold sm:text-4xl">{firstName ? `${firstName}, seventeen questions` : "Seventeen questions"} and your Full Report is done</h1>
       <p className="mt-3 text-ink-soft">
-        About {FULL_REPORT.formMinutes} minutes. Your full business check report{businessName ? ` for ${businessName}` : ""} is built from these answers and your business check, and emailed to <span className="font-medium text-ink">{email}</span> the moment you finish. Estimates are fine.
+        About {FULL_REPORT.formMinutes} minutes. Your Full Report{businessName ? ` for ${businessName}` : ""} is built from these answers and your Business Check, and emailed to <span className="font-medium text-ink">{email}</span> the moment you finish. Estimates are fine.
       </p>
 
       <form onSubmit={onSubmit} noValidate className="mt-8 space-y-10">
@@ -390,7 +390,7 @@ export default function FullReportPage() {
           <p className="text-sm text-ink-muted"><span className="font-semibold tabular-nums text-ink">{answered}</span> of 17 answered</p>
           {problem && <p role="alert" className="text-sm text-danger-strong">{problem}</p>}
           <Button type="submit" disabled={submit.isPending} className="h-12 w-full rounded-none bg-highlight-ink text-sm font-semibold uppercase tracking-widest text-paper hover:opacity-90">
-            <FileText className="mr-2 h-4 w-4" aria-hidden /> {submit.isPending ? "Building your report…" : "Send me my report"}
+            <FileText className="mr-2 h-4 w-4" aria-hidden /> {submit.isPending ? "Building your Full Report…" : "Send me my Full Report"}
           </Button>
         </div>
       </form>

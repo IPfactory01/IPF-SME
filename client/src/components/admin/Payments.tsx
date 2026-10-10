@@ -44,30 +44,30 @@ function ReportLine({ businessCheckId, report }: { businessCheckId: number; repo
   const resend = trpc.businessSupport.resendReportLink.useMutation({
     onSuccess: result => {
       if (result.deliveryStatus === "Failed") toast.error("A new link was made, but the email failed. Try again.");
-      else toast.success("A new report form link is on its way to the owner.");
+      else toast.success("A new Report Intake link is on its way to the owner.");
       void utils.businessSupport.checkDetail.invalidate({ businessCheckId });
     },
     onError: error => toast.error(error.message),
   });
-  if (!report) return <p className="mt-2 text-[13px] text-ink-muted">Report: the form link is sent when the payment is confirmed.</p>;
+  if (!report) return <p className="mt-2 text-[13px] text-ink-muted">Full Report: the Report Intake link is sent when the payment is confirmed.</p>;
   return (
     <div className="mt-3 space-y-2 border-t border-line-soft pt-3 text-[13px]">
       {report.status === "delivered" ? (
         <>
-          <p className="text-ink">Report sent {report.deliveredAt ? formatDate(report.deliveredAt) : ""}{report.deliveryStatus === "Failed" ? " · the email failed" : ""}</p>
-          <Button type="button" variant="outline" size="sm" className="rounded-none text-xs" disabled={download.isPending} onClick={() => download.mutate({ businessCheckId })}>Download the report</Button>
+          <p className="text-ink">Full Report sent {report.deliveredAt ? formatDate(report.deliveredAt) : ""}{report.deliveryStatus === "Failed" ? " · the email failed" : ""}</p>
+          <Button type="button" variant="outline" size="sm" className="rounded-none text-xs" disabled={download.isPending} onClick={() => download.mutate({ businessCheckId })}>Download the Full Report</Button>
         </>
       ) : (
         <>
-          <p className="text-ink">Report form sent {formatDate(report.createdAt)}. Waiting for the owner's answers; the report goes out the moment they finish.</p>
-          <Button type="button" variant="outline" size="sm" className="rounded-none text-xs" disabled={resend.isPending} onClick={() => resend.mutate({ businessCheckId })}>Send the form link again</Button>
+          <p className="text-ink">Report Intake sent {formatDate(report.createdAt)}. Waiting for the owner's answers; the Full Report goes out the moment they finish.</p>
+          <Button type="button" variant="outline" size="sm" className="rounded-none text-xs" disabled={resend.isPending} onClick={() => resend.mutate({ businessCheckId })}>Send the Report Intake link again</Button>
         </>
       )}
     </div>
   );
 }
 
-const SHORT_NAME: Record<PaymentItem, string> = { full_report: "Report", current_state: CURRENT_STATE.name };
+const SHORT_NAME: Record<PaymentItem, string> = { full_report: "Full Report", current_state: CURRENT_STATE.name };
 
 const CHIP: Record<PaymentDisplayStatus, string> = {
   requested: "border-highlight-ink/30 bg-highlight-ink/5 text-highlight-ink",
@@ -80,7 +80,7 @@ const CHIP: Record<PaymentDisplayStatus, string> = {
 export function PaymentChips({ payments, reportRequestedAt }: { payments: Partial<Record<PaymentItem, PaymentDisplayStatus>>; reportRequestedAt: Date | string | null }) {
   const chips = PAYMENT_ITEMS.flatMap(item => {
     const status = payments[item];
-    if (!status) return item === "full_report" && reportRequestedAt ? [{ item, text: "Report requested", className: CHIP.requested }] : [];
+    if (!status) return item === "full_report" && reportRequestedAt ? [{ item, text: "Full Report requested", className: CHIP.requested }] : [];
     const text = status === "confirmed" ? `${SHORT_NAME[item]} paid` : `${SHORT_NAME[item]}: ${PAYMENT_DISPLAY_LABELS[status].toLowerCase()}`;
     return [{ item, text, className: CHIP[status] }];
   });
@@ -171,7 +171,7 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
         <div className="mt-3 space-y-2 border-t border-line-soft pt-3">
           <p className="text-[13px] text-ink">
             Only confirm once you have seen {formatNaira(payment.amountNaira)} with reference {payment.reference} in the account. The owner is emailed
-            {item === "current_state" ? ", the business moves to Won and they get a link to set up their client account, where the Current State Assessment starts." : " with a link to a short form; their report is emailed the moment they finish it."}
+            {item === "current_state" ? ", the business moves to Won and they get a link to set up their client account, where the Current State Assessment starts." : " with the Report Intake link; their Full Report is emailed the moment they finish it."}
           </p>
           <div className="space-y-1">
             <Label htmlFor={`payment-note-${payment.id}`} className="text-xs text-ink-muted">Note (optional)</Label>

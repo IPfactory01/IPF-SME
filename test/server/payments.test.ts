@@ -53,8 +53,8 @@ describe("the payment details email", () => {
   it("gives the amount, the account, the reference and how to send proof", () => {
     configure();
     const email = paymentDetailsEmail({ fullName: "Ada Example", item: "full_report", reference: "TS-R-000012" , deadline: DEADLINE });
-    expect(email.subject).toBe("Payment details for your full business check report");
-    for (const line of ["Dear Ada,", "Amount: ₦100,000", "Bank: Example Bank", "Account name: Intellectual Property Factory Ltd", "Account number: 0123456789", "Reference: TS-R-000012", "Reply to this email with your proof of payment", "Your report is emailed to you the moment you finish it."]) {
+    expect(email.subject).toBe("Payment details for your Full Report");
+    for (const line of ["Dear Ada,", "Amount: ₦100,000", "Bank: Example Bank", "Account name: Intellectual Property Factory Ltd", "Account number: 0123456789", "Reference: TS-R-000012", "Reply to this email with your proof of payment", "Your Full Report is emailed to you the moment you finish it."]) {
       expect(email.body).toContain(line);
     }
     expect(email.body).not.toContain("DO NOT PAY");
@@ -79,13 +79,13 @@ describe("the payment details email", () => {
 });
 
 describe("the payment confirmed email", () => {
-  it("sends the report form link, with the report promised the moment the form is finished", () => {
+  it("sends the Report Intake link, with the report promised the moment the form is finished", () => {
     const email = paymentConfirmedEmail({ fullName: "Ada Example", item: "full_report", reference: "TS-R-000012", reportLink: "https://app.example.test/report/TOKEN" });
-    expect(email.subject).toBe("Payment received: your full business check report");
+    expect(email.subject).toBe("Payment received: your Full Report");
     expect(email.body).toContain("We have received your payment of ₦100,000 (reference TS-R-000012).");
-    expect(email.body).toContain("Your report is built from your answers and emailed to you the moment you finish.");
-    expect(email.body).toContain("Complete your report form: https://app.example.test/report/TOKEN");
-    expect(buildBusinessSupportEmailHtml(email.body)).toMatch(/<a href="https:\/\/app\.example\.test\/report\/TOKEN"[^>]*>Complete your report form<\/a>/);
+    expect(email.body).toContain("Your Full Report is built from your answers and emailed to you the moment you finish.");
+    expect(email.body).toContain("Complete your Report Intake: https://app.example.test/report/TOKEN");
+    expect(buildBusinessSupportEmailHtml(email.body)).toMatch(/<a href="https:\/\/app\.example\.test\/report\/TOKEN"[^>]*>Complete your Report Intake<\/a>/);
     expect(email.body).not.toMatch(/working days/);
   });
 

@@ -6,7 +6,7 @@ describe("Current State Assessment price", () => {
   it("is a flat ₦500,000 on the site, not a starting price (decided 7 October)", async () => {
     const { JOURNEY } = await import("@shared/businessSupport");
     const step = JOURNEY.find((item) => item.id === "current-state")!;
-    expect(step.body).toContain("₦500,000, paid after the call");
+    expect(step.body).toContain("₦500,000, paid after the Debrief");
     expect(step.body).not.toMatch(/from ₦500,000/i);
   });
 });

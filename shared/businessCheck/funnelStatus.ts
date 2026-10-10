@@ -30,8 +30,8 @@ export type FunnelTone = "muted" | "neutral" | "attention" | "info" | "positive"
 export const FUNNEL_STATUS_LABELS: Record<FunnelStatus, { label: string; tone: FunnelTone }> = {
   in_progress: { label: "Lead", tone: "muted" },
   completed: { label: "Qualified lead", tone: "neutral" },
-  call_requested: { label: "Call requested", tone: "attention" },
-  call_scheduled: { label: "Call booked", tone: "info" },
+  call_requested: { label: "Debrief requested", tone: "attention" },
+  call_scheduled: { label: "Debrief booked", tone: "info" },
   fit: { label: "Opportunity", tone: "positive" },
   referred: { label: "Referred", tone: "info" },
   declined: { label: "Lost", tone: "negative" },

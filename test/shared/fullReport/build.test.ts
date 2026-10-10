@@ -93,7 +93,7 @@ describe("the full report", () => {
     const report = build("smallOperatingTrader");
     expect(report.onePage.fixFirst.area).toBe("Financials");
     expect(report.onePage.moves[0]).toMatchObject({ month: "Month 1", area: "Financials" });
-    expect(part(report, 10).blocks[0]).toMatchObject({ kind: "table", columns: ["When", "Move", "This week", "Number to watch"] });
+    expect(part(report, 10).blocks[0]).toMatchObject({ kind: "table", columns: ["When", "Move", "This week", "Measure of Success"] });
   });
 
   it("reads the owner's goal back in their words", () => {

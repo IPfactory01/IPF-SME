@@ -81,8 +81,8 @@ export const ONBOARDING_ERRORS = {
   emailMismatch: "The email does not match this invitation.",
   existingAccount: "An account already exists for this email address. The IPF team will help you sign in.",
   existingAccountAdmin: "This email already belongs to an account. Linking an existing account to a new business is not available yet.",
-  noCheck: "That business check does not exist.",
-  invalidCheckEmail: "The business check does not have a valid email address to invite.",
+  noCheck: "That Business Check does not exist.",
+  invalidCheckEmail: "The Business Check does not have a valid email address to invite.",
 } as const;
 
 export const signInInputSchema = z.object({

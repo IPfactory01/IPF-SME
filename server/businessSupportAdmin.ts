@@ -128,7 +128,7 @@ export async function getBusinessCheckDetail(db: Pick<Database, "select">, busin
     resultJson: businessChecks.resultJson,
     summaryJson: businessChecks.summaryJson,
   }).from(businessChecks).where(eq(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "That business check does not exist." });
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   const { resultJson, summaryJson, ...fields } = row;
   const result = parseJson<Pick<CheckResult, "outline" | "primaryArea" | "founder">>(resultJson);
   const summary = parseJson<CheckSummary>(summaryJson);
@@ -172,7 +172,7 @@ export const SETTABLE_STAGES = PIPELINE_STAGES.filter(stage => stage !== "lead")
  */
 export async function setPipelineStage(db: Database, input: { businessCheckId: number; stage: Exclude<PipelineStage, "lead">; note?: string; actorUserId: number }) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That business check does not exist." });
+  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   if (check.pipelineStage === input.stage) return { success: true, pipelineStage: check.pipelineStage, changed: false } as const;
   if (check.pipelineStage === "won") throw new TRPCError({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
   await db.transaction(async tx => {
@@ -189,10 +189,10 @@ export async function setPipelineStage(db: Database, input: { businessCheckId: n
 
 async function requestedCheck(db: Pick<Database, "select">, businessCheckId: number) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That business check does not exist." });
-  if (!check.callRequestedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This business check has not asked for a discovery call." });
+  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  if (!check.callRequestedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This Business Check has not asked for a Debrief." });
   // A paid client's record is not reopened from the call list.
-  if (check.pipelineStage === "won") throw new TRPCError({ code: "CONFLICT", message: "This business has already been won, so its call outcome can no longer be changed here." });
+  if (check.pipelineStage === "won") throw new TRPCError({ code: "CONFLICT", message: "This business has already been won, so its Debrief outcome can no longer be changed here." });
   return check;
 }
 

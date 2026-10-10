@@ -105,7 +105,7 @@ export default function Home() {
               <a href="/login">Client sign in</a>
             </Button>
             <Button onClick={handleStartCheck} className="group hidden sm:inline-flex bg-ink text-paper hover:bg-charcoal font-medium text-xs uppercase tracking-widest px-5 py-2.5 rounded-none transition-transform active:scale-95">
-              Free business check <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              Free Business Check <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
             </Button>
           </div>
         </div>
@@ -177,13 +177,13 @@ export default function Home() {
               Business owners who already trade, at about ₦5 million a month or more, and who can give two to four hours a week for six weeks.
             </p>
             <p className="text-ink-soft leading-relaxed">
-              If you are smaller, start with the free check and our training timetable. If you are much larger, we will point you to {BRAND.organisationName} Advisory.
+              If you are smaller, start with the free Business Check and our training timetable. If you are much larger, we will point you to {BRAND.organisationName} Advisory.
             </p>
           </Reveal>
           <div>
             <Reveal><span className="text-xs uppercase tracking-widest text-ink-muted font-semibold block mb-3">Who you work with</span></Reveal>
             <Stagger as="ul" className="space-y-3 text-lg text-ink-600">
-              {[`A named ${BRAND.organisationName} consultant leads your work.`, "Analysts prepare every call.", "A partner joins for larger businesses.", "We use AI for analysis and say so."].map((line) => (
+              {[`A named ${BRAND.organisationName} consultant leads your work.`, "Analysts prepare every Session.", "A partner joins for larger businesses.", "We use AI for analysis and say so."].map((line) => (
                 <motion.li key={line} variants={staggerChild} className="flex items-start gap-3"><CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-highlight-ink" />{line}</motion.li>
               ))}
             </Stagger>
@@ -198,9 +198,9 @@ export default function Home() {
         <motion.div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 h-96 w-[48rem] -translate-x-1/2 rounded-full bg-highlight/20 blur-3xl" animate={{ x: ["-55%", "-45%", "-55%"], opacity: [0.5, 0.9, 0.5] }} transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }} />
         <Reveal className="relative container max-w-3xl mx-auto text-center">
           <img src={BRAND.logoOnDarkUrl} alt={BRAND.organisationName} className="mx-auto mb-8 h-28 w-auto" />
-          <h2 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight mb-4">Start with the free business check.</h2>
+          <h2 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight mb-4">Start with the free Business Check.</h2>
           <p className="text-on-dark-muted max-w-xl mx-auto mb-8">Ten minutes. No card. You&apos;ll know where you stand before you decide anything.</p>
-          <CtaButton onClick={handleStartCheck} tone="light">Start with a free business check</CtaButton>
+          <CtaButton onClick={handleStartCheck} tone="light">Start with a free Business Check</CtaButton>
         </Reveal>
       </section>
 
@@ -263,7 +263,7 @@ export default function Home() {
                 <button type="button" onClick={() => { setIsPasswordHelpMode(true); setSignInError(""); }} className="w-full text-center text-xs font-semibold text-brand underline underline-offset-2">First time here or forgot your password?</button>
               </>
             )}
-            {!passwordLinkSent && <p className="text-center text-xs leading-5 text-ink-muted">Not a client yet? <button type="button" onClick={() => { setIsParticipantSignInOpen(false); handleStartCheck(); }} className="font-semibold text-brand underline underline-offset-2">Start with the free business check</button>.</p>}
+            {!passwordLinkSent && <p className="text-center text-xs leading-5 text-ink-muted">Not a client yet? <button type="button" onClick={() => { setIsParticipantSignInOpen(false); handleStartCheck(); }} className="font-semibold text-brand underline underline-offset-2">Start with the free Business Check</button>.</p>}
           </div>
         </DialogContent>
       </Dialog>

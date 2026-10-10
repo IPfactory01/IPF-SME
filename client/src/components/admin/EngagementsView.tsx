@@ -40,6 +40,7 @@ export default function EngagementsView() {
     <div className="space-y-4 p-6">
       <p className="text-sm text-ink-muted">An engagement starts when the Current State Assessment is paid. Open one to name the team, book the calls, send what you need from the client and share what you found.</p>
       {storage.data && <StorageLine status={storage.data} onCheck={() => void storage.refetch()} />}
+      {storage.error && <p role="status" aria-label="File uploads" className="border border-health-watch bg-health-watch-tint p-3 text-sm text-health-watch">Could not check file storage: {storage.error.message}</p>}
       {awaiting.data && awaiting.data.length > 0 && (
         <section aria-labelledby="awaiting-start" className="space-y-2 border border-danger-line bg-danger-tint p-4">
           <h2 id="awaiting-start" className="text-sm font-semibold text-danger">Paid, but no engagement yet</h2>

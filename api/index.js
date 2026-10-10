@@ -160,6 +160,8 @@ var init_env = __esm({
       appAlternateOrigins: (process.env.APP_ALTERNATE_ORIGINS || "https://www.emmanueltarfa.com").split(",").map((value) => value.trim()).filter(Boolean).map(originOf),
       /** This Vercel deployment's own origin, trusted in production alongside the configured origins. */
       vercelOrigin: vercelDeploymentOrigin(),
+      /** The commit this deployment was built from (Vercel sets VERCEL_GIT_COMMIT_SHA), shown by /api/health as "build". */
+      buildCommit: (process.env.VERCEL_GIT_COMMIT_SHA?.trim() ?? "").slice(0, 7),
       /** Shared secret the host's scheduler sends as a Bearer token to /api/scheduled/* endpoints. */
       cronSecret: process.env.CRON_SECRET ?? "",
       /** Email address of the permanent Super Admin. */
@@ -12127,6 +12129,7 @@ function buildPaymentReceiptUploadKey(participantId, originalName, timestamp2 = 
 }
 
 // server/_core/app.ts
+init_env();
 import multer from "multer";
 function createApp() {
   const app = express();
@@ -12134,7 +12137,7 @@ function createApp() {
   app.set("trust proxy", 1);
   app.use(applySecurityHeaders);
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, service: "ipfactory-sme" });
+    res.json({ ok: true, service: "ipfactory-sme", build: ENV.buildCommit || null });
   });
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ limit: "32kb", extended: true }));

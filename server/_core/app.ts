@@ -11,6 +11,7 @@ import { getAuthenticatedParticipant } from "../participantAuth";
 import { storagePut } from "../storage";
 import { buildParticipantUploadKey, buildPaymentReceiptUploadKey, getParticipantUploadValidationError, participantUploadPolicy } from "../participantUploads";
 import { applySecurityHeaders, requireTrustedBrowserOrigin } from "../security";
+import { ENV } from "./env";
 import multer from "multer";
 
 /**
@@ -22,8 +23,9 @@ export function createApp() {
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
   app.use(applySecurityHeaders);
+  // "build" is the short commit the live site was built from, so anyone can tell whether a change has reached it.
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, service: "ipfactory-sme" });
+    res.json({ ok: true, service: "ipfactory-sme", build: ENV.buildCommit || null });
   });
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ limit: "32kb", extended: true }));

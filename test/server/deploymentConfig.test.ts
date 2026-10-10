@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const KEYS = ["APP_ORIGIN", "APP_ALTERNATE_ORIGINS", "OWNER_ADMIN_EMAIL", "DISCOVERY_CALL_URL"] as const;
+const KEYS = ["APP_ORIGIN", "APP_ALTERNATE_ORIGINS", "OWNER_ADMIN_EMAIL", "DISCOVERY_CALL_URL", "VERCEL_GIT_COMMIT_SHA"] as const;
 const saved = Object.fromEntries(KEYS.map((key) => [key, process.env[key]]));
 
 async function loadWith(env: Partial<Record<(typeof KEYS)[number], string>>) {
@@ -30,6 +30,11 @@ describe("discovery call booking page", () => {
 });
 
 describe("deployment identity configuration", () => {
+  it("names the commit the deployment was built from by its first seven characters, and is empty off Vercel", async () => {
+    expect((await loadWith({ VERCEL_GIT_COMMIT_SHA: " 902446e52a1b4962d80025b8415b3464f5d6a867 " })).ENV.buildCommit).toBe("902446e");
+    expect((await loadWith({})).ENV.buildCommit).toBe("");
+  });
+
   it("uses the configured public origin for links and origin checks, normalising trailing slashes", async () => {
     const config = await loadWith({ APP_ORIGIN: "https://programme.example.org/", APP_ALTERNATE_ORIGINS: "https://www.programme.example.org" });
 

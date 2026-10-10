@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   list: { setUp: true, items: [] as unknown[] } as { setUp: boolean; items: unknown[] },
   detail: null as unknown,
   awaiting: [] as unknown[],
+  storageError: null as { message: string } | null,
   storage: { configured: true, missing: [] as string[], bucket: "engagement-files", bucketFound: true as boolean | null, bucketPublic: false as boolean | null, problem: null as string | null },
   calls: {} as Record<string, unknown[]>,
 }));
@@ -26,7 +27,7 @@ vi.mock("@/lib/trpc", () => ({
       staff: {
         list: { useQuery: () => ({ data: api.list, isLoading: false, error: null }) },
         awaitingStart: { useQuery: () => ({ data: api.awaiting }) },
-        storageStatus: { useQuery: () => ({ data: api.storage, refetch: () => undefined }) },
+        storageStatus: { useQuery: () => ({ data: api.storageError ? undefined : api.storage, error: api.storageError, refetch: () => undefined }) },
         detail: { useQuery: () => ({ data: api.detail, isLoading: false, error: null }) },
         assignableStaff: { useQuery: () => ({ data: [{ userId: 9, name: "Ola Analyst", email: "ola@example.test", roles: ["analyst"] }] }) },
         ...Object.fromEntries(["start", "fileLink", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
@@ -60,6 +61,7 @@ beforeEach(() => {
   api.list = { setUp: true, items: [row] };
   api.awaiting = [];
   api.storage = { configured: true, missing: [], bucket: "engagement-files", bucketFound: true, bucketPublic: false, problem: null };
+  api.storageError = null;
   api.calls = {};
 });
 afterEach(cleanup);
@@ -100,6 +102,13 @@ describe("the team's engagements", () => {
     render(<EngagementsView />);
     expect(screen.getByRole("status", { name: "File uploads" }).textContent).toContain("not the anon key");
     expect(screen.getByRole("button", { name: "Check again" })).toBeTruthy();
+  });
+
+  it("says so when the storage check itself fails, rather than showing nothing", () => {
+    api.detail = detail({ manage: true, assign: true, review: true });
+    api.storageError = { message: "Your role does not include engagements." };
+    render(<EngagementsView />);
+    expect(screen.getByRole("status", { name: "File uploads" }).textContent).toBe("Could not check file storage: Your role does not include engagements.");
   });
 
   it("flags a paid assessment with no engagement and starts it from the list", () => {

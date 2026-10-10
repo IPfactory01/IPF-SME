@@ -57,6 +57,8 @@ export const ENV = {
     .map(originOf),
   /** This Vercel deployment's own origin, trusted in production alongside the configured origins. */
   vercelOrigin: vercelDeploymentOrigin(),
+  /** The commit this deployment was built from (Vercel sets VERCEL_GIT_COMMIT_SHA), shown by /api/health as "build". */
+  buildCommit: (process.env.VERCEL_GIT_COMMIT_SHA?.trim() ?? "").slice(0, 7),
   /** Shared secret the host's scheduler sends as a Bearer token to /api/scheduled/* endpoints. */
   cronSecret: process.env.CRON_SECRET ?? "",
   /** Email address of the permanent Super Admin. */

@@ -142,13 +142,13 @@ describe("createApp and the Vercel gateway", () => {
   it("serves GET /api/health", async () => {
     const res = await request(createApp(), "/api/health");
     expect(res.status).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ ok: true, service: "ipfactory-sme" });
+    expect(JSON.parse(res.body)).toEqual({ ok: true, service: "ipfactory-sme", build: null });
   });
 
   it("routes rewritten URLs to the original Express route", async () => {
     const gateway = createVercelGateway(createApp());
     const health = await request(gateway, "/api/index?__prefix=api&__path=health");
-    expect(JSON.parse(health.body)).toEqual({ ok: true, service: "ipfactory-sme" });
+    expect(JSON.parse(health.body)).toEqual({ ok: true, service: "ipfactory-sme", build: null });
     const portal = await request(gateway, "/api/index?__prefix=portal&__path=authenticate");
     expect(portal.status).toBe(302);
     expect(portal.location).toBe("/?participant_signin=1");

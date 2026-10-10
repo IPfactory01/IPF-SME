@@ -141,16 +141,28 @@ from the plain-text body so both versions say the same thing:
   {reference}" and "n / N".
 - Short tables never split across pages; values shrink to fit their tile.
 
-## 9. Screens of the engagement room (to design)
+## 9. Screens of the engagement room (built 10 October)
 
-When the engagement room is built (PRD F7), it follows this brief and adds:
+The room wears the site's dress, not the admin's. Built on 10 October (`client/src/components/AccountLayout.tsx`,
+`EngagementRoom.tsx`, `pages/AccountDashboard.tsx`):
 
-- A **journey bar** across the top: getting set up, Current State Assessment, the fix, the plan, day 30; the current step in
-  `brand`, done steps with a check, future steps muted.
-- **Four cards** answering the owner's questions: Where are we? What do you need from me? What did we agree? What have
-  I got? Each card shows at most three items and a "See all" link.
-- The **measure** as one large number with its baseline and target, coloured by the health colours.
-- Status words, never icons alone: "Requested", "Received", "Accepted"; "Shared on 23 October".
+- **The signed-in shell** carries the mark, the product name and the gradient rule, with the site's nav underline;
+  `container` width for the room, a reading width for the settings pages; the endorsement in the footer.
+- **The top answers "where are we?" in one look:** the greeting as an eyebrow in `highlight-ink`, the business name in
+  Playfair Display black, the stage and its one-line summary, the team; on the right the next call in a `brand-tint`
+  panel with "Join the call", and a shortcut to what to send first ("2 things to send · first by Tue 27 Oct"). The
+  logo's colours sit softly behind it, as on the site's hero.
+- **The journey bar** runs along the bottom of that panel: done steps with a check, the current step in `brand` with
+  "Now", future steps muted.
+- **Two columns on a desktop, one on a phone:** the work on the left (what we need from you, what we have found), the
+  context on the right (the one number we watch, your calls, the owner's seat card).
+- **The measure** is one large number: this week's reading in the health colour of its direction (`health-clear` the
+  right way, `health-watch` the wrong way), the move since the start in words, then where it started and where it is
+  going, then week by week.
+- **Status words, never icons alone:** "Booked", "Held", "To book", "Received", "Signed off", "Shared 23 Oct".
+- **Empty states carry a date** when one is known: "Notes from Current State Assessment call 1 reach you the same day,
+  Fri 23 Oct."
+- Account and business details live in the settings pages; the room shows nothing administrative.
 
 ## 10. Tests that guard the brand
 

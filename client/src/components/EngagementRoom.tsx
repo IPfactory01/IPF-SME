@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { formatFileSize, formatMeasure, OPEN_TASK_STATUSES, UPLOAD_ACCEPT, UPLOAD_MAX_MB } from "@shared/engagement";
 import type { inferRouterOutputs } from "@trpc/server";
-import { CalendarClock, Check, CircleDot, Circle, Download, Paperclip } from "lucide-react";
+import { ArrowRight, CalendarClock, Check, CircleDot, Circle, Download, Paperclip } from "lucide-react";
 import React, { useState } from "react";
 import { toast } from "sonner";
 import type { AppRouter } from "../../../server/routers";
@@ -16,111 +16,197 @@ const lagos = (value: Date | string | null | undefined, withTime = true) =>
   value ? new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short", ...(withTime ? { hour: "numeric", minute: "2-digit", hour12: true } : {}) }).format(new Date(value)) : "";
 const dueText = (dueOn: string | null) => (dueOn ? `By ${lagos(`${dueOn}T12:00:00Z`, false)}` : "");
 
-const CARD = "border border-line-soft bg-white p-5 shadow-sm";
+const CARD = "border border-line-soft bg-paper-raised p-5 shadow-sm sm:p-6";
 const KICKER = "text-xs font-semibold uppercase tracking-widest text-ink-muted";
+const EYEBROW = "text-[11px] font-semibold uppercase tracking-[0.2em] text-highlight-ink";
+const SESSION_WORDS: Record<Room["sessions"][number]["status"], string> = { planned: "Booked", held: "Held", cancelled: "Cancelled" };
 
 /**
- * The client's engagement room: where we are, what we need from you, what we have found. Everything shown here was
- * filtered on the server for this person; this screen decides nothing about access.
+ * The client's engagement room, in the site's own dress. The top answers "where are we?" in one look: the business,
+ * the stage, the next call, the one thing to do now, and the journey. Below, the work on the left (what we need from
+ * you, what we have found) and the context on the right (the one number, your calls, your team's seat). One column
+ * on a phone. Everything shown here was filtered on the server for this person; this screen decides nothing about
+ * access.
  */
-export default function EngagementRoom({ room }: { room: Room }) {
+export default function EngagementRoom({ room, greeting, aside }: { room: Room; greeting?: string; aside?: React.ReactNode }) {
   const open = room.tasks.filter(task => task.side === "client" && OPEN_TASK_STATUSES.includes(task.status));
   const withUs = room.tasks.filter(task => task.side === "client" && !OPEN_TASK_STATUSES.includes(task.status));
   const ours = room.tasks.filter(task => task.side === "ipf" && OPEN_TASK_STATUSES.includes(task.status));
   const sharedNotes = room.sessions.filter(session => session.notes);
   const isOwner = room.viewer.kind === "owner";
+  const current = room.journey.find(step => step.state === "current");
+  const firstDue = open.map(task => task.dueOn).filter((value): value is string => Boolean(value)).sort()[0] ?? null;
+  const toSend = `${open.length} thing${open.length === 1 ? "" : "s"} to send`;
   return (
-    <div className="space-y-5">
-      <section aria-labelledby="where-are-we" className={CARD}>
-        <p className={KICKER}>Where are we?</p>
-        <h2 id="where-are-we" className="mt-1 font-serif text-2xl font-bold tracking-tight">{room.stageLabel}</h2>
-        <ol className="mt-4 grid gap-3 sm:grid-cols-4" aria-label="Your journey">
+    <div className="space-y-6">
+      <section aria-labelledby="room-title" className="relative overflow-hidden border border-line-soft bg-paper-raised shadow-sm">
+        {/* The colour from the logo, softly, behind the business name: the same idea as the site's hero. */}
+        <div aria-hidden className="pointer-events-none absolute -left-20 -top-28 h-72 w-72 rounded-full bg-brand-plum/10 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-highlight/15 blur-3xl" />
+        <div className="relative grid gap-6 p-6 sm:p-8 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] lg:items-start">
+          <div>
+            {greeting && <p className={EYEBROW}>{greeting}</p>}
+            <h1 id="room-title" className="mt-2 font-serif text-3xl font-black tracking-tight sm:text-4xl">{room.businessName}</h1>
+            <p className="mt-3 max-w-xl text-ink-600"><span className="font-semibold text-ink">{room.stageLabel}.</span> {current?.summary}</p>
+            <div className="mt-5">
+              <p className={KICKER}>Your team</p>
+              {room.team.length ? (
+                <ul className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm">{room.team.map(member => <li key={`${member.name}-${member.roleLabel}`}><span className="font-medium">{member.name}</span> <span className="text-ink-muted">· {member.roleLabel}</span></li>)}</ul>
+              ) : <p className="mt-1 text-sm text-ink-muted">We are naming your team now.</p>}
+            </div>
+          </div>
+          <div className="space-y-3">
+            {room.nextSession ? (
+              <div className="border border-brand-line bg-brand-tint p-4">
+                <p className={KICKER}>Coming up</p>
+                <div className="mt-1 flex items-start gap-2">
+                  <CalendarClock className="mt-0.5 h-5 w-5 shrink-0 text-brand" aria-hidden />
+                  <div>
+                    <p className="font-semibold">Next: {room.nextSession.title}</p>
+                    <p className="text-sm text-ink-muted">{lagos(room.nextSession.scheduledFor)} (Lagos time){room.nextSession.durationMinutes ? `, ${room.nextSession.durationMinutes} minutes` : ""}</p>
+                  </div>
+                </div>
+                {room.nextSession.meetingLink && <Button asChild size="sm" className="mt-3 rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover"><a href={room.nextSession.meetingLink} target="_blank" rel="noreferrer">Join the call</a></Button>}
+              </div>
+            ) : (
+              <p className="border border-line-soft bg-paper p-4 text-sm text-ink-muted">We will book your next call with you and it will show here.</p>
+            )}
+            {open.length > 0 && (
+              <a href="#what-we-need" className="group flex items-center justify-between gap-3 border border-line-soft bg-paper p-4 text-sm transition-colors hover:border-brand-line">
+                <span><span className="font-semibold">{toSend}</span>{firstDue && <span className="text-ink-muted"> · first by {lagos(`${firstDue}T12:00:00Z`, false)}</span>}</span>
+                <ArrowRight className="h-4 w-4 shrink-0 text-brand transition-transform group-hover:translate-x-0.5" aria-hidden />
+              </a>
+            )}
+          </div>
+        </div>
+        <ol className="relative grid gap-3 border-t border-line-soft px-6 py-4 sm:grid-cols-4 sm:px-8" aria-label="Your journey">
           {room.journey.map(step => (
             <li key={step.stage} aria-current={step.state === "current" ? "step" : undefined} className={`border-t-2 pt-2 text-sm ${step.state === "current" ? "border-brand" : step.state === "done" ? "border-brand-line-strong" : "border-line"}`}>
-              <span className="flex items-center gap-1.5 font-semibold">
+              <span className={`flex items-center gap-1.5 ${step.state === "next" ? "text-ink-muted" : "font-semibold"}`}>
                 {step.state === "done" ? <Check className="h-4 w-4 text-brand" aria-hidden /> : step.state === "current" ? <CircleDot className="h-4 w-4 text-brand" aria-hidden /> : <Circle className="h-4 w-4 text-ink-faint" aria-hidden />}
                 {step.label}
               </span>
-              {step.state === "current" && <span className="mt-1 block text-ink-muted">{step.summary}</span>}
+              {step.state === "current" && <span className={`mt-1 block ${EYEBROW}`}>Now</span>}
             </li>
           ))}
         </ol>
-        {room.nextSession ? (
-          <div className="mt-5 flex flex-col gap-2 border border-brand-line bg-brand-tint p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-2">
-              <CalendarClock className="mt-0.5 h-5 w-5 text-brand" aria-hidden />
-              <div><p className="font-semibold">Next: {room.nextSession.title}</p><p className="text-sm text-ink-muted">{lagos(room.nextSession.scheduledFor)} (Lagos time){room.nextSession.durationMinutes ? `, ${room.nextSession.durationMinutes} minutes` : ""}</p></div>
-            </div>
-            {room.nextSession.meetingLink && <Button asChild size="sm" className="rounded-none bg-brand text-xs uppercase tracking-wider text-white"><a href={room.nextSession.meetingLink} target="_blank" rel="noreferrer">Join the call</a></Button>}
-          </div>
-        ) : (
-          <p className="mt-5 text-sm text-ink-muted">We will book your next call with you and it will show here.</p>
-        )}
-        <div className="mt-5">
-          <p className={KICKER}>Your team</p>
-          {room.team.length ? <ul className="mt-1 text-sm">{room.team.map(member => <li key={`${member.name}-${member.roleLabel}`}>{member.name} <span className="text-ink-muted">· {member.roleLabel}</span></li>)}</ul> : <p className="mt-1 text-sm text-ink-muted">We are naming your team now.</p>}
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] lg:items-start">
+        <div className="space-y-6">
+          <section id="what-we-need" aria-labelledby="what-we-need-title" className={`${CARD} scroll-mt-24`}>
+            <p className={KICKER}>What we need from you</p>
+            <h2 id="what-we-need-title" className="mt-1 font-serif text-2xl font-bold tracking-tight">{open.length ? toSend : "Nothing outstanding"}</h2>
+            {open.length > 0 && <p className="mt-1 text-sm text-ink-muted">{room.uploadsEnabled ? "Upload each one here, or send it on WhatsApp and tell us. Estimates are fine." : "Send each one on WhatsApp or by email, then tell us here. Estimates are fine."}</p>}
+            <ul className="mt-4 space-y-3">{open.map(task => <OpenTask key={task.id} task={task} uploadsEnabled={room.uploadsEnabled} />)}</ul>
+            {withUs.length > 0 && (
+              <details className="mt-4 text-sm">
+                <summary className="cursor-pointer font-semibold text-brand">Already with us ({withUs.length})</summary>
+                <ul className="mt-2 space-y-1">{withUs.map(task => <li key={task.id} className="border-b border-line-soft py-1"><div className="flex justify-between gap-3"><span>{task.title}</span><span className="text-ink-muted">{task.statusLabel}</span></div><FileList files={task.files} /></li>)}</ul>
+              </details>
+            )}
+            {ours.length > 0 && (
+              <div className="mt-5 border-t border-line-soft pt-4">
+                <p className={KICKER}>What we owe you</p>
+                <ul className="mt-1 space-y-1 text-sm">{ours.map(task => <li key={task.id}><div className="flex justify-between gap-3"><span>{task.title}</span><span className="whitespace-nowrap text-ink-muted">{dueText(task.dueOn)}</span></div><FileList files={task.files} /></li>)}</ul>
+              </div>
+            )}
+          </section>
+
+          <section aria-labelledby="what-we-found" className={CARD}>
+            <p className={KICKER}>What we have found</p>
+            <h2 id="what-we-found" className="mt-1 font-serif text-2xl font-bold tracking-tight">{room.deliverables.length || sharedNotes.length ? "Shared with you" : "Nothing shared yet"}</h2>
+            {!room.deliverables.length && !sharedNotes.length && (
+              <p className="mt-1 text-sm text-ink-muted">
+                {room.nextSession ? `Notes from ${room.nextSession.title} reach you the same day, ${lagos(room.nextSession.scheduledFor, false)}. Findings follow the second call.` : "Notes from each call reach you the same day. Findings follow the second call."}
+              </p>
+            )}
+            {room.problemStatement && <div className="mt-4 border-l-2 border-highlight-ink pl-3"><p className={KICKER}>The one problem we are fixing</p><p className="mt-1 font-serif text-lg">{room.problemStatement}</p></div>}
+            <ul className="mt-4 space-y-4">{room.deliverables.map(item => <DeliverableItem key={item.id} item={item} isOwner={isOwner} />)}</ul>
+            {sharedNotes.length > 0 && (
+              <div className="mt-4 space-y-3">
+                <p className={KICKER}>Notes from our calls</p>
+                {sharedNotes.map(session => (
+                  <article key={session.id} className="border border-line-soft p-3">
+                    <h3 className="text-sm font-semibold">{session.title}</h3>
+                    <p className="text-xs text-ink-muted">{lagos(session.scheduledFor ?? session.notesSharedAt)}{isOwner && session.notesAudience === "owner" ? " · only you can see these" : ""}</p>
+                    <p className="mt-2 whitespace-pre-line text-sm">{session.notes}</p>
+                    {isOwner && <AudienceToggle item="notes" id={session.id} audience={session.notesAudience ?? "owner"} />}
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
-      </section>
 
-      {room.measure && (
-        <section aria-labelledby="the-number" className={CARD}>
-          <p className={KICKER}>The one number we watch</p>
-          <h2 id="the-number" className="mt-1 font-serif text-xl font-bold tracking-tight">{room.measure.name}</h2>
-          {room.measure.definition && <p className="mt-1 text-sm text-ink-muted">{room.measure.definition}</p>}
-          <dl className="mt-4 grid grid-cols-3 gap-3 text-center">
-            <div className="border border-line-soft p-3"><dt className={KICKER}>Started at</dt><dd className="mt-1 font-serif text-xl">{formatMeasure(room.measure.baselineValue, room.measure.unit)}</dd></div>
-            <div className="border-2 border-brand bg-brand-tint p-3"><dt className={KICKER}>This week</dt><dd className="mt-1 font-serif text-xl">{formatMeasure(room.measure.latest?.reading, room.measure.unit)}</dd>{room.measure.latest && <dd className="text-xs text-ink-muted">Week {room.measure.latest.weekNumber}</dd>}</div>
-            <div className="border border-line-soft p-3"><dt className={KICKER}>Going to</dt><dd className="mt-1 font-serif text-xl">{formatMeasure(room.measure.targetValue, room.measure.unit)}</dd></div>
-          </dl>
-          {room.measure.readings.length > 0 && (
-            <table className="mt-4 w-full text-left text-sm" aria-label="Week by week">
-              <thead><tr className="border-b border-line text-xs uppercase tracking-wider text-ink-muted"><th className="py-1 pr-3">Week</th><th className="pr-3">The number</th><th>Next step</th></tr></thead>
-              <tbody>{room.measure.readings.map(row => <tr key={row.weekNumber} className="border-b border-line-soft align-top"><td className="py-1 pr-3">{row.weekNumber}{row.heldOn ? <span className="block text-xs text-ink-muted">{lagos(`${row.heldOn}T12:00:00Z`, false)}</span> : null}</td><td className="pr-3">{formatMeasure(row.reading, room.measure!.unit)}</td><td className="whitespace-pre-line">{row.nextStep ?? ""}</td></tr>)}</tbody>
-            </table>
-          )}
-        </section>
-      )}
-
-      <section aria-labelledby="what-we-need" className={CARD}>
-        <p className={KICKER}>What we need from you</p>
-        <h2 id="what-we-need" className="mt-1 font-serif text-xl font-bold tracking-tight">{open.length ? `${open.length} thing${open.length === 1 ? "" : "s"} to send` : "Nothing outstanding"}</h2>
-        {open.length > 0 && <p className="mt-1 text-sm text-ink-muted">Send each one on WhatsApp or by email, then tell us here. Estimates are fine.</p>}
-        <ul className="mt-4 space-y-3">{open.map(task => <OpenTask key={task.id} task={task} uploadsEnabled={room.uploadsEnabled} />)}</ul>
-        {withUs.length > 0 && (
-          <details className="mt-4 text-sm">
-            <summary className="cursor-pointer font-semibold text-brand">Already with us ({withUs.length})</summary>
-            <ul className="mt-2 space-y-1">{withUs.map(task => <li key={task.id} className="border-b border-line-soft py-1"><div className="flex justify-between gap-3"><span>{task.title}</span><span className="text-ink-muted">{task.statusLabel}</span></div><FileList files={task.files} /></li>)}</ul>
-          </details>
-        )}
-        {ours.length > 0 && (
-          <div className="mt-4">
-            <p className={KICKER}>What we owe you</p>
-            <ul className="mt-1 space-y-1 text-sm">{ours.map(task => <li key={task.id}><div className="flex justify-between gap-3"><span>{task.title}</span><span className="whitespace-nowrap text-ink-muted">{dueText(task.dueOn)}</span></div><FileList files={task.files} /></li>)}</ul>
-          </div>
-        )}
-      </section>
-
-      <section aria-labelledby="what-we-found" className={CARD}>
-        <p className={KICKER}>What we have found</p>
-        <h2 id="what-we-found" className="mt-1 font-serif text-xl font-bold tracking-tight">{room.deliverables.length || sharedNotes.length ? "Shared with you" : "Nothing shared yet"}</h2>
-        {!room.deliverables.length && !sharedNotes.length && <p className="mt-1 text-sm text-ink-muted">Notes from each call reach you the same day. Findings follow the second call.</p>}
-        {room.problemStatement && <div className="mt-4 border-l-2 border-brand pl-3"><p className={KICKER}>The one problem we are fixing</p><p className="mt-1 text-sm">{room.problemStatement}</p></div>}
-        <ul className="mt-4 space-y-4">{room.deliverables.map(item => <DeliverableItem key={item.id} item={item} isOwner={isOwner} />)}</ul>
-        {sharedNotes.length > 0 && (
-          <div className="mt-4 space-y-3">
-            <p className={KICKER}>Notes from our calls</p>
-            {sharedNotes.map(session => (
-              <article key={session.id} className="border border-line-soft p-3">
-                <h3 className="text-sm font-semibold">{session.title}</h3>
-                <p className="text-xs text-ink-muted">{lagos(session.scheduledFor ?? session.notesSharedAt)}{isOwner && session.notesAudience === "owner" ? " · only you can see these" : ""}</p>
-                <p className="mt-2 whitespace-pre-line text-sm">{session.notes}</p>
-                {isOwner && <AudienceToggle item="notes" id={session.id} audience={session.notesAudience ?? "owner"} />}
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+        <div className="space-y-6">
+          {room.measure && <MeasureCard measure={room.measure} />}
+          <section aria-labelledby="your-calls" className={CARD}>
+            <p className={KICKER}>Your calls</p>
+            <h2 id="your-calls" className="mt-1 font-serif text-xl font-bold tracking-tight">{room.sessions.length ? `${room.sessions.length} call${room.sessions.length === 1 ? "" : "s"}` : "Nothing booked yet"}</h2>
+            {room.sessions.length > 0 ? (
+              <ul className="mt-3 divide-y divide-line-soft text-sm">
+                {[...room.sessions].sort(bySchedule).map(session => (
+                  <li key={session.id} className="py-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="font-medium">{session.title}</span>
+                      <span className={`whitespace-nowrap text-xs ${session.status === "held" ? "text-health-clear" : "text-ink-muted"}`}>{session.status === "planned" && !session.scheduledFor ? "To book" : SESSION_WORDS[session.status]}</span>
+                    </div>
+                    {session.scheduledFor && <p className="text-xs text-ink-muted">{lagos(session.scheduledFor)}</p>}
+                    {session.status === "planned" && session.agenda && <p className="mt-1 text-xs text-ink-muted">{session.agenda}</p>}
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="mt-1 text-sm text-ink-muted">Your two assessment calls appear here once they are booked.</p>}
+          </section>
+          {aside}
+        </div>
+      </div>
     </div>
+  );
+}
+
+const bySchedule = (a: Room["sessions"][number], b: Room["sessions"][number]) => {
+  if (!a.scheduledFor && !b.scheduledFor) return 0;
+  if (!a.scheduledFor) return 1;
+  if (!b.scheduledFor) return -1;
+  return new Date(a.scheduledFor).getTime() - new Date(b.scheduledFor).getTime();
+};
+
+/** Which way the number has moved since the start, and whether that is the way we want. */
+function trendOf(measure: NonNullable<Room["measure"]>) {
+  const latest = measure.latest?.reading;
+  const base = measure.baselineValue;
+  if (latest === null || latest === undefined || base === null || base === undefined) return { tone: "", text: "The first reading comes with the first weekly check-in." };
+  const diff = Number(latest) - Number(base);
+  if (!Number.isFinite(diff) || diff === 0) return { tone: "", text: "No change yet since the start." };
+  const wantUp = measure.targetValue === null || measure.targetValue === undefined ? diff > 0 : Number(measure.targetValue) >= Number(base);
+  const good = wantUp ? diff > 0 : diff < 0;
+  return { tone: good ? "text-health-clear" : "text-health-watch", text: `${diff > 0 ? "Up" : "Down"} ${formatMeasure(Math.abs(diff), measure.unit)} since the start.` };
+}
+
+/** The one number we watch, large, with where it started and where it is going, then week by week. */
+function MeasureCard({ measure }: { measure: NonNullable<Room["measure"]> }) {
+  const trend = trendOf(measure);
+  return (
+    <section aria-labelledby="the-number" className={CARD}>
+      <p className={KICKER}>The one number we watch</p>
+      <h2 id="the-number" className="mt-1 font-serif text-xl font-bold tracking-tight">{measure.name}</h2>
+      {measure.definition && <p className="mt-1 text-sm text-ink-muted">{measure.definition}</p>}
+      <p className={`mt-4 font-serif text-4xl font-black tracking-tight tabular-nums ${trend.tone}`}>{formatMeasure(measure.latest?.reading ?? measure.baselineValue, measure.unit)}</p>
+      <p className="text-xs text-ink-muted">{measure.latest ? `Week ${measure.latest.weekNumber}` : "Where it starts"}</p>
+      <p className={`mt-1 text-sm ${trend.tone}`}>{trend.text}</p>
+      <dl className="mt-4 grid grid-cols-2 gap-3">
+        <div className="border border-line-soft p-3"><dt className={KICKER}>Started at</dt><dd className="mt-1 font-serif text-lg tabular-nums">{formatMeasure(measure.baselineValue, measure.unit)}</dd></div>
+        <div className="border border-brand-line bg-brand-tint p-3"><dt className={KICKER}>Going to</dt><dd className="mt-1 font-serif text-lg tabular-nums">{formatMeasure(measure.targetValue, measure.unit)}</dd></div>
+      </dl>
+      {measure.readings.length > 0 && (
+        <table className="mt-4 w-full text-left text-sm" aria-label="Week by week">
+          <thead><tr className="border-b border-line text-xs uppercase tracking-wider text-ink-muted"><th className="py-1 pr-3">Week</th><th className="pr-3">The number</th><th>Next step</th></tr></thead>
+          <tbody>{measure.readings.map(row => <tr key={row.weekNumber} className="border-b border-line-soft align-top"><td className="py-1 pr-3">{row.weekNumber}{row.heldOn ? <span className="block text-xs text-ink-muted">{lagos(`${row.heldOn}T12:00:00Z`, false)}</span> : null}</td><td className="pr-3 tabular-nums">{formatMeasure(row.reading, measure.unit)}</td><td className="whitespace-pre-line">{row.nextStep ?? ""}</td></tr>)}</tbody>
+        </table>
+      )}
+    </section>
   );
 }
 

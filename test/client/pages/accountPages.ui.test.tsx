@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import type { AccountSessionView } from "@shared/auth";
+import { journeyOf } from "@shared/engagement";
 
 const RICHIE_TECH = { businessId: 7, businessName: "Richie Tech", role: "owner", status: "active", profileComplete: false, profilePercent: 60 } as const;
 const SECOND_CO = { businessId: 8, businessName: "Second Co", role: "member", status: "active", profileComplete: false, profilePercent: 20 } as const;
@@ -29,7 +30,7 @@ const STAFF: AccountSessionView = {
 };
 
 const api = vi.hoisted(() => {
-  const state = { switchCalls: [] as unknown[], updateBusinessCalls: [] as unknown[], updateProfileCalls: [] as unknown[], changePasswordCalls: [] as unknown[], businessProfile: undefined as unknown, me: null as unknown, loading: false, preview: undefined as unknown, previewLoading: false, acceptCalls: [] as unknown[], signInCalls: [] as unknown[], signOutCalls: 0, setData: [] as unknown[] };
+  const state = { room: null as unknown, switchCalls: [] as unknown[], updateBusinessCalls: [] as unknown[], updateProfileCalls: [] as unknown[], changePasswordCalls: [] as unknown[], businessProfile: undefined as unknown, me: null as unknown, loading: false, preview: undefined as unknown, previewLoading: false, acceptCalls: [] as unknown[], signInCalls: [] as unknown[], signOutCalls: 0, setData: [] as unknown[] };
   const replies: { switchTo?: unknown; businessError?: string; passwordError?: string; accept?: unknown; signIn?: unknown; acceptError?: string; signInError?: string } = {};
   return { state, replies };
 });
@@ -52,8 +53,8 @@ vi.mock("@/lib/trpc", () => ({
       },
     },
     useUtils: () => ({ account: { me: { setData: (_: unknown, value: unknown) => api.state.setData.push(value), invalidate: () => undefined }, business: { invalidate: () => undefined } } }),
-    // No engagement yet: the dashboard shows the business card only (the room has its own tests).
-    engagement: { client: { room: { useQuery: () => ({ data: null, isLoading: false }) } } },
+    // The room has its own tests; here it is null (no engagement yet) unless a test sets one.
+    engagement: { client: { room: { useQuery: () => ({ data: api.state.room ?? null, isLoading: false }) } } },
     account: {
       me: { useQuery: () => ({ data: api.state.me, isLoading: api.state.loading, refetch: () => undefined }) },
       signIn: {
@@ -133,6 +134,7 @@ function renderAt(path: string, element: React.ReactElement) {
 const fill = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
 beforeEach(() => {
+  api.state.room = null;
   api.state.me = null;
   api.state.loading = false;
   api.state.preview = undefined;
@@ -315,17 +317,38 @@ describe("sign-in screen", () => {
 });
 
 describe("account dashboard", () => {
-  it("welcomes the person and shows their business workspace, the incomplete profile and a way to finish it", () => {
+  it("greets the person, names their business, says the room opens with the assessment, and offers to finish the profile", () => {
     api.state.me = SESSION;
     renderAt("/dashboard", <AccountDashboard />);
-    expect(screen.getByRole("heading", { name: "Welcome, Richie" })).toBeTruthy();
-    expect(screen.getByText("Richie Tech")).toBeTruthy();
-    expect(screen.getByText("Incomplete")).toBeTruthy();
+    expect(screen.getByText("Welcome back, Richie")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Richie Tech" })).toBeTruthy();
+    expect(screen.getByText(/Your room opens here when your Current State Assessment starts/)).toBeTruthy();
     expect(screen.getByText(/60% complete/)).toBeTruthy();
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("60");
-    expect(screen.getByText("richie@example.com")).toBeTruthy();
-    expect(screen.getByText(/Your account is you\. Your business is the workspace/)).toBeTruthy();
     expect(screen.getByRole("link", { name: "Complete profile" }).getAttribute("href")).toBe("/settings/business");
+    // Account details live in the settings pages, not on the room.
+    expect(screen.queryByText("richie@example.com")).toBeNull();
+  });
+
+  it("wears the site's brand: the mark and the product name lead back to the room", () => {
+    api.state.me = SESSION;
+    renderAt("/dashboard", <AccountDashboard />);
+    const home = screen.getByRole("link", { name: "The Shift, by IP Factory" });
+    expect(home.getAttribute("href")).toBe("/dashboard");
+    expect(home.querySelector("img")!.getAttribute("alt")).toBe("IP Factory");
+    expect(home.textContent).toBe("The Shift");
+    expect(screen.getByRole("link", { name: "Your room" }).getAttribute("href")).toBe("/dashboard");
+  });
+
+  it("is the room itself once the engagement exists: no profile card, no account card", () => {
+    api.state.me = SESSION;
+    api.state.room = { engagementId: 4, uploadsEnabled: false, businessName: "Richie Tech", viewer: { kind: "member", access: "full" }, stage: "assessment", stageLabel: "Current State Assessment", journey: journeyOf("assessment"), problemStatement: null, measure: null, team: [], nextSession: null, sessions: [], tasks: [], deliverables: [] };
+    renderAt("/dashboard", <AccountDashboard />);
+    expect(screen.getByText("Welcome back, Richie")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Richie Tech" })).toBeTruthy();
+    expect(screen.getByRole("list", { name: "Your journey" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Complete profile" })).toBeNull();
+    expect(screen.queryByText(/Your room opens here/)).toBeNull();
   });
 
   it("shows no workspace switcher for a person with one business", () => {

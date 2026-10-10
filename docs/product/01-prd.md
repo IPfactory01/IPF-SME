@@ -182,7 +182,9 @@ Rules:
   links the server issues after checking who is asking; switched on by the storage settings in Vercel. **Built 10
   October:** the one number we watch (where it started, this week, where it is going, week by week with the next step),
   shown to the owner and their full-access staff once the team sets it. The owner's **Your team** card
-  invites one person as Full or Contributor, changes their access or removes them.
+  invites one person as Full or Contributor, changes their access or removes them. **Designed 10 October:** the room in the
+  site's dress (design brief §9): the business, the stage, the next call and what to send first at the top, the journey bar,
+  two columns on a desktop; account details moved to the settings pages.
 
 ### F8. Engagement record and check-ins (internal)
 

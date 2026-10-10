@@ -73,9 +73,14 @@ afterEach(() => {
 });
 
 describe("the client's engagement room", () => {
-  it("says where we are, what is next in Lagos time, and who the team is", () => {
-    render(<EngagementRoom room={room()} />);
-    const where = within(screen.getByRole("region", { name: "Current State Assessment" }));
+  it("opens with the business, the greeting, where we are, what is next in Lagos time, who the team is and what to send first", () => {
+    render(<EngagementRoom room={room()} greeting="Welcome back, Ada" />);
+    const where = within(screen.getByRole("region", { name: "Ada Foods" }));
+    expect(where.getByText("Welcome back, Ada")).toBeTruthy();
+    expect(where.getByText("Current State Assessment.")).toBeTruthy();
+    const shortcut = where.getByText("2 things to send").closest("a")!;
+    expect(shortcut.getAttribute("href")).toBe("#what-we-need");
+    expect(shortcut.textContent).toBe("2 things to send · first by Wed 14 Oct");
     expect(where.getByRole("list", { name: "Your journey" }).querySelector('[aria-current="step"]')!.textContent).toContain("Current State Assessment");
     expect(where.getByText("Next: Current State Assessment call 1")).toBeTruthy();
     expect(where.getByText(/Fri 23 Oct, 10:00 am \(Lagos time\), 90 minutes/)).toBeTruthy();
@@ -124,6 +129,30 @@ describe("the client's engagement room", () => {
     expect(screen.getByText("We are naming your team now.")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Nothing outstanding" })).toBeTruthy();
     expect(screen.getByText("Notes from each call reach you the same day. Findings follow the second call.")).toBeTruthy();
+  });
+
+  it("gives the empty state a date once a call is booked, and no shortcut when there is nothing to send", () => {
+    const planned = room().sessions[0];
+    render(<EngagementRoom room={room({ tasks: [], deliverables: [], sessions: [planned] })} />);
+    expect(screen.getByText("Notes from Current State Assessment call 1 reach you the same day, Fri 23 Oct. Findings follow the second call.")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /to send/ })).toBeNull();
+    expect(screen.getByRole("heading", { name: "1 call" })).toBeTruthy();
+  });
+
+  it("lists each call with its date and whether it was held or is booked, soonest first", () => {
+    render(<EngagementRoom room={room()} />);
+    const calls = within(screen.getByRole("region", { name: "2 calls" }));
+    const items = calls.getAllByRole("listitem").map(item => item.textContent);
+    expect(items[0]).toContain("Kick-off");
+    expect(items[0]).toContain("Held");
+    expect(items[1]).toContain("Current State Assessment call 1");
+    expect(items[1]).toContain("Booked");
+    expect(items[1]).toContain("Fri 23 Oct, 10:00 am");
+  });
+
+  it("places what the page passes it, such as the owner's seat card, in the side column", () => {
+    render(<EngagementRoom room={room()} aside={<p>Seat card</p>} />);
+    expect(screen.getByText("Seat card")).toBeTruthy();
   });
 });
 
@@ -184,7 +213,18 @@ describe("the one number we watch", () => {
     expect(card.getAllByText("₦210,000")).toHaveLength(2);
     expect(card.getByText("₦400,000")).toBeTruthy();
     expect(card.getByText("Week 2")).toBeTruthy();
+    expect(card.getByText("Up ₦60,000 since the start.").className).toContain("text-health-clear");
     expect(within(card.getByRole("table", { name: "Week by week" })).getByText("Chase the two late invoices.")).toBeTruthy();
+  });
+
+  it("colours a move the wrong way as a watch, and says when there is no reading yet", () => {
+    const measure = { name: "Debtors over 30 days", definition: null, unit: "₦", baselineValue: 900000, targetValue: 300000, latest: { weekNumber: 1, heldOn: "2026-11-13", reading: 950000, nextStep: null }, readings: [{ weekNumber: 1, heldOn: "2026-11-13", reading: 950000, nextStep: null }] };
+    render(<EngagementRoom room={room({ measure })} />);
+    expect(screen.getByText("Up ₦50,000 since the start.").className).toContain("text-health-watch");
+    cleanup();
+    render(<EngagementRoom room={room({ measure: { ...measure, latest: null, readings: [] } })} />);
+    expect(screen.getByText("The first reading comes with the first weekly check-in.")).toBeTruthy();
+    expect(screen.getByText("Where it starts")).toBeTruthy();
   });
 
   it("shows no number card before the fix has one", () => {

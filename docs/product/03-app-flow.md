@@ -21,7 +21,7 @@ added without being documented here.
 | `/join/:token` | `JoinPage.tsx` | Link in a staff invitation or an owner's seat invitation | Set a password; staff land on `/admin` with their role, the owner's staff on `/dashboard` in that business | `/admin`, `/dashboard` |
 | `/login` | `LoginPage.tsx` | Anyone | Client sign-in with email and password | The landing page (section 6) |
 | `/signup` | Redirect | Anyone | No public sign-up | `/login` |
-| `/dashboard` | `AccountDashboard.tsx` | Signed-in account | Welcome; the engagement room once the Current State Assessment is paid (section 9); business profile completion; a link to the internal area for staff | `/settings/business`, `/admin` |
+| `/dashboard` | `AccountDashboard.tsx` | Signed-in account | The engagement room once the Current State Assessment is paid (section 9): the business name, the stage, the next call, what to send first and the journey across the top; what we need from you and what we have found on the left; the one number, your calls and the owner's seat card on the right. Before that: a welcome, when the room opens, and a prompt to finish the business profile. Staff: a link to the internal area | `/settings/business`, `/admin` |
 | `/settings/business` | `BusinessSettingsPage.tsx` | Signed-in account (owners and business admins can save) | Business name, description, year founded, sector, website | — |
 | `/settings/account` | `AccountSettingsPage.tsx` | Signed-in account | Name and password | — |
 | `/admin/login` | `AdminLoginPage.tsx` | Staff | Staff sign-in with email and password | `/admin` |

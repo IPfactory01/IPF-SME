@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   list: { setUp: true, items: [] as unknown[] } as { setUp: boolean; items: unknown[] },
   detail: null as unknown,
   awaiting: [] as unknown[],
+  storage: { configured: true, missing: [] as string[], bucket: "engagement-files", bucketFound: true as boolean | null, bucketPublic: false as boolean | null, problem: null as string | null },
   calls: {} as Record<string, unknown[]>,
 }));
 const replies: Record<string, unknown> = { start: { engagementId: 4, created: true }, fileLink: { url: "https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf" } };
@@ -25,6 +26,7 @@ vi.mock("@/lib/trpc", () => ({
       staff: {
         list: { useQuery: () => ({ data: api.list, isLoading: false, error: null }) },
         awaitingStart: { useQuery: () => ({ data: api.awaiting }) },
+        storageStatus: { useQuery: () => ({ data: api.storage, refetch: () => undefined }) },
         detail: { useQuery: () => ({ data: api.detail, isLoading: false, error: null }) },
         assignableStaff: { useQuery: () => ({ data: [{ userId: 9, name: "Ola Analyst", email: "ola@example.test", roles: ["analyst"] }] }) },
         ...Object.fromEntries(["start", "fileLink", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
@@ -57,6 +59,7 @@ const detail = (can: { manage: boolean; assign: boolean; review: boolean }, deli
 beforeEach(() => {
   api.list = { setUp: true, items: [row] };
   api.awaiting = [];
+  api.storage = { configured: true, missing: [], bucket: "engagement-files", bucketFound: true, bucketPublic: false, problem: null };
   api.calls = {};
 });
 afterEach(cleanup);
@@ -67,6 +70,36 @@ describe("the team's engagements", () => {
     render(<EngagementsView />);
     const tableRow = screen.getByText("Ada Foods").closest("tr")!;
     for (const text of ["Getting set up", "No one yet", "5 to send", "2 overdue", "2 not booked"]) expect(tableRow.textContent).toContain(text);
+  });
+
+  it("says whether file uploads are on, and if not exactly which setting or bucket is still missing", () => {
+    api.detail = detail({ manage: true, assign: true, review: true });
+    render(<EngagementsView />);
+    expect(screen.getByRole("status", { name: "File uploads" }).textContent).toContain("File uploads: on.");
+    cleanup();
+    api.storage = { ...api.storage, configured: false, missing: ["SUPABASE_URL"], bucketFound: null, bucketPublic: null };
+    render(<EngagementsView />);
+    let line = screen.getByRole("status", { name: "File uploads" }).textContent ?? "";
+    expect(line).toContain("File uploads: off.");
+    expect(line).toContain("SUPABASE_URL: the project URL from Supabase → Project Settings → API");
+    expect(line).not.toContain("SUPABASE_SERVICE_ROLE_KEY");
+    expect(line).toContain("then redeploy");
+    cleanup();
+    api.storage = { ...api.storage, configured: true, missing: [], bucketFound: false, bucketPublic: null };
+    render(<EngagementsView />);
+    line = screen.getByRole("status", { name: "File uploads" }).textContent ?? "";
+    expect(line).toContain("there is no bucket named engagement-files");
+    cleanup();
+    api.storage = { ...api.storage, bucketFound: true, bucketPublic: true };
+    render(<EngagementsView />);
+    line = screen.getByRole("status", { name: "File uploads" }).textContent ?? "";
+    expect(line).toContain("the bucket is public");
+    expect(line).toContain('switch "Public bucket" off');
+    cleanup();
+    api.storage = { ...api.storage, bucketFound: null, bucketPublic: null, problem: "Storage refused the service key. Check SUPABASE_SERVICE_ROLE_KEY is the service_role key, not the anon key." };
+    render(<EngagementsView />);
+    expect(screen.getByRole("status", { name: "File uploads" }).textContent).toContain("not the anon key");
+    expect(screen.getByRole("button", { name: "Check again" })).toBeTruthy();
   });
 
   it("flags a paid assessment with no engagement and starts it from the list", () => {

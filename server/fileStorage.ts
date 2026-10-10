@@ -74,3 +74,41 @@ export async function signedDownloadUrl(key: string, fileName: string, expiresIn
   const full = absolute(data.signedURL ?? data.signedUrl ?? "");
   return `${full}${full.includes("?") ? "&" : "?"}download=${encodeURIComponent(fileName)}`;
 }
+
+export type FileStorageStatus = {
+  /** All three settings are present. */
+  configured: boolean;
+  /** The settings that are still missing, by env name, so the message can say exactly what to add. */
+  missing: ("SUPABASE_URL" | "SUPABASE_SERVICE_ROLE_KEY" | "SUPABASE_STORAGE_BUCKET")[];
+  bucket: string;
+  /** Whether the bucket answered: null when the check could not run (not configured or storage unreachable). */
+  bucketFound: boolean | null;
+  /** A public bucket would let anyone with a link read client files; the room must not use one. */
+  bucketPublic: boolean | null;
+  /** What went wrong, in plain words and never with a key or URL in it. */
+  problem: string | null;
+};
+
+/**
+ * One live check the team can run from the Engagements tab after setting Vercel up: which settings are present, and
+ * whether the bucket exists and is private. Reads only; nothing is created or changed.
+ */
+export async function checkFileStorage(): Promise<FileStorageStatus> {
+  const missing: FileStorageStatus["missing"] = [];
+  if (!ENV.supabaseUrl) missing.push("SUPABASE_URL");
+  if (!ENV.supabaseServiceRoleKey) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+  if (!ENV.supabaseStorageBucket) missing.push("SUPABASE_STORAGE_BUCKET");
+  const status: FileStorageStatus = { configured: missing.length === 0, missing, bucket: ENV.supabaseStorageBucket, bucketFound: null, bucketPublic: null, problem: null };
+  if (!status.configured) return status;
+  if (!fileStorageOrigin()) return { ...status, problem: "SUPABASE_URL is not a web address. It should look like https://<project>.supabase.co" };
+  try {
+    const res = await fetch(`${base()}/bucket/${bucket()}`, { method: "GET", headers: authHeaders(), signal: AbortSignal.timeout(TIMEOUT_MS) });
+    if (res.status === 404 || res.status === 400) return { ...status, bucketFound: false };
+    if (res.status === 401 || res.status === 403) return { ...status, problem: "Storage refused the service key. Check SUPABASE_SERVICE_ROLE_KEY is the service_role key, not the anon key." };
+    if (!res.ok) return { ...status, problem: `Storage answered ${res.status}.` };
+    const data = (await res.json()) as { public?: boolean };
+    return { ...status, bucketFound: true, bucketPublic: Boolean(data.public) };
+  } catch {
+    return { ...status, problem: "Storage did not answer. Check SUPABASE_URL is the project URL from Supabase → Project Settings → API." };
+  }
+}

@@ -2223,6 +2223,25 @@ async function signedDownloadUrl(key, fileName2, expiresInSeconds = 300) {
   const full = absolute(data.signedURL ?? data.signedUrl ?? "");
   return `${full}${full.includes("?") ? "&" : "?"}download=${encodeURIComponent(fileName2)}`;
 }
+async function checkFileStorage() {
+  const missing = [];
+  if (!ENV.supabaseUrl) missing.push("SUPABASE_URL");
+  if (!ENV.supabaseServiceRoleKey) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+  if (!ENV.supabaseStorageBucket) missing.push("SUPABASE_STORAGE_BUCKET");
+  const status = { configured: missing.length === 0, missing, bucket: ENV.supabaseStorageBucket, bucketFound: null, bucketPublic: null, problem: null };
+  if (!status.configured) return status;
+  if (!fileStorageOrigin()) return { ...status, problem: "SUPABASE_URL is not a web address. It should look like https://<project>.supabase.co" };
+  try {
+    const res = await fetch(`${base()}/bucket/${bucket()}`, { method: "GET", headers: authHeaders(), signal: AbortSignal.timeout(TIMEOUT_MS) });
+    if (res.status === 404 || res.status === 400) return { ...status, bucketFound: false };
+    if (res.status === 401 || res.status === 403) return { ...status, problem: "Storage refused the service key. Check SUPABASE_SERVICE_ROLE_KEY is the service_role key, not the anon key." };
+    if (!res.ok) return { ...status, problem: `Storage answered ${res.status}.` };
+    const data = await res.json();
+    return { ...status, bucketFound: true, bucketPublic: Boolean(data.public) };
+  } catch {
+    return { ...status, problem: "Storage did not answer. Check SUPABASE_URL is the project URL from Supabase \u2192 Project Settings \u2192 API." };
+  }
+}
 
 // server/security.ts
 init_env();
@@ -11638,6 +11657,8 @@ var staffRouter = router({
       return [];
     }
   }),
+  /** Whether file uploads are on, and if not exactly which setting or the bucket is missing. Reads only. */
+  storageStatus: staff.query(() => checkFileStorage()),
   start: staff.input(z22.object({ businessCheckId: id })).mutation(async ({ ctx, input }) => guarded(async () => startAwaitingEngagement(await engagementDb(), ctx.actor, input))),
   detail: staff.input(z22.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => getStaffEngagement(await engagementDb(), ctx.actor, input.engagementId))),
   assignableStaff: staff.query(async ({ ctx }) => listAssignableStaff(await engagementDb(), ctx.actor)),

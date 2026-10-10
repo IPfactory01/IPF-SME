@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const env = vi.hoisted(() => ({ supabaseUrl: "", supabaseServiceRoleKey: "", supabaseStorageBucket: "engagement-files" }));
 vi.mock("@server/_core/env", () => ({ ENV: env }));
 
-import { createSignedUpload, fileStorageOrigin, isFileStorageConfigured, objectExists, signedDownloadUrl } from "@server/fileStorage";
+import { checkFileStorage, createSignedUpload, fileStorageOrigin, isFileStorageConfigured, objectExists, signedDownloadUrl } from "@server/fileStorage";
 
 const reply = (ok: boolean, body: unknown = {}, status = ok ? 200 : 404) => ({ ok, status, json: async () => body });
 const configure = () => {
@@ -80,5 +80,45 @@ describe("file storage (private Supabase bucket)", () => {
     vi.stubGlobal("fetch", fetchMock);
     await createSignedUpload("engagements/1/tasks/2/price list#1.pdf", "application/pdf");
     expect(String(fetchMock.mock.calls[0][0])).toContain("/engagement-files/engagements/1/tasks/2/price%20list%231.pdf");
+  });
+});
+
+describe("the storage check the team runs from the Engagements tab", () => {
+  it("names exactly which settings are missing and asks storage nothing until all three are set", async () => {
+    const fetchMock = vi.fn(async () => reply(true));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await checkFileStorage()).toEqual({ configured: false, missing: ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"], bucket: "engagement-files", bucketFound: null, bucketPublic: null, problem: null });
+    env.supabaseServiceRoleKey = "service-key-for-tests";
+    expect((await checkFileStorage()).missing).toEqual(["SUPABASE_URL"]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("reports a private bucket that exists as uploads on, asking storage for the bucket with the service key", async () => {
+    configure();
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => reply(true, { id: "engagement-files", name: "engagement-files", public: false }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await checkFileStorage()).toEqual({ configured: true, missing: [], bucket: "engagement-files", bucketFound: true, bucketPublic: false, problem: null });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://example-project.supabase.co/storage/v1/bucket/engagement-files",
+      expect.objectContaining({ method: "GET", headers: expect.objectContaining({ authorization: "Bearer service-key-for-tests" }) }),
+    );
+  });
+
+  it("tells the bucket, the key and the URL apart when something is wrong, without repeating any of them", async () => {
+    configure();
+    vi.stubGlobal("fetch", vi.fn(async () => reply(false, { message: "Bucket not found" }, 404)));
+    expect(await checkFileStorage()).toMatchObject({ configured: true, bucketFound: false, problem: null });
+    vi.stubGlobal("fetch", vi.fn(async () => reply(true, { public: true })));
+    expect(await checkFileStorage()).toMatchObject({ bucketFound: true, bucketPublic: true });
+    vi.stubGlobal("fetch", vi.fn(async () => reply(false, {}, 401)));
+    expect((await checkFileStorage()).problem).toMatch(/service_role key/);
+    vi.stubGlobal("fetch", vi.fn(async () => reply(false, {}, 500)));
+    expect((await checkFileStorage()).problem).toBe("Storage answered 500.");
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("getaddrinfo ENOTFOUND"); }));
+    const unreachable = await checkFileStorage();
+    expect(unreachable.problem).toMatch(/did not answer/);
+    expect(JSON.stringify(unreachable)).not.toContain("service-key-for-tests");
+    env.supabaseUrl = "example-project.supabase.co";
+    expect((await checkFileStorage()).problem).toMatch(/not a web address/);
   });
 });

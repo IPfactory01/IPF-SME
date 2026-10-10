@@ -48,6 +48,7 @@ import {
   staffRequestUpload,
   startAwaitingEngagement,
 } from "../engagements";
+import { checkFileStorage } from "../fileStorage";
 import { loadAuthority } from "../platformAccess";
 import { accountProcedure, adminProcedure, router } from "../_core/trpc";
 
@@ -103,6 +104,8 @@ const staffRouter = router({
       return [];
     }
   }),
+  /** Whether file uploads are on, and if not exactly which setting or the bucket is missing. Reads only. */
+  storageStatus: staff.query(() => checkFileStorage()),
   start: staff.input(z.object({ businessCheckId: id })).mutation(async ({ ctx, input }) => guarded(async () => startAwaitingEngagement(await engagementDb(), ctx.actor, input))),
   detail: staff.input(z.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => getStaffEngagement(await engagementDb(), ctx.actor, input.engagementId))),
   assignableStaff: staff.query(async ({ ctx }) => listAssignableStaff(await engagementDb(), ctx.actor)),

@@ -158,3 +158,49 @@ export function clientCanSeeTask(task: { side: EngagementTaskSide; assigneeUserI
   if (viewer.kind === "owner" || viewer.access === "full") return true;
   return task.assigneeUserId === viewer.userId;
 }
+
+// ---- Files -----------------------------------------------------------------------------------------------------------
+
+export const UPLOAD_MAX_MB = 25;
+export const UPLOAD_MAX_BYTES = UPLOAD_MAX_MB * 1024 * 1024;
+
+/** What the room accepts: the documents, photos and spreadsheets a data request asks for. Keyed by extension. */
+export const UPLOAD_TYPES: Record<string, readonly string[]> = {
+  pdf: ["application/pdf"],
+  jpg: ["image/jpeg"],
+  jpeg: ["image/jpeg"],
+  png: ["image/png"],
+  webp: ["image/webp"],
+  heic: ["image/heic", "image/heif"],
+  xlsx: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  xls: ["application/vnd.ms-excel"],
+  csv: ["text/csv", "application/vnd.ms-excel", "text/plain"],
+  docx: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+  doc: ["application/msword"],
+  txt: ["text/plain"],
+};
+export const UPLOAD_ACCEPT = Object.keys(UPLOAD_TYPES).map(extension => `.${extension}`).join(",");
+
+const extensionOf = (fileName: string) => fileName.toLowerCase().split(".").pop() ?? "";
+
+/** Allowed when the extension is known and the browser's type agrees (or says nothing, as some phones do). */
+export function isAllowedUploadType(contentType: string, fileName: string) {
+  const types = UPLOAD_TYPES[extensionOf(fileName)];
+  if (!types) return false;
+  return !contentType || contentType === "application/octet-stream" || types.includes(contentType.toLowerCase());
+}
+
+/** A storage-safe name: no path, no odd characters, at most 100 characters, the extension kept. */
+export function safeFileName(fileName: string) {
+  const base = fileName.split(/[\\/]/).pop() ?? "file";
+  const cleaned = base.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "file";
+  if (cleaned.length <= 100) return cleaned;
+  const extension = extensionOf(cleaned);
+  return `${cleaned.slice(0, 100 - extension.length - 1)}.${extension}`;
+}
+
+export function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} bytes`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, "")} MB`;
+}

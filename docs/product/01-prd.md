@@ -159,7 +159,7 @@ What the client sees while the engagement runs, on `/dashboard`. Built around th
 | The owner asks | The room shows | Concept note |
 |---|---|---|
 | **Where are we?** | The journey (getting set up, Current State Assessment week 1 and 2, the fix week 1 to 6, the plan, day 30), the next session and its date, the named team | §7 |
-| **What do you need from me?** | Data requests with due dates, an upload against each, and a status (requested, received, accepted) | §7 onboarding: data request list |
+| **What do you need from me?** | Data requests with due dates, an upload against each (PDF, photos, spreadsheets, Word; up to 25 MB), and a status (to do, sent, received, needs more) | §7 onboarding: data request list |
 | **What did we agree?** | Each session with its notes, decisions and actions (who does what by when); in the fix, the measure with its baseline, target and weekly reading | §7: notes reach the owner the same day; §17 check-in rows |
 | **What have I got?** | Deliverables: the problem statement, Current State Assessment findings, the prescription and tools, the plan, the full report, invoices and receipts | §8, §17 |
 
@@ -177,8 +177,10 @@ Rules:
 - AI-drafted notes and summaries are system output and are reviewed by a person before sharing.
 - **Status: Built (9 October), live once migration 0008 is applied:** where we are (journey, next call, team), what we
   need from you (data requests from the template, "I have sent this"), what we have found (shared notes and
-  deliverables, comments, the owner's sign-off, the owner's share-with-my-team choice). **Not built yet:** uploads
-  against a data request (needs file storage), the fix's measure and weekly reading. The owner's **Your team** card
+  deliverables, comments, the owner's sign-off, the owner's share-with-my-team choice). **Built 10 October:** uploads against a
+  data request and files on deliverables, straight from the browser to a private bucket, opened only through short-lived
+  links the server issues after checking who is asking; switched on by the storage settings in Vercel. **Not built
+  yet:** the fix's measure and weekly reading. The owner's **Your team** card
   invites one person as Full or Contributor, changes their access or removes them.
 
 ### F8. Engagement record and check-ins (internal)

@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import { BRAND } from "../shared/brand";
+import { fileStorageOrigin } from "./fileStorage";
 import { ENV } from "./_core/env";
 
 
@@ -68,9 +69,12 @@ export function applySecurityHeaders(req: Request, res: Response, next: NextFunc
 
   if (process.env.NODE_ENV === "production") {
     const analyticsSource = analyticsCspSource();
+    // The engagement room uploads straight to the private storage bucket, so the browser must be allowed to reach it.
+    const storageOrigin = fileStorageOrigin();
+    const storageSource = storageOrigin ? ` ${storageOrigin}` : "";
     res.setHeader(
       "Content-Security-Policy",
-      `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' https://*.manus.com https://*.manus.space https://www.instagram.com${analyticsSource}; connect-src 'self' https://api.manus.im https://*.manus.com https://*.manus.space https://www.instagram.com${analyticsSource}; frame-src https://accounts.google.com https://www.instagram.com https://calendly.com;`,
+      `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' https://*.manus.com https://*.manus.space https://www.instagram.com${analyticsSource}; connect-src 'self' https://api.manus.im https://*.manus.com https://*.manus.space https://www.instagram.com${analyticsSource}${storageSource}; frame-src https://accounts.google.com https://www.instagram.com https://calendly.com;`,
     );
   }
 

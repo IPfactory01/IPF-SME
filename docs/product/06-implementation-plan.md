@@ -41,6 +41,7 @@ window; the problem questions at the end of the check.
 | 0.4 | Name the finance person and grant roles to the analysts on the platform | Lewis | Phase 1 assignments |
 | 0.5 | Open IP Factory's Paystack business account; put the test keys, then the live keys, in Vercel (`PAYSTACK_PUBLIC_KEY`, `PAYSTACK_SECRET_KEY`) | ET, Lewis | Online payment (section 4) |
 | 0.6 | **Apply migration 0008** (`drizzle/supabase/apply-0008-engagement-room.sql` in the Supabase SQL Editor, or `pnpm db:migrate`) before the first Current State Assessment payment is confirmed | Lewis | The engagement room |
+| 0.7 | Create the private storage bucket `engagement-files` in Supabase → Storage; set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Vercel; upload one test file from a client account | Lewis | File uploads in the room |
 
 ## 3. Quick fixes found while writing these documents (this week, small)
 
@@ -79,7 +80,7 @@ see where it stands.
 | # | Build | Acceptance | Notes |
 |---|---|---|---|
 | 1.0 | ✅ **Built 9 October.** **Staff invitations** on the email-and-password sign-in: the Super Admin invites by email with a platform role; the person sets a password from a single-use link | A new analyst can be added and assigned without Google sign-in | Found 9 October: roles can only be granted to existing accounts |
-| 1.1 | **File storage** on a private Supabase Storage bucket, with short-lived signed links issued by the server after an access check | A file uploaded for client A cannot be read by client B or an unassigned analyst; links expire | Replaces the Manus storage proxy (old R3). New env names only in `.env.example` |
+| 1.1 | ✅ **Built 10 October**, live once `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and the private bucket exist (`docs/vercel-env-inventory.md`). **File storage** on a private Supabase Storage bucket, with short-lived signed links issued by the server after an access check | A file uploaded for client A cannot be read by client B or an unassigned analyst; links expire | Replaces the Manus storage proxy (old R3). New env names only in `.env.example` |
 | 1.2 | ✅ **Built 9 October.** **Engagement table**: created when the Current State Assessment payment is confirmed; linked to the business when the client creates their account | Confirming payment creates exactly one engagement; accepting the invitation links it | **Migration**: dedicated branch per `AGENTS.md` |
 | 1.3 | ✅ **Built 9 October.** **Engagement assignments** (engagement × person × role: lead, analyst, partner, expert) and the scope check | Analysts see only assigned engagements; `view_all_businesses` sees all | Permissions `manage_engagements`, `assign_engagements`, `review_engagements` already exist in `shared/platformPermissions.ts` |
 | 1.4 | ✅ **Built 9 October** (the Engagements section). **Internal engagement page**: stage, team, and the getting-set-up checklist (welcome note sent, data request sent, WhatsApp group created, analyst assigned, both Current State Assessment calls booked) | The desk lead can run onboarding from one screen in three working days | Concept note §7 onboarding |
@@ -101,7 +102,7 @@ Built with O1, O2 and O3 as recommended (PRD §10), and the owner's seat invitat
 | # | Build | Acceptance |
 |---|---|---|
 | 3.1 | ✅ **Built 9 October**; list, agendas and findings outline drawn from IP Factory's assessment proposals on 10 October. **Data request list** from a template (the concept note's onboarding list), per engagement, with due dates | The desk lead sends a list in one step |
-| 3.2 | Partly built: the client marks what they sent and the team accepts or asks for more; the upload waits for 1.1. **Client upload** against each request; status requested → received → accepted (or "needs more") | The analyst sees what is missing at a glance; the client sees what is still owed |
+| 3.2 | ✅ **Built 10 October.** The client uploads against a request (or says they sent it another way); the team accepts or asks for more. **Client upload** against each request; status requested → received → accepted (or "needs more") | The analyst sees what is missing at a glance; the client sees what is still owed |
 
 ## 8. Phase 4: the fix, check-ins and the record (needed by 6 November)
 

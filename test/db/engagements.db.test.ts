@@ -4,7 +4,7 @@
  * every read and change is checked on the server: the team by permission and assignment, the client by membership
  * and by what was shared with them. Email and the language model are stubbed.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import * as schema from "../../drizzle/schema";
 import { createPgliteHarness, createRemoteHarness, type DbHarness } from "./harness";
@@ -35,6 +35,7 @@ import { createContext } from "@server/_core/context";
 import { resetBusinessCheckRateLimitsForTests } from "@server/routers/businessCheck";
 import { hashAdminPassword, OWNER_ADMIN_EMAIL } from "@server/adminSecurity";
 import { addWorkingDays } from "@server/engagements";
+import { ENV } from "@server/_core/env";
 import { ACCOUNT_SESSION_COOKIE, type PlatformRole } from "@shared/auth";
 import { cleanAnswers } from "@shared/businessCheck/engine";
 import { ASSESSMENT_TEMPLATE } from "@shared/engagement";
@@ -335,6 +336,102 @@ for (const target of targets) {
         await (await owner.call()).engagement.client.setAudience({ item: "notes", id: sessionId, audience: "business" });
         expect((await (await full.browser.call()).engagement.client.room())!.sessions[0].notes).toBe("Frank notes for the owner.");
         expect((await (await contributor.browser.call()).engagement.client.room())!.sessions[0].notes).toBeNull();
+      });
+    });
+
+    describe("files (a private bucket, reached only through the server)", () => {
+      const saved = { url: ENV.supabaseUrl, key: ENV.supabaseServiceRoleKey, bucket: ENV.supabaseStorageBucket };
+      /** Stands in for Supabase Storage: a signed upload "arrives" the object, info and sign answer for what arrived. */
+      const storage = () => {
+        const objects = new Set<string>();
+        const fetchMock = vi.fn(async (url: string, init?: { method?: string }) => {
+          const path = new URL(url).pathname;
+          const key = decodeURIComponent(path.split("/engagement-files/")[1] ?? "");
+          const has = objects.has(key);
+          if (path.includes("/object/upload/sign/")) { objects.add(key); return { ok: true, status: 200, json: async () => ({ url: `/object/upload/sign/engagement-files/${key}?token=up` }) }; }
+          if (path.includes("/object/info/") || path.includes("/object/authenticated/")) return { ok: has, status: has ? 200 : 404, json: async () => ({}) };
+          if (path.includes("/object/sign/") && (init?.method ?? "GET") === "POST") return { ok: true, status: 200, json: async () => ({ signedURL: `/object/sign/engagement-files/${key}?token=down` }) };
+          return { ok: false, status: 404, json: async () => ({}) };
+        });
+        vi.stubGlobal("fetch", fetchMock);
+        return { fetchMock, objects };
+      };
+      const configure = () => { ENV.supabaseUrl = "https://example-project.supabase.co"; ENV.supabaseServiceRoleKey = "service-key-for-tests"; ENV.supabaseStorageBucket = "engagement-files"; };
+      afterEach(() => { ENV.supabaseUrl = saved.url; ENV.supabaseServiceRoleKey = saved.key; ENV.supabaseStorageBucket = saved.bucket; vi.unstubAllGlobals(); });
+      const pdf = (fileName: string) => ({ fileName, contentType: "application/pdf", sizeBytes: 120_000 });
+
+      it("says uploads are off, and what to do instead, until the bucket is set up", async () => {
+        const { owner } = await client("no-storage");
+        const room = (await (await owner.call()).engagement.client.room())!;
+        expect(room.uploadsEnabled).toBe(false);
+        await expect((await owner.call()).engagement.client.requestUpload({ taskId: room.tasks[0].id, ...pdf("sales.pdf") })).rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: expect.stringContaining("WhatsApp") });
+      });
+
+      it("lets the owner upload against a request: the file is recorded, the request is received, and only they and the team can open it", async () => {
+        configure();
+        storage();
+        const a = await client("files-a");
+        const b = await client("files-b");
+        const room = (await (await a.owner.call()).engagement.client.room())!;
+        expect(room.uploadsEnabled).toBe(true);
+        const task = room.tasks[1];
+        const ticket = await (await a.owner.call()).engagement.client.requestUpload({ taskId: task.id, ...pdf("sales.pdf") });
+        expect(ticket.storageKey).toMatch(new RegExp(`^engagements/${a.engagementId}/tasks/${task.id}/[0-9a-f-]+-sales\\.pdf$`));
+        expect(ticket.uploadUrl).toContain("https://example-project.supabase.co/storage/v1/object/upload/sign/engagement-files/");
+        expect(ticket.headers).toEqual({ "content-type": "application/pdf", "x-upsert": "false" });
+
+        // A key that belongs to another engagement or task is refused, however it was obtained.
+        await expect((await a.owner.call()).engagement.client.confirmUpload({ taskId: task.id, storageKey: `engagements/${b.engagementId}/tasks/1/x-sales.pdf`, note: null, ...pdf("sales.pdf") })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        const confirmed = await (await a.owner.call()).engagement.client.confirmUpload({ taskId: task.id, storageKey: ticket.storageKey, note: null, ...pdf("sales.pdf") });
+        expect(confirmed).toMatchObject({ status: "received" });
+
+        const after = (await (await a.owner.call()).engagement.client.room())!;
+        const updated = after.tasks.find(item => item.id === task.id)!;
+        expect(updated).toMatchObject({ status: "received", statusNote: "Uploaded to the room" });
+        expect(updated.files).toEqual([expect.objectContaining({ fileName: "sales.pdf", sizeBytes: 120_000, mine: true, fromTeam: false })]);
+        const link = await (await a.owner.call()).engagement.client.fileLink({ fileId: updated.files[0].id });
+        expect(link.url).toBe(`https://example-project.supabase.co/storage/v1/object/sign/engagement-files/${ticket.storageKey}?token=down&download=sales.pdf`);
+
+        await expect((await b.owner.call()).engagement.client.fileLink({ fileId: updated.files[0].id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        const analystUser = await person(["analyst"]);
+        const analyst = await signIn(analystUser, true);
+        await expect((await analyst.call()).engagement.staff.fileLink({ fileId: updated.files[0].id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await (await superAdmin.call()).engagement.staff.assign({ engagementId: a.engagementId, userId: analystUser.id, role: "analyst" });
+        expect((await (await analyst.call()).engagement.staff.fileLink({ fileId: updated.files[0].id })).url).toContain("download=sales.pdf");
+        const detail = await (await analyst.call()).engagement.staff.detail({ engagementId: a.engagementId });
+        expect(detail.uploadsEnabled).toBe(true);
+        expect(detail.tasks.find(item => item.id === task.id)!.files[0]).toMatchObject({ fileName: "sales.pdf", audience: "owner" });
+      });
+
+      it("refuses the wrong kind of file, a file that is too big, and an upload that never arrived", async () => {
+        configure();
+        const { objects } = storage();
+        const { owner } = await client("files-rules");
+        const taskId = (await (await owner.call()).engagement.client.room())!.tasks[2].id;
+        await expect((await owner.call()).engagement.client.requestUpload({ taskId, fileName: "virus.exe", contentType: "application/octet-stream", sizeBytes: 10 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await expect((await owner.call()).engagement.client.requestUpload({ taskId, fileName: "big.pdf", contentType: "application/pdf", sizeBytes: 26 * 1024 * 1024 })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        const ticket = await (await owner.call()).engagement.client.requestUpload({ taskId, ...pdf("costs.pdf") });
+        objects.delete(ticket.storageKey);
+        await expect((await owner.call()).engagement.client.confirmUpload({ taskId, storageKey: ticket.storageKey, note: null, ...pdf("costs.pdf") })).rejects.toMatchObject({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
+        expect((await (await owner.call()).engagement.client.room())!.tasks.find(item => item.id === taskId)!.status).toBe("open");
+      });
+
+      it("shows the team's file on a deliverable only once the deliverable is shared, and to the audience chosen", async () => {
+        configure();
+        storage();
+        const { owner, engagementId, businessId } = await client("files-deliverable");
+        const full = await member(businessId, "full");
+        const contributor = await member(businessId, "contributor");
+        const { deliverableId } = await (await superAdmin.call()).engagement.staff.saveDeliverable({ engagementId, kind: "tools", title: "Cash template", summary: "Fill it in every evening." });
+        const target = { kind: "deliverable" as const, id: deliverableId };
+        const ticket = await (await superAdmin.call()).engagement.staff.requestUpload({ engagementId, target, fileName: "cash-template.xlsx", contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", sizeBytes: 9_000 });
+        const { fileId } = await (await superAdmin.call()).engagement.staff.confirmUpload({ engagementId, target, storageKey: ticket.storageKey, audience: "business", fileName: "cash-template.xlsx", contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", sizeBytes: 9_000 });
+
+        await expect((await owner.call()).engagement.client.fileLink({ fileId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await (await superAdmin.call()).engagement.staff.shareDeliverable({ deliverableId, audience: "business" });
+        expect((await (await owner.call()).engagement.client.room())!.deliverables[0].files).toEqual([expect.objectContaining({ fileName: "cash-template.xlsx", fromTeam: true, mine: false })]);
+        expect((await (await full.browser.call()).engagement.client.fileLink({ fileId })).url).toContain("download=cash-template.xlsx");
+        await expect((await contributor.browser.call()).engagement.client.fileLink({ fileId })).rejects.toMatchObject({ code: "NOT_FOUND" });
       });
     });
 

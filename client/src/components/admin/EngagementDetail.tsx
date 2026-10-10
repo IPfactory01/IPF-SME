@@ -16,6 +16,9 @@ import {
   ENGAGEMENT_TEAM_ROLE_LABELS,
   ENGAGEMENT_TEAM_ROLES,
   FINDINGS_OUTLINE,
+  formatFileSize,
+  UPLOAD_ACCEPT,
+  type EngagementAudience,
   type EngagementDeliverableKind,
   type EngagementSessionKind,
   type EngagementSessionStatus,
@@ -36,6 +39,8 @@ type Detail = inferRouterOutputs<AppRouter>["engagement"]["staff"]["detail"];
 type Session = Detail["sessions"][number];
 type Task = Detail["tasks"][number];
 type Deliverable = Detail["deliverables"][number];
+type StaffFile = Task["files"][number];
+type UploadTarget = { kind: "task" | "deliverable"; id: number };
 
 const FIELD = "w-full border border-line bg-white px-2 py-1.5 text-sm text-ink";
 const LABEL = "block text-[11px] font-semibold uppercase tracking-wider text-ink-muted";
@@ -77,6 +82,59 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
       <Tasks data={data} engagementId={engagementId} />
       <Deliverables data={data} engagementId={engagementId} />
     </>
+  );
+}
+
+/** Files on a request or deliverable: open any; attach one (owner-only or the owner and their team) when storage is set up. */
+function StaffFiles({ files, engagementId, target, canUpload }: { files: StaffFile[]; engagementId: number; target: UploadTarget; canUpload: boolean }) {
+  const refresh = useRefresh(engagementId);
+  const link = trpc.engagement.staff.fileLink.useMutation({ onError: error => toast.error(error.message) });
+  const request = trpc.engagement.staff.requestUpload.useMutation();
+  const confirm = trpc.engagement.staff.confirmUpload.useMutation();
+  const [audience, setAudience] = useState<Exclude<EngagementAudience, "team">>("owner");
+  const [busy, setBusy] = useState(false);
+  const send = async (file: File) => {
+    setBusy(true);
+    try {
+      const meta = { fileName: file.name, contentType: file.type, sizeBytes: file.size };
+      const ticket = await request.mutateAsync({ engagementId, target, ...meta });
+      const put = await fetch(ticket.uploadUrl, { method: "PUT", headers: ticket.headers, body: file });
+      if (!put.ok) throw new Error("The upload did not finish. Try again.");
+      await confirm.mutateAsync({ engagementId, target, storageKey: ticket.storageKey, audience, ...meta });
+      refresh.onSuccess();
+      toast.success("File attached.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The upload did not finish.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="space-y-1 border-t border-line-soft pt-2">
+      {files.length > 0 && (
+        <ul aria-label="Files" className="space-y-1 text-sm">
+          {files.map(file => (
+            <li key={file.id} className="flex flex-wrap items-center gap-2">
+              <span>{file.fileName}</span>
+              <span className="text-xs text-ink-muted">{formatFileSize(file.sizeBytes)} · {file.uploadedByName || "unknown"} · {ENGAGEMENT_AUDIENCE_LABELS[file.audience].toLowerCase()}</span>
+              <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>Open</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {canUpload && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label className={`inline-flex cursor-pointer items-center border border-line bg-white px-2 py-1 text-xs font-medium ${busy ? "opacity-60" : ""}`}>
+            {busy ? "Uploading…" : "Attach a file"}
+            <input type="file" className="sr-only" accept={UPLOAD_ACCEPT} disabled={busy} aria-label={`Attach a file to ${target.kind} ${target.id}`} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void send(file); }} />
+          </label>
+          <select aria-label="Who sees the file" className={`${FIELD} w-auto`} value={audience} onChange={event => setAudience(event.target.value as typeof audience)}>
+            <option value="owner">{ENGAGEMENT_AUDIENCE_LABELS.owner}</option>
+            <option value="business">{ENGAGEMENT_AUDIENCE_LABELS.business}</option>
+          </select>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -259,6 +317,7 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
       </div>
       <label className={LABEL} htmlFor={`task-note-${id}`}>Note (the client sees it)</label>
       <input id={`task-note-${id}`} className={FIELD} disabled={!canManage} placeholder={status === "needs_more" ? "Say what else you need" : ""} value={note} onChange={event => setNote(event.target.value)} />
+      {task && <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && canManage} />}
       {canManage && (
         <div className="flex gap-2">
           <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !title.trim()} onClick={() => save.mutate({
@@ -321,6 +380,7 @@ function DeliverableCard({ item, data, engagementId, onDone }: { item?: Delivera
           </>
         )}
       </div>
+      {item && <StaffFiles files={item.files} engagementId={engagementId} target={{ kind: "deliverable", id: item.id }} canUpload={data.uploadsEnabled && data.can.manage} />}
       {item && needsApproval && !approved && <p className="text-xs text-ink-muted">The desk lead approves this before it can be shared.</p>}
       {item && (
         <div className="space-y-1 border-t border-line-soft pt-2">

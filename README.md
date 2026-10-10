@@ -15,7 +15,8 @@ Live at https://ipf-sme.vercel.app (Vercel, deploying `main`).
 - **Admin console:** leads, pipeline, payments, reports, onboarding, staff roles and permissions, audit trail.
 - **Engagement room:** starts when the Current State Assessment is paid; the team's Engagements section and the client's room
   on `/dashboard` (where we are, what we need from you, what we have found). Needs migration 0008.
-- **Next:** file uploads, staff and seat invitations, and the fix's measure and weekly check-in screens.
+- **Files:** uploads against data requests and on deliverables, in a private Supabase bucket (needs the storage settings).
+- **Next:** the fix's measure and weekly check-in screens; Paystack once the key is in Vercel.
 
 **Product documents:** [`docs/product/`](docs/product/README.md) holds the PRD, technical requirements, app flow, design
 brief, backend schema and implementation plan. Start there.

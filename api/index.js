@@ -148,6 +148,10 @@ var init_env = __esm({
       paymentBankName: process.env.PAYMENT_BANK_NAME?.trim() ?? "",
       paymentAccountName: process.env.PAYMENT_ACCOUNT_NAME?.trim() ?? "",
       paymentAccountNumber: process.env.PAYMENT_ACCOUNT_NUMBER?.trim() ?? "",
+      /** Private file storage for the engagement room (Supabase Storage, server/fileStorage.ts). Uploads switch on once set. */
+      supabaseUrl: process.env.SUPABASE_URL?.trim() ?? "",
+      supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "",
+      supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET?.trim() || "engagement-files",
       paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
       paystackSecretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
       /** Canonical public origin (scheme + host) used for emailed links and CSRF checks in production. */
@@ -408,6 +412,36 @@ function clientCanSeeTask(task, viewer) {
   if (task.side !== "client") return viewer.kind === "owner" || viewer.access === "full";
   if (viewer.kind === "owner" || viewer.access === "full") return true;
   return task.assigneeUserId === viewer.userId;
+}
+var UPLOAD_MAX_MB = 25;
+var UPLOAD_MAX_BYTES = UPLOAD_MAX_MB * 1024 * 1024;
+var UPLOAD_TYPES = {
+  pdf: ["application/pdf"],
+  jpg: ["image/jpeg"],
+  jpeg: ["image/jpeg"],
+  png: ["image/png"],
+  webp: ["image/webp"],
+  heic: ["image/heic", "image/heif"],
+  xlsx: ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+  xls: ["application/vnd.ms-excel"],
+  csv: ["text/csv", "application/vnd.ms-excel", "text/plain"],
+  docx: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+  doc: ["application/msword"],
+  txt: ["text/plain"]
+};
+var UPLOAD_ACCEPT = Object.keys(UPLOAD_TYPES).map((extension) => `.${extension}`).join(",");
+var extensionOf = (fileName2) => fileName2.toLowerCase().split(".").pop() ?? "";
+function isAllowedUploadType(contentType, fileName2) {
+  const types = UPLOAD_TYPES[extensionOf(fileName2)];
+  if (!types) return false;
+  return !contentType || contentType === "application/octet-stream" || types.includes(contentType.toLowerCase());
+}
+function safeFileName(fileName2) {
+  const base2 = fileName2.split(/[\\/]/).pop() ?? "file";
+  const cleaned = base2.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "file";
+  if (cleaned.length <= 100) return cleaned;
+  const extension = extensionOf(cleaned);
+  return `${cleaned.slice(0, 100 - extension.length - 1)}.${extension}`;
 }
 
 // drizzle/schema.ts
@@ -2132,6 +2166,64 @@ import { TRPCError } from "@trpc/server";
 
 // server/security.ts
 init_brand();
+
+// server/fileStorage.ts
+init_env();
+var TIMEOUT_MS = 1e4;
+function isFileStorageConfigured() {
+  return Boolean(ENV.supabaseUrl && ENV.supabaseServiceRoleKey && ENV.supabaseStorageBucket);
+}
+function fileStorageOrigin() {
+  try {
+    return ENV.supabaseUrl ? new URL(ENV.supabaseUrl).origin : "";
+  } catch {
+    return "";
+  }
+}
+var base = () => `${ENV.supabaseUrl.replace(/\/+$/, "")}/storage/v1`;
+var bucket = () => encodeURIComponent(ENV.supabaseStorageBucket);
+var encodeKey = (key) => key.split("/").map(encodeURIComponent).join("/");
+var authHeaders = () => ({ authorization: `Bearer ${ENV.supabaseServiceRoleKey}`, apikey: ENV.supabaseServiceRoleKey });
+var absolute = (path) => path.startsWith("http") ? path : `${base()}${path.startsWith("/") ? "" : "/"}${path}`;
+function requireConfigured() {
+  if (!isFileStorageConfigured()) throw new Error("File storage is not configured: set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and SUPABASE_STORAGE_BUCKET.");
+}
+async function createSignedUpload(key, contentType) {
+  requireConfigured();
+  const target = `${base()}/object/upload/sign/${bucket()}/${encodeKey(key)}`;
+  const res = await fetch(target, { method: "POST", headers: { ...authHeaders(), "content-type": "application/json" }, body: "{}", signal: AbortSignal.timeout(TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`Storage refused the upload (${res.status}).`);
+  const data = await res.json();
+  const url = data.url ? absolute(data.url) : `${target}?token=${encodeURIComponent(data.token ?? "")}`;
+  return { url, headers: { "content-type": contentType, "x-upsert": "false" } };
+}
+async function objectExists(key) {
+  requireConfigured();
+  const attempts = [
+    ["GET", `${base()}/object/info/${bucket()}/${encodeKey(key)}`],
+    ["HEAD", `${base()}/object/authenticated/${bucket()}/${encodeKey(key)}`]
+  ];
+  for (const [method, url] of attempts) {
+    const res = await fetch(url, { method, headers: authHeaders(), signal: AbortSignal.timeout(TIMEOUT_MS) }).catch(() => null);
+    if (res?.ok) return true;
+  }
+  return false;
+}
+async function signedDownloadUrl(key, fileName2, expiresInSeconds = 300) {
+  requireConfigured();
+  const res = await fetch(`${base()}/object/sign/${bucket()}/${encodeKey(key)}`, {
+    method: "POST",
+    headers: { ...authHeaders(), "content-type": "application/json" },
+    body: JSON.stringify({ expiresIn: expiresInSeconds }),
+    signal: AbortSignal.timeout(TIMEOUT_MS)
+  });
+  if (!res.ok) throw new Error(`Storage refused the link (${res.status}).`);
+  const data = await res.json();
+  const full = absolute(data.signedURL ?? data.signedUrl ?? "");
+  return `${full}${full.includes("?") ? "&" : "?"}download=${encodeURIComponent(fileName2)}`;
+}
+
+// server/security.ts
 init_env();
 var LOCAL_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i;
 function getTrustedApplicationOrigin(nodeEnv = process.env.NODE_ENV) {
@@ -2183,9 +2275,11 @@ function applySecurityHeaders(req, res, next) {
   res.setHeader("Cross-Origin-Resource-Policy", "same-origin");
   if (process.env.NODE_ENV === "production") {
     const analyticsSource = analyticsCspSource();
+    const storageOrigin = fileStorageOrigin();
+    const storageSource = storageOrigin ? ` ${storageOrigin}` : "";
     res.setHeader(
       "Content-Security-Policy",
-      `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' https://*.manus.com https://*.manus.space https://www.instagram.com${analyticsSource}; connect-src 'self' https://api.manus.im https://*.manus.com https://*.manus.space https://www.instagram.com${analyticsSource}; frame-src https://accounts.google.com https://www.instagram.com https://calendly.com;`
+      `default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data: blob: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; script-src 'self' https://*.manus.com https://*.manus.space https://www.instagram.com${analyticsSource}; connect-src 'self' https://api.manus.im https://*.manus.com https://*.manus.space https://www.instagram.com${analyticsSource}${storageSource}; frame-src https://accounts.google.com https://www.instagram.com https://calendly.com;`
     );
   }
   if (req.path.startsWith("/api/") || req.path.startsWith("/portal/") || req.path.startsWith("/admin/")) {
@@ -3058,8 +3152,8 @@ function burnPasswordCheck(password) {
   verifyAdminPasswordHash(password, dummyPasswordHash);
 }
 function slugify(name) {
-  const base = name.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
-  return `${base || "business"}-${randomBytes3(3).toString("hex")}`;
+  const base2 = name.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+  return `${base2 || "business"}-${randomBytes3(3).toString("hex")}`;
 }
 async function createSession(tx, userId, activeBusinessId = null) {
   const token2 = randomBytes3(32).toString("base64url");
@@ -8306,6 +8400,7 @@ init_env();
 // server/engagements.ts
 import { TRPCError as TRPCError12 } from "@trpc/server";
 import { and as and11, asc, desc as desc8, eq as eq14, inArray as inArray4, isNull as isNull5 } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 init_brand();
 var NOT_FOUND = "This engagement is not available.";
 var notFound = () => new TRPCError12({ code: "NOT_FOUND", message: NOT_FOUND });
@@ -8465,15 +8560,18 @@ async function getStaffEngagement(db, actor, engagementId) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
   const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq14(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq14(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
-  const [team, sessions, tasks, deliverables, comments, clientPeople] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, clientPeople, files] = await Promise.all([
     db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email }).from(engagementTeam).innerJoin(users, eq14(engagementTeam.userId, users.id)).where(eq14(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq14(engagementSessions.engagementId, engagementId)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq14(engagementTasks.engagementId, engagementId)).orderBy(asc(engagementTasks.id)),
     db.select().from(engagementDeliverables).where(eq14(engagementDeliverables.engagementId, engagementId)).orderBy(asc(engagementDeliverables.id)),
     db.select({ id: engagementComments.id, deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq14(engagementComments.authorUserId, users.id)).where(eq14(engagementComments.engagementId, engagementId)).orderBy(asc(engagementComments.id)),
-    engagement.businessId ? clientPeopleOf(db, engagement.businessId) : Promise.resolve([])
+    engagement.businessId ? clientPeopleOf(db, engagement.businessId) : Promise.resolve([]),
+    filesOf(db, engagementId)
   ]);
+  const filesFor = (where, id3) => files.filter((file) => file[where] === id3).map((file) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt }));
   return {
+    uploadsEnabled: isFileStorageConfigured(),
     engagement: { ...engagement, stageLabel: ENGAGEMENT_STAGE_LABELS[engagement.stage] },
     owner: check ? { name: check.fullName, email: check.email, whatsapp: check.whatsapp } : null,
     businessName: business?.name ?? check?.businessName ?? check?.fullName ?? "",
@@ -8481,8 +8579,8 @@ async function getStaffEngagement(db, actor, engagementId) {
     team: team.map((member) => ({ ...member, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
     clientPeople,
     sessions,
-    tasks: tasks.map((task) => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status] })),
-    deliverables: deliverables.map((item) => ({ ...item, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item.kind), comments: comments.filter((comment) => comment.deliverableId === item.id) })),
+    tasks: tasks.map((task) => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id) })),
+    deliverables: deliverables.map((item) => ({ ...item, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item.kind), comments: comments.filter((comment) => comment.deliverableId === item.id), files: filesFor("deliverableId", item.id) })),
     can: {
       manage: authorityAllows(actor.authority, "manage_engagements"),
       assign: authorityAllows(actor.authority, "assign_engagements"),
@@ -8691,20 +8789,23 @@ async function getClientRoom(db, session) {
   const engagement = (await db.select().from(engagements).where(eq14(engagements.businessId, business.businessId)).orderBy(desc8(engagements.id)).limit(1))[0];
   if (!engagement) return null;
   const viewer = await clientViewerFor(db, session, business.businessId);
-  const [team, sessions, tasks, deliverables, comments] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, files] = await Promise.all([
     db.select({ name: users.name, role: engagementTeam.role }).from(engagementTeam).innerJoin(users, eq14(engagementTeam.userId, users.id)).where(eq14(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq14(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq14(engagementTasks.engagementId, engagement.id)).orderBy(asc(engagementTasks.id)),
     db.select().from(engagementDeliverables).where(and11(eq14(engagementDeliverables.engagementId, engagement.id), eq14(engagementDeliverables.status, "shared"))).orderBy(asc(engagementDeliverables.id)),
-    db.select({ deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq14(engagementComments.authorUserId, users.id)).where(eq14(engagementComments.engagementId, engagement.id)).orderBy(asc(engagementComments.id))
+    db.select({ deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq14(engagementComments.authorUserId, users.id)).where(eq14(engagementComments.engagementId, engagement.id)).orderBy(asc(engagementComments.id)),
+    filesOf(db, engagement.id)
   ]);
   const visibleDeliverables = deliverables.filter((item) => clientCanSee(item.audience, viewer));
+  const clientFiles = (where, id3) => files.filter((file) => file[where] === id3 && clientFileVisible(file, viewer, session.user.id)).map((file) => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === session.user.id, fromTeam: file.fromTeam }));
   const now = Date.now();
   const scheduled = sessions.filter((item) => item.status !== "cancelled");
   const next = scheduled.filter((item) => item.status === "planned" && item.scheduledFor && item.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime())[0];
   const notesVisible = (item) => Boolean(item.notesSharedAt && item.clientNotes && clientCanSee(item.notesAudience, viewer));
   return {
     engagementId: engagement.id,
+    uploadsEnabled: isFileStorageConfigured(),
     businessName: business.businessName,
     viewer: viewer.kind === "owner" ? { kind: "owner" } : { kind: "member", access: viewer.access },
     stage: engagement.stage,
@@ -8735,7 +8836,8 @@ async function getClientRoom(db, session) {
       status: task.status,
       statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status],
       statusNote: task.statusNote,
-      mine: task.assigneeUserId === session.user.id
+      mine: task.assigneeUserId === session.user.id,
+      files: clientFiles("taskId", task.id)
     })),
     deliverables: visibleDeliverables.map((item) => ({
       id: item.id,
@@ -8747,6 +8849,7 @@ async function getClientRoom(db, session) {
       audience: item.audience,
       audienceLabel: ENGAGEMENT_AUDIENCE_LABELS[item.audience],
       accepted: item.clientAcceptedAt !== null,
+      files: clientFiles("deliverableId", item.id),
       comments: comments.filter((comment) => comment.deliverableId === item.id).map((comment) => ({ body: comment.body, createdAt: comment.createdAt, authorName: comment.authorName ?? "" }))
     }))
   };
@@ -8808,9 +8911,137 @@ async function setClientAudience(db, session, input) {
   await recordAudit(db, { action: "engagement_audience_changed", actorUserId: session.user.id, details: { item: input.item, id: input.id, audience: input.audience } });
   return { success: true };
 }
+var UPLOADS_OFF = 'File upload is not set up yet. Send it on WhatsApp or by email, then tick "I have sent this".';
+var requireUploads = () => {
+  if (!isFileStorageConfigured()) throw new TRPCError12({ code: "PRECONDITION_FAILED", message: UPLOADS_OFF });
+};
+function validateUpload(input) {
+  if (!Number.isFinite(input.sizeBytes) || input.sizeBytes <= 0 || input.sizeBytes > UPLOAD_MAX_BYTES) {
+    throw new TRPCError12({ code: "BAD_REQUEST", message: `Files up to ${UPLOAD_MAX_MB} MB.` });
+  }
+  if (!isAllowedUploadType(input.contentType, input.fileName)) {
+    throw new TRPCError12({ code: "BAD_REQUEST", message: "PDF, photos, spreadsheets and Word documents only." });
+  }
+}
+var keyPrefix = (engagementId, target) => `engagements/${engagementId}/${target.kind}s/${target.id}/`;
+var newStorageKey = (engagementId, target, fileName2) => `${keyPrefix(engagementId, target)}${randomUUID()}-${safeFileName(fileName2)}`;
+async function filesOf(db, engagementId) {
+  const rows = await db.select({
+    id: engagementFiles.id,
+    taskId: engagementFiles.taskId,
+    deliverableId: engagementFiles.deliverableId,
+    fileName: engagementFiles.fileName,
+    contentType: engagementFiles.contentType,
+    sizeBytes: engagementFiles.sizeBytes,
+    audience: engagementFiles.audience,
+    uploadedByUserId: engagementFiles.uploadedByUserId,
+    uploadedByName: users.name,
+    createdAt: engagementFiles.createdAt,
+    membershipId: businessMemberships.id
+  }).from(engagementFiles).innerJoin(users, eq14(engagementFiles.uploadedByUserId, users.id)).innerJoin(engagements, eq14(engagementFiles.engagementId, engagements.id)).leftJoin(businessMemberships, and11(eq14(businessMemberships.userId, engagementFiles.uploadedByUserId), eq14(businessMemberships.businessId, engagements.businessId))).where(eq14(engagementFiles.engagementId, engagementId)).orderBy(asc(engagementFiles.id));
+  return rows.map(({ membershipId, ...row }) => ({ ...row, fromTeam: membershipId === null }));
+}
+var clientFileVisible = (file, viewer, userId) => file.uploadedByUserId === userId || clientCanSee(file.audience, viewer);
+async function requireClientTaskForUpload(db, session, taskId) {
+  const task = (await db.select().from(engagementTasks).where(eq14(engagementTasks.id, taskId)).limit(1))[0];
+  if (!task) throw notFound();
+  const { viewer } = await requireClientEngagement(db, session, task.engagementId);
+  if (task.side !== "client" || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound();
+  return task;
+}
+async function clientRequestUpload(db, session, input) {
+  requireUploads();
+  validateUpload(input);
+  const task = await requireClientTaskForUpload(db, session, input.taskId);
+  const storageKey2 = newStorageKey(task.engagementId, { kind: "task", id: task.id }, input.fileName);
+  const upload2 = await createSignedUpload(storageKey2, input.contentType);
+  return { storageKey: storageKey2, uploadUrl: upload2.url, headers: upload2.headers };
+}
+async function clientConfirmUpload(db, session, input) {
+  requireUploads();
+  validateUpload(input);
+  const task = await requireClientTaskForUpload(db, session, input.taskId);
+  if (!input.storageKey.startsWith(keyPrefix(task.engagementId, { kind: "task", id: task.id }))) throw notFound();
+  if (!await objectExists(input.storageKey)) throw new TRPCError12({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
+  const open = task.status === "open" || task.status === "needs_more";
+  return db.transaction(async (tx) => {
+    const [file] = await tx.insert(engagementFiles).values({
+      engagementId: task.engagementId,
+      taskId: task.id,
+      storageKey: input.storageKey,
+      fileName: input.fileName.trim().slice(0, 255),
+      contentType: input.contentType || "application/octet-stream",
+      sizeBytes: input.sizeBytes,
+      audience: "owner",
+      uploadedByUserId: session.user.id
+    }).returning({ id: engagementFiles.id });
+    if (open) await tx.update(engagementTasks).set({ status: "received", statusNote: input.note || "Uploaded to the room" }).where(eq14(engagementTasks.id, task.id));
+    await recordAudit(tx, { action: "engagement_file_uploaded", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, fileId: file.id, ...open ? { status: "received" } : {} } });
+    return { success: true, fileId: file.id, status: open ? "received" : task.status };
+  });
+}
+async function clientFileLink(db, session, input) {
+  requireUploads();
+  const file = (await db.select().from(engagementFiles).where(eq14(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file) throw notFound();
+  const { viewer } = await requireClientEngagement(db, session, file.engagementId);
+  if (!clientFileVisible(file, viewer, session.user.id)) throw notFound();
+  if (file.taskId !== null) {
+    const task = (await db.select().from(engagementTasks).where(eq14(engagementTasks.id, file.taskId)).limit(1))[0];
+    if (!task || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound();
+  } else if (file.deliverableId !== null) {
+    const deliverable = (await db.select().from(engagementDeliverables).where(eq14(engagementDeliverables.id, file.deliverableId)).limit(1))[0];
+    if (!deliverable || deliverable.status !== "shared" || !clientCanSee(deliverable.audience, viewer)) throw notFound();
+  }
+  return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+}
+async function requireStaffTarget(db, actor, engagementId, target) {
+  await requireStaffEngagement(db, actor, engagementId);
+  const exists = target.kind === "task" ? await db.select({ id: engagementTasks.id }).from(engagementTasks).where(and11(eq14(engagementTasks.id, target.id), eq14(engagementTasks.engagementId, engagementId))).limit(1) : await db.select({ id: engagementDeliverables.id }).from(engagementDeliverables).where(and11(eq14(engagementDeliverables.id, target.id), eq14(engagementDeliverables.engagementId, engagementId))).limit(1);
+  if (!exists.length) throw notFound();
+}
+async function staffRequestUpload(db, actor, input) {
+  requireUploads();
+  requireManage(actor);
+  validateUpload(input);
+  await requireStaffTarget(db, actor, input.engagementId, input.target);
+  const storageKey2 = newStorageKey(input.engagementId, input.target, input.fileName);
+  const upload2 = await createSignedUpload(storageKey2, input.contentType);
+  return { storageKey: storageKey2, uploadUrl: upload2.url, headers: upload2.headers };
+}
+async function staffConfirmUpload(db, actor, input) {
+  requireUploads();
+  requireManage(actor);
+  validateUpload(input);
+  await requireStaffTarget(db, actor, input.engagementId, input.target);
+  if (!input.storageKey.startsWith(keyPrefix(input.engagementId, input.target))) throw notFound();
+  if (!await objectExists(input.storageKey)) throw new TRPCError12({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
+  return db.transaction(async (tx) => {
+    const [file] = await tx.insert(engagementFiles).values({
+      engagementId: input.engagementId,
+      taskId: input.target.kind === "task" ? input.target.id : null,
+      deliverableId: input.target.kind === "deliverable" ? input.target.id : null,
+      storageKey: input.storageKey,
+      fileName: input.fileName.trim().slice(0, 255),
+      contentType: input.contentType || "application/octet-stream",
+      sizeBytes: input.sizeBytes,
+      audience: input.audience,
+      uploadedByUserId: actor.id
+    }).returning({ id: engagementFiles.id });
+    await recordAudit(tx, { action: "engagement_file_uploaded", actorUserId: actor.id, details: { engagementId: input.engagementId, [input.target.kind === "task" ? "taskId" : "deliverableId"]: input.target.id, fileId: file.id, audience: input.audience } });
+    return { success: true, fileId: file.id };
+  });
+}
+async function staffFileLink(db, actor, input) {
+  requireUploads();
+  const file = (await db.select().from(engagementFiles).where(eq14(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file) throw notFound();
+  await requireStaffEngagement(db, actor, file.engagementId);
+  return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+}
 
 // server/clientOnboarding.ts
-import { randomBytes as randomBytes5, randomUUID } from "crypto";
+import { randomBytes as randomBytes5, randomUUID as randomUUID2 } from "crypto";
 import { and as and12, count, desc as desc9, eq as eq15, gt as gt5, isNull as isNull6 } from "drizzle-orm";
 import { TRPCError as TRPCError13 } from "@trpc/server";
 init_brand();
@@ -8919,7 +9150,7 @@ async function acceptOnboardingInvitation(req, res, rawInput) {
       if (input.email !== invitation.email) throw new TRPCError13({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
       if (await identityConflict(tx, invitation.email)) throw new TRPCError13({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
       const [user] = await tx.insert(users).values({
-        openId: `local:${randomUUID()}`,
+        openId: `local:${randomUUID2()}`,
         name: input.fullName,
         email: invitation.email,
         loginMethod: "password",
@@ -11308,6 +11539,9 @@ var id = z22.number().int().positive();
 var text3 = (max) => z22.string().trim().max(max);
 var optionalText2 = (max) => text3(max).transform((value) => value || null).nullable();
 var sharedAudience = z22.enum(["owner", "business"]);
+var upload = { fileName: text3(255).min(1, "The file has no name."), contentType: text3(128), sizeBytes: z22.number().int().positive().max(UPLOAD_MAX_BYTES) };
+var storageKey = z22.string().min(20).max(512);
+var uploadTarget = z22.object({ kind: z22.enum(["task", "deliverable"]), id });
 async function guarded(work) {
   try {
     return await work();
@@ -11377,7 +11611,10 @@ var staffRouter = router({
   saveDeliverable: staff.input(z22.object({ engagementId: id, deliverableId: id.optional(), kind: z22.enum(ENGAGEMENT_DELIVERABLE_KINDS), title: text3(200).min(1, "Give it a title."), summary: optionalText2(2e4) })).mutation(async ({ ctx, input }) => guarded(async () => saveDeliverable(await engagementDb(), ctx.actor, input))),
   approveDeliverable: staff.input(z22.object({ deliverableId: id })).mutation(async ({ ctx, input }) => guarded(async () => approveDeliverable(await engagementDb(), ctx.actor, input))),
   shareDeliverable: staff.input(z22.object({ deliverableId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareDeliverable(await engagementDb(), ctx.actor, input))),
-  comment: staff.input(z22.object({ deliverableId: id, body: text3(4e3).min(1) })).mutation(async ({ ctx, input }) => guarded(async () => staffComment(await engagementDb(), ctx.actor, input)))
+  comment: staff.input(z22.object({ deliverableId: id, body: text3(4e3).min(1) })).mutation(async ({ ctx, input }) => guarded(async () => staffComment(await engagementDb(), ctx.actor, input))),
+  requestUpload: staff.input(z22.object({ engagementId: id, target: uploadTarget, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input))),
+  confirmUpload: staff.input(z22.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
+  fileLink: staff.input(z22.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input)))
 });
 var clientRouter = router({
   /** Null when the business has no engagement yet, or the room is not set up in the database yet. */
@@ -11392,7 +11629,10 @@ var clientRouter = router({
   respondToTask: accountProcedure.input(z22.object({ taskId: id, note: optionalText2(500) })).mutation(async ({ ctx, input }) => guarded(async () => respondToTask(await engagementDb(), ctx.account, input))),
   comment: accountProcedure.input(z22.object({ deliverableId: id, body: text3(4e3).min(1, "Write your comment first.") })).mutation(async ({ ctx, input }) => guarded(async () => clientComment(await engagementDb(), ctx.account, input))),
   accept: accountProcedure.input(z22.object({ deliverableId: id })).mutation(async ({ ctx, input }) => guarded(async () => acceptDeliverable(await engagementDb(), ctx.account, input))),
-  setAudience: accountProcedure.input(z22.object({ item: z22.enum(["notes", "deliverable"]), id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => setClientAudience(await engagementDb(), ctx.account, input)))
+  setAudience: accountProcedure.input(z22.object({ item: z22.enum(["notes", "deliverable"]), id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => setClientAudience(await engagementDb(), ctx.account, input))),
+  requestUpload: accountProcedure.input(z22.object({ taskId: id, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientRequestUpload(await engagementDb(), ctx.account, input))),
+  confirmUpload: accountProcedure.input(z22.object({ taskId: id, storageKey, note: optionalText2(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmUpload(await engagementDb(), ctx.account, input))),
+  fileLink: accountProcedure.input(z22.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => clientFileLink(await engagementDb(), ctx.account, input)))
 });
 var engagementRouter = router({ staff: staffRouter, client: clientRouter });
 
@@ -11401,7 +11641,7 @@ import { TRPCError as TRPCError22 } from "@trpc/server";
 import { z as z24 } from "zod";
 
 // server/accountInvitations.ts
-import { randomBytes as randomBytes8, randomUUID as randomUUID2 } from "crypto";
+import { randomBytes as randomBytes8, randomUUID as randomUUID3 } from "crypto";
 import { and as and16, desc as desc12, eq as eq20, gt as gt6, inArray as inArray7, isNull as isNull8, ne as ne2 } from "drizzle-orm";
 import { TRPCError as TRPCError21 } from "@trpc/server";
 import { z as z23 } from "zod";
@@ -11578,7 +11818,7 @@ async function acceptAccountInvitation(db, req, res, rawInput) {
       if (!invitation || invitationState(invitation) !== "pending") throw unavailable3();
       if (input.email !== normaliseAccountEmail(invitation.email)) throw new TRPCError21({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
       if (await identityTaken(tx, invitation.email)) throw new TRPCError21({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
-      const [user] = await tx.insert(users).values({ openId: `local:${randomUUID2()}`, name: input.fullName, email: invitation.email, loginMethod: "password", role: "user", status: "active" }).returning({ id: users.id });
+      const [user] = await tx.insert(users).values({ openId: `local:${randomUUID3()}`, name: input.fullName, email: invitation.email, loginMethod: "password", role: "user", status: "active" }).returning({ id: users.id });
       await tx.insert(userCredentials).values({ userId: user.id, passwordHash });
       let businessId = null;
       if (invitation.kind === "staff") {

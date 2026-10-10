@@ -41,6 +41,10 @@ export const ENV = {
   paymentBankName: process.env.PAYMENT_BANK_NAME?.trim() ?? "",
   paymentAccountName: process.env.PAYMENT_ACCOUNT_NAME?.trim() ?? "",
   paymentAccountNumber: process.env.PAYMENT_ACCOUNT_NUMBER?.trim() ?? "",
+  /** Private file storage for the engagement room (Supabase Storage, server/fileStorage.ts). Uploads switch on once set. */
+  supabaseUrl: process.env.SUPABASE_URL?.trim() ?? "",
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "",
+  supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET?.trim() || "engagement-files",
   paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
   paystackSecretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
   /** Canonical public origin (scheme + host) used for emailed links and CSRF checks in production. */

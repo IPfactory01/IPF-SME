@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FINDINGS_OUTLINE } from "@shared/engagement";
 
@@ -11,8 +11,12 @@ const api = vi.hoisted(() => ({
   awaiting: [] as unknown[],
   calls: {} as Record<string, unknown[]>,
 }));
-const replies: Record<string, unknown> = { start: { engagementId: 4, created: true } };
-const mutation = (name: string) => (options?: { onSuccess?: (value: never) => void }) => ({ isPending: false, mutate: (input: unknown) => { (api.calls[name] ??= []).push(input); options?.onSuccess?.((replies[name] ?? { success: true }) as never); } });
+const replies: Record<string, unknown> = { start: { engagementId: 4, created: true }, fileLink: { url: "https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf" } };
+const mutation = (name: string) => (options?: { onSuccess?: (value: never) => void }) => ({
+  isPending: false,
+  mutate: (input: unknown) => { (api.calls[name] ??= []).push(input); options?.onSuccess?.((replies[name] ?? { success: true }) as never); },
+  mutateAsync: async (input: unknown) => { (api.calls[name] ??= []).push(input); options?.onSuccess?.((replies[name] ?? { success: true }) as never); return replies[name] ?? { success: true }; },
+});
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
@@ -23,7 +27,7 @@ vi.mock("@/lib/trpc", () => ({
         awaitingStart: { useQuery: () => ({ data: api.awaiting }) },
         detail: { useQuery: () => ({ data: api.detail, isLoading: false, error: null }) },
         assignableStaff: { useQuery: () => ({ data: [{ userId: 9, name: "Ola Analyst", email: "ola@example.test", roles: ["analyst"] }] }) },
-        ...Object.fromEntries(["start", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "requestUpload", "confirmUpload", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -33,8 +37,9 @@ const { default: EngagementsView } = await import("@/components/admin/Engagement
 
 const row = { id: 4, stage: "setting_up", stageLabel: "Getting set up", businessName: "Ada Foods", ownerName: "Ada Okafor", ownerEmail: "ada@example.test", hasAccount: true, createdAt: new Date(), team: [], openClientRequests: 5, overdueClientRequests: 2, unscheduledSessions: 2, nextSession: null };
 const session = { id: 31, engagementId: 4, kind: "assessment_call", title: "Current State Assessment call 1", scheduledFor: null, durationMinutes: 90, meetingLink: null, agenda: null, status: "planned", clientNotes: "Pricing first.", internalNotes: "Watch cash sales.", notesAudience: "owner", notesSharedAt: null, notesSharedByUserId: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() };
-const deliverable = (over: Record<string, unknown>) => ({ id: 41, engagementId: 4, kind: "prescription", kindLabel: "Prescription", title: "Daily cash count", summary: "Count every evening.", status: "draft", audience: "owner", approvedByUserId: null, approvedAt: null, sharedByUserId: null, sharedAt: null, clientAcceptedByUserId: null, clientAcceptedAt: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date(), needsApproval: true, comments: [], ...over });
-const detail = (can: { manage: boolean; assign: boolean; review: boolean }, deliverables = [deliverable({})]) => ({
+const deliverable = (over: Record<string, unknown>) => ({ id: 41, engagementId: 4, kind: "prescription", kindLabel: "Prescription", title: "Daily cash count", summary: "Count every evening.", status: "draft", audience: "owner", approvedByUserId: null, approvedAt: null, sharedByUserId: null, sharedAt: null, clientAcceptedByUserId: null, clientAcceptedAt: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date(), needsApproval: true, comments: [], files: [], ...over });
+const detail = (can: { manage: boolean; assign: boolean; review: boolean }, deliverables = [deliverable({})], tasks: unknown[] = []) => ({
+  uploadsEnabled: true,
   engagement: { id: 4, businessCheckId: 1, businessId: 7, paymentRequestId: 2, stage: "setting_up", stageLabel: "Getting set up", problemArea: null, subProblem: null, problemStatement: null, assessmentStartedAt: null, fixStartedAt: null, closedAt: null, createdAt: new Date(), updatedAt: new Date() },
   owner: { name: "Ada Okafor", email: "ada@example.test", whatsapp: "+234 800 000 0001" },
   businessName: "Ada Foods",
@@ -42,7 +47,7 @@ const detail = (can: { manage: boolean; assign: boolean; review: boolean }, deli
   team: [],
   clientPeople: [{ userId: 3, name: "Ada Okafor", role: "owner", access: "full" }],
   sessions: [session],
-  tasks: [],
+  tasks,
   deliverables,
   can,
 });
@@ -131,5 +136,24 @@ describe("the team's engagements", () => {
     expect((card.getByRole("button", { name: "Share with the owner" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(card.getByRole("button", { name: "Save notes" }));
     expect(api.calls.saveNotes).toEqual([{ sessionId: 31, clientNotes: "Pricing first, then cash.", internalNotes: "Watch cash sales." }]);
+  });
+});
+
+describe("files on the team's side", () => {
+  it("lists a request's files with who sent them and who may see them, opens one, and offers to attach when storage is set up", async () => {
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+    const task = { id: 7, engagementId: 4, kind: "data_request", title: "Your price list", detail: null, side: "client", assigneeUserId: null, dueOn: "2026-10-27", status: "received", statusLabel: "Sent, we are checking", statusNote: "Uploaded to the room", sessionId: null, createdByUserId: 1, completedAt: null, createdAt: new Date(), updatedAt: new Date(),
+      files: [{ id: 99, fileName: "prices.pdf", contentType: "application/pdf", sizeBytes: 120_000, audience: "owner", uploadedByName: "Ada Okafor", createdAt: new Date() }] };
+    api.detail = detail({ manage: true, assign: false, review: false }, [], [task]);
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const card = within(within(screen.getByRole("dialog")).getByLabelText("Your price list"));
+    expect(card.getByText(/117 KB · Ada Okafor · owner only/)).toBeTruthy();
+    fireEvent.click(card.getByRole("button", { name: "Open" }));
+    await waitFor(() => expect(open).toHaveBeenCalledWith(expect.stringContaining("download=sales.pdf"), "_blank", "noopener"));
+    expect(api.calls.fileLink).toEqual([{ fileId: 99 }]);
+    expect(card.getByLabelText("Attach a file to task 7")).toBeTruthy();
+    vi.unstubAllGlobals();
   });
 });

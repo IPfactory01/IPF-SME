@@ -90,7 +90,7 @@ and the room says it is not set up. Vocabulary and the who-sees-what rules: `sha
 | `engagement_tasks` | Data requests and actions in one list: whose side, which person, due date, status (to do, sent, received, needs more, done) | A client-side task with no person belongs to the whole business | What the client was asked for |
 | `engagement_deliverables` | Findings, problem statement, prescription, tools, plan: status draft, awaiting approval, approved, shared; audience; the owner's sign-off | A prescription or plan cannot be shared before approval (review_engagements); editing a shared one takes it back to draft | **Findings** about the business and its people |
 | `engagement_comments` | Feedback on a deliverable, from the client or the team | Only on a deliverable the writer can see | Comments |
-| `engagement_files` | Files in private storage: the data request or deliverable they belong to, audience | Unique storage key; served only through short-lived links after the same access check (storage not connected yet) | **Client files**: accounts, staff lists |
+| `engagement_files` | Files in private storage: the data request or deliverable they belong to, audience | Unique storage key under `engagements/{id}/tasks|deliverables/{id}/`; uploaded straight to a private Supabase bucket with a one-off signed URL, recorded only once the object exists; opened through five-minute signed links after the same access check (`server/fileStorage.ts`) | **Client files**: bank statements, accounts, staff lists |
 | `engagement_measures` | The fix's one number: name, definition, unit, baseline, target | One per engagement (D3) | Business figures |
 | `engagement_checkins` | One row per fix week: progress, blockers, next step, reading, questions asked, hours by role, AI used | Unique (engagement, week) | Internal: hours are never shown to the client |
 | `business_member_access` | The owner's staff: `full` or `contributor` | One per membership; no row means full (owners and business admins never have one) | — |
@@ -185,8 +185,7 @@ procedure grants assigned-only access.
    one role; a seat invitation creates the person with a membership and an access level, in the owner's business only,
    within the included seat. Accepting is one transaction; an existing account is never merged.
 
-Still to build on these tables: file uploads (`engagement_files`, a private bucket), and the fix's measure and
-check-in screens (`engagement_measures`, `engagement_checkins`).
+Still to build on these tables: the fix's measure and check-in screens (`engagement_measures`, `engagement_checkins`).
 
 ## 6. Findings to fix
 
@@ -201,4 +200,4 @@ Found while writing this document.
 | ~~`adminAccess.listTeam` lists only legacy admins~~ | Fixed 9 October: Admin Team now shows a Staff list from `user_platform_roles` above the legacy list | Done |
 | `businessSupport.downloadReport` needs `manage_client_onboarding` while `resendReportLink` needs `manage_payments` | Finance can resend but not download | Decide which permission owns the report |
 | `shared/auth.ts` and `docs/authentication.md` still say platform roles are "not built" and name a `platform_role_assignments` table | Misleading | Update the comments: the table is `user_platform_roles` |
-| File storage still uses the Manus "Forge" storage API (`server/storage.ts`, `BUILT_IN_FORGE_API_*`) | No file uploads for clients on Vercel without Manus credentials | Phase 1.1: private Supabase Storage bucket |
+| ~~File storage used the Manus "Forge" API~~ | The room now uses a private Supabase bucket (10 October); the Manus proxy remains only for the JUMP-era uploads | Done for the room; retire the proxy with the JUMP screens |

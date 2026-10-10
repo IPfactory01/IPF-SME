@@ -31,6 +31,7 @@ const SAMPLE_OWNER = {
 /** A client in week one of the Current State Assessment: what an owner sees in their room. Sample data only. */
 const SAMPLE_ROOM = {
   engagementId: 1,
+  uploadsEnabled: false,
   businessName: "Ada Foods",
   viewer: { kind: "owner" },
   stage: "assessment",
@@ -45,11 +46,11 @@ const SAMPLE_ROOM = {
     { id: 2, title: "Current State Assessment call 2", scheduledFor: day(7), durationMinutes: 90, meetingLink: "https://zoom.us/", status: "planned", agenda: "Your numbers, what they show, and the one problem to fix first.", notes: null, notesSharedAt: null, notesAudience: null },
   ],
   tasks: [
-    { id: 1, kind: "data_request", side: "client", title: "Your price list", detail: "What you sell and what you charge for each, or how you work out a price.", dueOn: "2026-10-27", status: "needs_more", statusLabel: "We need a bit more", statusNote: "the delivery charges too", mine: false },
-    { id: 2, kind: "data_request", side: "client", title: "What you spend each month", detail: "Rent, salaries, stock, transport and anything else that goes out regularly. Estimates are fine.", dueOn: "2026-10-27", status: "open", statusLabel: "To do", statusNote: null, mine: false },
-    { id: 3, kind: "data_request", side: "client", title: "Your last 12 months of sales", detail: null, dueOn: "2026-10-21", status: "accepted", statusLabel: "Received", statusNote: null, mine: false },
-    { id: 4, kind: "data_request", side: "client", title: "Who works in the business", detail: null, dueOn: "2026-10-21", status: "accepted", statusLabel: "Received", statusNote: null, mine: false },
-    { id: 5, kind: "action", side: "ipf", title: "Send the one-page cash template", detail: null, dueOn: "2026-10-26", status: "open", statusLabel: "To do", statusNote: null, mine: false },
+    { id: 1, kind: "data_request", side: "client", title: "Your price list", detail: "What you sell and what you charge for each, or how you work out a price.", dueOn: "2026-10-27", status: "needs_more", statusLabel: "We need a bit more", statusNote: "the delivery charges too", mine: false, files: [] },
+    { id: 2, kind: "data_request", side: "client", title: "What you spend each month", detail: "Rent, salaries, stock, transport and anything else that goes out regularly. Estimates are fine.", dueOn: "2026-10-27", status: "open", statusLabel: "To do", statusNote: null, mine: false, files: [] },
+    { id: 3, kind: "data_request", side: "client", title: "Your last 12 months of sales", detail: null, dueOn: "2026-10-21", status: "accepted", statusLabel: "Received", statusNote: null, mine: false, files: [] },
+    { id: 4, kind: "data_request", side: "client", title: "Who works in the business", detail: null, dueOn: "2026-10-21", status: "accepted", statusLabel: "Received", statusNote: null, mine: false, files: [] },
+    { id: 5, kind: "action", side: "ipf", title: "Send the one-page cash template", detail: null, dueOn: "2026-10-26", status: "open", statusLabel: "To do", statusNote: null, mine: false, files: [] },
   ],
   deliverables: [],
 };

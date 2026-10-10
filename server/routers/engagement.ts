@@ -9,6 +9,7 @@ import {
   ENGAGEMENT_TASK_SIDES,
   ENGAGEMENT_TASK_STATUSES,
   ENGAGEMENT_TEAM_ROLES,
+  UPLOAD_MAX_BYTES,
 } from "../../shared/engagement";
 import { authorityAllows } from "../../shared/platformPermissions";
 import {
@@ -16,6 +17,9 @@ import {
   approveDeliverable,
   assignTeamMember,
   clientComment,
+  clientConfirmUpload,
+  clientFileLink,
+  clientRequestUpload,
   engagementDb,
   getClientRoom,
   getStaffEngagement,
@@ -36,6 +40,9 @@ import {
   shareDeliverable,
   shareSessionNotes,
   staffComment,
+  staffConfirmUpload,
+  staffFileLink,
+  staffRequestUpload,
   startAwaitingEngagement,
 } from "../engagements";
 import { loadAuthority } from "../platformAccess";
@@ -45,6 +52,9 @@ const id = z.number().int().positive();
 const text = (max: number) => z.string().trim().max(max);
 const optionalText = (max: number) => text(max).transform(value => value || null).nullable();
 const sharedAudience = z.enum(["owner", "business"]);
+const upload = { fileName: text(255).min(1, "The file has no name."), contentType: text(128), sizeBytes: z.number().int().positive().max(UPLOAD_MAX_BYTES) };
+const storageKey = z.string().min(20).max(512);
+const uploadTarget = z.object({ kind: z.enum(["task", "deliverable"]), id });
 
 /** A missing table (migration 0008) becomes a clear message instead of a server error. */
 async function guarded<T>(work: () => Promise<T>): Promise<T> {
@@ -127,6 +137,9 @@ const staffRouter = router({
   approveDeliverable: staff.input(z.object({ deliverableId: id })).mutation(async ({ ctx, input }) => guarded(async () => approveDeliverable(await engagementDb(), ctx.actor, input))),
   shareDeliverable: staff.input(z.object({ deliverableId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareDeliverable(await engagementDb(), ctx.actor, input))),
   comment: staff.input(z.object({ deliverableId: id, body: text(4000).min(1) })).mutation(async ({ ctx, input }) => guarded(async () => staffComment(await engagementDb(), ctx.actor, input))),
+  requestUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input))),
+  confirmUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
+  fileLink: staff.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
 });
 
 /**
@@ -147,6 +160,9 @@ const clientRouter = router({
   comment: accountProcedure.input(z.object({ deliverableId: id, body: text(4000).min(1, "Write your comment first.") })).mutation(async ({ ctx, input }) => guarded(async () => clientComment(await engagementDb(), ctx.account, input))),
   accept: accountProcedure.input(z.object({ deliverableId: id })).mutation(async ({ ctx, input }) => guarded(async () => acceptDeliverable(await engagementDb(), ctx.account, input))),
   setAudience: accountProcedure.input(z.object({ item: z.enum(["notes", "deliverable"]), id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => setClientAudience(await engagementDb(), ctx.account, input))),
+  requestUpload: accountProcedure.input(z.object({ taskId: id, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientRequestUpload(await engagementDb(), ctx.account, input))),
+  confirmUpload: accountProcedure.input(z.object({ taskId: id, storageKey, note: optionalText(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmUpload(await engagementDb(), ctx.account, input))),
+  fileLink: accountProcedure.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => clientFileLink(await engagementDb(), ctx.account, input))),
 });
 
 export const engagementRouter = router({ staff: staffRouter, client: clientRouter });

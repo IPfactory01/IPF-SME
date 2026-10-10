@@ -8,6 +8,7 @@ import {
   clientOnboardingInvitations,
   engagementComments,
   engagementDeliverables,
+  engagementFiles,
   engagements,
   engagementSessions,
   engagementTasks,
@@ -38,11 +39,17 @@ import {
   type EngagementTaskSide,
   type EngagementTaskStatus,
   type EngagementTeamRole,
+  isAllowedUploadType,
+  safeFileName,
+  UPLOAD_MAX_BYTES,
+  UPLOAD_MAX_MB,
 } from "../shared/engagement";
 import type { AccountSession, Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { getDb } from "./db";
 import { deliverEmail } from "./email";
+import { createSignedUpload, isFileStorageConfigured, objectExists, signedDownloadUrl } from "./fileStorage";
+import { randomUUID } from "node:crypto";
 import { getTrustedApplicationOrigin } from "./security";
 import { BRAND } from "../shared/brand";
 
@@ -260,7 +267,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
   const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName })
     .from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
-  const [team, sessions, tasks, deliverables, comments, clientPeople] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, clientPeople, files] = await Promise.all([
     db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq(engagementSessions.engagementId, engagementId)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq(engagementTasks.engagementId, engagementId)).orderBy(asc(engagementTasks.id)),
@@ -268,8 +275,11 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     db.select({ id: engagementComments.id, deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name })
       .from(engagementComments).innerJoin(users, eq(engagementComments.authorUserId, users.id)).where(eq(engagementComments.engagementId, engagementId)).orderBy(asc(engagementComments.id)),
     engagement.businessId ? clientPeopleOf(db, engagement.businessId) : Promise.resolve([]),
+    filesOf(db, engagementId),
   ]);
+  const filesFor = (where: "taskId" | "deliverableId", id: number) => files.filter(file => file[where] === id).map(file => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt }));
   return {
+    uploadsEnabled: isFileStorageConfigured(),
     engagement: { ...engagement, stageLabel: ENGAGEMENT_STAGE_LABELS[engagement.stage] },
     owner: check ? { name: check.fullName, email: check.email, whatsapp: check.whatsapp } : null,
     businessName: business?.name ?? check?.businessName ?? check?.fullName ?? "",
@@ -277,8 +287,8 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     team: team.map(member => ({ ...member, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
     clientPeople,
     sessions,
-    tasks: tasks.map(task => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status] })),
-    deliverables: deliverables.map(item => ({ ...item, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item.kind), comments: comments.filter(comment => comment.deliverableId === item.id) })),
+    tasks: tasks.map(task => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id) })),
+    deliverables: deliverables.map(item => ({ ...item, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item.kind), comments: comments.filter(comment => comment.deliverableId === item.id), files: filesFor("deliverableId", item.id) })),
     can: {
       manage: authorityAllows(actor.authority, "manage_engagements"),
       assign: authorityAllows(actor.authority, "assign_engagements"),
@@ -550,21 +560,26 @@ export async function getClientRoom(db: Database, session: AccountSession) {
   const engagement = (await db.select().from(engagements).where(eq(engagements.businessId, business.businessId)).orderBy(desc(engagements.id)).limit(1))[0];
   if (!engagement) return null;
   const viewer = await clientViewerFor(db, session, business.businessId);
-  const [team, sessions, tasks, deliverables, comments] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, files] = await Promise.all([
     db.select({ name: users.name, role: engagementTeam.role }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq(engagementTasks.engagementId, engagement.id)).orderBy(asc(engagementTasks.id)),
     db.select().from(engagementDeliverables).where(and(eq(engagementDeliverables.engagementId, engagement.id), eq(engagementDeliverables.status, "shared"))).orderBy(asc(engagementDeliverables.id)),
     db.select({ deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name })
       .from(engagementComments).innerJoin(users, eq(engagementComments.authorUserId, users.id)).where(eq(engagementComments.engagementId, engagement.id)).orderBy(asc(engagementComments.id)),
+    filesOf(db, engagement.id),
   ]);
   const visibleDeliverables = deliverables.filter(item => clientCanSee(item.audience, viewer));
+  const clientFiles = (where: "taskId" | "deliverableId", id: number) => files
+    .filter(file => file[where] === id && clientFileVisible(file, viewer, session.user.id))
+    .map(file => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === session.user.id, fromTeam: file.fromTeam }));
   const now = Date.now();
   const scheduled = sessions.filter(item => item.status !== "cancelled");
   const next = scheduled.filter(item => item.status === "planned" && item.scheduledFor && item.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor!.getTime() - b.scheduledFor!.getTime())[0];
   const notesVisible = (item: (typeof sessions)[number]) => Boolean(item.notesSharedAt && item.clientNotes && clientCanSee(item.notesAudience, viewer));
   return {
     engagementId: engagement.id,
+    uploadsEnabled: isFileStorageConfigured(),
     businessName: business.businessName,
     viewer: viewer.kind === "owner" ? { kind: "owner" as const } : { kind: "member" as const, access: viewer.access },
     stage: engagement.stage,
@@ -587,9 +602,11 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     })),
     tasks: tasks.filter(task => task.status !== "cancelled" && clientCanSeeTask(task, viewer)).map(task => ({
       id: task.id, kind: task.kind, side: task.side, title: task.title, detail: task.detail, dueOn: task.dueOn, status: task.status, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], statusNote: task.statusNote, mine: task.assigneeUserId === session.user.id,
+      files: clientFiles("taskId", task.id),
     })),
     deliverables: visibleDeliverables.map(item => ({
       id: item.id, kind: item.kind, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind], title: item.title, summary: item.summary, sharedAt: item.sharedAt, audience: item.audience, audienceLabel: ENGAGEMENT_AUDIENCE_LABELS[item.audience], accepted: item.clientAcceptedAt !== null,
+      files: clientFiles("deliverableId", item.id),
       comments: comments.filter(comment => comment.deliverableId === item.id).map(comment => ({ body: comment.body, createdAt: comment.createdAt, authorName: comment.authorName ?? "" })),
     })),
   };
@@ -662,3 +679,149 @@ export async function setClientAudience(db: Database, session: AccountSession, i
   return { success: true } as const;
 }
 
+
+// ---- Files -----------------------------------------------------------------------------------------------------------
+
+const UPLOADS_OFF = "File upload is not set up yet. Send it on WhatsApp or by email, then tick \"I have sent this\".";
+const requireUploads = () => {
+  if (!isFileStorageConfigured()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: UPLOADS_OFF });
+};
+
+export type UploadTarget = { kind: "task" | "deliverable"; id: number };
+export type UploadInput = { fileName: string; contentType: string; sizeBytes: number };
+
+function validateUpload(input: UploadInput) {
+  if (!Number.isFinite(input.sizeBytes) || input.sizeBytes <= 0 || input.sizeBytes > UPLOAD_MAX_BYTES) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: `Files up to ${UPLOAD_MAX_MB} MB.` });
+  }
+  if (!isAllowedUploadType(input.contentType, input.fileName)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "PDF, photos, spreadsheets and Word documents only." });
+  }
+}
+
+const keyPrefix = (engagementId: number, target: UploadTarget) => `engagements/${engagementId}/${target.kind}s/${target.id}/`;
+const newStorageKey = (engagementId: number, target: UploadTarget, fileName: string) => `${keyPrefix(engagementId, target)}${randomUUID()}-${safeFileName(fileName)}`;
+
+/**
+ * Every file on an engagement, with who uploaded it. "From the team" means the uploader is not a member of the
+ * client's business: clients can only upload once they have an account, so anyone else is IP Factory.
+ */
+async function filesOf(db: Pick<Database, "select">, engagementId: number) {
+  const rows = await db.select({
+    id: engagementFiles.id, taskId: engagementFiles.taskId, deliverableId: engagementFiles.deliverableId, fileName: engagementFiles.fileName, contentType: engagementFiles.contentType,
+    sizeBytes: engagementFiles.sizeBytes, audience: engagementFiles.audience, uploadedByUserId: engagementFiles.uploadedByUserId, uploadedByName: users.name, createdAt: engagementFiles.createdAt,
+    membershipId: businessMemberships.id,
+  }).from(engagementFiles)
+    .innerJoin(users, eq(engagementFiles.uploadedByUserId, users.id))
+    .innerJoin(engagements, eq(engagementFiles.engagementId, engagements.id))
+    .leftJoin(businessMemberships, and(eq(businessMemberships.userId, engagementFiles.uploadedByUserId), eq(businessMemberships.businessId, engagements.businessId)))
+    .where(eq(engagementFiles.engagementId, engagementId)).orderBy(asc(engagementFiles.id));
+  return rows.map(({ membershipId, ...row }) => ({ ...row, fromTeam: membershipId === null }));
+}
+type EngagementFile = Awaited<ReturnType<typeof filesOf>>[number];
+
+/** A client sees a file they uploaded, or one whose audience includes them. The container's own rule applies as well. */
+const clientFileVisible = (file: Pick<EngagementFile, "uploadedByUserId" | "audience">, viewer: ClientViewer, userId: number) =>
+  file.uploadedByUserId === userId || clientCanSee(file.audience, viewer);
+
+async function requireClientTaskForUpload(db: Pick<Database, "select">, session: AccountSession, taskId: number) {
+  const task = (await db.select().from(engagementTasks).where(eq(engagementTasks.id, taskId)).limit(1))[0];
+  if (!task) throw notFound();
+  const { viewer } = await requireClientEngagement(db, session, task.engagementId);
+  if (task.side !== "client" || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound();
+  return task;
+}
+
+/** Step one of a client upload against a data request: where to put the file. Nothing is recorded yet. */
+export async function clientRequestUpload(db: Database, session: AccountSession, input: UploadInput & { taskId: number }) {
+  requireUploads();
+  validateUpload(input);
+  const task = await requireClientTaskForUpload(db, session, input.taskId);
+  const storageKey = newStorageKey(task.engagementId, { kind: "task", id: task.id }, input.fileName);
+  const upload = await createSignedUpload(storageKey, input.contentType);
+  return { storageKey, uploadUrl: upload.url, headers: upload.headers };
+}
+
+/**
+ * Step two: the browser finished the PUT. The key must belong to this task, the object must exist, then the file is
+ * recorded and the request moves to "received" (a second file on a received request changes nothing else).
+ */
+export async function clientConfirmUpload(db: Database, session: AccountSession, input: UploadInput & { taskId: number; storageKey: string; note: string | null }) {
+  requireUploads();
+  validateUpload(input);
+  const task = await requireClientTaskForUpload(db, session, input.taskId);
+  if (!input.storageKey.startsWith(keyPrefix(task.engagementId, { kind: "task", id: task.id }))) throw notFound();
+  if (!(await objectExists(input.storageKey))) throw new TRPCError({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
+  const open = task.status === "open" || task.status === "needs_more";
+  return db.transaction(async tx => {
+    const [file] = await tx.insert(engagementFiles).values({
+      engagementId: task.engagementId, taskId: task.id, storageKey: input.storageKey, fileName: input.fileName.trim().slice(0, 255), contentType: input.contentType || "application/octet-stream",
+      sizeBytes: input.sizeBytes, audience: "owner", uploadedByUserId: session.user.id,
+    }).returning({ id: engagementFiles.id });
+    if (open) await tx.update(engagementTasks).set({ status: "received", statusNote: input.note || "Uploaded to the room" }).where(eq(engagementTasks.id, task.id));
+    await recordAudit(tx, { action: "engagement_file_uploaded", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, fileId: file.id, ...(open ? { status: "received" } : {}) } });
+    return { success: true, fileId: file.id, status: open ? "received" as const : task.status } as const;
+  });
+}
+
+/** A short-lived link to a file the client may see: their own upload, or one shared with them on a visible item. */
+export async function clientFileLink(db: Database, session: AccountSession, input: { fileId: number }) {
+  requireUploads();
+  const file = (await db.select().from(engagementFiles).where(eq(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file) throw notFound();
+  const { viewer } = await requireClientEngagement(db, session, file.engagementId);
+  if (!clientFileVisible(file, viewer, session.user.id)) throw notFound();
+  if (file.taskId !== null) {
+    const task = (await db.select().from(engagementTasks).where(eq(engagementTasks.id, file.taskId)).limit(1))[0];
+    if (!task || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound();
+  } else if (file.deliverableId !== null) {
+    const deliverable = (await db.select().from(engagementDeliverables).where(eq(engagementDeliverables.id, file.deliverableId)).limit(1))[0];
+    if (!deliverable || deliverable.status !== "shared" || !clientCanSee(deliverable.audience, viewer)) throw notFound();
+  }
+  return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+}
+
+async function requireStaffTarget(db: Pick<Database, "select">, actor: StaffActor, engagementId: number, target: UploadTarget) {
+  await requireStaffEngagement(db, actor, engagementId);
+  const exists = target.kind === "task"
+    ? await db.select({ id: engagementTasks.id }).from(engagementTasks).where(and(eq(engagementTasks.id, target.id), eq(engagementTasks.engagementId, engagementId))).limit(1)
+    : await db.select({ id: engagementDeliverables.id }).from(engagementDeliverables).where(and(eq(engagementDeliverables.id, target.id), eq(engagementDeliverables.engagementId, engagementId))).limit(1);
+  if (!exists.length) throw notFound();
+}
+
+/** The team attaches a file to a request (what we owe the client) or a deliverable. Audience as for notes: owner by default. */
+export async function staffRequestUpload(db: Database, actor: StaffActor, input: UploadInput & { engagementId: number; target: UploadTarget }) {
+  requireUploads();
+  requireManage(actor);
+  validateUpload(input);
+  await requireStaffTarget(db, actor, input.engagementId, input.target);
+  const storageKey = newStorageKey(input.engagementId, input.target, input.fileName);
+  const upload = await createSignedUpload(storageKey, input.contentType);
+  return { storageKey, uploadUrl: upload.url, headers: upload.headers };
+}
+
+export async function staffConfirmUpload(db: Database, actor: StaffActor, input: UploadInput & { engagementId: number; target: UploadTarget; storageKey: string; audience: Exclude<EngagementAudience, "team"> }) {
+  requireUploads();
+  requireManage(actor);
+  validateUpload(input);
+  await requireStaffTarget(db, actor, input.engagementId, input.target);
+  if (!input.storageKey.startsWith(keyPrefix(input.engagementId, input.target))) throw notFound();
+  if (!(await objectExists(input.storageKey))) throw new TRPCError({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
+  return db.transaction(async tx => {
+    const [file] = await tx.insert(engagementFiles).values({
+      engagementId: input.engagementId, taskId: input.target.kind === "task" ? input.target.id : null, deliverableId: input.target.kind === "deliverable" ? input.target.id : null,
+      storageKey: input.storageKey, fileName: input.fileName.trim().slice(0, 255), contentType: input.contentType || "application/octet-stream", sizeBytes: input.sizeBytes, audience: input.audience, uploadedByUserId: actor.id,
+    }).returning({ id: engagementFiles.id });
+    await recordAudit(tx, { action: "engagement_file_uploaded", actorUserId: actor.id, details: { engagementId: input.engagementId, [input.target.kind === "task" ? "taskId" : "deliverableId"]: input.target.id, fileId: file.id, audience: input.audience } });
+    return { success: true, fileId: file.id } as const;
+  });
+}
+
+/** The team opens any file on an engagement in scope. */
+export async function staffFileLink(db: Database, actor: StaffActor, input: { fileId: number }) {
+  requireUploads();
+  const file = (await db.select().from(engagementFiles).where(eq(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file) throw notFound();
+  await requireStaffEngagement(db, actor, file.engagementId);
+  return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+}

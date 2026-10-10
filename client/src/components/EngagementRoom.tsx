@@ -1,14 +1,15 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { OPEN_TASK_STATUSES } from "@shared/engagement";
+import { formatFileSize, OPEN_TASK_STATUSES, UPLOAD_ACCEPT, UPLOAD_MAX_MB } from "@shared/engagement";
 import type { inferRouterOutputs } from "@trpc/server";
-import { CalendarClock, Check, CircleDot, Circle } from "lucide-react";
+import { CalendarClock, Check, CircleDot, Circle, Download, Paperclip } from "lucide-react";
 import React, { useState } from "react";
 import { toast } from "sonner";
 import type { AppRouter } from "../../../server/routers";
 
 type Room = NonNullable<inferRouterOutputs<AppRouter>["engagement"]["client"]["room"]>;
 type Task = Room["tasks"][number];
+type RoomFile = Task["files"][number];
 type Deliverable = Room["deliverables"][number];
 
 const lagos = (value: Date | string | null | undefined, withTime = true) =>
@@ -65,17 +66,17 @@ export default function EngagementRoom({ room }: { room: Room }) {
         <p className={KICKER}>What we need from you</p>
         <h2 id="what-we-need" className="mt-1 font-serif text-xl font-bold tracking-tight">{open.length ? `${open.length} thing${open.length === 1 ? "" : "s"} to send` : "Nothing outstanding"}</h2>
         {open.length > 0 && <p className="mt-1 text-sm text-ink-muted">Send each one on WhatsApp or by email, then tell us here. Estimates are fine.</p>}
-        <ul className="mt-4 space-y-3">{open.map(task => <OpenTask key={task.id} task={task} />)}</ul>
+        <ul className="mt-4 space-y-3">{open.map(task => <OpenTask key={task.id} task={task} uploadsEnabled={room.uploadsEnabled} />)}</ul>
         {withUs.length > 0 && (
           <details className="mt-4 text-sm">
             <summary className="cursor-pointer font-semibold text-brand">Already with us ({withUs.length})</summary>
-            <ul className="mt-2 space-y-1">{withUs.map(task => <li key={task.id} className="flex justify-between gap-3 border-b border-line-soft py-1"><span>{task.title}</span><span className="text-ink-muted">{task.statusLabel}</span></li>)}</ul>
+            <ul className="mt-2 space-y-1">{withUs.map(task => <li key={task.id} className="border-b border-line-soft py-1"><div className="flex justify-between gap-3"><span>{task.title}</span><span className="text-ink-muted">{task.statusLabel}</span></div><FileList files={task.files} /></li>)}</ul>
           </details>
         )}
         {ours.length > 0 && (
           <div className="mt-4">
             <p className={KICKER}>What we owe you</p>
-            <ul className="mt-1 space-y-1 text-sm">{ours.map(task => <li key={task.id} className="flex justify-between gap-3"><span>{task.title}</span><span className="whitespace-nowrap text-ink-muted">{dueText(task.dueOn)}</span></li>)}</ul>
+            <ul className="mt-1 space-y-1 text-sm">{ours.map(task => <li key={task.id}><div className="flex justify-between gap-3"><span>{task.title}</span><span className="whitespace-nowrap text-ink-muted">{dueText(task.dueOn)}</span></div><FileList files={task.files} /></li>)}</ul>
           </div>
         )}
       </section>
@@ -109,11 +110,58 @@ function useRoomRefresh() {
   return { onSuccess: () => void utils.engagement.client.room.invalidate(), onError: (error: { message: string }) => toast.error(error.message) };
 }
 
-function OpenTask({ task }: { task: Task }) {
+/** Request a place for the file, send it there from the browser, then tell the server it arrived. */
+function useClientUpload(taskId: number) {
+  const refresh = useRoomRefresh();
+  const request = trpc.engagement.client.requestUpload.useMutation();
+  const confirm = trpc.engagement.client.confirmUpload.useMutation();
+  const [busy, setBusy] = useState(false);
+  const send = async (file: File, note: string) => {
+    setBusy(true);
+    try {
+      const meta = { fileName: file.name, contentType: file.type, sizeBytes: file.size };
+      const ticket = await request.mutateAsync({ taskId, ...meta });
+      const put = await fetch(ticket.uploadUrl, { method: "PUT", headers: ticket.headers, body: file });
+      if (!put.ok) throw new Error("The upload did not finish. Check your connection and try again.");
+      await confirm.mutateAsync({ taskId, storageKey: ticket.storageKey, note: note || null, ...meta });
+      refresh.onSuccess();
+      toast.success("Thank you, we have your file. We will tell you if we need more.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The upload did not finish.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { send, busy };
+}
+
+/** Files on an item, each opened through a short-lived link the server issues after checking who is asking. */
+function FileList({ files }: { files: RoomFile[] }) {
+  const link = trpc.engagement.client.fileLink.useMutation({ onError: error => toast.error(error.message) });
+  if (!files.length) return null;
+  return (
+    <ul className="mt-2 space-y-1" aria-label="Files">
+      {files.map(file => (
+        <li key={file.id} className="flex flex-wrap items-center gap-2 text-sm">
+          <Paperclip className="h-3.5 w-3.5 text-ink-muted" aria-hidden />
+          <span>{file.fileName}</span>
+          <span className="text-xs text-ink-muted">{formatFileSize(file.sizeBytes)}{file.fromTeam ? " · from your team at IP Factory" : file.mine ? " · you" : ""}</span>
+          <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>
+            <Download className="h-3.5 w-3.5" aria-hidden />Download
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function OpenTask({ task, uploadsEnabled }: { task: Task; uploadsEnabled: boolean }) {
   const refresh = useRoomRefresh();
   const [note, setNote] = useState("");
   const [asking, setAsking] = useState(false);
   const respond = trpc.engagement.client.respondToTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success(task.kind === "data_request" ? "Thank you. We will check it and tell you if we need more." : "Marked as done."); } });
+  const upload = useClientUpload(task.id);
+  const canUpload = uploadsEnabled && task.kind === "data_request";
   return (
     <li className="border border-line-soft p-3">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
@@ -124,13 +172,23 @@ function OpenTask({ task }: { task: Task }) {
         </div>
         <span className="whitespace-nowrap text-xs text-ink-muted">{dueText(task.dueOn)}</span>
       </div>
+      <FileList files={task.files} />
       {asking ? (
         <div className="mt-2 flex flex-col gap-2 sm:flex-row">
           <input aria-label={`How you sent ${task.title}`} className="w-full border border-line bg-white px-2 py-1.5 text-sm" placeholder={task.kind === "data_request" ? "How you sent it, e.g. on WhatsApp (optional)" : "Anything we should know (optional)"} value={note} maxLength={500} onChange={event => setNote(event.target.value)} />
           <Button type="button" size="sm" className="rounded-none bg-brand text-xs text-white" disabled={respond.isPending} onClick={() => respond.mutate({ taskId: task.id, note })}>Confirm</Button>
         </div>
       ) : (
-        <Button type="button" size="sm" variant="outline" className="mt-2 rounded-none text-xs" onClick={() => setAsking(true)}>{task.kind === "data_request" ? "I have sent this" : "Mark as done"}</Button>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {canUpload && (
+            <label className={`inline-flex cursor-pointer items-center gap-1.5 border border-brand bg-brand px-3 py-1.5 text-xs font-medium text-white ${upload.busy ? "opacity-60" : ""}`}>
+              <Paperclip className="h-3.5 w-3.5" aria-hidden />{upload.busy ? "Uploading…" : "Upload a file"}
+              <input type="file" className="sr-only" accept={UPLOAD_ACCEPT} disabled={upload.busy} aria-label={`Upload a file for ${task.title}`} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload.send(file, ""); }} />
+            </label>
+          )}
+          <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => setAsking(true)}>{task.kind === "data_request" ? (canUpload ? "I sent it another way" : "I have sent this") : "Mark as done"}</Button>
+          {canUpload && <span className="text-xs text-ink-muted">PDF, photos or spreadsheets, up to {UPLOAD_MAX_MB} MB.</span>}
+        </div>
       )}
     </li>
   );
@@ -147,6 +205,7 @@ function DeliverableItem({ item, isOwner }: { item: Deliverable; isOwner: boolea
       <h3 className="font-semibold">{item.title}</h3>
       <p className="text-xs text-ink-muted">Shared {lagos(item.sharedAt, false)}{isOwner && item.audience === "owner" ? " · only you can see this" : ""}</p>
       {item.summary && <p className="mt-2 whitespace-pre-line text-sm">{item.summary}</p>}
+      <FileList files={item.files} />
       {item.comments.length > 0 && <ul className="mt-3 space-y-1 border-t border-line-soft pt-2">{item.comments.map((entry, index) => <li key={index} className="text-sm"><span className="font-medium">{entry.authorName}</span>: {entry.body}</li>)}</ul>}
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <input aria-label={`Your comment on ${item.title}`} className="w-full border border-line bg-white px-2 py-1.5 text-sm" placeholder="Ask a question or add a comment" value={comment} maxLength={4000} onChange={event => setComment(event.target.value)} />

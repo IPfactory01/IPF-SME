@@ -40,8 +40,9 @@ link (the payment itself stays recorded), and the admin record shows no report s
 before `0008` is applied: confirming a Current State Assessment payment still confirms it, sends the emails and the
 invitation (the hosting log says `[Engagements] The engagements table is missing: apply migration 0008`), onboarding
 still creates the account, a client's dashboard shows no room, and the admin Engagements section says the room is not set
-up yet. **Apply it before the first Current State Assessment payment is confirmed**; an engagement is not created
-retrospectively for a payment confirmed before then.
+up yet. **Apply it before the first Current State Assessment payment is confirmed.** If a payment is confirmed first, the
+admin Engagements section lists it under "Paid, but no engagement yet" once `0008` is applied, and the desk lead
+starts it with one click.
 
 **How to apply `0008`.** `pnpm db:migrate`, or paste `drizzle/supabase/apply-0008-engagement-room.sql` into the Supabase
 SQL Editor and press Run: it stops, changing nothing, unless exactly `0000` to `0007` are recorded and no engagement table

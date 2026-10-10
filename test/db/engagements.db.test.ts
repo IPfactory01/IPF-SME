@@ -188,6 +188,33 @@ for (const target of targets) {
         expect(await db.select().from(schema.engagements).where(eq(schema.engagements.businessCheckId, id))).toHaveLength(1);
       });
 
+      it("lists a paid assessment that has no engagement (paid before migration 0008), and lets the desk lead start it", async () => {
+        const { email, id } = await finishedCheck("catch-up");
+        await payAssessment(id);
+        await acceptInvitation(email, "Catch Up Ltd");
+        // As if the payment had been confirmed while the engagement tables were missing.
+        await db.delete(schema.engagements).where(eq(schema.engagements.businessCheckId, id));
+        const deskLead = await signIn(await person(["desk_lead"]), true);
+        const analyst = await signIn(await person(["analyst"]), true);
+
+        expect((await (await deskLead.call()).engagement.staff.awaitingStart()).map(item => item.businessCheckId)).toContain(id);
+        expect(await (await analyst.call()).engagement.staff.awaitingStart()).toEqual([]);
+        await expect((await analyst.call()).engagement.staff.start({ businessCheckId: id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+        const started = await (await deskLead.call()).engagement.staff.start({ businessCheckId: id });
+        expect(started.created).toBe(true);
+        const engagement = await engagementOf(id);
+        expect(engagement.businessId).not.toBeNull();
+        expect(await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.engagementId, engagement.id))).toHaveLength(ASSESSMENT_TEMPLATE.dataRequests.length);
+        expect((await (await deskLead.call()).engagement.staff.awaitingStart()).map(item => item.businessCheckId)).not.toContain(id);
+        expect(await (await deskLead.call()).engagement.staff.start({ businessCheckId: id })).toMatchObject({ engagementId: engagement.id, created: false });
+      });
+
+      it("refuses to start an engagement for an assessment that is not paid", async () => {
+        const { id } = await finishedCheck("unpaid");
+        await expect((await superAdmin.call()).engagement.staff.start({ businessCheckId: id })).rejects.toMatchObject({ code: "NOT_FOUND" });
+      });
+
       it("works out three working days in Lagos, skipping the weekend", () => {
         expect(addWorkingDays(new Date("2026-10-09T10:00:00Z"), 3)).toBe("2026-10-14"); // Friday to Wednesday
         expect(addWorkingDays(new Date("2026-10-12T23:30:00Z"), 3)).toBe("2026-10-16"); // already Tuesday in Lagos

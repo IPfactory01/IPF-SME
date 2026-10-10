@@ -12,6 +12,7 @@ import {
   engagementSessions,
   engagementTasks,
   engagementTeam,
+  paymentRequests,
   userPlatformRoles,
   users,
 } from "../drizzle/schema";
@@ -124,6 +125,46 @@ export async function startEngagementSafely(db: Database, input: { businessCheck
     console.error("[Engagements] Payment confirmed, but the engagement could not be started:", error instanceof Error ? error.message : error);
     return "failed";
   }
+}
+
+/** Starting an engagement by hand is the desk's call: it needs every engagement in view and the right to work on them. */
+const canStart = (actor: StaffActor) => canSeeAll(actor) && authorityAllows(actor.authority, "manage_engagements");
+function requireStart(actor: StaffActor) {
+  if (!canStart(actor)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "Only the desk lead can start an engagement by hand." });
+  }
+}
+
+/**
+ * Paid Current State Assessments with no engagement: a payment confirmed before migration 0008 was applied, or a start
+ * that failed. The safety net, so the order of events can never cost a client their room.
+ */
+export async function listAwaitingStart(db: Pick<Database, "select">, actor: StaffActor) {
+  // Nothing to act on for someone who cannot start one, so nothing is listed.
+  if (!canStart(actor)) return [];
+  return db.select({
+    businessCheckId: paymentRequests.businessCheckId,
+    paymentRequestId: paymentRequests.id,
+    confirmedAt: paymentRequests.confirmedAt,
+    fullName: businessChecks.fullName,
+    businessName: businessChecks.businessName,
+    email: businessChecks.email,
+  }).from(paymentRequests)
+    .innerJoin(businessChecks, eq(paymentRequests.businessCheckId, businessChecks.id))
+    .leftJoin(engagements, eq(engagements.businessCheckId, paymentRequests.businessCheckId))
+    .where(and(eq(paymentRequests.item, "current_state"), eq(paymentRequests.status, "confirmed"), isNull(engagements.id)))
+    .orderBy(asc(paymentRequests.confirmedAt));
+}
+
+/** Starts the engagement for a paid assessment that has none, exactly as confirming the payment would have. */
+export async function startAwaitingEngagement(db: Database, actor: StaffActor, input: { businessCheckId: number }) {
+  requireStart(actor);
+  const payment = (await db.select({ id: paymentRequests.id }).from(paymentRequests)
+    .where(and(eq(paymentRequests.businessCheckId, input.businessCheckId), eq(paymentRequests.item, "current_state"), eq(paymentRequests.status, "confirmed"))).limit(1))[0];
+  if (!payment) throw new TRPCError({ code: "NOT_FOUND", message: "This Current State Assessment is not paid yet." });
+  const result = await startEngagement(db, { businessCheckId: input.businessCheckId, paymentRequestId: payment.id, actorUserId: actor.id });
+  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq(engagements.businessCheckId, input.businessCheckId)).limit(1))[0];
+  return { engagementId: engagement.id, created: result.created } as const;
 }
 
 /** The owner accepted the account invitation: their engagement now belongs to their business. Never moves a linked one. */

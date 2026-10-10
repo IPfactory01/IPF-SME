@@ -21,6 +21,7 @@ import {
   getStaffEngagement,
   isMissingEngagementTable,
   listAssignableStaff,
+  listAwaitingStart,
   listStaffEngagements,
   MIGRATION_MISSING_MESSAGE,
   removeTeamMember,
@@ -35,6 +36,7 @@ import {
   shareDeliverable,
   shareSessionNotes,
   staffComment,
+  startAwaitingEngagement,
 } from "../engagements";
 import { loadAuthority } from "../platformAccess";
 import { accountProcedure, adminProcedure, router } from "../_core/trpc";
@@ -76,6 +78,16 @@ const staffRouter = router({
       return { setUp: false, items: [] };
     }
   }),
+  /** Paid assessments with no engagement yet (the safety net); empty before migration 0008. */
+  awaitingStart: staff.query(async ({ ctx }) => {
+    try {
+      return await listAwaitingStart(await engagementDb(), ctx.actor);
+    } catch (error) {
+      if (!isMissingEngagementTable(error)) throw error;
+      return [];
+    }
+  }),
+  start: staff.input(z.object({ businessCheckId: id })).mutation(async ({ ctx, input }) => guarded(async () => startAwaitingEngagement(await engagementDb(), ctx.actor, input))),
   detail: staff.input(z.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => getStaffEngagement(await engagementDb(), ctx.actor, input.engagementId))),
   assignableStaff: staff.query(async ({ ctx }) => listAssignableStaff(await engagementDb(), ctx.actor)),
   assign: staff.input(z.object({ engagementId: id, userId: id, role: z.enum(ENGAGEMENT_TEAM_ROLES) })).mutation(async ({ ctx, input }) => guarded(async () => assignTeamMember(await engagementDb(), ctx.actor, input))),

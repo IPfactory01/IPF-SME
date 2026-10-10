@@ -8347,6 +8347,31 @@ async function startEngagementSafely(db, input) {
     return "failed";
   }
 }
+var canStart = (actor) => canSeeAll(actor) && authorityAllows(actor.authority, "manage_engagements");
+function requireStart(actor) {
+  if (!canStart(actor)) {
+    throw new TRPCError12({ code: "FORBIDDEN", message: "Only the desk lead can start an engagement by hand." });
+  }
+}
+async function listAwaitingStart(db, actor) {
+  if (!canStart(actor)) return [];
+  return db.select({
+    businessCheckId: paymentRequests.businessCheckId,
+    paymentRequestId: paymentRequests.id,
+    confirmedAt: paymentRequests.confirmedAt,
+    fullName: businessChecks.fullName,
+    businessName: businessChecks.businessName,
+    email: businessChecks.email
+  }).from(paymentRequests).innerJoin(businessChecks, eq14(paymentRequests.businessCheckId, businessChecks.id)).leftJoin(engagements, eq14(engagements.businessCheckId, paymentRequests.businessCheckId)).where(and11(eq14(paymentRequests.item, "current_state"), eq14(paymentRequests.status, "confirmed"), isNull5(engagements.id))).orderBy(asc(paymentRequests.confirmedAt));
+}
+async function startAwaitingEngagement(db, actor, input) {
+  requireStart(actor);
+  const payment = (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and11(eq14(paymentRequests.businessCheckId, input.businessCheckId), eq14(paymentRequests.item, "current_state"), eq14(paymentRequests.status, "confirmed"))).limit(1))[0];
+  if (!payment) throw new TRPCError12({ code: "NOT_FOUND", message: "This Current State Assessment is not paid yet." });
+  const result = await startEngagement(db, { businessCheckId: input.businessCheckId, paymentRequestId: payment.id, actorUserId: actor.id });
+  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq14(engagements.businessCheckId, input.businessCheckId)).limit(1))[0];
+  return { engagementId: engagement.id, created: result.created };
+}
 async function linkEngagementToBusiness(db, input) {
   await db.update(engagements).set({ businessId: input.businessId }).where(and11(eq14(engagements.businessCheckId, input.businessCheckId), isNull5(engagements.businessId)));
 }
@@ -11284,6 +11309,16 @@ var staffRouter = router({
       return { setUp: false, items: [] };
     }
   }),
+  /** Paid assessments with no engagement yet (the safety net); empty before migration 0008. */
+  awaitingStart: staff.query(async ({ ctx }) => {
+    try {
+      return await listAwaitingStart(await engagementDb(), ctx.actor);
+    } catch (error) {
+      if (!isMissingEngagementTable(error)) throw error;
+      return [];
+    }
+  }),
+  start: staff.input(z22.object({ businessCheckId: id })).mutation(async ({ ctx, input }) => guarded(async () => startAwaitingEngagement(await engagementDb(), ctx.actor, input))),
   detail: staff.input(z22.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => getStaffEngagement(await engagementDb(), ctx.actor, input.engagementId))),
   assignableStaff: staff.query(async ({ ctx }) => listAssignableStaff(await engagementDb(), ctx.actor)),
   assign: staff.input(z22.object({ engagementId: id, userId: id, role: z22.enum(ENGAGEMENT_TEAM_ROLES) })).mutation(async ({ ctx, input }) => guarded(async () => assignTeamMember(await engagementDb(), ctx.actor, input))),

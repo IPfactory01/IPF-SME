@@ -7,19 +7,22 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const api = vi.hoisted(() => ({
   list: { setUp: true, items: [] as unknown[] } as { setUp: boolean; items: unknown[] },
   detail: null as unknown,
+  awaiting: [] as unknown[],
   calls: {} as Record<string, unknown[]>,
 }));
-const mutation = (name: string) => (options?: { onSuccess?: () => void }) => ({ isPending: false, mutate: (input: unknown) => { (api.calls[name] ??= []).push(input); options?.onSuccess?.(); } });
+const replies: Record<string, unknown> = { start: { engagementId: 4, created: true } };
+const mutation = (name: string) => (options?: { onSuccess?: (value: never) => void }) => ({ isPending: false, mutate: (input: unknown) => { (api.calls[name] ??= []).push(input); options?.onSuccess?.((replies[name] ?? { success: true }) as never); } });
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, list: { invalidate: () => undefined } } } }),
+    useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, list: { invalidate: () => undefined }, awaitingStart: { invalidate: () => undefined } } } }),
     engagement: {
       staff: {
         list: { useQuery: () => ({ data: api.list, isLoading: false, error: null }) },
+        awaitingStart: { useQuery: () => ({ data: api.awaiting }) },
         detail: { useQuery: () => ({ data: api.detail, isLoading: false, error: null }) },
         assignableStaff: { useQuery: () => ({ data: [{ userId: 9, name: "Ola Analyst", email: "ola@example.test", roles: ["analyst"] }] }) },
-        ...Object.fromEntries(["setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -45,6 +48,7 @@ const detail = (can: { manage: boolean; assign: boolean; review: boolean }, deli
 
 beforeEach(() => {
   api.list = { setUp: true, items: [row] };
+  api.awaiting = [];
   api.calls = {};
 });
 afterEach(cleanup);
@@ -55,6 +59,21 @@ describe("the team's engagements", () => {
     render(<EngagementsView />);
     const tableRow = screen.getByText("Ada Foods").closest("tr")!;
     for (const text of ["Getting set up", "No one yet", "5 to send", "2 overdue", "2 not booked"]) expect(tableRow.textContent).toContain(text);
+  });
+
+  it("flags a paid assessment with no engagement and starts it from the list", () => {
+    api.detail = detail({ manage: true, assign: true, review: true });
+    api.awaiting = [{ businessCheckId: 12, paymentRequestId: 3, confirmedAt: new Date("2026-10-15T10:00:00Z"), fullName: "Bola Quiet", businessName: "Bola Bakes", email: "bola@example.test" }];
+    render(<EngagementsView />);
+    const panel = within(screen.getByRole("region", { name: "Paid, but no engagement yet" }));
+    expect(panel.getByText("Bola Bakes")).toBeTruthy();
+    fireEvent.click(panel.getByRole("button", { name: "Start engagement" }));
+    expect(api.calls.start).toEqual([{ businessCheckId: 12 }]);
+  });
+
+  it("shows no such panel when every paid assessment has its engagement", () => {
+    render(<EngagementsView />);
+    expect(screen.queryByRole("region", { name: "Paid, but no engagement yet" })).toBeNull();
   });
 
   it("says so when the database is not ready, instead of failing", () => {

@@ -1,10 +1,12 @@
+import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import type { inferRouterOutputs } from "@trpc/server";
 import React, { useState } from "react";
+import { toast } from "sonner";
 import type { AppRouter } from "../../../../server/routers";
 import { ClickableRow, RecordDrawer, TD, TH } from "./AdminPrimitives";
 import EngagementDetail from "./EngagementDetail";
-import { formatDateTime } from "./format";
+import { formatDate, formatDateTime } from "./format";
 
 type Row = inferRouterOutputs<AppRouter>["engagement"]["staff"]["list"]["items"][number];
 
@@ -14,6 +16,17 @@ type Row = inferRouterOutputs<AppRouter>["engagement"]["staff"]["list"]["items"]
  */
 export default function EngagementsView() {
   const list = trpc.engagement.staff.list.useQuery(undefined, { retry: false });
+  const awaiting = trpc.engagement.staff.awaitingStart.useQuery(undefined, { retry: false });
+  const utils = trpc.useUtils();
+  const start = trpc.engagement.staff.start.useMutation({
+    onSuccess: result => {
+      void utils.engagement.staff.list.invalidate();
+      void utils.engagement.staff.awaitingStart.invalidate();
+      toast.success("Engagement started.");
+      setOpenId(result.engagementId);
+    },
+    onError: error => toast.error(error.message),
+  });
   const [openId, setOpenId] = useState<number | null>(null);
   const open = list.data?.items.find(item => item.id === openId) ?? null;
 
@@ -24,6 +37,20 @@ export default function EngagementsView() {
   return (
     <div className="space-y-4 p-6">
       <p className="text-sm text-ink-muted">An engagement starts when the Current State Assessment is paid. Open one to name the team, book the calls, send what you need from the client and share what you found.</p>
+      {awaiting.data && awaiting.data.length > 0 && (
+        <section aria-labelledby="awaiting-start" className="space-y-2 border border-danger-line bg-danger-tint p-4">
+          <h2 id="awaiting-start" className="text-sm font-semibold text-danger">Paid, but no engagement yet</h2>
+          <p className="text-xs text-ink">These Current State Assessments were paid before the room was set up, or the start failed. Start each one: it gets the usual requests and calls, and joins the client's account if they have one.</p>
+          <ul className="space-y-1">
+            {awaiting.data.map(item => (
+              <li key={item.businessCheckId} className="flex flex-wrap items-center justify-between gap-2 border-t border-danger-line pt-2 text-sm">
+                <span><span className="font-medium">{item.businessName || item.fullName}</span> <span className="text-ink-muted">· {item.fullName} · paid {formatDate(item.confirmedAt)}</span></span>
+                <Button type="button" size="sm" className="rounded-none bg-brand text-xs text-white" disabled={start.isPending} onClick={() => start.mutate({ businessCheckId: item.businessCheckId })}>Start engagement</Button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {list.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
         <div className="overflow-x-auto border border-line bg-white">
           <table className="w-full">

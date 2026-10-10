@@ -45,6 +45,7 @@ const room = (over: Record<string, unknown> = {}) => ({
   stageLabel: "Current State Assessment",
   journey: journeyOf("assessment"),
   problemStatement: null,
+  measure: null,
   team: [{ name: "Lewis Lead", roleLabel: "Engagement lead" }, { name: "Ola Analyst", roleLabel: "Analyst" }],
   nextSession: { id: 1, title: "Current State Assessment call 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1" },
   sessions: [
@@ -169,5 +170,25 @@ describe("files in the room", () => {
     fireEvent.click(list.getAllByRole("button", { name: "Download" })[0]);
     await waitFor(() => expect(open).toHaveBeenCalledWith("https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf", "_blank", "noopener"));
     expect(api.calls.fileLink).toEqual([{ fileId: 99 }]);
+  });
+});
+
+describe("the one number we watch", () => {
+  it("shows where it started, this week's reading and where it is going, week by week", () => {
+    const measure = { name: "Cash in the bank on Friday", definition: "The business account balance after the week's payments.", unit: "₦", baselineValue: 150000, targetValue: 400000,
+      latest: { weekNumber: 2, heldOn: "2026-11-20", reading: 210000, nextStep: "Chase the two late invoices." },
+      readings: [{ weekNumber: 1, heldOn: "2026-11-13", reading: 160000, nextStep: "Start the daily cash count." }, { weekNumber: 2, heldOn: "2026-11-20", reading: 210000, nextStep: "Chase the two late invoices." }] };
+    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "The fix", measure })} />);
+    const card = within(screen.getByRole("region", { name: "Cash in the bank on Friday" }));
+    expect(card.getByText("₦150,000")).toBeTruthy();
+    expect(card.getAllByText("₦210,000")).toHaveLength(2);
+    expect(card.getByText("₦400,000")).toBeTruthy();
+    expect(card.getByText("Week 2")).toBeTruthy();
+    expect(within(card.getByRole("table", { name: "Week by week" })).getByText("Chase the two late invoices.")).toBeTruthy();
+  });
+
+  it("shows no number card before the fix has one", () => {
+    render(<EngagementRoom room={room()} />);
+    expect(screen.queryByText("The one number we watch")).toBeNull();
   });
 });

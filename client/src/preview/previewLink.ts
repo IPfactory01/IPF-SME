@@ -38,6 +38,7 @@ const SAMPLE_ROOM = {
   stageLabel: "Current State Assessment",
   journey: journeyOf("assessment"),
   problemStatement: null,
+  measure: null,
   team: [{ name: "Femi Adebayo", roleLabel: "Engagement lead" }, { name: "Ngozi Eze", roleLabel: "Analyst" }],
   nextSession: { id: 2, title: "Current State Assessment call 2", scheduledFor: day(7), durationMinutes: 90, meetingLink: "https://zoom.us/" },
   sessions: [

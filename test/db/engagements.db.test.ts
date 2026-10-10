@@ -435,6 +435,40 @@ for (const target of targets) {
       });
     });
 
+    describe("the fix: the one number and the weekly check-in", () => {
+      it("lets the team set the number and record the weeks in order; the client sees the reading and the next step, never the hours", async () => {
+        const { owner, engagementId, businessId } = await client("fix");
+        const contributor = await member(businessId, "contributor");
+        const analystUser = await person(["analyst"]);
+        const analyst = await signIn(analystUser, true);
+        const outsider = await signIn(await person(["analyst"]), true);
+        await (await superAdmin.call()).engagement.staff.assign({ engagementId, userId: analystUser.id, role: "analyst" });
+
+        const measure = { engagementId, name: "Cash in the bank on Friday", definition: "The business account balance after the week's payments.", unit: "₦", baselineValue: 150000, targetValue: 400000 };
+        await expect((await outsider.call()).engagement.staff.saveMeasure(measure)).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await (await analyst.call()).engagement.staff.saveMeasure(measure);
+        await (await analyst.call()).engagement.staff.saveMeasure({ ...measure, targetValue: 450000 });
+        expect(await db.select().from(schema.engagementMeasures).where(eq(schema.engagementMeasures.engagementId, engagementId))).toHaveLength(1);
+
+        const week = (weekNumber: number, reading: number) => ({ engagementId, weekNumber, heldOn: `2026-11-${String(6 + 7 * weekNumber).padStart(2, "0")}`, progress: "Moved.", blockers: "Power cuts.", nextStep: `Step for week ${weekNumber + 1}.`, measureReading: reading, questionsAsked: "How do I price delivery?", hoursLead: 0.5, hoursAnalyst: 2.5, hoursPartner: null, aiUsed: true });
+        await expect((await analyst.call()).engagement.staff.saveCheckin(week(2, 200000))).rejects.toMatchObject({ code: "CONFLICT", message: "Record week 1 first: a check-in cannot start without last week's record." });
+        await (await analyst.call()).engagement.staff.saveCheckin(week(1, 160000));
+        await (await analyst.call()).engagement.staff.saveCheckin(week(2, 200000));
+        await (await analyst.call()).engagement.staff.saveCheckin({ ...week(2, 210000) });
+
+        const detail = await (await analyst.call()).engagement.staff.detail({ engagementId });
+        expect(detail.measure).toMatchObject({ name: "Cash in the bank on Friday", baselineValue: 150000, targetValue: 450000 });
+        expect(detail.checkins.map(row => [row.weekNumber, row.measureReading, row.hoursAnalyst])).toEqual([[1, 160000, 2.5], [2, 210000, 2.5]]);
+
+        const room = (await (await owner.call()).engagement.client.room())!;
+        expect(room.measure).toMatchObject({ name: "Cash in the bank on Friday", unit: "₦", baselineValue: 150000, targetValue: 450000, latest: { weekNumber: 2, reading: 210000 } });
+        expect(room.measure!.readings.map(row => [row.weekNumber, row.reading, row.nextStep])).toEqual([[1, 160000, "Step for week 2."], [2, 210000, "Step for week 3."]]);
+        const text = JSON.stringify(room);
+        for (const hidden of ["hoursAnalyst", "hoursLead", "questionsAsked", "Power cuts", "aiUsed"]) expect(text).not.toContain(hidden);
+        expect((await (await contributor.browser.call()).engagement.client.room())!.measure).toBeNull();
+      });
+    });
+
     describe("deliverables", () => {
       it("needs the desk lead's approval before a prescription reaches the client; findings can be shared at once", async () => {
         const { owner, engagementId } = await client("deliverables");

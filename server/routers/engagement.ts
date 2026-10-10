@@ -9,6 +9,7 @@ import {
   ENGAGEMENT_TASK_SIDES,
   ENGAGEMENT_TASK_STATUSES,
   ENGAGEMENT_TEAM_ROLES,
+  MAX_CHECKIN_WEEKS,
   UPLOAD_MAX_BYTES,
 } from "../../shared/engagement";
 import { authorityAllows } from "../../shared/platformPermissions";
@@ -30,7 +31,9 @@ import {
   MIGRATION_MISSING_MESSAGE,
   removeTeamMember,
   respondToTask,
+  saveCheckin,
   saveDeliverable,
+  saveMeasure,
   saveProblem,
   saveSession,
   saveSessionNotes,
@@ -55,6 +58,9 @@ const sharedAudience = z.enum(["owner", "business"]);
 const upload = { fileName: text(255).min(1, "The file has no name."), contentType: text(128), sizeBytes: z.number().int().positive().max(UPLOAD_MAX_BYTES) };
 const storageKey = z.string().min(20).max(512);
 const uploadTarget = z.object({ kind: z.enum(["task", "deliverable"]), id });
+const reading = z.number().finite().nullable();
+const hours = z.number().min(0).max(99.99).nullable();
+const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable();
 
 /** A missing table (migration 0008) becomes a clear message instead of a server error. */
 async function guarded<T>(work: () => Promise<T>): Promise<T> {
@@ -140,6 +146,12 @@ const staffRouter = router({
   requestUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input))),
   confirmUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
+  saveMeasure: staff.input(z.object({ engagementId: id, name: text(160).min(1, "Name the number."), definition: optionalText(2000), unit: optionalText(32), baselineValue: reading, targetValue: reading }))
+    .mutation(async ({ ctx, input }) => guarded(async () => saveMeasure(await engagementDb(), ctx.actor, input))),
+  saveCheckin: staff.input(z.object({
+    engagementId: id, weekNumber: z.number().int().min(1).max(MAX_CHECKIN_WEEKS), heldOn: dateOnly, progress: optionalText(4000), blockers: optionalText(4000), nextStep: optionalText(4000),
+    measureReading: reading, questionsAsked: optionalText(4000), hoursLead: hours, hoursAnalyst: hours, hoursPartner: hours, aiUsed: z.boolean().nullable(),
+  })).mutation(async ({ ctx, input }) => guarded(async () => saveCheckin(await engagementDb(), ctx.actor, input))),
 });
 
 /**

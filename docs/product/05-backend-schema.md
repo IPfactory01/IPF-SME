@@ -92,7 +92,7 @@ and the room says it is not set up. Vocabulary and the who-sees-what rules: `sha
 | `engagement_comments` | Feedback on a deliverable, from the client or the team | Only on a deliverable the writer can see | Comments |
 | `engagement_files` | Files in private storage: the data request or deliverable they belong to, audience | Unique storage key under `engagements/{id}/tasks|deliverables/{id}/`; uploaded straight to a private Supabase bucket with a one-off signed URL, recorded only once the object exists; opened through five-minute signed links after the same access check (`server/fileStorage.ts`) | **Client files**: bank statements, accounts, staff lists |
 | `engagement_measures` | The fix's one number: name, definition, unit, baseline, target | One per engagement (D3) | Business figures |
-| `engagement_checkins` | One row per fix week: progress, blockers, next step, reading, questions asked, hours by role, AI used | Unique (engagement, week) | Internal: hours are never shown to the client |
+| `engagement_checkins` | One row per fix week: the five-question check-in, the reading, the questions asked and the hours by role (concept note §17) | Unique (engagement, week); week N is recorded only after week N-1 | The client sees the reading and the next step only; hours, blockers, questions and AI use stay with the team |
 | `business_member_access` | The owner's staff: `full` or `contributor` | One per membership; no row means full (owners and business admins never have one) | — |
 | `account_invitations` | Invitations that create an account for IP Factory staff (with a role) or the owner's staff (with an access level) | Token stored as a hash; single use, expiring, revocable; one pending per email. Staff: `manage_roles` invites, never Super Admin. Seats: the owner of the business in use, within `TEAM_SEATS_INCLUDED` | Email and name |
 
@@ -185,7 +185,7 @@ procedure grants assigned-only access.
    one role; a seat invitation creates the person with a membership and an access level, in the owner's business only,
    within the included seat. Accepting is one transaction; an existing account is never merged.
 
-Still to build on these tables: the fix's measure and check-in screens (`engagement_measures`, `engagement_checkins`).
+Still to build: the close and the day-30 check, which need an `engagement_closes` table (migration 0009, December).
 
 ## 6. Findings to fix
 

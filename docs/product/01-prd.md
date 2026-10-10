@@ -179,8 +179,9 @@ Rules:
   need from you (data requests from the template, "I have sent this"), what we have found (shared notes and
   deliverables, comments, the owner's sign-off, the owner's share-with-my-team choice). **Built 10 October:** uploads against a
   data request and files on deliverables, straight from the browser to a private bucket, opened only through short-lived
-  links the server issues after checking who is asking; switched on by the storage settings in Vercel. **Not built
-  yet:** the fix's measure and weekly reading. The owner's **Your team** card
+  links the server issues after checking who is asking; switched on by the storage settings in Vercel. **Built 10
+  October:** the one number we watch (where it started, this week, where it is going, week by week with the next step),
+  shown to the owner and their full-access staff once the team sets it. The owner's **Your team** card
   invites one person as Full or Contributor, changes their access or removes them.
 
 ### F8. Engagement record and check-ins (internal)
@@ -194,8 +195,10 @@ value, moved, extension, plan delivered, next problem area, ongoing support defi
 - The record is what the January portal is built on, and the evidence for the pilot's pass marks (§13).
 - **Status: Partly built (9 October).** The engagement starts with the template when the Current State Assessment is
   paid; the admin Engagements section holds the stage, the team, the one problem, the calls with client and internal
-  notes, requests and actions, and deliverables with approval. The tables for the measure and the weekly check-in exist;
-  their screens are next.
+  notes, requests and actions, and deliverables with approval. The measure (set in fix week 1) and the weekly check-in (the five
+  questions, the reading, questions asked, hours by role, AI used) are recorded in the Engagements section, one week at a
+  time and in order (10 October). **Not built yet:** the close and the day-30 check, which need their own table
+  (migration 0009), planned for December when the first fixes close.
 
 ### F9. Internal workspace (admin console)
 

@@ -443,6 +443,7 @@ function safeFileName(fileName2) {
   const extension = extensionOf(cleaned);
   return `${cleaned.slice(0, 100 - extension.length - 1)}.${extension}`;
 }
+var MAX_CHECKIN_WEEKS = 12;
 
 // drizzle/schema.ts
 var usersRoleEnum = pgEnum("users_role", ["user", "admin"]);
@@ -8560,14 +8561,16 @@ async function getStaffEngagement(db, actor, engagementId) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
   const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq14(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq14(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
-  const [team, sessions, tasks, deliverables, comments, clientPeople, files] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins] = await Promise.all([
     db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email }).from(engagementTeam).innerJoin(users, eq14(engagementTeam.userId, users.id)).where(eq14(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq14(engagementSessions.engagementId, engagementId)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq14(engagementTasks.engagementId, engagementId)).orderBy(asc(engagementTasks.id)),
     db.select().from(engagementDeliverables).where(eq14(engagementDeliverables.engagementId, engagementId)).orderBy(asc(engagementDeliverables.id)),
     db.select({ id: engagementComments.id, deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq14(engagementComments.authorUserId, users.id)).where(eq14(engagementComments.engagementId, engagementId)).orderBy(asc(engagementComments.id)),
     engagement.businessId ? clientPeopleOf(db, engagement.businessId) : Promise.resolve([]),
-    filesOf(db, engagementId)
+    filesOf(db, engagementId),
+    measureOf(db, engagementId),
+    checkinsOf(db, engagementId)
   ]);
   const filesFor = (where, id3) => files.filter((file) => file[where] === id3).map((file) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt }));
   return {
@@ -8581,6 +8584,8 @@ async function getStaffEngagement(db, actor, engagementId) {
     sessions,
     tasks: tasks.map((task) => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id) })),
     deliverables: deliverables.map((item) => ({ ...item, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item.kind), comments: comments.filter((comment) => comment.deliverableId === item.id), files: filesFor("deliverableId", item.id) })),
+    measure,
+    checkins,
     can: {
       manage: authorityAllows(actor.authority, "manage_engagements"),
       assign: authorityAllows(actor.authority, "assign_engagements"),
@@ -8789,13 +8794,15 @@ async function getClientRoom(db, session) {
   const engagement = (await db.select().from(engagements).where(eq14(engagements.businessId, business.businessId)).orderBy(desc8(engagements.id)).limit(1))[0];
   if (!engagement) return null;
   const viewer = await clientViewerFor(db, session, business.businessId);
-  const [team, sessions, tasks, deliverables, comments, files] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, files, measure, checkins] = await Promise.all([
     db.select({ name: users.name, role: engagementTeam.role }).from(engagementTeam).innerJoin(users, eq14(engagementTeam.userId, users.id)).where(eq14(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq14(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq14(engagementTasks.engagementId, engagement.id)).orderBy(asc(engagementTasks.id)),
     db.select().from(engagementDeliverables).where(and11(eq14(engagementDeliverables.engagementId, engagement.id), eq14(engagementDeliverables.status, "shared"))).orderBy(asc(engagementDeliverables.id)),
     db.select({ deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq14(engagementComments.authorUserId, users.id)).where(eq14(engagementComments.engagementId, engagement.id)).orderBy(asc(engagementComments.id)),
-    filesOf(db, engagement.id)
+    filesOf(db, engagement.id),
+    measureOf(db, engagement.id),
+    checkinsOf(db, engagement.id)
   ]);
   const visibleDeliverables = deliverables.filter((item) => clientCanSee(item.audience, viewer));
   const clientFiles = (where, id3) => files.filter((file) => file[where] === id3 && clientFileVisible(file, viewer, session.user.id)).map((file) => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === session.user.id, fromTeam: file.fromTeam }));
@@ -8812,6 +8819,8 @@ async function getClientRoom(db, session) {
     stageLabel: ENGAGEMENT_STAGE_LABELS[engagement.stage],
     journey: journeyOf(engagement.stage),
     problemStatement: viewer.kind === "owner" || viewer.access === "full" ? engagement.problemStatement : null,
+    // The one number: the business's own result, so the owner and their full-access staff; never the hours behind it.
+    measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,
     team: team.map((member) => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
     sessions: scheduled.map((item) => ({
@@ -9038,6 +9047,57 @@ async function staffFileLink(db, actor, input) {
   if (!file) throw notFound();
   await requireStaffEngagement(db, actor, file.engagementId);
   return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+}
+var asNumber = (value) => value === null ? null : Number(value);
+var asNumeric = (value) => value === null ? null : String(value);
+async function measureOf(db, engagementId) {
+  const row = (await db.select().from(engagementMeasures).where(eq14(engagementMeasures.engagementId, engagementId)).limit(1))[0];
+  return row ? { ...row, baselineValue: asNumber(row.baselineValue), targetValue: asNumber(row.targetValue) } : null;
+}
+async function checkinsOf(db, engagementId) {
+  const rows = await db.select().from(engagementCheckins).where(eq14(engagementCheckins.engagementId, engagementId)).orderBy(asc(engagementCheckins.weekNumber));
+  return rows.map((row) => ({ ...row, measureReading: asNumber(row.measureReading), hoursLead: asNumber(row.hoursLead), hoursAnalyst: asNumber(row.hoursAnalyst), hoursPartner: asNumber(row.hoursPartner) }));
+}
+function clientMeasure(measure, checkins) {
+  const readings = checkins.map((row) => ({ weekNumber: row.weekNumber, heldOn: row.heldOn, reading: row.measureReading, nextStep: row.nextStep }));
+  const latest = [...readings].reverse().find((row) => row.reading !== null) ?? null;
+  return { name: measure.name, definition: measure.definition, unit: measure.unit, baselineValue: measure.baselineValue, targetValue: measure.targetValue, latest, readings };
+}
+async function saveMeasure(db, actor, input) {
+  requireManage(actor);
+  await requireStaffEngagement(db, actor, input.engagementId);
+  const values2 = { name: input.name, definition: input.definition, unit: input.unit, baselineValue: asNumeric(input.baselineValue), targetValue: asNumeric(input.targetValue) };
+  await db.transaction(async (tx) => {
+    await tx.insert(engagementMeasures).values({ engagementId: input.engagementId, ...values2, createdByUserId: actor.id }).onConflictDoUpdate({ target: engagementMeasures.engagementId, set: values2 });
+    await recordAudit(tx, { action: "engagement_measure_saved", actorUserId: actor.id, details: { engagementId: input.engagementId, name: input.name } });
+  });
+  return { success: true };
+}
+async function saveCheckin(db, actor, input) {
+  requireManage(actor);
+  await requireStaffEngagement(db, actor, input.engagementId);
+  if (input.weekNumber > 1) {
+    const previous = await db.select({ id: engagementCheckins.id }).from(engagementCheckins).where(and11(eq14(engagementCheckins.engagementId, input.engagementId), eq14(engagementCheckins.weekNumber, input.weekNumber - 1))).limit(1);
+    if (!previous.length) throw new TRPCError12({ code: "CONFLICT", message: `Record week ${input.weekNumber - 1} first: a check-in cannot start without last week's record.` });
+  }
+  const values2 = {
+    heldOn: input.heldOn,
+    progress: input.progress,
+    blockers: input.blockers,
+    nextStep: input.nextStep,
+    measureReading: asNumeric(input.measureReading),
+    questionsAsked: input.questionsAsked,
+    hoursLead: asNumeric(input.hoursLead),
+    hoursAnalyst: asNumeric(input.hoursAnalyst),
+    hoursPartner: asNumeric(input.hoursPartner),
+    aiUsed: input.aiUsed,
+    recordedByUserId: actor.id
+  };
+  await db.transaction(async (tx) => {
+    await tx.insert(engagementCheckins).values({ engagementId: input.engagementId, weekNumber: input.weekNumber, ...values2 }).onConflictDoUpdate({ target: [engagementCheckins.engagementId, engagementCheckins.weekNumber], set: values2 });
+    await recordAudit(tx, { action: "engagement_checkin_recorded", actorUserId: actor.id, details: { engagementId: input.engagementId, weekNumber: input.weekNumber } });
+  });
+  return { success: true };
 }
 
 // server/clientOnboarding.ts
@@ -11542,6 +11602,9 @@ var sharedAudience = z22.enum(["owner", "business"]);
 var upload = { fileName: text3(255).min(1, "The file has no name."), contentType: text3(128), sizeBytes: z22.number().int().positive().max(UPLOAD_MAX_BYTES) };
 var storageKey = z22.string().min(20).max(512);
 var uploadTarget = z22.object({ kind: z22.enum(["task", "deliverable"]), id });
+var reading3 = z22.number().finite().nullable();
+var hours = z22.number().min(0).max(99.99).nullable();
+var dateOnly = z22.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable();
 async function guarded(work) {
   try {
     return await work();
@@ -11614,7 +11677,22 @@ var staffRouter = router({
   comment: staff.input(z22.object({ deliverableId: id, body: text3(4e3).min(1) })).mutation(async ({ ctx, input }) => guarded(async () => staffComment(await engagementDb(), ctx.actor, input))),
   requestUpload: staff.input(z22.object({ engagementId: id, target: uploadTarget, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input))),
   confirmUpload: staff.input(z22.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
-  fileLink: staff.input(z22.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input)))
+  fileLink: staff.input(z22.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
+  saveMeasure: staff.input(z22.object({ engagementId: id, name: text3(160).min(1, "Name the number."), definition: optionalText2(2e3), unit: optionalText2(32), baselineValue: reading3, targetValue: reading3 })).mutation(async ({ ctx, input }) => guarded(async () => saveMeasure(await engagementDb(), ctx.actor, input))),
+  saveCheckin: staff.input(z22.object({
+    engagementId: id,
+    weekNumber: z22.number().int().min(1).max(MAX_CHECKIN_WEEKS),
+    heldOn: dateOnly,
+    progress: optionalText2(4e3),
+    blockers: optionalText2(4e3),
+    nextStep: optionalText2(4e3),
+    measureReading: reading3,
+    questionsAsked: optionalText2(4e3),
+    hoursLead: hours,
+    hoursAnalyst: hours,
+    hoursPartner: hours,
+    aiUsed: z22.boolean().nullable()
+  })).mutation(async ({ ctx, input }) => guarded(async () => saveCheckin(await engagementDb(), ctx.actor, input)))
 });
 var clientRouter = router({
   /** Null when the business has no engagement yet, or the room is not set up in the database yet. */

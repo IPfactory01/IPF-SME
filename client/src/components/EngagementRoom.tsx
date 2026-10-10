@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { formatFileSize, OPEN_TASK_STATUSES, UPLOAD_ACCEPT, UPLOAD_MAX_MB } from "@shared/engagement";
+import { formatFileSize, formatMeasure, OPEN_TASK_STATUSES, UPLOAD_ACCEPT, UPLOAD_MAX_MB } from "@shared/engagement";
 import type { inferRouterOutputs } from "@trpc/server";
 import { CalendarClock, Check, CircleDot, Circle, Download, Paperclip } from "lucide-react";
 import React, { useState } from "react";
@@ -61,6 +61,25 @@ export default function EngagementRoom({ room }: { room: Room }) {
           {room.team.length ? <ul className="mt-1 text-sm">{room.team.map(member => <li key={`${member.name}-${member.roleLabel}`}>{member.name} <span className="text-ink-muted">· {member.roleLabel}</span></li>)}</ul> : <p className="mt-1 text-sm text-ink-muted">We are naming your team now.</p>}
         </div>
       </section>
+
+      {room.measure && (
+        <section aria-labelledby="the-number" className={CARD}>
+          <p className={KICKER}>The one number we watch</p>
+          <h2 id="the-number" className="mt-1 font-serif text-xl font-bold tracking-tight">{room.measure.name}</h2>
+          {room.measure.definition && <p className="mt-1 text-sm text-ink-muted">{room.measure.definition}</p>}
+          <dl className="mt-4 grid grid-cols-3 gap-3 text-center">
+            <div className="border border-line-soft p-3"><dt className={KICKER}>Started at</dt><dd className="mt-1 font-serif text-xl">{formatMeasure(room.measure.baselineValue, room.measure.unit)}</dd></div>
+            <div className="border-2 border-brand bg-brand-tint p-3"><dt className={KICKER}>This week</dt><dd className="mt-1 font-serif text-xl">{formatMeasure(room.measure.latest?.reading, room.measure.unit)}</dd>{room.measure.latest && <dd className="text-xs text-ink-muted">Week {room.measure.latest.weekNumber}</dd>}</div>
+            <div className="border border-line-soft p-3"><dt className={KICKER}>Going to</dt><dd className="mt-1 font-serif text-xl">{formatMeasure(room.measure.targetValue, room.measure.unit)}</dd></div>
+          </dl>
+          {room.measure.readings.length > 0 && (
+            <table className="mt-4 w-full text-left text-sm" aria-label="Week by week">
+              <thead><tr className="border-b border-line text-xs uppercase tracking-wider text-ink-muted"><th className="py-1 pr-3">Week</th><th className="pr-3">The number</th><th>Next step</th></tr></thead>
+              <tbody>{room.measure.readings.map(row => <tr key={row.weekNumber} className="border-b border-line-soft align-top"><td className="py-1 pr-3">{row.weekNumber}{row.heldOn ? <span className="block text-xs text-ink-muted">{lagos(`${row.heldOn}T12:00:00Z`, false)}</span> : null}</td><td className="pr-3">{formatMeasure(row.reading, room.measure!.unit)}</td><td className="whitespace-pre-line">{row.nextStep ?? ""}</td></tr>)}</tbody>
+            </table>
+          )}
+        </section>
+      )}
 
       <section aria-labelledby="what-we-need" className={CARD}>
         <p className={KICKER}>What we need from you</p>

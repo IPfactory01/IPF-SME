@@ -6,9 +6,11 @@ import {
   businessMemberships,
   businesses,
   clientOnboardingInvitations,
+  engagementCheckins,
   engagementComments,
   engagementDeliverables,
   engagementFiles,
+  engagementMeasures,
   engagements,
   engagementSessions,
   engagementTasks,
@@ -267,7 +269,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
   const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName })
     .from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
-  const [team, sessions, tasks, deliverables, comments, clientPeople, files] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins] = await Promise.all([
     db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq(engagementSessions.engagementId, engagementId)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq(engagementTasks.engagementId, engagementId)).orderBy(asc(engagementTasks.id)),
@@ -276,6 +278,8 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
       .from(engagementComments).innerJoin(users, eq(engagementComments.authorUserId, users.id)).where(eq(engagementComments.engagementId, engagementId)).orderBy(asc(engagementComments.id)),
     engagement.businessId ? clientPeopleOf(db, engagement.businessId) : Promise.resolve([]),
     filesOf(db, engagementId),
+    measureOf(db, engagementId),
+    checkinsOf(db, engagementId),
   ]);
   const filesFor = (where: "taskId" | "deliverableId", id: number) => files.filter(file => file[where] === id).map(file => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt }));
   return {
@@ -289,6 +293,8 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     sessions,
     tasks: tasks.map(task => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id) })),
     deliverables: deliverables.map(item => ({ ...item, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item.kind), comments: comments.filter(comment => comment.deliverableId === item.id), files: filesFor("deliverableId", item.id) })),
+    measure,
+    checkins,
     can: {
       manage: authorityAllows(actor.authority, "manage_engagements"),
       assign: authorityAllows(actor.authority, "assign_engagements"),
@@ -560,7 +566,7 @@ export async function getClientRoom(db: Database, session: AccountSession) {
   const engagement = (await db.select().from(engagements).where(eq(engagements.businessId, business.businessId)).orderBy(desc(engagements.id)).limit(1))[0];
   if (!engagement) return null;
   const viewer = await clientViewerFor(db, session, business.businessId);
-  const [team, sessions, tasks, deliverables, comments, files] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, files, measure, checkins] = await Promise.all([
     db.select({ name: users.name, role: engagementTeam.role }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq(engagementTasks.engagementId, engagement.id)).orderBy(asc(engagementTasks.id)),
@@ -568,6 +574,8 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     db.select({ deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name })
       .from(engagementComments).innerJoin(users, eq(engagementComments.authorUserId, users.id)).where(eq(engagementComments.engagementId, engagement.id)).orderBy(asc(engagementComments.id)),
     filesOf(db, engagement.id),
+    measureOf(db, engagement.id),
+    checkinsOf(db, engagement.id),
   ]);
   const visibleDeliverables = deliverables.filter(item => clientCanSee(item.audience, viewer));
   const clientFiles = (where: "taskId" | "deliverableId", id: number) => files
@@ -586,6 +594,8 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     stageLabel: ENGAGEMENT_STAGE_LABELS[engagement.stage],
     journey: journeyOf(engagement.stage),
     problemStatement: viewer.kind === "owner" || viewer.access === "full" ? engagement.problemStatement : null,
+    // The one number: the business's own result, so the owner and their full-access staff; never the hours behind it.
+    measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,
     team: team.map(member => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
     sessions: scheduled.map(item => ({
@@ -824,4 +834,71 @@ export async function staffFileLink(db: Database, actor: StaffActor, input: { fi
   if (!file) throw notFound();
   await requireStaffEngagement(db, actor, file.engagementId);
   return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+}
+
+// ---- The fix: the one number and the weekly check-in -----------------------------------------------------------------
+
+const asNumber = (value: string | null) => (value === null ? null : Number(value));
+const asNumeric = (value: number | null) => (value === null ? null : String(value));
+
+async function measureOf(db: Pick<Database, "select">, engagementId: number) {
+  const row = (await db.select().from(engagementMeasures).where(eq(engagementMeasures.engagementId, engagementId)).limit(1))[0];
+  return row ? { ...row, baselineValue: asNumber(row.baselineValue), targetValue: asNumber(row.targetValue) } : null;
+}
+async function checkinsOf(db: Pick<Database, "select">, engagementId: number) {
+  const rows = await db.select().from(engagementCheckins).where(eq(engagementCheckins.engagementId, engagementId)).orderBy(asc(engagementCheckins.weekNumber));
+  return rows.map(row => ({ ...row, measureReading: asNumber(row.measureReading), hoursLead: asNumber(row.hoursLead), hoursAnalyst: asNumber(row.hoursAnalyst), hoursPartner: asNumber(row.hoursPartner) }));
+}
+type Measure = NonNullable<Awaited<ReturnType<typeof measureOf>>>;
+type Checkin = Awaited<ReturnType<typeof checkinsOf>>[number];
+
+/** What the client sees of the number: the definition, where it started, where it is going, and each week's reading and next step. */
+function clientMeasure(measure: Measure, checkins: Checkin[]) {
+  const readings = checkins.map(row => ({ weekNumber: row.weekNumber, heldOn: row.heldOn, reading: row.measureReading, nextStep: row.nextStep }));
+  const latest = [...readings].reverse().find(row => row.reading !== null) ?? null;
+  return { name: measure.name, definition: measure.definition, unit: measure.unit, baselineValue: measure.baselineValue, targetValue: measure.targetValue, latest, readings };
+}
+
+export type MeasureInput = { engagementId: number; name: string; definition: string | null; unit: string | null; baselineValue: number | null; targetValue: number | null };
+
+/** The fix's one number (D3): set in fix week 1, one per engagement; saving again updates it. */
+export async function saveMeasure(db: Database, actor: StaffActor, input: MeasureInput) {
+  requireManage(actor);
+  await requireStaffEngagement(db, actor, input.engagementId);
+  const values = { name: input.name, definition: input.definition, unit: input.unit, baselineValue: asNumeric(input.baselineValue), targetValue: asNumeric(input.targetValue) };
+  await db.transaction(async tx => {
+    await tx.insert(engagementMeasures).values({ engagementId: input.engagementId, ...values, createdByUserId: actor.id })
+      .onConflictDoUpdate({ target: engagementMeasures.engagementId, set: values });
+    await recordAudit(tx, { action: "engagement_measure_saved", actorUserId: actor.id, details: { engagementId: input.engagementId, name: input.name } });
+  });
+  return { success: true } as const;
+}
+
+export type CheckinInput = {
+  engagementId: number; weekNumber: number; heldOn: string | null; progress: string | null; blockers: string | null; nextStep: string | null;
+  measureReading: number | null; questionsAsked: string | null; hoursLead: number | null; hoursAnalyst: number | null; hoursPartner: number | null; aiUsed: boolean | null;
+};
+
+/**
+ * One row per fix week, recorded in order: a check-in cannot start without last week's record (concept note §9), so
+ * week N needs week N-1 first. Saving a week again updates it.
+ */
+export async function saveCheckin(db: Database, actor: StaffActor, input: CheckinInput) {
+  requireManage(actor);
+  await requireStaffEngagement(db, actor, input.engagementId);
+  if (input.weekNumber > 1) {
+    const previous = await db.select({ id: engagementCheckins.id }).from(engagementCheckins)
+      .where(and(eq(engagementCheckins.engagementId, input.engagementId), eq(engagementCheckins.weekNumber, input.weekNumber - 1))).limit(1);
+    if (!previous.length) throw new TRPCError({ code: "CONFLICT", message: `Record week ${input.weekNumber - 1} first: a check-in cannot start without last week's record.` });
+  }
+  const values = {
+    heldOn: input.heldOn, progress: input.progress, blockers: input.blockers, nextStep: input.nextStep, measureReading: asNumeric(input.measureReading), questionsAsked: input.questionsAsked,
+    hoursLead: asNumeric(input.hoursLead), hoursAnalyst: asNumeric(input.hoursAnalyst), hoursPartner: asNumeric(input.hoursPartner), aiUsed: input.aiUsed, recordedByUserId: actor.id,
+  };
+  await db.transaction(async tx => {
+    await tx.insert(engagementCheckins).values({ engagementId: input.engagementId, weekNumber: input.weekNumber, ...values })
+      .onConflictDoUpdate({ target: [engagementCheckins.engagementId, engagementCheckins.weekNumber], set: values });
+    await recordAudit(tx, { action: "engagement_checkin_recorded", actorUserId: actor.id, details: { engagementId: input.engagementId, weekNumber: input.weekNumber } });
+  });
+  return { success: true } as const;
 }

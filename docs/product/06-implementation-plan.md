@@ -109,9 +109,9 @@ Built with O1, O2 and O3 as recommended (PRD §10), and the owner's seat invitat
 | # | Build | Acceptance |
 |---|---|---|
 | 4.1 | **Problem statement** from Current State Assessment: chosen problem area, sub-problem, the owner's words | Exactly one problem per fix (D3) |
-| 4.2 | **Measure**: name, definition, baseline, target, recorded in fix week 1 | The client can see the measure and where it stands |
-| 4.3 | **Weekly check-in**: the five-question template, measure reading, questions asked, hours by role, AI used | A check-in cannot be closed without last week's actions reviewed |
-| 4.4 | **Close and day 30**: final value, moved, extension weeks, plan delivered, next problem area, ongoing support defined, day-30 check | The PRD §7 pass marks are countable from the record |
+| 4.2 | ✅ **Built 10 October.** **Measure**: name, definition, baseline, target, recorded in fix week 1 | The client can see the measure and where it stands |
+| 4.3 | ✅ **Built 10 October** (week N needs week N-1 first). **Weekly check-in**: the five-question template, measure reading, questions asked, hours by role, AI used | A check-in cannot be closed without last week's actions reviewed |
+| 4.4 | Needs `engagement_closes` (**migration 0009**, on its own branch when the first fixes approach week 6, December). **Close and day 30**: final value, moved, extension weeks, plan delivered, next problem area, ongoing support defined, day-30 check | The PRD §7 pass marks are countable from the record |
 | 4.5 | **Monday scorecard** for the desk: funnel, active fixes, measures, record completeness, hours | Replaces the spreadsheet export |
 
 ## 9. Phase 5: later (v0.2)

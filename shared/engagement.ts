@@ -204,3 +204,29 @@ export function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, "")} MB`;
 }
+
+// ---- The fix: the one number and the weekly check-in -----------------------------------------------------------------
+
+/** The fix runs up to six weeks; a free extension can add a few more. One check-in row per week. */
+export const FIX_WEEKS = 6;
+export const MAX_CHECKIN_WEEKS = 12;
+
+/** The five questions every weekly check-in answers (concept note §17), in the order they are asked. */
+export const CHECKIN_QUESTIONS = [
+  { key: "progress", label: "What moved this week?" },
+  { key: "blockers", label: "What got in the way?" },
+  { key: "nextStep", label: "What is the next step, and by when?" },
+  { key: "measureReading", label: "What does the number say this week?" },
+  { key: "questionsAsked", label: "What did the owner ask?" },
+] as const;
+
+/** "₦150,000", "12%", "3.5 days" or "—". */
+export function formatMeasure(value: number | string | null | undefined, unit?: string | null) {
+  if (value === null || value === undefined || value === "") return "—";
+  const number = Number(value);
+  const text = Number.isFinite(number) ? number.toLocaleString("en-GB", { maximumFractionDigits: 2 }) : String(value);
+  if (!unit) return text;
+  if (unit === "₦") return `₦${text}`;
+  if (unit === "%") return `${text}%`;
+  return `${text} ${unit}`;
+}

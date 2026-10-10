@@ -27,7 +27,7 @@ vi.mock("@/lib/trpc", () => ({
         awaitingStart: { useQuery: () => ({ data: api.awaiting }) },
         detail: { useQuery: () => ({ data: api.detail, isLoading: false, error: null }) },
         assignableStaff: { useQuery: () => ({ data: [{ userId: 9, name: "Ola Analyst", email: "ola@example.test", roles: ["analyst"] }] }) },
-        ...Object.fromEntries(["start", "fileLink", "requestUpload", "confirmUpload", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -49,6 +49,8 @@ const detail = (can: { manage: boolean; assign: boolean; review: boolean }, deli
   sessions: [session],
   tasks,
   deliverables,
+  measure: null as unknown,
+  checkins: [] as unknown[],
   can,
 });
 
@@ -155,5 +157,41 @@ describe("files on the team's side", () => {
     expect(api.calls.fileLink).toEqual([{ fileId: 99 }]);
     expect(card.getByLabelText("Attach a file to task 7")).toBeTruthy();
     vi.unstubAllGlobals();
+  });
+});
+
+describe("the fix on the team's side", () => {
+  it("sets the number, then records week 1 with the five questions, the reading and the hours", () => {
+    api.detail = detail({ manage: true, assign: false, review: false }, []);
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const drawer = within(screen.getByRole("dialog"));
+    fireEvent.change(drawer.getByLabelText("The number we watch"), { target: { value: "Cash in the bank on Friday" } });
+    fireEvent.change(drawer.getByLabelText("Unit"), { target: { value: "₦" } });
+    fireEvent.change(drawer.getByLabelText("Where it starts"), { target: { value: "150000" } });
+    fireEvent.change(drawer.getByLabelText("Where it should get to"), { target: { value: "400000" } });
+    fireEvent.click(drawer.getByRole("button", { name: "Set the number" }));
+    expect(api.calls.saveMeasure).toEqual([{ engagementId: 4, name: "Cash in the bank on Friday", definition: "", unit: "₦", baselineValue: 150000, targetValue: 400000 }]);
+
+    fireEvent.click(drawer.getByRole("button", { name: "Record week 1" }));
+    const week = within(drawer.getByLabelText("Week 1"));
+    fireEvent.change(week.getByLabelText("What moved this week?"), { target: { value: "Daily cash count started." } });
+    fireEvent.change(week.getByLabelText("What is the next step, and by when?"), { target: { value: "Chase late invoices by Friday." } });
+    fireEvent.change(week.getByLabelText("What does the number say this week?"), { target: { value: "160000" } });
+    fireEvent.change(week.getByLabelText("Analyst hours"), { target: { value: "2.5" } });
+    fireEvent.click(week.getByRole("button", { name: "Record week 1" }));
+    expect(api.calls.saveCheckin).toEqual([expect.objectContaining({ engagementId: 4, weekNumber: 1, progress: "Daily cash count started.", nextStep: "Chase late invoices by Friday.", measureReading: 160000, hoursAnalyst: 2.5, hoursLead: null, aiUsed: false })]);
+  });
+
+  it("offers the next week only, in order", () => {
+    const checkin = { id: 1, engagementId: 4, weekNumber: 1, heldOn: "2026-11-13", progress: "Started.", blockers: null, nextStep: "Keep going.", measureReading: 160000, questionsAsked: null, hoursLead: 1, hoursAnalyst: 2, hoursPartner: null, aiUsed: true, recordedByUserId: 1, createdAt: new Date(), updatedAt: new Date() };
+    api.detail = { ...detail({ manage: true, assign: false, review: false }, []), measure: { id: 1, engagementId: 4, name: "Cash", definition: null, unit: "₦", baselineValue: 150000, targetValue: 400000, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() }, checkins: [checkin] };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const drawer = within(screen.getByRole("dialog"));
+    expect(drawer.getByText(/Week 1/).textContent).toContain("₦160,000");
+    expect(drawer.getByRole("button", { name: "Record week 2" })).toBeTruthy();
+    expect(drawer.queryByRole("button", { name: "Record week 1" })).toBeNull();
+    expect(drawer.getByRole("button", { name: "Save week 1" })).toBeTruthy();
   });
 });

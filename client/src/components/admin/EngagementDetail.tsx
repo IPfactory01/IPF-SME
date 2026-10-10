@@ -15,8 +15,12 @@ import {
   ENGAGEMENT_TASK_STATUSES,
   ENGAGEMENT_TEAM_ROLE_LABELS,
   ENGAGEMENT_TEAM_ROLES,
+  CHECKIN_QUESTIONS,
   FINDINGS_OUTLINE,
+  FIX_WEEKS,
   formatFileSize,
+  formatMeasure,
+  MAX_CHECKIN_WEEKS,
   UPLOAD_ACCEPT,
   type EngagementAudience,
   type EngagementDeliverableKind,
@@ -40,6 +44,7 @@ type Session = Detail["sessions"][number];
 type Task = Detail["tasks"][number];
 type Deliverable = Detail["deliverables"][number];
 type StaffFile = Task["files"][number];
+type Checkin = Detail["checkins"][number];
 type UploadTarget = { kind: "task" | "deliverable"; id: number };
 
 const FIELD = "w-full border border-line bg-white px-2 py-1.5 text-sm text-ink";
@@ -81,6 +86,7 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
       <Sessions data={data} engagementId={engagementId} />
       <Tasks data={data} engagementId={engagementId} />
       <Deliverables data={data} engagementId={engagementId} />
+      <TheFix data={data} engagementId={engagementId} />
     </>
   );
 }
@@ -389,6 +395,86 @@ function DeliverableCard({ item, data, engagementId, onDone }: { item?: Delivera
             <input aria-label={`Comment on ${item.title}`} className={FIELD} value={comment} onChange={event => setComment(event.target.value)} placeholder="Add a comment" />
             <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={!comment.trim() || addComment.isPending} onClick={() => addComment.mutate({ deliverableId: item.id, body: comment })}>Post</Button>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const numberOrNull = (value: string) => (value.trim() === "" ? null : Number(value));
+
+/** The fix: the one number (set in week 1) and the weekly check-in, recorded in order. */
+function TheFix({ data, engagementId }: { data: Detail; engagementId: number }) {
+  const refresh = useRefresh(engagementId);
+  const measure = data.measure;
+  const [name, setName] = useState(measure?.name ?? "");
+  const [definition, setDefinition] = useState(measure?.definition ?? "");
+  const [unit, setUnit] = useState(measure?.unit ?? "");
+  const [baseline, setBaseline] = useState(measure?.baselineValue === null || measure?.baselineValue === undefined ? "" : String(measure.baselineValue));
+  const [target, setTarget] = useState(measure?.targetValue === null || measure?.targetValue === undefined ? "" : String(measure.targetValue));
+  const [adding, setAdding] = useState(false);
+  const save = trpc.engagement.staff.saveMeasure.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("The number is saved. The client can see it."); } });
+  const nextWeek = (data.checkins.at(-1)?.weekNumber ?? 0) + 1;
+  const canManage = data.can.manage;
+  return (
+    <DetailSection title="The fix: the one number and the weekly check-in">
+      <p className="text-xs text-ink-muted">One problem, one number. Set the number in fix week 1 with where it starts and where it should get to; the client sees it. Then one check-in a week, recorded in order: week {FIX_WEEKS} is the last unless the fix is extended.</p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div className="sm:col-span-2"><label className={LABEL} htmlFor="measure-name">The number we watch</label><input id="measure-name" className={FIELD} disabled={!canManage} value={name} maxLength={160} placeholder="e.g. Cash in the bank at the end of the week" onChange={event => setName(event.target.value)} /></div>
+        <div className="sm:col-span-2"><label className={LABEL} htmlFor="measure-definition">How it is measured (the client sees this)</label><textarea id="measure-definition" className={FIELD} rows={2} disabled={!canManage} value={definition} onChange={event => setDefinition(event.target.value)} /></div>
+        <div><label className={LABEL} htmlFor="measure-unit">Unit</label><input id="measure-unit" className={FIELD} disabled={!canManage} value={unit} maxLength={32} placeholder="₦, %, days, orders…" onChange={event => setUnit(event.target.value)} /></div>
+        <div className="grid grid-cols-2 gap-2">
+          <div><label className={LABEL} htmlFor="measure-baseline">Where it starts</label><input id="measure-baseline" type="number" step="any" className={FIELD} disabled={!canManage} value={baseline} onChange={event => setBaseline(event.target.value)} /></div>
+          <div><label className={LABEL} htmlFor="measure-target">Where it should get to</label><input id="measure-target" type="number" step="any" className={FIELD} disabled={!canManage} value={target} onChange={event => setTarget(event.target.value)} /></div>
+        </div>
+      </div>
+      {canManage && <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !name.trim()} onClick={() => save.mutate({ engagementId, name, definition, unit, baselineValue: numberOrNull(baseline), targetValue: numberOrNull(target) })}>{measure ? "Save the number" : "Set the number"}</Button>}
+      {data.checkins.map(checkin => <CheckinCard key={checkin.weekNumber} checkin={checkin} engagementId={engagementId} canManage={canManage} unit={measure?.unit ?? null} />)}
+      {adding ? (
+        <CheckinCard weekNumber={nextWeek} engagementId={engagementId} canManage={canManage} unit={measure?.unit ?? null} onDone={() => setAdding(false)} />
+      ) : canManage && nextWeek <= MAX_CHECKIN_WEEKS && (
+        <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Record week {nextWeek}</Button>
+      )}
+    </DetailSection>
+  );
+}
+
+function CheckinCard({ checkin, weekNumber, engagementId, canManage, unit, onDone }: { checkin?: Checkin; weekNumber?: number; engagementId: number; canManage: boolean; unit: string | null; onDone?: () => void }) {
+  const refresh = useRefresh(engagementId);
+  const week = checkin?.weekNumber ?? weekNumber ?? 1;
+  const [heldOn, setHeldOn] = useState(checkin?.heldOn ?? "");
+  const [answers, setAnswers] = useState({ progress: checkin?.progress ?? "", blockers: checkin?.blockers ?? "", nextStep: checkin?.nextStep ?? "", questionsAsked: checkin?.questionsAsked ?? "" });
+  const [reading, setReading] = useState(checkin?.measureReading === null || checkin?.measureReading === undefined ? "" : String(checkin.measureReading));
+  const [hours, setHours] = useState({ lead: checkin?.hoursLead?.toString() ?? "", analyst: checkin?.hoursAnalyst?.toString() ?? "", partner: checkin?.hoursPartner?.toString() ?? "" });
+  const [aiUsed, setAiUsed] = useState(checkin?.aiUsed ?? false);
+  const save = trpc.engagement.staff.saveCheckin.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success(`Week ${week} recorded.`); onDone?.(); } });
+  const id = `week-${week}`;
+  const field = (key: keyof typeof answers) => (event: { target: { value: string } }) => setAnswers(current => ({ ...current, [key]: event.target.value }));
+  return (
+    <div className="space-y-2 border border-line bg-paper-raised p-3" aria-label={`Week ${week}`}>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <p className="text-sm font-semibold">Week {week}{checkin?.measureReading !== null && checkin?.measureReading !== undefined ? <span className="ml-2 font-normal text-ink-muted">· {formatMeasure(checkin.measureReading, unit)}</span> : null}</p>
+        <div><label className={LABEL} htmlFor={`${id}-date`}>Held on</label><input id={`${id}-date`} type="date" className={FIELD} disabled={!canManage} value={heldOn} onChange={event => setHeldOn(event.target.value)} /></div>
+      </div>
+      {CHECKIN_QUESTIONS.map(question => question.key === "measureReading" ? (
+        <div key={question.key}><label className={LABEL} htmlFor={`${id}-reading`}>{question.label}{unit ? ` (${unit})` : ""}</label><input id={`${id}-reading`} type="number" step="any" className={FIELD} disabled={!canManage} value={reading} onChange={event => setReading(event.target.value)} /></div>
+      ) : (
+        <div key={question.key}><label className={LABEL} htmlFor={`${id}-${question.key}`}>{question.label}</label><textarea id={`${id}-${question.key}`} className={FIELD} rows={2} disabled={!canManage} value={answers[question.key]} onChange={field(question.key)} /></div>
+      ))}
+      <div className="grid grid-cols-3 gap-2">
+        <div><label className={LABEL} htmlFor={`${id}-hours-lead`}>Lead hours</label><input id={`${id}-hours-lead`} type="number" step="0.25" min={0} className={FIELD} disabled={!canManage} value={hours.lead} onChange={event => setHours(current => ({ ...current, lead: event.target.value }))} /></div>
+        <div><label className={LABEL} htmlFor={`${id}-hours-analyst`}>Analyst hours</label><input id={`${id}-hours-analyst`} type="number" step="0.25" min={0} className={FIELD} disabled={!canManage} value={hours.analyst} onChange={event => setHours(current => ({ ...current, analyst: event.target.value }))} /></div>
+        <div><label className={LABEL} htmlFor={`${id}-hours-partner`}>Partner hours</label><input id={`${id}-hours-partner`} type="number" step="0.25" min={0} className={FIELD} disabled={!canManage} value={hours.partner} onChange={event => setHours(current => ({ ...current, partner: event.target.value }))} /></div>
+      </div>
+      <label className="flex items-center gap-2 text-sm"><input type="checkbox" disabled={!canManage} checked={aiUsed} onChange={event => setAiUsed(event.target.checked)} />AI was used in preparing this check-in</label>
+      <p className="text-xs text-ink-muted">The client sees the reading and the next step. Hours, questions and what got in the way stay with the team.</p>
+      {canManage && (
+        <div className="flex gap-2">
+          <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending} onClick={() => save.mutate({
+            engagementId, weekNumber: week, heldOn: heldOn || null, progress: answers.progress, blockers: answers.blockers, nextStep: answers.nextStep, measureReading: numberOrNull(reading), questionsAsked: answers.questionsAsked,
+            hoursLead: numberOrNull(hours.lead), hoursAnalyst: numberOrNull(hours.analyst), hoursPartner: numberOrNull(hours.partner), aiUsed,
+          })}>{checkin ? "Save week" : "Record week"} {week}</Button>
+          {onDone && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={onDone}>Cancel</Button>}
         </div>
       )}
     </div>

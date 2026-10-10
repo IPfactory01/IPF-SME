@@ -14,9 +14,10 @@ const hoisted = vi.hoisted(() => {
     candidates: [] as unknown[],
     invitations: [] as unknown[],
     details: {} as Record<number, unknown>,
+    debrief: { setUp: true, debrief: null as unknown },
     metrics: { businessChecks: 3, users: 2, portalUsers: 1, businesses: 1, memberships: 1, pendingInvitations: 0, platformRoleAssignments: 0 },
     error: undefined as { message: string } | undefined,
-    mutations: { schedule: [] as unknown[], outcome: [] as unknown[], stage: [] as unknown[], invite: [] as unknown[], revoke: [] as unknown[], requestPayment: [] as unknown[], proof: [] as unknown[], confirmPayment: [] as unknown[], downloadReport: [] as unknown[], resendReportLink: [] as unknown[] },
+    mutations: { schedule: [] as unknown[], outcome: [] as unknown[], saveDebrief: [] as unknown[], shareDebrief: [] as unknown[], stage: [] as unknown[], invite: [] as unknown[], revoke: [] as unknown[], requestPayment: [] as unknown[], proof: [] as unknown[], confirmPayment: [] as unknown[], downloadReport: [] as unknown[], resendReportLink: [] as unknown[] },
     inviteResult: { invitationUrl: "https://app.example.test/onboarding/TOKEN123", deliveryStatus: "Simulated", expiresAt: new Date(), invitationId: 1 } as Record<string, unknown>,
   };
   const query = (key: "checks" | "calls" | "clients" | "candidates" | "invitations" | "metrics") => () => ({ data: api[key], isLoading: false, error: api.error });
@@ -36,7 +37,7 @@ vi.mock("@/lib/savePdf", () => ({ savePdf: () => undefined }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({
-      businessSupport: { discoveryCalls: hoisted.invalidate, checks: hoisted.invalidate, checkDetail: hoisted.invalidate },
+      businessSupport: { discoveryCalls: hoisted.invalidate, checks: hoisted.invalidate, checkDetail: hoisted.invalidate, debrief: hoisted.invalidate },
       onboarding: { candidates: hoisted.invalidate, invitations: hoisted.invalidate, metrics: hoisted.invalidate },
     }),
     businessSupport: {
@@ -45,6 +46,9 @@ vi.mock("@/lib/trpc", () => ({
       discoveryCalls: { useQuery: hoisted.query("calls") },
       clients: { useQuery: hoisted.query("clients") },
       scheduleCall: { useMutation: hoisted.mutation("schedule") },
+      debrief: { useQuery: () => ({ data: hoisted.api.debrief, isLoading: false }) },
+      saveDebrief: { useMutation: hoisted.mutation("saveDebrief", () => ({ debriefId: 1, shared: false })) },
+      shareDebrief: { useMutation: hoisted.mutation("shareDebrief") },
       recordOutcome: { useMutation: hoisted.mutation("outcome") },
       setStage: { useMutation: hoisted.mutation("stage", () => ({ success: true, pipelineStage: "won", changed: true })) },
       requestPayment: { useMutation: hoisted.mutation("requestPayment", () => ({ reference: "TS-CS-000001", deliveryStatus: "Simulated" })) },
@@ -113,7 +117,8 @@ beforeEach(() => {
   api.invitations = [];
   api.details = { 1: detailFor(), 2: detailFor({ id: 2, fullName: "Bola Quiet", businessName: "Bola Bakes", email: "bola@example.test", whatsapp: null, pipelineStage: "qualified_lead", callRequestedAt: null }) };
   api.error = undefined;
-  api.mutations = { schedule: [], outcome: [], stage: [], invite: [], revoke: [], requestPayment: [], proof: [], confirmPayment: [], downloadReport: [], resendReportLink: [] };
+  api.mutations = { schedule: [], outcome: [], saveDebrief: [], shareDebrief: [], stage: [], invite: [], revoke: [], requestPayment: [], proof: [], confirmPayment: [], downloadReport: [], resendReportLink: [] };
+  api.debrief = { setUp: true, debrief: null };
   api.inviteResult = { invitationUrl: "https://app.example.test/onboarding/TOKEN123", deliveryStatus: "Simulated", expiresAt: new Date(), invitationId: 1 };
 });
 afterEach(cleanup);
@@ -122,7 +127,7 @@ describe("which sections each person sees (decided from what the server resolved
   it("shows the Super Admin every section, in funnel order, opening on Business Checks", () => {
     expect(visibleAdminSections(SUPER).map(section => section.id)).toEqual(["checks", "calls", "onboarding", "engagements", "clients", "team", "jump"]);
     renderConsole();
-    expect(tabs()).toEqual(["Business Checks", "Discovery Calls", "Client Onboarding", "Engagements", "Clients", "Admin Team", "JUMP Programme (Legacy)"]);
+    expect(tabs()).toEqual(["Business Checks", "Debriefs", "Client Onboarding", "Engagements", "Clients", "Admin Team", "JUMP Programme (Legacy)"]);
     expect(screen.getByRole("button", { name: "Business Checks" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("heading", { name: "Business Checks" })).toBeTruthy();
     expect(screen.queryByText("JUMP REGISTRATION DESK")).toBeNull();
@@ -330,13 +335,13 @@ describe("Business Check record drawer", () => {
     for (const text of ["Check completed", "Call requested", "Call booked for", "5 Oct 2026", "Current stage", "Call booked"]) expect(funnel.textContent).toContain(text);
   });
 
-  it("offers only the action that fits: a requested call leads to Discovery Calls", () => {
+  it("offers only the action that fits: a requested call leads to Debriefs", () => {
     renderConsole();
     openRow("Ada Okafor");
     expect(drawer().queryByRole("button", { name: "Continue to Client Onboarding" })).toBeNull();
     fireEvent.click(drawer().getByRole("button", { name: "Go to Discovery Call" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Discovery Calls" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Debriefs" })).toBeTruthy();
   });
 
   it("offers Client Onboarding for a fit, and nothing for a check with no next step", () => {
@@ -373,8 +378,8 @@ describe("Business Check record drawer", () => {
   });
 });
 
-describe("Discovery Calls table", () => {
-  const open = () => { renderConsole(); openSection("Discovery Calls"); };
+describe("Debriefs table", () => {
+  const open = () => { renderConsole(); openSection("Debriefs"); };
 
   it("shows five compact columns and nothing else", () => {
     open();
@@ -432,7 +437,7 @@ describe("Discovery Calls table", () => {
 });
 
 describe("Discovery Call record drawer", () => {
-  const open = (name = "Ada Okafor") => { renderConsole(); openSection("Discovery Calls"); openRow(name); };
+  const open = (name = "Ada Okafor") => { renderConsole(); openSection("Debriefs"); openRow(name); };
 
   it("opens from the row with the prospect, contact and request details", () => {
     open();
@@ -446,9 +451,9 @@ describe("Discovery Call record drawer", () => {
     for (const text of ["5 Oct 2026", "Financials", "Intermediate readiness"]) expect(request.textContent).toContain(text);
   });
 
-  it("saves the call time with the existing action, only once a date and time are chosen", () => {
+  it("saves the Debrief time with the existing action, only once a date and time are chosen", () => {
     open();
-    const save = drawer().getByRole("button", { name: "Save call schedule" }) as HTMLButtonElement;
+    const save = drawer().getByRole("button", { name: "Save the Debrief time" }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     fireEvent.change(drawer().getByLabelText("Date"), { target: { value: "2026-10-12" } });
     expect(save.disabled).toBe(true);
@@ -461,17 +466,43 @@ describe("Discovery Call record drawer", () => {
   it("shows the scheduled time and allows rescheduling", () => {
     api.calls = [check({ callScheduledFor: new Date("2026-10-08T13:00:00Z") })];
     open();
-    const schedule = drawer().getByRole("heading", { name: "Schedule discovery call" }).closest("section")!;
+    const schedule = drawer().getByRole("heading", { name: "Schedule the Debrief" }).closest("section")!;
     expect(schedule.textContent).toContain("Scheduled for");
     expect(schedule.textContent).toContain("8 Oct 2026");
-    expect(drawer().queryByRole("button", { name: "Save call schedule" })).toBeNull();
-    fireEvent.click(drawer().getByRole("button", { name: "Reschedule call" }));
+    expect(drawer().queryByRole("button", { name: "Save the Debrief time" })).toBeNull();
+    fireEvent.click(drawer().getByRole("button", { name: "Reschedule the Debrief" }));
     expect(api.mutations.schedule).toHaveLength(1);
+  });
+
+  it("writes the Debrief up in the guide's five parts, saves it, then shares it with the owner as a separate step", () => {
+    api.calls = [check({ callScheduledFor: new Date("2026-10-13T13:00:00Z") })];
+    open();
+    const summary = drawer().getByRole("heading", { name: "Debrief summary" }).closest("section")!;
+    const save = within(summary).getByRole("button", { name: "Write up the Debrief" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    expect(within(summary).queryByRole("button", { name: "Share with the owner" })).toBeNull();
+    fireEvent.change(within(summary).getByLabelText("What we heard"), { target: { value: "Two outlets and a van." } });
+    fireEvent.change(within(summary).getByLabelText("The problem, in the owner's words"), { target: { value: "Cash runs out in week three." } });
+    fireEvent.change(within(summary).getByLabelText("What success looks like to them"), { target: { value: "Salaries on the 25th." } });
+    fireEvent.click(save);
+    expect(api.mutations.saveDebrief).toEqual([{ businessCheckId: 1, heldAt: new Date("2026-10-13T13:00:00Z"), heard: "Two outlets and a van.", problemInOwnerWords: "Cash runs out in week three.", successLooksLike: "Salaries on the 25th.", tried: "", nextSteps: "" }]);
+    cleanup();
+    api.debrief = { setUp: true, debrief: { id: 1, businessCheckId: 1, heldAt: null, heard: "Two outlets and a van.", problemInOwnerWords: null, successLooksLike: null, tried: null, nextSteps: null, sharedAt: null } };
+    open();
+    const again = drawer().getByRole("heading", { name: "Debrief summary" }).closest("section")!;
+    expect((within(again).getByLabelText("What we heard") as HTMLTextAreaElement).value).toBe("Two outlets and a van.");
+    expect(again.textContent).toContain("Internal: the owner cannot see it yet");
+    fireEvent.click(within(again).getByRole("button", { name: "Share with the owner" }));
+    expect(api.mutations.shareDebrief).toEqual([{ businessCheckId: 1, shared: true }]);
+    cleanup();
+    api.debrief = { setUp: false, debrief: null };
+    open();
+    expect(drawer().getByText("The Debrief record is not set up in the database yet (migration 0009).")).toBeTruthy();
   });
 
   it("offers Opportunity, Refer and Lost with different weight, and records them with the existing actions", () => {
     open();
-    expect(drawer().getByRole("heading", { name: "Record call outcome" })).toBeTruthy();
+    expect(drawer().getByRole("heading", { name: "Record the Debrief outcome" })).toBeTruthy();
     const fit = drawer().getByRole("button", { name: "Opportunity" });
     const refer = drawer().getByRole("button", { name: "Refer" });
     const decline = drawer().getByRole("button", { name: "Lost" });
@@ -506,7 +537,7 @@ describe("Discovery Call record drawer", () => {
     cleanup();
     api.calls = [check({ pipelineStage: "opportunity", invitationStatus: "pending" })];
     open();
-    expect(screen.queryByRole("heading", { name: "Record call outcome" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Record the Debrief outcome" })).toBeNull();
     expect(drawer().getByText("An onboarding link has been generated for this prospect.")).toBeTruthy();
   });
 
@@ -514,7 +545,7 @@ describe("Discovery Call record drawer", () => {
     open();
     fireEvent.click(drawer().getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Discovery Calls" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Debriefs" })).toBeTruthy();
     expect(screen.getByText("Ada Okafor")).toBeTruthy();
   });
 });

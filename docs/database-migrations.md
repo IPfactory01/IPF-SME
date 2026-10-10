@@ -44,6 +44,16 @@ up yet. **Apply it before the first Current State Assessment payment is confirme
 admin Engagements section lists it under "Paid, but no engagement yet" once `0008` is applied, and the desk lead
 starts it with one click.
 
+**`0009` and deployment order.** The Debrief record (`debriefs`) and the Work Plan fields (`weekNumber`, `sortOrder` on
+`engagement_sessions` and `engagement_tasks`; `factor` on `engagement_tasks`). Additive only, but the engagement queries read
+the new columns, so **apply it with the deployment that carries it**: until then the admin Engagements section and the
+client room say the room is not up to date (migration 0009), the Debrief summary says it is not set up, and confirming a
+Current State Assessment payment still confirms it (the engagement is started once `0009` is applied, from "Paid, but no
+engagement yet"). Apply with `pnpm db:migrate`, or paste `drizzle/supabase/apply-0009-debrief-work-plan.sql` into the
+Supabase SQL Editor and press Run: it stops, changing nothing, unless exactly `0000` to `0008` are recorded, no `debriefs`
+table exists and `engagement_tasks` has no `weekNumber`, then applies the migration and records `0009` with the file hash and
+journal timestamp.
+
 **How to apply `0008`.** `pnpm db:migrate`, or paste `drizzle/supabase/apply-0008-engagement-room.sql` into the Supabase
 SQL Editor and press Run: it stops, changing nothing, unless exactly `0000` to `0007` are recorded and no engagement table
 exists, then creates the tables and records `0008` with the file hash and journal timestamp, so `pnpm db:verify` passes

@@ -39,7 +39,8 @@ vi.mock("@/lib/trpc", () => ({
 const { default: EngagementsView } = await import("@/components/admin/EngagementsView");
 
 const row = { id: 4, stage: "setting_up", stageLabel: "Getting set up", businessName: "Ada Foods", ownerName: "Ada Okafor", ownerEmail: "ada@example.test", hasAccount: true, createdAt: new Date(), team: [], openClientRequests: 5, overdueClientRequests: 2, unscheduledSessions: 2, nextSession: null };
-const session = { id: 31, engagementId: 4, kind: "assessment_call", title: "Current State Assessment call 1", scheduledFor: null, durationMinutes: 90, meetingLink: null, agenda: null, status: "planned", clientNotes: "Pricing first.", internalNotes: "Watch cash sales.", notesAudience: "owner", notesSharedAt: null, notesSharedByUserId: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() };
+const task = (over: Record<string, unknown>) => ({ id: 51, engagementId: 4, kind: "data_request", side: "client", title: "Your price list", detail: null, assigneeUserId: null, dueOn: "2026-10-21", status: "open", statusLabel: "To do", statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 4, factor: "internal", createdByUserId: 1, completedAt: null, createdAt: new Date(), updatedAt: new Date(), files: [], ...over });
+const session = { id: 31, engagementId: 4, kind: "assessment_call", title: "Current State Assessment call 1", scheduledFor: null, durationMinutes: 90, meetingLink: null, agenda: null, status: "planned", weekNumber: 1, sortOrder: 7, clientNotes: "Pricing first.", internalNotes: "Watch cash sales.", notesAudience: "owner", notesSharedAt: null, notesSharedByUserId: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() };
 const deliverable = (over: Record<string, unknown>) => ({ id: 41, engagementId: 4, kind: "prescription", kindLabel: "Prescription", title: "Daily cash count", summary: "Count every evening.", status: "draft", audience: "owner", approvedByUserId: null, approvedAt: null, sharedByUserId: null, sharedAt: null, clientAcceptedByUserId: null, clientAcceptedAt: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date(), needsApproval: true, comments: [], files: [], ...over });
 const detail = (can: { manage: boolean; assign: boolean; review: boolean }, deliverables = [deliverable({})], tasks: unknown[] = []) => ({
   uploadsEnabled: true,
@@ -67,6 +68,30 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("the team's engagements", () => {
+  it("shows the Work Plan by week and in order, and saves the week, the order and the factor with a task", async () => {
+    api.detail = detail({ manage: true, assign: true, review: true }, [deliverable({})], [
+      task({ id: 52, title: "Bank statements for the last 6 months", weekNumber: 2, sortOrder: 1 }),
+      task({ id: 51, title: "Your price list", weekNumber: 1, sortOrder: 4 }),
+      task({ id: 53, title: "Your three main competitors and what they charge", side: "ipf", kind: "action", weekNumber: 1, sortOrder: 6, factor: "external" }),
+    ]);
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods"));
+    const plan = await screen.findByRole("heading", { name: "Work Plan" });
+    const section = plan.closest("section")!;
+    const labels = within(section).getAllByLabelText(/price list|Bank statements|competitors/).map(card => card.getAttribute("aria-label"));
+    expect(labels).toEqual(["Your price list", "Your three main competitors and what they charge", "Bank statements for the last 6 months"]);
+    expect(section.textContent).toContain("Week 1");
+    expect(section.textContent).toContain("Week 2");
+    const card = within(section).getByLabelText("Your price list");
+    expect((within(card).getByLabelText("Week") as HTMLSelectElement).value).toBe("1");
+    expect((within(card).getByLabelText("Factor") as HTMLSelectElement).value).toBe("internal");
+    fireEvent.change(within(card).getByLabelText("Week"), { target: { value: "2" } });
+    fireEvent.change(within(card).getByLabelText("Order in the week"), { target: { value: "9" } });
+    fireEvent.change(within(card).getByLabelText("Factor"), { target: { value: "external" } });
+    fireEvent.click(within(card).getByRole("button", { name: "Save" }));
+    expect(api.calls.saveTask[0]).toMatchObject({ taskId: 51, weekNumber: 2, sortOrder: 9, factor: "external" });
+  });
+
   it("lists what the desk needs at a glance: no team yet, what is overdue, calls not booked", () => {
     api.detail = detail({ manage: true, assign: true, review: true });
     render(<EngagementsView />);

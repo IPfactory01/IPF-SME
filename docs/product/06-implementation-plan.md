@@ -41,6 +41,7 @@ window; the problem questions at the end of the check.
 | 0.4 | Name the finance person and grant roles to the analysts on the platform | Lewis | Phase 1 assignments |
 | 0.5 | Open IP Factory's Paystack business account; put the test keys, then the live keys, in Vercel (`PAYSTACK_PUBLIC_KEY`, `PAYSTACK_SECRET_KEY`) | ET, Lewis | Online payment (section 4) |
 | 0.6 | ✅ **Done 10 October.** **Apply migration 0008** (`drizzle/supabase/apply-0008-engagement-room.sql` in the Supabase SQL Editor, or `pnpm db:migrate`) before the first Current State Assessment payment is confirmed | Lewis | The engagement room |
+| 0.8 | **Apply migration 0009** (`drizzle/supabase/apply-0009-debrief-work-plan.sql` in the Supabase SQL Editor, or `pnpm db:migrate`): the Debrief record and the Work Plan fields. Until it is applied the Engagements section and the client room say the room is not up to date, and the Debrief summary says it is not set up | Lewis | The Debrief in the admin and the room; the Work Plan by week |
 | 0.7 | Create the private storage bucket `engagement-files` in Supabase → Storage; set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Vercel, then redeploy; the Engagements tab then says "File uploads: on" or names what is still missing; upload one test file from a client account | Lewis | File uploads in the room |
 
 ## 3. Quick fixes found while writing these documents (this week, small)

@@ -5,6 +5,7 @@ import {
   ENGAGEMENT_SESSION_KINDS,
   ENGAGEMENT_SESSION_STATUSES,
   ENGAGEMENT_STAGES,
+  ENGAGEMENT_TASK_FACTORS,
   ENGAGEMENT_TASK_KINDS,
   ENGAGEMENT_TASK_SIDES,
   ENGAGEMENT_TASK_STATUSES,
@@ -124,6 +125,7 @@ const staffRouter = router({
     meetingLink: z.string().trim().url("Paste the full meeting link, starting https://").max(512).nullable().or(z.literal("").transform(() => null)),
     agenda: optionalText(4000),
     status: z.enum(ENGAGEMENT_SESSION_STATUSES),
+    weekNumber: z.number().int().min(1).max(12).nullable().optional(),
   })).mutation(async ({ ctx, input }) => guarded(async () => saveSession(await engagementDb(), ctx.actor, input))),
   saveNotes: staff.input(z.object({ sessionId: id, clientNotes: optionalText(20000), internalNotes: optionalText(20000) }))
     .mutation(async ({ ctx, input }) => guarded(async () => saveSessionNotes(await engagementDb(), ctx.actor, input))),
@@ -140,6 +142,9 @@ const staffRouter = router({
     status: z.enum(ENGAGEMENT_TASK_STATUSES),
     statusNote: optionalText(500),
     sessionId: id.nullable(),
+    weekNumber: z.number().int().min(1).max(12).nullable(),
+    sortOrder: z.number().int().min(0).max(999),
+    factor: z.enum(ENGAGEMENT_TASK_FACTORS).nullable(),
   })).mutation(async ({ ctx, input }) => guarded(async () => saveTask(await engagementDb(), ctx.actor, input))),
   saveDeliverable: staff.input(z.object({ engagementId: id, deliverableId: id.optional(), kind: z.enum(ENGAGEMENT_DELIVERABLE_KINDS), title: text(200).min(1, "Give it a title."), summary: optionalText(20000) }))
     .mutation(async ({ ctx, input }) => guarded(async () => saveDeliverable(await engagementDb(), ctx.actor, input))),

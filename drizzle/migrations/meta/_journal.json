@@ -64,6 +64,13 @@
       "when": 1791582319780,
       "tag": "0008_engagement_room",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1791622182142,
+      "tag": "0009_debrief_work_plan",
+      "breakpoints": true
     }
   ]
 }

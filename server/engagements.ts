@@ -38,6 +38,7 @@ import {
   type EngagementSessionStatus,
   type EngagementStage,
   type EngagementTaskKind,
+  type EngagementTaskFactor,
   type EngagementTaskSide,
   type EngagementTaskStatus,
   type EngagementTeamRole,
@@ -48,6 +49,7 @@ import {
 } from "../shared/engagement";
 import type { AccountSession, Database } from "./accountAuth";
 import { recordAudit } from "./audit";
+import { sharedDebriefFor } from "./debriefs";
 import { getDb } from "./db";
 import { deliverEmail } from "./email";
 import { createSignedUpload, isFileStorageConfigured, objectExists, signedDownloadUrl } from "./fileStorage";
@@ -71,11 +73,12 @@ export async function engagementDb() {
 }
 
 /** Migration 0008 not applied yet: the rest of the platform keeps working and the room says so. */
+/** A missing table (0008) or a missing column (0009): the room is not up to date in the database. */
 export function isMissingEngagementTable(error: unknown) {
   const code = (error as { code?: string })?.code ?? (error as { cause?: { code?: string } })?.cause?.code;
-  return code === "42P01";
+  return code === "42P01" || code === "42703";
 }
-export const MIGRATION_MISSING_MESSAGE = "The engagement room is not set up in the database yet (migration 0008).";
+export const MIGRATION_MISSING_MESSAGE = "The engagement room is not up to date in the database yet: apply migration 0009 (and 0008 if it is missing).";
 
 /** The calendar date `days` working days (Monday to Friday) after `from`, in Lagos, as YYYY-MM-DD. */
 export function addWorkingDays(from: Date, days: number) {
@@ -108,12 +111,18 @@ export async function startEngagement(db: Database, input: { businessCheckId: nu
       .onConflictDoNothing({ target: engagements.businessCheckId })
       .returning({ id: engagements.id });
     if (!created) return { engagementId: null, created: false } as const;
-    const dueOn = addWorkingDays(now, 3);
-    await tx.insert(engagementTasks).values(ASSESSMENT_TEMPLATE.dataRequests.map(item => ({
-      engagementId: created.id, kind: "data_request" as const, side: "client" as const, title: item.title, detail: item.detail, dueOn, createdByUserId: input.actorUserId,
-    })));
+    // The Work Plan: week 1 is due in three working days, week 2 in eight; the team's own actions sit beside the client's.
+    const dueFor = (week: number) => addWorkingDays(now, week === 1 ? 3 : 8);
+    await tx.insert(engagementTasks).values([
+      ...ASSESSMENT_TEMPLATE.dataRequests.map(item => ({
+        engagementId: created.id, kind: "data_request" as const, side: "client" as const, title: item.title, detail: item.detail, dueOn: dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: input.actorUserId,
+      })),
+      ...ASSESSMENT_TEMPLATE.teamActions.map(item => ({
+        engagementId: created.id, kind: "action" as const, side: "ipf" as const, title: item.title, detail: item.detail, dueOn: dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: input.actorUserId,
+      })),
+    ]);
     await tx.insert(engagementSessions).values(ASSESSMENT_TEMPLATE.sessions.map(item => ({
-      engagementId: created.id, kind: item.kind, title: item.title, durationMinutes: item.durationMinutes, agenda: item.agenda, createdByUserId: input.actorUserId,
+      engagementId: created.id, kind: item.kind, title: item.title, durationMinutes: item.durationMinutes, agenda: item.agenda, weekNumber: item.week, sortOrder: item.order, createdByUserId: input.actorUserId,
     })));
     await recordAudit(tx, { action: "engagement_started", actorUserId: input.actorUserId, details: { engagementId: created.id, businessCheckId: input.businessCheckId } });
     return { engagementId: created.id, created: true } as const;
@@ -422,12 +431,12 @@ export async function saveProblem(db: Database, actor: StaffActor, input: { enga
   return { success: true } as const;
 }
 
-export type SessionInput = { engagementId: number; sessionId?: number; kind: EngagementSessionKind; title: string; scheduledFor: Date | null; durationMinutes: number | null; meetingLink: string | null; agenda: string | null; status: EngagementSessionStatus };
+export type SessionInput = { engagementId: number; sessionId?: number; kind: EngagementSessionKind; title: string; scheduledFor: Date | null; durationMinutes: number | null; meetingLink: string | null; agenda: string | null; status: EngagementSessionStatus; weekNumber?: number | null };
 
 export async function saveSession(db: Database, actor: StaffActor, input: SessionInput) {
   requireManage(actor);
   await requireStaffEngagement(db, actor, input.engagementId);
-  const values = { kind: input.kind, title: input.title, scheduledFor: input.scheduledFor, durationMinutes: input.durationMinutes, meetingLink: input.meetingLink, agenda: input.agenda, status: input.status };
+  const values = { kind: input.kind, title: input.title, scheduledFor: input.scheduledFor, durationMinutes: input.durationMinutes, meetingLink: input.meetingLink, agenda: input.agenda, status: input.status, ...(input.weekNumber === undefined ? {} : { weekNumber: input.weekNumber }) };
   if (input.sessionId) {
     const updated = await db.update(engagementSessions).set(values).where(and(eq(engagementSessions.id, input.sessionId), eq(engagementSessions.engagementId, input.engagementId))).returning({ id: engagementSessions.id });
     if (!updated.length) throw notFound();
@@ -465,7 +474,7 @@ export async function shareSessionNotes(db: Database, actor: StaffActor, input: 
   return { success: true } as const;
 }
 
-export type TaskInput = { engagementId: number; taskId?: number; kind: EngagementTaskKind; title: string; detail: string | null; side: EngagementTaskSide; assigneeUserId: number | null; dueOn: string | null; status: EngagementTaskStatus; statusNote: string | null; sessionId: number | null };
+export type TaskInput = { engagementId: number; taskId?: number; kind: EngagementTaskKind; title: string; detail: string | null; side: EngagementTaskSide; assigneeUserId: number | null; dueOn: string | null; status: EngagementTaskStatus; statusNote: string | null; sessionId: number | null; weekNumber: number | null; sortOrder: number; factor: EngagementTaskFactor | null };
 
 export async function saveTask(db: Database, actor: StaffActor, input: TaskInput) {
   requireManage(actor);
@@ -478,7 +487,7 @@ export async function saveTask(db: Database, actor: StaffActor, input: TaskInput
   }
   if (input.sessionId !== null && !(await db.select({ id: engagementSessions.id }).from(engagementSessions).where(and(eq(engagementSessions.id, input.sessionId), eq(engagementSessions.engagementId, engagement.id))).limit(1)).length) throw notFound();
   const finished = input.status === "accepted" || input.status === "done";
-  const values = { kind: input.kind, title: input.title, detail: input.detail, side: input.side, assigneeUserId: input.assigneeUserId, dueOn: input.dueOn, status: input.status, statusNote: input.statusNote, sessionId: input.sessionId, completedAt: finished ? new Date() : null };
+  const values = { kind: input.kind, title: input.title, detail: input.detail, side: input.side, assigneeUserId: input.assigneeUserId, dueOn: input.dueOn, status: input.status, statusNote: input.statusNote, sessionId: input.sessionId, weekNumber: input.weekNumber, sortOrder: input.sortOrder, factor: input.factor, completedAt: finished ? new Date() : null };
   if (input.taskId) {
     const updated = await db.update(engagementTasks).set(values).where(and(eq(engagementTasks.id, input.taskId), eq(engagementTasks.engagementId, engagement.id))).returning({ id: engagementTasks.id });
     if (!updated.length) throw notFound();
@@ -577,6 +586,11 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     measureOf(db, engagement.id),
     checkinsOf(db, engagement.id),
   ]);
+  const fullView = viewer.kind === "owner" || viewer.access === "full";
+  // Where the engagement came from: the check's main finding and readiness, and the Debrief once the team shares it.
+  const check = (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt })
+    .from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  const debrief = fullView ? await sharedDebriefFor(db, engagement.businessCheckId) : null;
   const visibleDeliverables = deliverables.filter(item => clientCanSee(item.audience, viewer));
   const clientFiles = (where: "taskId" | "deliverableId", id: number) => files
     .filter(file => file[where] === id && clientFileVisible(file, viewer, session.user.id))
@@ -593,7 +607,12 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     stage: engagement.stage,
     stageLabel: ENGAGEMENT_STAGE_LABELS[engagement.stage],
     journey: journeyOf(engagement.stage),
-    problemStatement: viewer.kind === "owner" || viewer.access === "full" ? engagement.problemStatement : null,
+    assessmentStartedAt: engagement.assessmentStartedAt,
+    fixStartedAt: engagement.fixStartedAt,
+    closedAt: engagement.closedAt,
+    check: check ? { primaryArea: check.primaryArea, readiness: check.readiness, completedAt: check.completedAt, reportRequestedAt: check.reportRequestedAt } : null,
+    debrief,
+    problemStatement: fullView ? engagement.problemStatement : null,
     // The one number: the business's own result, so the owner and their full-access staff; never the hours behind it.
     measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,
     team: team.map(member => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
@@ -605,6 +624,8 @@ export async function getClientRoom(db: Database, session: AccountSession) {
       durationMinutes: item.durationMinutes,
       meetingLink: item.meetingLink,
       status: item.status,
+      weekNumber: item.weekNumber,
+      sortOrder: item.sortOrder,
       agenda: item.agenda,
       notes: notesVisible(item) ? item.clientNotes : null,
       notesSharedAt: notesVisible(item) ? item.notesSharedAt : null,
@@ -612,6 +633,7 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     })),
     tasks: tasks.filter(task => task.status !== "cancelled" && clientCanSeeTask(task, viewer)).map(task => ({
       id: task.id, kind: task.kind, side: task.side, title: task.title, detail: task.detail, dueOn: task.dueOn, status: task.status, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], statusNote: task.statusNote, mine: task.assigneeUserId === session.user.id,
+      weekNumber: task.weekNumber, sortOrder: task.sortOrder, factor: task.factor,
       files: clientFiles("taskId", task.id),
     })),
     deliverables: visibleDeliverables.map(item => ({

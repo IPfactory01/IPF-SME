@@ -13,6 +13,7 @@ import {
   setPipelineStage,
 } from "../businessSupportAdmin";
 import { confirmPayment, markProofReceived, requestPayment } from "../payments";
+import { getDebrief, isMissingDebriefTable, saveDebrief, shareDebrief } from "../debriefs";
 import { adminDownloadReport, resendReportLink } from "../fullReport/service";
 import { PAYMENT_ITEMS } from "../../shared/payments";
 import { adminPermissionProcedure, router } from "../_core/trpc";
@@ -40,6 +41,31 @@ export const businessSupportRouter = router({
   recordOutcome: prospects
     .input(z.object({ businessCheckId: z.number().int().positive(), outcome: z.enum(CALL_OUTCOMES) }))
     .mutation(async ({ ctx, input }) => recordDiscoveryCallOutcome(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
+  /** The Debrief as written up so far; `setUp` is false until migration 0009 is applied. */
+  debrief: prospects
+    .input(z.object({ businessCheckId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      try {
+        return { setUp: true, debrief: await getDebrief(await businessSupportDb(), input.businessCheckId) };
+      } catch (error) {
+        if (!isMissingDebriefTable(error)) throw error;
+        return { setUp: false, debrief: null };
+      }
+    }),
+  saveDebrief: prospects
+    .input(z.object({
+      businessCheckId: z.number().int().positive(),
+      heldAt: z.coerce.date().nullable(),
+      heard: z.string().trim().max(8000).transform(value => value || null).nullable(),
+      problemInOwnerWords: z.string().trim().max(2000).transform(value => value || null).nullable(),
+      successLooksLike: z.string().trim().max(2000).transform(value => value || null).nullable(),
+      tried: z.string().trim().max(2000).transform(value => value || null).nullable(),
+      nextSteps: z.string().trim().max(2000).transform(value => value || null).nullable(),
+    }))
+    .mutation(async ({ ctx, input }) => saveDebrief(await businessSupportDb(), input, ctx.user.id)),
+  shareDebrief: prospects
+    .input(z.object({ businessCheckId: z.number().int().positive(), shared: z.boolean() }))
+    .mutation(async ({ ctx, input }) => shareDebrief(await businessSupportDb(), input, ctx.user.id)),
   /** Moves a business check to any later stage (Opportunity, Won, Lost, Nurture, Referred…), with an optional note. */
   setStage: prospects
     .input(z.object({ businessCheckId: z.number().int().positive(), stage: z.enum(SETTABLE_STAGES as [Exclude<PipelineStage, "lead">, ...Exclude<PipelineStage, "lead">[]]), note: z.string().trim().max(500).optional() }))

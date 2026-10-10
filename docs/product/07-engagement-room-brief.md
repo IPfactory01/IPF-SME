@@ -75,8 +75,8 @@ For the implementation plan, once the mock is approved:
 
 | Need | Today | Change |
 |---|---|---|
-| Debrief summary | Not recorded | A record on the lead, captured in Discovery Calls, shared to the owner; a migration |
-| The work plan | Eight requests and two calls from the template, no weeks | Tasks carry a week, an order, a side (you, us, together) and a factor (internal, external); the template is shaped by the debrief and reviewed by the desk lead |
+| Debrief summary | **Built 10 October (migration 0009):** `debriefs`, captured in the admin's Debriefs section in the guide's five parts, shared to the owner as a separate step | Done |
+| The work plan | **Built 10 October (migration 0009):** tasks and sessions carry a week and an order; tasks a factor (internal, external); the template places nine Data Requests, two team actions and both calls in week 1 and 2 | The analyst shapes it from the Debrief; the desk lead reviews |
 | The check and the report in the room | Linked by id, not shown | The room reads the main finding, readiness and the report link |
 | "Now" | The stage only | Day X of 14 and week X of 6 from the stage dates |
 | Day 30 | Planned (migration 0009) | As planned |

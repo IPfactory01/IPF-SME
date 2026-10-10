@@ -70,6 +70,19 @@ export const ENGAGEMENT_TASK_KINDS = ["data_request", "action"] as const;
 export type EngagementTaskKind = (typeof ENGAGEMENT_TASK_KINDS)[number];
 export const ENGAGEMENT_TASK_SIDES = ["client", "ipf"] as const;
 export type EngagementTaskSide = (typeof ENGAGEMENT_TASK_SIDES)[number];
+export const ENGAGEMENT_TASK_SIDE_LABELS: Record<EngagementTaskSide, string> = { client: "You", ipf: "IP Factory" };
+
+/**
+ * The Current State Assessment tests both internal and external factors (ET, 10 October): internal is the business
+ * itself (numbers, prices, people, how the week runs); external is around it (customers, competitors, the market).
+ */
+export const ENGAGEMENT_TASK_FACTORS = ["internal", "external"] as const;
+export type EngagementTaskFactor = (typeof ENGAGEMENT_TASK_FACTORS)[number];
+export const ENGAGEMENT_TASK_FACTOR_LABELS: Record<EngagementTaskFactor, string> = { internal: "Internal", external: "External" };
+
+/** The Current State Assessment runs two weeks; the fix six. The room counts days and weeks against these. */
+export const ASSESSMENT_WEEKS = 2;
+export const ASSESSMENT_DAYS = 14;
 
 /**
  * open: not done yet · received: the client sent it, we have not checked · accepted: it is what we needed ·
@@ -98,24 +111,35 @@ export type EngagementDeliverableStatus = (typeof ENGAGEMENT_DELIVERABLE_STATUSE
  * concept note's onboarding list, so the first call is analysis, not collection. The team edits, adds or cancels items.
  */
 export const ASSESSMENT_TEMPLATE = {
+  /** What we need from the client, by week. Week 1 is due in three working days, week 2 in eight. */
   dataRequests: [
-    { title: "Six quick questions before your first call", detail: "A few words each is enough. 1. What do you sell, and who buys it? 2. At month end, how do you know whether you made money? 3. Does more than one business run through the same account? 4. Which decisions wait for you? 5. What happens when you are away for a week? 6. If you could fix one thing in three months, what would it be?" },
-    { title: "Your sales for the last 12 months", detail: "Month by month. A sales book, a till report or photos of your records all work." },
-    { title: "What you spend each month", detail: "Rent, salaries, stock, power, fuel and loan repayments. A rough list is fine." },
-    { title: "Your price list", detail: "What you charge for each product or service, and the discounts you give." },
-    { title: "Who works in the business", detail: "Each role, what they do and what they are paid. Names are optional." },
-    { title: "Bank statements for the last 6 months", detail: "The business account, and any personal account that business money passes through." },
-    { title: "Money owed to you, and money you owe", detail: "Unpaid customer bills, supplier debts and loans." },
-    { title: "Anything you already track", detail: "Spreadsheets, notebooks or app reports. Send them as they are." },
+    { week: 1, order: 1, factor: "internal" as const, title: "Six quick questions before your first call", detail: "A few words each is enough. 1. What do you sell, and who buys it? 2. At month end, how do you know whether you made money? 3. Does more than one business run through the same account? 4. Which decisions wait for you? 5. What happens when you are away for a week? 6. If you could fix one thing in three months, what would it be?" },
+    { week: 1, order: 2, factor: "internal" as const, title: "Your sales for the last 12 months", detail: "Month by month. A sales book, a till report or photos of your records all work." },
+    { week: 1, order: 3, factor: "internal" as const, title: "What you spend each month", detail: "Rent, salaries, stock, power, fuel and loan repayments. A rough list is fine." },
+    { week: 1, order: 4, factor: "internal" as const, title: "Your price list", detail: "What you charge for each product or service, and the discounts you give." },
+    { week: 1, order: 5, factor: "internal" as const, title: "Who works in the business", detail: "Each role, what they do and what they are paid. Names are optional." },
+    { week: 2, order: 1, factor: "internal" as const, title: "Bank statements for the last 6 months", detail: "The business account, and any personal account that business money passes through." },
+    { week: 2, order: 2, factor: "internal" as const, title: "Money owed to you, and money you owe", detail: "Unpaid customer bills, supplier debts and loans." },
+    { week: 2, order: 3, factor: "internal" as const, title: "Anything you already track", detail: "Spreadsheets, notebooks or app reports. Send them as they are." },
+    { week: 2, order: 4, factor: "external" as const, title: "Ten customers: why they buy, and why some stopped", detail: "Names are optional. A line each is enough; we may call two or three of them with you." },
+  ],
+  /** What the team does in the Work Plan, so the client sees our side of the two weeks as well as theirs. */
+  teamActions: [
+    { week: 1, order: 6, factor: "external" as const, title: "Your three main competitors and what they charge", detail: "From their price lists, their customers and a visit where we can." },
+    { week: 2, order: 5, factor: "internal" as const, title: "Profit by product or outlet, from your numbers", detail: "What each line of the business actually makes once its own costs are counted." },
   ],
   sessions: [
     {
+      week: 1,
+      order: 7,
       kind: "assessment_call" as const,
       title: `${CURRENT_STATE.name} call 1`,
       durationMinutes: 90,
       agenda: "Your business today.\n0 to 10 min: welcome, and what the two weeks look like.\n10 to 35: your business in your words, starting from your six answers.\n35 to 65: the numbers: sales, costs and prices, and the gaps we fill together.\n65 to 85: how the business runs: a normal week, who does what, what waits for you.\n85 to 90: what is still missing, and the date of call 2.",
     },
     {
+      week: 2,
+      order: 6,
       kind: "assessment_call" as const,
       title: `${CURRENT_STATE.name} call 2`,
       durationMinutes: 90,

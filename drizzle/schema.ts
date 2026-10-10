@@ -12,6 +12,7 @@ import {
   ENGAGEMENT_STAGES,
   ENGAGEMENT_TASK_KINDS,
   ENGAGEMENT_TASK_SIDES,
+  ENGAGEMENT_TASK_FACTORS,
   ENGAGEMENT_TASK_STATUSES,
   ENGAGEMENT_TEAM_ROLES,
 } from "../shared/engagement";
@@ -675,6 +676,29 @@ export const businessChecks = pgTable("business_checks", {
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
 });
 
+/**
+ * The Debrief: the free call after the Business Check, written up by the analyst within the hour following the firm's
+ * Client Debrief Meeting guide, cut to The Shift. One per business check. It informs the Work Plan and, once shared,
+ * opens the owner's room warm: what we heard, the problem in their words, what success looks like, what they tried.
+ */
+export const debriefs = pgTable("debriefs", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  businessCheckId: integer("businessCheckId").notNull().unique().references(() => businessChecks.id, { onDelete: "cascade" }),
+  heldAt: timestamp("heldAt", { withTimezone: true }),
+  heard: text("heard"),
+  problemInOwnerWords: text("problemInOwnerWords"),
+  successLooksLike: text("successLooksLike"),
+  tried: text("tried"),
+  nextSteps: text("nextSteps"),
+  capturedByUserId: integer("capturedByUserId").references(() => users.id),
+  /** Set when the owner may see it in their room; null keeps it internal. */
+  sharedAt: timestamp("sharedAt", { withTimezone: true }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+});
+
+export type Debrief = typeof debriefs.$inferSelect;
+
 export const clientOnboardingInvitationsStatusEnum = pgEnum("client_onboarding_invitations_status", ["pending", "accepted", "revoked", "expired"]);
 export const clientOnboardingInvitationsDeliveryStatusEnum = pgEnum("client_onboarding_invitations_delivery_status", ["Sent", "Failed", "Simulated"]);
 
@@ -788,6 +812,7 @@ export const engagementSessionsStatusEnum = pgEnum("engagement_sessions_status",
 export const engagementTasksKindEnum = pgEnum("engagement_tasks_kind", ENGAGEMENT_TASK_KINDS);
 export const engagementTasksSideEnum = pgEnum("engagement_tasks_side", ENGAGEMENT_TASK_SIDES);
 export const engagementTasksStatusEnum = pgEnum("engagement_tasks_status", ENGAGEMENT_TASK_STATUSES);
+export const engagementTasksFactorEnum = pgEnum("engagement_tasks_factor", ENGAGEMENT_TASK_FACTORS);
 export const engagementDeliverablesKindEnum = pgEnum("engagement_deliverables_kind", ENGAGEMENT_DELIVERABLE_KINDS);
 export const engagementDeliverablesStatusEnum = pgEnum("engagement_deliverables_status", ENGAGEMENT_DELIVERABLE_STATUSES);
 export const clientAccessLevelEnum = pgEnum("client_access_level", CLIENT_ACCESS_LEVELS);
@@ -838,6 +863,9 @@ export const engagementSessions = pgTable("engagement_sessions", {
   meetingLink: varchar("meetingLink", { length: 512 }),
   agenda: text("agenda"),
   status: engagementSessionsStatusEnum("status").default("planned").notNull(),
+  /** Where the session sits in the Work Plan: the week of the assessment or the fix, and its place in that week. */
+  weekNumber: integer("weekNumber"),
+  sortOrder: integer("sortOrder").default(0).notNull(),
   /** The notes the client may see once shared; `internalNotes` never leave IP Factory. */
   clientNotes: text("clientNotes"),
   internalNotes: text("internalNotes"),
@@ -861,6 +889,10 @@ export const engagementTasks = pgTable("engagement_tasks", {
   assigneeUserId: integer("assigneeUserId").references(() => users.id),
   dueOn: date("dueOn"),
   status: engagementTasksStatusEnum("status").default("open").notNull(),
+  /** Where the task sits in the Work Plan (week and place in the week), and whether it tests an internal or external factor. */
+  weekNumber: integer("weekNumber"),
+  sortOrder: integer("sortOrder").default(0).notNull(),
+  factor: engagementTasksFactorEnum("factor"),
   /** Why more is needed, or how the client sent it ("by WhatsApp"). */
   statusNote: varchar("statusNote", { length: 500 }),
   /** The session the action came out of. */

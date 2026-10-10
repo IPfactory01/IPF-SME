@@ -154,8 +154,9 @@ for (const target of targets) {
         const engagement = await engagementOf(id);
         expect(engagement).toMatchObject({ stage: "setting_up", businessId: null });
         const tasks = await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.engagementId, engagement.id));
-        expect(tasks.map((task: { title: string }) => task.title)).toEqual(ASSESSMENT_TEMPLATE.dataRequests.map(item => item.title));
-        expect(new Set(tasks.map((task: { kind: string; side: string; status: string; dueOn: string }) => `${task.kind}/${task.side}/${task.status}/${task.dueOn}`))).toEqual(new Set([`data_request/client/open/${addWorkingDays(new Date(), 3)}`]));
+        expect(tasks.map((task: { title: string }) => task.title)).toEqual([...ASSESSMENT_TEMPLATE.dataRequests, ...ASSESSMENT_TEMPLATE.teamActions].map(item => item.title));
+        // The Work Plan: week 1 due in three working days, week 2 in eight; the team's actions sit beside the client's requests.
+        expect(new Set(tasks.map((task: { kind: string; side: string; status: string; dueOn: string }) => `${task.kind}/${task.side}/${task.status}/${task.dueOn}`))).toEqual(new Set([`data_request/client/open/${addWorkingDays(new Date(), 3)}`, `data_request/client/open/${addWorkingDays(new Date(), 8)}`, `action/ipf/open/${addWorkingDays(new Date(), 3)}`, `action/ipf/open/${addWorkingDays(new Date(), 8)}`]));
         const sessions = await db.select().from(schema.engagementSessions).where(eq(schema.engagementSessions.engagementId, engagement.id));
         expect(sessions.map((item: { title: string; scheduledFor: Date | null }) => [item.title, item.scheduledFor])).toEqual([["Current State Assessment call 1", null], ["Current State Assessment call 2", null]]);
         // Each call carries its agenda from the template, so the client sees what the call is for before it is booked.
@@ -208,7 +209,7 @@ for (const target of targets) {
         expect(started.created).toBe(true);
         const engagement = await engagementOf(id);
         expect(engagement.businessId).not.toBeNull();
-        expect(await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.engagementId, engagement.id))).toHaveLength(ASSESSMENT_TEMPLATE.dataRequests.length);
+        expect(await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.engagementId, engagement.id))).toHaveLength(ASSESSMENT_TEMPLATE.dataRequests.length + ASSESSMENT_TEMPLATE.teamActions.length);
         expect((await (await deskLead.call()).engagement.staff.awaitingStart()).map(item => item.businessCheckId)).not.toContain(id);
         expect(await (await deskLead.call()).engagement.staff.start({ businessCheckId: id })).toMatchObject({ engagementId: engagement.id, created: false });
       });
@@ -261,6 +262,39 @@ for (const target of targets) {
     });
 
     describe("the client's side: membership and what was shared", () => {
+      it("opens the room warm: the check's main finding and readiness, the Work Plan by week, and the Debrief once the team shares it", async () => {
+        const { owner, businessCheckId, businessId } = await client("warm");
+        const admin = await superAdmin.call();
+        const before = (await (await owner.call()).engagement.client.room())!;
+        expect(before.check).toMatchObject({ readiness: expect.any(String) });
+        expect(before.check!.primaryArea).not.toBeNull();
+        expect(before.debrief).toBeNull();
+        // The template placed every item in a week, in order, tagged internal or external; the team's two actions sit beside the client's requests.
+        expect(before.tasks.filter(task => task.weekNumber === 1).map(task => task.sortOrder)).toEqual([1, 2, 3, 4, 5, 6]);
+        expect(before.tasks.filter(task => task.weekNumber === 2)).toHaveLength(5);
+        expect(before.tasks.filter(task => task.factor === "external").map(task => task.side).sort()).toEqual(["client", "ipf"]);
+        expect(before.sessions.map(session => session.weekNumber)).toEqual([1, 2]);
+
+        expect((await admin.businessSupport.debrief({ businessCheckId })).debrief).toBeNull();
+        await expect(admin.businessSupport.shareDebrief({ businessCheckId, shared: true })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        const saved = await admin.businessSupport.saveDebrief({ businessCheckId, heldAt: new Date("2026-10-13T13:00:00Z"), heard: "Two outlets and a van.", problemInOwnerWords: "Cash runs out in week three.", successLooksLike: "Pay salaries on the 25th.", tried: "A bookkeeper, for three months.", nextSteps: "The report, then the assessment." });
+        expect(saved).toMatchObject({ shared: false });
+        expect((await admin.businessSupport.debrief({ businessCheckId })).debrief).toMatchObject({ heard: "Two outlets and a van.", sharedAt: null });
+        expect((await (await owner.call()).engagement.client.room())!.debrief).toBeNull();
+
+        await admin.businessSupport.shareDebrief({ businessCheckId, shared: true });
+        const shared = (await (await owner.call()).engagement.client.room())!;
+        expect(shared.debrief).toMatchObject({ problemInOwnerWords: "Cash runs out in week three.", successLooksLike: "Pay salaries on the 25th.", sharedAt: expect.any(Date) });
+        expect(shared.debrief).not.toHaveProperty("capturedByUserId");
+        // Rewriting keeps it shared; a contributor never sees it; taking it back hides it again.
+        await admin.businessSupport.saveDebrief({ businessCheckId, heldAt: null, heard: "Two outlets, a kitchen and a van.", problemInOwnerWords: null, successLooksLike: null, tried: null, nextSteps: null });
+        expect((await (await owner.call()).engagement.client.room())!.debrief).toMatchObject({ heard: "Two outlets, a kitchen and a van.", problemInOwnerWords: null });
+        const contributor = await member(businessId, "contributor");
+        expect((await (await contributor.browser.call()).engagement.client.room())!.debrief).toBeNull();
+        await admin.businessSupport.shareDebrief({ businessCheckId, shared: false });
+        expect((await (await owner.call()).engagement.client.room())!.debrief).toBeNull();
+      });
+
       it("shows the owner their journey, what we need from them and their team, and lets them say they sent something", async () => {
         const { owner, engagementId } = await client("room");
         const lead = await person(["desk_lead"], "Lewis Lead");
@@ -269,7 +303,7 @@ for (const target of targets) {
         const room = (await (await owner.call()).engagement.client.room())!;
         expect(room).toMatchObject({ engagementId, stage: "setting_up", stageLabel: "Getting set up", viewer: { kind: "owner" }, team: [{ name: "Lewis Lead", roleLabel: "Engagement lead" }] });
         expect(room.journey.map(step => [step.label, step.state])).toEqual([["Getting set up", "current"], ["Current State Assessment", "next"], ["The fix", "next"], ["Your plan", "next"]]);
-        expect(room.tasks).toHaveLength(ASSESSMENT_TEMPLATE.dataRequests.length);
+        expect(room.tasks).toHaveLength(ASSESSMENT_TEMPLATE.dataRequests.length + ASSESSMENT_TEMPLATE.teamActions.length);
 
         const first = room.tasks[0];
         expect(await (await owner.call()).engagement.client.respondToTask({ taskId: first.id, note: "Sent on WhatsApp" })).toMatchObject({ status: "received" });
@@ -325,7 +359,7 @@ for (const target of targets) {
         const fullRoom = (await (await full.browser.call()).engagement.client.room())!;
         expect(fullRoom.viewer).toEqual({ kind: "member", access: "full" });
         expect(fullRoom.sessions[0].notes).toBeNull();
-        expect(fullRoom.tasks).toHaveLength(ASSESSMENT_TEMPLATE.dataRequests.length);
+        expect(fullRoom.tasks).toHaveLength(ASSESSMENT_TEMPLATE.dataRequests.length + ASSESSMENT_TEMPLATE.teamActions.length);
         const contributorRoom = (await (await contributor.browser.call()).engagement.client.room())!;
         expect(contributorRoom.tasks.map(item => item.id)).toEqual([task.id]);
         expect(contributorRoom.tasks[0].mine).toBe(true);

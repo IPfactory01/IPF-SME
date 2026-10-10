@@ -56,13 +56,29 @@ describe("the Current State Assessment template (from IP Factory's assessment pr
   it("asks for the six pre-call questions, the numbers, the people, the bank statements and what is owed", () => {
     const titles = ASSESSMENT_TEMPLATE.dataRequests.map(item => item.title);
     expect(titles[0]).toBe("Six quick questions before your first call");
-    expect(titles).toEqual(expect.arrayContaining(["Your sales for the last 12 months", "What you spend each month", "Your price list", "Who works in the business", "Bank statements for the last 6 months", "Money owed to you, and money you owe", "Anything you already track"]));
-    expect(titles).toHaveLength(8);
+    expect(titles).toEqual(expect.arrayContaining(["Your sales for the last 12 months", "What you spend each month", "Your price list", "Who works in the business", "Bank statements for the last 6 months", "Money owed to you, and money you owe", "Anything you already track", "Ten customers: why they buy, and why some stopped"]));
+    expect(titles).toHaveLength(9);
     for (const item of ASSESSMENT_TEMPLATE.dataRequests) {
       expect(item.title.length).toBeLessThanOrEqual(60);
       expect(item.detail.length).toBeGreaterThan(10);
     }
     expect(ASSESSMENT_TEMPLATE.dataRequests[0].detail.match(/\d\./g)).toHaveLength(6);
+  });
+
+  it("is a Work Plan: every item in week 1 or 2, in order, tagged internal or external, with the team's own actions and both calls placed", () => {
+    const items = [...ASSESSMENT_TEMPLATE.dataRequests, ...ASSESSMENT_TEMPLATE.teamActions];
+    for (const item of items) {
+      expect([1, 2]).toContain(item.week);
+      expect(["internal", "external"]).toContain(item.factor);
+    }
+    for (const week of [1, 2]) {
+      const orders = items.filter(item => item.week === week).map(item => item.order).sort((a, b) => a - b);
+      expect(orders).toEqual(orders.map((_, index) => index + 1));
+    }
+    // The assessment tests external factors too (ET, 10 October): customers from the client, competitors from the team.
+    expect(ASSESSMENT_TEMPLATE.dataRequests.filter(item => item.factor === "external")).toHaveLength(1);
+    expect(ASSESSMENT_TEMPLATE.teamActions.map(item => item.factor).sort()).toEqual(["external", "internal"]);
+    expect(ASSESSMENT_TEMPLATE.sessions.map(item => item.week)).toEqual([1, 2]);
   });
 
   it("gives both calls a timed 90-minute agenda that ends with what happens next", () => {

@@ -25,7 +25,8 @@ erDiagram
   businesses ||--o{ engagements : "joins on account"
   engagements ||--o{ engagement_team : "IP Factory team"
   engagements ||--o{ engagement_sessions : "calls and notes"
-  engagements ||--o{ engagement_tasks : "requests and actions"
+  engagements ||--o{ engagement_tasks : "the Work Plan"
+  business_checks ||--o| debriefs : "the Debrief"
   engagements ||--o{ engagement_deliverables : "what we hand over"
   engagement_deliverables ||--o{ engagement_comments : "feedback"
   business_memberships ||--o| business_member_access : "staff access level"
@@ -86,8 +87,9 @@ and the room says it is not set up. Vocabulary and the who-sees-what rules: `sha
 |---|---|---|---|
 | `engagements` | One per paid client: the business check, the Current State Assessment payment, the business (once the owner has an account), stage, the one problem (area, sub-problem, statement), dates | Unique business check; created by confirming the payment; linked by accepting the invitation, whichever comes second | The problem statement, in the owner's words |
 | `engagement_team` | Who from IP Factory works on it: lead, analyst, partner, specialist | Unique (engagement, person); only people with an internal role | Who works for which client |
-| `engagement_sessions` | Calls: kind, title, time, length, link, agenda, status; the client's version of the notes and the internal notes | Notes reach the client only once shared, with an audience (`owner` by default) | **Session notes**: what the owner said on the call |
-| `engagement_tasks` | Data requests and actions in one list: whose side, which person, due date, status (to do, sent, received, needs more, done) | A client-side task with no person belongs to the whole business | What the client was asked for |
+| `engagement_sessions` | Sessions: kind, title, time, length, link, agenda, status, and their place in the Work Plan (`weekNumber`, `sortOrder`, 0009); the client's version of the notes and the internal notes | Notes reach the client only once shared, with an audience (`owner` by default) | **Session notes**: what the owner said on the call |
+| `engagement_tasks` | The Work Plan: Data Requests and actions in one list: whose side, which person, due date, status (to do, sent, received, needs more, done), week and order in the week, and the factor tested (`internal` or `external`, 0009) | A client-side task with no person belongs to the whole business | What the client was asked for |
+| `debriefs` | The Debrief (0009): one per business check; held at; what we heard, the problem in the owner's words, what success looks like, what they tried, next steps; who captured it; shared at | Internal until `sharedAt` is set; the room shows it to the owner and full-access staff only, never who captured it | **The owner's own account of their business and problem** |
 | `engagement_deliverables` | Findings, problem statement, prescription, tools, plan: status draft, awaiting approval, approved, shared; audience; the owner's sign-off | A prescription or plan cannot be shared before approval (review_engagements); editing a shared one takes it back to draft | **Findings** about the business and its people |
 | `engagement_comments` | Feedback on a deliverable, from the client or the team | Only on a deliverable the writer can see | Comments |
 | `engagement_files` | Files in private storage: the data request or deliverable they belong to, audience | Unique storage key under `engagements/{id}/tasks|deliverables/{id}/`; uploaded straight to a private Supabase bucket with a one-off signed URL, recorded only once the object exists; opened through five-minute signed links after the same access check (`server/fileStorage.ts`) | **Client files**: bank statements, accounts, staff lists |

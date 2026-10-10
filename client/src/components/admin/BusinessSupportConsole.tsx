@@ -12,7 +12,7 @@ type Access = AdminAccessView & { email?: string | null; name?: string | null; p
 
 const TITLES: Record<AdminSectionId, string> = {
   checks: "Business Checks",
-  calls: "Discovery Calls",
+  calls: "Debriefs",
   onboarding: "Client Onboarding",
   engagements: "Engagements",
   clients: "Clients",

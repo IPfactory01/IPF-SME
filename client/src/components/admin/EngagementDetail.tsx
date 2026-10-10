@@ -2,6 +2,9 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { PROBLEM_AREAS } from "@shared/businessSupport";
 import {
+  ENGAGEMENT_TASK_FACTORS,
+  ENGAGEMENT_TASK_FACTOR_LABELS,
+  type EngagementTaskFactor,
   DELIVERABLES_NEEDING_APPROVAL,
   ENGAGEMENT_AUDIENCE_LABELS,
   ENGAGEMENT_DELIVERABLE_KIND_LABELS,
@@ -281,13 +284,22 @@ function SessionCard({ session, engagementId, canManage, onDone }: { session?: S
   );
 }
 
+/** The Work Plan: every Data Request and action, by week and in order, the client's side and ours. */
 function Tasks({ data, engagementId }: { data: Detail; engagementId: number }) {
   const [adding, setAdding] = useState(false);
+  const weekOf = (task: Task) => task.weekNumber ?? null;
+  const weeks = Array.from(new Set(data.tasks.map(weekOf))).sort((a, b) => (a ?? 99) - (b ?? 99));
+  const inWeek = (week: number | null) => data.tasks.filter(task => weekOf(task) === week).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
   return (
-    <DetailSection title="Requests and actions">
-      <p className="text-xs text-ink-muted">What we need from the client, and who does what by when. The client sees their side and ours; contributors see only what is given to them.</p>
-      {data.tasks.map(task => <TaskCard key={task.id} task={task} data={data} engagementId={engagementId} />)}
-      {adding ? <TaskCard data={data} engagementId={engagementId} onDone={() => setAdding(false)} /> : data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add a request or action</Button>}
+    <DetailSection title="Work Plan">
+      <p className="text-xs text-ink-muted">Data Requests from the client and actions on both sides, by week and in order: the plan the Debrief shaped. The client sees their side and ours; contributors see only what is given to them.</p>
+      {weeks.map(week => (
+        <div key={week ?? "none"} className="space-y-2">
+          <p className={`${LABEL} mt-3`}>{week === null ? "No week" : `Week ${week}`}</p>
+          {inWeek(week).map(task => <TaskCard key={task.id} task={task} data={data} engagementId={engagementId} />)}
+        </div>
+      ))}
+      {adding ? <TaskCard data={data} engagementId={engagementId} onDone={() => setAdding(false)} /> : data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add to the Work Plan</Button>}
     </DetailSection>
   );
 }
@@ -302,6 +314,9 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
   const [dueOn, setDueOn] = useState(task?.dueOn ?? "");
   const [status, setStatus] = useState<EngagementTaskStatus>(task?.status ?? "open");
   const [note, setNote] = useState(task?.statusNote ?? "");
+  const [week, setWeek] = useState(task?.weekNumber ? String(task.weekNumber) : "");
+  const [order, setOrder] = useState(String(task?.sortOrder ?? 0));
+  const [factor, setFactor] = useState<EngagementTaskFactor | "">(task?.factor ?? "");
   const save = trpc.engagement.staff.saveTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Saved."); onDone?.(); } });
   const people = side === "client" ? data.clientPeople.map(person => ({ userId: person.userId, name: person.name })) : data.team.map(member => ({ userId: member.userId, name: member.name ?? "" }));
   const id = task?.id ?? "new";
@@ -321,6 +336,11 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
         <div><label className={LABEL} htmlFor={`task-due-${id}`}>Due</label><input id={`task-due-${id}`} type="date" className={FIELD} disabled={!canManage} value={dueOn} onChange={event => setDueOn(event.target.value)} /></div>
         <div><label className={LABEL} htmlFor={`task-status-${id}`}>Status</label><select id={`task-status-${id}`} className={FIELD} disabled={!canManage} value={status} onChange={event => setStatus(event.target.value as EngagementTaskStatus)}>{ENGAGEMENT_TASK_STATUSES.map(item => <option key={item} value={item}>{ENGAGEMENT_TASK_STATUS_LABELS[item]}</option>)}</select></div>
       </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div><label className={LABEL} htmlFor={`task-week-${id}`}>Week</label><select id={`task-week-${id}`} className={FIELD} disabled={!canManage} value={week} onChange={event => setWeek(event.target.value)}><option value="">No week</option>{[1, 2, 3, 4, 5, 6].map(item => <option key={item} value={item}>Week {item}</option>)}</select></div>
+        <div><label className={LABEL} htmlFor={`task-order-${id}`}>Order in the week</label><input id={`task-order-${id}`} type="number" min={0} max={999} className={FIELD} disabled={!canManage} value={order} onChange={event => setOrder(event.target.value)} /></div>
+        <div><label className={LABEL} htmlFor={`task-factor-${id}`}>Factor</label><select id={`task-factor-${id}`} className={FIELD} disabled={!canManage} value={factor} onChange={event => setFactor(event.target.value as EngagementTaskFactor | "")}><option value="">Not tagged</option>{ENGAGEMENT_TASK_FACTORS.map(item => <option key={item} value={item}>{ENGAGEMENT_TASK_FACTOR_LABELS[item]}</option>)}</select></div>
+      </div>
       <label className={LABEL} htmlFor={`task-note-${id}`}>Note (the client sees it)</label>
       <input id={`task-note-${id}`} className={FIELD} disabled={!canManage} placeholder={status === "needs_more" ? "Say what else you need" : ""} value={note} onChange={event => setNote(event.target.value)} />
       {task && <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && canManage} />}
@@ -328,6 +348,7 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
         <div className="flex gap-2">
           <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !title.trim()} onClick={() => save.mutate({
             engagementId, taskId: task?.id, kind, side, title, detail, assigneeUserId: assignee ? Number(assignee) : null, dueOn: dueOn || null, status, statusNote: note, sessionId: task?.sessionId ?? null,
+            weekNumber: week ? Number(week) : null, sortOrder: Number(order) || 0, factor: factor || null,
           })}>Save</Button>
           {onDone && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={onDone}>Cancel</Button>}
         </div>

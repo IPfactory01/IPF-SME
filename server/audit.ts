@@ -10,6 +10,8 @@ export const AUDIT_ACTIONS = [
   "business_check_call_scheduled",
   "business_check_call_booked",
   "business_check_call_outcome",
+  "debrief_saved",
+  "debrief_shared",
   "business_check_stage_changed",
   "payment_details_sent",
   "payment_proof_received",

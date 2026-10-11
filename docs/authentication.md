@@ -141,8 +141,16 @@ revoke. Details hold identifiers and field names only, never secrets or values.
 **Admin counts** (`onboarding.metrics`): business checks, users, portal users (can sign in with a password), businesses,
 memberships and platform role assignments are separate numbers, never derived from one another.
 
+**Password reset and suspension** (`server/accountRecovery.ts`, 11 October): a member of the team with `manage_users` issues a
+reset link for a person from Admin Team → People; it is emailed (`Reset your password on The Shift`) and shown once to the
+issuer while email is deferred. Only the token's SHA-256 is stored (`user_password_reset_tokens`); the link works once, within
+20 minutes, and using it replaces the password, clears the lockout and signs the person out everywhere. The same responsibility
+suspends an account (every session revoked at once, sign-in refused with the generic message) and reinstates it; nobody changes
+their own account, only a Super Admin touches a Super Admin, and the permanent and the last Super Admin cannot be suspended.
+Audited as `account_password_reset_issued`, `account_password_reset_completed`, `account_suspended`, `account_reinstated`.
+
 **Deferred:** team invitations, member management, ownership transfer, second-business creation, engagement assignments, logo
-upload, email change, password-reset email, and a role-management UI.
+upload, email change, a public "forgot password" form, and a role-management UI.
 
 ## The admin console (IPF Business Support)
 

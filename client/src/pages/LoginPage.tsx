@@ -61,6 +61,7 @@ export default function LoginPage() {
           </CardContent>
         </Card>
         <p className="text-center text-sm text-ink-muted">Client access is created during onboarding.</p>
+        <p className="text-center text-xs text-ink-muted">Forgotten your password? Ask the IP Factory team for a reset link. It comes by email and works once, for 20 minutes.</p>
         <p className="text-center text-xs text-ink-muted">On the {BRAND.programmeName} programme? <a href="/portal" className="font-semibold text-brand underline underline-offset-2">Go to the participant portal</a>.</p>
       </div>
     </main>

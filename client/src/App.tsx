@@ -13,6 +13,7 @@ import AdminInvitationPage from "./pages/AdminInvitationPage";
 import BusinessCheck from "./pages/BusinessCheck";
 import OnboardingPage from "./pages/OnboardingPage";
 import JoinPage from "./pages/JoinPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import FullReportPage from "./pages/FullReportPage";
 import LoginPage from "./pages/LoginPage";
 import AccountDashboard from "./pages/AccountDashboard";
@@ -32,6 +33,7 @@ function Router() {
       <Route path="/signup">{() => <Redirect to="/login" />}</Route>
       <Route path="/onboarding/:token" component={OnboardingPage} />
       <Route path="/join/:token" component={JoinPage} />
+      <Route path="/reset/:token" component={ResetPasswordPage} />
       <Route path="/report/:token" component={FullReportPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/dashboard" component={AccountDashboard} />

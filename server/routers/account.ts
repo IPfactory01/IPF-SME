@@ -11,7 +11,16 @@ import {
   updateAccountProfile,
   updateBusinessProfile,
 } from "../accountAuth";
+import { confirmPasswordReset, previewPasswordReset } from "../accountRecovery";
+import { getDb } from "../db";
 import { accountProcedure, publicProcedure, router } from "../_core/trpc";
+import { TRPCError } from "@trpc/server";
+
+async function database() {
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  return db;
+}
 
 /**
  * Universal account sign-in. There is deliberately no sign-up here: accounts are created only by accepting an
@@ -51,4 +60,9 @@ export const accountRouter = router({
   updateProfile: accountProcedure.input(z.unknown()).mutation(({ ctx, input }) => updateAccountProfile(ctx.req, ctx.account, input)),
 
   changePassword: accountProcedure.input(z.unknown()).mutation(({ ctx, input }) => changeAccountPassword(ctx.req, ctx.account, input)),
+
+  /** The reset page: whether a reset link is usable, and for which address. Public, keyed by the link alone. */
+  resetPreview: publicProcedure.input(z.object({ token: z.string().min(1).max(200) })).query(async ({ ctx, input }) => previewPasswordReset(await database(), ctx.req, input.token)),
+  /** Sets a new password from a reset link and signs the person out everywhere. Validated inside, with one readable message. */
+  resetPassword: publicProcedure.input(z.unknown()).mutation(async ({ ctx, input }) => confirmPasswordReset(await database(), ctx.req, input)),
 });

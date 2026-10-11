@@ -5,6 +5,7 @@ import BusinessChecksView from "./BusinessChecksView";
 import ClientsView from "./ClientsView";
 import DiscoveryCallsView from "./DiscoveryCallsView";
 import EngagementsView from "./EngagementsView";
+import PeoplePanel from "./PeoplePanel";
 import StaffPanel from "./StaffPanel";
 import { roleDisplay } from "./format";
 
@@ -75,7 +76,7 @@ export default function BusinessSupportConsole({ access, team, jump }: { access:
             {active?.id === "onboarding" && <ClientOnboardingPanel />}
             {active?.id === "engagements" && <EngagementsView />}
             {active?.id === "clients" && <ClientsView />}
-            {active?.id === "team" && <><StaffPanel />{team}</>}
+            {active?.id === "team" && <><StaffPanel /><PeoplePanel />{team}</>}
             {active?.id === "jump" && <div className="p-4">{jump}</div>}
           </div>
         </>

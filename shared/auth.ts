@@ -76,6 +76,29 @@ export const onboardingAcceptInputSchema = z
 export type OnboardingAcceptInput = z.input<typeof onboardingAcceptInputSchema>;
 
 export const ONBOARDING_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** A password reset link works once, within this long. */
+export const PASSWORD_RESET_TTL_MS = 20 * 60 * 1000;
+
+export const PASSWORD_RESET_ERRORS = {
+  unavailable: "This reset link is unavailable. It may have expired or already been used. Ask the IP Factory team for a new one.",
+  notSetUp: "Password reset links are not set up in the database yet (migration 0010).",
+} as const;
+
+/** Choosing a new password from a reset link. The link is the only key; the policy is the account password policy. */
+export const resetPasswordInputSchema = z
+  .object({
+    token: z.string().min(20).max(200),
+    password: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
+    confirmPassword: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
+  })
+  .superRefine((value, context) => {
+    const policy = validateAccountPassword(value.password);
+    if (policy) context.addIssue({ code: "custom", path: ["password"], message: policy });
+    if (value.password !== value.confirmPassword) {
+      context.addIssue({ code: "custom", path: ["confirmPassword"], message: "The password confirmation does not match." });
+    }
+  });
 export const ONBOARDING_ERRORS = {
   unavailable: "This invitation is unavailable. It may have expired or already been used. Ask the IPF team for a new link.",
   emailMismatch: "The email does not match this invitation.",

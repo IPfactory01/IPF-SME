@@ -39,7 +39,8 @@ docs/product/     These six documents
   the rewrites in `vercel.json` (`/api/*`, `/portal/authenticate`, `/portal/access`, `/manus-storage/*`); everything
   else falls back to `index.html`.
 - `vercel.json` sets security headers for static files: a content security policy (Calendly is the only allowed frame),
-  `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, a permissions policy and same-origin resource policy.
+  `nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, a permissions policy, same-origin resource policy and
+  `Strict-Transport-Security` (two years, subdomains included) on the static routes.
 - **CI** (`.github/workflows/ci.yml`) runs on pushes to `main` and `claude/**` and on pull requests: install with the
   frozen lockfile, `check`, `check:tests`, `test`, `build`, then fails if the committed `api/index.js` is stale.
 - **Release rule:** work on a branch, preview, and push to `main` only on the owner's word ("push to main"). Never

@@ -50,7 +50,7 @@ export function ContactLines({ email, whatsapp }: { email: string; whatsapp: str
  * recommendation is created here, and the owner's raw answers are not shown.
  */
 const stageName = (stage: string | null) => (stage && stage in PIPELINE_LABELS ? stageDisplayName(stage as PipelineStage) : stage ?? "-");
-const PAYMENT_HISTORY = { payment_details_sent: "Payment details sent", payment_proof_received: "Proof of payment received", payment_confirmed: "Payment confirmed" } as const;
+const PAYMENT_HISTORY = { payment_details_sent: "Payment details sent", payment_proof_received: "Proof of payment received", payment_confirmed: "Payment confirmed", payment_confirmation_sent: "Payment confirmation emailed" } as const;
 const REPORT_HISTORY = { full_report_link_sent: "Report Intake link sent again", full_report_delivered: "Full Report sent" } as const;
 /** "lead" is where every check starts, so the team never moves a check back to it. */
 /**
@@ -236,10 +236,11 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
             {check.stageHistory.map(event => (
               <li key={event.id} className="border-l-2 border-brand-line pl-3">
                 <p className="text-ink">
-                  {event.action === "payment_details_sent" || event.action === "payment_proof_received" || event.action === "payment_confirmed"
+                  {event.action === "payment_details_sent" || event.action === "payment_proof_received" || event.action === "payment_confirmed" || event.action === "payment_confirmation_sent"
                     ? <>
                         {PAYMENT_HISTORY[event.action]}{event.item ? `: ${PAYMENT_ITEM_DETAILS[event.item].name}` : ""}{event.reference ? ` (${event.reference})` : ""}
                         {event.to && <span className="text-ink-muted"> · moved to {stageName(event.to)}</span>}
+                        {event.action === "payment_confirmation_sent" && event.delivery && <span className="text-ink-muted"> · {event.delivery === "Failed" ? "the email failed" : event.delivery === "Sent" ? "emailed" : "email not set up"}</span>}
                       </>
                     : event.action === "full_report_link_sent" || event.action === "full_report_delivered"
                     ? <>{REPORT_HISTORY[event.action]}{event.reference ? ` (${event.reference})` : ""}</>

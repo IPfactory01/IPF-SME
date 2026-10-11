@@ -163,7 +163,7 @@ export async function getBusinessCheckDetail(db: Pick<Database, "select">, busin
 }
 
 /** Audit actions that move a business check or record something about its call, shown as its history. */
-const HISTORY_ACTIONS = ["business_check_stage_changed", "business_check_call_outcome", "business_check_call_scheduled", "business_check_call_booked", "payment_details_sent", "payment_proof_received", "payment_confirmed", "full_report_link_sent", "full_report_delivered"] as const;
+const HISTORY_ACTIONS = ["business_check_stage_changed", "business_check_call_outcome", "business_check_call_scheduled", "business_check_call_booked", "payment_details_sent", "payment_proof_received", "payment_confirmed", "payment_confirmation_sent", "full_report_link_sent", "full_report_delivered"] as const;
 
 /** What the team has done to one business check, newest first, with who did it. Read from the audit log. */
 async function stageHistoryFor(db: Pick<Database, "select">, businessCheckId: number) {
@@ -175,8 +175,8 @@ async function stageHistoryFor(db: Pick<Database, "select">, businessCheckId: nu
     .orderBy(desc(adminAccessAuditEvents.createdAt), desc(adminAccessAuditEvents.id))
     .limit(100);
   return events.map(event => {
-    const details = parseJson<{ from?: PipelineStage; to?: PipelineStage; note?: string; scheduledFor?: string; item?: PaymentItem; reference?: string }>(event.details) ?? {};
-    return { id: event.id, action: event.action as (typeof HISTORY_ACTIONS)[number], from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, by: event.by ?? null, at: event.at };
+    const details = parseJson<{ from?: PipelineStage; to?: PipelineStage; note?: string; scheduledFor?: string; item?: PaymentItem; reference?: string; delivery?: string }>(event.details) ?? {};
+    return { id: event.id, action: event.action as (typeof HISTORY_ACTIONS)[number], from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, delivery: details.delivery ?? null, by: event.by ?? null, at: event.at };
   });
 }
 

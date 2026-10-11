@@ -151,6 +151,18 @@ for (const target of targets) {
         expect((await rowFor(token)).stage).toBe("operating");
       });
 
+      it("records one result and emails once when the same check is sent twice at once", async () => {
+        const token = await started("submit-race@example.test");
+        mocked.deliverEmail.mockClear();
+        const [first, second] = await Promise.all([
+          caller().submit({ token, answers: businessCheckProfiles.growingMaker }),
+          caller().submit({ token, answers: businessCheckProfiles.growingMaker }),
+        ]);
+        expect(first.result).toEqual(second.result);
+        expect(mocked.deliverEmail.mock.calls.filter(call => (call[0] as { to: string }).to === "submit-race@example.test")).toHaveLength(1);
+        expect((await rowFor(token)).completedAt).toBeInstanceOf(Date);
+      });
+
       it("lets a check be sent a few times an hour (a retry included), then asks the owner to wait", async () => {
         const token = await started("submit-limit@example.test");
         await caller().submit({ token, answers: businessCheckProfiles.growingMaker });

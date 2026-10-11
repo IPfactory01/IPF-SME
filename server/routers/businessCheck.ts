@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { randomBytes } from "crypto";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { INTERNATIONAL_PHONE } from "../../shared/phone";
 import { businessChecks, type BusinessCheck } from "../../drizzle/schema";
@@ -134,16 +134,9 @@ export const businessCheckRouter = router({
     const contact = contactOf(check, answers);
     const { summary, source } = await summariseCheck({ answers, result, contact });
 
-    const office = officeEmail({ contact, answers, summary, source, result });
-    const owner = ownerEmail({ contact, summary, result, answers });
-    // A delivery problem never blocks the check: the result is saved either way and the page says whether email went out.
-    const failed = { status: "Failed" as const };
-    const [officeDelivery, ownerDelivery] = await Promise.all([
-      deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, subject: office.subject, body: office.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:office` }).catch(() => failed),
-      deliverEmail({ to: check.email, subject: owner.subject, body: owner.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:owner` }).catch(() => failed),
-    ]);
-
-    await db.update(businessChecks).set({
+    // The completion is claimed in one conditional statement before anything is sent, so two submissions at once
+    // (a double click, a retry) record it once and email once; the loser is answered from what was recorded.
+    const [claimed] = await db.update(businessChecks).set({
       ...answerColumns(answers),
       pipelineStage: advancePipeline(check.pipelineStage, "qualified_lead"),
       route: result.route,
@@ -152,9 +145,24 @@ export const businessCheckRouter = router({
       resultJson: JSON.stringify(result),
       summaryJson: JSON.stringify(summary),
       summarySource: source,
-      notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent",
       completedAt: databaseNow(),
-    }).where(eq(businessChecks.id, check.id));
+    }).where(and(eq(businessChecks.id, check.id), isNull(businessChecks.completedAt))).returning({ id: businessChecks.id });
+    if (!claimed) {
+      const recorded = await findCheck(db, input.token);
+      return { token: recorded.publicToken, result: JSON.parse(recorded.resultJson ?? "null") ?? result, summary: JSON.parse(recorded.summaryJson ?? "null") ?? summary, summarySource: recorded.summarySource ?? source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: recorded.notificationStatus };
+    }
+
+    const office = officeEmail({ contact, answers, summary, source, result });
+    const owner = ownerEmail({ contact, summary, result, answers });
+    // A delivery problem never undoes the check: the result is already saved and the page says whether email went out.
+    const failed = { status: "Failed" as const };
+    const [officeDelivery, ownerDelivery] = await Promise.all([
+      deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, subject: office.subject, body: office.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:office` }).catch(() => failed),
+      deliverEmail({ to: check.email, subject: owner.subject, body: owner.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:owner` }).catch(() => failed),
+    ]);
+    await db.update(businessChecks)
+      .set({ notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent" })
+      .where(eq(businessChecks.id, check.id));
 
     return { token: check.publicToken, result, summary, summarySource: source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: ownerDelivery.status === "Sent" ? "Sent" : ownerDelivery.status === "Failed" ? "Failed" : "Simulated" };
   }),

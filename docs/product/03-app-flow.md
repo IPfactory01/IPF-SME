@@ -115,7 +115,8 @@ confirmation stays for direct transfers. The same applies to the Current State A
 | "Record call outcome" | Desk lead | **Opportunity** (fit), **Refer** or **Lost** | — | **Opportunity**, **Referred** or **Lost** |
 | "Move to" | Desk lead | Any other stage except **Won**, with a note (for example **Nurture**); Won comes only from a confirmed payment | — | As chosen |
 | "Send payment details" (Current State Assessment) | Finance or Super Admin | Payment request for ₦500,000 | Owner: *Payment details for your Current State Assessment* | Moves to **Opportunity** if earlier |
-| "Proof received", then "Confirm payment" | Finance or Super Admin | Payment confirmed; an invitation is created unless one is pending or accepted | Owner: *Payment received: your Current State Assessment starts* and *Set up your client account on The Shift* | **Won** |
+| "Proof received", then "Confirm payment" | Finance or Super Admin | Payment confirmed; an invitation is created unless one is pending or accepted; what happened to the confirmation email is recorded in the stage history | Owner: *Payment received: your Current State Assessment starts* and *Set up your client account on The Shift* | **Won** |
+| "Send the confirmation again" | Finance or Super Admin | `businessSupport.resendPaymentConfirmation`: the "payment received" email again, for an owner who lost it (a paid Full Report gets its Report Intake link again instead) | Owner: *Payment received: your Current State Assessment starts* | — |
 | "Create account" | Owner | `onboarding.accept`: person, credential, business, owner membership and session in one transaction | — | Invitation: **accepted** |
 
 **The 48-hour window:** every payment details email says when to pay by, 48 hours after it was sent (Lagos time).

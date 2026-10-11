@@ -128,7 +128,15 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
     },
     onError: error => toast.error(error.message),
   });
-  const busy = send.isPending || proof.isPending || confirm.isPending;
+  const resendConfirmation = trpc.businessSupport.resendPaymentConfirmation.useMutation({
+    onSuccess: result => {
+      if (result.deliveryStatus === "Failed") toast.error("The confirmation email failed again. Check the address and try later.");
+      else toast.success("The payment confirmation is on its way to the owner again.");
+      refresh();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const busy = send.isPending || proof.isPending || confirm.isPending || resendConfirmation.isPending;
   const { name, amount } = PAYMENT_ITEM_DETAILS[item];
   const open = payment && payment.status !== "confirmed";
 
@@ -152,6 +160,11 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
       ) : <p className="mt-1.5 text-[13px] text-ink-muted">Payment details not sent.</p>}
 
       {item === "full_report" && payment?.status === "confirmed" && <ReportLine businessCheckId={businessCheckId} report={report} />}
+      {item === "current_state" && payment?.status === "confirmed" && (
+        <div className="mt-3 border-t border-line-soft pt-3">
+          <Button type="button" variant="outline" size="sm" className="rounded-none text-xs" disabled={busy} onClick={() => resendConfirmation.mutate({ paymentRequestId: payment.id })}>Send the confirmation again</Button>
+        </div>
+      )}
 
       {payment?.status !== "confirmed" && !confirming && (
         <div className="mt-3 flex flex-wrap gap-2">

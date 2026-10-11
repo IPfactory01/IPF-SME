@@ -324,6 +324,24 @@ for (const target of targets) {
         expect((await rowFor(token)).pipelineStage).toBe("won");
       });
 
+      it("records what happened to the confirmation email, and sends it again on request", async () => {
+        const { email, id } = await finishedCheck("confirmation-again");
+        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+        await expect((await superAdmin.call()).businessSupport.resendPaymentConfirmation({ paymentRequestId })).rejects.toMatchObject({ code: "CONFLICT" });
+        mocked.deliverEmail.mockResolvedValueOnce({ status: "Failed", reason: "mailbox unavailable" });
+        await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId });
+        const history = () => (async () => (await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id })).stageHistory.filter(event => event.action === "payment_confirmation_sent"))();
+        expect(await history()).toEqual([expect.objectContaining({ item: "current_state", delivery: "Failed" })]);
+
+        mocked.deliverEmail.mockClear();
+        expect(await (await superAdmin.call()).businessSupport.resendPaymentConfirmation({ paymentRequestId })).toEqual({ success: true, deliveryStatus: "Simulated" });
+        const again = emails().find(sent => sent.to === email)!;
+        expect(again.subject).toBe("Payment received: your Current State Assessment starts");
+        expect(await history()).toEqual([expect.objectContaining({ delivery: "Simulated" }), expect.objectContaining({ delivery: "Failed" })]);
+        const audit = (await auditsFor("payment_confirmation_sent", id)).map((event: { details: string }) => JSON.parse(event.details).again);
+        expect(audit).toEqual([false, true]);
+      });
+
       it("sends one invitation and one confirmation when two people confirm together", async () => {
         const { email, id } = await finishedCheck("invite-twice");
         const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
@@ -475,6 +493,12 @@ for (const target of targets) {
         const reportToken = decodeURIComponent(resent.body.match(/Complete your Report Intake: (\S+)/)![1].split("/report/")[1]);
         expect(await reportRow(id)).toMatchObject({ status: "awaiting_intake", paymentRequestId: payment.id });
         expect(await (await browser().call()).fullReport.form({ token: reportToken })).toMatchObject({ status: "awaiting_intake", email });
+      });
+
+      it("sends the Report Intake link, not the confirmation, again for a paid report", async () => {
+        const { id } = await paidReport("report-confirmation");
+        const [payment] = await paymentsOf(id);
+        await expect((await superAdmin.call()).businessSupport.resendPaymentConfirmation({ paymentRequestId: payment.id })).rejects.toMatchObject({ code: "CONFLICT", message: "For the Full Report, send the Report Intake link again instead." });
       });
 
       it("still refuses a link for a report that was never paid for", async () => {

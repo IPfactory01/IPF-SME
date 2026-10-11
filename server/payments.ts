@@ -266,9 +266,12 @@ export async function confirmPayment(db: Database, input: { paymentRequestId: nu
   }
   if (!outcome) return NOT_CONFIRMED;
 
-  // Email after the commit: a delivery problem never undoes a confirmation, and the link can be sent again from the console.
+  // Email after the commit: a delivery problem never undoes a confirmation. What happened to the email is recorded, so
+  // the console can show it and send it again.
   const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink });
-  await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:confirmed` }).catch(() => undefined);
+  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:confirmed` })
+    .catch((error: unknown) => ({ status: "Failed" as const, reason: error instanceof Error ? error.message : "Unknown error" }));
+  await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference, delivery: delivery.status, again: false } });
 
   let invitation: CurrentStateInvitation | null = null;
   let engagement: EngagementStart | null = null;
@@ -278,6 +281,22 @@ export async function confirmPayment(db: Database, input: { paymentRequestId: nu
     invitation = await inviteToClientAccount(db, check.id, input.actorUserId);
   }
   return { success: true, changed: true, invitation, engagement } as const;
+}
+
+/**
+ * Sends the "payment received" email again for a confirmed Current State Assessment payment (an owner who lost it). The
+ * report's confirmation carries a one-time link, so for it the console sends the Report Intake link again instead.
+ */
+export async function resendPaymentConfirmation(db: Database, input: { paymentRequestId: number; actorUserId: number }) {
+  const request = await loadRequest(db, input.paymentRequestId);
+  if (request.status !== "confirmed") throw new TRPCError({ code: "CONFLICT", message: "This payment is not confirmed yet." });
+  if (request.item !== "current_state") throw new TRPCError({ code: "CONFLICT", message: "For the Full Report, send the Report Intake link again instead." });
+  const check = await loadCheck(db, request.businessCheckId);
+  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: null });
+  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:confirmed:${Date.now()}` })
+    .catch((error: unknown) => ({ status: "Failed" as const, reason: error instanceof Error ? error.message : "Unknown error" }));
+  await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference, delivery: delivery.status, again: true } });
+  return { success: true, deliveryStatus: delivery.status } as const;
 }
 
 /** The Current State Assessment starts in the client account: invite the owner unless an invitation is already out or accepted. */

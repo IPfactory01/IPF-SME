@@ -35,6 +35,14 @@ describe("Content-Security-Policy keeps script-src strict", () => {
   });
 });
 
+describe("transport security on the static routes", () => {
+  it("tells browsers to keep using HTTPS for two years, subdomains included", () => {
+    const config = JSON.parse(readFileSync(resolve(root, "vercel.json"), "utf8")) as { headers: Array<{ headers: Array<{ key: string; value: string }> }> };
+    const values = config.headers.flatMap(entry => entry.headers).filter(header => header.key === "Strict-Transport-Security").map(header => header.value);
+    expect(values).toEqual(["max-age=63072000; includeSubDomains"]);
+  });
+});
+
 describe("the inline script that CSP blocked", () => {
   it("is the Manus runtime, and builds made on Vercel leave it out (no unsafe-inline needed)", () => {
     expect(manusPluginsFor({ VERCEL: "1" })).toEqual([]);

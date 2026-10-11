@@ -12,7 +12,7 @@ import {
   setPipelineStage,
   type SettableStage,
 } from "../businessSupportAdmin";
-import { confirmPayment, markProofReceived, requestPayment } from "../payments";
+import { confirmPayment, markProofReceived, requestPayment, resendPaymentConfirmation } from "../payments";
 import { getDebrief, isMissingDebriefTable, saveDebrief, shareDebrief } from "../debriefs";
 import { adminDownloadReport, resendReportLink } from "../fullReport/service";
 import { PAYMENT_ITEMS } from "../../shared/payments";
@@ -87,6 +87,10 @@ export const businessSupportRouter = router({
   resendReportLink: payments
     .input(z.object({ businessCheckId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => resendReportLink(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
+  /** Sends the "payment received" email again for a confirmed Current State Assessment payment. */
+  resendPaymentConfirmation: payments
+    .input(z.object({ paymentRequestId: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => resendPaymentConfirmation(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
   /** The money is in the account. For the Current State Assessment this wins the business and sends the client account invitation. */
   confirmPayment: payments
     .input(z.object({ paymentRequestId: z.number().int().positive(), note: z.string().trim().max(500).optional() }))

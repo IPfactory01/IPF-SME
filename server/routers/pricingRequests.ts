@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { requireLegacyJump } from "../_core/legacy";
 import { pricingRequests } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { deliverEmail, JUMP_ADMINISTRATION_MAILBOX } from "../email";
@@ -98,6 +99,7 @@ async function persistAndNotify(input: {
 
 export const pricingRequestsRouter = router({
   submitPublic: publicProcedure.input(publicPricingRequestInput).mutation(async ({ input, ctx }) => {
+    requireLegacyJump();
     if (!consumePublicPricingRequestRateLimit(input.email, ctx.req.ip || "unknown")) {
       throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Kindly wait a few minutes before sending another pricing request." });
     }

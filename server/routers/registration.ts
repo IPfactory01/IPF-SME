@@ -1,4 +1,5 @@
 import { isOwnerAdmin } from "../adminSecurity";
+import { requireLegacyJump } from "../_core/legacy";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -228,6 +229,7 @@ export const registrationRouter = router({
   submit: publicProcedure
     .input(registrationInputSchema)
     .mutation(async ({ input }) => {
+      requireLegacyJump();
       const db = await getDb();
       if (!db) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
@@ -628,6 +630,7 @@ export const registrationRouter = router({
   requestPortalLink: publicProcedure
     .input(z.object({ email: z.string().email() }))
     .mutation(async ({ input, ctx }) => {
+      requireLegacyJump();
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });
       const email = input.email.trim().toLowerCase();
@@ -800,6 +803,7 @@ export const registrationRouter = router({
       })
     )
     .mutation(async ({ input }) => {
+      requireLegacyJump();
       const secretKey = ENV.paystackSecretKey;
       if (!secretKey) {
         throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Online card payments are not currently available. Kindly use the approved payment guidance in your participant portal." });
@@ -859,6 +863,7 @@ export const registrationRouter = router({
   verifyPaystack: publicProcedure
     .input(z.object({ reference: z.string().min(8).max(255), registrationId: z.number().int().positive() }))
     .mutation(async ({ input }) => {
+      requireLegacyJump();
       const secretKey = ENV.paystackSecretKey;
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR" });

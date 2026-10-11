@@ -5,6 +5,8 @@
  * a real database when TEST_DATABASE_URL is set (`pnpm test:db`). The remote run builds a throwaway schema.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+// These tests exercise the JUMP programme's own forms, which are closed unless the flag is on.
+vi.hoisted(() => { process.env.LEGACY_JUMP_ENABLED = "1"; });
 import { and, eq, sql } from "drizzle-orm";
 import { getTableConfig, isPgEnum, type PgEnumColumn, type PgTable } from "drizzle-orm/pg-core";
 import { TRPCError } from "@trpc/server";

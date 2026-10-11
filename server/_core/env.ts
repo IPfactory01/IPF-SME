@@ -81,6 +81,12 @@ export const ENV = {
    */
   ownerAdminEmail: (process.env.OWNER_ADMIN_EMAIL?.trim() ?? "").toLowerCase(),
   emailReplyTo: process.env.EMAIL_REPLY_TO ?? BRAND.administrationMailbox,
+  /**
+   * Keeps the JUMP programme's public procedures open (registration, portal sign-in links, pricing requests, Paystack
+   * callbacks, emailing a diagnostic to any address). Off unless LEGACY_JUMP_ENABLED is 1, true or yes: each of them
+   * sends email or calls a provider without a limit, and The Shift does not use them.
+   */
+  legacyJumpEnabled: /^(1|true|yes)$/i.test(process.env.LEGACY_JUMP_ENABLED?.trim() ?? ""),
   /** Required production settings that are not set (empty outside production). */
   missingSettings: missingProductionSettings(),
 };

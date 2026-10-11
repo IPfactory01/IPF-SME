@@ -99,7 +99,9 @@ example, exists only in Resend (shown once at creation) and in Vercel.
 - **Staff** have platform roles and permissions (`shared/platformPermissions.ts`); a client's session never becomes a
   staff identity.
 - **Legacy:** Manus OAuth plus an administrator password (`jump_admin_access`, 8 hours) and the JUMP participant session
-  (`jump_participant_session`, 30 days) remain for JUMP.
+  (`jump_participant_session`, 30 days) remain for JUMP. JUMP's public forms (registration, portal sign-in link, pricing
+  request, Paystack callbacks, emailing a diagnostic) are closed unless `LEGACY_JUMP_ENABLED` is set: each sends email
+  or calls a provider without a limit.
 
 ## 8. Security requirements
 

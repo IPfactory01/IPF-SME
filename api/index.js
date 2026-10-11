@@ -177,6 +177,12 @@ var init_env = __esm({
        */
       ownerAdminEmail: (process.env.OWNER_ADMIN_EMAIL?.trim() ?? "").toLowerCase(),
       emailReplyTo: process.env.EMAIL_REPLY_TO ?? BRAND.administrationMailbox,
+      /**
+       * Keeps the JUMP programme's public procedures open (registration, portal sign-in links, pricing requests, Paystack
+       * callbacks, emailing a diagnostic to any address). Off unless LEGACY_JUMP_ENABLED is 1, true or yes: each of them
+       * sends email or calls a provider without a limit, and The Shift does not use them.
+       */
+      legacyJumpEnabled: /^(1|true|yes)$/i.test(process.env.LEGACY_JUMP_ENABLED?.trim() ?? ""),
       /** Required production settings that are not set (empty outside production). */
       missingSettings: missingProductionSettings()
     };
@@ -238,7 +244,7 @@ var init_ics = __esm({
 // server/_core/app.ts
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { TRPCError as TRPCError24 } from "@trpc/server";
+import { TRPCError as TRPCError25 } from "@trpc/server";
 
 // shared/const.ts
 var COOKIE_NAME = "app_session_id";
@@ -3688,8 +3694,16 @@ var systemRouter = router({
   })
 });
 
-// server/routers/registration.ts
+// server/_core/legacy.ts
+init_env();
 import { TRPCError as TRPCError6 } from "@trpc/server";
+var LEGACY_CLOSED_MESSAGE = "This JUMP programme form is closed.";
+function requireLegacyJump() {
+  if (!ENV.legacyJumpEnabled) throw new TRPCError6({ code: "FORBIDDEN", message: LEGACY_CLOSED_MESSAGE });
+}
+
+// server/routers/registration.ts
+import { TRPCError as TRPCError7 } from "@trpc/server";
 import { and as and6, desc as desc2, eq as eq7, inArray, sql as sql3 } from "drizzle-orm";
 import { z as z4 } from "zod";
 import { nanoid } from "nanoid";
@@ -3907,10 +3921,10 @@ var registrationRouter = router({
   }),
   setUserRole: ownerAdminProcedure.input(z4.object({ userId: z4.string(), role: z4.enum(["admin", "user"]) })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const target = (await db.select({ id: users.id, email: users.email }).from(users).where(eq7(users.id, Number(input.userId))).limit(1))[0];
     if (target && isOwnerAdmin(target) && input.role !== "admin") {
-      throw new TRPCError6({ code: "FORBIDDEN", message: "The super administrator keeps permanent access and cannot be demoted." });
+      throw new TRPCError7({ code: "FORBIDDEN", message: "The super administrator keeps permanent access and cannot be demoted." });
     }
     await db.update(users).set({ role: input.role }).where(eq7(users.id, Number(input.userId)));
     return { success: true };
@@ -3920,21 +3934,21 @@ var registrationRouter = router({
   })),
   sendEngagementBriefInvitation: ownerAdminProcedure.input(z4.object({ registrationId: z4.number().int().positive(), testRecipient: z4.string().email().optional() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicants = await db.select().from(registrations).where(eq7(registrations.id, input.registrationId)).limit(1);
     const applicant = applicants[0];
     if (!applicant || applicant.status === "Rejected") {
-      throw new TRPCError6({ code: "NOT_FOUND", message: "Eligible participant registration not found." });
+      throw new TRPCError7({ code: "NOT_FOUND", message: "Eligible participant registration not found." });
     }
     if (applicant.supersededByRegistrationId) {
-      throw new TRPCError6({
+      throw new TRPCError7({
         code: "CONFLICT",
         message: "This lower-pathway registration has been consolidated into the participant\u2019s highest selected pathway. Kindly send the canonical invitation instead."
       });
     }
     const packageName = applicant.package;
     if (!["Foundation", "Engine Room", "Boardroom"].includes(packageName)) {
-      throw new TRPCError6({ code: "BAD_REQUEST", message: `The participant does not have a recognised ${BRAND.programmeShortName} pathway.` });
+      throw new TRPCError7({ code: "BAD_REQUEST", message: `The participant does not have a recognised ${BRAND.programmeShortName} pathway.` });
     }
     const passwordLink = await createParticipantPasswordLink(applicant.id, ctx.req);
     const message = buildEngagementBriefInvitationEmail({
@@ -3964,7 +3978,7 @@ var registrationRouter = router({
       status: delivery.status
     });
     if (delivery.status !== "Sent") {
-      throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "The Engagement Brief invitation could not be delivered." });
+      throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "The Engagement Brief invitation could not be delivered." });
     }
     return { status: delivery.status, recipient, packageName };
   }),
@@ -3985,9 +3999,10 @@ var registrationRouter = router({
   }),
   // Submit registration
   submit: publicProcedure.input(registrationInputSchema).mutation(async ({ input }) => {
+    requireLegacyJump();
     const db = await getDb();
     if (!db) {
-      throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     }
     const knownRegistrations = await db.select({
       id: registrations.id,
@@ -4003,7 +4018,7 @@ var registrationRouter = router({
     const relatedPathways = relatedActiveRegistrations.map((registration) => registration.package);
     const retainedPathway = relatedPathways.length > 0 ? selectHighestPathway(relatedPathways) : void 0;
     if (retainedPathway && !pathwaySupersedes(input.package, retainedPathway)) {
-      throw new TRPCError6({
+      throw new TRPCError7({
         code: "CONFLICT",
         message: `Your ${retainedPathway} registration is already active. Kindly use that single participant experience rather than submitting a second pathway entry.`
       });
@@ -4164,11 +4179,11 @@ Pre-submitted Question: ${input.question || "None"}`
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
     if (input.status === "Accepted") {
       const current = await db.select().from(registrations).where(eq7(registrations.id, input.id)).limit(1);
       const applicant = current[0];
-      if (!applicant) throw new TRPCError6({ code: "NOT_FOUND", message: "Registration not found" });
+      if (!applicant) throw new TRPCError7({ code: "NOT_FOUND", message: "Registration not found" });
       if (applicant.package === "Boardroom") {
         const acceptedBoardroom = await db.select({ count: sql3`count(*)` }).from(registrations).where(
           and6(
@@ -4177,7 +4192,7 @@ Pre-submitted Question: ${input.question || "None"}`
           )
         );
         if (Number(acceptedBoardroom[0]?.count ?? 0) >= BOARDROOM_CAPACITY && applicant.status !== "Accepted") {
-          throw new TRPCError6({
+          throw new TRPCError7({
             code: "CONFLICT",
             message: "Boardroom capacity is full. Move another applicant out of Accepted before accepting this registration."
           });
@@ -4189,9 +4204,9 @@ Pre-submitted Question: ${input.question || "None"}`
   }),
   archiveRegistration: ownerAdminProcedure.input(z4.object({ id: z4.number().int().positive() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
     const registration = (await db.select({ id: registrations.id, archivedAt: registrations.archivedAt }).from(registrations).where(eq7(registrations.id, input.id)).limit(1))[0];
-    if (!registration) throw new TRPCError6({ code: "NOT_FOUND", message: "Registration not found" });
+    if (!registration) throw new TRPCError7({ code: "NOT_FOUND", message: "Registration not found" });
     if (registration.archivedAt) return { success: true, alreadyArchived: true };
     await db.update(registrations).set(archiveApplicationFields(ctx.user.id)).where(eq7(registrations.id, input.id));
     return { success: true, alreadyArchived: false };
@@ -4204,7 +4219,7 @@ Pre-submitted Question: ${input.question || "None"}`
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(registrations).set({ [input.field]: input.value }).where(eq7(registrations.id, input.id));
     return { success: true };
   }),
@@ -4215,7 +4230,7 @@ Pre-submitted Question: ${input.question || "None"}`
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
     await db.update(registrations).set({ cohortGroup: input.cohortGroup }).where(eq7(registrations.id, input.id));
     return { success: true };
   }),
@@ -4228,7 +4243,7 @@ Pre-submitted Question: ${input.question || "None"}`
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
     const delivery = await deliverEmail({
       to: input.recipientEmail,
       subject: input.subject,
@@ -4252,9 +4267,9 @@ Pre-submitted Question: ${input.question || "None"}`
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
     if (input.registrationIds.length !== input.recipients.length) {
-      throw new TRPCError6({ code: "BAD_REQUEST", message: "Recipients and registrations must match." });
+      throw new TRPCError7({ code: "BAD_REQUEST", message: "Recipients and registrations must match." });
     }
     const deliveries = await Promise.all(
       input.registrationIds.map(
@@ -4289,11 +4304,12 @@ Pre-submitted Question: ${input.question || "None"}`
     return await db.select().from(emailLogs).orderBy(desc2(emailLogs.sentAt)).limit(100);
   }),
   requestPortalLink: publicProcedure.input(z4.object({ email: z4.string().email() })).mutation(async ({ input, ctx }) => {
+    requireLegacyJump();
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
     const email = input.email.trim().toLowerCase();
     if (!consumePortalLinkRateLimit(email, ctx.req.ip || "unknown")) {
-      throw new TRPCError6({ code: "TOO_MANY_REQUESTS", message: "For your security, please wait a few minutes before requesting another sign-in link." });
+      throw new TRPCError7({ code: "TOO_MANY_REQUESTS", message: "For your security, please wait a few minutes before requesting another sign-in link." });
     }
     const rows = await db.select().from(registrations);
     const applicant = rows.find((row) => normalizeParticipantEmail(row.email) === email);
@@ -4326,16 +4342,16 @@ Pre-submitted Question: ${input.question || "None"}`
       status: delivery.status
     });
     if (delivery.status !== "Sent") {
-      throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: `We could not deliver your password link. Please try again shortly or contact ${BRAND.facilitatorFirstName} directly.` });
+      throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: `We could not deliver your password link. Please try again shortly or contact ${BRAND.facilitatorFirstName} directly.` });
     }
     return { success: true, message: `If this email is linked to an eligible ${BRAND.programmeShortName} registration, a secure password link will arrive shortly.` };
   }),
   resendEmailLog: ownerAdminProcedure.input(z4.object({ logId: z4.number() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
     const logRecord = await db.select().from(emailLogs).where(eq7(emailLogs.id, input.logId)).limit(1);
     const target = logRecord[0];
-    if (!target) throw new TRPCError6({ code: "NOT_FOUND", message: "Email log not found" });
+    if (!target) throw new TRPCError7({ code: "NOT_FOUND", message: "Email log not found" });
     const delivery = await deliverEmail({
       to: target.recipientEmail,
       subject: target.subject,
@@ -4361,10 +4377,10 @@ Pre-submitted Question: ${input.question || "None"}`
     })
   ).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
     const acceptedApplicants = await db.select().from(registrations).where(eq7(registrations.status, "Accepted"));
     if (acceptedApplicants.length === 0) {
-      throw new TRPCError6({ code: "BAD_REQUEST", message: "No accepted participants found to send reminder to." });
+      throw new TRPCError7({ code: "BAD_REQUEST", message: "No accepted participants found to send reminder to." });
     }
     const startTime = /* @__PURE__ */ new Date(`${input.sessionDate}T09:00:00Z`);
     const endTime = new Date(startTime.getTime() + 90 * 60 * 1e3);
@@ -4426,19 +4442,20 @@ Notes: ${input.messageNotes || "Please join on time."}`,
       packageName: z4.enum(["Foundation", "Engine Room", "Boardroom"])
     })
   ).mutation(async ({ input }) => {
+    requireLegacyJump();
     const secretKey = ENV.paystackSecretKey;
     if (!secretKey) {
-      throw new TRPCError6({ code: "PRECONDITION_FAILED", message: "Online card payments are not currently available. Kindly use the approved payment guidance in your participant portal." });
+      throw new TRPCError7({ code: "PRECONDITION_FAILED", message: "Online card payments are not currently available. Kindly use the approved payment guidance in your participant portal." });
     }
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = (await db.select({ id: registrations.id, email: registrations.email, package: registrations.package, status: registrations.status }).from(registrations).where(eq7(registrations.id, input.registrationId)).limit(1))[0];
     if (!applicant || applicant.status === "Rejected" || applicant.email.trim().toLowerCase() !== input.email.trim().toLowerCase() || applicant.package !== input.packageName) {
-      throw new TRPCError6({ code: "FORBIDDEN", message: `This payment request does not match an eligible ${BRAND.programmeShortName} registration.` });
+      throw new TRPCError7({ code: "FORBIDDEN", message: `This payment request does not match an eligible ${BRAND.programmeShortName} registration.` });
     }
     const expectedAmount = PAYSTACK_COMMITMENT_AMOUNTS[applicant.package];
     if (input.amountInNaira !== expectedAmount) {
-      throw new TRPCError6({ code: "BAD_REQUEST", message: "The requested payment amount does not match this pathway\u2019s current commitment amount." });
+      throw new TRPCError7({ code: "BAD_REQUEST", message: "The requested payment amount does not match this pathway\u2019s current commitment amount." });
     }
     try {
       const res = await fetch("https://api.paystack.co/transaction/initialize", {
@@ -4460,7 +4477,7 @@ Notes: ${input.messageNotes || "Please join on time."}`,
       });
       const data = await res.json();
       if (!data.status || !data.data) {
-        throw new TRPCError6({ code: "BAD_REQUEST", message: data.message || "Failed to initialize Paystack transaction" });
+        throw new TRPCError7({ code: "BAD_REQUEST", message: data.message || "Failed to initialize Paystack transaction" });
       }
       return {
         success: true,
@@ -4469,18 +4486,19 @@ Notes: ${input.messageNotes || "Please join on time."}`,
         authorizationUrl: data.data.authorization_url
       };
     } catch (err) {
-      throw new TRPCError6({
+      throw new TRPCError7({
         code: "INTERNAL_SERVER_ERROR",
         message: err instanceof Error ? err.message : "Paystack initialization error"
       });
     }
   }),
   verifyPaystack: publicProcedure.input(z4.object({ reference: z4.string().min(8).max(255), registrationId: z4.number().int().positive() })).mutation(async ({ input }) => {
+    requireLegacyJump();
     const secretKey = ENV.paystackSecretKey;
     const db = await getDb();
-    if (!db) throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR" });
+    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
     if (!secretKey) {
-      throw new TRPCError6({ code: "PRECONDITION_FAILED", message: "Online card-payment verification is not currently available." });
+      throw new TRPCError7({ code: "PRECONDITION_FAILED", message: "Online card-payment verification is not currently available." });
     }
     try {
       const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(input.reference)}`, {
@@ -4498,13 +4516,13 @@ Notes: ${input.messageNotes || "Please join on time."}`,
       }
       return { success: false, status: data.data?.status ?? "failed" };
     } catch (err) {
-      throw new TRPCError6({ code: "INTERNAL_SERVER_ERROR", message: "Verification request failed" });
+      throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Verification request failed" });
     }
   })
 });
 
 // server/routers/scheduling.ts
-import { TRPCError as TRPCError7 } from "@trpc/server";
+import { TRPCError as TRPCError8 } from "@trpc/server";
 import { and as and7, desc as desc3, eq as eq8, sql as sql4 } from "drizzle-orm";
 import { z as z5 } from "zod";
 
@@ -4949,29 +4967,29 @@ var schedulingRouter = router({
   }),
   book: participantProcedure.input(z5.object({ slotId: z5.number().int().positive() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const booking = await db.transaction(async (tx) => {
       const applicantRows = await tx.select().from(registrations).where(eq8(registrations.id, ctx.participant.id)).limit(1);
       const applicant = applicantRows[0];
-      if (!applicant) throw new TRPCError7({ code: "NOT_FOUND", message: "Booking link not recognised." });
+      if (!applicant) throw new TRPCError8({ code: "NOT_FOUND", message: "Booking link not recognised." });
       const consentRows = await tx.select({ id: participantEngagementConsents.id }).from(participantEngagementConsents).where(and7(
         eq8(participantEngagementConsents.registrationId, applicant.id),
         eq8(participantEngagementConsents.briefVersion, ENGAGEMENT_BRIEF_VERSION)
       )).limit(1);
       if (!consentRows[0]) {
-        throw new TRPCError7({ code: "FORBIDDEN", message: "Please read and acknowledge your personalised engagement brief in the participant portal before scheduling." });
+        throw new TRPCError8({ code: "FORBIDDEN", message: "Please read and acknowledge your personalised engagement brief in the participant portal before scheduling." });
       }
       if (applicant.status !== "Accepted" || applicant.depositPaid !== "Paid") {
-        throw new TRPCError7({ code: "FORBIDDEN", message: "Scheduling opens after acceptance and confirmation of the 40% commitment payment." });
+        throw new TRPCError8({ code: "FORBIDDEN", message: "Scheduling opens after acceptance and confirmation of the 40% commitment payment." });
       }
       const slotRows = await tx.select().from(scheduleSlots).where(eq8(scheduleSlots.id, input.slotId)).limit(1);
       const slot = slotRows[0];
       if (!slot || slot.status !== "Open" || slot.bookedCount >= slot.capacity) {
-        throw new TRPCError7({ code: "CONFLICT", message: "That slot has just been taken. Please choose another available time." });
+        throw new TRPCError8({ code: "CONFLICT", message: "That slot has just been taken. Please choose another available time." });
       }
       const required = requiredMeetingsForPackage(applicant.package);
       if (required.kind !== slot.kind) {
-        throw new TRPCError7({ code: "BAD_REQUEST", message: `This package books ${required.kind} sessions.` });
+        throw new TRPCError8({ code: "BAD_REQUEST", message: `This package books ${required.kind} sessions.` });
       }
       const currentBookings = await tx.select({ count: sql4`count(*)` }).from(scheduleBookings).where(and7(
         eq8(scheduleBookings.registrationId, applicant.id),
@@ -4979,14 +4997,14 @@ var schedulingRouter = router({
         eq8(scheduleBookings.status, "Confirmed")
       ));
       if (Number(currentBookings[0]?.count ?? 0) >= required.count) {
-        throw new TRPCError7({ code: "CONFLICT", message: `You already have the maximum ${required.count} ${slot.kind} bookings for this package.` });
+        throw new TRPCError8({ code: "CONFLICT", message: `You already have the maximum ${required.count} ${slot.kind} bookings for this package.` });
       }
       const duplicate = await tx.select({ id: scheduleBookings.id }).from(scheduleBookings).where(and7(
         eq8(scheduleBookings.registrationId, applicant.id),
         eq8(scheduleBookings.slotId, slot.id),
         eq8(scheduleBookings.status, "Confirmed")
       )).limit(1);
-      if (duplicate[0]) throw new TRPCError7({ code: "CONFLICT", message: "You have already booked this slot." });
+      if (duplicate[0]) throw new TRPCError8({ code: "CONFLICT", message: "You have already booked this slot." });
       const existingBookings = await tx.select({
         startAt: scheduleSlots.startAt,
         endAt: scheduleSlots.endAt
@@ -5000,7 +5018,7 @@ var schedulingRouter = router({
         const s2Start = new Date(slot.startAt).getTime();
         const s2End = new Date(slot.endAt).getTime();
         if (s1Start < s2End && s2Start < s1End) {
-          throw new TRPCError7({ code: "CONFLICT", message: "You already have a confirmed session booked that overlaps with this time." });
+          throw new TRPCError8({ code: "CONFLICT", message: "You already have a confirmed session booked that overlaps with this time." });
         }
       }
       const claimedSlots = await tx.update(scheduleSlots).set({
@@ -5009,7 +5027,7 @@ var schedulingRouter = router({
         status: sql4`(CASE WHEN ${scheduleSlots.bookedCount} + 1 >= ${scheduleSlots.capacity} THEN 'Booked' ELSE 'Open' END)::${sql4.identifier(scheduleSlotsStatusEnum.enumName)}`
       }).where(and7(eq8(scheduleSlots.id, slot.id), eq8(scheduleSlots.status, "Open"), sql4`${scheduleSlots.bookedCount} < ${scheduleSlots.capacity}`)).returning({ id: scheduleSlots.id });
       if (claimedSlots.length !== 1) {
-        throw new TRPCError7({ code: "CONFLICT", message: "That slot has just been taken. Please choose another available time." });
+        throw new TRPCError8({ code: "CONFLICT", message: "That slot has just been taken. Please choose another available time." });
       }
       const [insertResult] = await tx.insert(scheduleBookings).values({
         registrationId: applicant.id,
@@ -5047,7 +5065,7 @@ var schedulingRouter = router({
   }),
   seed: adminProcedure.input(z5.object({ kind: slotKindSchema })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const kind = asSlotKind(input.kind);
     const definitions = generateSlotDefinitions(kind);
     const existing = await db.select({ startAt: scheduleSlots.startAt, kind: scheduleSlots.kind }).from(scheduleSlots).where(eq8(scheduleSlots.kind, kind));
@@ -5063,7 +5081,7 @@ var schedulingRouter = router({
   }),
   block: adminProcedure.input(z5.object({ slotId: z5.number().int().positive(), blocked: z5.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     await db.update(scheduleSlots).set({ status: input.blocked ? "Blocked" : "Open" }).where(and7(eq8(scheduleSlots.id, input.slotId), eq8(scheduleSlots.bookedCount, 0)));
     return { success: true };
   })
@@ -5072,7 +5090,7 @@ var schedulingRouter = router({
 // server/routers/participant.ts
 import { and as and8, desc as desc4, eq as eq9 } from "drizzle-orm";
 import { z as z7 } from "zod";
-import { TRPCError as TRPCError8 } from "@trpc/server";
+import { TRPCError as TRPCError9 } from "@trpc/server";
 
 // server/paymentGuidance.ts
 init_brand();
@@ -5372,7 +5390,7 @@ async function getCompletedStructuredDiagnostic(db, applicant) {
   const draft = mergeStructuredDiagnosticDraft(applicant, stored?.structuredDiagnostic ?? null);
   const progress = diagnosticSectionProgress(draft);
   if (progress.completed !== progress.total) {
-    throw new TRPCError8({
+    throw new TRPCError9({
       code: "PRECONDITION_FAILED",
       message: "Complete all five assessment sections before generating your working diagnostic report."
     });
@@ -5395,7 +5413,7 @@ async function requireBriefAcknowledgement(db, registrationId) {
     )
   ).limit(1))[0];
   if (!consent) {
-    throw new TRPCError8({ code: "FORBIDDEN", message: "Acknowledge your Engagement Brief before opening the Current Status Assessment." });
+    throw new TRPCError9({ code: "FORBIDDEN", message: "Acknowledge your Engagement Brief before opening the Current Status Assessment." });
   }
 }
 var participantRouter = router({
@@ -5409,7 +5427,7 @@ var participantRouter = router({
   dashboard: participantProcedure.input(z7.object({}).optional()).query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) {
-      throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     }
     const applicant = ctx.participant;
     let programmeRecord = (await db.select().from(participantProgrammeRecords).where(eq9(participantProgrammeRecords.registrationId, applicant.id)).limit(1))[0];
@@ -5445,7 +5463,7 @@ var participantRouter = router({
       programmeRecord = (await db.select().from(participantProgrammeRecords).where(eq9(participantProgrammeRecords.registrationId, applicant.id)).limit(1))[0];
     }
     if (!programmeRecord) {
-      throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Could not initialise participant programme record." });
+      throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Could not initialise participant programme record." });
     }
     const bookings = await db.select({
       id: scheduleBookings.id,
@@ -5508,7 +5526,7 @@ var participantRouter = router({
   paymentGuidance: participantProcedure.input(z7.object({}).optional()).query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) {
-      throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     }
     const applicant = ctx.participant;
     return getPrivatePaymentGuidance(applicant.package, applicant.fullName);
@@ -5517,7 +5535,7 @@ var participantRouter = router({
   acknowledgeEngagementBrief: participantProcedure.input(z7.object({ confirmed: z7.literal(true) })).mutation(async ({ ctx }) => {
     const db = await getDb();
     if (!db) {
-      throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     }
     const applicant = ctx.participant;
     const existingRows = await db.select().from(participantEngagementConsents).where(
@@ -5577,7 +5595,7 @@ var participantRouter = router({
   ).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) {
-      throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     }
     await db.insert(participantBriefs).values({
       registrationId: input.registrationId,
@@ -5605,12 +5623,12 @@ var participantRouter = router({
   ).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) {
-      throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     }
     const applicant = ctx.participant;
     const expectedPrefix = `participant-assignments/${applicant.id}/`;
     if (!input.fileKey.startsWith(expectedPrefix)) {
-      throw new TRPCError8({ code: "FORBIDDEN", message: "This uploaded file is not associated with your private participant session." });
+      throw new TRPCError9({ code: "FORBIDDEN", message: "This uploaded file is not associated with your private participant session." });
     }
     await db.insert(participantAssignments).values({
       registrationId: applicant.id,
@@ -5645,11 +5663,11 @@ var participantRouter = router({
     })
   ).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = ctx.participant;
     const expectedPrefix = `payment-receipts/${applicant.id}/`;
     if (!input.fileKey.startsWith(expectedPrefix)) {
-      throw new TRPCError8({ code: "FORBIDDEN", message: "This receipt is not associated with your private participant session." });
+      throw new TRPCError9({ code: "FORBIDDEN", message: "This receipt is not associated with your private participant session." });
     }
     await db.insert(participantPaymentReceipts).values({
       registrationId: applicant.id,
@@ -5679,7 +5697,7 @@ var participantRouter = router({
     })
   ).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     await db.update(participantPaymentReceipts).set({
       status: input.status,
       reviewedByUserId: ctx.user.id,
@@ -5691,7 +5709,7 @@ var participantRouter = router({
   // Staged, registration-aware Current State Diagnostic. It is unlocked by brief consent, not payment.
   getStructuredDiagnostic: participantProcedure.input(z7.object({}).optional()).query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = ctx.participant;
     await requireBriefAcknowledgement(db, applicant.id);
     const stored = (await db.select({ structuredDiagnostic: currentStatusAssessments.structuredDiagnostic }).from(currentStatusAssessments).where(eq9(currentStatusAssessments.registrationId, applicant.id)).limit(1))[0];
@@ -5700,7 +5718,7 @@ var participantRouter = router({
   }),
   saveStructuredDiagnostic: participantProcedure.input(z7.object({ draft: structuredDiagnosticDraftSchema })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = ctx.participant;
     await requireBriefAcknowledgement(db, applicant.id);
     const draft = input.draft;
@@ -5722,14 +5740,14 @@ var participantRouter = router({
   }),
   getWorkingDiagnosticReport: participantProcedure.input(z7.object({}).optional()).query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = ctx.participant;
     await requireBriefAcknowledgement(db, applicant.id);
     return getLatestWorkingDiagnosticReport(db, applicant.id);
   }),
   generateWorkingDiagnosticReport: participantProcedure.input(z7.object({}).optional()).mutation(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = ctx.participant;
     const draft = await getCompletedStructuredDiagnostic(db, applicant);
     const report = buildWorkingDiagnosticReport(applicant, draft);
@@ -5742,12 +5760,12 @@ var participantRouter = router({
   }),
   downloadWorkingDiagnosticReportPdf: participantProcedure.input(z7.object({}).optional()).query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = ctx.participant;
     await requireBriefAcknowledgement(db, applicant.id);
     const current = await getLatestWorkingDiagnosticReport(db, applicant.id);
     if (!current) {
-      throw new TRPCError8({ code: "NOT_FOUND", message: "Generate your working diagnostic report before downloading it." });
+      throw new TRPCError9({ code: "NOT_FOUND", message: "Generate your working diagnostic report before downloading it." });
     }
     const pdf = await renderWorkingDiagnosticReportPdf(current.report);
     const safeBusinessName = applicant.businessName.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "report";
@@ -5757,13 +5775,14 @@ var participantRouter = router({
     };
   }),
   emailWorkingDiagnosticReport: participantProcedure.input(z7.object({ recipientEmail: z7.string().email().max(320).optional() })).mutation(async ({ input, ctx }) => {
+    requireLegacyJump();
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = ctx.participant;
     await requireBriefAcknowledgement(db, applicant.id);
     const current = await getLatestWorkingDiagnosticReport(db, applicant.id);
     if (!current) {
-      throw new TRPCError8({ code: "NOT_FOUND", message: "Generate your working diagnostic report before emailing it." });
+      throw new TRPCError9({ code: "NOT_FOUND", message: "Generate your working diagnostic report before emailing it." });
     }
     const recipientEmail = input.recipientEmail || applicant.email;
     const pdf = await renderWorkingDiagnosticReportPdf(current.report);
@@ -5794,7 +5813,7 @@ ${BRAND.facilitatorName}`;
       status: result.status === "Sent" ? "Sent" : result.status === "Failed" ? "Failed" : "Simulated"
     });
     if (result.status === "Failed") {
-      throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Your report email could not be sent. Kindly try again shortly." });
+      throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Your report email could not be sent. Kindly try again shortly." });
     }
     return { status: result.status, recipientEmail };
   }),
@@ -5803,7 +5822,7 @@ ${BRAND.facilitatorName}`;
   getAssessment: participantProcedure.input(z7.object({}).optional()).query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) {
-      throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     }
     const applicant = ctx.participant;
     await requireBriefAcknowledgement(db, applicant.id);
@@ -5825,7 +5844,7 @@ ${BRAND.facilitatorName}`;
   ).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) {
-      throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     }
     const applicant = ctx.participant;
     await requireBriefAcknowledgement(db, applicant.id);
@@ -5861,7 +5880,7 @@ ${BRAND.facilitatorName}`;
     const db = await getDb();
     if (!db) return null;
     const applicant = (await db.select().from(registrations).where(eq9(registrations.id, input.registrationId)).limit(1))[0];
-    if (!applicant) throw new TRPCError8({ code: "NOT_FOUND", message: "Participant registration not found." });
+    if (!applicant) throw new TRPCError9({ code: "NOT_FOUND", message: "Participant registration not found." });
     const assessment = (await db.select().from(currentStatusAssessments).where(eq9(currentStatusAssessments.registrationId, input.registrationId)).limit(1))[0];
     if (!assessment) return { assessment: null, draft: null, progress: null, workingReport: null };
     const draft = mergeStructuredDiagnosticDraft(applicant, assessment.structuredDiagnostic ?? null);
@@ -5876,14 +5895,14 @@ ${BRAND.facilitatorName}`;
   downloadAssessmentPdf: participantProcedure.input(z7.object({}).optional()).query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) {
-      throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+      throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     }
     const applicant = ctx.participant;
     await requireBriefAcknowledgement(db, applicant.id);
     const assessmentRows = await db.select().from(currentStatusAssessments).where(eq9(currentStatusAssessments.registrationId, applicant.id)).limit(1);
     const assessment = assessmentRows[0];
     if (!assessment) {
-      throw new TRPCError8({ code: "NOT_FOUND", message: "Assessment not found. Please submit your assessment first." });
+      throw new TRPCError9({ code: "NOT_FOUND", message: "Assessment not found. Please submit your assessment first." });
     }
     const PDFDocument3 = (await import("pdfkit")).default;
     const doc = new PDFDocument3({ margin: 50, size: "A4" });
@@ -5937,7 +5956,7 @@ ${BRAND.facilitatorName}`;
   // Get AI consulting chat conversation history and current question
   getConsultingChat: participantProcedure.input(z7.object({}).optional()).query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = ctx.participant;
     const messages = await db.select().from(consultingChatMessages).where(eq9(consultingChatMessages.registrationId, applicant.id)).orderBy(consultingChatMessages.createdAt);
     if (messages.length === 0) {
@@ -5985,7 +6004,7 @@ When leading through high-uncertainty execution or pivoting under cash pressure,
     isPass: z7.boolean().default(false)
   })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = ctx.participant;
     const participantMessage = input.isPass ? "[Participant passed on this question]" : input.content;
     await db.insert(consultingChatMessages).values({
@@ -6082,7 +6101,7 @@ You can now review your inferred diagnostic findings, strategic hypotheses, and 
   // Download Consulting Assessment Inferred PDF Report
   downloadConsultingReportPdf: participantProcedure.input(z7.object({}).optional()).query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = ctx.participant;
     const reportRows = await db.select().from(consultingReports).where(eq9(consultingReports.registrationId, applicant.id)).limit(1);
     const report = reportRows[0];
@@ -6141,7 +6160,7 @@ You can now review your inferred diagnostic findings, strategic hypotheses, and 
 });
 
 // server/routers/adminAccess.ts
-import { TRPCError as TRPCError9 } from "@trpc/server";
+import { TRPCError as TRPCError10 } from "@trpc/server";
 import { and as and9, desc as desc5, eq as eq10, gt as gt4, isNull as isNull4 } from "drizzle-orm";
 import { randomBytes as randomBytes4 } from "crypto";
 import { z as z8 } from "zod";
@@ -6154,7 +6173,7 @@ function expirationStatus(expiresAt) {
 var adminAccessRouter = router({
   status: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db || !ctx.user) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db || !ctx.user) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const credentials = await db.select({ id: adminCredentials.id }).from(adminCredentials).where(eq10(adminCredentials.userId, ctx.user.id)).limit(1);
     const authority = await loadAuthority(db, ctx.user);
     const internal = authority.roles.length > 0;
@@ -6179,13 +6198,13 @@ var adminAccessRouter = router({
   }),
   enrollOwnerPassword: protectedProcedure.input(z8.object({ password: passwordSchema, confirmPassword: passwordSchema })).mutation(async ({ ctx, input }) => {
     if (!ctx.user || !isOwnerAdmin(ctx.user) || ctx.user.role !== "admin") {
-      throw new TRPCError9({ code: "FORBIDDEN", message: `Only the recognised ${BRAND.programmeShortName} super administrator can create this password.` });
+      throw new TRPCError10({ code: "FORBIDDEN", message: `Only the recognised ${BRAND.programmeShortName} super administrator can create this password.` });
     }
     if (input.password !== input.confirmPassword) {
-      throw new TRPCError9({ code: "BAD_REQUEST", message: "The password confirmation does not match." });
+      throw new TRPCError10({ code: "BAD_REQUEST", message: "The password confirmation does not match." });
     }
     const policyError = validateAdminPassword(input.password);
-    if (policyError) throw new TRPCError9({ code: "BAD_REQUEST", message: policyError });
+    if (policyError) throw new TRPCError10({ code: "BAD_REQUEST", message: policyError });
     await setAdminPassword(ctx.user.id, input.password);
     await issueAdminAccessSession(ctx.req, ctx.res, ctx.user.id);
     const db = await getDb();
@@ -6198,21 +6217,21 @@ var adminAccessRouter = router({
   }),
   verifyPassword: protectedProcedure.input(z8.object({ password: z8.string().min(1).max(160) })).mutation(async ({ ctx, input }) => {
     if (!ctx.user || ctx.user.role !== "admin") {
-      throw new TRPCError9({ code: "FORBIDDEN", message: `This account is not an authorised ${BRAND.programmeShortName} administrator.` });
+      throw new TRPCError10({ code: "FORBIDDEN", message: `This account is not an authorised ${BRAND.programmeShortName} administrator.` });
     }
     const result = await verifyAndRecordAdminPassword(ctx.user.id, input.password);
-    if (!result.ok) throw new TRPCError9({ code: "UNAUTHORIZED", message: result.reason });
+    if (!result.ok) throw new TRPCError10({ code: "UNAUTHORIZED", message: result.reason });
     await issueAdminAccessSession(ctx.req, ctx.res, ctx.user.id);
     return { success: true, message: "Administrator access verified." };
   }),
   requestPasswordReset: protectedProcedure.mutation(async ({ ctx }) => {
     if (!ctx.user || ctx.user.role !== "admin") {
-      throw new TRPCError9({ code: "FORBIDDEN", message: `This account is not an authorised ${BRAND.programmeShortName} administrator.` });
+      throw new TRPCError10({ code: "FORBIDDEN", message: `This account is not an authorised ${BRAND.programmeShortName} administrator.` });
     }
     const db = await getDb();
-    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const email = normalizeAdminEmail(ctx.user.email);
-    if (!email) throw new TRPCError9({ code: "BAD_REQUEST", message: "This administrator account does not have a verified email address." });
+    if (!email) throw new TRPCError10({ code: "BAD_REQUEST", message: "This administrator account does not have a verified email address." });
     const token2 = randomBytes4(32).toString("base64url");
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_MAX_AGE_MS);
     await db.update(adminPasswordResetTokens).set({ revokedAt: /* @__PURE__ */ new Date() }).where(and9(
@@ -6244,7 +6263,7 @@ ${BRAND.senderDisplayName}`
     });
     if (delivery.status !== "Sent") {
       await db.update(adminPasswordResetTokens).set({ revokedAt: /* @__PURE__ */ new Date(), deliveryStatus: delivery.status, deliveryMessageId: null }).where(eq10(adminPasswordResetTokens.id, resetId));
-      throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "The reset email could not be delivered. Kindly try again shortly." });
+      throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "The reset email could not be delivered. Kindly try again shortly." });
     }
     await db.update(adminPasswordResetTokens).set({ deliveryStatus: delivery.status, deliveryMessageId: delivery.providerMessageId || null }).where(eq10(adminPasswordResetTokens.id, resetId));
     await db.insert(adminAccessAuditEvents).values({
@@ -6257,12 +6276,12 @@ ${BRAND.senderDisplayName}`
   }),
   confirmPasswordReset: publicProcedure.input(z8.object({ token: z8.string().min(30).max(200), password: passwordSchema, confirmPassword: passwordSchema })).mutation(async ({ ctx, input }) => {
     if (input.password !== input.confirmPassword) {
-      throw new TRPCError9({ code: "BAD_REQUEST", message: "The password confirmation does not match." });
+      throw new TRPCError10({ code: "BAD_REQUEST", message: "The password confirmation does not match." });
     }
     const policyError = validateAdminPassword(input.password);
-    if (policyError) throw new TRPCError9({ code: "BAD_REQUEST", message: policyError });
+    if (policyError) throw new TRPCError10({ code: "BAD_REQUEST", message: policyError });
     const db = await getDb();
-    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const resetToken = (await db.select().from(adminPasswordResetTokens).where(and9(
       eq10(adminPasswordResetTokens.tokenHash, sha256(input.token)),
       isNull4(adminPasswordResetTokens.consumedAt),
@@ -6270,11 +6289,11 @@ ${BRAND.senderDisplayName}`
       gt4(adminPasswordResetTokens.expiresAt, /* @__PURE__ */ new Date())
     )).limit(1))[0];
     if (!resetToken) {
-      throw new TRPCError9({ code: "NOT_FOUND", message: "This password reset link is unavailable or has expired. Kindly request a new link." });
+      throw new TRPCError10({ code: "NOT_FOUND", message: "This password reset link is unavailable or has expired. Kindly request a new link." });
     }
     const administrator = (await db.select().from(users).where(and9(eq10(users.id, resetToken.userId), eq10(users.role, "admin"))).limit(1))[0];
     if (!administrator) {
-      throw new TRPCError9({ code: "FORBIDDEN", message: "This password reset link is no longer valid." });
+      throw new TRPCError10({ code: "FORBIDDEN", message: "This password reset link is no longer valid." });
     }
     await revokeAdminSessionsForUser(administrator.id);
     await setAdminPassword(administrator.id, input.password);
@@ -6298,13 +6317,13 @@ ${BRAND.senderDisplayName}`
     inviteeName: z8.string().trim().min(2).max(255).optional(),
     permissions: z8.array(z8.string().refine(isAdminPermission)).min(1).max(ADMIN_PERMISSION_IDS.length)
   })).mutation(async ({ ctx, input }) => {
-    if (!ctx.user) throw new TRPCError9({ code: "UNAUTHORIZED" });
+    if (!ctx.user) throw new TRPCError10({ code: "UNAUTHORIZED" });
     const db = await getDb();
-    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const email = normalizeAdminEmail(input.email);
-    if (email === OWNER_ADMIN_EMAIL) throw new TRPCError9({ code: "BAD_REQUEST", message: "The super administrator already has permanent access." });
+    if (email === OWNER_ADMIN_EMAIL) throw new TRPCError10({ code: "BAD_REQUEST", message: "The super administrator already has permanent access." });
     const existingAdmin = await db.select({ id: users.id }).from(users).where(and9(emailEquals(users.email, email), eq10(users.role, "admin"))).limit(1);
-    if (existingAdmin.length) throw new TRPCError9({ code: "CONFLICT", message: `That email is already an active ${BRAND.programmeShortName} administrator.` });
+    if (existingAdmin.length) throw new TRPCError10({ code: "CONFLICT", message: `That email is already an active ${BRAND.programmeShortName} administrator.` });
     const token2 = randomBytes4(32).toString("base64url");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1e3);
     const permissions = parseAdminPermissions(JSON.stringify(input.permissions));
@@ -6370,12 +6389,12 @@ ${BRAND.senderDisplayName}`
     }));
   }),
   revokeAdmin: ownerAdminProcedure.input(z8.object({ userId: z8.number().int().positive() })).mutation(async ({ ctx, input }) => {
-    if (!ctx.user) throw new TRPCError9({ code: "UNAUTHORIZED" });
+    if (!ctx.user) throw new TRPCError10({ code: "UNAUTHORIZED" });
     const db = await getDb();
-    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const target = await db.select().from(users).where(eq10(users.id, input.userId)).limit(1);
-    if (!target[0] || target[0].role !== "admin") throw new TRPCError9({ code: "NOT_FOUND", message: "Active administrator not found." });
-    if (isOwnerAdmin(target[0])) throw new TRPCError9({ code: "FORBIDDEN", message: `The ${BRAND.programmeShortName} super administrator cannot be revoked here.` });
+    if (!target[0] || target[0].role !== "admin") throw new TRPCError10({ code: "NOT_FOUND", message: "Active administrator not found." });
+    if (isOwnerAdmin(target[0])) throw new TRPCError10({ code: "FORBIDDEN", message: `The ${BRAND.programmeShortName} super administrator cannot be revoked here.` });
     await db.update(users).set({ role: "user" }).where(eq10(users.id, target[0].id));
     await db.delete(adminPermissionProfiles).where(eq10(adminPermissionProfiles.userId, target[0].id));
     await revokeAdminSessionsForUser(target[0].id);
@@ -6390,12 +6409,12 @@ ${BRAND.senderDisplayName}`
     userId: z8.number().int().positive(),
     permissions: z8.array(z8.string().refine(isAdminPermission)).min(1).max(ADMIN_PERMISSION_IDS.length)
   })).mutation(async ({ ctx, input }) => {
-    if (!ctx.user) throw new TRPCError9({ code: "UNAUTHORIZED" });
+    if (!ctx.user) throw new TRPCError10({ code: "UNAUTHORIZED" });
     const db = await getDb();
-    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const target = (await db.select().from(users).where(eq10(users.id, input.userId)).limit(1))[0];
-    if (!target || target.role !== "admin") throw new TRPCError9({ code: "NOT_FOUND", message: "Active administrator not found." });
-    if (isOwnerAdmin(target)) throw new TRPCError9({ code: "FORBIDDEN", message: "The Super Admin retains all permissions and cannot be restricted." });
+    if (!target || target.role !== "admin") throw new TRPCError10({ code: "NOT_FOUND", message: "Active administrator not found." });
+    if (isOwnerAdmin(target)) throw new TRPCError10({ code: "FORBIDDEN", message: "The Super Admin retains all permissions and cannot be restricted." });
     const permissionsJson = serializeAdminPermissions(parseAdminPermissions(JSON.stringify(input.permissions)));
     const profile = (await db.select({ id: adminPermissionProfiles.id }).from(adminPermissionProfiles).where(eq10(adminPermissionProfiles.userId, target.id)).limit(1))[0];
     if (profile) {
@@ -6407,20 +6426,20 @@ ${BRAND.senderDisplayName}`
     return { success: true };
   }),
   acceptInvitation: protectedProcedure.input(z8.object({ token: z8.string().min(30).max(200), password: passwordSchema, confirmPassword: passwordSchema })).mutation(async ({ ctx, input }) => {
-    if (!ctx.user) throw new TRPCError9({ code: "UNAUTHORIZED" });
-    if (input.password !== input.confirmPassword) throw new TRPCError9({ code: "BAD_REQUEST", message: "The password confirmation does not match." });
+    if (!ctx.user) throw new TRPCError10({ code: "UNAUTHORIZED" });
+    if (input.password !== input.confirmPassword) throw new TRPCError10({ code: "BAD_REQUEST", message: "The password confirmation does not match." });
     const policyError = validateAdminPassword(input.password);
-    if (policyError) throw new TRPCError9({ code: "BAD_REQUEST", message: policyError });
+    if (policyError) throw new TRPCError10({ code: "BAD_REQUEST", message: policyError });
     const db = await getDb();
-    if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const candidates = await db.select().from(adminInvitations).where(and9(eq10(adminInvitations.tokenHash, sha256(input.token)), eq10(adminInvitations.status, "Pending"))).limit(1);
     const invitation = candidates[0];
     if (!invitation || invitation.expiresAt.getTime() <= Date.now()) {
       if (invitation) await db.update(adminInvitations).set({ status: "Expired" }).where(eq10(adminInvitations.id, invitation.id));
-      throw new TRPCError9({ code: "NOT_FOUND", message: "This invitation is unavailable or has expired." });
+      throw new TRPCError10({ code: "NOT_FOUND", message: "This invitation is unavailable or has expired." });
     }
     if (normalizeAdminEmail(ctx.user.email) !== invitation.email) {
-      throw new TRPCError9({ code: "FORBIDDEN", message: `Kindly sign in with ${invitation.email} to accept this invitation.` });
+      throw new TRPCError10({ code: "FORBIDDEN", message: `Kindly sign in with ${invitation.email} to accept this invitation.` });
     }
     await db.update(users).set({ role: "admin" }).where(eq10(users.id, ctx.user.id));
     await setAdminPassword(ctx.user.id, input.password);
@@ -6451,7 +6470,7 @@ ${BRAND.senderDisplayName}`
 });
 
 // server/routers/referrals.ts
-import { TRPCError as TRPCError10 } from "@trpc/server";
+import { TRPCError as TRPCError11 } from "@trpc/server";
 import { and as and10, desc as desc6, eq as eq11, sql as sql5 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { nanoid as nanoid2 } from "nanoid";
@@ -6481,7 +6500,7 @@ function shareOrigin(req) {
 var referralsRouter = router({
   share: participantProcedure.query(async ({ ctx }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const registrationId = ctx.participant.id;
     let profile = (await db.select().from(participantReferralProfiles).where(eq11(participantReferralProfiles.registrationId, registrationId)).limit(1))[0];
     if (!profile) {
@@ -6492,7 +6511,7 @@ var referralsRouter = router({
       }
       profile = (await db.select().from(participantReferralProfiles).where(eq11(participantReferralProfiles.registrationId, registrationId)).limit(1))[0];
     }
-    if (!profile) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Could not prepare your share link." });
+    if (!profile) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Could not prepare your share link." });
     const referrals = await db.select().from(participantReferrals).where(eq11(participantReferrals.referrerRegistrationId, registrationId)).orderBy(desc6(participantReferrals.createdAt));
     const approvedCount = referrals.filter((referral) => referral.status === "Approved").length;
     return {
@@ -6527,20 +6546,20 @@ var referralsRouter = router({
   }),
   review: ownerAdminProcedure.input(z9.object({ id: z9.number().int().positive(), decision: z9.enum(["Qualified", "Approved", "Declined"]), notes: z9.string().trim().max(2e3).optional() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
-    if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const referral = (await db.select().from(participantReferrals).where(eq11(participantReferrals.id, input.id)).limit(1))[0];
-    if (!referral) throw new TRPCError10({ code: "NOT_FOUND", message: "Referral record not found." });
+    if (!referral) throw new TRPCError11({ code: "NOT_FOUND", message: "Referral record not found." });
     const referredRegistration = (await db.select().from(registrations).where(eq11(registrations.id, referral.referredRegistrationId)).limit(1))[0];
-    if (!referredRegistration) throw new TRPCError10({ code: "NOT_FOUND", message: "Referred participant record not found." });
+    if (!referredRegistration) throw new TRPCError11({ code: "NOT_FOUND", message: "Referred participant record not found." });
     const isEligible = referralIsEligibleForQualification(referredRegistration.status, referredRegistration.depositPaid);
     if ((input.decision === "Qualified" || input.decision === "Approved") && !isEligible) {
-      throw new TRPCError10({ code: "PRECONDITION_FAILED", message: "A referral can qualify only after the referred business is Accepted and its first commitment payment is marked Paid." });
+      throw new TRPCError11({ code: "PRECONDITION_FAILED", message: "A referral can qualify only after the referred business is Accepted and its first commitment payment is marked Paid." });
     }
     if (input.decision === "Approved") {
-      if (referral.status !== "Qualified") throw new TRPCError10({ code: "PRECONDITION_FAILED", message: "Mark the referral Qualified before approving a credit." });
+      if (referral.status !== "Qualified") throw new TRPCError11({ code: "PRECONDITION_FAILED", message: "Mark the referral Qualified before approving a credit." });
       const countRow = (await db.select({ count: sql5`count(*)` }).from(participantReferrals).where(and10(eq11(participantReferrals.referrerRegistrationId, referral.referrerRegistrationId), eq11(participantReferrals.status, "Approved"))))[0];
       if (!referralCreditIsAvailable(Number(countRow?.count ?? 0))) {
-        throw new TRPCError10({ code: "PRECONDITION_FAILED", message: `The referrer has reached the maximum of ${REFERRAL_MAX_APPROVED_CREDITS} approved referral credits.` });
+        throw new TRPCError11({ code: "PRECONDITION_FAILED", message: `The referrer has reached the maximum of ${REFERRAL_MAX_APPROVED_CREDITS} approved referral credits.` });
       }
     }
     await db.update(participantReferrals).set({
@@ -6941,7 +6960,7 @@ var inboundRepliesRouter = router({
 // server/routers/pricingRequests.ts
 import { z as z12 } from "zod";
 init_brand();
-import { TRPCError as TRPCError11 } from "@trpc/server";
+import { TRPCError as TRPCError12 } from "@trpc/server";
 var PACKAGE_CHOICES = ["Foundation", "Engine Room", "Boardroom", "Not sure yet"];
 var PUBLIC_REQUEST_WINDOW_MS = 15 * 60 * 1e3;
 var PUBLIC_REQUEST_MAXIMUM = 5;
@@ -6986,7 +7005,7 @@ function buildNotification(input) {
 }
 async function persistAndNotify(input) {
   const db = await getDb();
-  if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: `${BRAND.programmeShortName} is temporarily unable to record this pricing request.` });
+  if (!db) throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: `${BRAND.programmeShortName} is temporarily unable to record this pricing request.` });
   const message = buildNotification(input);
   const delivery = await deliverEmail({
     to: JUMP_ADMINISTRATION_MAILBOX,
@@ -7005,14 +7024,15 @@ async function persistAndNotify(input) {
     notificationStatus
   });
   if (delivery.status === "Failed") {
-    throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "We could not send your request to the programme office. Kindly try again shortly." });
+    throw new TRPCError12({ code: "INTERNAL_SERVER_ERROR", message: "We could not send your request to the programme office. Kindly try again shortly." });
   }
   return { success: true };
 }
 var pricingRequestsRouter = router({
   submitPublic: publicProcedure.input(publicPricingRequestInput).mutation(async ({ input, ctx }) => {
+    requireLegacyJump();
     if (!consumePublicPricingRequestRateLimit(input.email, ctx.req.ip || "unknown")) {
-      throw new TRPCError11({ code: "TOO_MANY_REQUESTS", message: "Kindly wait a few minutes before sending another pricing request." });
+      throw new TRPCError12({ code: "TOO_MANY_REQUESTS", message: "Kindly wait a few minutes before sending another pricing request." });
     }
     return persistAndNotify({ ...input, source: "Public" });
   }),
@@ -7031,7 +7051,7 @@ var pricingRequestsRouter = router({
 });
 
 // server/routers/businessCheck.ts
-import { TRPCError as TRPCError17 } from "@trpc/server";
+import { TRPCError as TRPCError18 } from "@trpc/server";
 import { randomBytes as randomBytes7 } from "crypto";
 import { eq as eq19 } from "drizzle-orm";
 import { z as z16 } from "zod";
@@ -8525,16 +8545,16 @@ function officeEmail(input) {
 
 // server/payments.ts
 import { and as and14, desc as desc10, eq as eq18, inArray as inArray5, ne as ne2 } from "drizzle-orm";
-import { TRPCError as TRPCError16 } from "@trpc/server";
+import { TRPCError as TRPCError17 } from "@trpc/server";
 init_brand();
 init_env();
 
 // server/engagements.ts
-import { TRPCError as TRPCError13 } from "@trpc/server";
+import { TRPCError as TRPCError14 } from "@trpc/server";
 import { and as and11, asc, desc as desc8, eq as eq15, inArray as inArray4, isNull as isNull5 } from "drizzle-orm";
 
 // server/debriefs.ts
-import { TRPCError as TRPCError12 } from "@trpc/server";
+import { TRPCError as TRPCError13 } from "@trpc/server";
 import { eq as eq14 } from "drizzle-orm";
 function isMissingDebriefTable(error) {
   const code = error?.code ?? error?.cause?.code;
@@ -8542,7 +8562,7 @@ function isMissingDebriefTable(error) {
 }
 async function requireCheck(db, businessCheckId) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email }).from(businessChecks).where(eq14(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError12({ code: "NOT_FOUND", message: "This business check does not exist." });
+  if (!check) throw new TRPCError13({ code: "NOT_FOUND", message: "This business check does not exist." });
   return check;
 }
 async function getDebrief(db, businessCheckId) {
@@ -8561,7 +8581,7 @@ async function shareDebrief(db, input, actorUserId) {
   const check = await requireCheck(db, input.businessCheckId);
   return db.transaction(async (tx) => {
     const updated = await tx.update(debriefs).set({ sharedAt: input.shared ? /* @__PURE__ */ new Date() : null }).where(eq14(debriefs.businessCheckId, check.id)).returning({ id: debriefs.id });
-    if (!updated.length) throw new TRPCError12({ code: "NOT_FOUND", message: "Write the Debrief up before sharing it." });
+    if (!updated.length) throw new TRPCError13({ code: "NOT_FOUND", message: "Write the Debrief up before sharing it." });
     await recordAudit(tx, { action: "debrief_shared", actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, debriefId: updated[0].id, shared: input.shared } });
     return { success: true };
   });
@@ -8581,10 +8601,10 @@ async function sharedDebriefFor(db, businessCheckId) {
 import { randomUUID } from "node:crypto";
 init_brand();
 var NOT_FOUND = "This engagement is not available.";
-var notFound = () => new TRPCError13({ code: "NOT_FOUND", message: NOT_FOUND });
+var notFound = () => new TRPCError14({ code: "NOT_FOUND", message: NOT_FOUND });
 async function engagementDb() {
   const db = await getDb();
-  if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 function isMissingEngagementTable(error) {
@@ -8665,7 +8685,7 @@ async function startEngagementSafely(db, input) {
 var canStart = (actor) => canSeeAll(actor) && authorityAllows(actor.authority, "manage_engagements");
 function requireStart(actor) {
   if (!canStart(actor)) {
-    throw new TRPCError13({ code: "FORBIDDEN", message: "Only the desk lead can start an engagement by hand." });
+    throw new TRPCError14({ code: "FORBIDDEN", message: "Only the desk lead can start an engagement by hand." });
   }
 }
 async function listAwaitingStart(db, actor) {
@@ -8682,7 +8702,7 @@ async function listAwaitingStart(db, actor) {
 async function startAwaitingEngagement(db, actor, input) {
   requireStart(actor);
   const payment = (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and11(eq15(paymentRequests.businessCheckId, input.businessCheckId), eq15(paymentRequests.item, "current_state"), eq15(paymentRequests.status, "confirmed"))).limit(1))[0];
-  if (!payment) throw new TRPCError13({ code: "NOT_FOUND", message: "This Current State Assessment is not paid yet." });
+  if (!payment) throw new TRPCError14({ code: "NOT_FOUND", message: "This Current State Assessment is not paid yet." });
   const result = await startEngagement(db, { businessCheckId: input.businessCheckId, paymentRequestId: payment.id, actorUserId: actor.id });
   const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq15(engagements.businessCheckId, input.businessCheckId)).limit(1))[0];
   return { engagementId: engagement.id, created: result.created };
@@ -8704,7 +8724,7 @@ async function requireStaffEngagement(db, actor, engagementId) {
   throw notFound();
 }
 function requirePermission(actor, permission, message) {
-  if (!authorityAllows(actor.authority, permission)) throw new TRPCError13({ code: "FORBIDDEN", message });
+  if (!authorityAllows(actor.authority, permission)) throw new TRPCError14({ code: "FORBIDDEN", message });
 }
 var requireManage = (actor) => requirePermission(actor, "manage_engagements", "Your role does not include working on engagements.");
 async function listStaffEngagements(db, actor) {
@@ -8840,7 +8860,7 @@ async function assignTeamMember(db, actor, input) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
   await requireStaffEngagement(db, actor, input.engagementId);
   const staff2 = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq15(userPlatformRoles.userId, users.id)).where(and11(eq15(userPlatformRoles.userId, input.userId), eq15(users.status, "active"))).limit(1))[0];
-  if (!staff2) throw new TRPCError13({ code: "BAD_REQUEST", message: "Only IP Factory staff can join an engagement team." });
+  if (!staff2) throw new TRPCError14({ code: "BAD_REQUEST", message: "Only IP Factory staff can join an engagement team." });
   await db.transaction(async (tx) => {
     await tx.insert(engagementTeam).values({ engagementId: input.engagementId, userId: input.userId, role: input.role, assignedByUserId: actor.id }).onConflictDoUpdate({ target: [engagementTeam.engagementId, engagementTeam.userId], set: { role: input.role, assignedByUserId: actor.id } });
     await recordAudit(tx, { action: "engagement_team_assigned", actorUserId: actor.id, details: { engagementId: input.engagementId, userId: input.userId, role: input.role } });
@@ -8905,7 +8925,7 @@ async function saveSessionNotes(db, actor, input) {
 async function shareSessionNotes(db, actor, input) {
   requireManage(actor);
   const session = await requireStaffSession(db, actor, input.sessionId);
-  if (!session.clientNotes?.trim()) throw new TRPCError13({ code: "BAD_REQUEST", message: "Write the client's version of the notes before sharing them." });
+  if (!session.clientNotes?.trim()) throw new TRPCError14({ code: "BAD_REQUEST", message: "Write the client's version of the notes before sharing them." });
   await db.transaction(async (tx) => {
     await tx.update(engagementSessions).set({ notesAudience: input.audience, notesSharedAt: /* @__PURE__ */ new Date(), notesSharedByUserId: actor.id }).where(eq15(engagementSessions.id, session.id));
     await recordAudit(tx, { action: "engagement_notes_shared", actorUserId: actor.id, details: { engagementId: session.engagementId, sessionId: session.id, audience: input.audience } });
@@ -8918,7 +8938,7 @@ async function saveTask(db, actor, input) {
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   if (input.assigneeUserId !== null) {
     const allowed = input.side === "client" ? engagement.businessId !== null && (await clientPeopleOf(db, engagement.businessId)).some((person) => person.userId === input.assigneeUserId) : (await db.select({ userId: engagementTeam.userId }).from(engagementTeam).where(and11(eq15(engagementTeam.engagementId, engagement.id), eq15(engagementTeam.userId, input.assigneeUserId))).limit(1)).length === 1;
-    if (!allowed) throw new TRPCError13({ code: "BAD_REQUEST", message: input.side === "client" ? "That person is not part of the client's business." : "That person is not on the engagement team." });
+    if (!allowed) throw new TRPCError14({ code: "BAD_REQUEST", message: input.side === "client" ? "That person is not part of the client's business." : "That person is not on the engagement team." });
   }
   if (input.sessionId !== null && !(await db.select({ id: engagementSessions.id }).from(engagementSessions).where(and11(eq15(engagementSessions.id, input.sessionId), eq15(engagementSessions.engagementId, engagement.id))).limit(1)).length) throw notFound();
   const finished = input.status === "accepted" || input.status === "done";
@@ -8952,7 +8972,7 @@ async function requireStaffDeliverable(db, actor, deliverableId) {
 async function approveDeliverable(db, actor, input) {
   requirePermission(actor, "review_engagements", "Only the desk lead or a partner can approve this.");
   const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
-  if (deliverable.status === "shared") throw new TRPCError13({ code: "CONFLICT", message: "This is already shared." });
+  if (deliverable.status === "shared") throw new TRPCError14({ code: "CONFLICT", message: "This is already shared." });
   await db.transaction(async (tx) => {
     await tx.update(engagementDeliverables).set({ status: "approved", approvedAt: /* @__PURE__ */ new Date(), approvedByUserId: actor.id }).where(eq15(engagementDeliverables.id, deliverable.id));
     await recordAudit(tx, { action: "engagement_deliverable_approved", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind } });
@@ -8963,7 +8983,7 @@ async function shareDeliverable(db, actor, input) {
   requireManage(actor);
   const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
   if (DELIVERABLES_NEEDING_APPROVAL.includes(deliverable.kind) && deliverable.status !== "approved" && deliverable.status !== "shared") {
-    throw new TRPCError13({ code: "FORBIDDEN", message: `The desk lead approves every ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]} before the client sees it.` });
+    throw new TRPCError14({ code: "FORBIDDEN", message: `The desk lead approves every ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]} before the client sees it.` });
   }
   await db.transaction(async (tx) => {
     await tx.update(engagementDeliverables).set({ status: "shared", audience: input.audience, sharedAt: /* @__PURE__ */ new Date(), sharedByUserId: actor.id }).where(eq15(engagementDeliverables.id, deliverable.id));
@@ -9087,7 +9107,7 @@ async function respondToTask(db, session, input) {
   if (!task) throw notFound();
   const { viewer } = await requireClientEngagement(db, session, task.engagementId);
   if (task.side !== "client" || !clientCanSeeTask(task, viewer)) throw notFound();
-  if (task.status !== "open" && task.status !== "needs_more") throw new TRPCError13({ code: "CONFLICT", message: "This is already with us." });
+  if (task.status !== "open" && task.status !== "needs_more") throw new TRPCError14({ code: "CONFLICT", message: "This is already with us." });
   const status = task.kind === "data_request" ? "received" : "done";
   await db.transaction(async (tx) => {
     await tx.update(engagementTasks).set({ status, statusNote: input.note, completedAt: status === "done" ? /* @__PURE__ */ new Date() : null }).where(eq15(engagementTasks.id, task.id));
@@ -9109,7 +9129,7 @@ async function clientComment(db, session, input) {
 }
 async function acceptDeliverable(db, session, input) {
   const { deliverable, viewer } = await requireClientDeliverable(db, session, input.deliverableId);
-  if (viewer.kind !== "owner") throw new TRPCError13({ code: "FORBIDDEN", message: "Only the owner can sign this off." });
+  if (viewer.kind !== "owner") throw new TRPCError14({ code: "FORBIDDEN", message: "Only the owner can sign this off." });
   if (deliverable.clientAcceptedAt) return { success: true, changed: false };
   await db.transaction(async (tx) => {
     await tx.update(engagementDeliverables).set({ clientAcceptedAt: /* @__PURE__ */ new Date(), clientAcceptedByUserId: session.user.id }).where(eq15(engagementDeliverables.id, deliverable.id));
@@ -9120,13 +9140,13 @@ async function acceptDeliverable(db, session, input) {
 async function setClientAudience(db, session, input) {
   if (input.item === "deliverable") {
     const { deliverable, viewer } = await requireClientDeliverable(db, session, input.id);
-    if (viewer.kind !== "owner") throw new TRPCError13({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
+    if (viewer.kind !== "owner") throw new TRPCError14({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
     await db.update(engagementDeliverables).set({ audience: input.audience }).where(eq15(engagementDeliverables.id, deliverable.id));
   } else {
     const item = (await db.select().from(engagementSessions).where(eq15(engagementSessions.id, input.id)).limit(1))[0];
     if (!item || !item.notesSharedAt) throw notFound();
     const { viewer } = await requireClientEngagement(db, session, item.engagementId);
-    if (viewer.kind !== "owner") throw new TRPCError13({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
+    if (viewer.kind !== "owner") throw new TRPCError14({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
     await db.update(engagementSessions).set({ notesAudience: input.audience }).where(eq15(engagementSessions.id, item.id));
   }
   await recordAudit(db, { action: "engagement_audience_changed", actorUserId: session.user.id, details: { item: input.item, id: input.id, audience: input.audience } });
@@ -9134,14 +9154,14 @@ async function setClientAudience(db, session, input) {
 }
 var UPLOADS_OFF = 'File upload is not set up yet. Send it on WhatsApp or by email, then tick "I have sent this".';
 var requireUploads = () => {
-  if (!isFileStorageConfigured()) throw new TRPCError13({ code: "PRECONDITION_FAILED", message: UPLOADS_OFF });
+  if (!isFileStorageConfigured()) throw new TRPCError14({ code: "PRECONDITION_FAILED", message: UPLOADS_OFF });
 };
 function validateUpload(input) {
   if (!Number.isFinite(input.sizeBytes) || input.sizeBytes <= 0 || input.sizeBytes > UPLOAD_MAX_BYTES) {
-    throw new TRPCError13({ code: "BAD_REQUEST", message: `Files up to ${UPLOAD_MAX_MB} MB.` });
+    throw new TRPCError14({ code: "BAD_REQUEST", message: `Files up to ${UPLOAD_MAX_MB} MB.` });
   }
   if (!isAllowedUploadType(input.contentType, input.fileName)) {
-    throw new TRPCError13({ code: "BAD_REQUEST", message: "PDF, photos, spreadsheets and Word documents only." });
+    throw new TRPCError14({ code: "BAD_REQUEST", message: "PDF, photos, spreadsheets and Word documents only." });
   }
 }
 var keyPrefix = (engagementId, target) => `engagements/${engagementId}/${target.kind}s/${target.id}/`;
@@ -9183,7 +9203,7 @@ async function clientConfirmUpload(db, session, input) {
   validateUpload(input);
   const task = await requireClientTaskForUpload(db, session, input.taskId);
   if (!input.storageKey.startsWith(keyPrefix(task.engagementId, { kind: "task", id: task.id }))) throw notFound();
-  if (!await objectExists(input.storageKey)) throw new TRPCError13({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
+  if (!await objectExists(input.storageKey)) throw new TRPCError14({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
   const open = task.status === "open" || task.status === "needs_more";
   return db.transaction(async (tx) => {
     const [file] = await tx.insert(engagementFiles).values({
@@ -9236,7 +9256,7 @@ async function staffConfirmUpload(db, actor, input) {
   validateUpload(input);
   await requireStaffTarget(db, actor, input.engagementId, input.target);
   if (!input.storageKey.startsWith(keyPrefix(input.engagementId, input.target))) throw notFound();
-  if (!await objectExists(input.storageKey)) throw new TRPCError13({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
+  if (!await objectExists(input.storageKey)) throw new TRPCError14({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
   return db.transaction(async (tx) => {
     const [file] = await tx.insert(engagementFiles).values({
       engagementId: input.engagementId,
@@ -9290,7 +9310,7 @@ async function saveCheckin(db, actor, input) {
   await requireStaffEngagement(db, actor, input.engagementId);
   if (input.weekNumber > 1) {
     const previous = await db.select({ id: engagementCheckins.id }).from(engagementCheckins).where(and11(eq15(engagementCheckins.engagementId, input.engagementId), eq15(engagementCheckins.weekNumber, input.weekNumber - 1))).limit(1);
-    if (!previous.length) throw new TRPCError13({ code: "CONFLICT", message: `Record week ${input.weekNumber - 1} first: a Weekly Check-in cannot start without last week's record.` });
+    if (!previous.length) throw new TRPCError14({ code: "CONFLICT", message: `Record week ${input.weekNumber - 1} first: a Weekly Check-in cannot start without last week's record.` });
   }
   const values2 = {
     heldOn: input.heldOn,
@@ -9315,17 +9335,17 @@ async function saveCheckin(db, actor, input) {
 // server/clientOnboarding.ts
 import { randomBytes as randomBytes5, randomUUID as randomUUID2 } from "crypto";
 import { and as and12, count, desc as desc9, eq as eq16, gt as gt5, isNull as isNull6 } from "drizzle-orm";
-import { TRPCError as TRPCError14 } from "@trpc/server";
+import { TRPCError as TRPCError15 } from "@trpc/server";
 init_brand();
 import { z as z14 } from "zod";
 var emailSchema = z14.string().trim().email().max(320);
 function effectiveInvitationStatus(invitation, now = /* @__PURE__ */ new Date()) {
   return invitation.status === "pending" && invitation.expiresAt.getTime() <= now.getTime() ? "expired" : invitation.status;
 }
-var unavailable = () => new TRPCError14({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.unavailable });
+var unavailable = () => new TRPCError15({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.unavailable });
 async function requireDatabase() {
   const db = await getDb();
-  if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError15({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 async function identityConflict(db, email) {
@@ -9362,13 +9382,13 @@ async function assessmentPaid(db, businessCheckId) {
 async function createOnboardingInvitation(input) {
   const db = await requireDatabase();
   const check = (await db.select().from(businessChecks).where(eq16(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError14({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
+  if (!check) throw new TRPCError15({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
   const email = normaliseAccountEmail(check.email);
-  if (!emailSchema.safeParse(email).success) throw new TRPCError14({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.invalidCheckEmail });
-  if (await identityConflict(db, email)) throw new TRPCError14({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccountAdmin });
+  if (!emailSchema.safeParse(email).success) throw new TRPCError15({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.invalidCheckEmail });
+  if (await identityConflict(db, email)) throw new TRPCError15({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccountAdmin });
   const paid = await assessmentPaid(db, check.id);
   const override = input.overrideReason?.trim() ?? "";
-  if (!paid && !override) throw new TRPCError14({ code: "PRECONDITION_FAILED", message: ONBOARDING_ERRORS.unpaid });
+  if (!paid && !override) throw new TRPCError15({ code: "PRECONDITION_FAILED", message: ONBOARDING_ERRORS.unpaid });
   const token2 = randomBytes5(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ONBOARDING_INVITATION_TTL_MS);
   const invitation = await db.transaction(async (tx) => {
@@ -9402,7 +9422,7 @@ async function createOnboardingInvitation(input) {
 async function revokeOnboardingInvitation(input) {
   const db = await requireDatabase();
   const revoked = await db.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and12(eq16(clientOnboardingInvitations.id, input.invitationId), eq16(clientOnboardingInvitations.status, "pending"))).returning({ id: clientOnboardingInvitations.id, email: clientOnboardingInvitations.email });
-  if (revoked.length !== 1) throw new TRPCError14({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
+  if (revoked.length !== 1) throw new TRPCError15({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
   await db.insert(adminAccessAuditEvents).values({
     actorUserId: input.actorUserId,
     action: "client_onboarding_invitation_revoked",
@@ -9412,7 +9432,7 @@ async function revokeOnboardingInvitation(input) {
   return { success: true };
 }
 async function previewOnboardingInvitation(req, token2) {
-  if (!consumeRateLimit("onboarding", req, "preview", 60)) throw new TRPCError14({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!consumeRateLimit("onboarding", req, "preview", 60)) throw new TRPCError15({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const db = await requireDatabase();
   const invitation = (await db.select().from(clientOnboardingInvitations).where(eq16(clientOnboardingInvitations.tokenHash, sha256(token2))).limit(1))[0];
   if (!invitation || effectiveInvitationStatus(invitation) !== "pending") return { available: false };
@@ -9421,9 +9441,9 @@ async function previewOnboardingInvitation(req, token2) {
 async function acceptOnboardingInvitation(req, res, rawInput) {
   assertSameOrigin(req);
   const parsed = onboardingAcceptInputSchema.safeParse(rawInput);
-  if (!parsed.success) throw new TRPCError14({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
+  if (!parsed.success) throw new TRPCError15({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
   const input = parsed.data;
-  if (!consumeRateLimit("onboarding", req, "accept", 10)) throw new TRPCError14({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!consumeRateLimit("onboarding", req, "accept", 10)) throw new TRPCError15({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const db = await requireDatabase();
   const passwordHash = hashAdminPassword(input.password);
   let created;
@@ -9431,8 +9451,8 @@ async function acceptOnboardingInvitation(req, res, rawInput) {
     created = await db.transaction(async (tx) => {
       const invitation = (await tx.select().from(clientOnboardingInvitations).where(eq16(clientOnboardingInvitations.tokenHash, sha256(input.token))).limit(1))[0];
       if (!invitation || effectiveInvitationStatus(invitation) !== "pending") throw unavailable();
-      if (input.email !== invitation.email) throw new TRPCError14({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
-      if (await identityConflict(tx, invitation.email)) throw new TRPCError14({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
+      if (input.email !== invitation.email) throw new TRPCError15({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
+      if (await identityConflict(tx, invitation.email)) throw new TRPCError15({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
       const [user] = await tx.insert(users).values({
         openId: `local:${randomUUID2()}`,
         name: input.fullName,
@@ -9464,7 +9484,7 @@ async function acceptOnboardingInvitation(req, res, rawInput) {
       return { userId: user.id, email: invitation.email, business, session, businessCheckId: invitation.businessCheckId };
     });
   } catch (error) {
-    if (isUniqueViolation(error)) throw new TRPCError14({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
+    if (isUniqueViolation(error)) throw new TRPCError15({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
     throw error;
   }
   await linkEngagementToBusiness(db, { businessCheckId: created.businessCheckId, businessId: created.business.id }).catch((error) => {
@@ -9541,7 +9561,7 @@ async function onboardingMetrics() {
 // server/fullReport/service.ts
 import { randomBytes as randomBytes6 } from "node:crypto";
 import { and as and13, eq as eq17 } from "drizzle-orm";
-import { TRPCError as TRPCError15 } from "@trpc/server";
+import { TRPCError as TRPCError16 } from "@trpc/server";
 init_brand();
 
 // shared/fullReport/content.ts
@@ -10967,14 +10987,14 @@ async function issueReportLink(db, input) {
   return reportUrl(token2);
 }
 async function recordFor(db, token2) {
-  if (!token2 || token2.length > 200) throw new TRPCError15({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
+  if (!token2 || token2.length > 200) throw new TRPCError16({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
   const record = (await db.select().from(fullReports).where(eq17(fullReports.tokenHash, sha256(token2))).limit(1))[0];
-  if (!record) throw new TRPCError15({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
+  if (!record) throw new TRPCError16({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
   return record;
 }
 async function checkFor(db, businessCheckId) {
   const check = (await db.select().from(businessChecks).where(eq17(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError15({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
+  if (!check) throw new TRPCError16({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
   return check;
 }
 async function reportForm(db, token2) {
@@ -10992,7 +11012,7 @@ function parse(text4) {
 }
 async function assemble(db, record) {
   const intake = readIntake(parse(record.intakeJson));
-  if (!intake || !record.intakeSubmittedAt) throw new TRPCError15({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
+  if (!intake || !record.intakeSubmittedAt) throw new TRPCError16({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
   const check = await checkFor(db, record.businessCheckId);
   const payment = (await db.select({ reference: paymentRequests.reference }).from(paymentRequests).where(eq17(paymentRequests.id, record.paymentRequestId)).limit(1))[0];
   const answers = parse(check.answersJson) ?? {};
@@ -11039,11 +11059,11 @@ function reportEmail(report, downloadUrl) {
 }
 async function submitReportIntake(db, token2, rawIntake) {
   const record = await recordFor(db, token2);
-  if (record.status === "delivered") throw new TRPCError15({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
+  if (record.status === "delivered") throw new TRPCError16({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
   const parsed = intakeSchema.safeParse(rawIntake);
-  if (!parsed.success) throw new TRPCError15({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Please check your answers." });
+  if (!parsed.success) throw new TRPCError16({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Please check your answers." });
   const [claimed] = await db.update(fullReports).set({ status: "delivered", intakeJson: JSON.stringify(parsed.data), intakeSubmittedAt: /* @__PURE__ */ new Date(), reportVersion: REPORT_VERSION }).where(and13(eq17(fullReports.id, record.id), eq17(fullReports.status, "awaiting_intake"))).returning();
-  if (!claimed) throw new TRPCError15({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
+  if (!claimed) throw new TRPCError16({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
   const { report, generatedAt, email } = await assemble(db, claimed);
   const pdf = await renderFullReportPdf(report, generatedAt);
   const message = reportEmail(report, reportUrl(token2));
@@ -11077,13 +11097,13 @@ async function submitReportIntake(db, token2, rawIntake) {
 }
 async function downloadReport(db, token2) {
   const record = await recordFor(db, token2);
-  if (record.status !== "delivered") throw new TRPCError15({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
+  if (record.status !== "delivered") throw new TRPCError16({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
   const { report, generatedAt } = await assemble(db, record);
   return { fileName: fileName(report), pdf: (await renderFullReportPdf(report, generatedAt)).toString("base64") };
 }
 async function adminDownloadReport(db, businessCheckId) {
   const record = (await db.select().from(fullReports).where(eq17(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
-  if (!record || record.status !== "delivered") throw new TRPCError15({ code: "NOT_FOUND", message: "This Full Report has not been sent yet." });
+  if (!record || record.status !== "delivered") throw new TRPCError16({ code: "NOT_FOUND", message: "This Full Report has not been sent yet." });
   const { report, generatedAt } = await assemble(db, record);
   return { fileName: fileName(report), pdf: (await renderFullReportPdf(report, generatedAt)).toString("base64") };
 }
@@ -11093,9 +11113,9 @@ async function reportStatusFor(db, businessCheckId) {
 }
 async function resendReportLink(db, input) {
   const record = (await db.select().from(fullReports).where(eq17(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
-  if (record?.status === "delivered") throw new TRPCError15({ code: "CONFLICT", message: "The Full Report has already been sent." });
+  if (record?.status === "delivered") throw new TRPCError16({ code: "CONFLICT", message: "The Full Report has already been sent." });
   const paymentRequestId = record?.paymentRequestId ?? (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and13(eq17(paymentRequests.businessCheckId, input.businessCheckId), eq17(paymentRequests.item, "full_report"), eq17(paymentRequests.status, "confirmed"))).limit(1))[0]?.id;
-  if (!paymentRequestId) throw new TRPCError15({ code: "NOT_FOUND", message: "Confirm the Full Report payment first: that sends the Report Intake link." });
+  if (!paymentRequestId) throw new TRPCError16({ code: "NOT_FOUND", message: "Confirm the Full Report payment first: that sends the Report Intake link." });
   const check = await checkFor(db, input.businessCheckId);
   const link = await issueReportLink(db, { businessCheckId: check.id, paymentRequestId });
   const firstName2 = check.fullName.trim().split(/\s+/)[0] || "there";
@@ -11228,14 +11248,14 @@ async function paymentStatusesByCheck(db, businessCheckIds) {
 }
 async function loadCheck(db, businessCheckId) {
   const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq18(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError16({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  if (!check) throw new TRPCError17({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   return check;
 }
 var BEFORE_OPPORTUNITY = ["lead", "qualified_lead", "call_booked"];
 async function requestPayment(db, input) {
   const check = await loadCheck(db, input.businessCheckId);
   const existing = (await db.select().from(paymentRequests).where(and14(eq18(paymentRequests.businessCheckId, check.id), eq18(paymentRequests.item, input.item))).limit(1))[0];
-  if (existing?.status === "confirmed") throw new TRPCError16({ code: "CONFLICT", message: "This has already been paid." });
+  if (existing?.status === "confirmed") throw new TRPCError17({ code: "CONFLICT", message: "This has already been paid." });
   const reference = paymentReference(input.item, check.id);
   const amountNaira = PAYMENT_ITEM_DETAILS[input.item].amount;
   const stageTo = input.item === "current_state" && BEFORE_OPPORTUNITY.includes(check.pipelineStage) ? "opportunity" : check.pipelineStage;
@@ -11258,10 +11278,10 @@ async function requestPayment(db, input) {
 }
 async function loadRequest(db, paymentRequestId) {
   const request = (await db.select().from(paymentRequests).where(eq18(paymentRequests.id, paymentRequestId)).limit(1))[0];
-  if (!request) throw new TRPCError16({ code: "NOT_FOUND", message: "That payment request does not exist." });
+  if (!request) throw new TRPCError17({ code: "NOT_FOUND", message: "That payment request does not exist." });
   return request;
 }
-var alreadyConfirmed = () => new TRPCError16({ code: "CONFLICT", message: "This payment is already confirmed." });
+var alreadyConfirmed = () => new TRPCError17({ code: "CONFLICT", message: "This payment is already confirmed." });
 async function markProofReceived(db, input) {
   const request = await loadRequest(db, input.paymentRequestId);
   if (request.status === "confirmed") throw alreadyConfirmed();
@@ -11299,7 +11319,7 @@ async function confirmPayment(db, input) {
       return { reportLink };
     });
   } catch (error) {
-    if (isMissingPaymentTable(error)) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "The Full Report table is not set up yet (migration 0007). Nothing was confirmed." });
+    if (isMissingPaymentTable(error)) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "The Full Report table is not set up yet (migration 0007). Nothing was confirmed." });
     throw error;
   }
   if (!outcome) return NOT_CONFIRMED;
@@ -11322,7 +11342,7 @@ async function inviteToClientAccount(db, businessCheckId, actorUserId) {
     await createOnboardingInvitation({ businessCheckId, actorUserId });
     return "sent";
   } catch (error) {
-    if (error instanceof TRPCError16 && error.code === "CONFLICT") return "has_account";
+    if (error instanceof TRPCError17 && error.code === "CONFLICT") return "has_account";
     console.error("[Payments] Payment confirmed, but the client account invitation could not be sent:", error instanceof Error ? error.message : error);
     return "failed";
   }
@@ -11419,7 +11439,7 @@ var businessCheckStartInput = z16.object({
   whatsapp: z16.string().trim().regex(INTERNATIONAL_PHONE, "Kindly check the WhatsApp number.").optional(),
   heardFrom: z16.string().trim().max(64).optional()
 });
-var unavailable2 = (what) => new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: `We could not ${what} just now. Kindly try again shortly.` });
+var unavailable2 = (what) => new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: `We could not ${what} just now. Kindly try again shortly.` });
 async function database(what) {
   const db = await getDb();
   if (!db) throw unavailable2(what);
@@ -11427,7 +11447,7 @@ async function database(what) {
 }
 async function findCheck(db, token2) {
   const [check] = await db.select().from(businessChecks).where(eq19(businessChecks.publicToken, token2)).limit(1);
-  if (!check) throw new TRPCError17({ code: "NOT_FOUND", message: "We could not find that Business Check. Kindly start again." });
+  if (!check) throw new TRPCError18({ code: "NOT_FOUND", message: "We could not find that Business Check. Kindly start again." });
   return check;
 }
 function answerColumns(answers) {
@@ -11443,7 +11463,7 @@ var businessCheckRouter = router({
   start: publicProcedure.input(businessCheckStartInput).mutation(async ({ input, ctx }) => {
     const ip = (ctx.req.ip || "unknown").toLowerCase();
     if (!allowStartFromIp(ip) || !allowStart(`${ip}:${input.email.toLowerCase()}`)) {
-      throw new TRPCError17({ code: "TOO_MANY_REQUESTS", message: "Kindly wait a few minutes before starting another Business Check." });
+      throw new TRPCError18({ code: "TOO_MANY_REQUESTS", message: "Kindly wait a few minutes before starting another Business Check." });
     }
     const db = await database("start your Business Check");
     const token2 = randomBytes7(24).toString("base64url");
@@ -11461,7 +11481,7 @@ var businessCheckRouter = router({
   }),
   /** Saves answers as the owner goes, so an unfinished check still tells the team where they were. */
   saveProgress: publicProcedure.input(z16.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }) => {
-    if (!allowSave(input.token)) throw new TRPCError17({ code: "TOO_MANY_REQUESTS", message: "Too many updates. Your answers are still kept on this device." });
+    if (!allowSave(input.token)) throw new TRPCError18({ code: "TOO_MANY_REQUESTS", message: "Too many updates. Your answers are still kept on this device." });
     const db = await database("save your progress");
     const check = await findCheck(db, input.token);
     if (check.completedAt) return { saved: false };
@@ -11477,7 +11497,7 @@ var businessCheckRouter = router({
     }
     const answers = cleanAnswers(input.answers);
     if (!isComplete(answers)) {
-      throw new TRPCError17({ code: "BAD_REQUEST", message: "Some questions are still unanswered. Kindly go back and complete them." });
+      throw new TRPCError18({ code: "BAD_REQUEST", message: "Some questions are still unanswered. Kindly go back and complete them." });
     }
     const result = evaluate(answers);
     const contact = contactOf(check, answers);
@@ -11513,7 +11533,7 @@ var businessCheckRouter = router({
   })).mutation(async ({ input }) => {
     const db = await database("record your request");
     const check = await findCheck(db, input.token);
-    if (!check.completedAt) throw new TRPCError17({ code: "BAD_REQUEST", message: "Kindly finish the Business Check first." });
+    if (!check.completedAt) throw new TRPCError18({ code: "BAD_REQUEST", message: "Kindly finish the Business Check first." });
     const bookedFor = input.choice === "call" && input.calendlyEventUri ? await bookedCallTime(input.calendlyEventUri, check.email) ?? await findBookedCall(check.email) : null;
     if (bookedFor) {
       await db.update(businessChecks).set({ callScheduledFor: bookedFor }).where(eq19(businessChecks.id, check.id));
@@ -11529,7 +11549,7 @@ var businessCheckRouter = router({
           const sent = await requestPayment(db, { businessCheckId: check.id, item: "full_report", actorUserId: null });
           payment = sent.deliveryStatus === "Failed" ? `Payment details: ${sent.reference}, but the email to the owner failed (${sent.deliveryProblem ?? "no reason given"}). Send them again from admin once that is fixed.` : `Payment details sent: ${sent.reference}`;
         } catch (error) {
-          const paid = error instanceof TRPCError17 && error.code === "CONFLICT";
+          const paid = error instanceof TRPCError18 && error.code === "CONFLICT";
           if (!paid) console.error("[BusinessCheck] Could not send the report payment details:", error instanceof Error ? error.message : error);
           payment = paid ? "Payment: already paid" : "Payment details: NOT SENT. Send them from the admin console.";
         }
@@ -11604,12 +11624,12 @@ var clientOnboardingRouter = router({
 
 // server/routers/platformRoles.ts
 import { z as z19 } from "zod";
-import { TRPCError as TRPCError18 } from "@trpc/server";
+import { TRPCError as TRPCError19 } from "@trpc/server";
 var manageRoles = adminPermissionProcedure("manage_roles");
 var roleInput = z19.object({ userId: z19.number().int().positive(), role: z19.enum(PLATFORM_ROLES) });
 async function database2() {
   const db = await getDb();
-  if (!db) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 var platformRolesRouter = router({
@@ -11623,10 +11643,10 @@ import { z as z20 } from "zod";
 
 // server/businessSupportAdmin.ts
 import { and as and15, desc as desc11, eq as eq20, inArray as inArray6, isNotNull as isNotNull2, isNull as isNull7, sql as sql7 } from "drizzle-orm";
-import { TRPCError as TRPCError19 } from "@trpc/server";
+import { TRPCError as TRPCError20 } from "@trpc/server";
 async function requireDatabase2() {
   const db = await getDb();
-  if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 var CHECK_COLUMNS = {
@@ -11711,7 +11731,7 @@ async function getBusinessCheckDetail(db, businessCheckId) {
     resultJson: businessChecks.resultJson,
     summaryJson: businessChecks.summaryJson
   }).from(businessChecks).where(eq20(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!row) throw new TRPCError19({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  if (!row) throw new TRPCError20({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   const { resultJson, summaryJson, ...fields } = row;
   const result = parseJson(resultJson);
   const summary = parseJson(summaryJson);
@@ -11738,9 +11758,9 @@ async function stageHistoryFor(db, businessCheckId) {
 var SETTABLE_STAGES = PIPELINE_STAGES.filter((stage) => stage !== "lead" && stage !== "won");
 async function setPipelineStage(db, input) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq20(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError19({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  if (!check) throw new TRPCError20({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   if (check.pipelineStage === input.stage) return { success: true, pipelineStage: check.pipelineStage, changed: false };
-  if (check.pipelineStage === "won") throw new TRPCError19({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
+  if (check.pipelineStage === "won") throw new TRPCError20({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
   await db.transaction(async (tx) => {
     await tx.update(businessChecks).set({ pipelineStage: input.stage }).where(eq20(businessChecks.id, check.id));
     await recordAudit(tx, {
@@ -11754,9 +11774,9 @@ async function setPipelineStage(db, input) {
 }
 async function requestedCheck(db, businessCheckId) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq20(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError19({ code: "NOT_FOUND", message: "That Business Check does not exist." });
-  if (!check.callRequestedAt) throw new TRPCError19({ code: "BAD_REQUEST", message: "This Business Check has not asked for a Debrief." });
-  if (check.pipelineStage === "won") throw new TRPCError19({ code: "CONFLICT", message: "This business has already been won, so its Debrief outcome can no longer be changed here." });
+  if (!check) throw new TRPCError20({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  if (!check.callRequestedAt) throw new TRPCError20({ code: "BAD_REQUEST", message: "This Business Check has not asked for a Debrief." });
+  if (check.pipelineStage === "won") throw new TRPCError20({ code: "CONFLICT", message: "This business has already been won, so its Debrief outcome can no longer be changed here." });
   return check;
 }
 async function scheduleDiscoveryCall(db, input) {
@@ -11843,10 +11863,10 @@ var businessSupportRouter = router({
 
 // server/routers/fullReport.ts
 import { z as z21 } from "zod";
-import { TRPCError as TRPCError20 } from "@trpc/server";
+import { TRPCError as TRPCError21 } from "@trpc/server";
 async function database3() {
   const db = await getDb();
-  if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach your report just now. Please try again in a minute." });
+  if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach your report just now. Please try again in a minute." });
   return db;
 }
 var token = z21.string().trim().min(1).max(200);
@@ -11858,7 +11878,7 @@ var fullReportRouter = router({
 });
 
 // server/routers/engagement.ts
-import { TRPCError as TRPCError21 } from "@trpc/server";
+import { TRPCError as TRPCError22 } from "@trpc/server";
 import { z as z22 } from "zod";
 var id = z22.number().int().positive();
 var text3 = (max) => z22.string().trim().max(max);
@@ -11874,14 +11894,14 @@ async function guarded(work) {
   try {
     return await work();
   } catch (error) {
-    if (isMissingEngagementTable(error)) throw new TRPCError21({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
+    if (isMissingEngagementTable(error)) throw new TRPCError22({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
     throw error;
   }
 }
 var staff = adminProcedure.use(async ({ ctx, next }) => {
   const authority = await loadAuthority(await engagementDb(), ctx.user);
   if (!authorityAllows(authority, "view_all_businesses") && !authorityAllows(authority, "view_assigned_businesses")) {
-    throw new TRPCError21({ code: "FORBIDDEN", message: "Your role does not include engagements." });
+    throw new TRPCError22({ code: "FORBIDDEN", message: "Your role does not include engagements." });
   }
   return next({ ctx: { ...ctx, actor: { id: ctx.user.id, authority } } });
 });
@@ -11986,17 +12006,17 @@ var clientRouter = router({
 var engagementRouter = router({ staff: staffRouter, client: clientRouter });
 
 // server/routers/invitations.ts
-import { TRPCError as TRPCError23 } from "@trpc/server";
+import { TRPCError as TRPCError24 } from "@trpc/server";
 import { z as z24 } from "zod";
 
 // server/accountInvitations.ts
 import { randomBytes as randomBytes8, randomUUID as randomUUID3 } from "crypto";
 import { and as and16, desc as desc12, eq as eq21, gt as gt6, inArray as inArray7, isNull as isNull8, ne as ne3 } from "drizzle-orm";
-import { TRPCError as TRPCError22 } from "@trpc/server";
+import { TRPCError as TRPCError23 } from "@trpc/server";
 import { z as z23 } from "zod";
 init_brand();
 var JOIN_PATH = "/join";
-var unavailable3 = () => new TRPCError22({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.unavailable });
+var unavailable3 = () => new TRPCError23({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.unavailable });
 var newInvitationSchema = z23.object({
   email: z23.string().trim().email("Enter a valid email address.").max(ACCOUNT_EMAIL_MAX_LENGTH).transform(normaliseAccountEmail),
   fullName: z23.string().trim().min(2, "Enter their full name.").max(ACCOUNT_FULL_NAME_MAX_LENGTH)
@@ -12058,7 +12078,7 @@ async function issue(db, input) {
       return row;
     });
   } catch (error) {
-    if (isUniqueViolation(error)) throw new TRPCError22({ code: "CONFLICT", message: "An invitation to this address is already out." });
+    if (isUniqueViolation(error)) throw new TRPCError23({ code: "CONFLICT", message: "An invitation to this address is already out." });
     throw error;
   }
   const invitationUrl = `${getTrustedApplicationOrigin()}${JOIN_PATH}/${encodeURIComponent(token2)}`;
@@ -12069,18 +12089,18 @@ async function issue(db, input) {
 }
 var staffInvitationSchema = newInvitationSchema.extend({ role: z23.enum(["admin", "desk_lead", "analyst", "partner", "subject_matter_expert", "finance"]) });
 async function inviteStaff(db, actor, rawInput) {
-  if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError22({ code: "FORBIDDEN", message: "Only someone who manages roles can invite staff." });
+  if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError23({ code: "FORBIDDEN", message: "Only someone who manages roles can invite staff." });
   const input = staffInvitationSchema.parse(rawInput);
-  if (await identityTaken(db, input.email)) throw new TRPCError22({ code: "CONFLICT", message: "This email already has an account. Give that person a role instead." });
+  if (await identityTaken(db, input.email)) throw new TRPCError23({ code: "CONFLICT", message: "This email already has an account. Give that person a role instead." });
   return issue(db, { kind: "staff", email: input.email, fullName: input.fullName, platformRole: input.role, actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName });
 }
 async function listStaffInvitations(db, actor) {
-  if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError22({ code: "FORBIDDEN", message: "Only someone who manages roles can see staff invitations." });
+  if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError23({ code: "FORBIDDEN", message: "Only someone who manages roles can see staff invitations." });
   const rows = await db.select({ id: accountInvitations.id, email: accountInvitations.email, fullName: accountInvitations.fullName, role: accountInvitations.platformRole, status: accountInvitations.status, expiresAt: accountInvitations.expiresAt, deliveryStatus: accountInvitations.deliveryStatus, createdAt: accountInvitations.createdAt }).from(accountInvitations).where(eq21(accountInvitations.kind, "staff")).orderBy(desc12(accountInvitations.id)).limit(100);
   return rows.map((row) => ({ ...row, status: invitationState(row) }));
 }
 async function listStaff(db, actor) {
-  if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError22({ code: "FORBIDDEN", message: "Only someone who manages roles can see the team." });
+  if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError23({ code: "FORBIDDEN", message: "Only someone who manages roles can see the team." });
   const rows = await db.select({ userId: users.id, name: users.name, email: users.email, status: users.status, role: userPlatformRoles.role }).from(userPlatformRoles).innerJoin(users, eq21(userPlatformRoles.userId, users.id)).orderBy(users.name);
   const people = /* @__PURE__ */ new Map();
   for (const row of rows) {
@@ -12091,19 +12111,19 @@ async function listStaff(db, actor) {
   return Array.from(people.values());
 }
 async function revokeStaffInvitation(db, actor, input) {
-  if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError22({ code: "FORBIDDEN", message: "Only someone who manages roles can revoke staff invitations." });
+  if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError23({ code: "FORBIDDEN", message: "Only someone who manages roles can revoke staff invitations." });
   return revoke(db, { invitationId: input.invitationId, kind: "staff", actorUserId: actor.id });
 }
 async function revoke(db, input) {
   const revoked = await db.update(accountInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and16(eq21(accountInvitations.id, input.invitationId), eq21(accountInvitations.kind, input.kind), eq21(accountInvitations.status, "pending"), ...input.businessId ? [eq21(accountInvitations.businessId, input.businessId)] : [])).returning({ id: accountInvitations.id, email: accountInvitations.email });
-  if (revoked.length !== 1) throw new TRPCError22({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
+  if (revoked.length !== 1) throw new TRPCError23({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
   await recordAudit(db, { action: "account_invitation_revoked", actorUserId: input.actorUserId, targetEmail: revoked[0].email, details: { invitationId: revoked[0].id, kind: input.kind } });
   return { success: true };
 }
 var seatInvitationSchema = newInvitationSchema.extend({ access: z23.enum(["full", "contributor"]) });
 function requireOwnerLevel(session) {
   const business = session.activeBusiness;
-  if (!business || business.role === "member") throw new TRPCError22({ code: "FORBIDDEN", message: "Only the owner can add people to the business." });
+  if (!business || business.role === "member") throw new TRPCError23({ code: "FORBIDDEN", message: "Only the owner can add people to the business." });
   return business;
 }
 async function listSeats(db, session) {
@@ -12124,8 +12144,8 @@ async function inviteSeat(db, session, rawInput) {
   const business = requireOwnerLevel(session);
   const input = seatInvitationSchema.parse(rawInput);
   const seats = await listSeats(db, session);
-  if (seats.used >= seats.included) throw new TRPCError22({ code: "FORBIDDEN", message: `Your engagement includes ${seats.included === 1 ? "one person" : `${seats.included} people`} from your team. Remove them or their invitation to invite someone else.` });
-  if (await identityTaken(db, input.email)) throw new TRPCError22({ code: "CONFLICT", message: "This email already has an account. Ask IP Factory to help add them." });
+  if (seats.used >= seats.included) throw new TRPCError23({ code: "FORBIDDEN", message: `Your engagement includes ${seats.included === 1 ? "one person" : `${seats.included} people`} from your team. Remove them or their invitation to invite someone else.` });
+  if (await identityTaken(db, input.email)) throw new TRPCError23({ code: "CONFLICT", message: "This email already has an account. Ask IP Factory to help add them." });
   return issue(db, { kind: "business_member", email: input.email, fullName: input.fullName, businessId: business.businessId, access: input.access, actorUserId: session.user.id, inviterName: session.user.fullName, businessName: business.businessName });
 }
 async function revokeSeatInvitation(db, session, input) {
@@ -12135,19 +12155,19 @@ async function revokeSeatInvitation(db, session, input) {
 async function removeSeat(db, session, input) {
   const business = requireOwnerLevel(session);
   const removed = await db.update(businessMemberships).set({ status: "removed" }).where(and16(eq21(businessMemberships.id, input.membershipId), eq21(businessMemberships.businessId, business.businessId), eq21(businessMemberships.role, "member"), ne3(businessMemberships.status, "removed"))).returning({ id: businessMemberships.id, userId: businessMemberships.userId });
-  if (removed.length !== 1) throw new TRPCError22({ code: "NOT_FOUND", message: "That person is not on your team." });
+  if (removed.length !== 1) throw new TRPCError23({ code: "NOT_FOUND", message: "That person is not on your team." });
   await recordAudit(db, { action: "business_member_removed", actorUserId: session.user.id, details: { businessId: business.businessId, membershipId: removed[0].id, userId: removed[0].userId } });
   return { success: true };
 }
 async function setSeatAccess(db, session, input) {
   const business = requireOwnerLevel(session);
   const membership = (await db.select({ id: businessMemberships.id }).from(businessMemberships).where(and16(eq21(businessMemberships.id, input.membershipId), eq21(businessMemberships.businessId, business.businessId), eq21(businessMemberships.role, "member"), eq21(businessMemberships.status, "active"))).limit(1))[0];
-  if (!membership) throw new TRPCError22({ code: "NOT_FOUND", message: "That person is not on your team." });
+  if (!membership) throw new TRPCError23({ code: "NOT_FOUND", message: "That person is not on your team." });
   await db.insert(businessMemberAccess).values({ membershipId: membership.id, access: input.access, grantedByUserId: session.user.id }).onConflictDoUpdate({ target: businessMemberAccess.membershipId, set: { access: input.access, grantedByUserId: session.user.id } });
   return { success: true };
 }
 async function previewAccountInvitation(db, req, token2) {
-  if (!consumeRateLimit("onboarding", req, "join-preview", 60)) throw new TRPCError22({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!consumeRateLimit("onboarding", req, "join-preview", 60)) throw new TRPCError23({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const invitation = (await db.select().from(accountInvitations).where(eq21(accountInvitations.tokenHash, sha256(token2))).limit(1))[0];
   if (!invitation || invitationState(invitation) !== "pending") return { available: false };
   const business = invitation.businessId ? (await db.select({ name: businesses.name }).from(businesses).where(eq21(businesses.id, invitation.businessId)).limit(1))[0] : null;
@@ -12156,17 +12176,17 @@ async function previewAccountInvitation(db, req, token2) {
 async function acceptAccountInvitation(db, req, res, rawInput) {
   assertSameOrigin(req);
   const parsed = acceptAccountInvitationSchema.safeParse(rawInput);
-  if (!parsed.success) throw new TRPCError22({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
+  if (!parsed.success) throw new TRPCError23({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
   const input = parsed.data;
-  if (!consumeRateLimit("onboarding", req, "join-accept", 10)) throw new TRPCError22({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!consumeRateLimit("onboarding", req, "join-accept", 10)) throw new TRPCError23({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const passwordHash = hashAdminPassword(input.password);
   let created;
   try {
     created = await db.transaction(async (tx) => {
       const invitation = (await tx.select().from(accountInvitations).where(eq21(accountInvitations.tokenHash, sha256(input.token))).limit(1))[0];
       if (!invitation || invitationState(invitation) !== "pending") throw unavailable3();
-      if (input.email !== normaliseAccountEmail(invitation.email)) throw new TRPCError22({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
-      if (await identityTaken(tx, invitation.email)) throw new TRPCError22({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
+      if (input.email !== normaliseAccountEmail(invitation.email)) throw new TRPCError23({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
+      if (await identityTaken(tx, invitation.email)) throw new TRPCError23({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
       const [user] = await tx.insert(users).values({ openId: `local:${randomUUID3()}`, name: input.fullName, email: invitation.email, loginMethod: "password", role: "user", status: "active" }).returning({ id: users.id });
       await tx.insert(userCredentials).values({ userId: user.id, passwordHash });
       let businessId = null;
@@ -12187,7 +12207,7 @@ async function acceptAccountInvitation(db, req, res, rawInput) {
       return { userId: user.id, email: invitation.email, session, businessId };
     });
   } catch (error) {
-    if (isUniqueViolation(error)) throw new TRPCError22({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
+    if (isUniqueViolation(error)) throw new TRPCError23({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
     throw error;
   }
   setSessionCookie(req, res, created.session.token);
@@ -12202,7 +12222,7 @@ async function guarded2(work) {
   try {
     return await work();
   } catch (error) {
-    if (isMissingEngagementTable(error)) throw new TRPCError23({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
+    if (isMissingEngagementTable(error)) throw new TRPCError24({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
     throw error;
   }
 }
@@ -12424,7 +12444,7 @@ function createApp() {
       return res.status(201).json(uploaded);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to upload the file.";
-      const status = error instanceof TRPCError24 && error.code === "UNAUTHORIZED" ? 401 : 500;
+      const status = error instanceof TRPCError25 && error.code === "UNAUTHORIZED" ? 401 : 500;
       console.warn("[Participant upload] Failed:", message);
       return res.status(status).json({ message: status === 401 ? "Kindly sign in to your participant portal again and try again." : "We could not store this file. Kindly try again shortly." });
     }
@@ -12444,7 +12464,7 @@ function createApp() {
       return res.status(201).json(uploaded);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to upload the payment receipt.";
-      const status = error instanceof TRPCError24 && error.code === "UNAUTHORIZED" ? 401 : 500;
+      const status = error instanceof TRPCError25 && error.code === "UNAUTHORIZED" ? 401 : 500;
       console.warn("[Payment receipt upload] Failed:", message);
       return res.status(status).json({ message: status === 401 ? "Kindly sign in to your participant portal again and try again." : "We could not store the receipt. Kindly try again shortly." });
     }

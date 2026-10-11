@@ -1,4 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
+import { requireLegacyJump } from "../_core/legacy";
 import { z } from "zod";
 import { consultingChatMessages, consultingReports, currentStatusAssessments, emailLogs, participantAssignments, participantBriefs, participantEngagementConsents, participantPaymentReceipts, participantProgrammeMilestoneEvents, participantProgrammeRecords, registrations, scheduleBookings, scheduleSlots, type Registration } from "../../drizzle/schema";
 import { adminPermissionProcedure, participantProcedure, publicProcedure, router } from "../_core/trpc";
@@ -665,6 +666,7 @@ export const participantRouter = router({
   emailWorkingDiagnosticReport: participantProcedure
     .input(z.object({ recipientEmail: z.string().email().max(320).optional() }))
     .mutation(async ({ input, ctx }) => {
+      requireLegacyJump();
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const applicant = ctx.participant;

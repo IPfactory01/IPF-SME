@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+// These tests exercise the JUMP programme's own forms, which are closed unless the flag is on.
+vi.hoisted(() => { process.env.LEGACY_JUMP_ENABLED = "1"; });
 import type { TrpcContext } from "@server/_core/context";
 
 const mocked = vi.hoisted(() => ({

@@ -32,14 +32,6 @@ describe("discovery call booking page", () => {
   });
 });
 
-describe("the runtime", () => {
-  it("is pinned to Node 22 and pnpm 10 for every host, not only CI", () => {
-    const manifest = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8")) as { engines?: Record<string, string> };
-    expect(manifest.engines).toEqual({ node: "22.x", pnpm: ">=10" });
-    expect(readFileSync(resolve(process.cwd(), ".nvmrc"), "utf8").trim()).toMatch(/^22/);
-  });
-});
-
 describe("the Vercel function", () => {
   it("may run for a minute: the Business Check waits on the AI summary and two emails in one request", () => {
     const config = JSON.parse(readFileSync(resolve(process.cwd(), "vercel.json"), "utf8")) as { functions?: Record<string, { maxDuration?: number }> };

@@ -7173,7 +7173,7 @@ var pricingRequestsRouter = router({
 // server/routers/businessCheck.ts
 import { TRPCError as TRPCError18 } from "@trpc/server";
 import { randomBytes as randomBytes7 } from "crypto";
-import { eq as eq20 } from "drizzle-orm";
+import { and as and15, eq as eq20, isNull as isNull7 } from "drizzle-orm";
 import { z as z16 } from "zod";
 
 // shared/phone.ts
@@ -11444,7 +11444,8 @@ async function confirmPayment(db, input) {
   }
   if (!outcome) return NOT_CONFIRMED;
   const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink });
-  await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:confirmed` }).catch(() => void 0);
+  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:confirmed` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
+  await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference, delivery: delivery.status, again: false } });
   let invitation = null;
   let engagement = null;
   if (request.item === "current_state") {
@@ -11452,6 +11453,16 @@ async function confirmPayment(db, input) {
     invitation = await inviteToClientAccount(db, check.id, input.actorUserId);
   }
   return { success: true, changed: true, invitation, engagement };
+}
+async function resendPaymentConfirmation(db, input) {
+  const request = await loadRequest(db, input.paymentRequestId);
+  if (request.status !== "confirmed") throw new TRPCError17({ code: "CONFLICT", message: "This payment is not confirmed yet." });
+  if (request.item !== "current_state") throw new TRPCError17({ code: "CONFLICT", message: "For the Full Report, send the Report Intake link again instead." });
+  const check = await loadCheck(db, request.businessCheckId);
+  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: null });
+  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:confirmed:${Date.now()}` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
+  await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference, delivery: delivery.status, again: true } });
+  return { success: true, deliveryStatus: delivery.status };
 }
 async function inviteToClientAccount(db, businessCheckId, actorUserId) {
   const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt }).from(clientOnboardingInvitations).where(eq19(clientOnboardingInvitations.businessCheckId, businessCheckId)).orderBy(desc10(clientOnboardingInvitations.id)).limit(1))[0];
@@ -11604,14 +11615,7 @@ var businessCheckRouter = router({
     const result = evaluate(answers);
     const contact = contactOf(check, answers);
     const { summary, source } = await summariseCheck({ answers, result, contact });
-    const office = officeEmail({ contact, answers, summary, source, result });
-    const owner = ownerEmail({ contact, summary, result, answers });
-    const failed = { status: "Failed" };
-    const [officeDelivery, ownerDelivery] = await Promise.all([
-      deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, subject: office.subject, body: office.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:office` }).catch(() => failed),
-      deliverEmail({ to: check.email, subject: owner.subject, body: owner.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:owner` }).catch(() => failed)
-    ]);
-    await db.update(businessChecks).set({
+    const [claimed] = await db.update(businessChecks).set({
       ...answerColumns(answers),
       pipelineStage: advancePipeline(check.pipelineStage, "qualified_lead"),
       route: result.route,
@@ -11620,9 +11624,20 @@ var businessCheckRouter = router({
       resultJson: JSON.stringify(result),
       summaryJson: JSON.stringify(summary),
       summarySource: source,
-      notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent",
       completedAt: databaseNow()
-    }).where(eq20(businessChecks.id, check.id));
+    }).where(and15(eq20(businessChecks.id, check.id), isNull7(businessChecks.completedAt))).returning({ id: businessChecks.id });
+    if (!claimed) {
+      const recorded = await findCheck(db, input.token);
+      return { token: recorded.publicToken, result: JSON.parse(recorded.resultJson ?? "null") ?? result, summary: JSON.parse(recorded.summaryJson ?? "null") ?? summary, summarySource: recorded.summarySource ?? source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: recorded.notificationStatus };
+    }
+    const office = officeEmail({ contact, answers, summary, source, result });
+    const owner = ownerEmail({ contact, summary, result, answers });
+    const failed = { status: "Failed" };
+    const [officeDelivery, ownerDelivery] = await Promise.all([
+      deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, subject: office.subject, body: office.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:office` }).catch(() => failed),
+      deliverEmail({ to: check.email, subject: owner.subject, body: owner.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:owner` }).catch(() => failed)
+    ]);
+    await db.update(businessChecks).set({ notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent" }).where(eq20(businessChecks.id, check.id));
     return { token: check.publicToken, result, summary, summarySource: source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: ownerDelivery.status === "Sent" ? "Sent" : ownerDelivery.status === "Failed" ? "Failed" : "Simulated" };
   }),
   /** The owner asks for the free call or the full report from the result screen. */
@@ -11685,7 +11700,7 @@ import { z as z17 } from "zod";
 
 // server/accountRecovery.ts
 import { randomBytes as randomBytes8 } from "node:crypto";
-import { and as and15, eq as eq21, gt as gt6, isNull as isNull7 } from "drizzle-orm";
+import { and as and16, eq as eq21, gt as gt6, isNull as isNull8 } from "drizzle-orm";
 import { TRPCError as TRPCError19 } from "@trpc/server";
 init_brand();
 var RESET_PATH = "/reset";
@@ -11746,7 +11761,7 @@ async function issuePasswordReset(db, input) {
   let resetId;
   try {
     resetId = await db.transaction(async (tx) => {
-      await tx.update(userPasswordResetTokens).set({ revokedAt: databaseNow() }).where(and15(eq21(userPasswordResetTokens.userId, target.id), isNull7(userPasswordResetTokens.consumedAt), isNull7(userPasswordResetTokens.revokedAt)));
+      await tx.update(userPasswordResetTokens).set({ revokedAt: databaseNow() }).where(and16(eq21(userPasswordResetTokens.userId, target.id), isNull8(userPasswordResetTokens.consumedAt), isNull8(userPasswordResetTokens.revokedAt)));
       const [row] = await tx.insert(userPasswordResetTokens).values({ userId: target.id, tokenHash: sha256(token2), expiresAt, issuedByUserId: input.actor.id }).returning({ id: userPasswordResetTokens.id });
       await recordAudit(tx, { action: "account_password_reset_issued", actorUserId: input.actor.id, targetEmail: target.email, details: { targetUserId: target.id, resetId: row.id, expiresAt: expiresAt.toISOString() } });
       return row.id;
@@ -11763,10 +11778,10 @@ async function issuePasswordReset(db, input) {
 }
 async function openReset(db, token2) {
   if (!token2 || token2.length > 200) return null;
-  return (await db.select({ id: userPasswordResetTokens.id, userId: users.id, email: users.email, status: users.status }).from(userPasswordResetTokens).innerJoin(users, eq21(users.id, userPasswordResetTokens.userId)).where(and15(
+  return (await db.select({ id: userPasswordResetTokens.id, userId: users.id, email: users.email, status: users.status }).from(userPasswordResetTokens).innerJoin(users, eq21(users.id, userPasswordResetTokens.userId)).where(and16(
     eq21(userPasswordResetTokens.tokenHash, sha256(token2)),
-    isNull7(userPasswordResetTokens.consumedAt),
-    isNull7(userPasswordResetTokens.revokedAt),
+    isNull8(userPasswordResetTokens.consumedAt),
+    isNull8(userPasswordResetTokens.revokedAt),
     gt6(userPasswordResetTokens.expiresAt, /* @__PURE__ */ new Date())
   )).limit(1))[0] ?? null;
 }
@@ -11788,10 +11803,10 @@ async function confirmPasswordReset(db, req, rawInput) {
   const passwordHash = hashAdminPassword(parsed.data.password);
   try {
     return await db.transaction(async (tx) => {
-      const [claimed] = await tx.update(userPasswordResetTokens).set({ consumedAt: databaseNow() }).where(and15(
+      const [claimed] = await tx.update(userPasswordResetTokens).set({ consumedAt: databaseNow() }).where(and16(
         eq21(userPasswordResetTokens.tokenHash, sha256(parsed.data.token)),
-        isNull7(userPasswordResetTokens.consumedAt),
-        isNull7(userPasswordResetTokens.revokedAt),
+        isNull8(userPasswordResetTokens.consumedAt),
+        isNull8(userPasswordResetTokens.revokedAt),
         gt6(userPasswordResetTokens.expiresAt, /* @__PURE__ */ new Date())
       )).returning({ userId: userPasswordResetTokens.userId });
       if (!claimed) throw unavailable3();
@@ -11799,7 +11814,7 @@ async function confirmPasswordReset(db, req, rawInput) {
       if (!person || person.status !== "active") throw unavailable3();
       const [credential] = await tx.update(userCredentials).set({ passwordHash, failedAttempts: 0, lockedUntil: null }).where(eq21(userCredentials.userId, person.id)).returning({ id: userCredentials.id });
       if (!credential) throw unavailable3();
-      await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and15(eq21(userSessions.userId, person.id), isNull7(userSessions.revokedAt)));
+      await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and16(eq21(userSessions.userId, person.id), isNull8(userSessions.revokedAt)));
       await recordAudit(tx, { action: "account_password_reset_completed", actorUserId: person.id, targetEmail: person.email });
       return { success: true, email: person.email ?? "" };
     });
@@ -11823,7 +11838,7 @@ async function setAccountStatus(db, input) {
   const reason = input.reason?.trim() || "";
   await db.transaction(async (tx) => {
     await tx.update(users).set({ status: input.status }).where(eq21(users.id, target.id));
-    if (input.status === "suspended") await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and15(eq21(userSessions.userId, target.id), isNull7(userSessions.revokedAt)));
+    if (input.status === "suspended") await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and16(eq21(userSessions.userId, target.id), isNull8(userSessions.revokedAt)));
     await recordAudit(tx, {
       action: input.status === "suspended" ? "account_suspended" : "account_reinstated",
       actorUserId: input.actor.id,
@@ -11908,7 +11923,7 @@ var platformRolesRouter = router({
 import { z as z20 } from "zod";
 
 // server/businessSupportAdmin.ts
-import { and as and16, desc as desc11, eq as eq22, inArray as inArray6, isNotNull as isNotNull2, isNull as isNull8, sql as sql8 } from "drizzle-orm";
+import { and as and17, desc as desc11, eq as eq22, inArray as inArray6, isNotNull as isNotNull2, isNull as isNull9, sql as sql8 } from "drizzle-orm";
 import { TRPCError as TRPCError22 } from "@trpc/server";
 async function requireDatabase2() {
   const db = await getDb();
@@ -11949,7 +11964,7 @@ async function syncCalendlyBookings(db, rows) {
     const time = await findBookedCall(row.email);
     if (!time) return;
     const stage = advancePipeline(row.pipelineStage, "call_booked");
-    const [saved] = await db.update(businessChecks).set({ callScheduledFor: time, callRequestedAt: row.callRequestedAt ?? databaseNow(), pipelineStage: stage }).where(and16(eq22(businessChecks.id, row.id), isNull8(businessChecks.callScheduledFor))).returning({ id: businessChecks.id });
+    const [saved] = await db.update(businessChecks).set({ callScheduledFor: time, callRequestedAt: row.callRequestedAt ?? databaseNow(), pipelineStage: stage }).where(and17(eq22(businessChecks.id, row.id), isNull9(businessChecks.callScheduledFor))).returning({ id: businessChecks.id });
     if (!saved) return;
     await recordAudit(db, { action: "business_check_call_booked", targetEmail: row.email, details: { businessCheckId: row.id, scheduledFor: time.toISOString(), source: "calendly_lookup", ...row.callRequestedAt ? {} : { requested: "calendly" } } });
     found.set(row.id, time);
@@ -12022,12 +12037,12 @@ async function getBusinessCheckDetail(db, businessCheckId) {
     primaryAreaNumber: result?.primaryArea?.area ?? row.primaryArea ?? null
   };
 }
-var HISTORY_ACTIONS = ["business_check_stage_changed", "business_check_call_outcome", "business_check_call_scheduled", "business_check_call_booked", "payment_details_sent", "payment_proof_received", "payment_confirmed", "full_report_link_sent", "full_report_delivered"];
+var HISTORY_ACTIONS = ["business_check_stage_changed", "business_check_call_outcome", "business_check_call_scheduled", "business_check_call_booked", "payment_details_sent", "payment_proof_received", "payment_confirmed", "payment_confirmation_sent", "full_report_link_sent", "full_report_delivered"];
 async function stageHistoryFor(db, businessCheckId) {
-  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq22(users.id, adminAccessAuditEvents.actorUserId)).where(and16(inArray6(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql8`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc11(adminAccessAuditEvents.createdAt), desc11(adminAccessAuditEvents.id)).limit(100);
+  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq22(users.id, adminAccessAuditEvents.actorUserId)).where(and17(inArray6(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql8`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc11(adminAccessAuditEvents.createdAt), desc11(adminAccessAuditEvents.id)).limit(100);
   return events.map((event) => {
     const details = parseJson(event.details) ?? {};
-    return { id: event.id, action: event.action, from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, by: event.by ?? null, at: event.at };
+    return { id: event.id, action: event.action, from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, delivery: details.delivery ?? null, by: event.by ?? null, at: event.at };
   });
 }
 var SETTABLE_STAGES = PIPELINE_STAGES.filter((stage) => stage !== "lead" && stage !== "won");
@@ -12135,6 +12150,8 @@ var businessSupportRouter = router({
   downloadReport: prospects.input(z20.object({ businessCheckId: z20.number().int().positive() })).mutation(async ({ input }) => adminDownloadReport(await businessSupportDb(), input.businessCheckId)),
   /** Sends the owner a new link to the Report Intake. */
   resendReportLink: payments.input(z20.object({ businessCheckId: z20.number().int().positive() })).mutation(async ({ ctx, input }) => resendReportLink(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
+  /** Sends the "payment received" email again for a confirmed Current State Assessment payment. */
+  resendPaymentConfirmation: payments.input(z20.object({ paymentRequestId: z20.number().int().positive() })).mutation(async ({ ctx, input }) => resendPaymentConfirmation(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
   /** The money is in the account. For the Current State Assessment this wins the business and sends the client account invitation. */
   confirmPayment: payments.input(z20.object({ paymentRequestId: z20.number().int().positive(), note: z20.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => confirmPayment(await businessSupportDb(), { ...input, note: input.note || void 0, actorUserId: ctx.user.id }))
 });
@@ -12301,7 +12318,7 @@ import { z as z24 } from "zod";
 
 // server/accountInvitations.ts
 import { randomBytes as randomBytes9, randomUUID as randomUUID3 } from "crypto";
-import { and as and17, desc as desc12, eq as eq23, gt as gt7, inArray as inArray7, isNull as isNull9, ne as ne3 } from "drizzle-orm";
+import { and as and18, desc as desc12, eq as eq23, gt as gt7, inArray as inArray7, isNull as isNull10, ne as ne3 } from "drizzle-orm";
 import { TRPCError as TRPCError25 } from "@trpc/server";
 import { z as z23 } from "zod";
 init_brand();
@@ -12352,7 +12369,7 @@ async function issue(db, input) {
   let invitation;
   try {
     invitation = await db.transaction(async (tx) => {
-      await tx.update(accountInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and17(emailEquals(accountInvitations.email, input.email), eq23(accountInvitations.status, "pending")));
+      await tx.update(accountInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and18(emailEquals(accountInvitations.email, input.email), eq23(accountInvitations.status, "pending")));
       const [row] = await tx.insert(accountInvitations).values({
         kind: input.kind,
         email: input.email,
@@ -12405,7 +12422,7 @@ async function revokeStaffInvitation(db, actor, input) {
   return revoke(db, { invitationId: input.invitationId, kind: "staff", actorUserId: actor.id });
 }
 async function revoke(db, input) {
-  const revoked = await db.update(accountInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and17(eq23(accountInvitations.id, input.invitationId), eq23(accountInvitations.kind, input.kind), eq23(accountInvitations.status, "pending"), ...input.businessId ? [eq23(accountInvitations.businessId, input.businessId)] : [])).returning({ id: accountInvitations.id, email: accountInvitations.email });
+  const revoked = await db.update(accountInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and18(eq23(accountInvitations.id, input.invitationId), eq23(accountInvitations.kind, input.kind), eq23(accountInvitations.status, "pending"), ...input.businessId ? [eq23(accountInvitations.businessId, input.businessId)] : [])).returning({ id: accountInvitations.id, email: accountInvitations.email });
   if (revoked.length !== 1) throw new TRPCError25({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
   await recordAudit(db, { action: "account_invitation_revoked", actorUserId: input.actorUserId, targetEmail: revoked[0].email, details: { invitationId: revoked[0].id, kind: input.kind } });
   return { success: true };
@@ -12419,8 +12436,8 @@ function requireOwnerLevel(session) {
 async function listSeats(db, session) {
   const business = requireOwnerLevel(session);
   const [members, invitations] = await Promise.all([
-    db.select({ membershipId: businessMemberships.id, userId: users.id, name: users.name, email: users.email, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq23(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq23(businessMemberAccess.membershipId, businessMemberships.id)).where(and17(eq23(businessMemberships.businessId, business.businessId), eq23(businessMemberships.role, "member"), eq23(businessMemberships.status, "active"))),
-    db.select().from(accountInvitations).where(and17(eq23(accountInvitations.kind, "business_member"), eq23(accountInvitations.businessId, business.businessId), eq23(accountInvitations.status, "pending")))
+    db.select({ membershipId: businessMemberships.id, userId: users.id, name: users.name, email: users.email, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq23(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq23(businessMemberAccess.membershipId, businessMemberships.id)).where(and18(eq23(businessMemberships.businessId, business.businessId), eq23(businessMemberships.role, "member"), eq23(businessMemberships.status, "active"))),
+    db.select().from(accountInvitations).where(and18(eq23(accountInvitations.kind, "business_member"), eq23(accountInvitations.businessId, business.businessId), eq23(accountInvitations.status, "pending")))
   ]);
   const pending = invitations.filter((item) => invitationState(item) === "pending");
   return {
@@ -12444,14 +12461,14 @@ async function revokeSeatInvitation(db, session, input) {
 }
 async function removeSeat(db, session, input) {
   const business = requireOwnerLevel(session);
-  const removed = await db.update(businessMemberships).set({ status: "removed" }).where(and17(eq23(businessMemberships.id, input.membershipId), eq23(businessMemberships.businessId, business.businessId), eq23(businessMemberships.role, "member"), ne3(businessMemberships.status, "removed"))).returning({ id: businessMemberships.id, userId: businessMemberships.userId });
+  const removed = await db.update(businessMemberships).set({ status: "removed" }).where(and18(eq23(businessMemberships.id, input.membershipId), eq23(businessMemberships.businessId, business.businessId), eq23(businessMemberships.role, "member"), ne3(businessMemberships.status, "removed"))).returning({ id: businessMemberships.id, userId: businessMemberships.userId });
   if (removed.length !== 1) throw new TRPCError25({ code: "NOT_FOUND", message: "That person is not on your team." });
   await recordAudit(db, { action: "business_member_removed", actorUserId: session.user.id, details: { businessId: business.businessId, membershipId: removed[0].id, userId: removed[0].userId } });
   return { success: true };
 }
 async function setSeatAccess(db, session, input) {
   const business = requireOwnerLevel(session);
-  const membership = (await db.select({ id: businessMemberships.id }).from(businessMemberships).where(and17(eq23(businessMemberships.id, input.membershipId), eq23(businessMemberships.businessId, business.businessId), eq23(businessMemberships.role, "member"), eq23(businessMemberships.status, "active"))).limit(1))[0];
+  const membership = (await db.select({ id: businessMemberships.id }).from(businessMemberships).where(and18(eq23(businessMemberships.id, input.membershipId), eq23(businessMemberships.businessId, business.businessId), eq23(businessMemberships.role, "member"), eq23(businessMemberships.status, "active"))).limit(1))[0];
   if (!membership) throw new TRPCError25({ code: "NOT_FOUND", message: "That person is not on your team." });
   await db.insert(businessMemberAccess).values({ membershipId: membership.id, access: input.access, grantedByUserId: session.user.id }).onConflictDoUpdate({ target: businessMemberAccess.membershipId, set: { access: input.access, grantedByUserId: session.user.id } });
   return { success: true };
@@ -12491,7 +12508,7 @@ async function acceptAccountInvitation(db, req, res, rawInput) {
         businessId = business.id;
       }
       const session = await createSession(tx, user.id, businessId);
-      const claimed = await tx.update(accountInvitations).set({ status: "accepted", acceptedAt: databaseNow(), acceptedByUserId: user.id }).where(and17(eq23(accountInvitations.id, invitation.id), eq23(accountInvitations.status, "pending"), gt7(accountInvitations.expiresAt, /* @__PURE__ */ new Date()), isNull9(accountInvitations.acceptedAt))).returning({ id: accountInvitations.id });
+      const claimed = await tx.update(accountInvitations).set({ status: "accepted", acceptedAt: databaseNow(), acceptedByUserId: user.id }).where(and18(eq23(accountInvitations.id, invitation.id), eq23(accountInvitations.status, "pending"), gt7(accountInvitations.expiresAt, /* @__PURE__ */ new Date()), isNull10(accountInvitations.acceptedAt))).returning({ id: accountInvitations.id });
       if (claimed.length !== 1) throw unavailable4();
       await recordAudit(tx, { action: "account_invitation_accepted", actorUserId: user.id, targetEmail: invitation.email, details: { invitationId: invitation.id, kind: invitation.kind } });
       return { userId: user.id, email: invitation.email, session, businessId };

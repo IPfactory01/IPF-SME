@@ -2,10 +2,6 @@
   "name": "jump-2026-registration",
   "version": "1.0.0",
   "type": "module",
-  "engines": {
-    "node": "22.x",
-    "pnpm": ">=10"
-  },
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",

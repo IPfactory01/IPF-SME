@@ -100,13 +100,14 @@ for (const target of targets) {
     });
 
     describe("schema", () => {
-      it("creates exactly the 50 expected tables", async () => {
+      it("creates exactly the 52 expected tables", async () => {
         const rows = await harness.query(sql`select table_name from information_schema.tables where table_schema = current_schema() and table_type = 'BASE TABLE'`);
         const created = rows.map(row => String(row.table_name)).sort();
         // 30 from the MySQL migration + user_credentials, user_sessions, businesses, business_memberships, client_onboarding_invitations, user_platform_roles, payment_requests, full_reports,
         // and the engagement room (0008): engagements, engagement_team, engagement_sessions, engagement_tasks, engagement_deliverables, engagement_files, engagement_comments,
-        // engagement_measures, engagement_checkins, business_member_access, account_invitations, and debriefs (0009).
-        expect(expectedTableNames).toHaveLength(50);
+        // engagement_measures, engagement_checkins, business_member_access, account_invitations, debriefs (0009), and rate_limit_counters
+        // and user_password_reset_tokens (0010).
+        expect(expectedTableNames).toHaveLength(52);
         expect(expectedTableNames.filter(name => !created.includes(name))).toEqual([]);
         expect(created.filter(name => !expectedTableNames.includes(name))).toEqual([]);
       });
@@ -179,7 +180,7 @@ for (const target of targets) {
           }
         }
         expect(declared).toBe(rows.length); // no foreign key exists that the schema does not declare
-        expect(declared).toBe(53);
+        expect(declared).toBe(55);
       });
 
       it("stores a declared name longer than 63 bytes truncated, which is why lookups must use pgIdentifier", async () => {
@@ -231,10 +232,10 @@ for (const target of targets) {
         expect(await db.select().from(schema.businessMemberships).where(eq(schema.businessMemberships.userId, user.id))).toHaveLength(0);
       });
 
-      it("creates all 69 enum types with their exact labels in order", async () => {
+      it("creates all 71 enum types with their exact labels in order", async () => {
         const rows = await harness.query(sql`select t.typname, array_agg(e.enumlabel::text order by e.enumsortorder) as labels from pg_type t join pg_enum e on e.enumtypid = t.oid join pg_namespace n on n.oid = t.typnamespace where n.nspname = current_schema() group by t.typname`);
         const actual = new Map(rows.map(row => [String(row.typname), row.labels as string[]]));
-        expect(enums).toHaveLength(70);
+        expect(enums).toHaveLength(71);
         for (const definition of enums) expect(actual.get(definition.enumName), definition.enumName).toEqual([...definition.enumValues]);
         expect(actual.size).toBe(enums.length);
       });

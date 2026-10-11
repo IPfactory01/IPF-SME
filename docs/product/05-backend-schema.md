@@ -56,7 +56,9 @@ erDiagram
 | `user_sessions` | Server-side sessions behind the `ipf_session` cookie | Unique token hash; expiry; revocation; `activeBusinessId` (the workspace in use) | Token hash |
 | `user_platform_roles` | Internal IP Factory roles (super_admin, admin, desk_lead, analyst, partner, subject_matter_expert, finance) | Unique (person, role); who granted it | Who holds which role |
 | `admin_permission_profiles` | Extra capabilities chosen by the Super Admin for a person | One per user | — |
-| `admin_access_audit_events` | Append-only audit trail for staff, payments, reports, roles and onboarding | Written through `recordAudit` (`server/audit.ts`); details never contain secrets | Actor id, target email |
+| `admin_access_audit_events` | Append-only audit trail for staff, payments, reports, roles and onboarding | Written through `recordAudit` (`server/audit.ts`); details never contain secrets; indexed by action and time (0010) | Actor id, target email |
+| `user_password_reset_tokens` | Password reset links for client and staff accounts, issued by staff with `manage_users` (migration 0010) | Only the token's SHA-256; 20 minutes; single use; a new link revokes the one still out; who issued it; delivery status | Token hash |
+| `rate_limit_counters` | Fixed-window counters behind the rate limits, shared by every function instance (migration 0010) | One row per key (`check_start:ip:…`, `check_submit:token:…`); window and count advance in one statement; expired rows are purged | Hashed keys only, no addresses in clear |
 
 ### Clients
 
@@ -197,7 +199,7 @@ Found while writing this document.
 |---|---|---|
 | `business_checks.publicToken` is stored in plain text and works as a bearer token for that check | Someone with database read access could resume or submit another person's check | Store a hash, as every other token does; migrate existing rows |
 | Full report links (`full_reports.tokenHash`) never expire and the report procedures have no rate limit | A forwarded link opens the report indefinitely | Add an expiry after delivery (or limit downloads) and a rate limit like onboarding's |
-| The 30 tables from the baseline migration have no foreign keys or indexes beyond primary and unique keys | Slower queries as data grows; orphaned rows possible | Add indexes on `business_checks` (stage, email, createdAt) first |
+| ~~The 30 tables from the baseline migration have no foreign keys or indexes beyond primary and unique keys~~ | Migration 0010 (11 October) indexes `business_checks` (created, call requested, stage, `lower(email)`), the audit log (action, created), `user_sessions` (user, expiry), engagement comments, files and tasks. The JUMP-era tables keep no indexes | Done for The Shift's tables (once 0010 is applied) |
 | ~~No engagement assignment table~~ | Fixed by 0008: `engagement_team`; `view_assigned_businesses` now opens the engagements a person is on | Done (once 0008 is applied) |
 | ~~`adminAccess.listTeam` lists only legacy admins~~ | Fixed 9 October: Admin Team now shows a Staff list from `user_platform_roles` above the legacy list | Done |
 | `businessSupport.downloadReport` needs `manage_client_onboarding` while `resendReportLink` needs `manage_payments` | Finance can resend but not download | Decide which permission owns the report |

@@ -44,6 +44,14 @@ up yet. **Apply it before the first Current State Assessment payment is confirme
 admin Engagements section lists it under "Paid, but no engagement yet" once `0008` is applied, and the desk lead
 starts it with one click.
 
+**`0010`.** Rate-limit counters (`rate_limit_counters`), password reset links (`user_password_reset_tokens`) and the
+first index set (business checks, the audit log, sessions, engagement comments, files and tasks). Additive only. Until it
+is applied the rate limits fall back to per-instance memory (the log says so once), password reset links say they are not
+set up, and nothing else changes. Apply with `pnpm db:migrate`, or paste
+`drizzle/supabase/apply-0010-rate-limits-reset-tokens-indexes.sql` into the Supabase SQL Editor and press Run: it stops,
+changing nothing, unless exactly `0000` to `0009` are recorded and none of the new tables or indexes exist, then applies
+the migration and records `0010` with the file hash and journal timestamp.
+
 **`0009` and deployment order.** The Debrief record (`debriefs`) and the Work Plan fields (`weekNumber`, `sortOrder` on
 `engagement_sessions` and `engagement_tasks`; `factor` on `engagement_tasks`). Additive only, but the engagement queries read
 the new columns, so **apply it with the deployment that carries it**: until then the admin Engagements section and the

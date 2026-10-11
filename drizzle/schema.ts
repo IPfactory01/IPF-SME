@@ -65,7 +65,37 @@ export const userSessions = pgTable("user_sessions", {
   /** The workspace chosen for this session. Always re-verified against an active membership; never trusted as proof of access. */
   activeBusinessId: integer("activeBusinessId").references((): AnyPgColumn => businesses.id, { onDelete: "set null" }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
-});
+}, table => [index("user_sessions_user_idx").on(table.userId), index("user_sessions_expires_idx").on(table.expiresAt)]);
+
+/**
+ * Fixed-window counters behind the rate limits (server/rateLimit.ts), shared by every function instance. One row per
+ * key, e.g. "check_start:ip:…" or "check_submit:token:…"; the window and the count advance in one statement, and rows
+ * are purged once their window has passed.
+ */
+export const rateLimitCounters = pgTable("rate_limit_counters", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  key: varchar("key", { length: 160 }).notNull().unique(),
+  count: integer("count").default(0).notNull(),
+  windowEndsAt: timestamp("windowEndsAt", { withTimezone: true }).notNull(),
+}, table => [index("rate_limit_counters_window_idx").on(table.windowEndsAt)]);
+
+export const userPasswordResetTokensDeliveryStatusEnum = pgEnum("user_password_reset_tokens_delivery_status", ["Sent", "Failed", "Simulated"]);
+
+/**
+ * Password reset links for universal accounts, issued by staff with manage_users (server/accountRecovery.ts). Only the
+ * SHA-256 of the token is stored; a link works once, within 20 minutes, and issuing a new one revokes the one still out.
+ */
+export const userPasswordResetTokens = pgTable("user_password_reset_tokens", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  userId: integer("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: varchar("tokenHash", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumedAt", { withTimezone: true }),
+  revokedAt: timestamp("revokedAt", { withTimezone: true }),
+  issuedByUserId: integer("issuedByUserId").references(() => users.id, { onDelete: "set null" }),
+  deliveryStatus: userPasswordResetTokensDeliveryStatusEnum("deliveryStatus").default("Simulated").notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+}, table => [index("user_password_reset_tokens_user_idx").on(table.userId)]);
 
 export const userPlatformRolesRoleEnum = pgEnum("user_platform_roles_role", ["super_admin", "admin", "desk_lead", "analyst", "partner", "subject_matter_expert", "finance"]);
 
@@ -212,7 +242,7 @@ export const adminAccessAuditEvents = pgTable("admin_access_audit_events", {
   targetEmail: varchar("targetEmail", { length: 320 }),
   details: text("details"),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
-});
+}, table => [index("admin_access_audit_events_action_created_idx").on(table.action, table.createdAt)]);
 
 export type AdminAccessAuditEvent = typeof adminAccessAuditEvents.$inferSelect;
 
@@ -674,7 +704,12 @@ export const businessChecks = pgTable("business_checks", {
   completedAt: timestamp("completedAt", { withTimezone: true }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
-});
+}, table => [
+  index("business_checks_created_idx").on(table.createdAt),
+  index("business_checks_call_requested_idx").on(table.callRequestedAt),
+  index("business_checks_stage_idx").on(table.pipelineStage),
+  index("business_checks_email_lower_idx").on(sql`lower(${table.email})`),
+]);
 
 /**
  * The Debrief: the free call after the Business Check, written up by the analyst within the hour following the firm's
@@ -901,7 +936,7 @@ export const engagementTasks = pgTable("engagement_tasks", {
   completedAt: timestamp("completedAt", { withTimezone: true }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
-}, table => [index("engagement_tasks_engagement_idx").on(table.engagementId)]);
+}, table => [index("engagement_tasks_engagement_idx").on(table.engagementId), index("engagement_tasks_session_idx").on(table.sessionId), index("engagement_tasks_assignee_idx").on(table.assigneeUserId)]);
 
 /** What IP Factory hands over: findings, the problem statement, the prescription, tools and the plan. */
 export const engagementDeliverables = pgTable("engagement_deliverables", {
@@ -938,7 +973,7 @@ export const engagementFiles = pgTable("engagement_files", {
   audience: engagementAudienceEnum("audience").default("owner").notNull(),
   uploadedByUserId: integer("uploadedByUserId").notNull().references(() => users.id),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
-}, table => [index("engagement_files_engagement_idx").on(table.engagementId)]);
+}, table => [index("engagement_files_engagement_idx").on(table.engagementId), index("engagement_files_task_idx").on(table.taskId), index("engagement_files_deliverable_idx").on(table.deliverableId)]);
 
 /** Feedback on a deliverable, from the client or the team. */
 export const engagementComments = pgTable("engagement_comments", {
@@ -948,7 +983,7 @@ export const engagementComments = pgTable("engagement_comments", {
   authorUserId: integer("authorUserId").notNull().references(() => users.id),
   body: text("body").notNull(),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
-}, table => [index("engagement_comments_deliverable_idx").on(table.deliverableId)]);
+}, table => [index("engagement_comments_deliverable_idx").on(table.deliverableId), index("engagement_comments_engagement_idx").on(table.engagementId)]);
 
 /** The fix's one number (D3): recorded in fix week 1. */
 export const engagementMeasures = pgTable("engagement_measures", {

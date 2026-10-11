@@ -511,7 +511,25 @@ var userSessions = pgTable("user_sessions", {
   /** The workspace chosen for this session. Always re-verified against an active membership; never trusted as proof of access. */
   activeBusinessId: integer("activeBusinessId").references(() => businesses.id, { onDelete: "set null" }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
-});
+}, (table2) => [index("user_sessions_user_idx").on(table2.userId), index("user_sessions_expires_idx").on(table2.expiresAt)]);
+var rateLimitCounters = pgTable("rate_limit_counters", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  key: varchar("key", { length: 160 }).notNull().unique(),
+  count: integer("count").default(0).notNull(),
+  windowEndsAt: timestamp("windowEndsAt", { withTimezone: true }).notNull()
+}, (table2) => [index("rate_limit_counters_window_idx").on(table2.windowEndsAt)]);
+var userPasswordResetTokensDeliveryStatusEnum = pgEnum("user_password_reset_tokens_delivery_status", ["Sent", "Failed", "Simulated"]);
+var userPasswordResetTokens = pgTable("user_password_reset_tokens", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  userId: integer("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: varchar("tokenHash", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumedAt", { withTimezone: true }),
+  revokedAt: timestamp("revokedAt", { withTimezone: true }),
+  issuedByUserId: integer("issuedByUserId").references(() => users.id, { onDelete: "set null" }),
+  deliveryStatus: userPasswordResetTokensDeliveryStatusEnum("deliveryStatus").default("Simulated").notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
+}, (table2) => [index("user_password_reset_tokens_user_idx").on(table2.userId)]);
 var userPlatformRolesRoleEnum = pgEnum("user_platform_roles_role", ["super_admin", "admin", "desk_lead", "analyst", "partner", "subject_matter_expert", "finance"]);
 var userPlatformRoles = pgTable("user_platform_roles", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
@@ -613,7 +631,7 @@ var adminAccessAuditEvents = pgTable("admin_access_audit_events", {
   targetEmail: varchar("targetEmail", { length: 320 }),
   details: text("details"),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
-});
+}, (table2) => [index("admin_access_audit_events_action_created_idx").on(table2.action, table2.createdAt)]);
 var emailLogsStatusEnum = pgEnum("email_logs_status", ["Sent", "Failed", "Simulated"]);
 var emailLogs = pgTable("email_logs", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
@@ -940,7 +958,12 @@ var businessChecks = pgTable("business_checks", {
   completedAt: timestamp("completedAt", { withTimezone: true }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
-});
+}, (table2) => [
+  index("business_checks_created_idx").on(table2.createdAt),
+  index("business_checks_call_requested_idx").on(table2.callRequestedAt),
+  index("business_checks_stage_idx").on(table2.pipelineStage),
+  index("business_checks_email_lower_idx").on(sql`lower(${table2.email})`)
+]);
 var debriefs = pgTable("debriefs", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   businessCheckId: integer("businessCheckId").notNull().unique().references(() => businessChecks.id, { onDelete: "cascade" }),
@@ -1110,7 +1133,7 @@ var engagementTasks = pgTable("engagement_tasks", {
   completedAt: timestamp("completedAt", { withTimezone: true }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
-}, (table2) => [index("engagement_tasks_engagement_idx").on(table2.engagementId)]);
+}, (table2) => [index("engagement_tasks_engagement_idx").on(table2.engagementId), index("engagement_tasks_session_idx").on(table2.sessionId), index("engagement_tasks_assignee_idx").on(table2.assigneeUserId)]);
 var engagementDeliverables = pgTable("engagement_deliverables", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
@@ -1143,7 +1166,7 @@ var engagementFiles = pgTable("engagement_files", {
   audience: engagementAudienceEnum("audience").default("owner").notNull(),
   uploadedByUserId: integer("uploadedByUserId").notNull().references(() => users.id),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
-}, (table2) => [index("engagement_files_engagement_idx").on(table2.engagementId)]);
+}, (table2) => [index("engagement_files_engagement_idx").on(table2.engagementId), index("engagement_files_task_idx").on(table2.taskId), index("engagement_files_deliverable_idx").on(table2.deliverableId)]);
 var engagementComments = pgTable("engagement_comments", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
@@ -1151,7 +1174,7 @@ var engagementComments = pgTable("engagement_comments", {
   authorUserId: integer("authorUserId").notNull().references(() => users.id),
   body: text("body").notNull(),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
-}, (table2) => [index("engagement_comments_deliverable_idx").on(table2.deliverableId)]);
+}, (table2) => [index("engagement_comments_deliverable_idx").on(table2.deliverableId), index("engagement_comments_engagement_idx").on(table2.engagementId)]);
 var engagementMeasures = pgTable("engagement_measures", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   engagementId: integer("engagementId").notNull().unique().references(() => engagements.id, { onDelete: "cascade" }),

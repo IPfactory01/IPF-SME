@@ -12,6 +12,7 @@ import { isMissingPaymentTable, paymentRequestsFor, paymentStatusesByCheck } fro
 import { reportStatusFor } from "./fullReport/service";
 import { effectivePaymentStatus, paymentDeadline, type PaymentItem } from "../shared/payments";
 import { getDb } from "./db";
+import { databaseNow } from "./dbHelpers";
 
 async function requireDatabase() {
   const db = await getDb();
@@ -40,27 +41,43 @@ const CHECK_COLUMNS = {
 
 /** How many waiting calls are looked up in Calendly per page load, so the admin console stays quick. */
 const CALENDLY_SYNC_LIMIT = 10;
+/** A finished check that never asked for a Debrief on the result page is looked up for this long: the summary email carries the Calendly link. */
+const CALENDLY_LOOKUP_DAYS = 14;
 
-type ListedCheck = { id: number; email: string; pipelineStage: PipelineStage; callRequestedAt: Date | null; callScheduledFor: Date | null };
+type ListedCheck = { id: number; email: string; pipelineStage: PipelineStage; callRequestedAt: Date | null; callScheduledFor: Date | null; completedAt: Date | null };
+
+/** A check whose Debrief may be booked in Calendly without the console knowing: asked for on the page, or finished recently (the email link). */
+function awaitsCalendlyLookup(row: ListedCheck, now: number) {
+  if (row.callScheduledFor || !row.completedAt) return false;
+  if (row.pipelineStage === "call_booked") return true;
+  return row.pipelineStage === "qualified_lead" && now - row.completedAt.getTime() <= CALENDLY_LOOKUP_DAYS * 86_400_000;
+}
 
 /**
- * Fills in the time of calls that were asked for but have no time yet, from IP Factory's Calendly account (bookings
- * made before CALENDLY_API_TOKEN was set, or in a new tab). Only checks still at the call stage are looked up; each
- * found time is saved, so it is looked up once. Without the token this does nothing.
+ * Fills in the time of Debriefs booked in IP Factory's Calendly account that the console does not know about yet:
+ * calls asked for on the result page before CALENDLY_API_TOKEN was set or booked in a new tab, and bookings made from
+ * the link in the summary email by owners who never pressed the button (looked up for 14 days after they finished).
+ * A found booking counts as the request: it moves the check to "Debrief booked". Each found time is saved, so it is
+ * looked up once. Without the token this does nothing.
  */
 async function syncCalendlyBookings<T extends ListedCheck>(db: Database, rows: T[]): Promise<T[]> {
   if (!isCalendlyConfigured()) return rows;
-  const waiting = rows.filter(row => row.callRequestedAt && !row.callScheduledFor && row.pipelineStage === "call_booked").slice(0, CALENDLY_SYNC_LIMIT);
+  const now = Date.now();
+  const waiting = rows.filter(row => awaitsCalendlyLookup(row, now)).slice(0, CALENDLY_SYNC_LIMIT);
   if (!waiting.length) return rows;
   const found = new Map<number, Date>();
   await Promise.all(waiting.map(async row => {
     const time = await findBookedCall(row.email);
     if (!time) return;
-    await db.update(businessChecks).set({ callScheduledFor: time }).where(and(eq(businessChecks.id, row.id), isNull(businessChecks.callScheduledFor)));
-    await recordAudit(db, { action: "business_check_call_booked", targetEmail: row.email, details: { businessCheckId: row.id, scheduledFor: time.toISOString(), source: "calendly_lookup" } });
+    const stage = advancePipeline(row.pipelineStage, "call_booked");
+    const [saved] = await db.update(businessChecks)
+      .set({ callScheduledFor: time, callRequestedAt: row.callRequestedAt ?? databaseNow(), pipelineStage: stage })
+      .where(and(eq(businessChecks.id, row.id), isNull(businessChecks.callScheduledFor))).returning({ id: businessChecks.id });
+    if (!saved) return;
+    await recordAudit(db, { action: "business_check_call_booked", targetEmail: row.email, details: { businessCheckId: row.id, scheduledFor: time.toISOString(), source: "calendly_lookup", ...(row.callRequestedAt ? {} : { requested: "calendly" }) } });
     found.set(row.id, time);
   }));
-  return rows.map(row => (found.has(row.id) ? { ...row, callScheduledFor: found.get(row.id)! } : row));
+  return rows.map(row => (found.has(row.id) ? { ...row, callScheduledFor: found.get(row.id)!, callRequestedAt: row.callRequestedAt ?? new Date(), pipelineStage: advancePipeline(row.pipelineStage, "call_booked") } : row));
 }
 
 /** Every business check: leads who only left their details, and finished checks. These are prospects, not clients. */
@@ -202,12 +219,22 @@ async function requestedCheck(db: Pick<Database, "select">, businessCheckId: num
   return check;
 }
 
-/** Records the time agreed for the call. The owner's request is kept as it was; the stage moves to "call booked" if it was behind. */
+/**
+ * Records the time agreed for the Debrief, for any finished check: one the owner asked for on the result page (the
+ * request is kept as it was), or one booked from the email link or agreed another way, which this records as the
+ * request too. The stage moves to "Debrief booked" if it was behind.
+ */
 export async function scheduleDiscoveryCall(db: Database, input: { businessCheckId: number; scheduledFor: Date; actorUserId: number }) {
-  const check = await requestedCheck(db, input.businessCheckId);
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt })
+    .from(businessChecks).where(eq(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  if (!check.completedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This Business Check is not finished yet, so there is no Debrief to schedule." });
+  if (check.pipelineStage === "won") throw new TRPCError({ code: "CONFLICT", message: "This business has already been won, so its Debrief can no longer be changed here." });
   await db.transaction(async tx => {
-    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq(businessChecks.id, check.id));
-    await recordAudit(tx, { action: "business_check_call_scheduled", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: input.scheduledFor.toISOString() } });
+    await tx.update(businessChecks)
+      .set({ callScheduledFor: input.scheduledFor, callRequestedAt: check.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") })
+      .where(eq(businessChecks.id, check.id));
+    await recordAudit(tx, { action: "business_check_call_scheduled", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: input.scheduledFor.toISOString(), ...(check.callRequestedAt ? {} : { requested: "by_hand" }) } });
   });
   return { success: true } as const;
 }

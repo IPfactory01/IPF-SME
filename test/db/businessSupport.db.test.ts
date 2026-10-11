@@ -278,6 +278,32 @@ for (const target of targets) {
         expect(events.some((event: { details: string }) => event.details.includes(`"businessCheckId":${id}`))).toBe(true);
       });
 
+      it("records a Debrief agreed outside the result page for any finished check: it counts as the request and the check joins Debriefs", async () => {
+        const { token, email, visitor } = await finishedCheck("email-link");
+        const id = (await rowFor(token)).id as number;
+        expect((await rowFor(token)).callRequestedAt).toBeNull();
+        const when = new Date(Date.now() + 2 * 86_400_000);
+        await (await superAdmin.call()).businessSupport.scheduleCall({ businessCheckId: id, scheduledFor: when });
+        const row = await rowFor(token);
+        expect(row.callScheduledFor.getTime()).toBe(when.getTime());
+        expect(row.callRequestedAt).toBeInstanceOf(Date);
+        expect(row.pipelineStage).toBe("call_booked");
+        expect((await (await superAdmin.call()).businessSupport.discoveryCalls()).some((listed: { email: string }) => listed.email === email)).toBe(true);
+        const events = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "business_check_call_scheduled"));
+        expect(events.some((event: { details: string }) => event.details.includes(`"businessCheckId":${id}`) && event.details.includes('"requested":"by_hand"'))).toBe(true);
+        // From here the Debrief outcome can be recorded like any other.
+        expect(await (await superAdmin.call()).businessSupport.recordOutcome({ businessCheckId: id, outcome: "fit" })).toEqual({ success: true, pipelineStage: "opportunity" });
+        void visitor;
+      });
+
+      it("refuses to schedule a Debrief for a Business Check that is not finished", async () => {
+        const visitor = browser();
+        const { token } = await (await visitor.call()).businessCheck.start({ fullName: "Ada Unfinished", email: uniqueEmail("unfinished"), whatsapp: "+2348000000001" });
+        const id = (await rowFor(token)).id as number;
+        await expect((await superAdmin.call()).businessSupport.scheduleCall({ businessCheckId: id, scheduledFor: new Date(Date.now() + 86_400_000) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        expect((await rowFor(token)).callRequestedAt).toBeNull();
+      });
+
       it.each([
         ["fit", "opportunity"],
         ["refer", "referred"],
@@ -298,8 +324,8 @@ for (const target of targets) {
         const silent = await finishedCheck("never-asked");
         const silentId = (await rowFor(silent.token)).id;
         await expect((await superAdmin.call()).businessSupport.recordOutcome({ businessCheckId: silentId, outcome: "fit" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-        await expect((await superAdmin.call()).businessSupport.scheduleCall({ businessCheckId: silentId, scheduledFor: new Date(Date.now() + 86_400_000) })).rejects.toMatchObject({ code: "BAD_REQUEST" });
         await expect((await superAdmin.call()).businessSupport.recordOutcome({ businessCheckId: 2_000_000_000, outcome: "fit" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect((await superAdmin.call()).businessSupport.scheduleCall({ businessCheckId: 2_000_000_000, scheduledFor: new Date(Date.now() + 86_400_000) })).rejects.toMatchObject({ code: "NOT_FOUND" });
         const won = await requested("won");
         await db.update(schema.businessChecks).set({ pipelineStage: "won" }).where(eq(schema.businessChecks.id, won.id));
         await expect((await superAdmin.call()).businessSupport.recordOutcome({ businessCheckId: won.id, outcome: "decline" })).rejects.toMatchObject({ code: "CONFLICT" });
@@ -389,6 +415,31 @@ for (const target of targets) {
         mocked.findBookedCall.mockClear();
         await (await superAdmin.call()).businessSupport.discoveryCalls();
         expect(mocked.findBookedCall).not.toHaveBeenCalledWith(call.email);
+      });
+
+      it("picks up a booking made from the email link: a finished check that never pressed the button gets its time, its request and the Debrief stage", async () => {
+        const check = await finishedCheck("calendly-email-link");
+        const id = (await rowFor(check.token)).id as number;
+        const when = new Date("2026-10-16T10:00:00Z");
+        mocked.findBookedCall.mockImplementation(async (email: string) => (email === check.email ? when : null));
+        const listed = (await (await superAdmin.call()).businessSupport.checks()).find(row => row.id === id)!;
+        expect(listed).toMatchObject({ callScheduledFor: when, pipelineStage: "call_booked" });
+        expect(listed.callRequestedAt).toBeInstanceOf(Date);
+        const row = await rowFor(check.token);
+        expect(row).toMatchObject({ pipelineStage: "call_booked" });
+        expect(row.callScheduledFor.getTime()).toBe(when.getTime());
+        expect(row.callRequestedAt).toBeInstanceOf(Date);
+        expect((await (await superAdmin.call()).businessSupport.discoveryCalls()).some((item: { id: number }) => item.id === id)).toBe(true);
+        const events = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "business_check_call_booked"));
+        expect(events.some((event: { details: string }) => event.details.includes(`"businessCheckId":${id}`) && event.details.includes('"requested":"calendly"'))).toBe(true);
+      });
+
+      it("stops looking for a booking two weeks after a check that never asked was finished", async () => {
+        const check = await finishedCheck("calendly-old");
+        const id = (await rowFor(check.token)).id as number;
+        await db.update(schema.businessChecks).set({ completedAt: new Date(Date.now() - 20 * 86_400_000) }).where(eq(schema.businessChecks.id, id));
+        await (await superAdmin.call()).businessSupport.checks();
+        expect(mocked.findBookedCall).not.toHaveBeenCalledWith(check.email);
       });
 
       it("leaves calls alone that already have a time, have moved past the call stage, or have no booking", async () => {

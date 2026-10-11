@@ -11667,19 +11667,28 @@ var CHECK_COLUMNS = {
   createdAt: businessChecks.createdAt
 };
 var CALENDLY_SYNC_LIMIT = 10;
+var CALENDLY_LOOKUP_DAYS = 14;
+function awaitsCalendlyLookup(row, now) {
+  if (row.callScheduledFor || !row.completedAt) return false;
+  if (row.pipelineStage === "call_booked") return true;
+  return row.pipelineStage === "qualified_lead" && now - row.completedAt.getTime() <= CALENDLY_LOOKUP_DAYS * 864e5;
+}
 async function syncCalendlyBookings(db, rows) {
   if (!isCalendlyConfigured()) return rows;
-  const waiting = rows.filter((row) => row.callRequestedAt && !row.callScheduledFor && row.pipelineStage === "call_booked").slice(0, CALENDLY_SYNC_LIMIT);
+  const now = Date.now();
+  const waiting = rows.filter((row) => awaitsCalendlyLookup(row, now)).slice(0, CALENDLY_SYNC_LIMIT);
   if (!waiting.length) return rows;
   const found = /* @__PURE__ */ new Map();
   await Promise.all(waiting.map(async (row) => {
     const time = await findBookedCall(row.email);
     if (!time) return;
-    await db.update(businessChecks).set({ callScheduledFor: time }).where(and15(eq20(businessChecks.id, row.id), isNull7(businessChecks.callScheduledFor)));
-    await recordAudit(db, { action: "business_check_call_booked", targetEmail: row.email, details: { businessCheckId: row.id, scheduledFor: time.toISOString(), source: "calendly_lookup" } });
+    const stage = advancePipeline(row.pipelineStage, "call_booked");
+    const [saved] = await db.update(businessChecks).set({ callScheduledFor: time, callRequestedAt: row.callRequestedAt ?? databaseNow(), pipelineStage: stage }).where(and15(eq20(businessChecks.id, row.id), isNull7(businessChecks.callScheduledFor))).returning({ id: businessChecks.id });
+    if (!saved) return;
+    await recordAudit(db, { action: "business_check_call_booked", targetEmail: row.email, details: { businessCheckId: row.id, scheduledFor: time.toISOString(), source: "calendly_lookup", ...row.callRequestedAt ? {} : { requested: "calendly" } } });
     found.set(row.id, time);
   }));
-  return rows.map((row) => found.has(row.id) ? { ...row, callScheduledFor: found.get(row.id) } : row);
+  return rows.map((row) => found.has(row.id) ? { ...row, callScheduledFor: found.get(row.id), callRequestedAt: row.callRequestedAt ?? /* @__PURE__ */ new Date(), pipelineStage: advancePipeline(row.pipelineStage, "call_booked") } : row);
 }
 async function listBusinessChecks(db) {
   const [rows, invitations] = await Promise.all([
@@ -11780,10 +11789,13 @@ async function requestedCheck(db, businessCheckId) {
   return check;
 }
 async function scheduleDiscoveryCall(db, input) {
-  const check = await requestedCheck(db, input.businessCheckId);
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt }).from(businessChecks).where(eq20(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError20({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  if (!check.completedAt) throw new TRPCError20({ code: "BAD_REQUEST", message: "This Business Check is not finished yet, so there is no Debrief to schedule." });
+  if (check.pipelineStage === "won") throw new TRPCError20({ code: "CONFLICT", message: "This business has already been won, so its Debrief can no longer be changed here." });
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq20(businessChecks.id, check.id));
-    await recordAudit(tx, { action: "business_check_call_scheduled", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: input.scheduledFor.toISOString() } });
+    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, callRequestedAt: check.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq20(businessChecks.id, check.id));
+    await recordAudit(tx, { action: "business_check_call_scheduled", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: input.scheduledFor.toISOString(), ...check.callRequestedAt ? {} : { requested: "by_hand" } } });
   });
   return { success: true };
 }

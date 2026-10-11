@@ -668,6 +668,25 @@ describe("the commercial pipeline in Business Checks", () => {
     expect(screen.getByText("P One")).toBeTruthy();
   });
 
+  it("offers to record a Debrief time only for a finished check that never asked for one, and the time counts as the request", () => {
+    renderConsole();
+    openRow("Ada Okafor");
+    expect(drawer().queryByText("Debrief time")).toBeNull();
+    cleanup();
+
+    api.details[1] = detailFor({ callRequestedAt: null, pipelineStage: "qualified_lead" });
+    renderConsole();
+    openRow("Ada Okafor");
+    const section = within(drawer().getByText("Debrief time").closest("section")!);
+    expect(section.getByText(/No Debrief was requested from the result page/).textContent).toContain("It counts as the request.");
+    const save = section.getByRole("button", { name: "Save the Debrief time" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.change(section.getByLabelText("Date"), { target: { value: "2026-10-16" } });
+    fireEvent.change(section.getByLabelText("Time"), { target: { value: "10:00" } });
+    fireEvent.click(section.getByRole("button", { name: "Save the Debrief time" }));
+    expect(api.mutations.schedule).toEqual([{ businessCheckId: 1, scheduledFor: new Date("2026-10-16T10:00") }]);
+  });
+
   it("moves a check to any later stage except Won, with an optional note", () => {
     renderConsole();
     openRow("Ada Okafor");

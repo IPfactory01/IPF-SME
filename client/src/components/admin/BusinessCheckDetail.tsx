@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
@@ -11,7 +12,7 @@ import { AREA_NAMES, type Health } from "@shared/businessCheck/questions";
 import React, { useState } from "react";
 import { toast } from "sonner";
 import { CopyButton, DetailField, DetailSection, StatusBadge } from "./AdminPrimitives";
-import { formatDate, formatDateTime, ROUTE_LABELS, whatsappLink } from "./format";
+import { combineDateAndTime, formatDate, formatDateTime, ROUTE_LABELS, whatsappLink } from "./format";
 import { PaymentsPanel } from "./Payments";
 import { PAYMENT_ITEM_DETAILS } from "@shared/payments";
 
@@ -52,6 +53,37 @@ const stageName = (stage: string | null) => (stage && stage in PIPELINE_LABELS ?
 const PAYMENT_HISTORY = { payment_details_sent: "Payment details sent", payment_proof_received: "Proof of payment received", payment_confirmed: "Payment confirmed" } as const;
 const REPORT_HISTORY = { full_report_link_sent: "Report Intake link sent again", full_report_delivered: "Full Report sent" } as const;
 /** "lead" is where every check starts, so the team never moves a check back to it. */
+/**
+ * For a finished check that never asked for a Debrief on the result page. The owner may have booked from the link in
+ * their summary email (Calendly bookings are picked up by themselves) or agreed a time another way: recording it here
+ * counts as the request and puts the check in Debriefs.
+ */
+function RecordDebriefTime({ businessCheckId }: { businessCheckId: number }) {
+  const utils = trpc.useUtils();
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const schedule = trpc.businessSupport.scheduleCall.useMutation({
+    onSuccess: () => {
+      toast.success("Debrief time saved.");
+      void utils.businessSupport.checkDetail.invalidate({ businessCheckId });
+      void utils.businessSupport.checks.invalidate();
+      void utils.businessSupport.discoveryCalls.invalidate();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const when = combineDateAndTime(date, time);
+  return (
+    <form className="space-y-3" onSubmit={event => { event.preventDefault(); if (when) schedule.mutate({ businessCheckId, scheduledFor: when }); }}>
+      <p className="text-sm text-ink-muted">No Debrief was requested from the result page. A Calendly booking made from the email link is picked up by itself; for a Debrief agreed another way, record the time here. It counts as the request.</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1"><Label htmlFor={`debrief-date-${businessCheckId}`} className="text-xs text-ink-muted">Date</Label><Input id={`debrief-date-${businessCheckId}`} type="date" value={date} onChange={event => setDate(event.target.value)} className="h-9 rounded-none" /></div>
+        <div className="space-y-1"><Label htmlFor={`debrief-time-${businessCheckId}`} className="text-xs text-ink-muted">Time</Label><Input id={`debrief-time-${businessCheckId}`} type="time" value={time} onChange={event => setTime(event.target.value)} className="h-9 rounded-none" /></div>
+      </div>
+      <Button type="submit" variant="outline" size="sm" disabled={schedule.isPending || !when} className="rounded-none text-xs">Save the Debrief time</Button>
+    </form>
+  );
+}
+
 /** Won is not offered: only confirming the Current State Assessment payment sets it. */
 const MOVABLE_STAGES = PIPELINE_STAGES.filter((stage): stage is Exclude<PipelineStage, "lead" | "won"> => stage !== "lead" && stage !== "won");
 
@@ -187,6 +219,12 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
       <DetailSection title="Payments">
         <PaymentsPanel businessCheckId={check.id} payments={check.payments} report={check.report} />
       </DetailSection>
+
+      {check.completedAt && !check.callRequestedAt && check.pipelineStage !== "won" && (
+        <DetailSection title="Debrief time">
+          <RecordDebriefTime businessCheckId={check.id} />
+        </DetailSection>
+      )}
 
       <DetailSection title="Move to">
         <MoveStage businessCheckId={check.id} current={check.pipelineStage} />

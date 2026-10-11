@@ -110,7 +110,7 @@ confirmation stays for direct transfers. The same applies to the Current State A
 | Step | Who | What happens | Email | Stage |
 |---|---|---|---|---|
 | "Book my free call" | Owner | Calendly opens inline with name and email filled in. The call counts as booked only when Calendly confirms; "open in a new tab" also records the request. With no booking page, the button records a request | Office: *… asked for a free discovery call* (Calendly sends the owner its own confirmation) | **Call booked** |
-| "Schedule discovery call" | Desk lead | Records the agreed time | — | — |
+| "Save the Debrief time" | Desk lead | Records the agreed time for any finished check, from Debriefs or the check's record. For an owner who booked from the link in the summary email or agreed a time another way it counts as the request. Calendly bookings are also picked up on each console load: for Debriefs asked for on the page, and for checks finished in the last 14 days | — | **Call booked** if earlier |
 | "Record call outcome" | Desk lead | **Opportunity** (fit), **Refer** or **Lost** | — | **Opportunity**, **Referred** or **Lost** |
 | "Move to" | Desk lead | Any other stage except **Won**, with a note (for example **Nurture**); Won comes only from a confirmed payment | — | As chosen |
 | "Send payment details" (Current State Assessment) | Finance or Super Admin | Payment request for ₦500,000 | Owner: *Payment details for your Current State Assessment* | Moves to **Opportunity** if earlier |

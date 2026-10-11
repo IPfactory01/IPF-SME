@@ -139,7 +139,7 @@ export async function createOnboardingInvitation(input: { businessCheckId: numbe
   const invitationUrl = `${getTrustedApplicationOrigin()}/onboarding/${encodeURIComponent(token)}`;
   const message = buildOnboardingEmail({ fullName: check.fullName, businessName: check.businessName ?? "", url: invitationUrl });
   // Not BCC'd to a shared mailbox: the link is a one-time credential.
-  const delivery = await deliverEmail({ to: email, subject: message.subject, body: message.body, sender: "business_support" });
+  const delivery = await deliverEmail({ to: email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `client_onboarding_invitations:${invitation.id}` });
   await db.update(clientOnboardingInvitations).set({
     deliveryStatus: delivery.status,
     deliveryMessageId: delivery.status === "Sent" ? delivery.providerMessageId || null : null,

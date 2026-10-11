@@ -110,6 +110,73 @@ export function resendRequestBody(input: {
   };
 }
 
+/** How long one Resend call may take. A serverless function cannot wait on a hung provider. */
+export const EMAIL_TIMEOUT_MS = 8_000;
+/** The pause before the one retry, unless Resend asks for a (short) longer one. */
+const RETRY_DELAY_MS = 600;
+const RETRY_DELAY_MAX_MS = 2_000;
+const USER_AGENT = "the-shift-platform/1.0";
+
+/** Resend's Retry-After in seconds, capped so a retry still fits in the request. */
+function retryDelay(retryAfter: string | null) {
+  const seconds = Number(retryAfter);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1000, RETRY_DELAY_MAX_MS) : RETRY_DELAY_MS;
+}
+
+const wait = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
+
+/**
+ * One email through Resend: a bounded request (EMAIL_TIMEOUT_MS), one retry when Resend is busy or down (429, 5xx, no
+ * answer) and an Idempotency-Key so the retry, or a repeated request for the same record, cannot send twice. A refusal
+ * (an unverified domain, a bad address) is not retried. Never throws.
+ */
+export async function postToResend(input: {
+  payload: unknown;
+  apiKey: string;
+  idempotencyKey?: string;
+  fetchImpl?: typeof fetch;
+  timeoutMs?: number;
+  sleep?: (ms: number) => Promise<void>;
+}): Promise<EmailDeliveryResult> {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const sleep = input.sleep ?? wait;
+  const timeoutMs = input.timeoutMs ?? EMAIL_TIMEOUT_MS;
+  const body = JSON.stringify(input.payload);
+  let last: EmailDeliveryResult = { status: "Failed", reason: "Not sent" };
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetchImpl("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          authorization: `Bearer ${input.apiKey}`,
+          "user-agent": USER_AGENT,
+          ...(input.idempotencyKey ? { "idempotency-key": input.idempotencyKey.slice(0, 256) } : {}),
+        },
+        body,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      const data = (await response.json().catch(() => ({}))) as { id?: string; message?: string; name?: string };
+      if (response.ok) return { status: "Sent", providerMessageId: data.id };
+      const reason = data.message || data.name || `Resend API error: HTTP ${response.status}`;
+      last = { status: "Failed", reason };
+      const busy = response.status === 429 || response.status >= 500;
+      // Visible in the hosting logs (e.g. an unverified domain); never includes the API key.
+      console.warn(`[Email] Resend ${busy ? "did not accept" : "refused"} an email (HTTP ${response.status}): ${reason}`);
+      if (!busy || attempt === 1) return last;
+      await sleep(retryDelay(response.headers.get("retry-after")));
+    } catch (error) {
+      const timedOut = error instanceof Error && error.name === "TimeoutError";
+      last = { status: "Failed", reason: timedOut ? `Resend did not answer within ${Math.round(timeoutMs / 1000)} seconds` : error instanceof Error ? error.message : "Unknown error during email delivery" };
+      console.warn(`[Email] Resend could not be reached: ${last.reason}`);
+      if (attempt === 1) return last;
+      await sleep(RETRY_DELAY_MS);
+    }
+  }
+  return last;
+}
+
 export async function deliverEmail(input: {
   to: string;
   bcc?: string | string[];
@@ -121,6 +188,11 @@ export async function deliverEmail(input: {
   attachments?: EmailAttachment[];
   /** Defaults to the JUMP programme; business check email passes "business_support". */
   sender?: EmailSender;
+  /**
+   * Names the record and the message, e.g. "payment_requests:12:confirmed", so a retry or a repeated request cannot
+   * send the same email twice (Resend keeps the key for 24 hours). Omit for a message that is new every time.
+   */
+  idempotencyKey?: string;
 }): Promise<EmailDeliveryResult> {
   if (process.env.NODE_ENV === "test" || process.env.VITEST || process.env.VITEST_WORKER_ID) {
     return { status: "Simulated", reason: "test_sender" };
@@ -129,27 +201,8 @@ export async function deliverEmail(input: {
   const apiKey = ENV.resendApiKey;
   if (!apiKey) {
     console.warn("[Email] RESEND_API_KEY is not set, so no email was sent.");
-    return { status: "Failed", reason: `${BRAND.programmeShortName} programme email delivery is not configured` };
+    return { status: "Failed", reason: "Email delivery is not configured (RESEND_API_KEY)" };
   }
 
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-        "user-agent": "jump-2026-registration/1.0",
-      },
-      body: JSON.stringify(resendRequestBody(input)),
-    });
-    const data = (await response.json().catch(() => ({}))) as { id?: string; message?: string; name?: string };
-    if (response.ok) return { status: "Sent", providerMessageId: data.id };
-    const reason = data.message || data.name || `Resend API error: HTTP ${response.status}`;
-    // Visible in the hosting logs (e.g. an unverified domain); never includes the API key.
-    console.warn(`[Email] Resend refused an email (HTTP ${response.status}): ${reason}`);
-    return { status: "Failed", reason };
-  } catch (error) {
-    return { status: "Failed", reason: error instanceof Error ? error.message : `Unknown error during ${BRAND.programmeShortName} email delivery` };
-  }
+  return postToResend({ payload: resendRequestBody(input), apiKey, idempotencyKey: input.idempotencyKey });
 }

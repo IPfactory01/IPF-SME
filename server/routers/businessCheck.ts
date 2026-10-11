@@ -162,8 +162,8 @@ export const businessCheckRouter = router({
     // A delivery problem never blocks the check: the result is saved either way and the page says whether email went out.
     const failed = { status: "Failed" as const };
     const [officeDelivery, ownerDelivery] = await Promise.all([
-      deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, subject: office.subject, body: office.body, sender: "business_support" }).catch(() => failed),
-      deliverEmail({ to: check.email, subject: owner.subject, body: owner.body, sender: "business_support" }).catch(() => failed),
+      deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, subject: office.subject, body: office.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:office` }).catch(() => failed),
+      deliverEmail({ to: check.email, subject: owner.subject, body: owner.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:owner` }).catch(() => failed),
     ]);
 
     await db.update(businessChecks).set({
@@ -233,6 +233,7 @@ export const businessCheckRouter = router({
         }
         await deliverEmail({
           sender: "business_support",
+          idempotencyKey: `business_checks:${check.id}:${input.choice}:office`,
           to: BUSINESS_SUPPORT_MAILBOX,
           subject: `Business Check: ${check.businessName || check.fullName} asked for ${what}`,
           body: [

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const KEYS = ["APP_ORIGIN", "APP_ALTERNATE_ORIGINS", "OWNER_ADMIN_EMAIL", "DISCOVERY_CALL_URL", "VERCEL_GIT_COMMIT_SHA"] as const;
@@ -26,6 +28,13 @@ describe("discovery call booking page", () => {
     expect((await loadWith({ DISCOVERY_CALL_URL: " https://calendly.com/ip-factory/discovery-call " })).ENV.discoveryCallUrl).toBe("https://calendly.com/ip-factory/discovery-call");
     // Without the setting, the site uses IP Factory's Calendly event from shared/brand.ts.
     expect((await loadWith({})).ENV.discoveryCallUrl).toBe("https://calendly.com/ipfactory-info/ipf-free-20-minute-discovery-call");
+  });
+});
+
+describe("the Vercel function", () => {
+  it("may run for a minute: the Business Check waits on the AI summary and two emails in one request", () => {
+    const config = JSON.parse(readFileSync(resolve(process.cwd(), "vercel.json"), "utf8")) as { functions?: Record<string, { maxDuration?: number }> };
+    expect(config.functions?.["api/index.js"]?.maxDuration).toBe(60);
   });
 });
 

@@ -134,8 +134,11 @@ export async function summariseCheck(input: { answers: Answers; result: CheckRes
   const fallback = { summary: rulesSummary(input.result), source: "Rules" as const };
   if (!ENV.forgeApiKey) return fallback;
   try {
+    // The same budget stops the request and its retries, so a slow model cannot hold the function past the timeout.
+    const signal = AbortSignal.timeout(AI_TIMEOUT_MS);
     const response = await withTimeout(
       invokeLLM({
+        signal,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           {

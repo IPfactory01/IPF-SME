@@ -186,7 +186,7 @@ export async function requestPayment(db: Database, input: { businessCheckId: num
 
   // The window starts when the details go out; sending them again starts a new one.
   const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference, deadline: paymentDeadline(request.requestedAt) });
-  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" })
+  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:details:${request.requestedAt.getTime()}` })
     .catch((error: unknown) => ({ status: "Failed" as const, reason: error instanceof Error ? error.message : "Unknown error" }));
   await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq(paymentRequests.id, request.id));
   // Why an email failed, for the office notice (for example Resend refusing addresses before the domain is verified).
@@ -268,7 +268,7 @@ export async function confirmPayment(db: Database, input: { paymentRequestId: nu
 
   // Email after the commit: a delivery problem never undoes a confirmation, and the link can be sent again from the console.
   const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink });
-  await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" }).catch(() => undefined);
+  await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:confirmed` }).catch(() => undefined);
 
   let invitation: CurrentStateInvitation | null = null;
   let engagement: EngagementStart | null = null;

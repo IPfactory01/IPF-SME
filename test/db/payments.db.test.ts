@@ -225,6 +225,8 @@ for (const target of targets) {
         ]);
         expect(results.filter(result => result.changed)).toHaveLength(1);
         expect(emails().filter(sent => sent.to === email)).toHaveLength(1);
+        // The provider is told which message this is, so a retry on its side cannot send it twice either.
+        expect(mocked.deliverEmail.mock.calls[0][0]).toMatchObject({ idempotencyKey: `payment_requests:${payment.id}:confirmed` });
         expect(await auditsFor("payment_confirmed", id)).toHaveLength(1);
         expect(await db.select().from(schema.fullReports).where(eq(schema.fullReports.businessCheckId, id))).toHaveLength(1);
       });

@@ -1996,6 +1996,53 @@ function resendRequestBody(input) {
     ]
   };
 }
+var EMAIL_TIMEOUT_MS = 8e3;
+var RETRY_DELAY_MS = 600;
+var RETRY_DELAY_MAX_MS = 2e3;
+var USER_AGENT = "the-shift-platform/1.0";
+function retryDelay(retryAfter) {
+  const seconds = Number(retryAfter);
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1e3, RETRY_DELAY_MAX_MS) : RETRY_DELAY_MS;
+}
+var wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function postToResend(input) {
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const sleep2 = input.sleep ?? wait;
+  const timeoutMs = input.timeoutMs ?? EMAIL_TIMEOUT_MS;
+  const body = JSON.stringify(input.payload);
+  let last = { status: "Failed", reason: "Not sent" };
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetchImpl("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          authorization: `Bearer ${input.apiKey}`,
+          "user-agent": USER_AGENT,
+          ...input.idempotencyKey ? { "idempotency-key": input.idempotencyKey.slice(0, 256) } : {}
+        },
+        body,
+        signal: AbortSignal.timeout(timeoutMs)
+      });
+      const data = await response.json().catch(() => ({}));
+      if (response.ok) return { status: "Sent", providerMessageId: data.id };
+      const reason = data.message || data.name || `Resend API error: HTTP ${response.status}`;
+      last = { status: "Failed", reason };
+      const busy = response.status === 429 || response.status >= 500;
+      console.warn(`[Email] Resend ${busy ? "did not accept" : "refused"} an email (HTTP ${response.status}): ${reason}`);
+      if (!busy || attempt === 1) return last;
+      await sleep2(retryDelay(response.headers.get("retry-after")));
+    } catch (error) {
+      const timedOut = error instanceof Error && error.name === "TimeoutError";
+      last = { status: "Failed", reason: timedOut ? `Resend did not answer within ${Math.round(timeoutMs / 1e3)} seconds` : error instanceof Error ? error.message : "Unknown error during email delivery" };
+      console.warn(`[Email] Resend could not be reached: ${last.reason}`);
+      if (attempt === 1) return last;
+      await sleep2(RETRY_DELAY_MS);
+    }
+  }
+  return last;
+}
 async function deliverEmail(input) {
   if (process.env.NODE_ENV === "test" || process.env.VITEST || process.env.VITEST_WORKER_ID) {
     return { status: "Simulated", reason: "test_sender" };
@@ -2003,27 +2050,9 @@ async function deliverEmail(input) {
   const apiKey = ENV.resendApiKey;
   if (!apiKey) {
     console.warn("[Email] RESEND_API_KEY is not set, so no email was sent.");
-    return { status: "Failed", reason: `${BRAND.programmeShortName} programme email delivery is not configured` };
+    return { status: "Failed", reason: "Email delivery is not configured (RESEND_API_KEY)" };
   }
-  try {
-    const response = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-        "user-agent": "jump-2026-registration/1.0"
-      },
-      body: JSON.stringify(resendRequestBody(input))
-    });
-    const data = await response.json().catch(() => ({}));
-    if (response.ok) return { status: "Sent", providerMessageId: data.id };
-    const reason = data.message || data.name || `Resend API error: HTTP ${response.status}`;
-    console.warn(`[Email] Resend refused an email (HTTP ${response.status}): ${reason}`);
-    return { status: "Failed", reason };
-  } catch (error) {
-    return { status: "Failed", reason: error instanceof Error ? error.message : `Unknown error during ${BRAND.programmeShortName} email delivery` };
-  }
+  return postToResend({ payload: resendRequestBody(input), apiKey, idempotencyKey: input.idempotencyKey });
 }
 
 // server/scheduledReminder.ts
@@ -8150,7 +8179,22 @@ var normalizeResponseFormat = ({
 var RETRY_MAX_RETRIES = 4;
 var RETRY_BASE_DELAY_MS = 500;
 var RETRY_MAX_DELAY_MS = 3e4;
-var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+var abortReason = (signal) => signal.reason instanceof Error ? signal.reason : new DOMException("The LLM request was aborted", "AbortError");
+var sleep = (ms, signal) => new Promise((resolve, reject) => {
+  if (signal?.aborted) {
+    reject(abortReason(signal));
+    return;
+  }
+  const onAbort = () => {
+    clearTimeout(timer);
+    reject(abortReason(signal));
+  };
+  const timer = setTimeout(() => {
+    signal?.removeEventListener("abort", onAbort);
+    resolve();
+  }, ms);
+  signal?.addEventListener("abort", onAbort, { once: true });
+});
 var parseRetryAfter = (value) => {
   if (!value) return void 0;
   const seconds = Number(value);
@@ -8165,7 +8209,9 @@ var computeBackoffDelay = (attempt, retryAfterMs) => {
 };
 var fetchWithBackoff = async (url, init) => {
   let lastError;
+  const signal = init.signal ?? void 0;
   for (let attempt = 0; attempt <= RETRY_MAX_RETRIES; attempt++) {
+    if (signal?.aborted) throw abortReason(signal);
     try {
       const response = await fetch(url, init);
       if (response.ok || attempt === RETRY_MAX_RETRIES) {
@@ -8181,14 +8227,14 @@ var fetchWithBackoff = async (url, init) => {
       console.warn(
         `LLM request retry ${attempt + 1}/${RETRY_MAX_RETRIES} after status ${response.status}`
       );
-      await sleep(computeBackoffDelay(attempt, retryAfterMs));
+      await sleep(computeBackoffDelay(attempt, retryAfterMs), signal);
     } catch (error) {
       lastError = error;
-      if (attempt === RETRY_MAX_RETRIES) throw error;
+      if (signal?.aborted || attempt === RETRY_MAX_RETRIES) throw error;
       console.warn(
         `LLM request retry ${attempt + 1}/${RETRY_MAX_RETRIES} after network error`
       );
-      await sleep(computeBackoffDelay(attempt));
+      await sleep(computeBackoffDelay(attempt), signal);
     }
   }
   throw lastError instanceof Error ? lastError : new Error("LLM request failed after exhausting retries");
@@ -8208,7 +8254,8 @@ async function invokeLLM(params) {
     thinking,
     reasoning,
     maxTokens,
-    max_tokens
+    max_tokens,
+    signal
   } = params;
   const payload = {
     messages: messages.map(normalizeMessage)
@@ -8251,7 +8298,8 @@ async function invokeLLM(params) {
       "content-type": "application/json",
       authorization: `Bearer ${ENV.forgeApiKey}`
     },
-    body: JSON.stringify(payload)
+    body: JSON.stringify(payload),
+    signal
   });
   if (!response.ok) {
     const errorText = await response.text();
@@ -8359,8 +8407,10 @@ async function summariseCheck(input) {
   const fallback = { summary: rulesSummary(input.result), source: "Rules" };
   if (!ENV.forgeApiKey) return fallback;
   try {
+    const signal = AbortSignal.timeout(AI_TIMEOUT_MS);
     const response = await withTimeout(
       invokeLLM({
+        signal,
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           {
@@ -9316,7 +9366,7 @@ async function createOnboardingInvitation(input) {
   });
   const invitationUrl = `${getTrustedApplicationOrigin()}/onboarding/${encodeURIComponent(token2)}`;
   const message = buildOnboardingEmail({ fullName: check.fullName, businessName: check.businessName ?? "", url: invitationUrl });
-  const delivery = await deliverEmail({ to: email, subject: message.subject, body: message.body, sender: "business_support" });
+  const delivery = await deliverEmail({ to: email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `client_onboarding_invitations:${invitation.id}` });
   await db.update(clientOnboardingInvitations).set({
     deliveryStatus: delivery.status,
     deliveryMessageId: delivery.status === "Sent" ? delivery.providerMessageId || null : null
@@ -10979,6 +11029,7 @@ async function submitReportIntake(db, token2, rawIntake) {
   const message = reportEmail(report, reportUrl(token2));
   const delivery = await deliverEmail({
     sender: "business_support",
+    idempotencyKey: `full_reports:${claimed.id}:report`,
     to: email,
     subject: message.subject,
     body: message.body,
@@ -10988,6 +11039,7 @@ async function submitReportIntake(db, token2, rawIntake) {
   await recordAudit(db, { action: "full_report_delivered", targetEmail: email, details: { businessCheckId: claimed.businessCheckId, reference: report.reference, delivery: delivery.status } });
   await deliverEmail({
     sender: "business_support",
+    idempotencyKey: `full_reports:${claimed.id}:office`,
     to: BUSINESS_SUPPORT_MAILBOX,
     subject: `Full Report sent: ${report.businessName}`,
     body: [
@@ -11029,6 +11081,8 @@ async function resendReportLink(db, input) {
   const firstName2 = check.fullName.trim().split(/\s+/)[0] || "there";
   const delivery = await deliverEmail({
     sender: "business_support",
+    // A new link each time, so each resend is its own message.
+    idempotencyKey: `full_reports:${check.id}:link:${Date.now()}`,
     to: check.email,
     subject: "Your Report Intake",
     body: [
@@ -11177,7 +11231,7 @@ async function requestPayment(db, input) {
     return row;
   });
   const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference, deadline: paymentDeadline(request.requestedAt) });
-  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
+  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:details:${request.requestedAt.getTime()}` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
   await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq18(paymentRequests.id, request.id));
   const deliveryProblem = delivery.status === "Failed" ? delivery.reason : null;
   return { paymentRequestId: request.id, reference, status: request.status, deliveryStatus: delivery.status, deliveryProblem, pipelineStage: stageTo };
@@ -11230,7 +11284,7 @@ async function confirmPayment(db, input) {
   }
   if (!outcome) return NOT_CONFIRMED;
   const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink });
-  await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" }).catch(() => void 0);
+  await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:confirmed` }).catch(() => void 0);
   let invitation = null;
   let engagement = null;
   if (request.item === "current_state") {
@@ -11412,8 +11466,8 @@ var businessCheckRouter = router({
     const owner = ownerEmail({ contact, summary, result, answers });
     const failed = { status: "Failed" };
     const [officeDelivery, ownerDelivery] = await Promise.all([
-      deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, subject: office.subject, body: office.body, sender: "business_support" }).catch(() => failed),
-      deliverEmail({ to: check.email, subject: owner.subject, body: owner.body, sender: "business_support" }).catch(() => failed)
+      deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, subject: office.subject, body: office.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:office` }).catch(() => failed),
+      deliverEmail({ to: check.email, subject: owner.subject, body: owner.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:owner` }).catch(() => failed)
     ]);
     await db.update(businessChecks).set({
       ...answerColumns(answers),
@@ -11462,6 +11516,7 @@ var businessCheckRouter = router({
       }
       await deliverEmail({
         sender: "business_support",
+        idempotencyKey: `business_checks:${check.id}:${input.choice}:office`,
         to: BUSINESS_SUPPORT_MAILBOX,
         subject: `Business Check: ${check.businessName || check.fullName} asked for ${what}`,
         body: [
@@ -11988,7 +12043,7 @@ async function issue(db, input) {
   }
   const invitationUrl = `${getTrustedApplicationOrigin()}${JOIN_PATH}/${encodeURIComponent(token2)}`;
   const message = buildInvitationEmail({ kind: input.kind, fullName: input.fullName, url: invitationUrl, inviterName: input.inviterName, businessName: input.businessName, access: input.access });
-  const delivery = await deliverEmail({ to: input.email, subject: message.subject, body: message.body, sender: "business_support" });
+  const delivery = await deliverEmail({ to: input.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `account_invitations:${invitation.id}` });
   await db.update(accountInvitations).set({ deliveryStatus: delivery.status }).where(eq21(accountInvitations.id, invitation.id));
   return { invitationId: invitation.id, invitationUrl, deliveryStatus: delivery.status };
 }

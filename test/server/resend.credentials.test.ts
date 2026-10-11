@@ -13,7 +13,7 @@ describe.skipIf(!shouldValidate)("Resend credentials", () => {
       headers: {
         accept: "application/json",
         authorization: `Bearer ${apiKey}`,
-        "user-agent": "jump-2026-registration/1.0",
+        "user-agent": "the-shift-platform/1.0",
       },
     });
 

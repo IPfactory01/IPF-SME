@@ -81,7 +81,7 @@ example, exists only in Resend (shown once at creation) and in Vercel.
 
 | Service | Used for | How | Status |
 |---|---|---|---|
-| **Resend** | All outbound email | `fetch` to `api.resend.com/emails` (`server/email.ts`); inline logo as an attachment with `content_id` | Live. The `ipfactory.co` sending domain still needs DNS records (DG); until then Resend refuses most outside addresses |
+| **Resend** | All outbound email | `fetch` to `api.resend.com/emails` (`server/email.ts`) with an 8-second limit, one retry when Resend is busy or down (429, 5xx, no answer) and an `Idempotency-Key` naming the record and message, so a retry or a repeated request cannot send twice; a refusal is not retried; inline logo as an attachment with `content_id` | Live. The `ipfactory.co` sending domain still needs DNS records (DG); until then Resend refuses most outside addresses |
 | **Calendly** | Discovery call booking | Inline embed with name and email prefilled (`shared/booking.ts`); optional API read of the booked time (`server/calendly.ts`) | Live |
 | **AI (LLM)** | The business check summary only | Manus "Forge" chat completions endpoint (`server/_core/llm.ts`) with a 25-second limit; falls back to the rules summary | Works only with Manus credentials; to move to the Anthropic API |
 | **File storage** | JUMP uploads only today | Manus "Forge" presigned S3 (`server/storage.ts`), served through `/manus-storage/*` | To be replaced by a private Supabase Storage bucket (implementation plan 1.1) |
@@ -147,6 +147,6 @@ Known gaps to close are listed in [5. Backend schema](05-backend-schema.md) §6.
 | Phone | Every owner-facing screen works at 390 px wide on a mid-range Android phone over mobile data |
 | Speed | The business check moves to the next question instantly (local state; saving happens in the background) |
 | Report | The full report PDF is built and emailed within the form submission (seconds, no queue) |
-| Availability | Vercel's platform availability; email or AI failures never block saving a check or confirming a payment, and each failure is recorded |
+| Availability | Vercel's platform availability; email or AI failures never block saving a check or confirming a payment, and each failure is recorded. The function may run for 60 seconds (`maxDuration` in `vercel.json`); the Business Check's 25-second AI budget aborts the model request and its retries, and each email call is bounded, so one request stays inside that limit |
 | Data location | Supabase project region as configured by IP Factory; files to follow the same region when storage moves |
 | Accessibility | Labels on every input, radio groups and checkboxes with accessible names, visible focus, reduced motion respected |

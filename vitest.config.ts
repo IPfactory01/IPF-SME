@@ -15,6 +15,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // Tests run as a fictional owner: production names the Super Admin in the hosting environment, never in code.
+    env: { OWNER_ADMIN_EMAIL: "owner@example.test" },
     // Every test lives under test/, mirroring client/src, server and shared.
     include: ["test/**/*.test.ts", "test/**/*.test.tsx", "test/**/*.spec.ts", "test/**/*.spec.tsx"],
   },

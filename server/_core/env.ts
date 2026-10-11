@@ -14,6 +14,17 @@ function vercelDeploymentOrigin() {
   }
 }
 
+/**
+ * Settings production cannot run without. Nothing stands in for them: /api/health answers 503 and lists any that are
+ * missing, and the server logs them once when it starts, so a deployment without them is visible at once instead of
+ * quietly using someone else's domain or address.
+ */
+export const REQUIRED_IN_PRODUCTION = ["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY"] as const;
+
+export function missingProductionSettings(env: NodeJS.ProcessEnv = process.env) {
+  return env.NODE_ENV === "production" ? REQUIRED_IN_PRODUCTION.filter(name => !env[name]?.trim()) : [];
+}
+
 export const ENV = {
   appId: process.env.VITE_APP_ID ?? "",
   cookieSecret: process.env.JWT_SECRET ?? "",
@@ -47,10 +58,13 @@ export const ENV = {
   supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET?.trim() || "engagement-files",
   paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
   paystackSecretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
-  /** Canonical public origin (scheme + host) used for emailed links and CSRF checks in production. */
-  appOrigin: originOf(process.env.APP_ORIGIN || "https://emmanueltarfa.com"),
+  /**
+   * Canonical public origin (scheme + host) used for emailed links and CSRF checks in production. Without APP_ORIGIN
+   * the deployment's own Vercel address stands in (links still work; health reports the gap); locally, localhost.
+   */
+  appOrigin: originOf(process.env.APP_ORIGIN?.trim() || vercelDeploymentOrigin() || "http://localhost:3000"),
   /** Further production origins accepted for browser requests, comma-separated (e.g. the www host). */
-  appAlternateOrigins: (process.env.APP_ALTERNATE_ORIGINS || "https://www.emmanueltarfa.com")
+  appAlternateOrigins: (process.env.APP_ALTERNATE_ORIGINS || "")
     .split(",")
     .map((value) => value.trim())
     .filter(Boolean)
@@ -61,9 +75,16 @@ export const ENV = {
   buildCommit: (process.env.VERCEL_GIT_COMMIT_SHA?.trim() ?? "").slice(0, 7),
   /** Shared secret the host's scheduler sends as a Bearer token to /api/scheduled/* endpoints. */
   cronSecret: process.env.CRON_SECRET ?? "",
-  /** Email address of the permanent Super Admin. */
-  // A blank value (`OWNER_ADMIN_EMAIL=`) is treated as unset: `??` alone would keep "" and make every user without an
-  // email look like the Super Admin.
-  ownerAdminEmail: (process.env.OWNER_ADMIN_EMAIL?.trim() || "emmanueltarfa@gmail.com").toLowerCase(),
+  /**
+   * Email address of the permanent Super Admin. Empty when unset or blank: then nobody is Super Admin by email, and only
+   * a role stored by `pnpm owner:bootstrap` counts. Every comparison must treat "" as "no owner", never as a match.
+   */
+  ownerAdminEmail: (process.env.OWNER_ADMIN_EMAIL?.trim() ?? "").toLowerCase(),
   emailReplyTo: process.env.EMAIL_REPLY_TO ?? BRAND.administrationMailbox,
+  /** Required production settings that are not set (empty outside production). */
+  missingSettings: missingProductionSettings(),
 };
+
+if (ENV.missingSettings.length) {
+  console.error(`[Config] Missing in production: ${ENV.missingSettings.join(", ")}. Set them in the hosting environment; /api/health reports them until then.`);
+}

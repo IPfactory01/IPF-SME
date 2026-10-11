@@ -239,7 +239,7 @@ export function requirePlatformPermission(session: Pick<AccountSession, "permiss
 }
 
 export async function emailIsReserved(db: Pick<Database, "select">, email: string) {
-  if (email === OWNER_ADMIN_EMAIL) return true;
+  if (OWNER_ADMIN_EMAIL && email === OWNER_ADMIN_EMAIL) return true;
   const invited = await db.select({ id: adminInvitations.id }).from(adminInvitations).where(and(emailEquals(adminInvitations.email, email), eq(adminInvitations.status, "Pending"))).limit(1);
   return invited.length > 0;
 }

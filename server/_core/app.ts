@@ -12,6 +12,7 @@ import { storagePut } from "../storage";
 import { buildParticipantUploadKey, buildPaymentReceiptUploadKey, getParticipantUploadValidationError, participantUploadPolicy } from "../participantUploads";
 import { applySecurityHeaders, requireTrustedBrowserOrigin } from "../security";
 import { ENV } from "./env";
+import { healthReport } from "./health";
 import multer from "multer";
 
 /**
@@ -25,7 +26,8 @@ export function createApp() {
   app.use(applySecurityHeaders);
   // "build" is the short commit the live site was built from, so anyone can tell whether a change has reached it.
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, service: "ipfactory-sme", build: ENV.buildCommit || null });
+    const report = healthReport();
+    res.status(report.status).json(report.body);
   });
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ limit: "32kb", extended: true }));

@@ -116,11 +116,15 @@ function vercelDeploymentOrigin() {
     return "";
   }
 }
-var ENV;
+function missingProductionSettings(env = process.env) {
+  return env.NODE_ENV === "production" ? REQUIRED_IN_PRODUCTION.filter((name) => !env[name]?.trim()) : [];
+}
+var REQUIRED_IN_PRODUCTION, ENV;
 var init_env = __esm({
   "server/_core/env.ts"() {
     "use strict";
     init_brand();
+    REQUIRED_IN_PRODUCTION = ["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY"];
     ENV = {
       appId: process.env.VITE_APP_ID ?? "",
       cookieSecret: process.env.JWT_SECRET ?? "",
@@ -154,22 +158,31 @@ var init_env = __esm({
       supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET?.trim() || "engagement-files",
       paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
       paystackSecretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
-      /** Canonical public origin (scheme + host) used for emailed links and CSRF checks in production. */
-      appOrigin: originOf(process.env.APP_ORIGIN || "https://emmanueltarfa.com"),
+      /**
+       * Canonical public origin (scheme + host) used for emailed links and CSRF checks in production. Without APP_ORIGIN
+       * the deployment's own Vercel address stands in (links still work; health reports the gap); locally, localhost.
+       */
+      appOrigin: originOf(process.env.APP_ORIGIN?.trim() || vercelDeploymentOrigin() || "http://localhost:3000"),
       /** Further production origins accepted for browser requests, comma-separated (e.g. the www host). */
-      appAlternateOrigins: (process.env.APP_ALTERNATE_ORIGINS || "https://www.emmanueltarfa.com").split(",").map((value) => value.trim()).filter(Boolean).map(originOf),
+      appAlternateOrigins: (process.env.APP_ALTERNATE_ORIGINS || "").split(",").map((value) => value.trim()).filter(Boolean).map(originOf),
       /** This Vercel deployment's own origin, trusted in production alongside the configured origins. */
       vercelOrigin: vercelDeploymentOrigin(),
       /** The commit this deployment was built from (Vercel sets VERCEL_GIT_COMMIT_SHA), shown by /api/health as "build". */
       buildCommit: (process.env.VERCEL_GIT_COMMIT_SHA?.trim() ?? "").slice(0, 7),
       /** Shared secret the host's scheduler sends as a Bearer token to /api/scheduled/* endpoints. */
       cronSecret: process.env.CRON_SECRET ?? "",
-      /** Email address of the permanent Super Admin. */
-      // A blank value (`OWNER_ADMIN_EMAIL=`) is treated as unset: `??` alone would keep "" and make every user without an
-      // email look like the Super Admin.
-      ownerAdminEmail: (process.env.OWNER_ADMIN_EMAIL?.trim() || "emmanueltarfa@gmail.com").toLowerCase(),
-      emailReplyTo: process.env.EMAIL_REPLY_TO ?? BRAND.administrationMailbox
+      /**
+       * Email address of the permanent Super Admin. Empty when unset or blank: then nobody is Super Admin by email, and only
+       * a role stored by `pnpm owner:bootstrap` counts. Every comparison must treat "" as "no owner", never as a match.
+       */
+      ownerAdminEmail: (process.env.OWNER_ADMIN_EMAIL?.trim() ?? "").toLowerCase(),
+      emailReplyTo: process.env.EMAIL_REPLY_TO ?? BRAND.administrationMailbox,
+      /** Required production settings that are not set (empty outside production). */
+      missingSettings: missingProductionSettings()
     };
+    if (ENV.missingSettings.length) {
+      console.error(`[Config] Missing in production: ${ENV.missingSettings.join(", ")}. Set them in the hosting environment; /api/health reports them until then.`);
+    }
   }
 });
 
@@ -1215,8 +1228,14 @@ function databaseNow() {
 // server/db.ts
 var _pool = null;
 var _db = null;
-var POOL_MAX_CONNECTIONS = 1;
+var DEFAULT_POOL_MAX = 5;
+var POOL_MAX_LIMIT = 20;
+var QUERY_TIMEOUT_MS = 8e3;
 var SSL_PARAMETERS = ["sslmode", "ssl", "sslcert", "sslkey", "sslrootcert"];
+function poolMax(env = process.env) {
+  const value = Number(env.DATABASE_POOL_MAX);
+  return Number.isInteger(value) && value >= 1 && value <= POOL_MAX_LIMIT ? value : DEFAULT_POOL_MAX;
+}
 function createPoolConfig(connectionString, env = process.env) {
   const url = new URL(connectionString);
   const isLocal = ["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname);
@@ -1224,7 +1243,8 @@ function createPoolConfig(connectionString, env = process.env) {
   const ca = env.DATABASE_SSL_CA?.trim();
   return {
     connectionString: url.toString(),
-    max: POOL_MAX_CONNECTIONS,
+    max: poolMax(env),
+    query_timeout: QUERY_TIMEOUT_MS,
     idleTimeoutMillis: 1e4,
     connectionTimeoutMillis: 1e4,
     allowExitOnIdle: true,
@@ -1281,7 +1301,7 @@ async function upsertUser(user) {
     if (user.role !== void 0) {
       values2.role = user.role;
       updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId || user.email === ENV.ownerAdminEmail) {
+    } else if (ENV.ownerOpenId && user.openId === ENV.ownerOpenId || ENV.ownerAdminEmail && user.email === ENV.ownerAdminEmail) {
       values2.role = "admin";
       updateSet.role = "admin";
     }
@@ -3341,7 +3361,7 @@ function requireBusinessCapability(session, businessId, capability) {
   return membership;
 }
 async function emailIsReserved(db, email) {
-  if (email === OWNER_ADMIN_EMAIL) return true;
+  if (OWNER_ADMIN_EMAIL && email === OWNER_ADMIN_EMAIL) return true;
   const invited = await db.select({ id: adminInvitations.id }).from(adminInvitations).where(and5(emailEquals(adminInvitations.email, email), eq6(adminInvitations.status, "Pending"))).limit(1);
   return invited.length > 0;
 }
@@ -12356,8 +12376,17 @@ function buildPaymentReceiptUploadKey(participantId, originalName, timestamp2 = 
   return `payment-receipts/${participantId}/${timestamp2}-${safeName}`;
 }
 
-// server/_core/app.ts
+// server/_core/health.ts
 init_env();
+function healthReport(settings = ENV) {
+  const ok = settings.missingSettings.length === 0;
+  return {
+    status: ok ? 200 : 503,
+    body: { ok, service: "ipfactory-sme", build: settings.buildCommit || null, ...ok ? {} : { missing: [...settings.missingSettings] } }
+  };
+}
+
+// server/_core/app.ts
 import multer from "multer";
 function createApp() {
   const app = express();
@@ -12365,7 +12394,8 @@ function createApp() {
   app.set("trust proxy", 1);
   app.use(applySecurityHeaders);
   app.get("/api/health", (_req, res) => {
-    res.json({ ok: true, service: "ipfactory-sme", build: ENV.buildCommit || null });
+    const report = healthReport();
+    res.status(report.status).json(report.body);
   });
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ limit: "32kb", extended: true }));

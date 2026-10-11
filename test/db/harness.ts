@@ -59,7 +59,7 @@ export async function createRemoteHarness(url: string): Promise<DbHarness> {
   const { drizzle } = await vi.importActual<typeof import("drizzle-orm/node-postgres")>("drizzle-orm/node-postgres");
   const schemaName = `contract_${randomBytes(6).toString("hex")}`;
   const { createPoolConfig } = await vi.importActual<typeof import("@server/db")>("@server/db");
-  // The production pool settings (max 1 connection), so the search_path set on connect applies to every statement.
+  // The production pool settings; the search_path is set on every new connection, so it applies to every statement.
   const pool = new pg.Pool(createPoolConfig(url));
   pool.on("connect", client => void client.query(`set search_path to "${schemaName}"`));
   await pool.query(`create schema "${schemaName}"`);
@@ -160,6 +160,8 @@ export async function createDriverHarness(): Promise<DbHarness> {
   await server.start();
 
   process.env.DATABASE_URL = `postgresql://postgres:postgres@127.0.0.1:${port}/postgres`;
+  // pglite-socket serves one client at a time, so the pool is pinned to one connection here (production uses five).
+  process.env.DATABASE_POOL_MAX = "1";
   const database = await vi.importActual<typeof import("@server/db")>("@server/db");
   const db = (await database.getDb()) as AnyPgDb;
   return {

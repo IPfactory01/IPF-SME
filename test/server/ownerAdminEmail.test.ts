@@ -14,11 +14,10 @@ async function loadEnv(value: string | undefined) {
 
 // These reload the server modules inside the test, so a cold import can take several seconds when files run in parallel.
 describe("OWNER_ADMIN_EMAIL", { timeout: 30_000 }, () => {
-  it("falls back to the default when unset, blank or only spaces", async () => {
-    const fallback = await loadEnv(undefined);
-    expect(fallback).toMatch(/^[^@\s]+@[^@\s]+\.[^@\s]+$/);
-    expect(await loadEnv("")).toBe(fallback);
-    expect(await loadEnv("   ")).toBe(fallback);
+  it("is empty when unset, blank or only spaces, so nobody is Super Admin by email until it is set", async () => {
+    expect(await loadEnv(undefined)).toBe("");
+    expect(await loadEnv("")).toBe("");
+    expect(await loadEnv("   ")).toBe("");
   });
 
   it("is trimmed and lower-cased when set", async () => {

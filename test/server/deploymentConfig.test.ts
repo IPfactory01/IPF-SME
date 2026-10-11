@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const KEYS = ["APP_ORIGIN", "APP_ALTERNATE_ORIGINS", "OWNER_ADMIN_EMAIL", "DISCOVERY_CALL_URL", "VERCEL_GIT_COMMIT_SHA"] as const;
+const KEYS = ["NODE_ENV", "APP_ORIGIN", "APP_ALTERNATE_ORIGINS", "OWNER_ADMIN_EMAIL", "DISCOVERY_CALL_URL", "VERCEL_GIT_COMMIT_SHA", "VERCEL_URL", "DATABASE_URL", "JWT_SECRET", "RESEND_API_KEY"] as const;
 const saved = Object.fromEntries(KEYS.map((key) => [key, process.env[key]]));
 
 async function loadWith(env: Partial<Record<(typeof KEYS)[number], string>>) {
@@ -11,8 +11,9 @@ async function loadWith(env: Partial<Record<(typeof KEYS)[number], string>>) {
   vi.resetModules();
   const security = await import("@server/security");
   const adminSecurity = await import("@server/adminSecurity");
-  const { ENV } = await import("@server/_core/env");
-  return { ...security, ...adminSecurity, ENV };
+  const { ENV, REQUIRED_IN_PRODUCTION } = await import("@server/_core/env");
+  const { healthReport } = await import("@server/_core/health");
+  return { ...security, ...adminSecurity, ENV, REQUIRED_IN_PRODUCTION, healthReport };
 }
 
 afterEach(() => {
@@ -61,18 +62,37 @@ describe("deployment identity configuration", () => {
     expect(config.isOwnerAdmin({ email: "emmanueltarfa@gmail.com" })).toBe(false);
   });
 
-  it("keeps the current production identity when nothing is configured", async () => {
-    const config = await loadWith({});
+  it("has no personal defaults: without APP_ORIGIN the deployment's own address is used and nobody is Super Admin by email", async () => {
+    const config = await loadWith({ VERCEL_URL: "ipf-sme-abc123.vercel.app" });
 
-    expect(config.getTrustedApplicationOrigin("production")).toBe("https://emmanueltarfa.com");
-    expect(config.isTrustedBrowserOrigin("https://www.emmanueltarfa.com", "production")).toBe(true);
-    expect(config.OWNER_ADMIN_EMAIL).toBe("emmanueltarfa@gmail.com");
+    expect(config.getTrustedApplicationOrigin("production")).toBe("https://ipf-sme-abc123.vercel.app");
+    expect(config.isTrustedBrowserOrigin("https://ipf-sme-abc123.vercel.app", "production")).toBe(true);
+    expect(config.isTrustedBrowserOrigin("https://www.emmanueltarfa.com", "production")).toBe(false);
+    expect(config.ENV.appAlternateOrigins).toEqual([]);
+    expect(config.OWNER_ADMIN_EMAIL).toBe("");
+    expect(config.isOwnerAdmin({ email: "emmanueltarfa@gmail.com" })).toBe(false);
+    expect(config.isOwnerAdmin({ email: "" })).toBe(false);
   });
 
-  it("treats blank origin variables as unset instead of failing at import", async () => {
+  it("treats blank origin variables as unset instead of failing at import, falling back to localhost off Vercel", async () => {
     const config = await loadWith({ APP_ORIGIN: "", APP_ALTERNATE_ORIGINS: "" });
 
-    expect(config.getTrustedApplicationOrigin("production")).toBe("https://emmanueltarfa.com");
-    expect(config.isTrustedBrowserOrigin("https://www.emmanueltarfa.com", "production")).toBe(true);
+    expect(config.getTrustedApplicationOrigin("production")).toBe("http://localhost:3000");
+    expect(config.ENV.missingSettings).toEqual([]);
+  });
+
+  it("names the settings production cannot run without, and health answers 503 until they are set", async () => {
+    const bare = await loadWith({ NODE_ENV: "production", VERCEL_URL: "ipf-sme-abc123.vercel.app" });
+    expect(bare.REQUIRED_IN_PRODUCTION).toEqual(["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY"]);
+    expect(bare.ENV.missingSettings).toEqual(["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY"]);
+    expect(bare.healthReport()).toEqual({ status: 503, body: { ok: false, service: "ipfactory-sme", build: null, missing: ["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY"] } });
+
+    const partial = await loadWith({ NODE_ENV: "production", DATABASE_URL: "postgresql://x", JWT_SECRET: "s", APP_ORIGIN: "https://ipfactory.co", OWNER_ADMIN_EMAIL: " ", RESEND_API_KEY: "re_x", VERCEL_GIT_COMMIT_SHA: "abcdef0123" });
+    expect(partial.ENV.missingSettings).toEqual(["OWNER_ADMIN_EMAIL"]);
+    expect(partial.healthReport()).toEqual({ status: 503, body: { ok: false, service: "ipfactory-sme", build: "abcdef0", missing: ["OWNER_ADMIN_EMAIL"] } });
+
+    const complete = await loadWith({ NODE_ENV: "production", DATABASE_URL: "postgresql://x", JWT_SECRET: "s", APP_ORIGIN: "https://ipfactory.co", OWNER_ADMIN_EMAIL: "owner@programme.example.org", RESEND_API_KEY: "re_x" });
+    expect(complete.ENV.missingSettings).toEqual([]);
+    expect(complete.healthReport()).toEqual({ status: 200, body: { ok: true, service: "ipfactory-sme", build: null } });
   });
 });

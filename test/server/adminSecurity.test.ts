@@ -9,10 +9,10 @@ import {
 } from "@server/adminSecurity";
 
 describe("JUMP administrator security", () => {
-  it("recognises the super administrator Gmail address without case or whitespace sensitivity", () => {
-    expect(normalizeAdminEmail("  EmmanuelTarfa@Gmail.com ")).toBe("emmanueltarfa@gmail.com");
-    expect(isOwnerAdmin({ email: "EmmanuelTarfa@Gmail.com" })).toBe(true);
-    expect(isOwnerAdmin({ email: "other.admin@gmail.com" })).toBe(false);
+  it("recognises the configured owner address without case or whitespace sensitivity", () => {
+    expect(normalizeAdminEmail("  Owner@Example.TEST ")).toBe("owner@example.test");
+    expect(isOwnerAdmin({ email: "Owner@Example.test" })).toBe(true);
+    expect(isOwnerAdmin({ email: "other.admin@example.test" })).toBe(false);
   });
 
   it("requires a long password with sufficient character diversity", () => {

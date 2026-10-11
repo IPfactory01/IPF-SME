@@ -47,9 +47,10 @@ docs/product/     These six documents
 
 ## 4. Database
 
-- PostgreSQL on Supabase. At runtime `DATABASE_URL` uses the **transaction pooler** (port 6543, one connection per
-  function instance); migrations use `MIGRATION_DATABASE_URL` (session pooler, port 5432). `DATABASE_SSL_CA` pins the
-  certificate.
+- PostgreSQL on Supabase. At runtime `DATABASE_URL` uses the **transaction pooler** (port 6543) through a small pool of
+  five connections per function instance (`DATABASE_POOL_MAX` overrides it), each query abandoned after 8 seconds so a
+  stuck statement cannot hold the instance; migrations use `MIGRATION_DATABASE_URL` (session pooler, port 5432).
+  `DATABASE_SSL_CA` pins the certificate.
 - Schema in `drizzle/schema.ts` (38 tables, 55 enums); explained in [5. Backend schema](05-backend-schema.md).
 - Changes: edit the schema → `pnpm db:generate` → review the SQL → apply. Migrations 0006 and 0007 were applied with a
   guarded SQL script that records the Drizzle hash, so `drizzle.__drizzle_migrations` stays in step

@@ -17,8 +17,9 @@ const scheduledReminderSource = readFileSync(resolve(process.cwd(), "server/sche
 
 describe("JUMP defensive security controls", () => {
   it("uses an allowlisted production origin rather than a request-controlled host", () => {
-    expect(getTrustedApplicationOrigin("production")).toBe("https://emmanueltarfa.com");
-    expect(isTrustedBrowserOrigin("https://emmanueltarfa.com", "production")).toBe(true);
+    // Nothing is configured in the test process: the origin comes from the environment, never from a built-in domain.
+    expect(getTrustedApplicationOrigin("production")).toBe("http://localhost:3000");
+    expect(isTrustedBrowserOrigin("https://emmanueltarfa.com", "production")).toBe(false);
     expect(isTrustedBrowserOrigin("https://attacker.example", "production")).toBe(false);
     expect(isTrustedBrowserOrigin("https://3000-example.us2.manus.computer", "development")).toBe(false);
     expect(isTrustedBrowserOrigin("https://any-site.manus.space", "production")).toBe(false);

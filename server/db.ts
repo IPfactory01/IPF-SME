@@ -7,10 +7,23 @@ import { databaseNow } from './dbHelpers';
 let _pool: pg.Pool | null = null;
 let _db: ReturnType<typeof drizzle> | null = null;
 
-// One connection per function instance: Supabase's Transaction Pooler multiplexes the real connections,
-// and node-postgres (unlike postgres.js) does not pipeline queries, which transaction pooling cannot serve.
-const POOL_MAX_CONNECTIONS = 1;
+// A few connections per function instance: Vercel serves several requests on one instance at once and each query holds
+// a connection while it runs, so one connection would queue every request behind the slowest query. Supabase's
+// Transaction Pooler multiplexes these onto its own server connections, which keeps the count small. node-postgres
+// (unlike postgres.js) does not pipeline queries, which transaction pooling could not serve anyway.
+const DEFAULT_POOL_MAX = 5;
+const POOL_MAX_LIMIT = 20;
+// A query that has not answered by then is abandoned on the client, so a stuck statement frees the instance. This is
+// node-postgres's own query_timeout: statement_timeout is a server session setting the transaction pooler cannot keep
+// per client.
+const QUERY_TIMEOUT_MS = 8_000;
 const SSL_PARAMETERS = ["sslmode", "ssl", "sslcert", "sslkey", "sslrootcert"];
+
+/** DATABASE_POOL_MAX, when it is a whole number from 1 to 20; otherwise the default. */
+export function poolMax(env: NodeJS.ProcessEnv = process.env) {
+  const value = Number(env.DATABASE_POOL_MAX);
+  return Number.isInteger(value) && value >= 1 && value <= POOL_MAX_LIMIT ? value : DEFAULT_POOL_MAX;
+}
 
 export function createPoolConfig(connectionString: string, env: NodeJS.ProcessEnv = process.env): pg.PoolConfig {
   const url = new URL(connectionString);
@@ -20,7 +33,8 @@ export function createPoolConfig(connectionString: string, env: NodeJS.ProcessEn
   const ca = env.DATABASE_SSL_CA?.trim();
   return {
     connectionString: url.toString(),
-    max: POOL_MAX_CONNECTIONS,
+    max: poolMax(env),
+    query_timeout: QUERY_TIMEOUT_MS,
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 10_000,
     allowExitOnIdle: true,
@@ -97,7 +111,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     if (user.role !== undefined) {
       values.role = user.role;
       updateSet.role = user.role;
-    } else if (user.openId === ENV.ownerOpenId || user.email === ENV.ownerAdminEmail) {
+    } else if ((ENV.ownerOpenId && user.openId === ENV.ownerOpenId) || (ENV.ownerAdminEmail && user.email === ENV.ownerAdminEmail)) {
       values.role = 'admin';
       updateSet.role = 'admin';
     }

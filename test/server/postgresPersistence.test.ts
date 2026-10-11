@@ -33,13 +33,22 @@ import { emailEquals } from "@server/dbHelpers";
 const root = process.cwd();
 
 describe("database pool for Vercel and the Supabase transaction pooler", () => {
-  it("uses a single connection, short idle timeouts and no TLS parameters from the URL", () => {
+  it("uses a few connections with a query timeout, short idle timeouts and no TLS parameters from the URL", () => {
     const config = createPoolConfig("postgresql://user:secret@aws-1-eu-west-1.pooler.supabase.com:6543/postgres?sslmode=require&application_name=ipf", {});
-    expect(config).toMatchObject({ max: 1, idleTimeoutMillis: 10_000, connectionTimeoutMillis: 10_000, allowExitOnIdle: true });
+    // Several requests share one function instance on Vercel: one connection would queue them behind the slowest query,
+    // and a query with no timeout would hold that queue until the function was killed.
+    expect(config).toMatchObject({ max: 5, query_timeout: 8_000, idleTimeoutMillis: 10_000, connectionTimeoutMillis: 10_000, allowExitOnIdle: true });
     const url = new URL(config.connectionString!);
     expect(url.searchParams.has("sslmode")).toBe(false);
     expect(url.searchParams.get("application_name")).toBe("ipf");
     expect(url.port).toBe("6543");
+  });
+
+  it("lets DATABASE_POOL_MAX set the pool size within reason", () => {
+    const remote = "postgresql://user:secret@aws-1-eu-west-1.pooler.supabase.com:6543/postgres";
+    expect(createPoolConfig(remote, { DATABASE_POOL_MAX: "3" }).max).toBe(3);
+    expect(createPoolConfig(remote, { DATABASE_POOL_MAX: "20" }).max).toBe(20);
+    for (const bad of ["0", "21", "2.5", "many", ""]) expect(createPoolConfig(remote, { DATABASE_POOL_MAX: bad }).max).toBe(5);
   });
 
   it("encrypts remote connections, verifying the server only when DATABASE_SSL_CA is provided", () => {
@@ -62,7 +71,7 @@ describe("database pool for Vercel and the Supabase transaction pooler", () => {
     expect(mocked.pools).toHaveLength(1);
     expect(mocked.drizzle).toHaveBeenCalledTimes(1);
     expect(mocked.drizzle.mock.calls[0][0]).toBe(mocked.pools[0]);
-    expect(mocked.pools[0].config.max).toBe(1);
+    expect(mocked.pools[0].config.max).toBe(5);
     expect(mocked.pools[0].on).toHaveBeenCalledWith("error", expect.any(Function));
   });
 

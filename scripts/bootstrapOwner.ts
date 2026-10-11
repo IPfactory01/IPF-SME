@@ -49,6 +49,7 @@ function promptHidden(question: string): Promise<string> {
 
 async function main() {
   const replaceExisting = process.argv.includes("--reset");
+  if (!ENV.ownerAdminEmail) throw new Error("OWNER_ADMIN_EMAIL is not set, so there is no owner to set up. Put the Super Admin's sign-in email in .env first.");
   const db = await getDb();
   if (!db) throw new Error("DATABASE_URL is not set, so there is no database to update.");
   // An owner who already has a password does not need to type one again: just make sure Super Admin is stored as a role.

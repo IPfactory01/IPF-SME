@@ -174,7 +174,7 @@ for (const target of targets) {
 
       it("links at once when the owner was invited by hand and has an account before paying", async () => {
         const { email, id } = await finishedCheck("early");
-        await (await superAdmin.call()).onboarding.invite({ businessCheckId: id });
+        await (await superAdmin.call()).onboarding.invite({ businessCheckId: id, overrideReason: "Invited early by agreement" });
         await acceptInvitation(email, "Early Bird Ltd");
         await payAssessment(id);
         const engagement = await engagementOf(id);

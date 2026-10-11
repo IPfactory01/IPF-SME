@@ -568,18 +568,30 @@ describe("Client Onboarding view", () => {
     confirm.mockRestore();
   });
 
-  it("asks before inviting anyone who has not paid, and sends nothing if the admin says no", () => {
+  it("asks for a reason before inviting anyone who has not paid, sends nothing without one, and records it when given", () => {
     api.candidates = [check({ pipelineStage: "opportunity" })];
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
     open();
     fireEvent.click(screen.getByRole("button", { name: "Invite to onboard" }));
-    expect(confirm).toHaveBeenCalledWith("Ada Okafor is at Opportunity: the Current State Assessment is not paid yet. Invite them to set up a client account anyway?");
+    const form = within(screen.getByRole("form", { name: "Invite before payment" }));
+    expect(form.getByText("Ada Okafor is at Opportunity: the Current State Assessment is not paid yet.")).toBeTruthy();
+    expect((form.getByRole("button", { name: "Invite anyway" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(form.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("form", { name: "Invite before payment" })).toBeNull();
     expect(api.mutations.invite).toEqual([]);
-    confirm.mockReturnValue(true);
+
     fireEvent.click(screen.getByRole("button", { name: "Invite to onboard" }));
-    expect(api.mutations.invite).toEqual([{ businessCheckId: 1 }]);
-    confirm.mockRestore();
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "  Payment agreed for Friday  " } });
+    fireEvent.click(screen.getByRole("button", { name: "Invite anyway" }));
+    expect(api.mutations.invite).toEqual([{ businessCheckId: 1, overrideReason: "Payment agreed for Friday" }]);
+    expect(screen.queryByRole("form", { name: "Invite before payment" })).toBeNull();
   });
+
+  /** Invites the first candidate, who has not paid, with a reason. */
+  const inviteFirstWithReason = () => {
+    fireEvent.click(screen.getAllByRole("button", { name: "Invite to onboard" })[0]);
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Agreed exception" } });
+    fireEvent.click(screen.getByRole("button", { name: "Invite anyway" }));
+  };
 
   it("shows the call, the stage, the email and the link state for each business check", () => {
     api.candidates = [check({ invitationStatus: "pending" }), check({ id: 2, fullName: "Bola Quiet", email: "bola@example.test", callRequestedAt: null, pipelineStage: "qualified_lead", invitationStatus: null })];
@@ -591,28 +603,24 @@ describe("Client Onboarding view", () => {
   });
 
   it("generates a link and, when no email went out, says to copy it and send it manually", () => {
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     open();
-    fireEvent.click(screen.getAllByRole("button", { name: "Invite to onboard" })[0]);
-    expect(api.mutations.invite).toEqual([{ businessCheckId: 1 }]);
+    inviteFirstWithReason();
+    expect(api.mutations.invite).toEqual([{ businessCheckId: 1, overrideReason: "Agreed exception" }]);
     const link = screen.getByLabelText("Onboarding link") as HTMLInputElement;
     expect(link.value).toBe("https://app.example.test/onboarding/TOKEN123");
     expect(screen.getByRole("status").textContent).toContain("Email not sent. Copy this secure link and send it to the client manually.");
     expect(screen.getByRole("button", { name: "Copy" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Hide" }));
     expect(screen.queryByLabelText("Onboarding link")).toBeNull();
-    confirm.mockRestore();
   });
 
   it("does not tell the admin to send it manually when the email really went out", () => {
     api.inviteResult = { ...api.inviteResult, deliveryStatus: "Sent" };
-    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     open();
-    fireEvent.click(screen.getAllByRole("button", { name: "Invite to onboard" })[0]);
+    inviteFirstWithReason();
     const status = screen.getByRole("status").textContent!;
     expect(status).toContain("also emailed to the client");
     expect(status).not.toContain("Email not sent");
-    confirm.mockRestore();
   });
 
   it("separates the people and workspaces from the prospects in the counts", () => {
@@ -660,18 +668,19 @@ describe("the commercial pipeline in Business Checks", () => {
     expect(screen.getByText("P One")).toBeTruthy();
   });
 
-  it("moves a check to any later stage, including Won and Nurture, with an optional note", () => {
+  it("moves a check to any later stage except Won, with an optional note", () => {
     renderConsole();
     openRow("Ada Okafor");
     const move = within(drawer().getByText("Move to").closest("section")!);
-    // The current stage and the starting stage are not offered.
+    // The current stage, the starting stage and Won (set only by a confirmed payment) are not offered.
     expect(move.queryByRole("button", { name: "Debrief requested" })).toBeNull();
     expect(move.queryByRole("button", { name: "Lead" })).toBeNull();
-    for (const name of ["Qualified lead", "Opportunity", "Won", "Lost", "Nurture", "Referred"]) expect(move.getByRole("button", { name })).toBeTruthy();
-    fireEvent.change(move.getByLabelText("Note (optional)"), { target: { value: "  Paid by transfer  " } });
-    fireEvent.click(move.getByRole("button", { name: "Won" }));
+    expect(move.queryByRole("button", { name: "Won" })).toBeNull();
+    expect(move.getByText("Won is set by confirming the Current State Assessment payment.")).toBeTruthy();
+    for (const name of ["Qualified lead", "Opportunity", "Lost", "Nurture", "Referred"]) expect(move.getByRole("button", { name })).toBeTruthy();
+    fireEvent.change(move.getByLabelText("Note (optional)"), { target: { value: "  Not ready until January  " } });
     fireEvent.click(move.getByRole("button", { name: "Nurture" }));
-    expect(api.mutations.stage).toEqual([{ businessCheckId: 1, stage: "won", note: "Paid by transfer" }, { businessCheckId: 1, stage: "nurture", note: undefined }]);
+    expect(api.mutations.stage).toEqual([{ businessCheckId: 1, stage: "nurture", note: "Not ready until January" }]);
   });
 
   it("shows the team's moves with who, when, from, to and the note, and treats a won business as final", () => {

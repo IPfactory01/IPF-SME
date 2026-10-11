@@ -108,7 +108,9 @@ for (const target of targets) {
       }).returning();
       return row;
     }
-    const invite = async (checkId: number, admin: browser = superAdmin) => admin.call().onboarding.invite({ businessCheckId: checkId });
+    // Most of these checks have not paid, so the hand invitation carries the recorded reason the server requires.
+    const invite = async (checkId: number, admin: browser = superAdmin) => admin.call().onboarding.invite({ businessCheckId: checkId, overrideReason: "Agreed exception for the test" });
+    const markPaid = (checkId: number) => db.insert(schema.paymentRequests).values({ businessCheckId: checkId, item: "current_state", amountNaira: 500_000, reference: `TS-CS-${String(checkId).padStart(6, "0")}`, status: "confirmed", confirmedAt: new Date() });
     const accept = (token: string, email: string, extra: Record<string, string> = {}, client: browser = browser()) =>
       client.call().onboarding.accept({ token, email, fullName: "Ada Example", password: PASSWORD, confirmPassword: PASSWORD, businessName: "Example Traders", ...extra });
     const total = async (table: Parameters<typeof db.select>[0] extends never ? never : unknown) => Number((await db.select({ n: count() }).from(table))[0].n);
@@ -219,6 +221,29 @@ for (const target of targets) {
 
       it("refuses an unknown business check", async () => {
         await expect(invite(2_000_000_000)).rejects.toMatchObject({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
+      });
+
+      it("refuses to invite before the Current State Assessment is paid unless a reason is given, and records the reason", async () => {
+        const check = await businessCheck();
+        await expect(superAdmin.call().onboarding.invite({ businessCheckId: check.id })).rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: ONBOARDING_ERRORS.unpaid });
+        await expect(superAdmin.call().onboarding.invite({ businessCheckId: check.id, overrideReason: "ok" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        expect(await db.select().from(schema.clientOnboardingInvitations).where(eq(schema.clientOnboardingInvitations.businessCheckId, check.id))).toHaveLength(0);
+
+        const result = await superAdmin.call().onboarding.invite({ businessCheckId: check.id, overrideReason: "  Payment agreed for Friday  " });
+        const audit = (await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "client_onboarding_invitation_created")))
+          .find((event: { details: string }) => event.details.includes(`"invitationId":${result.invitationId}`))!;
+        expect(JSON.parse(audit.details)).toMatchObject({ paid: false, override: "Payment agreed for Friday" });
+      });
+
+      it("invites without a reason once the Current State Assessment payment is confirmed", async () => {
+        const check = await businessCheck();
+        await markPaid(check.id);
+        const result = await superAdmin.call().onboarding.invite({ businessCheckId: check.id });
+        expect(result.invitationUrl).toMatch(/\/onboarding\/[A-Za-z0-9_-]{43}$/);
+        const audit = (await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "client_onboarding_invitation_created")))
+          .find((event: { details: string }) => event.details.includes(`"invitationId":${result.invitationId}`))!;
+        expect(JSON.parse(audit.details)).toMatchObject({ paid: true });
+        expect(JSON.parse(audit.details)).not.toHaveProperty("override");
       });
 
       it("refuses to invite an address that already has an account, or that is reserved for an administrator", async () => {

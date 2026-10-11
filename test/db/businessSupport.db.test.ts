@@ -314,23 +314,23 @@ for (const target of targets) {
     });
 
     describe("moving a check through the pipeline", () => {
-      it("moves a check to any later stage, including Won and Nurture, and shows each move with who, from, to and the note", async () => {
+      it("moves a check to any later stage except Won, and shows each move with who, from, to and the note", async () => {
         const check = await finishedCheck("pipeline");
         const id = (await rowFor(check.token)).id as number;
         await requestCall(check.visitor, check.token);
         await (await superAdmin.call()).businessSupport.recordOutcome({ businessCheckId: id, outcome: "fit" });
         expect(await (await superAdmin.call()).businessSupport.setStage({ businessCheckId: id, stage: "nurture", note: " Not ready to pay until January " })).toEqual({ success: true, pipelineStage: "nurture", changed: true });
-        expect(await (await superAdmin.call()).businessSupport.setStage({ businessCheckId: id, stage: "won" })).toMatchObject({ pipelineStage: "won", changed: true });
-        expect((await rowFor(check.token)).pipelineStage).toBe("won");
+        // Won means paid: only confirming the Current State Assessment payment sets it.
+        await expect((await superAdmin.call()).businessSupport.setStage({ businessCheckId: id, stage: "won" as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        expect((await rowFor(check.token)).pipelineStage).toBe("nurture");
 
         const detail = await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id });
         expect(detail.stageHistory.map(event => [event.action, event.from, event.to])).toEqual([
-          ["business_check_stage_changed", "nurture", "won"],
           ["business_check_stage_changed", "opportunity", "nurture"],
           ["business_check_call_outcome", "call_booked", "opportunity"],
         ]);
-        expect(detail.stageHistory[1]).toMatchObject({ note: "Not ready to pay until January", by: "Owner" });
-        expect(detail.stageHistory[0].note).toBeNull();
+        expect(detail.stageHistory[0]).toMatchObject({ note: "Not ready to pay until January", by: "Owner" });
+        expect(detail.stageHistory[1].note).toBeNull();
       });
 
       it("does nothing when the stage is unchanged, never reopens a won business, and never moves a check back to Lead", async () => {
@@ -338,10 +338,12 @@ for (const target of targets) {
         const id = (await rowFor(check.token)).id as number;
         expect(await (await superAdmin.call()).businessSupport.setStage({ businessCheckId: id, stage: "qualified_lead" })).toMatchObject({ changed: false });
         await expect((await superAdmin.call()).businessSupport.setStage({ businessCheckId: id, stage: "lead" as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-        await (await superAdmin.call()).businessSupport.setStage({ businessCheckId: id, stage: "won" });
+        await (await superAdmin.call()).businessSupport.setStage({ businessCheckId: id, stage: "nurture" });
+        // Won by a confirmed payment (recorded directly here): final from then on.
+        await db.update(schema.businessChecks).set({ pipelineStage: "won" }).where(eq(schema.businessChecks.id, id));
         await expect((await superAdmin.call()).businessSupport.setStage({ businessCheckId: id, stage: "lost" })).rejects.toMatchObject({ code: "CONFLICT" });
         expect((await rowFor(check.token)).pipelineStage).toBe("won");
-        await expect((await superAdmin.call()).businessSupport.setStage({ businessCheckId: 2_000_000_000, stage: "won" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect((await superAdmin.call()).businessSupport.setStage({ businessCheckId: 2_000_000_000, stage: "lost" })).rejects.toMatchObject({ code: "NOT_FOUND" });
         const events = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "business_check_stage_changed"));
         expect(events.filter((event: { details: string }) => event.details.includes(`"businessCheckId":${id}`))).toHaveLength(1);
       });
@@ -352,7 +354,7 @@ for (const target of targets) {
         const bareAdmin = await signInStaff(await person({ role: "admin" }));
         const deskLead = await signInStaff(await person({}, ["desk_lead"]));
         for (const b of [browser(), bareAdmin, deskLead]) {
-          await expect((await b.call()).businessSupport.setStage({ businessCheckId: id, stage: "won" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+          await expect((await b.call()).businessSupport.setStage({ businessCheckId: id, stage: "nurture" })).rejects.toMatchObject({ code: "FORBIDDEN" });
         }
         expect((await rowFor(check.token)).pipelineStage).toBe("qualified_lead");
       });
@@ -468,7 +470,7 @@ for (const target of targets) {
           calls: (await (await superAdmin.call()).businessSupport.discoveryCalls()).find((row: { email: string }) => row.email === email)!.invitationStatus,
         });
         expect(await stateIn()).toEqual({ checks: null, calls: null });
-        await (await superAdmin.call()).onboarding.invite({ businessCheckId: id });
+        await (await superAdmin.call()).onboarding.invite({ businessCheckId: id, overrideReason: "Invited early by agreement" });
         expect(await stateIn()).toEqual({ checks: "pending", calls: "pending" });
       });
 
@@ -490,7 +492,7 @@ for (const target of targets) {
         expect(before).toMatchObject({ email, pipelineStage: "opportunity", invitationStatus: null });
         expect(before.callRequestedAt).toBeInstanceOf(Date);
 
-        const issued = await (await superAdmin.call()).onboarding.invite({ businessCheckId: id });
+        const issued = await (await superAdmin.call()).onboarding.invite({ businessCheckId: id, overrideReason: "Invited early by agreement" });
         expect(issued.invitationUrl).toMatch(/\/onboarding\/[A-Za-z0-9_-]{43}$/);
         expect(issued.deliveryStatus).toBe("Simulated");
         const after = (await (await superAdmin.call()).onboarding.candidates()).find((item: { id: number }) => item.id === id)!;
@@ -511,7 +513,7 @@ for (const target of targets) {
         const unonboarded = await finishedCheck("not-a-client");
         await requestCall(visitor, token);
         const id = (await rowFor(token)).id;
-        const issued = await (await superAdmin.call()).onboarding.invite({ businessCheckId: id });
+        const issued = await (await superAdmin.call()).onboarding.invite({ businessCheckId: id, overrideReason: "Invited early by agreement" });
         const clientBrowser = browser();
         await (await clientBrowser.call()).onboarding.accept({ token: decodeURIComponent(issued.invitationUrl.split("/onboarding/")[1]), email, fullName: "Client Person", password: PASSWORD, confirmPassword: PASSWORD, businessName: "Listed Client Co" });
 

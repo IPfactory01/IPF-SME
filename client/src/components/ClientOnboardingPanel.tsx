@@ -20,6 +20,9 @@ export default function ClientOnboardingPanel() {
   const invitations = trpc.onboarding.invitations.useQuery(undefined, { retry: false });
   const metrics = trpc.onboarding.metrics.useQuery(undefined, { retry: false });
   const [issued, setIssued] = useState<{ url: string; email: string; delivery: string } | null>(null);
+  /** A candidate who has not paid, waiting for the reason to invite them anyway. */
+  const [early, setEarly] = useState<{ id: number; fullName: string; stage: string } | null>(null);
+  const [reason, setReason] = useState("");
 
   const refresh = () => {
     void utils.onboarding.invitations.invalidate();
@@ -34,11 +37,21 @@ export default function ClientOnboardingPanel() {
     },
     onError: error => toast.error(error.message),
   });
-  /** Won means the Current State Assessment is paid; inviting anyone earlier is allowed but has to be deliberate. */
+  /** Won means the Current State Assessment is paid; the server refuses anyone earlier unless a reason is recorded. */
   const inviteCandidate = (item: { id: number; fullName: string; pipelineStage: string }) => {
-    const stage = STAGE_NAMES[item.pipelineStage] ?? item.pipelineStage;
-    if (item.pipelineStage !== "won" && !window.confirm(`${item.fullName} is at ${stage}: the ${CURRENT_STATE.name} is not paid yet. Invite them to set up a client account anyway?`)) return;
-    invite.mutate({ businessCheckId: item.id });
+    if (item.pipelineStage === "won") {
+      invite.mutate({ businessCheckId: item.id });
+      return;
+    }
+    setEarly({ id: item.id, fullName: item.fullName, stage: STAGE_NAMES[item.pipelineStage] ?? item.pipelineStage });
+    setReason("");
+  };
+  const inviteEarly = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!early || reason.trim().length < 5) return;
+    invite.mutate({ businessCheckId: early.id, overrideReason: reason.trim() });
+    setEarly(null);
+    setReason("");
   };
   const revoke = trpc.onboarding.revoke.useMutation({ onSuccess: () => { toast.success("Invitation revoked."); refresh(); }, onError: error => toast.error(error.message) });
 
@@ -68,6 +81,21 @@ export default function ClientOnboardingPanel() {
             <Button type="button" variant="outline" className="rounded-none text-xs" onClick={() => setIssued(null)}>Hide</Button>
           </div>
         </div>
+      )}
+
+      {early && (
+        <form aria-label="Invite before payment" onSubmit={inviteEarly} className="space-y-2 border border-amber-200 bg-amber-50 p-4 text-sm">
+          <p className="font-semibold">{early.fullName} is at {early.stage}: the {CURRENT_STATE.name} is not paid yet.</p>
+          <p className="text-ink-muted">The invitation normally goes out when the payment is confirmed. To invite now, give the reason. It is recorded with the invitation.</p>
+          <div className="space-y-1">
+            <label htmlFor="invite-early-reason" className="text-xs uppercase tracking-wider text-ink-muted">Reason</label>
+            <input id="invite-early-reason" value={reason} onChange={event => setReason(event.target.value)} maxLength={500} className="w-full border border-line bg-white px-2 py-1" placeholder="For example, payment agreed with the desk lead for Friday" />
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" disabled={invite.isPending || reason.trim().length < 5} className="rounded-none bg-brand text-xs text-white">Invite anyway</Button>
+            <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => setEarly(null)}>Cancel</Button>
+          </div>
+        </form>
       )}
 
       <section>

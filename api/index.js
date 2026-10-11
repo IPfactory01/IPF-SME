@@ -1204,6 +1204,10 @@ import { sql as sql2 } from "drizzle-orm";
 function emailEquals(column, normalisedEmail) {
   return sql2`lower(${column}) = ${normalisedEmail.trim().toLowerCase()}`;
 }
+function isUndefinedTable(error) {
+  const code = error?.code ?? error?.cause?.code;
+  return code === "42P01";
+}
 function databaseNow() {
   return sql2`now()`;
 }
@@ -2873,7 +2877,8 @@ var ONBOARDING_ERRORS = {
   existingAccount: "An account already exists for this email address. The IPF team will help you sign in.",
   existingAccountAdmin: "This email already belongs to an account. Linking an existing account to a new business is not available yet.",
   noCheck: "That Business Check does not exist.",
-  invalidCheckEmail: "The Business Check does not have a valid email address to invite."
+  invalidCheckEmail: "The Business Check does not have a valid email address to invite.",
+  unpaid: "The Current State Assessment is not paid yet. Confirm the payment first, or give the reason for inviting anyway."
 };
 var signInInputSchema = z.object({
   email: z.string().trim().max(ACCOUNT_EMAIL_MAX_LENGTH).transform(normaliseAccountEmail),
@@ -9275,6 +9280,15 @@ function buildOnboardingEmail(input) {
     ].join("\n")
   };
 }
+async function assessmentPaid(db, businessCheckId) {
+  try {
+    const paid = await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and12(eq16(paymentRequests.businessCheckId, businessCheckId), eq16(paymentRequests.item, "current_state"), eq16(paymentRequests.status, "confirmed"))).limit(1);
+    return paid.length > 0;
+  } catch (error) {
+    if (isUndefinedTable(error)) return false;
+    throw error;
+  }
+}
 async function createOnboardingInvitation(input) {
   const db = await requireDatabase();
   const check = (await db.select().from(businessChecks).where(eq16(businessChecks.id, input.businessCheckId)).limit(1))[0];
@@ -9282,6 +9296,9 @@ async function createOnboardingInvitation(input) {
   const email = normaliseAccountEmail(check.email);
   if (!emailSchema.safeParse(email).success) throw new TRPCError14({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.invalidCheckEmail });
   if (await identityConflict(db, email)) throw new TRPCError14({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccountAdmin });
+  const paid = await assessmentPaid(db, check.id);
+  const override = input.overrideReason?.trim() ?? "";
+  if (!paid && !override) throw new TRPCError14({ code: "PRECONDITION_FAILED", message: ONBOARDING_ERRORS.unpaid });
   const token2 = randomBytes5(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ONBOARDING_INVITATION_TTL_MS);
   const invitation = await db.transaction(async (tx) => {
@@ -9308,7 +9325,7 @@ async function createOnboardingInvitation(input) {
     actorUserId: input.actorUserId,
     action: "client_onboarding_invitation_created",
     targetEmail: email,
-    details: JSON.stringify({ invitationId: invitation.id, businessCheckId: check.id, deliveryStatus: delivery.status })
+    details: JSON.stringify({ invitationId: invitation.id, businessCheckId: check.id, deliveryStatus: delivery.status, paid, ...paid ? {} : { override } })
   });
   return { invitationId: invitation.id, invitationUrl, expiresAt, deliveryStatus: delivery.status };
 }
@@ -11505,7 +11522,8 @@ var clientOnboardingRouter = router({
   candidates: manage.query(() => listOnboardingCandidates()),
   invitations: manage.query(() => listOnboardingInvitations()),
   metrics: manage.query(() => onboardingMetrics()),
-  invite: manage.input(z18.object({ businessCheckId: z18.number().int().positive() })).mutation(({ ctx, input }) => createOnboardingInvitation({ businessCheckId: input.businessCheckId, actorUserId: ctx.user.id })),
+  /** Before the Current State Assessment payment is confirmed, a reason is required and recorded with the invitation. */
+  invite: manage.input(z18.object({ businessCheckId: z18.number().int().positive(), overrideReason: z18.string().trim().min(5, "Give the reason for inviting before payment.").max(500).optional() })).mutation(({ ctx, input }) => createOnboardingInvitation({ businessCheckId: input.businessCheckId, actorUserId: ctx.user.id, overrideReason: input.overrideReason })),
   revoke: manage.input(z18.object({ invitationId: z18.number().int().positive() })).mutation(({ ctx, input }) => revokeOnboardingInvitation({ invitationId: input.invitationId, actorUserId: ctx.user.id }))
 });
 
@@ -11642,7 +11660,7 @@ async function stageHistoryFor(db, businessCheckId) {
     return { id: event.id, action: event.action, from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, by: event.by ?? null, at: event.at };
   });
 }
-var SETTABLE_STAGES = PIPELINE_STAGES.filter((stage) => stage !== "lead");
+var SETTABLE_STAGES = PIPELINE_STAGES.filter((stage) => stage !== "lead" && stage !== "won");
 async function setPipelineStage(db, input) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq20(businessChecks.id, input.businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError19({ code: "NOT_FOUND", message: "That Business Check does not exist." });
@@ -11733,7 +11751,7 @@ var businessSupportRouter = router({
     nextSteps: z20.string().trim().max(2e3).transform((value) => value || null).nullable()
   })).mutation(async ({ ctx, input }) => saveDebrief(await businessSupportDb(), input, ctx.user.id)),
   shareDebrief: prospects.input(z20.object({ businessCheckId: z20.number().int().positive(), shared: z20.boolean() })).mutation(async ({ ctx, input }) => shareDebrief(await businessSupportDb(), input, ctx.user.id)),
-  /** Moves a business check to any later stage (Opportunity, Won, Lost, Nurture, Referred…), with an optional note. */
+  /** Moves a business check to a later stage (Opportunity, Lost, Nurture, Referred…), with an optional note. Won comes only from a confirmed payment. */
   setStage: prospects.input(z20.object({ businessCheckId: z20.number().int().positive(), stage: z20.enum(SETTABLE_STAGES), note: z20.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => setPipelineStage(await businessSupportDb(), { ...input, note: input.note || void 0, actorUserId: ctx.user.id })),
   clients: clients.query(async () => listClients(await businessSupportDb())),
   /** Emails the owner the payment details for the full report or the Current State Assessment (again, if already sent). */

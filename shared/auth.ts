@@ -83,6 +83,7 @@ export const ONBOARDING_ERRORS = {
   existingAccountAdmin: "This email already belongs to an account. Linking an existing account to a new business is not available yet.",
   noCheck: "That Business Check does not exist.",
   invalidCheckEmail: "The Business Check does not have a valid email address to invite.",
+  unpaid: "The Current State Assessment is not paid yet. Confirm the payment first, or give the reason for inviting anyway.",
 } as const;
 
 export const signInInputSchema = z.object({

@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { PipelineStage } from "../../shared/businessCheck/pipeline";
 import {
   CALL_OUTCOMES,
   businessSupportDb,
@@ -11,6 +10,7 @@ import {
   scheduleDiscoveryCall,
   SETTABLE_STAGES,
   setPipelineStage,
+  type SettableStage,
 } from "../businessSupportAdmin";
 import { confirmPayment, markProofReceived, requestPayment } from "../payments";
 import { getDebrief, isMissingDebriefTable, saveDebrief, shareDebrief } from "../debriefs";
@@ -66,9 +66,9 @@ export const businessSupportRouter = router({
   shareDebrief: prospects
     .input(z.object({ businessCheckId: z.number().int().positive(), shared: z.boolean() }))
     .mutation(async ({ ctx, input }) => shareDebrief(await businessSupportDb(), input, ctx.user.id)),
-  /** Moves a business check to any later stage (Opportunity, Won, Lost, Nurture, Referred…), with an optional note. */
+  /** Moves a business check to a later stage (Opportunity, Lost, Nurture, Referred…), with an optional note. Won comes only from a confirmed payment. */
   setStage: prospects
-    .input(z.object({ businessCheckId: z.number().int().positive(), stage: z.enum(SETTABLE_STAGES as [Exclude<PipelineStage, "lead">, ...Exclude<PipelineStage, "lead">[]]), note: z.string().trim().max(500).optional() }))
+    .input(z.object({ businessCheckId: z.number().int().positive(), stage: z.enum(SETTABLE_STAGES as [SettableStage, ...SettableStage[]]), note: z.string().trim().max(500).optional() }))
     .mutation(async ({ ctx, input }) => setPipelineStage(await businessSupportDb(), { ...input, note: input.note || undefined, actorUserId: ctx.user.id })),
   clients: clients.query(async () => listClients(await businessSupportDb())),
   /** Emails the owner the payment details for the full report or the Current State Assessment (again, if already sent). */

@@ -112,7 +112,7 @@ confirmation stays for direct transfers. The same applies to the Current State A
 | "Book my free call" | Owner | Calendly opens inline with name and email filled in. The call counts as booked only when Calendly confirms; "open in a new tab" also records the request. With no booking page, the button records a request | Office: *… asked for a free discovery call* (Calendly sends the owner its own confirmation) | **Call booked** |
 | "Schedule discovery call" | Desk lead | Records the agreed time | — | — |
 | "Record call outcome" | Desk lead | **Opportunity** (fit), **Refer** or **Lost** | — | **Opportunity**, **Referred** or **Lost** |
-| "Move to" | Desk lead | Any other stage, with a note (for example **Nurture**) | — | As chosen |
+| "Move to" | Desk lead | Any other stage except **Won**, with a note (for example **Nurture**); Won comes only from a confirmed payment | — | As chosen |
 | "Send payment details" (Current State Assessment) | Finance or Super Admin | Payment request for ₦500,000 | Owner: *Payment details for your Current State Assessment* | Moves to **Opportunity** if earlier |
 | "Proof received", then "Confirm payment" | Finance or Super Admin | Payment confirmed; an invitation is created unless one is pending or accepted | Owner: *Payment received: your Current State Assessment starts* and *Set up your client account on The Shift* | **Won** |
 | "Create account" | Owner | `onboarding.accept`: person, credential, business, owner membership and session in one transaction | — | Invitation: **accepted** |
@@ -126,7 +126,8 @@ invitation follows the Current State Assessment payment instead (the concept not
 at Fit is still possible.
 
 The desk lead can also send an invitation by hand from **Client Onboarding** ("Invite to onboard") and revoke a pending
-one.
+one. Before the Current State Assessment payment is confirmed the server refuses the invitation unless a reason is
+given; the reason is recorded in the audit log with the invitation.
 
 ## 6. Signing in and where people land
 
@@ -148,7 +149,7 @@ action again.
 |---|---|---|---|
 | **Business Checks** | `manage_client_onboarding` | Metrics (total, completed, call requested, ready to onboard, reports requested); stage filter; search; table with payment chips | Row → detail drawer: contact, the check, findings, outline, recommended support, funnel, **Payments** (send details, proof received, confirm), **Full report** (resend link, download), **Move to** a stage, stage history, next step |
 | **Debriefs** | `manage_client_onboarding` | Debrief requests and booked Debriefs | Schedule or reschedule the Debrief; **Debrief summary** (the guide's five parts: what we heard, the problem in the owner's words, what success looks like, what they tried, next steps), "Write up the Debrief" / "Save the Debrief", then "Share with the owner" or "Keep it internal" as a separate step (needs migration 0009); record the outcome (Opportunity, Refer, Lost); "Continue to Client Onboarding" |
-| **Client Onboarding** | `manage_client_onboarding` | Metrics (checks, portal users, businesses, memberships, pending links); every check; invitations | "Invite to onboard"; copy the link once; revoke a pending invitation |
+| **Client Onboarding** | `manage_client_onboarding` | Metrics (checks, portal users, businesses, memberships, pending links); every check; invitations | "Invite to onboard" (a recorded reason is required before payment); copy the link once; revoke a pending invitation |
 | **Engagements** | `view_all_businesses`, or `view_assigned_businesses` for the engagements a person is on | a file storage line (uploads on, or exactly which Vercel setting or the private bucket is still missing); "Paid, but no engagement yet" (desk lead: a paid assessment with no engagement, with "Start engagement"); every engagement in scope: business, stage, team, what the client still owes (overdue in red), next call or calls not booked | Row → drawer: stage; team (add, remove: `assign_engagements`); the one problem; calls (time, link, agenda, client and internal notes, share with the owner or the owner and their team); the Work Plan (whose side, person, week, order, factor, due date, status, note); deliverables (save, approve: `review_engagements`, share, comment); files on requests and deliverables (open any; attach one as owner-only or for the owner and their team, when storage is set up); the fix (the one number with where it starts and should get to; one check-in a week, in order, with the five questions, the reading, hours by role and AI used). Changes need `manage_engagements` |
 | **Clients** | `view_all_businesses` | Onboarded businesses and their members | Read only |
 | **Admin Team** | Super Admin (`manage_roles`) | **Staff**: everyone with a role, and invitations that create a staff account with one role; then the legacy administrators | Invite with a role (never Super Admin), copy the link once, revoke; legacy: invite, revoke, edit powers |
@@ -171,7 +172,8 @@ stateDiagram-v2
 ```
 
 - The first three stages move automatically and only forward; they never overwrite a stage the team has set
-  (`advancePipeline`, `shared/businessCheck/pipeline.ts`). The team can move a check to any stage with "Move to".
+  (`advancePipeline`, `shared/businessCheck/pipeline.ts`). The team can move a check to any stage except Won with "Move to";
+  Won is set only by confirming the Current State Assessment payment.
 - **Payment request:** requested → proof received → confirmed (`shared/payments.ts`). A request still awaiting payment
   48 hours after the details went out shows as "48 hours passed" (worked out, not stored).
 - **Full report:** awaiting form → delivered (`full_reports.status`).
@@ -225,5 +227,5 @@ Found while writing this document. Each is small and listed in the implementatio
 | ~~Home's "Client sign in" opens the JUMP participant sign-in~~ | Fixed 9 October: it goes to `/login`; JUMP participants reach their sign-in from `/portal` or the link on `/login` | Done |
 | ~~Staff invitations use the legacy Google flow~~ | Fixed 9 October: Admin Team → Staff invites by email with one role; the person sets a password at `/join/:token` | Done (once migration 0008 is applied) |
 | The `/admin` gate and side menu still say "Registration Desk" and Gmail | Old wording | Rebrand the labels |
-| ~~"Invite to onboard" invites at any stage without a question~~ | Fixed 9 October: before Won it asks to confirm | Done |
+| ~~"Invite to onboard" invites at any stage without a question~~ | Fixed 11 October: before Won the server requires a reason, which is recorded; "Move to" no longer offers Won | Done |
 | The JUMP "Email selected" button opens nothing | Legacy only | Remove with the JUMP screens |

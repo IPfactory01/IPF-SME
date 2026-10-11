@@ -339,7 +339,7 @@ for (const target of targets) {
 
       it("does not send a second invitation when one is already out", async () => {
         const { id } = await finishedCheck("already-invited");
-        await (await superAdmin.call()).onboarding.invite({ businessCheckId: id });
+        await (await superAdmin.call()).onboarding.invite({ businessCheckId: id, overrideReason: "Invited early by agreement" });
         const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
         expect(await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId })).toMatchObject({ invitation: "already_invited" });
         const invitations = await db.select().from(schema.clientOnboardingInvitations).where(eq(schema.clientOnboardingInvitations.businessCheckId, id));

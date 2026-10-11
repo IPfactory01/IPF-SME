@@ -163,14 +163,20 @@ async function stageHistoryFor(db: Pick<Database, "select">, businessCheckId: nu
   });
 }
 
-/** Stages the team can move a check to. "lead" is where every check starts, so nothing moves back to it. */
-export const SETTABLE_STAGES = PIPELINE_STAGES.filter(stage => stage !== "lead") as Exclude<PipelineStage, "lead">[];
+/** A stage the team can move a check to by hand. */
+export type SettableStage = Exclude<PipelineStage, "lead" | "won">;
 
 /**
- * Moves a business check to any later pipeline stage (after the call, a payment or a decision), with an optional note
- * for the team. A won business is not reopened here, as with call outcomes. Every change is audited.
+ * Stages the team can move a check to. "lead" is where every check starts, so nothing moves back to it; "won" means
+ * paid, so only confirming the Current State Assessment payment sets it (server/payments.ts).
  */
-export async function setPipelineStage(db: Database, input: { businessCheckId: number; stage: Exclude<PipelineStage, "lead">; note?: string; actorUserId: number }) {
+export const SETTABLE_STAGES = PIPELINE_STAGES.filter(stage => stage !== "lead" && stage !== "won") as SettableStage[];
+
+/**
+ * Moves a business check to a later pipeline stage (after the call or a decision), with an optional note for the team.
+ * A won business is not reopened here, as with call outcomes. Every change is audited.
+ */
+export async function setPipelineStage(db: Database, input: { businessCheckId: number; stage: SettableStage; note?: string; actorUserId: number }) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq(businessChecks.id, input.businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   if (check.pipelineStage === input.stage) return { success: true, pipelineStage: check.pipelineStage, changed: false } as const;

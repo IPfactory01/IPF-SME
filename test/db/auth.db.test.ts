@@ -104,7 +104,7 @@ for (const target of targets) {
         stage: "unknown",
         answersJson: "{}",
       }).returning();
-      const invitation = await createOnboardingInvitation({ businessCheckId: check.id, actorUserId });
+      const invitation = await createOnboardingInvitation({ businessCheckId: check.id, actorUserId, overrideReason: "Test account" });
       const token = decodeURIComponent(invitation.invitationUrl.split("/onboarding/")[1]);
       return client.call().onboarding.accept({ token, fullName: input.fullName, email: input.email, password: input.password, confirmPassword: input.confirmPassword, businessName: input.businessName });
     }

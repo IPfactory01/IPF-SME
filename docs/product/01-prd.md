@@ -123,7 +123,8 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
   The call counts as booked only when Calendly confirms. Without a booking page the button records a request and the
   team emails.
 - The team records the outcome: **Opportunity** (we can help), **Refer** (to IP Factory Advisory or a specialist) or
-  **Lost**; "Move to" sets any other stage, such as **Nurture** (pipeline stages in `shared/businessCheck/pipeline.ts`).
+  **Lost**; "Move to" sets any other stage except **Won**, such as **Nurture** (pipeline stages in `shared/businessCheck/pipeline.ts`);
+  Won is set only by confirming the Current State Assessment payment.
 - **Status: Built.**
 
 ### F5. Payments (manual confirmation until Paystack is set up)
@@ -208,7 +209,7 @@ value, moved, extension, plan delivered, next problem area, ongoing support defi
 ### F9. Internal workspace (admin console)
 
 - Leads: every business check with stage, contact, answers, outline, the summary and history.
-- Pipeline: discovery call outcome (Opportunity, Refer, Lost), any stage by "Move to", onboarding invitation, Won.
+- Pipeline: discovery call outcome (Opportunity, Refer, Lost), any stage except Won by "Move to", onboarding invitation, Won by a confirmed payment.
 - Payments panel and full report line on each check (F3, F5).
 - Staff sign-in with email and password; staff invitations; capability-based permissions; audit trail.
 - The JUMP-era views (registrations, participants, scheduling, receipts) remain for history and are not part of the new
@@ -294,7 +295,7 @@ From concept note §13. The platform must make these countable without a spreads
 | The check asks trading businesses what they have tried, what the problem costs and who decides | ET |
 | The check stays rules-driven: fixed questions and scoring, with AI writing only the summary | ET |
 | Younger businesses are not asked about exit (under 5 years) or owner transition (under 10 years); those areas show as "Not assessed" | ET |
-| The client account invitation goes out when the Current State Assessment is paid; staff can still invite by hand at any time | ET |
+| The client account invitation goes out when the Current State Assessment is paid; staff can invite by hand before payment only with a reason, which is recorded | ET |
 | The paid assessment is called "Current State Assessment" everywhere: site, emails, admin, the report and these documents | ET |
 | The engagement room follows five principles: the fix is one problem with one measure; show only what the team will keep current; notes and findings are for the owner by default; bookings on Calendly, conversation on WhatsApp, internal tasks in ClickUp; one free staff seat, no paid seats in the pilot | ET ("proceed", 9 October) |
 | Data requests and actions sit in one list; the client marks what they sent, the team marks it received or asks for more | Built as recommended |

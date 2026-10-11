@@ -8,6 +8,7 @@ import {
   businessMemberships,
   businesses,
   clientOnboardingInvitations,
+  paymentRequests,
   userCredentials,
   userPlatformRoles,
   users,
@@ -36,7 +37,7 @@ import {
   type Database,
 } from "./accountAuth";
 import { getDb } from "./db";
-import { databaseNow, emailEquals } from "./dbHelpers";
+import { databaseNow, emailEquals, isUndefinedTable } from "./dbHelpers";
 import { deliverEmail } from "./email";
 import { hashAdminPassword, sha256 } from "./adminSecurity";
 import { linkEngagementToBusiness } from "./engagements";
@@ -86,21 +87,36 @@ export function buildOnboardingEmail(input: { fullName: string; businessName: st
   };
 }
 
+/** True when the Current State Assessment payment is confirmed. A missing payment table (migration 0006) counts as unpaid. */
+async function assessmentPaid(db: Pick<Database, "select">, businessCheckId: number) {
+  try {
+    const paid = await db.select({ id: paymentRequests.id }).from(paymentRequests)
+      .where(and(eq(paymentRequests.businessCheckId, businessCheckId), eq(paymentRequests.item, "current_state"), eq(paymentRequests.status, "confirmed"))).limit(1);
+    return paid.length > 0;
+  } catch (error) {
+    if (isUndefinedTable(error)) return false;
+    throw error;
+  }
+}
+
 /**
  * Issues a single-use onboarding invitation for a business check (a prospect). The raw token exists only in the
  * returned URL, which goes to the authorised admin and the client's email: it is never stored or logged.
  *
- * NOTE: there is no canonical persisted "discovery call = fit" field, so it is not enforced here, and none is faked. The
- * caller is an authorised administrator (see docs/authentication.md). A confirmed Current State Assessment payment
- * (server/payments.ts, payment_requests) calls this automatically; an administrator can still invite by hand.
+ * The invitation follows the Current State Assessment payment: confirming it (server/payments.ts) calls this
+ * automatically, and an administrator can send it again by hand. Before the payment is confirmed the server refuses
+ * unless the administrator gives a reason, which is recorded in the audit log with the invitation.
  */
-export async function createOnboardingInvitation(input: { businessCheckId: number; actorUserId: number }) {
+export async function createOnboardingInvitation(input: { businessCheckId: number; actorUserId: number; overrideReason?: string }) {
   const db = await requireDatabase();
   const check = (await db.select().from(businessChecks).where(eq(businessChecks.id, input.businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
   const email = normaliseAccountEmail(check.email);
   if (!emailSchema.safeParse(email).success) throw new TRPCError({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.invalidCheckEmail });
   if (await identityConflict(db, email)) throw new TRPCError({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccountAdmin });
+  const paid = await assessmentPaid(db, check.id);
+  const override = input.overrideReason?.trim() ?? "";
+  if (!paid && !override) throw new TRPCError({ code: "PRECONDITION_FAILED", message: ONBOARDING_ERRORS.unpaid });
 
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ONBOARDING_INVITATION_TTL_MS);
@@ -132,7 +148,7 @@ export async function createOnboardingInvitation(input: { businessCheckId: numbe
     actorUserId: input.actorUserId,
     action: "client_onboarding_invitation_created",
     targetEmail: email,
-    details: JSON.stringify({ invitationId: invitation.id, businessCheckId: check.id, deliveryStatus: delivery.status }),
+    details: JSON.stringify({ invitationId: invitation.id, businessCheckId: check.id, deliveryStatus: delivery.status, paid, ...(paid ? {} : { override }) }),
   });
   return { invitationId: invitation.id, invitationUrl, expiresAt, deliveryStatus: delivery.status };
 }

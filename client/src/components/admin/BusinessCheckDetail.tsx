@@ -4,7 +4,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import type { AdminSectionId } from "@/lib/adminSections";
 import { READINESS_LABELS } from "@shared/businessCheck/engine";
-import { formatNaira, PRICES } from "@shared/businessSupport";
+import { CURRENT_STATE, formatNaira, PRICES } from "@shared/businessSupport";
 import { funnelStatus, isReadyToOnboard, stageDisplayName } from "@shared/businessCheck/funnelStatus";
 import { PIPELINE_LABELS, PIPELINE_STAGES, type PipelineStage } from "@shared/businessCheck/pipeline";
 import { AREA_NAMES, type Health } from "@shared/businessCheck/questions";
@@ -52,10 +52,11 @@ const stageName = (stage: string | null) => (stage && stage in PIPELINE_LABELS ?
 const PAYMENT_HISTORY = { payment_details_sent: "Payment details sent", payment_proof_received: "Proof of payment received", payment_confirmed: "Payment confirmed" } as const;
 const REPORT_HISTORY = { full_report_link_sent: "Report Intake link sent again", full_report_delivered: "Full Report sent" } as const;
 /** "lead" is where every check starts, so the team never moves a check back to it. */
-const MOVABLE_STAGES = PIPELINE_STAGES.filter((stage): stage is Exclude<PipelineStage, "lead"> => stage !== "lead");
+/** Won is not offered: only confirming the Current State Assessment payment sets it. */
+const MOVABLE_STAGES = PIPELINE_STAGES.filter((stage): stage is Exclude<PipelineStage, "lead" | "won"> => stage !== "lead" && stage !== "won");
 
 /**
- * Moves the check to any later stage, with an optional note for the team. The server checks the permission, refuses to
+ * Moves the check to a later stage, with an optional note for the team. The server checks the permission, refuses to
  * reopen a won business and records who moved it, from where, to where and why.
  */
 function MoveStage({ businessCheckId, current }: { businessCheckId: number; current: PipelineStage }) {
@@ -78,12 +79,13 @@ function MoveStage({ businessCheckId, current }: { businessCheckId: number; curr
       <div className="flex flex-wrap gap-2">
         {MOVABLE_STAGES.filter(stage => stage !== current).map(stage => (
           <Button key={stage} type="button" variant="outline" size="sm" title={PIPELINE_LABELS[stage].meaning} disabled={move.isPending}
-            className={`rounded-none text-xs ${stage === "won" ? "border-emerald-300 text-emerald-900 hover:bg-emerald-50" : stage === "lost" ? "border-rose-200 text-rose-800 hover:bg-rose-50" : ""}`}
+            className={`rounded-none text-xs ${stage === "lost" ? "border-rose-200 text-rose-800 hover:bg-rose-50" : ""}`}
             onClick={() => move.mutate({ businessCheckId, stage, note: note.trim() || undefined })}>
             {stageDisplayName(stage)}
           </Button>
         ))}
       </div>
+      <p className="text-xs text-ink-muted">Won is set by confirming the {CURRENT_STATE.name} payment.</p>
       <div className="space-y-1">
         <Label htmlFor={`stage-note-${businessCheckId}`} className="text-xs text-ink-muted">Note (optional)</Label>
         <Textarea id={`stage-note-${businessCheckId}`} value={note} onChange={event => setNote(event.target.value)} maxLength={500} rows={2} placeholder="For example, what was agreed on the call" className="rounded-none text-sm" />

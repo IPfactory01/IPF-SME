@@ -30,8 +30,11 @@ export const REPORT_ERRORS = {
 
 const reportUrl = (token: string) => `${getTrustedApplicationOrigin()}/report/${encodeURIComponent(token)}`;
 
-/** Issues (or reissues) the Report Intake link for a confirmed report payment. Null when the report was already sent. */
-export async function issueReportLink(db: Database, input: { businessCheckId: number; paymentRequestId: number }) {
+/**
+ * Issues (or reissues) the Report Intake link for a confirmed report payment. Null when the report was already sent.
+ * Takes a transaction, so confirming a payment and issuing its link commit together.
+ */
+export async function issueReportLink(db: Pick<Database, "select" | "insert" | "update">, input: { businessCheckId: number; paymentRequestId: number }) {
   const token = randomBytes(32).toString("base64url");
   const existing = (await db.select().from(fullReports).where(eq(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
   if (existing?.status === "delivered") return null;
@@ -192,13 +195,19 @@ export async function reportStatusFor(db: Pick<Database, "select">, businessChec
   return record ?? null;
 }
 
-/** Sends the Report Intake link again (a new link; the old one stops working), for an owner who lost the email. */
+/**
+ * Sends the Report Intake link again (a new link; the old one stops working), for an owner who lost the email. A confirmed
+ * report payment with no link yet (a confirmation that failed halfway, before links were issued in the same transaction)
+ * gets its first link here, so the console can always recover a paid owner.
+ */
 export async function resendReportLink(db: Database, input: { businessCheckId: number; actorUserId: number }) {
   const record = (await db.select().from(fullReports).where(eq(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
-  if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Confirm the Full Report payment first: that sends the Report Intake link." });
-  if (record.status === "delivered") throw new TRPCError({ code: "CONFLICT", message: "The Full Report has already been sent." });
+  if (record?.status === "delivered") throw new TRPCError({ code: "CONFLICT", message: "The Full Report has already been sent." });
+  const paymentRequestId = record?.paymentRequestId ?? (await db.select({ id: paymentRequests.id }).from(paymentRequests)
+    .where(and(eq(paymentRequests.businessCheckId, input.businessCheckId), eq(paymentRequests.item, "full_report"), eq(paymentRequests.status, "confirmed"))).limit(1))[0]?.id;
+  if (!paymentRequestId) throw new TRPCError({ code: "NOT_FOUND", message: "Confirm the Full Report payment first: that sends the Report Intake link." });
   const check = await checkFor(db, input.businessCheckId);
-  const link = await issueReportLink(db, { businessCheckId: check.id, paymentRequestId: record.paymentRequestId });
+  const link = await issueReportLink(db, { businessCheckId: check.id, paymentRequestId });
   const firstName = check.fullName.trim().split(/\s+/)[0] || "there";
   const delivery = await deliverEmail({
     sender: "business_support",

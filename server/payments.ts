@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { businessChecks, clientOnboardingInvitations, paymentRequests, type PaymentRequest } from "../drizzle/schema";
 import { BRAND } from "../shared/brand";
@@ -200,47 +200,74 @@ async function loadRequest(db: Pick<Database, "select">, paymentRequestId: numbe
   return request;
 }
 
-/** The owner sent proof of payment (usually by replying to the payment email); the money is not yet confirmed. */
+const alreadyConfirmed = () => new TRPCError({ code: "CONFLICT", message: "This payment is already confirmed." });
+
+/**
+ * The owner sent proof of payment (usually by replying to the payment email); the money is not yet confirmed. The move
+ * is claimed in one conditional statement, so two people pressing the button together record it once.
+ */
 export async function markProofReceived(db: Database, input: { paymentRequestId: number; actorUserId: number }) {
   const request = await loadRequest(db, input.paymentRequestId);
-  if (request.status === "confirmed") throw new TRPCError({ code: "CONFLICT", message: "This payment is already confirmed." });
+  if (request.status === "confirmed") throw alreadyConfirmed();
   if (request.status === "proof_received") return { success: true, changed: false } as const;
   const check = await loadCheck(db, request.businessCheckId);
-  await db.transaction(async tx => {
-    await tx.update(paymentRequests).set({ status: "proof_received", proofReceivedAt: new Date() }).where(eq(paymentRequests.id, request.id));
+  const changed = await db.transaction(async tx => {
+    const [claimed] = await tx.update(paymentRequests).set({ status: "proof_received", proofReceivedAt: new Date() })
+      .where(and(eq(paymentRequests.id, request.id), eq(paymentRequests.status, "requested"))).returning({ id: paymentRequests.id });
+    if (!claimed) return false;
     await recordAudit(tx, { action: "payment_proof_received", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference } });
+    return true;
   });
-  return { success: true, changed: true } as const;
+  if (changed) return { success: true, changed: true } as const;
+  // Someone else moved it first: answer as they would have been answered.
+  if ((await loadRequest(db, request.id)).status === "confirmed") throw alreadyConfirmed();
+  return { success: true, changed: false } as const;
 }
 
 /** What happened to the client account invitation when a Current State Assessment payment was confirmed. */
 export type CurrentStateInvitation = "sent" | "already_invited" | "has_account" | "failed";
 
+const NOT_CONFIRMED = { success: true, changed: false, invitation: null, engagement: null } as const;
+
 /**
  * Confirms the money arrived (the team checked the account), emails the owner, and for the Current State Assessment wins the business
  * and sends the client account invitation unless one is already out or accepted. A confirmed payment is final.
+ *
+ * The confirmation is claimed in one conditional statement inside one transaction, together with the stage, the audit
+ * row and (for the report) the Report Intake link: two people confirming together confirm once, send one email and
+ * issue one invitation, and a confirmed report payment always has a link that can be sent again.
  */
 export async function confirmPayment(db: Database, input: { paymentRequestId: number; actorUserId: number; note?: string }) {
   const request = await loadRequest(db, input.paymentRequestId);
-  if (request.status === "confirmed") return { success: true, changed: false, invitation: null, engagement: null } as const;
+  if (request.status === "confirmed") return NOT_CONFIRMED;
   const check = await loadCheck(db, request.businessCheckId);
   const stageTo: PipelineStage = request.item === "current_state" ? "won" : check.pipelineStage;
-  await db.transaction(async tx => {
-    await tx.update(paymentRequests)
-      .set({ status: "confirmed", confirmedAt: new Date(), confirmedByUserId: input.actorUserId, note: input.note || null })
-      .where(eq(paymentRequests.id, request.id));
-    if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq(businessChecks.id, check.id));
-    await recordAudit(tx, {
-      action: "payment_confirmed",
-      actorUserId: input.actorUserId,
-      targetEmail: check.email,
-      details: { businessCheckId: check.id, item: request.item, reference: request.reference, amountNaira: request.amountNaira, ...(input.note ? { note: input.note } : {}), ...(stageTo !== check.pipelineStage ? { from: check.pipelineStage, to: stageTo } : {}) },
+  let outcome: { reportLink: string | null } | null;
+  try {
+    outcome = await db.transaction(async tx => {
+      const [claimed] = await tx.update(paymentRequests)
+        .set({ status: "confirmed", confirmedAt: new Date(), confirmedByUserId: input.actorUserId, note: input.note || null })
+        .where(and(eq(paymentRequests.id, request.id), ne(paymentRequests.status, "confirmed"))).returning({ id: paymentRequests.id });
+      if (!claimed) return null;
+      if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq(businessChecks.id, check.id));
+      await recordAudit(tx, {
+        action: "payment_confirmed",
+        actorUserId: input.actorUserId,
+        targetEmail: check.email,
+        details: { businessCheckId: check.id, item: request.item, reference: request.reference, amountNaira: request.amountNaira, ...(input.note ? { note: input.note } : {}), ...(stageTo !== check.pipelineStage ? { from: check.pipelineStage, to: stageTo } : {}) },
+      });
+      // The report's Report Intake link is issued in the same transaction, so the email can carry it and a failure here confirms nothing.
+      const reportLink = request.item === "full_report" ? await issueReportLink(tx, { businessCheckId: check.id, paymentRequestId: request.id }) : null;
+      return { reportLink };
     });
-  });
+  } catch (error) {
+    if (isMissingPaymentTable(error)) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "The Full Report table is not set up yet (migration 0007). Nothing was confirmed." });
+    throw error;
+  }
+  if (!outcome) return NOT_CONFIRMED;
 
-  // The report's form link is issued before the email, so the email can carry it.
-  const reportLink = request.item === "full_report" ? await issueReportLink(db, { businessCheckId: check.id, paymentRequestId: request.id }) : null;
-  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink });
+  // Email after the commit: a delivery problem never undoes a confirmation, and the link can be sent again from the console.
+  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink });
   await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" }).catch(() => undefined);
 
   let invitation: CurrentStateInvitation | null = null;

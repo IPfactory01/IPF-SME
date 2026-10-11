@@ -94,9 +94,9 @@ every answer.
 | "Get my full report" | Owner | `businessCheck.requestNext({ choice: "report" })` | Owner: *Payment details for your full business check report*; office: *… asked for the full business check report* | Payment: **requested** |
 | Proof sent | Owner | Replies to the email with proof | — | — |
 | "Proof received" | Finance or Super Admin | `businessSupport.markProofReceived` | — | Payment: **proof received** |
-| "Confirm payment" → "Yes, the money is in" | Finance or Super Admin | `businessSupport.confirmPayment`; a report link is issued | Owner: *Payment received: your full business check report* (with the form link) | Payment: **paid**; report: **awaiting form** |
+| "Confirm payment" → "Yes, the money is in" | Finance or Super Admin | `businessSupport.confirmPayment`; the report link is issued in the same transaction, and two people confirming together confirm once | Owner: *Payment received: your full business check report* (with the form link) | Payment: **paid**; report: **awaiting form** |
 | Form submitted | Owner | `fullReport.submit`; the report is built and rendered at once | Owner: *Your full business check report: {business}* (PDF attached); office: *Full report sent: {business}* | Report: **delivered** |
-| "Send the form link again" | Finance or Super Admin | `businessSupport.resendReportLink`; the old link stops working | Owner: *Your report form* | — |
+| "Send the form link again" | Finance or Super Admin | `businessSupport.resendReportLink`; the old link stops working; a confirmed payment with no link yet gets its first | Owner: *Your report form* | — |
 | "Download the report" | Staff with `manage_client_onboarding` | `businessSupport.downloadReport` | — | — |
 
 The form can be submitted once. After that the same link shows "Your report has been sent" with a download button.

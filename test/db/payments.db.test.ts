@@ -101,6 +101,26 @@ for (const target of targets) {
       return { token, email, visitor, id };
     }
 
+    /**
+     * Holds every transaction until released, so two calls both read the payment before either writes: the race two
+     * operators (or a double click) cause on Vercel, which the serialised test database would otherwise never show.
+     */
+    function holdTransactions() {
+      const real = harness.db as unknown as Record<string, unknown> & { transaction: (fn: unknown) => Promise<unknown> };
+      let release!: () => void;
+      const gate = new Promise<void>(resolve => { release = resolve; });
+      holder.current = new Proxy(real, { get: (target, property) => (property === "transaction" ? (fn: unknown) => gate.then(() => real.transaction.call(target, fn)) : Reflect.get(target, property)) });
+      return { release: () => { holder.current = real; release(); } };
+    }
+    /** Runs the calls together, lets both read, then lets the transactions through. */
+    async function together<T>(calls: Array<() => Promise<T>>) {
+      const hold = holdTransactions();
+      const pending = Promise.all(calls.map(call => call()));
+      await new Promise(resolve => setTimeout(resolve, 50));
+      hold.release();
+      return pending;
+    }
+
     beforeAll(async () => {
       harness = await target.make();
       db = harness.db;
@@ -179,6 +199,55 @@ for (const target of targets) {
         await expect((await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "full_report" })).rejects.toMatchObject({ code: "CONFLICT" });
         await expect((await superAdmin.call()).businessSupport.markProofReceived({ paymentRequestId: payment.id })).rejects.toMatchObject({ code: "CONFLICT" });
       });
+
+      it("records proof once when two people press the button together", async () => {
+        const { token, visitor, id } = await finishedCheck("proof-twice");
+        await (await visitor.call()).businessCheck.requestNext({ token, choice: "report" });
+        const [payment] = await paymentsOf(id);
+        const [first, second] = await Promise.all([superAdmin.call(), superAdmin.call()]);
+        const results = await together([
+          () => first.businessSupport.markProofReceived({ paymentRequestId: payment.id }),
+          () => second.businessSupport.markProofReceived({ paymentRequestId: payment.id }),
+        ]);
+        expect(results.filter(result => result.changed)).toHaveLength(1);
+        expect(await auditsFor("payment_proof_received", id)).toHaveLength(1);
+      });
+
+      it("confirms once, with one email, one link and one audit row, when two people confirm together", async () => {
+        const { token, email, visitor, id } = await finishedCheck("confirm-twice");
+        await (await visitor.call()).businessCheck.requestNext({ token, choice: "report" });
+        const [payment] = await paymentsOf(id);
+        mocked.deliverEmail.mockClear();
+        const [first, second] = await Promise.all([superAdmin.call(), superAdmin.call()]);
+        const results = await together([
+          () => first.businessSupport.confirmPayment({ paymentRequestId: payment.id, note: "first" }),
+          () => second.businessSupport.confirmPayment({ paymentRequestId: payment.id, note: "second" }),
+        ]);
+        expect(results.filter(result => result.changed)).toHaveLength(1);
+        expect(emails().filter(sent => sent.to === email)).toHaveLength(1);
+        expect(await auditsFor("payment_confirmed", id)).toHaveLength(1);
+        expect(await db.select().from(schema.fullReports).where(eq(schema.fullReports.businessCheckId, id))).toHaveLength(1);
+      });
+
+      it("confirms nothing when the Report Intake link cannot be issued, and confirms once the fault is gone", async () => {
+        const { token, visitor, id } = await finishedCheck("confirm-fault");
+        await (await visitor.call()).businessCheck.requestNext({ token, choice: "report" });
+        const [payment] = await paymentsOf(id);
+        mocked.deliverEmail.mockClear();
+        await db.execute(sql.raw(`create or replace function ipf_force_failure() returns trigger language plpgsql as $$ begin raise exception 'forced failure'; end $$`));
+        await db.execute(sql.raw(`create trigger ipf_force_failure before insert on full_reports for each row execute function ipf_force_failure()`));
+        try {
+          await expect((await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: payment.id })).rejects.toThrow();
+        } finally {
+          await db.execute(sql.raw(`drop trigger ipf_force_failure on full_reports`));
+        }
+        // Nothing half done: the payment is still open, nothing was emailed and nothing was recorded.
+        expect((await paymentsOf(id))[0]).toMatchObject({ status: "requested", confirmedAt: null });
+        expect(mocked.deliverEmail).not.toHaveBeenCalled();
+        expect(await auditsFor("payment_confirmed", id)).toHaveLength(0);
+        expect(await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: payment.id })).toMatchObject({ changed: true });
+        expect((await paymentsOf(id))[0].status).toBe("confirmed");
+      });
     });
 
     describe("Current State Assessment", () => {
@@ -251,6 +320,21 @@ for (const target of targets) {
         expect(await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId })).toMatchObject({ changed: true, invitation: "sent" });
         expect(await detailOf()).toMatchObject({ status: "confirmed", displayStatus: "confirmed" });
         expect((await rowFor(token)).pipelineStage).toBe("won");
+      });
+
+      it("sends one invitation and one confirmation when two people confirm together", async () => {
+        const { email, id } = await finishedCheck("invite-twice");
+        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+        mocked.deliverEmail.mockClear();
+        const [first, second] = await Promise.all([superAdmin.call(), superAdmin.call()]);
+        const results = await together([
+          () => first.businessSupport.confirmPayment({ paymentRequestId }),
+          () => second.businessSupport.confirmPayment({ paymentRequestId }),
+        ]);
+        expect(results.filter(result => result.changed)).toEqual([expect.objectContaining({ invitation: "sent" })]);
+        const invitations = await db.select().from(schema.clientOnboardingInvitations).where(eq(schema.clientOnboardingInvitations.businessCheckId, id));
+        expect(invitations.map((invitation: { status: string }) => invitation.status)).toEqual(["pending"]);
+        expect(emails().filter(sent => sent.to === email).map(sent => sent.subject)).toEqual(["Payment received: your Current State Assessment starts", "Set up your client account on The Shift"]);
       });
 
       it("does not send a second invitation when one is already out", async () => {
@@ -373,6 +457,28 @@ for (const target of targets) {
         await expect((await browser().call()).fullReport.submit({ token: reportToken, intake: { ...sampleIntake, topEarner: 2, products: [sampleIntake.products[0]] } })).rejects.toMatchObject({ code: "BAD_REQUEST" });
         await expect((await browser().call()).fullReport.download({ token: reportToken })).rejects.toMatchObject({ code: "BAD_REQUEST" });
         expect((await reportRow(id)).status).toBe("awaiting_intake");
+      });
+
+      it("sends a first Report Intake link to a confirmed report payment that has none (a confirmation that failed halfway)", async () => {
+        const { id, email, token, visitor } = await finishedCheck("report-recover");
+        await (await visitor.call()).businessCheck.requestNext({ token, choice: "report" });
+        const [payment] = await paymentsOf(id);
+        // The state an earlier version could leave behind: confirmed in the database, no full_reports row.
+        await db.update(schema.paymentRequests).set({ status: "confirmed", confirmedAt: new Date() }).where(eq(schema.paymentRequests.id, payment.id));
+        expect(await reportRow(id)).toBeUndefined();
+
+        mocked.deliverEmail.mockClear();
+        expect(await (await superAdmin.call()).businessSupport.resendReportLink({ businessCheckId: id })).toMatchObject({ success: true });
+        const resent = emails().find(item => item.to === email && item.subject === "Your Report Intake")!;
+        const reportToken = decodeURIComponent(resent.body.match(/Complete your Report Intake: (\S+)/)![1].split("/report/")[1]);
+        expect(await reportRow(id)).toMatchObject({ status: "awaiting_intake", paymentRequestId: payment.id });
+        expect(await (await browser().call()).fullReport.form({ token: reportToken })).toMatchObject({ status: "awaiting_intake", email });
+      });
+
+      it("still refuses a link for a report that was never paid for", async () => {
+        const { id, token, visitor } = await finishedCheck("report-unpaid");
+        await (await visitor.call()).businessCheck.requestNext({ token, choice: "report" });
+        await expect((await superAdmin.call()).businessSupport.resendReportLink({ businessCheckId: id })).rejects.toMatchObject({ code: "NOT_FOUND" });
       });
 
       it("lets the team see, download and resend; a resent link replaces the old one", async () => {

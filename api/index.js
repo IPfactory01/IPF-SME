@@ -8449,7 +8449,7 @@ function officeEmail(input) {
 }
 
 // server/payments.ts
-import { and as and14, desc as desc10, eq as eq18, inArray as inArray5 } from "drizzle-orm";
+import { and as and14, desc as desc10, eq as eq18, inArray as inArray5, ne as ne2 } from "drizzle-orm";
 import { TRPCError as TRPCError16 } from "@trpc/server";
 init_brand();
 init_env();
@@ -11004,10 +11004,11 @@ async function reportStatusFor(db, businessCheckId) {
 }
 async function resendReportLink(db, input) {
   const record = (await db.select().from(fullReports).where(eq17(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
-  if (!record) throw new TRPCError15({ code: "NOT_FOUND", message: "Confirm the Full Report payment first: that sends the Report Intake link." });
-  if (record.status === "delivered") throw new TRPCError15({ code: "CONFLICT", message: "The Full Report has already been sent." });
+  if (record?.status === "delivered") throw new TRPCError15({ code: "CONFLICT", message: "The Full Report has already been sent." });
+  const paymentRequestId = record?.paymentRequestId ?? (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and13(eq17(paymentRequests.businessCheckId, input.businessCheckId), eq17(paymentRequests.item, "full_report"), eq17(paymentRequests.status, "confirmed"))).limit(1))[0]?.id;
+  if (!paymentRequestId) throw new TRPCError15({ code: "NOT_FOUND", message: "Confirm the Full Report payment first: that sends the Report Intake link." });
   const check = await checkFor(db, input.businessCheckId);
-  const link = await issueReportLink(db, { businessCheckId: check.id, paymentRequestId: record.paymentRequestId });
+  const link = await issueReportLink(db, { businessCheckId: check.id, paymentRequestId });
   const firstName2 = check.fullName.trim().split(/\s+/)[0] || "there";
   const delivery = await deliverEmail({
     sender: "business_support",
@@ -11169,34 +11170,49 @@ async function loadRequest(db, paymentRequestId) {
   if (!request) throw new TRPCError16({ code: "NOT_FOUND", message: "That payment request does not exist." });
   return request;
 }
+var alreadyConfirmed = () => new TRPCError16({ code: "CONFLICT", message: "This payment is already confirmed." });
 async function markProofReceived(db, input) {
   const request = await loadRequest(db, input.paymentRequestId);
-  if (request.status === "confirmed") throw new TRPCError16({ code: "CONFLICT", message: "This payment is already confirmed." });
+  if (request.status === "confirmed") throw alreadyConfirmed();
   if (request.status === "proof_received") return { success: true, changed: false };
   const check = await loadCheck(db, request.businessCheckId);
-  await db.transaction(async (tx) => {
-    await tx.update(paymentRequests).set({ status: "proof_received", proofReceivedAt: /* @__PURE__ */ new Date() }).where(eq18(paymentRequests.id, request.id));
+  const changed = await db.transaction(async (tx) => {
+    const [claimed] = await tx.update(paymentRequests).set({ status: "proof_received", proofReceivedAt: /* @__PURE__ */ new Date() }).where(and14(eq18(paymentRequests.id, request.id), eq18(paymentRequests.status, "requested"))).returning({ id: paymentRequests.id });
+    if (!claimed) return false;
     await recordAudit(tx, { action: "payment_proof_received", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference } });
+    return true;
   });
-  return { success: true, changed: true };
+  if (changed) return { success: true, changed: true };
+  if ((await loadRequest(db, request.id)).status === "confirmed") throw alreadyConfirmed();
+  return { success: true, changed: false };
 }
+var NOT_CONFIRMED = { success: true, changed: false, invitation: null, engagement: null };
 async function confirmPayment(db, input) {
   const request = await loadRequest(db, input.paymentRequestId);
-  if (request.status === "confirmed") return { success: true, changed: false, invitation: null, engagement: null };
+  if (request.status === "confirmed") return NOT_CONFIRMED;
   const check = await loadCheck(db, request.businessCheckId);
   const stageTo = request.item === "current_state" ? "won" : check.pipelineStage;
-  await db.transaction(async (tx) => {
-    await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note: input.note || null }).where(eq18(paymentRequests.id, request.id));
-    if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq18(businessChecks.id, check.id));
-    await recordAudit(tx, {
-      action: "payment_confirmed",
-      actorUserId: input.actorUserId,
-      targetEmail: check.email,
-      details: { businessCheckId: check.id, item: request.item, reference: request.reference, amountNaira: request.amountNaira, ...input.note ? { note: input.note } : {}, ...stageTo !== check.pipelineStage ? { from: check.pipelineStage, to: stageTo } : {} }
+  let outcome;
+  try {
+    outcome = await db.transaction(async (tx) => {
+      const [claimed] = await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note: input.note || null }).where(and14(eq18(paymentRequests.id, request.id), ne2(paymentRequests.status, "confirmed"))).returning({ id: paymentRequests.id });
+      if (!claimed) return null;
+      if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq18(businessChecks.id, check.id));
+      await recordAudit(tx, {
+        action: "payment_confirmed",
+        actorUserId: input.actorUserId,
+        targetEmail: check.email,
+        details: { businessCheckId: check.id, item: request.item, reference: request.reference, amountNaira: request.amountNaira, ...input.note ? { note: input.note } : {}, ...stageTo !== check.pipelineStage ? { from: check.pipelineStage, to: stageTo } : {} }
+      });
+      const reportLink = request.item === "full_report" ? await issueReportLink(tx, { businessCheckId: check.id, paymentRequestId: request.id }) : null;
+      return { reportLink };
     });
-  });
-  const reportLink = request.item === "full_report" ? await issueReportLink(db, { businessCheckId: check.id, paymentRequestId: request.id }) : null;
-  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink });
+  } catch (error) {
+    if (isMissingPaymentTable(error)) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "The Full Report table is not set up yet (migration 0007). Nothing was confirmed." });
+    throw error;
+  }
+  if (!outcome) return NOT_CONFIRMED;
+  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink });
   await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support" }).catch(() => void 0);
   let invitation = null;
   let engagement = null;
@@ -11882,7 +11898,7 @@ import { z as z24 } from "zod";
 
 // server/accountInvitations.ts
 import { randomBytes as randomBytes8, randomUUID as randomUUID3 } from "crypto";
-import { and as and16, desc as desc12, eq as eq21, gt as gt6, inArray as inArray7, isNull as isNull8, ne as ne2 } from "drizzle-orm";
+import { and as and16, desc as desc12, eq as eq21, gt as gt6, inArray as inArray7, isNull as isNull8, ne as ne3 } from "drizzle-orm";
 import { TRPCError as TRPCError22 } from "@trpc/server";
 import { z as z23 } from "zod";
 init_brand();
@@ -12025,7 +12041,7 @@ async function revokeSeatInvitation(db, session, input) {
 }
 async function removeSeat(db, session, input) {
   const business = requireOwnerLevel(session);
-  const removed = await db.update(businessMemberships).set({ status: "removed" }).where(and16(eq21(businessMemberships.id, input.membershipId), eq21(businessMemberships.businessId, business.businessId), eq21(businessMemberships.role, "member"), ne2(businessMemberships.status, "removed"))).returning({ id: businessMemberships.id, userId: businessMemberships.userId });
+  const removed = await db.update(businessMemberships).set({ status: "removed" }).where(and16(eq21(businessMemberships.id, input.membershipId), eq21(businessMemberships.businessId, business.businessId), eq21(businessMemberships.role, "member"), ne3(businessMemberships.status, "removed"))).returning({ id: businessMemberships.id, userId: businessMemberships.userId });
   if (removed.length !== 1) throw new TRPCError22({ code: "NOT_FOUND", message: "That person is not on your team." });
   await recordAudit(db, { action: "business_member_removed", actorUserId: session.user.id, details: { businessId: business.businessId, membershipId: removed[0].id, userId: removed[0].userId } });
   return { success: true };

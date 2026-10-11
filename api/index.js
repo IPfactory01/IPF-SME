@@ -2886,7 +2886,7 @@ function registerStorageProxy(app) {
 
 // server/accountAuth.ts
 import { randomBytes as randomBytes3 } from "crypto";
-import { and as and5, desc, eq as eq6, gt as gt3, isNotNull, isNull as isNull3, ne } from "drizzle-orm";
+import { and as and5, desc, eq as eq7, gt as gt3, isNotNull, isNull as isNull3, ne } from "drizzle-orm";
 import { TRPCError as TRPCError3 } from "@trpc/server";
 
 // shared/auth.ts
@@ -3253,10 +3253,98 @@ async function listPlatformRoleAssignments(db) {
   return rows;
 }
 
+// server/rateLimit.ts
+import { eq as eq6, sql as sql3 } from "drizzle-orm";
+var MINUTE = 6e4;
+var HOUR2 = 60 * MINUTE;
+var DAY = 24 * HOUR2;
+var LIMITS = {
+  /** New Business Checks from one address, whatever email is typed. */
+  checkStartIp: { scope: "check_start_ip", max: 20, windowMs: 15 * MINUTE },
+  /** New Business Checks from one address and email. */
+  checkStartEmail: { scope: "check_start_email", max: 5, windowMs: 15 * MINUTE },
+  /** Progress saves per check (one per answer). */
+  checkSave: { scope: "check_save", max: 300, windowMs: 15 * MINUTE },
+  /** Submissions per check: each runs the AI summary and sends two emails. */
+  checkSubmit: { scope: "check_submit", max: 3, windowMs: HOUR2 },
+  /** Debrief and Full Report requests per check: each can email and look up Calendly. */
+  checkNext: { scope: "check_next", max: 5, windowMs: DAY },
+  /** Report Intake reads and submissions per report link. */
+  reportForm: { scope: "report_form", max: 30, windowMs: HOUR2 },
+  /** Report downloads per link: each renders the PDF again. */
+  reportDownload: { scope: "report_download", max: 5, windowMs: DAY },
+  /** Public token lookups per address: legacy reset confirmation and invitation status. */
+  publicLookup: { scope: "public_lookup", max: 30, windowMs: HOUR2 }
+};
+var memory = /* @__PURE__ */ new Map();
+var storeRetryAt = 0;
+var STORE_RETRY_MS = 5 * MINUTE;
+var missingTableReported = false;
+function limitKey(rule, subject) {
+  return `${rule.scope}:${sha256(`${rule.scope}|${subject.trim().toLowerCase()}`).slice(0, 40)}`;
+}
+function consumeInMemory(key, rule, now) {
+  const existing = memory.get(key);
+  if (!existing || existing.resetAt <= now) {
+    memory.set(key, { count: 1, resetAt: now + rule.windowMs });
+    return true;
+  }
+  existing.count += 1;
+  return existing.count <= rule.max;
+}
+async function store() {
+  if (Date.now() < storeRetryAt) return null;
+  try {
+    return await getDb();
+  } catch {
+    return null;
+  }
+}
+function standIn(reason, error) {
+  storeRetryAt = Date.now() + STORE_RETRY_MS;
+  if (error === void 0 || !isUndefinedTable(error)) {
+    console.error(`[RateLimit] ${reason}; this instance's memory stands in for five minutes.`, error instanceof Error ? error.message : "");
+  } else if (!missingTableReported) {
+    missingTableReported = true;
+    console.error("[RateLimit] The rate_limit_counters table is missing (migration 0010): limits are per function instance until it is applied.");
+  }
+}
+async function consumeLimit(rule, subject) {
+  const key = limitKey(rule, subject);
+  const now = Date.now();
+  const db = await store();
+  if (db) {
+    try {
+      const windowEndsAt = new Date(now + rule.windowMs);
+      const [row] = await db.insert(rateLimitCounters).values({ key, count: 1, windowEndsAt }).onConflictDoUpdate({
+        target: rateLimitCounters.key,
+        set: {
+          count: sql3`case when ${rateLimitCounters.windowEndsAt} <= now() then 1 else ${rateLimitCounters.count} + 1 end`,
+          windowEndsAt: sql3`case when ${rateLimitCounters.windowEndsAt} <= now() then ${windowEndsAt}::timestamptz else ${rateLimitCounters.windowEndsAt} end`
+        }
+      }).returning({ count: rateLimitCounters.count });
+      if (row) return row.count <= rule.max;
+    } catch (error) {
+      standIn("The rate-limit counter could not be written", error);
+    }
+  }
+  return consumeInMemory(key, rule, now);
+}
+async function releaseLimit(rule, subject) {
+  const key = limitKey(rule, subject);
+  memory.delete(key);
+  const db = await store();
+  if (!db) return;
+  try {
+    await db.delete(rateLimitCounters).where(eq6(rateLimitCounters.key, key));
+  } catch (error) {
+    standIn("The rate-limit counter could not be released", error);
+  }
+}
+
 // server/accountAuth.ts
 var PG_UNIQUE_VIOLATION2 = "23505";
 var RATE_LIMIT_WINDOW_MS = ACCOUNT_LOCKOUT_MS;
-var rateLimits = /* @__PURE__ */ new Map();
 function isUniqueViolation(error) {
   const candidate = error;
   return candidate?.code === PG_UNIQUE_VIOLATION2 || candidate?.cause?.code === PG_UNIQUE_VIOLATION2;
@@ -3265,19 +3353,10 @@ function requestIp(req) {
   return (req.ip || "unknown").trim().toLowerCase();
 }
 function consumeRateLimit(action, req, email, maximum) {
-  const key = `${action}:${requestIp(req)}:${email}`;
-  const now = Date.now();
-  const existing = rateLimits.get(key);
-  if (!existing || existing.resetAt <= now) {
-    rateLimits.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  if (existing.count >= maximum) return false;
-  existing.count += 1;
-  return true;
+  return consumeLimit({ scope: `${action}_${email === "preview" || email === "accept" || email === "join-preview" || email === "join-accept" ? email : "email"}`, max: maximum, windowMs: RATE_LIMIT_WINDOW_MS }, `${requestIp(req)}:${email}`);
 }
 function releaseRateLimit(action, req, email) {
-  rateLimits.delete(`${action}:${requestIp(req)}:${email}`);
+  return releaseLimit({ scope: `${action}_email`, max: 0, windowMs: RATE_LIMIT_WINDOW_MS }, `${requestIp(req)}:${email}`);
 }
 function assertSameOrigin(req) {
   const origin = req.headers.origin;
@@ -3333,7 +3412,7 @@ async function loadMemberships(db, userId) {
     yearFounded: businesses.yearFounded,
     sector: businesses.sector,
     website: businesses.website
-  }).from(businessMemberships).innerJoin(businesses, eq6(businessMemberships.businessId, businesses.id)).where(and5(eq6(businessMemberships.userId, userId), eq6(businessMemberships.status, "active"), eq6(businesses.status, "active"))).orderBy(businessMemberships.id);
+  }).from(businessMemberships).innerJoin(businesses, eq7(businessMemberships.businessId, businesses.id)).where(and5(eq7(businessMemberships.userId, userId), eq7(businessMemberships.status, "active"), eq7(businesses.status, "active"))).orderBy(businessMemberships.id);
   return rows.map((row) => {
     const completion = businessProfileCompletion({ name: row.businessName, description: row.description, yearFounded: row.yearFounded, sector: row.sector, website: row.website });
     return { businessId: row.businessId, businessName: row.businessName, role: row.role, status: "active", profileComplete: completion.complete, profilePercent: completion.percent };
@@ -3365,7 +3444,7 @@ async function resolveAccountSession(req) {
     email: users.email,
     role: users.role,
     status: users.status
-  }).from(userSessions).innerJoin(users, eq6(userSessions.userId, users.id)).where(and5(eq6(userSessions.tokenHash, sha256(token2)), isNull3(userSessions.revokedAt), gt3(userSessions.expiresAt, /* @__PURE__ */ new Date()), eq6(users.status, "active"))).limit(1);
+  }).from(userSessions).innerJoin(users, eq7(userSessions.userId, users.id)).where(and5(eq7(userSessions.tokenHash, sha256(token2)), isNull3(userSessions.revokedAt), gt3(userSessions.expiresAt, /* @__PURE__ */ new Date()), eq7(users.status, "active"))).limit(1);
   const row = rows[0];
   if (!row) return null;
   const [memberships, authority] = await Promise.all([
@@ -3391,19 +3470,19 @@ function requireBusinessCapability(session, businessId, capability) {
 }
 async function emailIsReserved(db, email) {
   if (OWNER_ADMIN_EMAIL && email === OWNER_ADMIN_EMAIL) return true;
-  const invited = await db.select({ id: adminInvitations.id }).from(adminInvitations).where(and5(emailEquals(adminInvitations.email, email), eq6(adminInvitations.status, "Pending"))).limit(1);
+  const invited = await db.select({ id: adminInvitations.id }).from(adminInvitations).where(and5(emailEquals(adminInvitations.email, email), eq7(adminInvitations.status, "Pending"))).limit(1);
   return invited.length > 0;
 }
 async function signInAccount(req, res, rawInput, options = {}) {
   assertSameOrigin(req);
   const email = normaliseAccountEmail(rawInput.email);
-  if (!consumeRateLimit("signin", req, email, ACCOUNT_MAX_FAILED_ATTEMPTS)) {
+  if (!await consumeRateLimit("signin", req, email, ACCOUNT_MAX_FAILED_ATTEMPTS)) {
     throw new TRPCError3({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   }
   const db = await getDb();
   if (!db) throw new TRPCError3({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   const user = email ? (await db.select().from(users).where(emailEquals(users.email, email)).limit(1))[0] : void 0;
-  const credential = user ? (await db.select().from(userCredentials).where(eq6(userCredentials.userId, user.id)).limit(1))[0] : void 0;
+  const credential = user ? (await db.select().from(userCredentials).where(eq7(userCredentials.userId, user.id)).limit(1))[0] : void 0;
   if (!user || !credential || user.status !== "active") {
     burnPasswordCheck(rawInput.password);
     throw new TRPCError3({ code: "UNAUTHORIZED", message: ACCOUNT_AUTH_ERRORS.invalidCredentials });
@@ -3415,7 +3494,7 @@ async function signInAccount(req, res, rawInput, options = {}) {
   if (!verifyAdminPasswordHash(rawInput.password, credential.passwordHash)) {
     const attempts = credential.failedAttempts + 1;
     const lock = attempts >= ACCOUNT_MAX_FAILED_ATTEMPTS ? new Date(Date.now() + ACCOUNT_LOCKOUT_MS) : null;
-    await db.update(userCredentials).set({ failedAttempts: lock ? 0 : attempts, lockedUntil: lock }).where(eq6(userCredentials.id, credential.id));
+    await db.update(userCredentials).set({ failedAttempts: lock ? 0 : attempts, lockedUntil: lock }).where(eq7(userCredentials.id, credential.id));
     await recordAudit(db, { action: "account_sign_in_failed", actorUserId: user.id, targetEmail: user.email, details: { attempts, locked: Boolean(lock) } });
     throw new TRPCError3({ code: "UNAUTHORIZED", message: ACCOUNT_AUTH_ERRORS.invalidCredentials });
   }
@@ -3426,15 +3505,15 @@ async function signInAccount(req, res, rawInput, options = {}) {
   }
   const memberships = await loadMemberships(db, user.id);
   const session = await db.transaction(async (tx) => {
-    await tx.update(userCredentials).set({ failedAttempts: 0, lockedUntil: null }).where(eq6(userCredentials.id, credential.id));
-    await tx.update(users).set({ lastSignedIn: databaseNow() }).where(eq6(users.id, user.id));
-    const previous = (await tx.select({ activeBusinessId: userSessions.activeBusinessId }).from(userSessions).where(and5(eq6(userSessions.userId, user.id), isNotNull(userSessions.activeBusinessId))).orderBy(desc(userSessions.id)).limit(1))[0];
+    await tx.update(userCredentials).set({ failedAttempts: 0, lockedUntil: null }).where(eq7(userCredentials.id, credential.id));
+    await tx.update(users).set({ lastSignedIn: databaseNow() }).where(eq7(users.id, user.id));
+    const previous = (await tx.select({ activeBusinessId: userSessions.activeBusinessId }).from(userSessions).where(and5(eq7(userSessions.userId, user.id), isNotNull(userSessions.activeBusinessId))).orderBy(desc(userSessions.id)).limit(1))[0];
     const restored = chooseActiveBusiness(memberships, previous?.activeBusinessId ?? null)?.businessId ?? null;
     const created = await createSession(tx, user.id, restored);
     await recordAudit(tx, { action: "account_signed_in", actorUserId: user.id, targetEmail: user.email });
     return { ...created, restored };
   });
-  releaseRateLimit("signin", req, email);
+  await releaseRateLimit("signin", req, email);
   setSessionCookie(req, res, session.token);
   return buildView(user, authority, memberships, session.restored);
 }
@@ -3444,10 +3523,10 @@ async function signOutAccount(req, res) {
   if (token2) {
     const db = await getDb();
     if (db) {
-      const live = (await db.select({ userId: userSessions.userId }).from(userSessions).where(and5(eq6(userSessions.tokenHash, sha256(token2)), isNull3(userSessions.revokedAt))).limit(1))[0];
+      const live = (await db.select({ userId: userSessions.userId }).from(userSessions).where(and5(eq7(userSessions.tokenHash, sha256(token2)), isNull3(userSessions.revokedAt))).limit(1))[0];
       if (live) {
         await db.transaction(async (tx) => {
-          await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and5(eq6(userSessions.tokenHash, sha256(token2)), isNull3(userSessions.revokedAt)));
+          await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and5(eq7(userSessions.tokenHash, sha256(token2)), isNull3(userSessions.revokedAt)));
           await recordAudit(tx, { action: "account_signed_out", actorUserId: live.userId });
         });
       }
@@ -3462,7 +3541,7 @@ async function switchWorkspace(req, session, businessId) {
   const db = await getDb();
   if (!db) throw new TRPCError3({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   await db.transaction(async (tx) => {
-    await tx.update(userSessions).set({ activeBusinessId: membership.businessId }).where(eq6(userSessions.id, session.sessionId));
+    await tx.update(userSessions).set({ activeBusinessId: membership.businessId }).where(eq7(userSessions.id, session.sessionId));
     await recordAudit(tx, { action: "workspace_switched", actorUserId: session.user.id, targetEmail: session.user.email, details: { businessId: membership.businessId, from: session.activeBusiness?.businessId ?? null } });
   });
   return toAccountView({ ...session, activeBusiness: membership });
@@ -3472,7 +3551,7 @@ async function getBusinessProfile(session, businessId) {
   const membership = requireBusinessCapability(session, businessId, "view_business");
   const db = await getDb();
   if (!db) throw new TRPCError3({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-  const business = (await db.select().from(businesses).where(eq6(businesses.id, membership.businessId)).limit(1))[0];
+  const business = (await db.select().from(businesses).where(eq7(businesses.id, membership.businessId)).limit(1))[0];
   if (!business) throw new TRPCError3({ code: "FORBIDDEN", message: ACCOUNT_AUTH_ERRORS.noBusinessAccess });
   const completion = businessProfileCompletion(business);
   return {
@@ -3505,7 +3584,7 @@ async function updateBusinessProfile(req, session, rawInput) {
   for (const key of BUSINESS_PROFILE_COLUMNS) if (fields[key] !== void 0) changes[key] = fields[key];
   if (Object.keys(changes).length === 0) return getBusinessProfile(session, businessId);
   await db.transaction(async (tx) => {
-    await tx.update(businesses).set(changes).where(eq6(businesses.id, businessId));
+    await tx.update(businesses).set(changes).where(eq7(businesses.id, businessId));
     await recordAudit(tx, { action: "business_profile_updated", actorUserId: session.user.id, targetEmail: session.user.email, details: { businessId, fields: Object.keys(changes) } });
   });
   const refreshed = await resolveAccountSessionFromId(db, session);
@@ -3522,7 +3601,7 @@ async function updateAccountProfile(req, session, rawInput) {
   const db = await getDb();
   if (!db) throw new TRPCError3({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   await db.transaction(async (tx) => {
-    await tx.update(users).set({ name: parsed.data.fullName }).where(eq6(users.id, session.user.id));
+    await tx.update(users).set({ name: parsed.data.fullName }).where(eq7(users.id, session.user.id));
     await recordAudit(tx, { action: "account_profile_updated", actorUserId: session.user.id, targetEmail: session.user.email, details: { fields: ["name"] } });
   });
   return toAccountView({ ...session, user: { ...session.user, fullName: parsed.data.fullName } });
@@ -3533,7 +3612,7 @@ async function changeAccountPassword(req, session, rawInput) {
   if (!parsed.success) throw new TRPCError3({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
   const db = await getDb();
   if (!db) throw new TRPCError3({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-  const credential = (await db.select().from(userCredentials).where(eq6(userCredentials.userId, session.user.id)).limit(1))[0];
+  const credential = (await db.select().from(userCredentials).where(eq7(userCredentials.userId, session.user.id)).limit(1))[0];
   if (!credential) throw new TRPCError3({ code: "FORBIDDEN", message: ACCOUNT_AUTH_ERRORS.wrongCurrentPassword });
   if (credential.lockedUntil && credential.lockedUntil.getTime() > Date.now()) {
     throw new TRPCError3({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
@@ -3541,13 +3620,13 @@ async function changeAccountPassword(req, session, rawInput) {
   if (!verifyAdminPasswordHash(parsed.data.currentPassword, credential.passwordHash)) {
     const attempts = credential.failedAttempts + 1;
     const lock = attempts >= ACCOUNT_MAX_FAILED_ATTEMPTS ? new Date(Date.now() + ACCOUNT_LOCKOUT_MS) : null;
-    await db.update(userCredentials).set({ failedAttempts: lock ? 0 : attempts, lockedUntil: lock }).where(eq6(userCredentials.id, credential.id));
+    await db.update(userCredentials).set({ failedAttempts: lock ? 0 : attempts, lockedUntil: lock }).where(eq7(userCredentials.id, credential.id));
     throw new TRPCError3({ code: "BAD_REQUEST", message: ACCOUNT_AUTH_ERRORS.wrongCurrentPassword });
   }
   const newHash = hashAdminPassword(parsed.data.newPassword);
   await db.transaction(async (tx) => {
-    await tx.update(userCredentials).set({ passwordHash: newHash, failedAttempts: 0, lockedUntil: null }).where(eq6(userCredentials.id, credential.id));
-    await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and5(eq6(userSessions.userId, session.user.id), isNull3(userSessions.revokedAt), ne(userSessions.id, session.sessionId)));
+    await tx.update(userCredentials).set({ passwordHash: newHash, failedAttempts: 0, lockedUntil: null }).where(eq7(userCredentials.id, credential.id));
+    await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and5(eq7(userSessions.userId, session.user.id), isNull3(userSessions.revokedAt), ne(userSessions.id, session.sessionId)));
     await recordAudit(tx, { action: "account_password_changed", actorUserId: session.user.id, targetEmail: session.user.email });
   });
   return { success: true };
@@ -3727,7 +3806,7 @@ function requireLegacyJump() {
 
 // server/routers/registration.ts
 import { TRPCError as TRPCError7 } from "@trpc/server";
-import { and as and6, desc as desc2, eq as eq7, inArray, sql as sql3 } from "drizzle-orm";
+import { and as and6, desc as desc2, eq as eq8, inArray, sql as sql4 } from "drizzle-orm";
 import { z as z4 } from "zod";
 import { nanoid } from "nanoid";
 
@@ -3921,9 +4000,9 @@ async function supersedeDuplicatePathways(db, duplicateRegistrationIds, canonica
 }
 async function recordReferralAttribution(db, referralCode, referredRegistrationId, referredEmail) {
   if (!referralCode) return;
-  const profile = (await db.select().from(participantReferralProfiles).where(eq7(participantReferralProfiles.referralCode, referralCode)).limit(1))[0];
+  const profile = (await db.select().from(participantReferralProfiles).where(eq8(participantReferralProfiles.referralCode, referralCode)).limit(1))[0];
   if (!profile) return;
-  const referrer = (await db.select({ id: registrations.id, email: registrations.email }).from(registrations).where(eq7(registrations.id, profile.registrationId)).limit(1))[0];
+  const referrer = (await db.select({ id: registrations.id, email: registrations.email }).from(registrations).where(eq8(registrations.id, profile.registrationId)).limit(1))[0];
   if (!referrer || referrer.email.trim().toLowerCase() === referredEmail.trim().toLowerCase()) return;
   try {
     await db.insert(participantReferrals).values({
@@ -3945,11 +4024,11 @@ var registrationRouter = router({
   setUserRole: ownerAdminProcedure.input(z4.object({ userId: z4.string(), role: z4.enum(["admin", "user"]) })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-    const target = (await db.select({ id: users.id, email: users.email }).from(users).where(eq7(users.id, Number(input.userId))).limit(1))[0];
+    const target = (await db.select({ id: users.id, email: users.email }).from(users).where(eq8(users.id, Number(input.userId))).limit(1))[0];
     if (target && isOwnerAdmin(target) && input.role !== "admin") {
       throw new TRPCError7({ code: "FORBIDDEN", message: "The super administrator keeps permanent access and cannot be demoted." });
     }
-    await db.update(users).set({ role: input.role }).where(eq7(users.id, Number(input.userId)));
+    await db.update(users).set({ role: input.role }).where(eq8(users.id, Number(input.userId)));
     return { success: true };
   }),
   replaceParticipantPortalLink: adminPermissionProcedure("manage_portal_access").input(z4.object({ registrationId: z4.number().int().positive() })).mutation(async ({ input, ctx }) => ({
@@ -3958,7 +4037,7 @@ var registrationRouter = router({
   sendEngagementBriefInvitation: ownerAdminProcedure.input(z4.object({ registrationId: z4.number().int().positive(), testRecipient: z4.string().email().optional() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-    const applicants = await db.select().from(registrations).where(eq7(registrations.id, input.registrationId)).limit(1);
+    const applicants = await db.select().from(registrations).where(eq8(registrations.id, input.registrationId)).limit(1);
     const applicant = applicants[0];
     if (!applicant || applicant.status === "Rejected") {
       throw new TRPCError7({ code: "NOT_FOUND", message: "Eligible participant registration not found." });
@@ -3992,7 +4071,7 @@ var registrationRouter = router({
       deliveryStatus: delivery.status,
       deliveryMessageId: delivery.status === "Sent" ? delivery.providerMessageId || null : null,
       revokedAt: delivery.status === "Sent" ? null : /* @__PURE__ */ new Date()
-    }).where(eq7(participantPasswordTokens.id, passwordLink.tokenId));
+    }).where(eq8(participantPasswordTokens.id, passwordLink.tokenId));
     await db.insert(emailLogs).values({
       registrationId: applicant.id,
       recipientEmail: recipient,
@@ -4008,10 +4087,10 @@ var registrationRouter = router({
   capacity: publicProcedure.query(async () => {
     const db = await getDb();
     if (!db) return { boardroomCount: 0, boardroomAvailable: true };
-    const result = await db.select({ count: sql3`count(*)` }).from(registrations).where(
+    const result = await db.select({ count: sql4`count(*)` }).from(registrations).where(
       and6(
-        eq7(registrations.package, "Boardroom"),
-        eq7(registrations.status, "Accepted")
+        eq8(registrations.package, "Boardroom"),
+        eq8(registrations.status, "Accepted")
       )
     );
     const boardroomCount = Number(result[0]?.count ?? 0);
@@ -4049,10 +4128,10 @@ var registrationRouter = router({
     const bookingToken = nanoid(32);
     const { diagnostic, registrationFields } = buildRegistrationInsertFields(input, bookingToken);
     if (input.package === "Boardroom") {
-      const capacityCheck = await db.select({ count: sql3`count(*)` }).from(registrations).where(
+      const capacityCheck = await db.select({ count: sql4`count(*)` }).from(registrations).where(
         and6(
-          eq7(registrations.package, "Boardroom"),
-          eq7(registrations.status, "Accepted")
+          eq8(registrations.package, "Boardroom"),
+          eq8(registrations.status, "Accepted")
         )
       );
       const count2 = Number(capacityCheck[0]?.count ?? 0);
@@ -4204,14 +4283,14 @@ Pre-submitted Question: ${input.question || "None"}`
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
     if (input.status === "Accepted") {
-      const current = await db.select().from(registrations).where(eq7(registrations.id, input.id)).limit(1);
+      const current = await db.select().from(registrations).where(eq8(registrations.id, input.id)).limit(1);
       const applicant = current[0];
       if (!applicant) throw new TRPCError7({ code: "NOT_FOUND", message: "Registration not found" });
       if (applicant.package === "Boardroom") {
-        const acceptedBoardroom = await db.select({ count: sql3`count(*)` }).from(registrations).where(
+        const acceptedBoardroom = await db.select({ count: sql4`count(*)` }).from(registrations).where(
           and6(
-            eq7(registrations.package, "Boardroom"),
-            eq7(registrations.status, "Accepted")
+            eq8(registrations.package, "Boardroom"),
+            eq8(registrations.status, "Accepted")
           )
         );
         if (Number(acceptedBoardroom[0]?.count ?? 0) >= BOARDROOM_CAPACITY && applicant.status !== "Accepted") {
@@ -4222,16 +4301,16 @@ Pre-submitted Question: ${input.question || "None"}`
         }
       }
     }
-    await db.update(registrations).set({ status: input.status }).where(eq7(registrations.id, input.id));
+    await db.update(registrations).set({ status: input.status }).where(eq8(registrations.id, input.id));
     return { success: true };
   }),
   archiveRegistration: ownerAdminProcedure.input(z4.object({ id: z4.number().int().positive() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
-    const registration = (await db.select({ id: registrations.id, archivedAt: registrations.archivedAt }).from(registrations).where(eq7(registrations.id, input.id)).limit(1))[0];
+    const registration = (await db.select({ id: registrations.id, archivedAt: registrations.archivedAt }).from(registrations).where(eq8(registrations.id, input.id)).limit(1))[0];
     if (!registration) throw new TRPCError7({ code: "NOT_FOUND", message: "Registration not found" });
     if (registration.archivedAt) return { success: true, alreadyArchived: true };
-    await db.update(registrations).set(archiveApplicationFields(ctx.user.id)).where(eq7(registrations.id, input.id));
+    await db.update(registrations).set(archiveApplicationFields(ctx.user.id)).where(eq8(registrations.id, input.id));
     return { success: true, alreadyArchived: false };
   }),
   updatePayment: adminPermissionProcedure("manage_payments").input(
@@ -4243,7 +4322,7 @@ Pre-submitted Question: ${input.question || "None"}`
   ).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(registrations).set({ [input.field]: input.value }).where(eq7(registrations.id, input.id));
+    await db.update(registrations).set({ [input.field]: input.value }).where(eq8(registrations.id, input.id));
     return { success: true };
   }),
   updateCohort: adminPermissionProcedure("manage_cohorts").input(
@@ -4254,7 +4333,7 @@ Pre-submitted Question: ${input.question || "None"}`
   ).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
-    await db.update(registrations).set({ cohortGroup: input.cohortGroup }).where(eq7(registrations.id, input.id));
+    await db.update(registrations).set({ cohortGroup: input.cohortGroup }).where(eq8(registrations.id, input.id));
     return { success: true };
   }),
   sendEmail: ownerAdminProcedure.input(
@@ -4319,7 +4398,7 @@ Pre-submitted Question: ${input.question || "None"}`
   getEmailLogs: adminPermissionProcedure("view_communications").input(z4.object({ registrationId: z4.number() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
-    return await db.select().from(emailLogs).where(eq7(emailLogs.registrationId, input.registrationId)).orderBy(desc2(emailLogs.sentAt));
+    return await db.select().from(emailLogs).where(eq8(emailLogs.registrationId, input.registrationId)).orderBy(desc2(emailLogs.sentAt));
   }),
   getAllEmailLogs: adminPermissionProcedure("view_communications").query(async () => {
     const db = await getDb();
@@ -4356,7 +4435,7 @@ Pre-submitted Question: ${input.question || "None"}`
       deliveryStatus: delivery.status,
       deliveryMessageId: delivery.status === "Sent" ? delivery.providerMessageId || null : null,
       revokedAt: delivery.status === "Sent" ? null : /* @__PURE__ */ new Date()
-    }).where(eq7(participantPasswordTokens.id, passwordLink.tokenId));
+    }).where(eq8(participantPasswordTokens.id, passwordLink.tokenId));
     await db.insert(emailLogs).values({
       registrationId: applicant.id,
       recipientEmail: applicant.email,
@@ -4372,7 +4451,7 @@ Pre-submitted Question: ${input.question || "None"}`
   resendEmailLog: ownerAdminProcedure.input(z4.object({ logId: z4.number() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
-    const logRecord = await db.select().from(emailLogs).where(eq7(emailLogs.id, input.logId)).limit(1);
+    const logRecord = await db.select().from(emailLogs).where(eq8(emailLogs.id, input.logId)).limit(1);
     const target = logRecord[0];
     if (!target) throw new TRPCError7({ code: "NOT_FOUND", message: "Email log not found" });
     const delivery = await deliverEmail({
@@ -4401,7 +4480,7 @@ Pre-submitted Question: ${input.question || "None"}`
   ).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR" });
-    const acceptedApplicants = await db.select().from(registrations).where(eq7(registrations.status, "Accepted"));
+    const acceptedApplicants = await db.select().from(registrations).where(eq8(registrations.status, "Accepted"));
     if (acceptedApplicants.length === 0) {
       throw new TRPCError7({ code: "BAD_REQUEST", message: "No accepted participants found to send reminder to." });
     }
@@ -4472,7 +4551,7 @@ Notes: ${input.messageNotes || "Please join on time."}`,
     }
     const db = await getDb();
     if (!db) throw new TRPCError7({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-    const applicant = (await db.select({ id: registrations.id, email: registrations.email, package: registrations.package, status: registrations.status }).from(registrations).where(eq7(registrations.id, input.registrationId)).limit(1))[0];
+    const applicant = (await db.select({ id: registrations.id, email: registrations.email, package: registrations.package, status: registrations.status }).from(registrations).where(eq8(registrations.id, input.registrationId)).limit(1))[0];
     if (!applicant || applicant.status === "Rejected" || applicant.email.trim().toLowerCase() !== input.email.trim().toLowerCase() || applicant.package !== input.packageName) {
       throw new TRPCError7({ code: "FORBIDDEN", message: `This payment request does not match an eligible ${BRAND.programmeShortName} registration.` });
     }
@@ -4530,11 +4609,11 @@ Notes: ${input.messageNotes || "Please join on time."}`,
         }
       });
       const data = await res.json();
-      const applicant = (await db.select({ id: registrations.id, package: registrations.package, status: registrations.status }).from(registrations).where(eq7(registrations.id, input.registrationId)).limit(1))[0];
+      const applicant = (await db.select({ id: registrations.id, package: registrations.package, status: registrations.status }).from(registrations).where(eq8(registrations.id, input.registrationId)).limit(1))[0];
       const expectedAmount = applicant ? PAYSTACK_COMMITMENT_AMOUNTS[applicant.package] * 100 : void 0;
       const providerRegistrationId = Number(data.data?.metadata?.registrationId);
       if (data.status && data.data?.status === "success" && applicant?.status !== "Rejected" && data.data?.amount === expectedAmount && providerRegistrationId === input.registrationId) {
-        await db.update(registrations).set({ depositPaid: "Paid" }).where(eq7(registrations.id, input.registrationId));
+        await db.update(registrations).set({ depositPaid: "Paid" }).where(eq8(registrations.id, input.registrationId));
         return { success: true, status: "success" };
       }
       return { success: false, status: data.data?.status ?? "failed" };
@@ -4546,7 +4625,7 @@ Notes: ${input.messageNotes || "Please join on time."}`,
 
 // server/routers/scheduling.ts
 import { TRPCError as TRPCError8 } from "@trpc/server";
-import { and as and7, desc as desc3, eq as eq8, sql as sql4 } from "drizzle-orm";
+import { and as and7, desc as desc3, eq as eq9, sql as sql5 } from "drizzle-orm";
 import { z as z5 } from "zod";
 
 // server/calendar.ts
@@ -4916,15 +4995,15 @@ var schedulingRouter = router({
     let reason;
     let requiredCount = kind === "Decide" || kind === "Apply" ? 3 : 5;
     let packageName;
-    const applicant = await db.select({ id: registrations.id, status: registrations.status, depositPaid: registrations.depositPaid, package: registrations.package }).from(registrations).where(eq8(registrations.id, ctx.participant.id)).limit(1);
+    const applicant = await db.select({ id: registrations.id, status: registrations.status, depositPaid: registrations.depositPaid, package: registrations.package }).from(registrations).where(eq9(registrations.id, ctx.participant.id)).limit(1);
     const row = applicant[0];
     if (!row) {
       eligible = false;
       reason = "Your participant session could not be confirmed. Kindly reopen your personal portal link.";
     } else {
       const consentRows = await db.select({ id: participantEngagementConsents.id }).from(participantEngagementConsents).where(and7(
-        eq8(participantEngagementConsents.registrationId, row.id),
-        eq8(participantEngagementConsents.briefVersion, ENGAGEMENT_BRIEF_VERSION)
+        eq9(participantEngagementConsents.registrationId, row.id),
+        eq9(participantEngagementConsents.briefVersion, ENGAGEMENT_BRIEF_VERSION)
       )).limit(1);
       if (!consentRows[0]) {
         eligible = false;
@@ -4942,7 +5021,7 @@ var schedulingRouter = router({
         }
       }
     }
-    const rows = await db.select().from(scheduleSlots).where(eq8(scheduleSlots.kind, kind)).orderBy(scheduleSlots.startAt);
+    const rows = await db.select().from(scheduleSlots).where(eq9(scheduleSlots.kind, kind)).orderBy(scheduleSlots.startAt);
     const window = getAvailabilityWindow(kind);
     let busyRanges = [];
     if (isCalendarConfigured()) {
@@ -4975,7 +5054,7 @@ var schedulingRouter = router({
   myBookings: participantProcedure.input(z5.object({}).optional()).query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    const applicant = await db.select({ id: registrations.id }).from(registrations).where(eq8(registrations.id, ctx.participant.id)).limit(1);
+    const applicant = await db.select({ id: registrations.id }).from(registrations).where(eq9(registrations.id, ctx.participant.id)).limit(1);
     if (!applicant[0]) return [];
     return db.select({
       id: scheduleBookings.id,
@@ -4986,18 +5065,18 @@ var schedulingRouter = router({
       endAt: scheduleSlots.endAt,
       timezone: scheduleSlots.timezone,
       sessionNumber: scheduleSlots.sessionNumber
-    }).from(scheduleBookings).innerJoin(scheduleSlots, eq8(scheduleBookings.slotId, scheduleSlots.id)).where(and7(eq8(scheduleBookings.registrationId, applicant[0].id), eq8(scheduleBookings.status, "Confirmed"))).orderBy(scheduleSlots.startAt);
+    }).from(scheduleBookings).innerJoin(scheduleSlots, eq9(scheduleBookings.slotId, scheduleSlots.id)).where(and7(eq9(scheduleBookings.registrationId, applicant[0].id), eq9(scheduleBookings.status, "Confirmed"))).orderBy(scheduleSlots.startAt);
   }),
   book: participantProcedure.input(z5.object({ slotId: z5.number().int().positive() })).mutation(async ({ input, ctx }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const booking = await db.transaction(async (tx) => {
-      const applicantRows = await tx.select().from(registrations).where(eq8(registrations.id, ctx.participant.id)).limit(1);
+      const applicantRows = await tx.select().from(registrations).where(eq9(registrations.id, ctx.participant.id)).limit(1);
       const applicant = applicantRows[0];
       if (!applicant) throw new TRPCError8({ code: "NOT_FOUND", message: "Booking link not recognised." });
       const consentRows = await tx.select({ id: participantEngagementConsents.id }).from(participantEngagementConsents).where(and7(
-        eq8(participantEngagementConsents.registrationId, applicant.id),
-        eq8(participantEngagementConsents.briefVersion, ENGAGEMENT_BRIEF_VERSION)
+        eq9(participantEngagementConsents.registrationId, applicant.id),
+        eq9(participantEngagementConsents.briefVersion, ENGAGEMENT_BRIEF_VERSION)
       )).limit(1);
       if (!consentRows[0]) {
         throw new TRPCError8({ code: "FORBIDDEN", message: "Please read and acknowledge your personalised engagement brief in the participant portal before scheduling." });
@@ -5005,7 +5084,7 @@ var schedulingRouter = router({
       if (applicant.status !== "Accepted" || applicant.depositPaid !== "Paid") {
         throw new TRPCError8({ code: "FORBIDDEN", message: "Scheduling opens after acceptance and confirmation of the 40% commitment payment." });
       }
-      const slotRows = await tx.select().from(scheduleSlots).where(eq8(scheduleSlots.id, input.slotId)).limit(1);
+      const slotRows = await tx.select().from(scheduleSlots).where(eq9(scheduleSlots.id, input.slotId)).limit(1);
       const slot = slotRows[0];
       if (!slot || slot.status !== "Open" || slot.bookedCount >= slot.capacity) {
         throw new TRPCError8({ code: "CONFLICT", message: "That slot has just been taken. Please choose another available time." });
@@ -5014,26 +5093,26 @@ var schedulingRouter = router({
       if (required.kind !== slot.kind) {
         throw new TRPCError8({ code: "BAD_REQUEST", message: `This package books ${required.kind} sessions.` });
       }
-      const currentBookings = await tx.select({ count: sql4`count(*)` }).from(scheduleBookings).where(and7(
-        eq8(scheduleBookings.registrationId, applicant.id),
-        eq8(scheduleBookings.kind, slot.kind),
-        eq8(scheduleBookings.status, "Confirmed")
+      const currentBookings = await tx.select({ count: sql5`count(*)` }).from(scheduleBookings).where(and7(
+        eq9(scheduleBookings.registrationId, applicant.id),
+        eq9(scheduleBookings.kind, slot.kind),
+        eq9(scheduleBookings.status, "Confirmed")
       ));
       if (Number(currentBookings[0]?.count ?? 0) >= required.count) {
         throw new TRPCError8({ code: "CONFLICT", message: `You already have the maximum ${required.count} ${slot.kind} bookings for this package.` });
       }
       const duplicate = await tx.select({ id: scheduleBookings.id }).from(scheduleBookings).where(and7(
-        eq8(scheduleBookings.registrationId, applicant.id),
-        eq8(scheduleBookings.slotId, slot.id),
-        eq8(scheduleBookings.status, "Confirmed")
+        eq9(scheduleBookings.registrationId, applicant.id),
+        eq9(scheduleBookings.slotId, slot.id),
+        eq9(scheduleBookings.status, "Confirmed")
       )).limit(1);
       if (duplicate[0]) throw new TRPCError8({ code: "CONFLICT", message: "You have already booked this slot." });
       const existingBookings = await tx.select({
         startAt: scheduleSlots.startAt,
         endAt: scheduleSlots.endAt
-      }).from(scheduleBookings).innerJoin(scheduleSlots, eq8(scheduleBookings.slotId, scheduleSlots.id)).where(and7(
-        eq8(scheduleBookings.registrationId, applicant.id),
-        eq8(scheduleBookings.status, "Confirmed")
+      }).from(scheduleBookings).innerJoin(scheduleSlots, eq9(scheduleBookings.slotId, scheduleSlots.id)).where(and7(
+        eq9(scheduleBookings.registrationId, applicant.id),
+        eq9(scheduleBookings.status, "Confirmed")
       ));
       for (const bookingRow of existingBookings) {
         const s1Start = new Date(bookingRow.startAt).getTime();
@@ -5045,10 +5124,10 @@ var schedulingRouter = router({
         }
       }
       const claimedSlots = await tx.update(scheduleSlots).set({
-        bookedCount: sql4`${scheduleSlots.bookedCount} + 1`,
+        bookedCount: sql5`${scheduleSlots.bookedCount} + 1`,
         // PostgreSQL does not coerce a text CASE result into an enum column, so the result is cast explicitly.
-        status: sql4`(CASE WHEN ${scheduleSlots.bookedCount} + 1 >= ${scheduleSlots.capacity} THEN 'Booked' ELSE 'Open' END)::${sql4.identifier(scheduleSlotsStatusEnum.enumName)}`
-      }).where(and7(eq8(scheduleSlots.id, slot.id), eq8(scheduleSlots.status, "Open"), sql4`${scheduleSlots.bookedCount} < ${scheduleSlots.capacity}`)).returning({ id: scheduleSlots.id });
+        status: sql5`(CASE WHEN ${scheduleSlots.bookedCount} + 1 >= ${scheduleSlots.capacity} THEN 'Booked' ELSE 'Open' END)::${sql5.identifier(scheduleSlotsStatusEnum.enumName)}`
+      }).where(and7(eq9(scheduleSlots.id, slot.id), eq9(scheduleSlots.status, "Open"), sql5`${scheduleSlots.bookedCount} < ${scheduleSlots.capacity}`)).returning({ id: scheduleSlots.id });
       if (claimedSlots.length !== 1) {
         throw new TRPCError8({ code: "CONFLICT", message: "That slot has just been taken. Please choose another available time." });
       }
@@ -5078,7 +5157,7 @@ var schedulingRouter = router({
       calendarStatus = "Failed";
       console.error("[Calendar] Event creation failed after local booking:", error);
     }
-    await db.update(scheduleBookings).set({ calendarStatus, googleCalendarEventId }).where(eq8(scheduleBookings.id, booking.bookingId));
+    await db.update(scheduleBookings).set({ calendarStatus, googleCalendarEventId }).where(eq9(scheduleBookings.id, booking.bookingId));
     return {
       success: true,
       bookingId: booking.bookingId,
@@ -5091,7 +5170,7 @@ var schedulingRouter = router({
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const kind = asSlotKind(input.kind);
     const definitions = generateSlotDefinitions(kind);
-    const existing = await db.select({ startAt: scheduleSlots.startAt, kind: scheduleSlots.kind }).from(scheduleSlots).where(eq8(scheduleSlots.kind, kind));
+    const existing = await db.select({ startAt: scheduleSlots.startAt, kind: scheduleSlots.kind }).from(scheduleSlots).where(eq9(scheduleSlots.kind, kind));
     const keys = new Set(existing.map((slot) => `${slot.kind}:${new Date(slot.startAt).getTime()}`));
     const missing = definitions.filter((slot) => !keys.has(`${slot.kind}:${slot.startAt.getTime()}`));
     if (missing.length > 0) await db.insert(scheduleSlots).values(missing);
@@ -5100,18 +5179,18 @@ var schedulingRouter = router({
   adminList: adminProcedure.input(z5.object({ kind: slotKindSchema.optional() }).optional()).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(scheduleSlots).where(input?.kind ? eq8(scheduleSlots.kind, input.kind) : void 0).orderBy(desc3(scheduleSlots.startAt));
+    return db.select().from(scheduleSlots).where(input?.kind ? eq9(scheduleSlots.kind, input.kind) : void 0).orderBy(desc3(scheduleSlots.startAt));
   }),
   block: adminProcedure.input(z5.object({ slotId: z5.number().int().positive(), blocked: z5.boolean() })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError8({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-    await db.update(scheduleSlots).set({ status: input.blocked ? "Blocked" : "Open" }).where(and7(eq8(scheduleSlots.id, input.slotId), eq8(scheduleSlots.bookedCount, 0)));
+    await db.update(scheduleSlots).set({ status: input.blocked ? "Blocked" : "Open" }).where(and7(eq9(scheduleSlots.id, input.slotId), eq9(scheduleSlots.bookedCount, 0)));
     return { success: true };
   })
 });
 
 // server/routers/participant.ts
-import { and as and8, desc as desc4, eq as eq9 } from "drizzle-orm";
+import { and as and8, desc as desc4, eq as eq10 } from "drizzle-orm";
 import { z as z7 } from "zod";
 import { TRPCError as TRPCError9 } from "@trpc/server";
 
@@ -5409,7 +5488,7 @@ function parseWorkingDiagnosticReport(raw) {
 }
 async function getCompletedStructuredDiagnostic(db, applicant) {
   await requireBriefAcknowledgement(db, applicant.id);
-  const stored = (await db.select({ structuredDiagnostic: currentStatusAssessments.structuredDiagnostic }).from(currentStatusAssessments).where(eq9(currentStatusAssessments.registrationId, applicant.id)).limit(1))[0];
+  const stored = (await db.select({ structuredDiagnostic: currentStatusAssessments.structuredDiagnostic }).from(currentStatusAssessments).where(eq10(currentStatusAssessments.registrationId, applicant.id)).limit(1))[0];
   const draft = mergeStructuredDiagnosticDraft(applicant, stored?.structuredDiagnostic ?? null);
   const progress = diagnosticSectionProgress(draft);
   if (progress.completed !== progress.total) {
@@ -5421,7 +5500,7 @@ async function getCompletedStructuredDiagnostic(db, applicant) {
   return draft;
 }
 async function getLatestWorkingDiagnosticReport(db, registrationId) {
-  const rows = await db.select({ summaryJson: consultingReports.summaryJson, updatedAt: consultingReports.updatedAt }).from(consultingReports).where(eq9(consultingReports.registrationId, registrationId)).orderBy(desc4(consultingReports.updatedAt));
+  const rows = await db.select({ summaryJson: consultingReports.summaryJson, updatedAt: consultingReports.updatedAt }).from(consultingReports).where(eq10(consultingReports.registrationId, registrationId)).orderBy(desc4(consultingReports.updatedAt));
   for (const row of rows) {
     const report = parseWorkingDiagnosticReport(row.summaryJson);
     if (report) return { report, updatedAt: row.updatedAt };
@@ -5431,8 +5510,8 @@ async function getLatestWorkingDiagnosticReport(db, registrationId) {
 async function requireBriefAcknowledgement(db, registrationId) {
   const consent = (await db.select({ id: participantEngagementConsents.id }).from(participantEngagementConsents).where(
     and8(
-      eq9(participantEngagementConsents.registrationId, registrationId),
-      eq9(participantEngagementConsents.briefVersion, ENGAGEMENT_BRIEF_VERSION)
+      eq10(participantEngagementConsents.registrationId, registrationId),
+      eq10(participantEngagementConsents.briefVersion, ENGAGEMENT_BRIEF_VERSION)
     )
   ).limit(1))[0];
   if (!consent) {
@@ -5453,7 +5532,7 @@ var participantRouter = router({
       throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     }
     const applicant = ctx.participant;
-    let programmeRecord = (await db.select().from(participantProgrammeRecords).where(eq9(participantProgrammeRecords.registrationId, applicant.id)).limit(1))[0];
+    let programmeRecord = (await db.select().from(participantProgrammeRecords).where(eq10(participantProgrammeRecords.registrationId, applicant.id)).limit(1))[0];
     if (!programmeRecord) {
       const registrationSnapshot = JSON.stringify({
         id: applicant.id,
@@ -5483,7 +5562,7 @@ var participantRouter = router({
         });
       } catch {
       }
-      programmeRecord = (await db.select().from(participantProgrammeRecords).where(eq9(participantProgrammeRecords.registrationId, applicant.id)).limit(1))[0];
+      programmeRecord = (await db.select().from(participantProgrammeRecords).where(eq10(participantProgrammeRecords.registrationId, applicant.id)).limit(1))[0];
     }
     if (!programmeRecord) {
       throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Could not initialise participant programme record." });
@@ -5497,17 +5576,17 @@ var participantRouter = router({
       timezone: scheduleSlots.timezone,
       sessionNumber: scheduleSlots.sessionNumber,
       googleCalendarEventId: scheduleSlots.googleCalendarEventId
-    }).from(scheduleBookings).innerJoin(scheduleSlots, eq9(scheduleBookings.slotId, scheduleSlots.id)).where(
+    }).from(scheduleBookings).innerJoin(scheduleSlots, eq10(scheduleBookings.slotId, scheduleSlots.id)).where(
       and8(
-        eq9(scheduleBookings.registrationId, applicant.id),
-        eq9(scheduleBookings.status, "Confirmed")
+        eq10(scheduleBookings.registrationId, applicant.id),
+        eq10(scheduleBookings.status, "Confirmed")
       )
     ).orderBy(scheduleSlots.startAt);
-    const briefs = await db.select().from(participantBriefs).where(eq9(participantBriefs.registrationId, applicant.id)).orderBy(desc4(participantBriefs.createdAt));
+    const briefs = await db.select().from(participantBriefs).where(eq10(participantBriefs.registrationId, applicant.id)).orderBy(desc4(participantBriefs.createdAt));
     const consentRows = await db.select().from(participantEngagementConsents).where(
       and8(
-        eq9(participantEngagementConsents.registrationId, applicant.id),
-        eq9(participantEngagementConsents.briefVersion, ENGAGEMENT_BRIEF_VERSION)
+        eq10(participantEngagementConsents.registrationId, applicant.id),
+        eq10(participantEngagementConsents.briefVersion, ENGAGEMENT_BRIEF_VERSION)
       )
     ).orderBy(desc4(participantEngagementConsents.acknowledgedAt)).limit(1);
     const currentConsent = consentRows[0] ?? null;
@@ -5563,8 +5642,8 @@ var participantRouter = router({
     const applicant = ctx.participant;
     const existingRows = await db.select().from(participantEngagementConsents).where(
       and8(
-        eq9(participantEngagementConsents.registrationId, applicant.id),
-        eq9(participantEngagementConsents.briefVersion, ENGAGEMENT_BRIEF_VERSION)
+        eq10(participantEngagementConsents.registrationId, applicant.id),
+        eq10(participantEngagementConsents.briefVersion, ENGAGEMENT_BRIEF_VERSION)
       )
     ).orderBy(desc4(participantEngagementConsents.acknowledgedAt)).limit(1);
     const existing = existingRows[0];
@@ -5596,7 +5675,7 @@ var participantRouter = router({
     await db.update(participantEngagementConsents).set({
       confirmationEmailStatus: delivery.status,
       confirmationEmailMessageId: messageId
-    }).where(eq9(participantEngagementConsents.id, consentId));
+    }).where(eq10(participantEngagementConsents.id, consentId));
     await db.insert(emailLogs).values({
       registrationId: applicant.id,
       recipientEmail: applicant.email,
@@ -5633,7 +5712,7 @@ var participantRouter = router({
   listBriefs: adminPermissionProcedure("view_documents").input(z7.object({ registrationId: z7.number().int().positive() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(participantBriefs).where(eq9(participantBriefs.registrationId, input.registrationId)).orderBy(desc4(participantBriefs.createdAt));
+    return db.select().from(participantBriefs).where(eq10(participantBriefs.registrationId, input.registrationId)).orderBy(desc4(participantBriefs.createdAt));
   }),
   // Participant upload completed assignment
   uploadAssignment: participantProcedure.input(
@@ -5667,13 +5746,13 @@ var participantRouter = router({
     const db = await getDb();
     if (!db) return [];
     const applicant = ctx.participant;
-    return db.select().from(participantAssignments).where(eq9(participantAssignments.registrationId, applicant.id)).orderBy(desc4(participantAssignments.createdAt));
+    return db.select().from(participantAssignments).where(eq10(participantAssignments.registrationId, applicant.id)).orderBy(desc4(participantAssignments.createdAt));
   }),
   // Admin list assignments for any registration ID
   adminListAssignments: adminPermissionProcedure("view_documents").input(z7.object({ registrationId: z7.number().int().positive() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(participantAssignments).where(eq9(participantAssignments.registrationId, input.registrationId)).orderBy(desc4(participantAssignments.createdAt));
+    return db.select().from(participantAssignments).where(eq10(participantAssignments.registrationId, input.registrationId)).orderBy(desc4(participantAssignments.createdAt));
   }),
   // Participant-submitted proof of transfer. A receipt can never mark a payment as paid by itself.
   submitPaymentReceipt: participantProcedure.input(
@@ -5705,12 +5784,12 @@ var participantRouter = router({
   listPaymentReceipts: participantProcedure.input(z7.object({}).optional()).query(async ({ ctx }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(participantPaymentReceipts).where(eq9(participantPaymentReceipts.registrationId, ctx.participant.id)).orderBy(desc4(participantPaymentReceipts.createdAt));
+    return db.select().from(participantPaymentReceipts).where(eq10(participantPaymentReceipts.registrationId, ctx.participant.id)).orderBy(desc4(participantPaymentReceipts.createdAt));
   }),
   adminListPaymentReceipts: adminPermissionProcedure("manage_payments").input(z7.object({ registrationId: z7.number().int().positive() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return [];
-    return db.select().from(participantPaymentReceipts).where(eq9(participantPaymentReceipts.registrationId, input.registrationId)).orderBy(desc4(participantPaymentReceipts.createdAt));
+    return db.select().from(participantPaymentReceipts).where(eq10(participantPaymentReceipts.registrationId, input.registrationId)).orderBy(desc4(participantPaymentReceipts.createdAt));
   }),
   reviewPaymentReceipt: adminPermissionProcedure("manage_payments").input(
     z7.object({
@@ -5726,7 +5805,7 @@ var participantRouter = router({
       reviewedByUserId: ctx.user.id,
       reviewedAt: /* @__PURE__ */ new Date(),
       reviewNote: input.reviewNote || null
-    }).where(eq9(participantPaymentReceipts.id, input.receiptId));
+    }).where(eq10(participantPaymentReceipts.id, input.receiptId));
     return { success: true };
   }),
   // Staged, registration-aware Current State Diagnostic. It is unlocked by brief consent, not payment.
@@ -5735,7 +5814,7 @@ var participantRouter = router({
     if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = ctx.participant;
     await requireBriefAcknowledgement(db, applicant.id);
-    const stored = (await db.select({ structuredDiagnostic: currentStatusAssessments.structuredDiagnostic }).from(currentStatusAssessments).where(eq9(currentStatusAssessments.registrationId, applicant.id)).limit(1))[0];
+    const stored = (await db.select({ structuredDiagnostic: currentStatusAssessments.structuredDiagnostic }).from(currentStatusAssessments).where(eq10(currentStatusAssessments.registrationId, applicant.id)).limit(1))[0];
     const draft = mergeStructuredDiagnosticDraft(applicant, stored?.structuredDiagnostic ?? null);
     return { draft, progress: diagnosticSectionProgress(draft) };
   }),
@@ -5745,7 +5824,7 @@ var participantRouter = router({
     const applicant = ctx.participant;
     await requireBriefAcknowledgement(db, applicant.id);
     const draft = input.draft;
-    const existing = (await db.select({ id: currentStatusAssessments.id }).from(currentStatusAssessments).where(eq9(currentStatusAssessments.registrationId, applicant.id)).limit(1))[0];
+    const existing = (await db.select({ id: currentStatusAssessments.id }).from(currentStatusAssessments).where(eq10(currentStatusAssessments.registrationId, applicant.id)).limit(1))[0];
     const values2 = {
       structuredDiagnostic: JSON.stringify(draft),
       diagnosticVersion: STRUCTURED_DIAGNOSTIC_VERSION,
@@ -5755,7 +5834,7 @@ var participantRouter = router({
       status: "Draft"
     };
     if (existing) {
-      await db.update(currentStatusAssessments).set(values2).where(eq9(currentStatusAssessments.id, existing.id));
+      await db.update(currentStatusAssessments).set(values2).where(eq10(currentStatusAssessments.id, existing.id));
     } else {
       await db.insert(currentStatusAssessments).values({ registrationId: applicant.id, ...values2 });
     }
@@ -5849,7 +5928,7 @@ ${BRAND.facilitatorName}`;
     }
     const applicant = ctx.participant;
     await requireBriefAcknowledgement(db, applicant.id);
-    const assessmentRows = await db.select().from(currentStatusAssessments).where(eq9(currentStatusAssessments.registrationId, applicant.id)).limit(1);
+    const assessmentRows = await db.select().from(currentStatusAssessments).where(eq10(currentStatusAssessments.registrationId, applicant.id)).limit(1);
     return assessmentRows[0] || null;
   }),
   // Save or update current status assessment by participant token
@@ -5871,7 +5950,7 @@ ${BRAND.facilitatorName}`;
     }
     const applicant = ctx.participant;
     await requireBriefAcknowledgement(db, applicant.id);
-    const existingRows = await db.select().from(currentStatusAssessments).where(eq9(currentStatusAssessments.registrationId, applicant.id)).limit(1);
+    const existingRows = await db.select().from(currentStatusAssessments).where(eq10(currentStatusAssessments.registrationId, applicant.id)).limit(1);
     if (existingRows.length > 0) {
       await db.update(currentStatusAssessments).set({
         businessModelSummary: input.businessModelSummary,
@@ -5882,7 +5961,7 @@ ${BRAND.facilitatorName}`;
         desiredSixMonthOutcome: input.desiredSixMonthOutcome,
         additionalNotes: input.additionalNotes,
         status: input.status
-      }).where(eq9(currentStatusAssessments.registrationId, applicant.id));
+      }).where(eq10(currentStatusAssessments.registrationId, applicant.id));
     } else {
       await db.insert(currentStatusAssessments).values({
         registrationId: applicant.id,
@@ -5902,9 +5981,9 @@ ${BRAND.facilitatorName}`;
   adminGetAssessment: adminPermissionProcedure("view_assessments").input(z7.object({ registrationId: z7.number().int().positive() })).query(async ({ input }) => {
     const db = await getDb();
     if (!db) return null;
-    const applicant = (await db.select().from(registrations).where(eq9(registrations.id, input.registrationId)).limit(1))[0];
+    const applicant = (await db.select().from(registrations).where(eq10(registrations.id, input.registrationId)).limit(1))[0];
     if (!applicant) throw new TRPCError9({ code: "NOT_FOUND", message: "Participant registration not found." });
-    const assessment = (await db.select().from(currentStatusAssessments).where(eq9(currentStatusAssessments.registrationId, input.registrationId)).limit(1))[0];
+    const assessment = (await db.select().from(currentStatusAssessments).where(eq10(currentStatusAssessments.registrationId, input.registrationId)).limit(1))[0];
     if (!assessment) return { assessment: null, draft: null, progress: null, workingReport: null };
     const draft = mergeStructuredDiagnosticDraft(applicant, assessment.structuredDiagnostic ?? null);
     return {
@@ -5922,7 +6001,7 @@ ${BRAND.facilitatorName}`;
     }
     const applicant = ctx.participant;
     await requireBriefAcknowledgement(db, applicant.id);
-    const assessmentRows = await db.select().from(currentStatusAssessments).where(eq9(currentStatusAssessments.registrationId, applicant.id)).limit(1);
+    const assessmentRows = await db.select().from(currentStatusAssessments).where(eq10(currentStatusAssessments.registrationId, applicant.id)).limit(1);
     const assessment = assessmentRows[0];
     if (!assessment) {
       throw new TRPCError9({ code: "NOT_FOUND", message: "Assessment not found. Please submit your assessment first." });
@@ -5981,7 +6060,7 @@ ${BRAND.facilitatorName}`;
     const db = await getDb();
     if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = ctx.participant;
-    const messages = await db.select().from(consultingChatMessages).where(eq9(consultingChatMessages.registrationId, applicant.id)).orderBy(consultingChatMessages.createdAt);
+    const messages = await db.select().from(consultingChatMessages).where(eq10(consultingChatMessages.registrationId, applicant.id)).orderBy(consultingChatMessages.createdAt);
     if (messages.length === 0) {
       const welcomeText = `Welcome, ${applicant.fullName}. I am your strategy & innovation AI consulting partner for ${BRAND.programmeName} (working alongside ${BRAND.facilitatorFormalName}).
 
@@ -6011,10 +6090,10 @@ When leading through high-uncertainty execution or pivoting under cash pressure,
         topicTag: "founder_swot",
         structuredData: initialOptions
       });
-      const freshMessages = await db.select().from(consultingChatMessages).where(eq9(consultingChatMessages.registrationId, applicant.id)).orderBy(consultingChatMessages.createdAt);
+      const freshMessages = await db.select().from(consultingChatMessages).where(eq10(consultingChatMessages.registrationId, applicant.id)).orderBy(consultingChatMessages.createdAt);
       return { messages: freshMessages, completed: false };
     }
-    const reportRows = await db.select().from(consultingReports).where(eq9(consultingReports.registrationId, applicant.id)).limit(1);
+    const reportRows = await db.select().from(consultingReports).where(eq10(consultingReports.registrationId, applicant.id)).limit(1);
     return {
       messages,
       completed: reportRows.length > 0,
@@ -6036,7 +6115,7 @@ When leading through high-uncertainty execution or pivoting under cash pressure,
       content: participantMessage,
       topicTag: "user_response"
     });
-    const messages = await db.select().from(consultingChatMessages).where(eq9(consultingChatMessages.registrationId, applicant.id)).orderBy(consultingChatMessages.createdAt);
+    const messages = await db.select().from(consultingChatMessages).where(eq10(consultingChatMessages.registrationId, applicant.id)).orderBy(consultingChatMessages.createdAt);
     const aiTurns = messages.filter((m) => m.sender === "ai").length;
     let nextAiContent = "";
     let nextOptions = null;
@@ -6126,7 +6205,7 @@ You can now review your inferred diagnostic findings, strategic hypotheses, and 
     const db = await getDb();
     if (!db) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const applicant = ctx.participant;
-    const reportRows = await db.select().from(consultingReports).where(eq9(consultingReports.registrationId, applicant.id)).limit(1);
+    const reportRows = await db.select().from(consultingReports).where(eq10(consultingReports.registrationId, applicant.id)).limit(1);
     const report = reportRows[0];
     const summary = report ? JSON.parse(report.summaryJson) : {
       strategicHypotheses: ["Diagnostic interview pending completion."],
@@ -6184,7 +6263,7 @@ You can now review your inferred diagnostic findings, strategic hypotheses, and 
 
 // server/routers/adminAccess.ts
 import { TRPCError as TRPCError10 } from "@trpc/server";
-import { and as and9, desc as desc5, eq as eq10, gt as gt4, isNull as isNull4 } from "drizzle-orm";
+import { and as and9, desc as desc5, eq as eq11, gt as gt4, isNull as isNull4 } from "drizzle-orm";
 import { randomBytes as randomBytes4 } from "crypto";
 import { z as z8 } from "zod";
 init_brand();
@@ -6197,7 +6276,7 @@ var adminAccessRouter = router({
   status: protectedProcedure.query(async ({ ctx }) => {
     const db = await getDb();
     if (!db || !ctx.user) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-    const credentials = await db.select({ id: adminCredentials.id }).from(adminCredentials).where(eq10(adminCredentials.userId, ctx.user.id)).limit(1);
+    const credentials = await db.select({ id: adminCredentials.id }).from(adminCredentials).where(eq11(adminCredentials.userId, ctx.user.id)).limit(1);
     const authority = await loadAuthority(db, ctx.user);
     const internal = authority.roles.length > 0;
     const viaAccount = ctx.authChannel === "account";
@@ -6258,7 +6337,7 @@ var adminAccessRouter = router({
     const token2 = randomBytes4(32).toString("base64url");
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_MAX_AGE_MS);
     await db.update(adminPasswordResetTokens).set({ revokedAt: /* @__PURE__ */ new Date() }).where(and9(
-      eq10(adminPasswordResetTokens.userId, ctx.user.id),
+      eq11(adminPasswordResetTokens.userId, ctx.user.id),
       isNull4(adminPasswordResetTokens.consumedAt),
       isNull4(adminPasswordResetTokens.revokedAt)
     ));
@@ -6285,10 +6364,10 @@ For your protection, this link can be used once. If you did not request this res
 ${BRAND.senderDisplayName}`
     });
     if (delivery.status !== "Sent") {
-      await db.update(adminPasswordResetTokens).set({ revokedAt: /* @__PURE__ */ new Date(), deliveryStatus: delivery.status, deliveryMessageId: null }).where(eq10(adminPasswordResetTokens.id, resetId));
+      await db.update(adminPasswordResetTokens).set({ revokedAt: /* @__PURE__ */ new Date(), deliveryStatus: delivery.status, deliveryMessageId: null }).where(eq11(adminPasswordResetTokens.id, resetId));
       throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "The reset email could not be delivered. Kindly try again shortly." });
     }
-    await db.update(adminPasswordResetTokens).set({ deliveryStatus: delivery.status, deliveryMessageId: delivery.providerMessageId || null }).where(eq10(adminPasswordResetTokens.id, resetId));
+    await db.update(adminPasswordResetTokens).set({ deliveryStatus: delivery.status, deliveryMessageId: delivery.providerMessageId || null }).where(eq11(adminPasswordResetTokens.id, resetId));
     await db.insert(adminAccessAuditEvents).values({
       actorUserId: ctx.user.id,
       action: "admin_password_reset_requested",
@@ -6298,6 +6377,7 @@ ${BRAND.senderDisplayName}`
     return { success: true, expiresAt };
   }),
   confirmPasswordReset: publicProcedure.input(z8.object({ token: z8.string().min(30).max(200), password: passwordSchema, confirmPassword: passwordSchema })).mutation(async ({ ctx, input }) => {
+    if (!await consumeLimit(LIMITS.publicLookup, ctx.req.ip || "unknown")) throw new TRPCError10({ code: "TOO_MANY_REQUESTS", message: "Too many attempts. Kindly try again later." });
     if (input.password !== input.confirmPassword) {
       throw new TRPCError10({ code: "BAD_REQUEST", message: "The password confirmation does not match." });
     }
@@ -6306,7 +6386,7 @@ ${BRAND.senderDisplayName}`
     const db = await getDb();
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const resetToken = (await db.select().from(adminPasswordResetTokens).where(and9(
-      eq10(adminPasswordResetTokens.tokenHash, sha256(input.token)),
+      eq11(adminPasswordResetTokens.tokenHash, sha256(input.token)),
       isNull4(adminPasswordResetTokens.consumedAt),
       isNull4(adminPasswordResetTokens.revokedAt),
       gt4(adminPasswordResetTokens.expiresAt, /* @__PURE__ */ new Date())
@@ -6314,13 +6394,13 @@ ${BRAND.senderDisplayName}`
     if (!resetToken) {
       throw new TRPCError10({ code: "NOT_FOUND", message: "This password reset link is unavailable or has expired. Kindly request a new link." });
     }
-    const administrator = (await db.select().from(users).where(and9(eq10(users.id, resetToken.userId), eq10(users.role, "admin"))).limit(1))[0];
+    const administrator = (await db.select().from(users).where(and9(eq11(users.id, resetToken.userId), eq11(users.role, "admin"))).limit(1))[0];
     if (!administrator) {
       throw new TRPCError10({ code: "FORBIDDEN", message: "This password reset link is no longer valid." });
     }
     await revokeAdminSessionsForUser(administrator.id);
     await setAdminPassword(administrator.id, input.password);
-    await db.update(adminPasswordResetTokens).set({ consumedAt: /* @__PURE__ */ new Date() }).where(eq10(adminPasswordResetTokens.id, resetToken.id));
+    await db.update(adminPasswordResetTokens).set({ consumedAt: /* @__PURE__ */ new Date() }).where(eq11(adminPasswordResetTokens.id, resetToken.id));
     clearAdminAccessSession(ctx.req, ctx.res);
     await db.insert(adminAccessAuditEvents).values({
       actorUserId: administrator.id,
@@ -6345,12 +6425,12 @@ ${BRAND.senderDisplayName}`
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const email = normalizeAdminEmail(input.email);
     if (email === OWNER_ADMIN_EMAIL) throw new TRPCError10({ code: "BAD_REQUEST", message: "The super administrator already has permanent access." });
-    const existingAdmin = await db.select({ id: users.id }).from(users).where(and9(emailEquals(users.email, email), eq10(users.role, "admin"))).limit(1);
+    const existingAdmin = await db.select({ id: users.id }).from(users).where(and9(emailEquals(users.email, email), eq11(users.role, "admin"))).limit(1);
     if (existingAdmin.length) throw new TRPCError10({ code: "CONFLICT", message: `That email is already an active ${BRAND.programmeShortName} administrator.` });
     const token2 = randomBytes4(32).toString("base64url");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1e3);
     const permissions = parseAdminPermissions(JSON.stringify(input.permissions));
-    await db.update(adminInvitations).set({ status: "Revoked" }).where(and9(eq10(adminInvitations.email, email), eq10(adminInvitations.status, "Pending")));
+    await db.update(adminInvitations).set({ status: "Revoked" }).where(and9(eq11(adminInvitations.email, email), eq11(adminInvitations.status, "Pending")));
     const inserted = await db.insert(adminInvitations).values({
       email,
       inviteeName: input.inviteeName || null,
@@ -6380,7 +6460,7 @@ ${BRAND.senderDisplayName}`
     await db.update(adminInvitations).set({
       deliveryStatus: delivery.status,
       deliveryMessageId: delivery.status === "Sent" ? delivery.providerMessageId || null : null
-    }).where(eq10(adminInvitations.id, invitationId));
+    }).where(eq11(adminInvitations.id, invitationId));
     await db.insert(adminAccessAuditEvents).values({
       actorUserId: ctx.user.id,
       action: "admin_invitation_created",
@@ -6392,7 +6472,7 @@ ${BRAND.senderDisplayName}`
   listTeam: ownerAdminProcedure.query(async () => {
     const db = await getDb();
     if (!db) return [];
-    const team = await db.select().from(users).where(eq10(users.role, "admin")).orderBy(desc5(users.lastSignedIn));
+    const team = await db.select().from(users).where(eq11(users.role, "admin")).orderBy(desc5(users.lastSignedIn));
     const profiles = await db.select().from(adminPermissionProfiles);
     const permissionMap = new Map(profiles.map((profile) => [profile.userId, parseAdminPermissions(profile.permissionsJson)]));
     return team.map((member) => ({
@@ -6415,11 +6495,11 @@ ${BRAND.senderDisplayName}`
     if (!ctx.user) throw new TRPCError10({ code: "UNAUTHORIZED" });
     const db = await getDb();
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-    const target = await db.select().from(users).where(eq10(users.id, input.userId)).limit(1);
+    const target = await db.select().from(users).where(eq11(users.id, input.userId)).limit(1);
     if (!target[0] || target[0].role !== "admin") throw new TRPCError10({ code: "NOT_FOUND", message: "Active administrator not found." });
     if (isOwnerAdmin(target[0])) throw new TRPCError10({ code: "FORBIDDEN", message: `The ${BRAND.programmeShortName} super administrator cannot be revoked here.` });
-    await db.update(users).set({ role: "user" }).where(eq10(users.id, target[0].id));
-    await db.delete(adminPermissionProfiles).where(eq10(adminPermissionProfiles.userId, target[0].id));
+    await db.update(users).set({ role: "user" }).where(eq11(users.id, target[0].id));
+    await db.delete(adminPermissionProfiles).where(eq11(adminPermissionProfiles.userId, target[0].id));
     await revokeAdminSessionsForUser(target[0].id);
     await db.insert(adminAccessAuditEvents).values({
       actorUserId: ctx.user.id,
@@ -6435,13 +6515,13 @@ ${BRAND.senderDisplayName}`
     if (!ctx.user) throw new TRPCError10({ code: "UNAUTHORIZED" });
     const db = await getDb();
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-    const target = (await db.select().from(users).where(eq10(users.id, input.userId)).limit(1))[0];
+    const target = (await db.select().from(users).where(eq11(users.id, input.userId)).limit(1))[0];
     if (!target || target.role !== "admin") throw new TRPCError10({ code: "NOT_FOUND", message: "Active administrator not found." });
     if (isOwnerAdmin(target)) throw new TRPCError10({ code: "FORBIDDEN", message: "The Super Admin retains all permissions and cannot be restricted." });
     const permissionsJson = serializeAdminPermissions(parseAdminPermissions(JSON.stringify(input.permissions)));
-    const profile = (await db.select({ id: adminPermissionProfiles.id }).from(adminPermissionProfiles).where(eq10(adminPermissionProfiles.userId, target.id)).limit(1))[0];
+    const profile = (await db.select({ id: adminPermissionProfiles.id }).from(adminPermissionProfiles).where(eq11(adminPermissionProfiles.userId, target.id)).limit(1))[0];
     if (profile) {
-      await db.update(adminPermissionProfiles).set({ permissionsJson, updatedByUserId: ctx.user.id }).where(eq10(adminPermissionProfiles.id, profile.id));
+      await db.update(adminPermissionProfiles).set({ permissionsJson, updatedByUserId: ctx.user.id }).where(eq11(adminPermissionProfiles.id, profile.id));
     } else {
       await db.insert(adminPermissionProfiles).values({ userId: target.id, permissionsJson, updatedByUserId: ctx.user.id });
     }
@@ -6455,25 +6535,25 @@ ${BRAND.senderDisplayName}`
     if (policyError) throw new TRPCError10({ code: "BAD_REQUEST", message: policyError });
     const db = await getDb();
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-    const candidates = await db.select().from(adminInvitations).where(and9(eq10(adminInvitations.tokenHash, sha256(input.token)), eq10(adminInvitations.status, "Pending"))).limit(1);
+    const candidates = await db.select().from(adminInvitations).where(and9(eq11(adminInvitations.tokenHash, sha256(input.token)), eq11(adminInvitations.status, "Pending"))).limit(1);
     const invitation = candidates[0];
     if (!invitation || invitation.expiresAt.getTime() <= Date.now()) {
-      if (invitation) await db.update(adminInvitations).set({ status: "Expired" }).where(eq10(adminInvitations.id, invitation.id));
+      if (invitation) await db.update(adminInvitations).set({ status: "Expired" }).where(eq11(adminInvitations.id, invitation.id));
       throw new TRPCError10({ code: "NOT_FOUND", message: "This invitation is unavailable or has expired." });
     }
     if (normalizeAdminEmail(ctx.user.email) !== invitation.email) {
       throw new TRPCError10({ code: "FORBIDDEN", message: `Kindly sign in with ${invitation.email} to accept this invitation.` });
     }
-    await db.update(users).set({ role: "admin" }).where(eq10(users.id, ctx.user.id));
+    await db.update(users).set({ role: "admin" }).where(eq11(users.id, ctx.user.id));
     await setAdminPassword(ctx.user.id, input.password);
     const permissionsJson = serializeAdminPermissions(parseAdminPermissions(invitation.proposedPermissionsJson));
-    const profile = (await db.select({ id: adminPermissionProfiles.id }).from(adminPermissionProfiles).where(eq10(adminPermissionProfiles.userId, ctx.user.id)).limit(1))[0];
+    const profile = (await db.select({ id: adminPermissionProfiles.id }).from(adminPermissionProfiles).where(eq11(adminPermissionProfiles.userId, ctx.user.id)).limit(1))[0];
     if (profile) {
-      await db.update(adminPermissionProfiles).set({ permissionsJson, updatedByUserId: invitation.createdByUserId }).where(eq10(adminPermissionProfiles.id, profile.id));
+      await db.update(adminPermissionProfiles).set({ permissionsJson, updatedByUserId: invitation.createdByUserId }).where(eq11(adminPermissionProfiles.id, profile.id));
     } else {
       await db.insert(adminPermissionProfiles).values({ userId: ctx.user.id, permissionsJson, updatedByUserId: invitation.createdByUserId });
     }
-    await db.update(adminInvitations).set({ status: "Accepted", acceptedByUserId: ctx.user.id, acceptedAt: /* @__PURE__ */ new Date() }).where(eq10(adminInvitations.id, invitation.id));
+    await db.update(adminInvitations).set({ status: "Accepted", acceptedByUserId: ctx.user.id, acceptedAt: /* @__PURE__ */ new Date() }).where(eq11(adminInvitations.id, invitation.id));
     await issueAdminAccessSession(ctx.req, ctx.res, ctx.user.id);
     await db.insert(adminAccessAuditEvents).values({
       actorUserId: ctx.user.id,
@@ -6483,10 +6563,11 @@ ${BRAND.senderDisplayName}`
     });
     return { success: true };
   }),
-  inviteStatus: publicProcedure.input(z8.object({ token: z8.string().min(30).max(200) })).query(async ({ input }) => {
+  inviteStatus: publicProcedure.input(z8.object({ token: z8.string().min(30).max(200) })).query(async ({ ctx, input }) => {
+    if (!await consumeLimit(LIMITS.publicLookup, ctx.req.ip || "unknown")) throw new TRPCError10({ code: "TOO_MANY_REQUESTS", message: "Too many attempts. Kindly try again later." });
     const db = await getDb();
     if (!db) return { valid: false };
-    const result = await db.select({ inviteeName: adminInvitations.inviteeName, expiresAt: adminInvitations.expiresAt, status: adminInvitations.status }).from(adminInvitations).where(eq10(adminInvitations.tokenHash, sha256(input.token))).limit(1);
+    const result = await db.select({ inviteeName: adminInvitations.inviteeName, expiresAt: adminInvitations.expiresAt, status: adminInvitations.status }).from(adminInvitations).where(eq11(adminInvitations.tokenHash, sha256(input.token))).limit(1);
     const invitation = result[0];
     return { valid: Boolean(invitation && invitation.status === "Pending" && invitation.expiresAt.getTime() > Date.now()), inviteeName: invitation?.inviteeName || null };
   })
@@ -6494,7 +6575,7 @@ ${BRAND.senderDisplayName}`
 
 // server/routers/referrals.ts
 import { TRPCError as TRPCError11 } from "@trpc/server";
-import { and as and10, desc as desc6, eq as eq11, sql as sql5 } from "drizzle-orm";
+import { and as and10, desc as desc6, eq as eq12, sql as sql6 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { nanoid as nanoid2 } from "nanoid";
 
@@ -6525,17 +6606,17 @@ var referralsRouter = router({
     const db = await getDb();
     if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const registrationId = ctx.participant.id;
-    let profile = (await db.select().from(participantReferralProfiles).where(eq11(participantReferralProfiles.registrationId, registrationId)).limit(1))[0];
+    let profile = (await db.select().from(participantReferralProfiles).where(eq12(participantReferralProfiles.registrationId, registrationId)).limit(1))[0];
     if (!profile) {
       const referralCode = `j${nanoid2(20)}`;
       try {
         await db.insert(participantReferralProfiles).values({ registrationId, referralCode });
       } catch {
       }
-      profile = (await db.select().from(participantReferralProfiles).where(eq11(participantReferralProfiles.registrationId, registrationId)).limit(1))[0];
+      profile = (await db.select().from(participantReferralProfiles).where(eq12(participantReferralProfiles.registrationId, registrationId)).limit(1))[0];
     }
     if (!profile) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Could not prepare your share link." });
-    const referrals = await db.select().from(participantReferrals).where(eq11(participantReferrals.referrerRegistrationId, registrationId)).orderBy(desc6(participantReferrals.createdAt));
+    const referrals = await db.select().from(participantReferrals).where(eq12(participantReferrals.referrerRegistrationId, registrationId)).orderBy(desc6(participantReferrals.createdAt));
     const approvedCount = referrals.filter((referral) => referral.status === "Approved").length;
     return {
       shareUrl: `${shareOrigin(ctx.req)}/?ref=${encodeURIComponent(profile.referralCode)}`,
@@ -6565,14 +6646,14 @@ var referralsRouter = router({
       referredPackage: referred.package,
       referredStatus: referred.status,
       referredDepositPaid: referred.depositPaid
-    }).from(participantReferrals).innerJoin(referrer, eq11(participantReferrals.referrerRegistrationId, referrer.id)).innerJoin(referred, eq11(participantReferrals.referredRegistrationId, referred.id)).orderBy(desc6(participantReferrals.createdAt));
+    }).from(participantReferrals).innerJoin(referrer, eq12(participantReferrals.referrerRegistrationId, referrer.id)).innerJoin(referred, eq12(participantReferrals.referredRegistrationId, referred.id)).orderBy(desc6(participantReferrals.createdAt));
   }),
   review: ownerAdminProcedure.input(z9.object({ id: z9.number().int().positive(), decision: z9.enum(["Qualified", "Approved", "Declined"]), notes: z9.string().trim().max(2e3).optional() })).mutation(async ({ ctx, input }) => {
     const db = await getDb();
     if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-    const referral = (await db.select().from(participantReferrals).where(eq11(participantReferrals.id, input.id)).limit(1))[0];
+    const referral = (await db.select().from(participantReferrals).where(eq12(participantReferrals.id, input.id)).limit(1))[0];
     if (!referral) throw new TRPCError11({ code: "NOT_FOUND", message: "Referral record not found." });
-    const referredRegistration = (await db.select().from(registrations).where(eq11(registrations.id, referral.referredRegistrationId)).limit(1))[0];
+    const referredRegistration = (await db.select().from(registrations).where(eq12(registrations.id, referral.referredRegistrationId)).limit(1))[0];
     if (!referredRegistration) throw new TRPCError11({ code: "NOT_FOUND", message: "Referred participant record not found." });
     const isEligible = referralIsEligibleForQualification(referredRegistration.status, referredRegistration.depositPaid);
     if ((input.decision === "Qualified" || input.decision === "Approved") && !isEligible) {
@@ -6580,7 +6661,7 @@ var referralsRouter = router({
     }
     if (input.decision === "Approved") {
       if (referral.status !== "Qualified") throw new TRPCError11({ code: "PRECONDITION_FAILED", message: "Mark the referral Qualified before approving a credit." });
-      const countRow = (await db.select({ count: sql5`count(*)` }).from(participantReferrals).where(and10(eq11(participantReferrals.referrerRegistrationId, referral.referrerRegistrationId), eq11(participantReferrals.status, "Approved"))))[0];
+      const countRow = (await db.select({ count: sql6`count(*)` }).from(participantReferrals).where(and10(eq12(participantReferrals.referrerRegistrationId, referral.referrerRegistrationId), eq12(participantReferrals.status, "Approved"))))[0];
       if (!referralCreditIsAvailable(Number(countRow?.count ?? 0))) {
         throw new TRPCError11({ code: "PRECONDITION_FAILED", message: `The referrer has reached the maximum of ${REFERRAL_MAX_APPROVED_CREDITS} approved referral credits.` });
       }
@@ -6591,7 +6672,7 @@ var referralsRouter = router({
       reviewedByUserId: ctx.user.id,
       reviewedAt: /* @__PURE__ */ new Date(),
       notes: input.notes || null
-    }).where(eq11(participantReferrals.id, referral.id));
+    }).where(eq12(participantReferrals.id, referral.id));
     return { success: true, decision: input.decision, creditPercentage: input.decision === "Approved" ? REFERRAL_CREDIT_PERCENTAGE : 0 };
   })
 });
@@ -6680,7 +6761,7 @@ var informationSessionRouter = router({
 });
 
 // server/routers/paymentInstructions.ts
-import { eq as eq12 } from "drizzle-orm";
+import { eq as eq13 } from "drizzle-orm";
 import { z as z10 } from "zod";
 
 // shared/paymentInstructionTemplates.ts
@@ -6785,7 +6866,7 @@ var paymentInstructionInput = z10.object({
 async function getEligibleRegistration(registrationId) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const registration = (await db.select().from(registrations).where(eq12(registrations.id, registrationId)).limit(1))[0];
+  const registration = (await db.select().from(registrations).where(eq13(registrations.id, registrationId)).limit(1))[0];
   if (!registration || registration.status === "Rejected" || registration.supersededByRegistrationId) {
     throw new Error("An eligible active participant record was not found.");
   }
@@ -6823,7 +6904,7 @@ var paymentInstructionsRouter = router({
 });
 
 // server/routers/inboundReplies.ts
-import { desc as desc7, eq as eq13, inArray as inArray3 } from "drizzle-orm";
+import { desc as desc7, eq as eq14, inArray as inArray3 } from "drizzle-orm";
 import { z as z11 } from "zod";
 
 // server/workspaceMailbox.ts
@@ -6933,7 +7014,7 @@ var inboundRepliesRouter = router({
       status: inboundEmailReplies.status,
       participantName: registrations.fullName,
       package: registrations.package
-    }).from(inboundEmailReplies).innerJoin(registrations, eq13(inboundEmailReplies.registrationId, registrations.id)).orderBy(desc7(inboundEmailReplies.receivedAt));
+    }).from(inboundEmailReplies).innerJoin(registrations, eq14(inboundEmailReplies.registrationId, registrations.id)).orderBy(desc7(inboundEmailReplies.receivedAt));
     return { replies, connected: isJumpMailboxSyncConfigured() };
   }),
   sync: ownerAdminProcedure.mutation(async () => {
@@ -6975,7 +7056,7 @@ var inboundRepliesRouter = router({
   updateStatus: adminPermissionProcedure("view_communications").input(z11.object({ id: z11.number().int().positive(), status: replyStatus })).mutation(async ({ input }) => {
     const db = await getDb();
     if (!db) throw new Error("Database not available.");
-    await db.update(inboundEmailReplies).set({ status: input.status }).where(eq13(inboundEmailReplies.id, input.id));
+    await db.update(inboundEmailReplies).set({ status: input.status }).where(eq14(inboundEmailReplies.id, input.id));
     return { success: true };
   })
 });
@@ -7076,7 +7157,7 @@ var pricingRequestsRouter = router({
 // server/routers/businessCheck.ts
 import { TRPCError as TRPCError18 } from "@trpc/server";
 import { randomBytes as randomBytes7 } from "crypto";
-import { eq as eq19 } from "drizzle-orm";
+import { eq as eq20 } from "drizzle-orm";
 import { z as z16 } from "zod";
 
 // shared/phone.ts
@@ -8567,29 +8648,29 @@ function officeEmail(input) {
 }
 
 // server/payments.ts
-import { and as and14, desc as desc10, eq as eq18, inArray as inArray5, ne as ne2 } from "drizzle-orm";
+import { and as and14, desc as desc10, eq as eq19, inArray as inArray5, ne as ne2 } from "drizzle-orm";
 import { TRPCError as TRPCError17 } from "@trpc/server";
 init_brand();
 init_env();
 
 // server/engagements.ts
 import { TRPCError as TRPCError14 } from "@trpc/server";
-import { and as and11, asc, desc as desc8, eq as eq15, inArray as inArray4, isNull as isNull5 } from "drizzle-orm";
+import { and as and11, asc, desc as desc8, eq as eq16, inArray as inArray4, isNull as isNull5 } from "drizzle-orm";
 
 // server/debriefs.ts
 import { TRPCError as TRPCError13 } from "@trpc/server";
-import { eq as eq14 } from "drizzle-orm";
+import { eq as eq15 } from "drizzle-orm";
 function isMissingDebriefTable(error) {
   const code = error?.code ?? error?.cause?.code;
   return code === "42P01";
 }
 async function requireCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email }).from(businessChecks).where(eq14(businessChecks.id, businessCheckId)).limit(1))[0];
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email }).from(businessChecks).where(eq15(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError13({ code: "NOT_FOUND", message: "This business check does not exist." });
   return check;
 }
 async function getDebrief(db, businessCheckId) {
-  return (await db.select().from(debriefs).where(eq14(debriefs.businessCheckId, businessCheckId)).limit(1))[0] ?? null;
+  return (await db.select().from(debriefs).where(eq15(debriefs.businessCheckId, businessCheckId)).limit(1))[0] ?? null;
 }
 async function saveDebrief(db, input, actorUserId) {
   const check = await requireCheck(db, input.businessCheckId);
@@ -8603,7 +8684,7 @@ async function saveDebrief(db, input, actorUserId) {
 async function shareDebrief(db, input, actorUserId) {
   const check = await requireCheck(db, input.businessCheckId);
   return db.transaction(async (tx) => {
-    const updated = await tx.update(debriefs).set({ sharedAt: input.shared ? /* @__PURE__ */ new Date() : null }).where(eq14(debriefs.businessCheckId, check.id)).returning({ id: debriefs.id });
+    const updated = await tx.update(debriefs).set({ sharedAt: input.shared ? /* @__PURE__ */ new Date() : null }).where(eq15(debriefs.businessCheckId, check.id)).returning({ id: debriefs.id });
     if (!updated.length) throw new TRPCError13({ code: "NOT_FOUND", message: "Write the Debrief up before sharing it." });
     await recordAudit(tx, { action: "debrief_shared", actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, debriefId: updated[0].id, shared: input.shared } });
     return { success: true };
@@ -8649,7 +8730,7 @@ function addWorkingDays(from, days) {
 async function startEngagement(db, input) {
   const now = input.now ?? /* @__PURE__ */ new Date();
   return db.transaction(async (tx) => {
-    const accepted = (await tx.select({ businessId: clientOnboardingInvitations.businessId }).from(clientOnboardingInvitations).where(and11(eq15(clientOnboardingInvitations.businessCheckId, input.businessCheckId), eq15(clientOnboardingInvitations.status, "accepted"))).orderBy(desc8(clientOnboardingInvitations.id)).limit(1))[0];
+    const accepted = (await tx.select({ businessId: clientOnboardingInvitations.businessId }).from(clientOnboardingInvitations).where(and11(eq16(clientOnboardingInvitations.businessCheckId, input.businessCheckId), eq16(clientOnboardingInvitations.status, "accepted"))).orderBy(desc8(clientOnboardingInvitations.id)).limit(1))[0];
     const [created] = await tx.insert(engagements).values({ businessCheckId: input.businessCheckId, paymentRequestId: input.paymentRequestId, businessId: accepted?.businessId ?? null }).onConflictDoNothing({ target: engagements.businessCheckId }).returning({ id: engagements.id });
     if (!created) return { engagementId: null, created: false };
     const dueFor = (week) => addWorkingDays(now, week === 1 ? 3 : 8);
@@ -8720,27 +8801,27 @@ async function listAwaitingStart(db, actor) {
     fullName: businessChecks.fullName,
     businessName: businessChecks.businessName,
     email: businessChecks.email
-  }).from(paymentRequests).innerJoin(businessChecks, eq15(paymentRequests.businessCheckId, businessChecks.id)).leftJoin(engagements, eq15(engagements.businessCheckId, paymentRequests.businessCheckId)).where(and11(eq15(paymentRequests.item, "current_state"), eq15(paymentRequests.status, "confirmed"), isNull5(engagements.id))).orderBy(asc(paymentRequests.confirmedAt));
+  }).from(paymentRequests).innerJoin(businessChecks, eq16(paymentRequests.businessCheckId, businessChecks.id)).leftJoin(engagements, eq16(engagements.businessCheckId, paymentRequests.businessCheckId)).where(and11(eq16(paymentRequests.item, "current_state"), eq16(paymentRequests.status, "confirmed"), isNull5(engagements.id))).orderBy(asc(paymentRequests.confirmedAt));
 }
 async function startAwaitingEngagement(db, actor, input) {
   requireStart(actor);
-  const payment = (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and11(eq15(paymentRequests.businessCheckId, input.businessCheckId), eq15(paymentRequests.item, "current_state"), eq15(paymentRequests.status, "confirmed"))).limit(1))[0];
+  const payment = (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and11(eq16(paymentRequests.businessCheckId, input.businessCheckId), eq16(paymentRequests.item, "current_state"), eq16(paymentRequests.status, "confirmed"))).limit(1))[0];
   if (!payment) throw new TRPCError14({ code: "NOT_FOUND", message: "This Current State Assessment is not paid yet." });
   const result = await startEngagement(db, { businessCheckId: input.businessCheckId, paymentRequestId: payment.id, actorUserId: actor.id });
-  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq15(engagements.businessCheckId, input.businessCheckId)).limit(1))[0];
+  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq16(engagements.businessCheckId, input.businessCheckId)).limit(1))[0];
   return { engagementId: engagement.id, created: result.created };
 }
 async function linkEngagementToBusiness(db, input) {
-  await db.update(engagements).set({ businessId: input.businessId }).where(and11(eq15(engagements.businessCheckId, input.businessCheckId), isNull5(engagements.businessId)));
+  await db.update(engagements).set({ businessId: input.businessId }).where(and11(eq16(engagements.businessCheckId, input.businessCheckId), isNull5(engagements.businessId)));
 }
 var canSeeAll = (actor) => authorityAllows(actor.authority, "view_all_businesses");
 var canSeeAssigned = (actor) => authorityAllows(actor.authority, "view_assigned_businesses");
 async function assignedEngagementIds(db, userId) {
-  const rows = await db.select({ engagementId: engagementTeam.engagementId }).from(engagementTeam).where(eq15(engagementTeam.userId, userId));
+  const rows = await db.select({ engagementId: engagementTeam.engagementId }).from(engagementTeam).where(eq16(engagementTeam.userId, userId));
   return rows.map((row) => row.engagementId);
 }
 async function requireStaffEngagement(db, actor, engagementId) {
-  const engagement = (await db.select().from(engagements).where(eq15(engagements.id, engagementId)).limit(1))[0];
+  const engagement = (await db.select().from(engagements).where(eq16(engagements.id, engagementId)).limit(1))[0];
   if (!engagement) throw notFound();
   if (canSeeAll(actor)) return engagement;
   if (canSeeAssigned(actor) && (await assignedEngagementIds(db, actor.id)).includes(engagementId)) return engagement;
@@ -8767,11 +8848,11 @@ async function listStaffEngagements(db, actor) {
     ownerEmail: businessChecks.email,
     checkBusinessName: businessChecks.businessName,
     businessName: businesses.name
-  }).from(engagements).innerJoin(businessChecks, eq15(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq15(engagements.businessId, businesses.id)).where(scope ? inArray4(engagements.id, scope) : void 0).orderBy(desc8(engagements.id));
+  }).from(engagements).innerJoin(businessChecks, eq16(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq16(engagements.businessId, businesses.id)).where(scope ? inArray4(engagements.id, scope) : void 0).orderBy(desc8(engagements.id));
   if (!rows.length) return [];
   const ids = rows.map((row) => row.id);
   const [team, tasks, sessions] = await Promise.all([
-    db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role, name: users.name }).from(engagementTeam).innerJoin(users, eq15(engagementTeam.userId, users.id)).where(inArray4(engagementTeam.engagementId, ids)),
+    db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role, name: users.name }).from(engagementTeam).innerJoin(users, eq16(engagementTeam.userId, users.id)).where(inArray4(engagementTeam.engagementId, ids)),
     db.select({ engagementId: engagementTasks.engagementId, side: engagementTasks.side, status: engagementTasks.status, dueOn: engagementTasks.dueOn }).from(engagementTasks).where(inArray4(engagementTasks.engagementId, ids)),
     db.select({ engagementId: engagementSessions.engagementId, title: engagementSessions.title, scheduledFor: engagementSessions.scheduledFor, status: engagementSessions.status }).from(engagementSessions).where(inArray4(engagementSessions.engagementId, ids))
   ]);
@@ -8798,14 +8879,14 @@ async function listStaffEngagements(db, actor) {
 }
 async function getStaffEngagement(db, actor, engagementId) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
-  const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq15(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
-  const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq15(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
+  const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq16(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq16(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
   const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins] = await Promise.all([
-    db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email }).from(engagementTeam).innerJoin(users, eq15(engagementTeam.userId, users.id)).where(eq15(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
-    db.select().from(engagementSessions).where(eq15(engagementSessions.engagementId, engagementId)).orderBy(asc(engagementSessions.id)),
-    db.select().from(engagementTasks).where(eq15(engagementTasks.engagementId, engagementId)).orderBy(asc(engagementTasks.id)),
-    db.select().from(engagementDeliverables).where(eq15(engagementDeliverables.engagementId, engagementId)).orderBy(asc(engagementDeliverables.id)),
-    db.select({ id: engagementComments.id, deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq15(engagementComments.authorUserId, users.id)).where(eq15(engagementComments.engagementId, engagementId)).orderBy(asc(engagementComments.id)),
+    db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email }).from(engagementTeam).innerJoin(users, eq16(engagementTeam.userId, users.id)).where(eq16(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
+    db.select().from(engagementSessions).where(eq16(engagementSessions.engagementId, engagementId)).orderBy(asc(engagementSessions.id)),
+    db.select().from(engagementTasks).where(eq16(engagementTasks.engagementId, engagementId)).orderBy(asc(engagementTasks.id)),
+    db.select().from(engagementDeliverables).where(eq16(engagementDeliverables.engagementId, engagementId)).orderBy(asc(engagementDeliverables.id)),
+    db.select({ id: engagementComments.id, deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq16(engagementComments.authorUserId, users.id)).where(eq16(engagementComments.engagementId, engagementId)).orderBy(asc(engagementComments.id)),
     engagement.businessId ? clientPeopleOf(db, engagement.businessId) : Promise.resolve([]),
     filesOf(db, engagementId),
     measureOf(db, engagementId),
@@ -8833,12 +8914,12 @@ async function getStaffEngagement(db, actor, engagementId) {
   };
 }
 async function clientPeopleOf(db, businessId) {
-  const rows = await db.select({ userId: users.id, name: users.name, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq15(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq15(businessMemberAccess.membershipId, businessMemberships.id)).where(and11(eq15(businessMemberships.businessId, businessId), eq15(businessMemberships.status, "active"))).orderBy(asc(businessMemberships.id));
+  const rows = await db.select({ userId: users.id, name: users.name, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq16(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq16(businessMemberAccess.membershipId, businessMemberships.id)).where(and11(eq16(businessMemberships.businessId, businessId), eq16(businessMemberships.status, "active"))).orderBy(asc(businessMemberships.id));
   return rows.map((row) => ({ userId: row.userId, name: row.name ?? "", role: row.role, access: row.role === "member" ? row.access ?? "full" : "full" }));
 }
 async function listAssignableStaff(db, actor) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
-  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, role: userPlatformRoles.role }).from(userPlatformRoles).innerJoin(users, eq15(userPlatformRoles.userId, users.id)).where(eq15(users.status, "active")).orderBy(asc(users.name));
+  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, role: userPlatformRoles.role }).from(userPlatformRoles).innerJoin(users, eq16(userPlatformRoles.userId, users.id)).where(eq16(users.status, "active")).orderBy(asc(users.name));
   const people = /* @__PURE__ */ new Map();
   for (const row of rows) {
     const person = people.get(row.userId) ?? { userId: row.userId, name: row.name ?? "", email: row.email ?? "", roles: [] };
@@ -8863,12 +8944,12 @@ function sharedNoticeEmail(input) {
   };
 }
 async function clientRecipients(db, businessId, audience) {
-  const people = await db.select({ name: users.name, email: users.email, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq15(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq15(businessMemberAccess.membershipId, businessMemberships.id)).where(and11(eq15(businessMemberships.businessId, businessId), eq15(businessMemberships.status, "active"), eq15(users.status, "active")));
+  const people = await db.select({ name: users.name, email: users.email, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq16(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq16(businessMemberAccess.membershipId, businessMemberships.id)).where(and11(eq16(businessMemberships.businessId, businessId), eq16(businessMemberships.status, "active"), eq16(users.status, "active")));
   return people.filter((person) => person.email && clientCanSee(audience, person.role === "member" ? { kind: "member", access: person.access ?? "full", userId: 0 } : { kind: "owner" }));
 }
 async function notifyShared(db, engagementId, audience, what, title) {
   try {
-    const engagement = (await db.select({ businessId: engagements.businessId }).from(engagements).where(eq15(engagements.id, engagementId)).limit(1))[0];
+    const engagement = (await db.select({ businessId: engagements.businessId }).from(engagements).where(eq16(engagements.id, engagementId)).limit(1))[0];
     if (!engagement?.businessId) return;
     const url = `${getTrustedApplicationOrigin()}/dashboard`;
     for (const person of await clientRecipients(db, engagement.businessId, audience)) {
@@ -8882,7 +8963,7 @@ async function notifyShared(db, engagementId, audience, what, title) {
 async function assignTeamMember(db, actor, input) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
   await requireStaffEngagement(db, actor, input.engagementId);
-  const staff2 = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq15(userPlatformRoles.userId, users.id)).where(and11(eq15(userPlatformRoles.userId, input.userId), eq15(users.status, "active"))).limit(1))[0];
+  const staff2 = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq16(userPlatformRoles.userId, users.id)).where(and11(eq16(userPlatformRoles.userId, input.userId), eq16(users.status, "active"))).limit(1))[0];
   if (!staff2) throw new TRPCError14({ code: "BAD_REQUEST", message: "Only IP Factory staff can join an engagement team." });
   await db.transaction(async (tx) => {
     await tx.insert(engagementTeam).values({ engagementId: input.engagementId, userId: input.userId, role: input.role, assignedByUserId: actor.id }).onConflictDoUpdate({ target: [engagementTeam.engagementId, engagementTeam.userId], set: { role: input.role, assignedByUserId: actor.id } });
@@ -8894,7 +8975,7 @@ async function removeTeamMember(db, actor, input) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
   await requireStaffEngagement(db, actor, input.engagementId);
   await db.transaction(async (tx) => {
-    await tx.delete(engagementTeam).where(and11(eq15(engagementTeam.engagementId, input.engagementId), eq15(engagementTeam.userId, input.userId)));
+    await tx.delete(engagementTeam).where(and11(eq16(engagementTeam.engagementId, input.engagementId), eq16(engagementTeam.userId, input.userId)));
     await recordAudit(tx, { action: "engagement_team_removed", actorUserId: actor.id, details: { engagementId: input.engagementId, userId: input.userId } });
   });
   return { success: true };
@@ -8910,7 +8991,7 @@ async function setEngagementStage(db, actor, input) {
       ...input.stage === "assessment" && !engagement.assessmentStartedAt ? { assessmentStartedAt: now } : {},
       ...input.stage === "fix" && !engagement.fixStartedAt ? { fixStartedAt: now } : {},
       ...input.stage === "closed" ? { closedAt: now } : { closedAt: null }
-    }).where(eq15(engagements.id, engagement.id));
+    }).where(eq16(engagements.id, engagement.id));
     await recordAudit(tx, { action: "engagement_stage_changed", actorUserId: actor.id, details: { engagementId: engagement.id, from: engagement.stage, to: input.stage } });
   });
   return { success: true, changed: true };
@@ -8918,7 +8999,7 @@ async function setEngagementStage(db, actor, input) {
 async function saveProblem(db, actor, input) {
   requireManage(actor);
   await requireStaffEngagement(db, actor, input.engagementId);
-  await db.update(engagements).set({ problemArea: input.problemArea, subProblem: input.subProblem, problemStatement: input.problemStatement }).where(eq15(engagements.id, input.engagementId));
+  await db.update(engagements).set({ problemArea: input.problemArea, subProblem: input.subProblem, problemStatement: input.problemStatement }).where(eq16(engagements.id, input.engagementId));
   return { success: true };
 }
 async function saveSession(db, actor, input) {
@@ -8926,7 +9007,7 @@ async function saveSession(db, actor, input) {
   await requireStaffEngagement(db, actor, input.engagementId);
   const values2 = { kind: input.kind, title: input.title, scheduledFor: input.scheduledFor, durationMinutes: input.durationMinutes, meetingLink: input.meetingLink, agenda: input.agenda, status: input.status, ...input.weekNumber === void 0 ? {} : { weekNumber: input.weekNumber } };
   if (input.sessionId) {
-    const updated = await db.update(engagementSessions).set(values2).where(and11(eq15(engagementSessions.id, input.sessionId), eq15(engagementSessions.engagementId, input.engagementId))).returning({ id: engagementSessions.id });
+    const updated = await db.update(engagementSessions).set(values2).where(and11(eq16(engagementSessions.id, input.sessionId), eq16(engagementSessions.engagementId, input.engagementId))).returning({ id: engagementSessions.id });
     if (!updated.length) throw notFound();
     return { sessionId: input.sessionId };
   }
@@ -8934,7 +9015,7 @@ async function saveSession(db, actor, input) {
   return { sessionId: created.id };
 }
 async function requireStaffSession(db, actor, sessionId) {
-  const session = (await db.select().from(engagementSessions).where(eq15(engagementSessions.id, sessionId)).limit(1))[0];
+  const session = (await db.select().from(engagementSessions).where(eq16(engagementSessions.id, sessionId)).limit(1))[0];
   if (!session) throw notFound();
   await requireStaffEngagement(db, actor, session.engagementId);
   return session;
@@ -8942,7 +9023,7 @@ async function requireStaffSession(db, actor, sessionId) {
 async function saveSessionNotes(db, actor, input) {
   requireManage(actor);
   await requireStaffSession(db, actor, input.sessionId);
-  await db.update(engagementSessions).set({ clientNotes: input.clientNotes, internalNotes: input.internalNotes }).where(eq15(engagementSessions.id, input.sessionId));
+  await db.update(engagementSessions).set({ clientNotes: input.clientNotes, internalNotes: input.internalNotes }).where(eq16(engagementSessions.id, input.sessionId));
   return { success: true };
 }
 async function shareSessionNotes(db, actor, input) {
@@ -8950,7 +9031,7 @@ async function shareSessionNotes(db, actor, input) {
   const session = await requireStaffSession(db, actor, input.sessionId);
   if (!session.clientNotes?.trim()) throw new TRPCError14({ code: "BAD_REQUEST", message: "Write the client's version of the notes before sharing them." });
   await db.transaction(async (tx) => {
-    await tx.update(engagementSessions).set({ notesAudience: input.audience, notesSharedAt: /* @__PURE__ */ new Date(), notesSharedByUserId: actor.id }).where(eq15(engagementSessions.id, session.id));
+    await tx.update(engagementSessions).set({ notesAudience: input.audience, notesSharedAt: /* @__PURE__ */ new Date(), notesSharedByUserId: actor.id }).where(eq16(engagementSessions.id, session.id));
     await recordAudit(tx, { action: "engagement_notes_shared", actorUserId: actor.id, details: { engagementId: session.engagementId, sessionId: session.id, audience: input.audience } });
   });
   await notifyShared(db, session.engagementId, input.audience, "the Session notes", session.title);
@@ -8960,14 +9041,14 @@ async function saveTask(db, actor, input) {
   requireManage(actor);
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   if (input.assigneeUserId !== null) {
-    const allowed = input.side === "client" ? engagement.businessId !== null && (await clientPeopleOf(db, engagement.businessId)).some((person) => person.userId === input.assigneeUserId) : (await db.select({ userId: engagementTeam.userId }).from(engagementTeam).where(and11(eq15(engagementTeam.engagementId, engagement.id), eq15(engagementTeam.userId, input.assigneeUserId))).limit(1)).length === 1;
+    const allowed = input.side === "client" ? engagement.businessId !== null && (await clientPeopleOf(db, engagement.businessId)).some((person) => person.userId === input.assigneeUserId) : (await db.select({ userId: engagementTeam.userId }).from(engagementTeam).where(and11(eq16(engagementTeam.engagementId, engagement.id), eq16(engagementTeam.userId, input.assigneeUserId))).limit(1)).length === 1;
     if (!allowed) throw new TRPCError14({ code: "BAD_REQUEST", message: input.side === "client" ? "That person is not part of the client's business." : "That person is not on the engagement team." });
   }
-  if (input.sessionId !== null && !(await db.select({ id: engagementSessions.id }).from(engagementSessions).where(and11(eq15(engagementSessions.id, input.sessionId), eq15(engagementSessions.engagementId, engagement.id))).limit(1)).length) throw notFound();
+  if (input.sessionId !== null && !(await db.select({ id: engagementSessions.id }).from(engagementSessions).where(and11(eq16(engagementSessions.id, input.sessionId), eq16(engagementSessions.engagementId, engagement.id))).limit(1)).length) throw notFound();
   const finished = input.status === "accepted" || input.status === "done";
   const values2 = { kind: input.kind, title: input.title, detail: input.detail, side: input.side, assigneeUserId: input.assigneeUserId, dueOn: input.dueOn, status: input.status, statusNote: input.statusNote, sessionId: input.sessionId, weekNumber: input.weekNumber, sortOrder: input.sortOrder, factor: input.factor, completedAt: finished ? /* @__PURE__ */ new Date() : null };
   if (input.taskId) {
-    const updated = await db.update(engagementTasks).set(values2).where(and11(eq15(engagementTasks.id, input.taskId), eq15(engagementTasks.engagementId, engagement.id))).returning({ id: engagementTasks.id });
+    const updated = await db.update(engagementTasks).set(values2).where(and11(eq16(engagementTasks.id, input.taskId), eq16(engagementTasks.engagementId, engagement.id))).returning({ id: engagementTasks.id });
     if (!updated.length) throw notFound();
     return { taskId: input.taskId };
   }
@@ -8979,7 +9060,7 @@ async function saveDeliverable(db, actor, input) {
   await requireStaffEngagement(db, actor, input.engagementId);
   const values2 = { kind: input.kind, title: input.title, summary: input.summary };
   if (input.deliverableId) {
-    const updated = await db.update(engagementDeliverables).set({ ...values2, status: "draft", approvedAt: null, approvedByUserId: null, sharedAt: null, sharedByUserId: null, clientAcceptedAt: null, clientAcceptedByUserId: null }).where(and11(eq15(engagementDeliverables.id, input.deliverableId), eq15(engagementDeliverables.engagementId, input.engagementId))).returning({ id: engagementDeliverables.id });
+    const updated = await db.update(engagementDeliverables).set({ ...values2, status: "draft", approvedAt: null, approvedByUserId: null, sharedAt: null, sharedByUserId: null, clientAcceptedAt: null, clientAcceptedByUserId: null }).where(and11(eq16(engagementDeliverables.id, input.deliverableId), eq16(engagementDeliverables.engagementId, input.engagementId))).returning({ id: engagementDeliverables.id });
     if (!updated.length) throw notFound();
     return { deliverableId: input.deliverableId };
   }
@@ -8987,7 +9068,7 @@ async function saveDeliverable(db, actor, input) {
   return { deliverableId: created.id };
 }
 async function requireStaffDeliverable(db, actor, deliverableId) {
-  const deliverable = (await db.select().from(engagementDeliverables).where(eq15(engagementDeliverables.id, deliverableId)).limit(1))[0];
+  const deliverable = (await db.select().from(engagementDeliverables).where(eq16(engagementDeliverables.id, deliverableId)).limit(1))[0];
   if (!deliverable) throw notFound();
   await requireStaffEngagement(db, actor, deliverable.engagementId);
   return deliverable;
@@ -8997,7 +9078,7 @@ async function approveDeliverable(db, actor, input) {
   const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
   if (deliverable.status === "shared") throw new TRPCError14({ code: "CONFLICT", message: "This is already shared." });
   await db.transaction(async (tx) => {
-    await tx.update(engagementDeliverables).set({ status: "approved", approvedAt: /* @__PURE__ */ new Date(), approvedByUserId: actor.id }).where(eq15(engagementDeliverables.id, deliverable.id));
+    await tx.update(engagementDeliverables).set({ status: "approved", approvedAt: /* @__PURE__ */ new Date(), approvedByUserId: actor.id }).where(eq16(engagementDeliverables.id, deliverable.id));
     await recordAudit(tx, { action: "engagement_deliverable_approved", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind } });
   });
   return { success: true };
@@ -9009,7 +9090,7 @@ async function shareDeliverable(db, actor, input) {
     throw new TRPCError14({ code: "FORBIDDEN", message: `The desk lead approves every ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]} before the client sees it.` });
   }
   await db.transaction(async (tx) => {
-    await tx.update(engagementDeliverables).set({ status: "shared", audience: input.audience, sharedAt: /* @__PURE__ */ new Date(), sharedByUserId: actor.id }).where(eq15(engagementDeliverables.id, deliverable.id));
+    await tx.update(engagementDeliverables).set({ status: "shared", audience: input.audience, sharedAt: /* @__PURE__ */ new Date(), sharedByUserId: actor.id }).where(eq16(engagementDeliverables.id, deliverable.id));
     await recordAudit(tx, { action: "engagement_deliverable_shared", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind, audience: input.audience } });
   });
   await notifyShared(db, deliverable.engagementId, input.audience, `your ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]}`, deliverable.title);
@@ -9024,28 +9105,28 @@ async function clientViewerFor(db, session, businessId) {
   const membership = session.memberships.find((item) => item.businessId === businessId);
   if (!membership) throw notFound();
   if (membership.role !== "member") return { kind: "owner" };
-  const access = (await db.select({ access: businessMemberAccess.access }).from(businessMemberAccess).innerJoin(businessMemberships, eq15(businessMemberAccess.membershipId, businessMemberships.id)).where(and11(eq15(businessMemberships.businessId, businessId), eq15(businessMemberships.userId, session.user.id))).limit(1))[0];
+  const access = (await db.select({ access: businessMemberAccess.access }).from(businessMemberAccess).innerJoin(businessMemberships, eq16(businessMemberAccess.membershipId, businessMemberships.id)).where(and11(eq16(businessMemberships.businessId, businessId), eq16(businessMemberships.userId, session.user.id))).limit(1))[0];
   return { kind: "member", access: access?.access ?? "full", userId: session.user.id };
 }
 async function getClientRoom(db, session) {
   const business = session.activeBusiness;
   if (!business) return null;
-  const engagement = (await db.select().from(engagements).where(eq15(engagements.businessId, business.businessId)).orderBy(desc8(engagements.id)).limit(1))[0];
+  const engagement = (await db.select().from(engagements).where(eq16(engagements.businessId, business.businessId)).orderBy(desc8(engagements.id)).limit(1))[0];
   if (!engagement) return null;
   const viewer = await clientViewerFor(db, session, business.businessId);
   const [team, sessions, tasks, deliverables, comments, files, measure, checkins] = await Promise.all([
-    db.select({ name: users.name, role: engagementTeam.role }).from(engagementTeam).innerJoin(users, eq15(engagementTeam.userId, users.id)).where(eq15(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
-    db.select().from(engagementSessions).where(eq15(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
-    db.select().from(engagementTasks).where(eq15(engagementTasks.engagementId, engagement.id)).orderBy(asc(engagementTasks.id)),
-    db.select().from(engagementDeliverables).where(and11(eq15(engagementDeliverables.engagementId, engagement.id), eq15(engagementDeliverables.status, "shared"))).orderBy(asc(engagementDeliverables.id)),
-    db.select({ deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq15(engagementComments.authorUserId, users.id)).where(eq15(engagementComments.engagementId, engagement.id)).orderBy(asc(engagementComments.id)),
+    db.select({ name: users.name, role: engagementTeam.role }).from(engagementTeam).innerJoin(users, eq16(engagementTeam.userId, users.id)).where(eq16(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
+    db.select().from(engagementSessions).where(eq16(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
+    db.select().from(engagementTasks).where(eq16(engagementTasks.engagementId, engagement.id)).orderBy(asc(engagementTasks.id)),
+    db.select().from(engagementDeliverables).where(and11(eq16(engagementDeliverables.engagementId, engagement.id), eq16(engagementDeliverables.status, "shared"))).orderBy(asc(engagementDeliverables.id)),
+    db.select({ deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq16(engagementComments.authorUserId, users.id)).where(eq16(engagementComments.engagementId, engagement.id)).orderBy(asc(engagementComments.id)),
     filesOf(db, engagement.id),
     measureOf(db, engagement.id),
     checkinsOf(db, engagement.id)
   ]);
   const fullView = viewer.kind === "owner" || viewer.access === "full";
-  const check = (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor }).from(businessChecks).where(eq15(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
-  const report = (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq15(fullReports.businessCheckId, engagement.businessCheckId)).limit(1))[0] ?? null;
+  const check = (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor }).from(businessChecks).where(eq16(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  const report = (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq16(fullReports.businessCheckId, engagement.businessCheckId)).limit(1))[0] ?? null;
   const debrief = fullView ? await sharedDebriefFor(db, engagement.businessCheckId) : null;
   const visibleDeliverables = deliverables.filter((item) => clientCanSee(item.audience, viewer));
   const clientFiles = (where, id3) => files.filter((file) => file[where] === id3 && clientFileVisible(file, viewer, session.user.id)).map((file) => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === session.user.id, fromTeam: file.fromTeam }));
@@ -9121,25 +9202,25 @@ async function getClientRoom(db, session) {
 async function requireClientEngagement(db, session, engagementId) {
   const business = session.activeBusiness;
   if (!business) throw notFound();
-  const engagement = (await db.select().from(engagements).where(and11(eq15(engagements.id, engagementId), eq15(engagements.businessId, business.businessId))).limit(1))[0];
+  const engagement = (await db.select().from(engagements).where(and11(eq16(engagements.id, engagementId), eq16(engagements.businessId, business.businessId))).limit(1))[0];
   if (!engagement || engagement.businessId === null) throw notFound();
   return { engagement, viewer: await clientViewerFor(db, session, engagement.businessId) };
 }
 async function respondToTask(db, session, input) {
-  const task = (await db.select().from(engagementTasks).where(eq15(engagementTasks.id, input.taskId)).limit(1))[0];
+  const task = (await db.select().from(engagementTasks).where(eq16(engagementTasks.id, input.taskId)).limit(1))[0];
   if (!task) throw notFound();
   const { viewer } = await requireClientEngagement(db, session, task.engagementId);
   if (task.side !== "client" || !clientCanSeeTask(task, viewer)) throw notFound();
   if (task.status !== "open" && task.status !== "needs_more") throw new TRPCError14({ code: "CONFLICT", message: "This is already with us." });
   const status = task.kind === "data_request" ? "received" : "done";
   await db.transaction(async (tx) => {
-    await tx.update(engagementTasks).set({ status, statusNote: input.note, completedAt: status === "done" ? /* @__PURE__ */ new Date() : null }).where(eq15(engagementTasks.id, task.id));
+    await tx.update(engagementTasks).set({ status, statusNote: input.note, completedAt: status === "done" ? /* @__PURE__ */ new Date() : null }).where(eq16(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status } });
   });
   return { success: true, status };
 }
 async function requireClientDeliverable(db, session, deliverableId) {
-  const deliverable = (await db.select().from(engagementDeliverables).where(eq15(engagementDeliverables.id, deliverableId)).limit(1))[0];
+  const deliverable = (await db.select().from(engagementDeliverables).where(eq16(engagementDeliverables.id, deliverableId)).limit(1))[0];
   if (!deliverable || deliverable.status !== "shared") throw notFound();
   const { viewer } = await requireClientEngagement(db, session, deliverable.engagementId);
   if (!clientCanSee(deliverable.audience, viewer)) throw notFound();
@@ -9155,7 +9236,7 @@ async function acceptDeliverable(db, session, input) {
   if (viewer.kind !== "owner") throw new TRPCError14({ code: "FORBIDDEN", message: "Only the owner can sign this off." });
   if (deliverable.clientAcceptedAt) return { success: true, changed: false };
   await db.transaction(async (tx) => {
-    await tx.update(engagementDeliverables).set({ clientAcceptedAt: /* @__PURE__ */ new Date(), clientAcceptedByUserId: session.user.id }).where(eq15(engagementDeliverables.id, deliverable.id));
+    await tx.update(engagementDeliverables).set({ clientAcceptedAt: /* @__PURE__ */ new Date(), clientAcceptedByUserId: session.user.id }).where(eq16(engagementDeliverables.id, deliverable.id));
     await recordAudit(tx, { action: "engagement_deliverable_accepted", actorUserId: session.user.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id } });
   });
   return { success: true, changed: true };
@@ -9164,13 +9245,13 @@ async function setClientAudience(db, session, input) {
   if (input.item === "deliverable") {
     const { deliverable, viewer } = await requireClientDeliverable(db, session, input.id);
     if (viewer.kind !== "owner") throw new TRPCError14({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
-    await db.update(engagementDeliverables).set({ audience: input.audience }).where(eq15(engagementDeliverables.id, deliverable.id));
+    await db.update(engagementDeliverables).set({ audience: input.audience }).where(eq16(engagementDeliverables.id, deliverable.id));
   } else {
-    const item = (await db.select().from(engagementSessions).where(eq15(engagementSessions.id, input.id)).limit(1))[0];
+    const item = (await db.select().from(engagementSessions).where(eq16(engagementSessions.id, input.id)).limit(1))[0];
     if (!item || !item.notesSharedAt) throw notFound();
     const { viewer } = await requireClientEngagement(db, session, item.engagementId);
     if (viewer.kind !== "owner") throw new TRPCError14({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
-    await db.update(engagementSessions).set({ notesAudience: input.audience }).where(eq15(engagementSessions.id, item.id));
+    await db.update(engagementSessions).set({ notesAudience: input.audience }).where(eq16(engagementSessions.id, item.id));
   }
   await recordAudit(db, { action: "engagement_audience_changed", actorUserId: session.user.id, details: { item: input.item, id: input.id, audience: input.audience } });
   return { success: true };
@@ -9202,12 +9283,12 @@ async function filesOf(db, engagementId) {
     uploadedByName: users.name,
     createdAt: engagementFiles.createdAt,
     membershipId: businessMemberships.id
-  }).from(engagementFiles).innerJoin(users, eq15(engagementFiles.uploadedByUserId, users.id)).innerJoin(engagements, eq15(engagementFiles.engagementId, engagements.id)).leftJoin(businessMemberships, and11(eq15(businessMemberships.userId, engagementFiles.uploadedByUserId), eq15(businessMemberships.businessId, engagements.businessId))).where(eq15(engagementFiles.engagementId, engagementId)).orderBy(asc(engagementFiles.id));
+  }).from(engagementFiles).innerJoin(users, eq16(engagementFiles.uploadedByUserId, users.id)).innerJoin(engagements, eq16(engagementFiles.engagementId, engagements.id)).leftJoin(businessMemberships, and11(eq16(businessMemberships.userId, engagementFiles.uploadedByUserId), eq16(businessMemberships.businessId, engagements.businessId))).where(eq16(engagementFiles.engagementId, engagementId)).orderBy(asc(engagementFiles.id));
   return rows.map(({ membershipId, ...row }) => ({ ...row, fromTeam: membershipId === null }));
 }
 var clientFileVisible = (file, viewer, userId) => file.uploadedByUserId === userId || clientCanSee(file.audience, viewer);
 async function requireClientTaskForUpload(db, session, taskId) {
-  const task = (await db.select().from(engagementTasks).where(eq15(engagementTasks.id, taskId)).limit(1))[0];
+  const task = (await db.select().from(engagementTasks).where(eq16(engagementTasks.id, taskId)).limit(1))[0];
   if (!task) throw notFound();
   const { viewer } = await requireClientEngagement(db, session, task.engagementId);
   if (task.side !== "client" || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound();
@@ -9239,29 +9320,29 @@ async function clientConfirmUpload(db, session, input) {
       audience: "owner",
       uploadedByUserId: session.user.id
     }).returning({ id: engagementFiles.id });
-    if (open) await tx.update(engagementTasks).set({ status: "received", statusNote: input.note || "Uploaded to the room" }).where(eq15(engagementTasks.id, task.id));
+    if (open) await tx.update(engagementTasks).set({ status: "received", statusNote: input.note || "Uploaded to the room" }).where(eq16(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_file_uploaded", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, fileId: file.id, ...open ? { status: "received" } : {} } });
     return { success: true, fileId: file.id, status: open ? "received" : task.status };
   });
 }
 async function clientFileLink(db, session, input) {
   requireUploads();
-  const file = (await db.select().from(engagementFiles).where(eq15(engagementFiles.id, input.fileId)).limit(1))[0];
+  const file = (await db.select().from(engagementFiles).where(eq16(engagementFiles.id, input.fileId)).limit(1))[0];
   if (!file) throw notFound();
   const { viewer } = await requireClientEngagement(db, session, file.engagementId);
   if (!clientFileVisible(file, viewer, session.user.id)) throw notFound();
   if (file.taskId !== null) {
-    const task = (await db.select().from(engagementTasks).where(eq15(engagementTasks.id, file.taskId)).limit(1))[0];
+    const task = (await db.select().from(engagementTasks).where(eq16(engagementTasks.id, file.taskId)).limit(1))[0];
     if (!task || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound();
   } else if (file.deliverableId !== null) {
-    const deliverable = (await db.select().from(engagementDeliverables).where(eq15(engagementDeliverables.id, file.deliverableId)).limit(1))[0];
+    const deliverable = (await db.select().from(engagementDeliverables).where(eq16(engagementDeliverables.id, file.deliverableId)).limit(1))[0];
     if (!deliverable || deliverable.status !== "shared" || !clientCanSee(deliverable.audience, viewer)) throw notFound();
   }
   return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
 }
 async function requireStaffTarget(db, actor, engagementId, target) {
   await requireStaffEngagement(db, actor, engagementId);
-  const exists = target.kind === "task" ? await db.select({ id: engagementTasks.id }).from(engagementTasks).where(and11(eq15(engagementTasks.id, target.id), eq15(engagementTasks.engagementId, engagementId))).limit(1) : await db.select({ id: engagementDeliverables.id }).from(engagementDeliverables).where(and11(eq15(engagementDeliverables.id, target.id), eq15(engagementDeliverables.engagementId, engagementId))).limit(1);
+  const exists = target.kind === "task" ? await db.select({ id: engagementTasks.id }).from(engagementTasks).where(and11(eq16(engagementTasks.id, target.id), eq16(engagementTasks.engagementId, engagementId))).limit(1) : await db.select({ id: engagementDeliverables.id }).from(engagementDeliverables).where(and11(eq16(engagementDeliverables.id, target.id), eq16(engagementDeliverables.engagementId, engagementId))).limit(1);
   if (!exists.length) throw notFound();
 }
 async function staffRequestUpload(db, actor, input) {
@@ -9298,7 +9379,7 @@ async function staffConfirmUpload(db, actor, input) {
 }
 async function staffFileLink(db, actor, input) {
   requireUploads();
-  const file = (await db.select().from(engagementFiles).where(eq15(engagementFiles.id, input.fileId)).limit(1))[0];
+  const file = (await db.select().from(engagementFiles).where(eq16(engagementFiles.id, input.fileId)).limit(1))[0];
   if (!file) throw notFound();
   await requireStaffEngagement(db, actor, file.engagementId);
   return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
@@ -9306,11 +9387,11 @@ async function staffFileLink(db, actor, input) {
 var asNumber = (value) => value === null ? null : Number(value);
 var asNumeric = (value) => value === null ? null : String(value);
 async function measureOf(db, engagementId) {
-  const row = (await db.select().from(engagementMeasures).where(eq15(engagementMeasures.engagementId, engagementId)).limit(1))[0];
+  const row = (await db.select().from(engagementMeasures).where(eq16(engagementMeasures.engagementId, engagementId)).limit(1))[0];
   return row ? { ...row, baselineValue: asNumber(row.baselineValue), targetValue: asNumber(row.targetValue) } : null;
 }
 async function checkinsOf(db, engagementId) {
-  const rows = await db.select().from(engagementCheckins).where(eq15(engagementCheckins.engagementId, engagementId)).orderBy(asc(engagementCheckins.weekNumber));
+  const rows = await db.select().from(engagementCheckins).where(eq16(engagementCheckins.engagementId, engagementId)).orderBy(asc(engagementCheckins.weekNumber));
   return rows.map((row) => ({ ...row, measureReading: asNumber(row.measureReading), hoursLead: asNumber(row.hoursLead), hoursAnalyst: asNumber(row.hoursAnalyst), hoursPartner: asNumber(row.hoursPartner) }));
 }
 function clientMeasure(measure, checkins) {
@@ -9332,7 +9413,7 @@ async function saveCheckin(db, actor, input) {
   requireManage(actor);
   await requireStaffEngagement(db, actor, input.engagementId);
   if (input.weekNumber > 1) {
-    const previous = await db.select({ id: engagementCheckins.id }).from(engagementCheckins).where(and11(eq15(engagementCheckins.engagementId, input.engagementId), eq15(engagementCheckins.weekNumber, input.weekNumber - 1))).limit(1);
+    const previous = await db.select({ id: engagementCheckins.id }).from(engagementCheckins).where(and11(eq16(engagementCheckins.engagementId, input.engagementId), eq16(engagementCheckins.weekNumber, input.weekNumber - 1))).limit(1);
     if (!previous.length) throw new TRPCError14({ code: "CONFLICT", message: `Record week ${input.weekNumber - 1} first: a Weekly Check-in cannot start without last week's record.` });
   }
   const values2 = {
@@ -9357,7 +9438,7 @@ async function saveCheckin(db, actor, input) {
 
 // server/clientOnboarding.ts
 import { randomBytes as randomBytes5, randomUUID as randomUUID2 } from "crypto";
-import { and as and12, count, desc as desc9, eq as eq16, gt as gt5, isNull as isNull6 } from "drizzle-orm";
+import { and as and12, count, desc as desc9, eq as eq17, gt as gt5, isNull as isNull6 } from "drizzle-orm";
 import { TRPCError as TRPCError15 } from "@trpc/server";
 init_brand();
 import { z as z14 } from "zod";
@@ -9395,7 +9476,7 @@ function buildOnboardingEmail(input) {
 }
 async function assessmentPaid(db, businessCheckId) {
   try {
-    const paid = await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and12(eq16(paymentRequests.businessCheckId, businessCheckId), eq16(paymentRequests.item, "current_state"), eq16(paymentRequests.status, "confirmed"))).limit(1);
+    const paid = await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and12(eq17(paymentRequests.businessCheckId, businessCheckId), eq17(paymentRequests.item, "current_state"), eq17(paymentRequests.status, "confirmed"))).limit(1);
     return paid.length > 0;
   } catch (error) {
     if (isUndefinedTable(error)) return false;
@@ -9404,7 +9485,7 @@ async function assessmentPaid(db, businessCheckId) {
 }
 async function createOnboardingInvitation(input) {
   const db = await requireDatabase();
-  const check = (await db.select().from(businessChecks).where(eq16(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  const check = (await db.select().from(businessChecks).where(eq17(businessChecks.id, input.businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError15({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
   const email = normaliseAccountEmail(check.email);
   if (!emailSchema.safeParse(email).success) throw new TRPCError15({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.invalidCheckEmail });
@@ -9415,7 +9496,7 @@ async function createOnboardingInvitation(input) {
   const token2 = randomBytes5(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ONBOARDING_INVITATION_TTL_MS);
   const invitation = await db.transaction(async (tx) => {
-    await tx.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and12(eq16(clientOnboardingInvitations.businessCheckId, check.id), eq16(clientOnboardingInvitations.status, "pending")));
+    await tx.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and12(eq17(clientOnboardingInvitations.businessCheckId, check.id), eq17(clientOnboardingInvitations.status, "pending")));
     const [row] = await tx.insert(clientOnboardingInvitations).values({
       businessCheckId: check.id,
       email,
@@ -9433,7 +9514,7 @@ async function createOnboardingInvitation(input) {
   await db.update(clientOnboardingInvitations).set({
     deliveryStatus: delivery.status,
     deliveryMessageId: delivery.status === "Sent" ? delivery.providerMessageId || null : null
-  }).where(eq16(clientOnboardingInvitations.id, invitation.id));
+  }).where(eq17(clientOnboardingInvitations.id, invitation.id));
   await db.insert(adminAccessAuditEvents).values({
     actorUserId: input.actorUserId,
     action: "client_onboarding_invitation_created",
@@ -9444,7 +9525,7 @@ async function createOnboardingInvitation(input) {
 }
 async function revokeOnboardingInvitation(input) {
   const db = await requireDatabase();
-  const revoked = await db.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and12(eq16(clientOnboardingInvitations.id, input.invitationId), eq16(clientOnboardingInvitations.status, "pending"))).returning({ id: clientOnboardingInvitations.id, email: clientOnboardingInvitations.email });
+  const revoked = await db.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and12(eq17(clientOnboardingInvitations.id, input.invitationId), eq17(clientOnboardingInvitations.status, "pending"))).returning({ id: clientOnboardingInvitations.id, email: clientOnboardingInvitations.email });
   if (revoked.length !== 1) throw new TRPCError15({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
   await db.insert(adminAccessAuditEvents).values({
     actorUserId: input.actorUserId,
@@ -9455,9 +9536,9 @@ async function revokeOnboardingInvitation(input) {
   return { success: true };
 }
 async function previewOnboardingInvitation(req, token2) {
-  if (!consumeRateLimit("onboarding", req, "preview", 60)) throw new TRPCError15({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!await consumeRateLimit("onboarding", req, "preview", 60)) throw new TRPCError15({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const db = await requireDatabase();
-  const invitation = (await db.select().from(clientOnboardingInvitations).where(eq16(clientOnboardingInvitations.tokenHash, sha256(token2))).limit(1))[0];
+  const invitation = (await db.select().from(clientOnboardingInvitations).where(eq17(clientOnboardingInvitations.tokenHash, sha256(token2))).limit(1))[0];
   if (!invitation || effectiveInvitationStatus(invitation) !== "pending") return { available: false };
   return { available: true, email: invitation.email, fullName: invitation.fullNameSnapshot, businessName: invitation.businessNameSnapshot };
 }
@@ -9466,13 +9547,13 @@ async function acceptOnboardingInvitation(req, res, rawInput) {
   const parsed = onboardingAcceptInputSchema.safeParse(rawInput);
   if (!parsed.success) throw new TRPCError15({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
   const input = parsed.data;
-  if (!consumeRateLimit("onboarding", req, "accept", 10)) throw new TRPCError15({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!await consumeRateLimit("onboarding", req, "accept", 10)) throw new TRPCError15({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const db = await requireDatabase();
   const passwordHash = hashAdminPassword(input.password);
   let created;
   try {
     created = await db.transaction(async (tx) => {
-      const invitation = (await tx.select().from(clientOnboardingInvitations).where(eq16(clientOnboardingInvitations.tokenHash, sha256(input.token))).limit(1))[0];
+      const invitation = (await tx.select().from(clientOnboardingInvitations).where(eq17(clientOnboardingInvitations.tokenHash, sha256(input.token))).limit(1))[0];
       if (!invitation || effectiveInvitationStatus(invitation) !== "pending") throw unavailable();
       if (input.email !== invitation.email) throw new TRPCError15({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
       if (await identityConflict(tx, invitation.email)) throw new TRPCError15({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
@@ -9498,8 +9579,8 @@ async function acceptOnboardingInvitation(req, res, rawInput) {
         acceptedByUserId: user.id,
         businessId: business.id
       }).where(and12(
-        eq16(clientOnboardingInvitations.id, invitation.id),
-        eq16(clientOnboardingInvitations.status, "pending"),
+        eq17(clientOnboardingInvitations.id, invitation.id),
+        eq17(clientOnboardingInvitations.status, "pending"),
         gt5(clientOnboardingInvitations.expiresAt, /* @__PURE__ */ new Date()),
         isNull6(clientOnboardingInvitations.acceptedAt)
       )).returning({ id: clientOnboardingInvitations.id });
@@ -9576,14 +9657,14 @@ async function onboardingMetrics() {
     businesses: await one(db.select({ n: count() }).from(businesses)),
     memberships: await one(db.select({ n: count() }).from(businessMemberships)),
     platformRoleAssignments: await one(db.select({ n: count() }).from(userPlatformRoles)),
-    pendingInvitations: await one(db.select({ n: count() }).from(clientOnboardingInvitations).where(and12(eq16(clientOnboardingInvitations.status, "pending"), gt5(clientOnboardingInvitations.expiresAt, /* @__PURE__ */ new Date())))),
+    pendingInvitations: await one(db.select({ n: count() }).from(clientOnboardingInvitations).where(and12(eq17(clientOnboardingInvitations.status, "pending"), gt5(clientOnboardingInvitations.expiresAt, /* @__PURE__ */ new Date())))),
     activeSessions: await one(db.select({ n: count() }).from(userSessions).where(and12(isNull6(userSessions.revokedAt), gt5(userSessions.expiresAt, /* @__PURE__ */ new Date()))))
   };
 }
 
 // server/fullReport/service.ts
 import { randomBytes as randomBytes6 } from "node:crypto";
-import { and as and13, eq as eq17 } from "drizzle-orm";
+import { and as and13, eq as eq18 } from "drizzle-orm";
 import { TRPCError as TRPCError16 } from "@trpc/server";
 init_brand();
 
@@ -11003,20 +11084,20 @@ var REPORT_ERRORS = {
 var reportUrl = (token2) => `${getTrustedApplicationOrigin()}/report/${encodeURIComponent(token2)}`;
 async function issueReportLink(db, input) {
   const token2 = randomBytes6(32).toString("base64url");
-  const existing = (await db.select().from(fullReports).where(eq17(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
+  const existing = (await db.select().from(fullReports).where(eq18(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
   if (existing?.status === "delivered") return null;
-  if (existing) await db.update(fullReports).set({ tokenHash: sha256(token2) }).where(eq17(fullReports.id, existing.id));
+  if (existing) await db.update(fullReports).set({ tokenHash: sha256(token2) }).where(eq18(fullReports.id, existing.id));
   else await db.insert(fullReports).values({ businessCheckId: input.businessCheckId, paymentRequestId: input.paymentRequestId, tokenHash: sha256(token2) });
   return reportUrl(token2);
 }
 async function recordFor(db, token2) {
   if (!token2 || token2.length > 200) throw new TRPCError16({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
-  const record = (await db.select().from(fullReports).where(eq17(fullReports.tokenHash, sha256(token2))).limit(1))[0];
+  const record = (await db.select().from(fullReports).where(eq18(fullReports.tokenHash, sha256(token2))).limit(1))[0];
   if (!record) throw new TRPCError16({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
   return record;
 }
 async function checkFor(db, businessCheckId) {
-  const check = (await db.select().from(businessChecks).where(eq17(businessChecks.id, businessCheckId)).limit(1))[0];
+  const check = (await db.select().from(businessChecks).where(eq18(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError16({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
   return check;
 }
@@ -11037,7 +11118,7 @@ async function assemble(db, record) {
   const intake = readIntake(parse(record.intakeJson));
   if (!intake || !record.intakeSubmittedAt) throw new TRPCError16({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
   const check = await checkFor(db, record.businessCheckId);
-  const payment = (await db.select({ reference: paymentRequests.reference }).from(paymentRequests).where(eq17(paymentRequests.id, record.paymentRequestId)).limit(1))[0];
+  const payment = (await db.select({ reference: paymentRequests.reference }).from(paymentRequests).where(eq18(paymentRequests.id, record.paymentRequestId)).limit(1))[0];
   const answers = parse(check.answersJson) ?? {};
   const result = parse(check.resultJson) ?? evaluate(answers);
   const report = buildFullReport({
@@ -11085,7 +11166,7 @@ async function submitReportIntake(db, token2, rawIntake) {
   if (record.status === "delivered") throw new TRPCError16({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
   const parsed = intakeSchema.safeParse(rawIntake);
   if (!parsed.success) throw new TRPCError16({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Please check your answers." });
-  const [claimed] = await db.update(fullReports).set({ status: "delivered", intakeJson: JSON.stringify(parsed.data), intakeSubmittedAt: /* @__PURE__ */ new Date(), reportVersion: REPORT_VERSION }).where(and13(eq17(fullReports.id, record.id), eq17(fullReports.status, "awaiting_intake"))).returning();
+  const [claimed] = await db.update(fullReports).set({ status: "delivered", intakeJson: JSON.stringify(parsed.data), intakeSubmittedAt: /* @__PURE__ */ new Date(), reportVersion: REPORT_VERSION }).where(and13(eq18(fullReports.id, record.id), eq18(fullReports.status, "awaiting_intake"))).returning();
   if (!claimed) throw new TRPCError16({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
   const { report, generatedAt, email } = await assemble(db, claimed);
   const pdf = await renderFullReportPdf(report, generatedAt);
@@ -11098,7 +11179,7 @@ async function submitReportIntake(db, token2, rawIntake) {
     body: message.body,
     attachments: [{ filename: fileName(report), content: pdf, contentType: "application/pdf" }]
   }).catch(() => ({ status: "Failed" }));
-  await db.update(fullReports).set({ deliveredAt: /* @__PURE__ */ new Date(), deliveryStatus: delivery.status }).where(eq17(fullReports.id, claimed.id));
+  await db.update(fullReports).set({ deliveredAt: /* @__PURE__ */ new Date(), deliveryStatus: delivery.status }).where(eq18(fullReports.id, claimed.id));
   await recordAudit(db, { action: "full_report_delivered", targetEmail: email, details: { businessCheckId: claimed.businessCheckId, reference: report.reference, delivery: delivery.status } });
   await deliverEmail({
     sender: "business_support",
@@ -11125,19 +11206,19 @@ async function downloadReport(db, token2) {
   return { fileName: fileName(report), pdf: (await renderFullReportPdf(report, generatedAt)).toString("base64") };
 }
 async function adminDownloadReport(db, businessCheckId) {
-  const record = (await db.select().from(fullReports).where(eq17(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
+  const record = (await db.select().from(fullReports).where(eq18(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
   if (!record || record.status !== "delivered") throw new TRPCError16({ code: "NOT_FOUND", message: "This Full Report has not been sent yet." });
   const { report, generatedAt } = await assemble(db, record);
   return { fileName: fileName(report), pdf: (await renderFullReportPdf(report, generatedAt)).toString("base64") };
 }
 async function reportStatusFor(db, businessCheckId) {
-  const record = (await db.select({ status: fullReports.status, createdAt: fullReports.createdAt, deliveredAt: fullReports.deliveredAt, deliveryStatus: fullReports.deliveryStatus }).from(fullReports).where(eq17(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
+  const record = (await db.select({ status: fullReports.status, createdAt: fullReports.createdAt, deliveredAt: fullReports.deliveredAt, deliveryStatus: fullReports.deliveryStatus }).from(fullReports).where(eq18(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
   return record ?? null;
 }
 async function resendReportLink(db, input) {
-  const record = (await db.select().from(fullReports).where(eq17(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
+  const record = (await db.select().from(fullReports).where(eq18(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
   if (record?.status === "delivered") throw new TRPCError16({ code: "CONFLICT", message: "The Full Report has already been sent." });
-  const paymentRequestId = record?.paymentRequestId ?? (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and13(eq17(paymentRequests.businessCheckId, input.businessCheckId), eq17(paymentRequests.item, "full_report"), eq17(paymentRequests.status, "confirmed"))).limit(1))[0]?.id;
+  const paymentRequestId = record?.paymentRequestId ?? (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and13(eq18(paymentRequests.businessCheckId, input.businessCheckId), eq18(paymentRequests.item, "full_report"), eq18(paymentRequests.status, "confirmed"))).limit(1))[0]?.id;
   if (!paymentRequestId) throw new TRPCError16({ code: "NOT_FOUND", message: "Confirm the Full Report payment first: that sends the Report Intake link." });
   const check = await checkFor(db, input.businessCheckId);
   const link = await issueReportLink(db, { businessCheckId: check.id, paymentRequestId });
@@ -11270,21 +11351,21 @@ async function paymentStatusesByCheck(db, businessCheckIds) {
   return byCheck;
 }
 async function loadCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq18(businessChecks.id, businessCheckId)).limit(1))[0];
+  const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq19(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError17({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   return check;
 }
 var BEFORE_OPPORTUNITY = ["lead", "qualified_lead", "call_booked"];
 async function requestPayment(db, input) {
   const check = await loadCheck(db, input.businessCheckId);
-  const existing = (await db.select().from(paymentRequests).where(and14(eq18(paymentRequests.businessCheckId, check.id), eq18(paymentRequests.item, input.item))).limit(1))[0];
+  const existing = (await db.select().from(paymentRequests).where(and14(eq19(paymentRequests.businessCheckId, check.id), eq19(paymentRequests.item, input.item))).limit(1))[0];
   if (existing?.status === "confirmed") throw new TRPCError17({ code: "CONFLICT", message: "This has already been paid." });
   const reference = paymentReference(input.item, check.id);
   const amountNaira = PAYMENT_ITEM_DETAILS[input.item].amount;
   const stageTo = input.item === "current_state" && BEFORE_OPPORTUNITY.includes(check.pipelineStage) ? "opportunity" : check.pipelineStage;
   const request = await db.transaction(async (tx) => {
     const [row] = await tx.insert(paymentRequests).values({ businessCheckId: check.id, item: input.item, amountNaira, reference, requestedByUserId: input.actorUserId }).onConflictDoUpdate({ target: [paymentRequests.businessCheckId, paymentRequests.item], set: { amountNaira, requestedByUserId: input.actorUserId, requestedAt: /* @__PURE__ */ new Date() } }).returning();
-    if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq18(businessChecks.id, check.id));
+    if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq19(businessChecks.id, check.id));
     await recordAudit(tx, {
       action: "payment_details_sent",
       actorUserId: input.actorUserId,
@@ -11295,12 +11376,12 @@ async function requestPayment(db, input) {
   });
   const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference, deadline: paymentDeadline(request.requestedAt) });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:details:${request.requestedAt.getTime()}` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
-  await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq18(paymentRequests.id, request.id));
+  await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq19(paymentRequests.id, request.id));
   const deliveryProblem = delivery.status === "Failed" ? delivery.reason : null;
   return { paymentRequestId: request.id, reference, status: request.status, deliveryStatus: delivery.status, deliveryProblem, pipelineStage: stageTo };
 }
 async function loadRequest(db, paymentRequestId) {
-  const request = (await db.select().from(paymentRequests).where(eq18(paymentRequests.id, paymentRequestId)).limit(1))[0];
+  const request = (await db.select().from(paymentRequests).where(eq19(paymentRequests.id, paymentRequestId)).limit(1))[0];
   if (!request) throw new TRPCError17({ code: "NOT_FOUND", message: "That payment request does not exist." });
   return request;
 }
@@ -11311,7 +11392,7 @@ async function markProofReceived(db, input) {
   if (request.status === "proof_received") return { success: true, changed: false };
   const check = await loadCheck(db, request.businessCheckId);
   const changed = await db.transaction(async (tx) => {
-    const [claimed] = await tx.update(paymentRequests).set({ status: "proof_received", proofReceivedAt: /* @__PURE__ */ new Date() }).where(and14(eq18(paymentRequests.id, request.id), eq18(paymentRequests.status, "requested"))).returning({ id: paymentRequests.id });
+    const [claimed] = await tx.update(paymentRequests).set({ status: "proof_received", proofReceivedAt: /* @__PURE__ */ new Date() }).where(and14(eq19(paymentRequests.id, request.id), eq19(paymentRequests.status, "requested"))).returning({ id: paymentRequests.id });
     if (!claimed) return false;
     await recordAudit(tx, { action: "payment_proof_received", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference } });
     return true;
@@ -11329,9 +11410,9 @@ async function confirmPayment(db, input) {
   let outcome;
   try {
     outcome = await db.transaction(async (tx) => {
-      const [claimed] = await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note: input.note || null }).where(and14(eq18(paymentRequests.id, request.id), ne2(paymentRequests.status, "confirmed"))).returning({ id: paymentRequests.id });
+      const [claimed] = await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note: input.note || null }).where(and14(eq19(paymentRequests.id, request.id), ne2(paymentRequests.status, "confirmed"))).returning({ id: paymentRequests.id });
       if (!claimed) return null;
-      if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq18(businessChecks.id, check.id));
+      if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq19(businessChecks.id, check.id));
       await recordAudit(tx, {
         action: "payment_confirmed",
         actorUserId: input.actorUserId,
@@ -11357,7 +11438,7 @@ async function confirmPayment(db, input) {
   return { success: true, changed: true, invitation, engagement };
 }
 async function inviteToClientAccount(db, businessCheckId, actorUserId) {
-  const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt }).from(clientOnboardingInvitations).where(eq18(clientOnboardingInvitations.businessCheckId, businessCheckId)).orderBy(desc10(clientOnboardingInvitations.id)).limit(1))[0];
+  const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt }).from(clientOnboardingInvitations).where(eq19(clientOnboardingInvitations.businessCheckId, businessCheckId)).orderBy(desc10(clientOnboardingInvitations.id)).limit(1))[0];
   const status = latest ? effectiveInvitationStatus(latest) : null;
   if (status === "accepted") return "has_account";
   if (status === "pending") return "already_invited";
@@ -11432,26 +11513,7 @@ async function bookedCallTime(eventUri, inviteeEmail) {
 }
 
 // server/routers/businessCheck.ts
-var WINDOW_MS = 15 * 60 * 1e3;
-var limiters = [];
-function rateLimiter(maximum) {
-  const counts = /* @__PURE__ */ new Map();
-  limiters.push({ clear: () => counts.clear() });
-  return (key) => {
-    const now = Date.now();
-    const existing = counts.get(key);
-    if (!existing || existing.resetAt <= now) {
-      counts.set(key, { count: 1, resetAt: now + WINDOW_MS });
-      return true;
-    }
-    if (existing.count >= maximum) return false;
-    existing.count += 1;
-    return true;
-  };
-}
-var allowStart = rateLimiter(5);
-var allowStartFromIp = rateLimiter(20);
-var allowSave = rateLimiter(300);
+var tooMany = (message) => new TRPCError18({ code: "TOO_MANY_REQUESTS", message });
 var answerValue = z16.union([z16.string().max(300), z16.array(z16.string().max(64)).max(10)]);
 var answersInput = z16.record(z16.string().max(32), answerValue.optional()).refine((value) => Object.keys(value).length <= 80);
 var tokenInput = z16.string().min(16).max(64);
@@ -11469,7 +11531,7 @@ async function database(what) {
   return db;
 }
 async function findCheck(db, token2) {
-  const [check] = await db.select().from(businessChecks).where(eq19(businessChecks.publicToken, token2)).limit(1);
+  const [check] = await db.select().from(businessChecks).where(eq20(businessChecks.publicToken, token2)).limit(1);
   if (!check) throw new TRPCError18({ code: "NOT_FOUND", message: "We could not find that Business Check. Kindly start again." });
   return check;
 }
@@ -11485,8 +11547,8 @@ var businessCheckRouter = router({
   /** The details screen: records the owner as a lead before the first question. */
   start: publicProcedure.input(businessCheckStartInput).mutation(async ({ input, ctx }) => {
     const ip = (ctx.req.ip || "unknown").toLowerCase();
-    if (!allowStartFromIp(ip) || !allowStart(`${ip}:${input.email.toLowerCase()}`)) {
-      throw new TRPCError18({ code: "TOO_MANY_REQUESTS", message: "Kindly wait a few minutes before starting another Business Check." });
+    if (!await consumeLimit(LIMITS.checkStartIp, ip) || !await consumeLimit(LIMITS.checkStartEmail, `${ip}:${input.email}`)) {
+      throw tooMany("Kindly wait a few minutes before starting another Business Check.");
     }
     const db = await database("start your Business Check");
     const token2 = randomBytes7(24).toString("base64url");
@@ -11504,15 +11566,16 @@ var businessCheckRouter = router({
   }),
   /** Saves answers as the owner goes, so an unfinished check still tells the team where they were. */
   saveProgress: publicProcedure.input(z16.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }) => {
-    if (!allowSave(input.token)) throw new TRPCError18({ code: "TOO_MANY_REQUESTS", message: "Too many updates. Your answers are still kept on this device." });
+    if (!await consumeLimit(LIMITS.checkSave, input.token)) throw tooMany("Too many updates. Your answers are still kept on this device.");
     const db = await database("save your progress");
     const check = await findCheck(db, input.token);
     if (check.completedAt) return { saved: false };
-    await db.update(businessChecks).set(answerColumns(cleanAnswers(input.answers))).where(eq19(businessChecks.id, check.id));
+    await db.update(businessChecks).set(answerColumns(cleanAnswers(input.answers))).where(eq20(businessChecks.id, check.id));
     return { saved: true };
   }),
   /** Finishes the check: works out the result on the server, writes the summary and emails both sides once. */
   submit: publicProcedure.input(z16.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }) => {
+    if (!await consumeLimit(LIMITS.checkSubmit, input.token)) throw tooMany("Your Business Check has been sent. Kindly wait a while before sending it again.");
     const db = await database("record your Business Check");
     const check = await findCheck(db, input.token);
     if (check.completedAt && check.resultJson && check.summaryJson && check.summarySource) {
@@ -11543,7 +11606,7 @@ var businessCheckRouter = router({
       summarySource: source,
       notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent",
       completedAt: databaseNow()
-    }).where(eq19(businessChecks.id, check.id));
+    }).where(eq20(businessChecks.id, check.id));
     return { token: check.publicToken, result, summary, summarySource: source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: ownerDelivery.status === "Sent" ? "Sent" : ownerDelivery.status === "Failed" ? "Failed" : "Simulated" };
   }),
   /** The owner asks for the free call or the full report from the result screen. */
@@ -11554,17 +11617,18 @@ var businessCheckRouter = router({
     /** Sent when Calendly confirms a booking; the time itself is read from Calendly on the server. */
     calendlyEventUri: z16.string().regex(CALENDLY_EVENT_URI).optional()
   })).mutation(async ({ input }) => {
+    if (!await consumeLimit(LIMITS.checkNext, input.token)) throw tooMany("Your request has been recorded. Kindly wait before sending another.");
     const db = await database("record your request");
     const check = await findCheck(db, input.token);
     if (!check.completedAt) throw new TRPCError18({ code: "BAD_REQUEST", message: "Kindly finish the Business Check first." });
     const bookedFor = input.choice === "call" && input.calendlyEventUri ? await bookedCallTime(input.calendlyEventUri, check.email) ?? await findBookedCall(check.email) : null;
     if (bookedFor) {
-      await db.update(businessChecks).set({ callScheduledFor: bookedFor }).where(eq19(businessChecks.id, check.id));
+      await db.update(businessChecks).set({ callScheduledFor: bookedFor }).where(eq20(businessChecks.id, check.id));
       await recordAudit(db, { action: "business_check_call_booked", targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: bookedFor.toISOString(), source: "calendly" } });
     }
     const already = input.choice === "call" ? check.callRequestedAt : check.reportRequestedAt;
     if (!already) {
-      await db.update(businessChecks).set(input.choice === "call" ? { callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") } : { reportRequestedAt: databaseNow() }).where(eq19(businessChecks.id, check.id));
+      await db.update(businessChecks).set(input.choice === "call" ? { callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") } : { reportRequestedAt: databaseNow() }).where(eq20(businessChecks.id, check.id));
       const what = input.choice === "call" ? "a free Debrief" : "the Full Report";
       let payment = "";
       if (input.choice === "report") {
@@ -11665,7 +11729,7 @@ var platformRolesRouter = router({
 import { z as z20 } from "zod";
 
 // server/businessSupportAdmin.ts
-import { and as and15, desc as desc11, eq as eq20, inArray as inArray6, isNotNull as isNotNull2, isNull as isNull7, sql as sql7 } from "drizzle-orm";
+import { and as and15, desc as desc11, eq as eq21, inArray as inArray6, isNotNull as isNotNull2, isNull as isNull7, sql as sql8 } from "drizzle-orm";
 import { TRPCError as TRPCError20 } from "@trpc/server";
 async function requireDatabase2() {
   const db = await getDb();
@@ -11706,7 +11770,7 @@ async function syncCalendlyBookings(db, rows) {
     const time = await findBookedCall(row.email);
     if (!time) return;
     const stage = advancePipeline(row.pipelineStage, "call_booked");
-    const [saved] = await db.update(businessChecks).set({ callScheduledFor: time, callRequestedAt: row.callRequestedAt ?? databaseNow(), pipelineStage: stage }).where(and15(eq20(businessChecks.id, row.id), isNull7(businessChecks.callScheduledFor))).returning({ id: businessChecks.id });
+    const [saved] = await db.update(businessChecks).set({ callScheduledFor: time, callRequestedAt: row.callRequestedAt ?? databaseNow(), pipelineStage: stage }).where(and15(eq21(businessChecks.id, row.id), isNull7(businessChecks.callScheduledFor))).returning({ id: businessChecks.id });
     if (!saved) return;
     await recordAudit(db, { action: "business_check_call_booked", targetEmail: row.email, details: { businessCheckId: row.id, scheduledFor: time.toISOString(), source: "calendly_lookup", ...row.callRequestedAt ? {} : { requested: "calendly" } } });
     found.set(row.id, time);
@@ -11762,7 +11826,7 @@ async function getBusinessCheckDetail(db, businessCheckId) {
     heardFrom: businessChecks.heardFrom,
     resultJson: businessChecks.resultJson,
     summaryJson: businessChecks.summaryJson
-  }).from(businessChecks).where(eq20(businessChecks.id, businessCheckId)).limit(1))[0];
+  }).from(businessChecks).where(eq21(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!row) throw new TRPCError20({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   const { resultJson, summaryJson, ...fields } = row;
   const result = parseJson(resultJson);
@@ -11781,7 +11845,7 @@ async function getBusinessCheckDetail(db, businessCheckId) {
 }
 var HISTORY_ACTIONS = ["business_check_stage_changed", "business_check_call_outcome", "business_check_call_scheduled", "business_check_call_booked", "payment_details_sent", "payment_proof_received", "payment_confirmed", "full_report_link_sent", "full_report_delivered"];
 async function stageHistoryFor(db, businessCheckId) {
-  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq20(users.id, adminAccessAuditEvents.actorUserId)).where(and15(inArray6(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql7`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc11(adminAccessAuditEvents.createdAt), desc11(adminAccessAuditEvents.id)).limit(100);
+  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq21(users.id, adminAccessAuditEvents.actorUserId)).where(and15(inArray6(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql8`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc11(adminAccessAuditEvents.createdAt), desc11(adminAccessAuditEvents.id)).limit(100);
   return events.map((event) => {
     const details = parseJson(event.details) ?? {};
     return { id: event.id, action: event.action, from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, by: event.by ?? null, at: event.at };
@@ -11789,12 +11853,12 @@ async function stageHistoryFor(db, businessCheckId) {
 }
 var SETTABLE_STAGES = PIPELINE_STAGES.filter((stage) => stage !== "lead" && stage !== "won");
 async function setPipelineStage(db, input) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq20(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq21(businessChecks.id, input.businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError20({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   if (check.pipelineStage === input.stage) return { success: true, pipelineStage: check.pipelineStage, changed: false };
   if (check.pipelineStage === "won") throw new TRPCError20({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ pipelineStage: input.stage }).where(eq20(businessChecks.id, check.id));
+    await tx.update(businessChecks).set({ pipelineStage: input.stage }).where(eq21(businessChecks.id, check.id));
     await recordAudit(tx, {
       action: "business_check_stage_changed",
       actorUserId: input.actorUserId,
@@ -11805,19 +11869,19 @@ async function setPipelineStage(db, input) {
   return { success: true, pipelineStage: input.stage, changed: true };
 }
 async function requestedCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq20(businessChecks.id, businessCheckId)).limit(1))[0];
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq21(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError20({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   if (!check.callRequestedAt) throw new TRPCError20({ code: "BAD_REQUEST", message: "This Business Check has not asked for a Debrief." });
   if (check.pipelineStage === "won") throw new TRPCError20({ code: "CONFLICT", message: "This business has already been won, so its Debrief outcome can no longer be changed here." });
   return check;
 }
 async function scheduleDiscoveryCall(db, input) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt }).from(businessChecks).where(eq20(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt }).from(businessChecks).where(eq21(businessChecks.id, input.businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError20({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   if (!check.completedAt) throw new TRPCError20({ code: "BAD_REQUEST", message: "This Business Check is not finished yet, so there is no Debrief to schedule." });
   if (check.pipelineStage === "won") throw new TRPCError20({ code: "CONFLICT", message: "This business has already been won, so its Debrief can no longer be changed here." });
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, callRequestedAt: check.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq20(businessChecks.id, check.id));
+    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, callRequestedAt: check.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq21(businessChecks.id, check.id));
     await recordAudit(tx, { action: "business_check_call_scheduled", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: input.scheduledFor.toISOString(), ...check.callRequestedAt ? {} : { requested: "by_hand" } } });
   });
   return { success: true };
@@ -11828,7 +11892,7 @@ async function recordDiscoveryCallOutcome(db, input) {
   const check = await requestedCheck(db, input.businessCheckId);
   const stage = OUTCOME_STAGE[input.outcome];
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ pipelineStage: stage }).where(eq20(businessChecks.id, check.id));
+    await tx.update(businessChecks).set({ pipelineStage: stage }).where(eq21(businessChecks.id, check.id));
     await recordAudit(tx, { action: "business_check_call_outcome", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, outcome: input.outcome, from: check.pipelineStage, to: stage } });
   });
   return { success: true, pipelineStage: stage };
@@ -11846,7 +11910,7 @@ async function listClients(db) {
     membershipStatus: businessMemberships.status,
     joinedAt: businessMemberships.createdAt,
     businessCreatedAt: businesses.createdAt
-  }).from(businessMemberships).innerJoin(businesses, eq20(businessMemberships.businessId, businesses.id)).innerJoin(users, eq20(businessMemberships.userId, users.id)).orderBy(desc11(businesses.createdAt), businessMemberships.id).limit(500);
+  }).from(businessMemberships).innerJoin(businesses, eq21(businessMemberships.businessId, businesses.id)).innerJoin(users, eq21(businessMemberships.userId, users.id)).orderBy(desc11(businesses.createdAt), businessMemberships.id).limit(500);
 }
 async function businessSupportDb() {
   return requireDatabase2();
@@ -11905,11 +11969,23 @@ async function database3() {
   return db;
 }
 var token = z21.string().trim().min(1).max(200);
+async function allow(rule, link) {
+  if (!await consumeLimit(rule, link)) throw new TRPCError21({ code: "TOO_MANY_REQUESTS", message: "Too many requests for this report. Kindly try again later." });
+}
 var fullReportRouter = router({
-  form: publicProcedure.input(z21.object({ token })).query(async ({ input }) => reportForm(await database3(), input.token)),
+  form: publicProcedure.input(z21.object({ token })).query(async ({ input }) => {
+    await allow(LIMITS.reportForm, input.token);
+    return reportForm(await database3(), input.token);
+  }),
   /** Takes the Report Intake, builds the report and emails it at once; returns the PDF so the page can offer it. */
-  submit: publicProcedure.input(z21.object({ token, intake: z21.unknown() })).mutation(async ({ input }) => submitReportIntake(await database3(), input.token, input.intake)),
-  download: publicProcedure.input(z21.object({ token })).mutation(async ({ input }) => downloadReport(await database3(), input.token))
+  submit: publicProcedure.input(z21.object({ token, intake: z21.unknown() })).mutation(async ({ input }) => {
+    await allow(LIMITS.reportForm, input.token);
+    return submitReportIntake(await database3(), input.token, input.intake);
+  }),
+  download: publicProcedure.input(z21.object({ token })).mutation(async ({ input }) => {
+    await allow(LIMITS.reportDownload, input.token);
+    return downloadReport(await database3(), input.token);
+  })
 });
 
 // server/routers/engagement.ts
@@ -12046,7 +12122,7 @@ import { z as z24 } from "zod";
 
 // server/accountInvitations.ts
 import { randomBytes as randomBytes8, randomUUID as randomUUID3 } from "crypto";
-import { and as and16, desc as desc12, eq as eq21, gt as gt6, inArray as inArray7, isNull as isNull8, ne as ne3 } from "drizzle-orm";
+import { and as and16, desc as desc12, eq as eq22, gt as gt6, inArray as inArray7, isNull as isNull8, ne as ne3 } from "drizzle-orm";
 import { TRPCError as TRPCError23 } from "@trpc/server";
 import { z as z23 } from "zod";
 init_brand();
@@ -12097,7 +12173,7 @@ async function issue(db, input) {
   let invitation;
   try {
     invitation = await db.transaction(async (tx) => {
-      await tx.update(accountInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and16(emailEquals(accountInvitations.email, input.email), eq21(accountInvitations.status, "pending")));
+      await tx.update(accountInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and16(emailEquals(accountInvitations.email, input.email), eq22(accountInvitations.status, "pending")));
       const [row] = await tx.insert(accountInvitations).values({
         kind: input.kind,
         email: input.email,
@@ -12119,7 +12195,7 @@ async function issue(db, input) {
   const invitationUrl = `${getTrustedApplicationOrigin()}${JOIN_PATH}/${encodeURIComponent(token2)}`;
   const message = buildInvitationEmail({ kind: input.kind, fullName: input.fullName, url: invitationUrl, inviterName: input.inviterName, businessName: input.businessName, access: input.access });
   const delivery = await deliverEmail({ to: input.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `account_invitations:${invitation.id}` });
-  await db.update(accountInvitations).set({ deliveryStatus: delivery.status }).where(eq21(accountInvitations.id, invitation.id));
+  await db.update(accountInvitations).set({ deliveryStatus: delivery.status }).where(eq22(accountInvitations.id, invitation.id));
   return { invitationId: invitation.id, invitationUrl, deliveryStatus: delivery.status };
 }
 var staffInvitationSchema = newInvitationSchema.extend({ role: z23.enum(["admin", "desk_lead", "analyst", "partner", "subject_matter_expert", "finance"]) });
@@ -12131,12 +12207,12 @@ async function inviteStaff(db, actor, rawInput) {
 }
 async function listStaffInvitations(db, actor) {
   if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError23({ code: "FORBIDDEN", message: "Only someone who manages roles can see staff invitations." });
-  const rows = await db.select({ id: accountInvitations.id, email: accountInvitations.email, fullName: accountInvitations.fullName, role: accountInvitations.platformRole, status: accountInvitations.status, expiresAt: accountInvitations.expiresAt, deliveryStatus: accountInvitations.deliveryStatus, createdAt: accountInvitations.createdAt }).from(accountInvitations).where(eq21(accountInvitations.kind, "staff")).orderBy(desc12(accountInvitations.id)).limit(100);
+  const rows = await db.select({ id: accountInvitations.id, email: accountInvitations.email, fullName: accountInvitations.fullName, role: accountInvitations.platformRole, status: accountInvitations.status, expiresAt: accountInvitations.expiresAt, deliveryStatus: accountInvitations.deliveryStatus, createdAt: accountInvitations.createdAt }).from(accountInvitations).where(eq22(accountInvitations.kind, "staff")).orderBy(desc12(accountInvitations.id)).limit(100);
   return rows.map((row) => ({ ...row, status: invitationState(row) }));
 }
 async function listStaff(db, actor) {
   if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError23({ code: "FORBIDDEN", message: "Only someone who manages roles can see the team." });
-  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, status: users.status, role: userPlatformRoles.role }).from(userPlatformRoles).innerJoin(users, eq21(userPlatformRoles.userId, users.id)).orderBy(users.name);
+  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, status: users.status, role: userPlatformRoles.role }).from(userPlatformRoles).innerJoin(users, eq22(userPlatformRoles.userId, users.id)).orderBy(users.name);
   const people = /* @__PURE__ */ new Map();
   for (const row of rows) {
     const person = people.get(row.userId) ?? { userId: row.userId, name: row.name ?? "", email: row.email ?? "", status: row.status, roles: [] };
@@ -12150,7 +12226,7 @@ async function revokeStaffInvitation(db, actor, input) {
   return revoke(db, { invitationId: input.invitationId, kind: "staff", actorUserId: actor.id });
 }
 async function revoke(db, input) {
-  const revoked = await db.update(accountInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and16(eq21(accountInvitations.id, input.invitationId), eq21(accountInvitations.kind, input.kind), eq21(accountInvitations.status, "pending"), ...input.businessId ? [eq21(accountInvitations.businessId, input.businessId)] : [])).returning({ id: accountInvitations.id, email: accountInvitations.email });
+  const revoked = await db.update(accountInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and16(eq22(accountInvitations.id, input.invitationId), eq22(accountInvitations.kind, input.kind), eq22(accountInvitations.status, "pending"), ...input.businessId ? [eq22(accountInvitations.businessId, input.businessId)] : [])).returning({ id: accountInvitations.id, email: accountInvitations.email });
   if (revoked.length !== 1) throw new TRPCError23({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
   await recordAudit(db, { action: "account_invitation_revoked", actorUserId: input.actorUserId, targetEmail: revoked[0].email, details: { invitationId: revoked[0].id, kind: input.kind } });
   return { success: true };
@@ -12164,8 +12240,8 @@ function requireOwnerLevel(session) {
 async function listSeats(db, session) {
   const business = requireOwnerLevel(session);
   const [members, invitations] = await Promise.all([
-    db.select({ membershipId: businessMemberships.id, userId: users.id, name: users.name, email: users.email, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq21(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq21(businessMemberAccess.membershipId, businessMemberships.id)).where(and16(eq21(businessMemberships.businessId, business.businessId), eq21(businessMemberships.role, "member"), eq21(businessMemberships.status, "active"))),
-    db.select().from(accountInvitations).where(and16(eq21(accountInvitations.kind, "business_member"), eq21(accountInvitations.businessId, business.businessId), eq21(accountInvitations.status, "pending")))
+    db.select({ membershipId: businessMemberships.id, userId: users.id, name: users.name, email: users.email, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq22(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq22(businessMemberAccess.membershipId, businessMemberships.id)).where(and16(eq22(businessMemberships.businessId, business.businessId), eq22(businessMemberships.role, "member"), eq22(businessMemberships.status, "active"))),
+    db.select().from(accountInvitations).where(and16(eq22(accountInvitations.kind, "business_member"), eq22(accountInvitations.businessId, business.businessId), eq22(accountInvitations.status, "pending")))
   ]);
   const pending = invitations.filter((item) => invitationState(item) === "pending");
   return {
@@ -12189,23 +12265,23 @@ async function revokeSeatInvitation(db, session, input) {
 }
 async function removeSeat(db, session, input) {
   const business = requireOwnerLevel(session);
-  const removed = await db.update(businessMemberships).set({ status: "removed" }).where(and16(eq21(businessMemberships.id, input.membershipId), eq21(businessMemberships.businessId, business.businessId), eq21(businessMemberships.role, "member"), ne3(businessMemberships.status, "removed"))).returning({ id: businessMemberships.id, userId: businessMemberships.userId });
+  const removed = await db.update(businessMemberships).set({ status: "removed" }).where(and16(eq22(businessMemberships.id, input.membershipId), eq22(businessMemberships.businessId, business.businessId), eq22(businessMemberships.role, "member"), ne3(businessMemberships.status, "removed"))).returning({ id: businessMemberships.id, userId: businessMemberships.userId });
   if (removed.length !== 1) throw new TRPCError23({ code: "NOT_FOUND", message: "That person is not on your team." });
   await recordAudit(db, { action: "business_member_removed", actorUserId: session.user.id, details: { businessId: business.businessId, membershipId: removed[0].id, userId: removed[0].userId } });
   return { success: true };
 }
 async function setSeatAccess(db, session, input) {
   const business = requireOwnerLevel(session);
-  const membership = (await db.select({ id: businessMemberships.id }).from(businessMemberships).where(and16(eq21(businessMemberships.id, input.membershipId), eq21(businessMemberships.businessId, business.businessId), eq21(businessMemberships.role, "member"), eq21(businessMemberships.status, "active"))).limit(1))[0];
+  const membership = (await db.select({ id: businessMemberships.id }).from(businessMemberships).where(and16(eq22(businessMemberships.id, input.membershipId), eq22(businessMemberships.businessId, business.businessId), eq22(businessMemberships.role, "member"), eq22(businessMemberships.status, "active"))).limit(1))[0];
   if (!membership) throw new TRPCError23({ code: "NOT_FOUND", message: "That person is not on your team." });
   await db.insert(businessMemberAccess).values({ membershipId: membership.id, access: input.access, grantedByUserId: session.user.id }).onConflictDoUpdate({ target: businessMemberAccess.membershipId, set: { access: input.access, grantedByUserId: session.user.id } });
   return { success: true };
 }
 async function previewAccountInvitation(db, req, token2) {
-  if (!consumeRateLimit("onboarding", req, "join-preview", 60)) throw new TRPCError23({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
-  const invitation = (await db.select().from(accountInvitations).where(eq21(accountInvitations.tokenHash, sha256(token2))).limit(1))[0];
+  if (!await consumeRateLimit("onboarding", req, "join-preview", 60)) throw new TRPCError23({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  const invitation = (await db.select().from(accountInvitations).where(eq22(accountInvitations.tokenHash, sha256(token2))).limit(1))[0];
   if (!invitation || invitationState(invitation) !== "pending") return { available: false };
-  const business = invitation.businessId ? (await db.select({ name: businesses.name }).from(businesses).where(eq21(businesses.id, invitation.businessId)).limit(1))[0] : null;
+  const business = invitation.businessId ? (await db.select({ name: businesses.name }).from(businesses).where(eq22(businesses.id, invitation.businessId)).limit(1))[0] : null;
   return { available: true, kind: invitation.kind, email: invitation.email, fullName: invitation.fullName, businessName: business?.name ?? null, access: invitation.access };
 }
 async function acceptAccountInvitation(db, req, res, rawInput) {
@@ -12213,12 +12289,12 @@ async function acceptAccountInvitation(db, req, res, rawInput) {
   const parsed = acceptAccountInvitationSchema.safeParse(rawInput);
   if (!parsed.success) throw new TRPCError23({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
   const input = parsed.data;
-  if (!consumeRateLimit("onboarding", req, "join-accept", 10)) throw new TRPCError23({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!await consumeRateLimit("onboarding", req, "join-accept", 10)) throw new TRPCError23({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const passwordHash = hashAdminPassword(input.password);
   let created;
   try {
     created = await db.transaction(async (tx) => {
-      const invitation = (await tx.select().from(accountInvitations).where(eq21(accountInvitations.tokenHash, sha256(input.token))).limit(1))[0];
+      const invitation = (await tx.select().from(accountInvitations).where(eq22(accountInvitations.tokenHash, sha256(input.token))).limit(1))[0];
       if (!invitation || invitationState(invitation) !== "pending") throw unavailable3();
       if (input.email !== normaliseAccountEmail(invitation.email)) throw new TRPCError23({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
       if (await identityTaken(tx, invitation.email)) throw new TRPCError23({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
@@ -12229,14 +12305,14 @@ async function acceptAccountInvitation(db, req, res, rawInput) {
         if (!invitation.platformRole || invitation.platformRole === "super_admin") throw unavailable3();
         await tx.insert(userPlatformRoles).values({ userId: user.id, role: invitation.platformRole, grantedByUserId: invitation.createdByUserId });
       } else {
-        const business = invitation.businessId ? (await tx.select({ id: businesses.id, status: businesses.status }).from(businesses).where(eq21(businesses.id, invitation.businessId)).limit(1))[0] : void 0;
+        const business = invitation.businessId ? (await tx.select({ id: businesses.id, status: businesses.status }).from(businesses).where(eq22(businesses.id, invitation.businessId)).limit(1))[0] : void 0;
         if (!business || business.status !== "active") throw unavailable3();
         const [membership] = await tx.insert(businessMemberships).values({ businessId: business.id, userId: user.id, role: "member", status: "active" }).returning({ id: businessMemberships.id });
         await tx.insert(businessMemberAccess).values({ membershipId: membership.id, access: invitation.access ?? "contributor", grantedByUserId: invitation.createdByUserId });
         businessId = business.id;
       }
       const session = await createSession(tx, user.id, businessId);
-      const claimed = await tx.update(accountInvitations).set({ status: "accepted", acceptedAt: databaseNow(), acceptedByUserId: user.id }).where(and16(eq21(accountInvitations.id, invitation.id), eq21(accountInvitations.status, "pending"), gt6(accountInvitations.expiresAt, /* @__PURE__ */ new Date()), isNull8(accountInvitations.acceptedAt))).returning({ id: accountInvitations.id });
+      const claimed = await tx.update(accountInvitations).set({ status: "accepted", acceptedAt: databaseNow(), acceptedByUserId: user.id }).where(and16(eq22(accountInvitations.id, invitation.id), eq22(accountInvitations.status, "pending"), gt6(accountInvitations.expiresAt, /* @__PURE__ */ new Date()), isNull8(accountInvitations.acceptedAt))).returning({ id: accountInvitations.id });
       if (claimed.length !== 1) throw unavailable3();
       await recordAudit(tx, { action: "account_invitation_accepted", actorUserId: user.id, targetEmail: invitation.email, details: { invitationId: invitation.id, kind: invitation.kind } });
       return { userId: user.id, email: invitation.email, session, businessId };
@@ -12323,7 +12399,7 @@ var appRouter = router({
 });
 
 // server/_core/context.ts
-import { eq as eq22 } from "drizzle-orm";
+import { eq as eq23 } from "drizzle-orm";
 async function createContext(opts) {
   let user = null;
   let authChannel;
@@ -12338,7 +12414,7 @@ async function createContext(opts) {
       const session = await resolveAccountSession(opts.req);
       if (session && session.authority.roles.length > 0) {
         const db = await getDb();
-        const row = db ? (await db.select().from(users).where(eq22(users.id, session.user.id)).limit(1))[0] : void 0;
+        const row = db ? (await db.select().from(users).where(eq23(users.id, session.user.id)).limit(1))[0] : void 0;
         if (row && row.status === "active") {
           user = row;
           authChannel = "account";

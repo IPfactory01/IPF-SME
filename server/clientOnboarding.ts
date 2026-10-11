@@ -171,7 +171,7 @@ export async function revokeOnboardingInvitation(input: { invitationId: number; 
 
 /** What the invited client sees before creating the account. Any unusable invitation looks the same. */
 export async function previewOnboardingInvitation(req: Request, token: string) {
-  if (!consumeRateLimit("onboarding", req, "preview", 60)) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!(await consumeRateLimit("onboarding", req, "preview", 60))) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const db = await requireDatabase();
   const invitation = (await db.select().from(clientOnboardingInvitations).where(eq(clientOnboardingInvitations.tokenHash, sha256(token))).limit(1))[0];
   if (!invitation || effectiveInvitationStatus(invitation) !== "pending") return { available: false } as const;
@@ -187,7 +187,7 @@ export async function acceptOnboardingInvitation(req: Request, res: Response, ra
   const parsed = onboardingAcceptInputSchema.safeParse(rawInput);
   if (!parsed.success) throw new TRPCError({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
   const input = parsed.data;
-  if (!consumeRateLimit("onboarding", req, "accept", 10)) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!(await consumeRateLimit("onboarding", req, "accept", 10))) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const db = await requireDatabase();
   const passwordHash = hashAdminPassword(input.password);
 

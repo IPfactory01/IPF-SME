@@ -27,11 +27,11 @@ import { databaseNow, emailEquals } from "./dbHelpers";
 // The proven scrypt format and constant-time comparison already used for administrator passwords.
 import { hashAdminPassword, OWNER_ADMIN_EMAIL, sha256, verifyAdminPasswordHash } from "./adminSecurity";
 import { loadAuthority } from "./platformAccess";
+import { consumeLimit, releaseLimit } from "./rateLimit";
 import { isSameHostOrigin, isTrustedBrowserOrigin } from "./security";
 
 const PG_UNIQUE_VIOLATION = "23505";
 const RATE_LIMIT_WINDOW_MS = ACCOUNT_LOCKOUT_MS;
-const rateLimits = new Map<string, { count: number; resetAt: number }>();
 
 
 export function isUniqueViolation(error: unknown) {
@@ -43,23 +43,18 @@ function requestIp(req: Request) {
   return (req.ip || "unknown").trim().toLowerCase();
 }
 
-/** Per-instance throttle keyed on address + email; the database lockout below is the cross-instance control. */
+/**
+ * Throttle keyed on address + email (or address + action for token previews), shared by every function instance
+ * through server/rateLimit.ts; the database lockout below is the per-account control. `maximum` attempts per
+ * 15 minutes.
+ */
 export function consumeRateLimit(action: "onboarding" | "signin", req: Request, email: string, maximum: number) {
-  const key = `${action}:${requestIp(req)}:${email}`;
-  const now = Date.now();
-  const existing = rateLimits.get(key);
-  if (!existing || existing.resetAt <= now) {
-    rateLimits.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true;
-  }
-  if (existing.count >= maximum) return false;
-  existing.count += 1;
-  return true;
+  return consumeLimit({ scope: `${action}_${email === "preview" || email === "accept" || email === "join-preview" || email === "join-accept" ? email : "email"}`, max: maximum, windowMs: RATE_LIMIT_WINDOW_MS }, `${requestIp(req)}:${email}`);
 }
 
-/** Clears the per-instance throttle for an address + email after a successful sign-in. */
+/** Clears the throttle for an address + email after a successful sign-in. */
 function releaseRateLimit(action: "onboarding" | "signin", req: Request, email: string) {
-  rateLimits.delete(`${action}:${requestIp(req)}:${email}`);
+  return releaseLimit({ scope: `${action}_email`, max: 0, windowMs: RATE_LIMIT_WINDOW_MS }, `${requestIp(req)}:${email}`);
 }
 
 /**
@@ -248,7 +243,7 @@ export async function emailIsReserved(db: Pick<Database, "select">, email: strin
 export async function signInAccount(req: Request, res: Response, rawInput: { email: string; password: string }, options: { internalOnly?: boolean } = {}) {
   assertSameOrigin(req);
   const email = normaliseAccountEmail(rawInput.email);
-  if (!consumeRateLimit("signin", req, email, ACCOUNT_MAX_FAILED_ATTEMPTS)) {
+  if (!(await consumeRateLimit("signin", req, email, ACCOUNT_MAX_FAILED_ATTEMPTS))) {
     throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   }
   const db = await getDb();
@@ -292,7 +287,7 @@ export async function signInAccount(req: Request, res: Response, rawInput: { ema
     await recordAudit(tx, { action: "account_signed_in", actorUserId: user.id, targetEmail: user.email });
     return { ...created, restored };
   });
-  releaseRateLimit("signin", req, email);
+  await releaseRateLimit("signin", req, email);
   setSessionCookie(req, res, session.token);
   return buildView(user, authority, memberships, session.restored);
 }

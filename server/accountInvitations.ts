@@ -236,7 +236,7 @@ export async function setSeatAccess(db: Database, session: AccountSession, input
 
 /** What the invited person sees before setting a password. Any unusable invitation looks the same. */
 export async function previewAccountInvitation(db: Database, req: Request, token: string) {
-  if (!consumeRateLimit("onboarding", req, "join-preview", 60)) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!(await consumeRateLimit("onboarding", req, "join-preview", 60))) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const invitation = (await db.select().from(accountInvitations).where(eq(accountInvitations.tokenHash, sha256(token))).limit(1))[0];
   if (!invitation || invitationState(invitation) !== "pending") return { available: false } as const;
   const business = invitation.businessId ? (await db.select({ name: businesses.name }).from(businesses).where(eq(businesses.id, invitation.businessId)).limit(1))[0] : null;
@@ -252,7 +252,7 @@ export async function acceptAccountInvitation(db: Database, req: Request, res: R
   const parsed = acceptAccountInvitationSchema.safeParse(rawInput);
   if (!parsed.success) throw new TRPCError({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
   const input = parsed.data;
-  if (!consumeRateLimit("onboarding", req, "join-accept", 10)) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!(await consumeRateLimit("onboarding", req, "join-accept", 10))) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const passwordHash = hashAdminPassword(input.password);
   let created;
   try {

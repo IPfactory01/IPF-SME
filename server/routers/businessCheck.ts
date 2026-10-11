@@ -15,41 +15,15 @@ import { requestPayment } from "../payments";
 import { ENV } from "../_core/env";
 import { bookedCallTime, CALENDLY_EVENT_URI, findBookedCall } from "../calendly";
 import { recordAudit } from "../audit";
+import { consumeLimit, LIMITS, resetRateLimitsForTests } from "../rateLimit";
 import { publicProcedure, router } from "../_core/trpc";
 import { lagosTime } from "../lagosTime";
 
-const WINDOW_MS = 15 * 60 * 1000;
+const tooMany = (message: string) => new TRPCError({ code: "TOO_MANY_REQUESTS", message });
 
-const limiters: Array<{ clear: () => void }> = [];
-
-/** Fixed-window counters, per key. Starting a check is rare; saving progress happens on every answer. */
-function rateLimiter(maximum: number) {
-  const counts = new Map<string, { count: number; resetAt: number }>();
-  limiters.push({ clear: () => counts.clear() });
-  return (key: string) => {
-    const now = Date.now();
-    const existing = counts.get(key);
-    if (!existing || existing.resetAt <= now) {
-      counts.set(key, { count: 1, resetAt: now + WINDOW_MS });
-      return true;
-    }
-    if (existing.count >= maximum) return false;
-    existing.count += 1;
-    return true;
-  };
-}
-
-const allowStart = rateLimiter(5);
-/** Caps new checks from one address whatever email is typed, so the table cannot be flooded with leads. */
-const allowStartFromIp = rateLimiter(20);
-const allowSave = rateLimiter(300);
-
-/**
- * Clears every limiter's counters. Tests only: the limiters live at module level, so tests that share a process
- * (and an address) would otherwise spend one another's allowance. Never call this from application code.
- */
+/** Clears every rate limit's counters. Tests only; never call this from application code. */
 export function resetBusinessCheckRateLimitsForTests() {
-  for (const limiter of limiters) limiter.clear();
+  return resetRateLimitsForTests();
 }
 
 const answerValue = z.union([z.string().max(300), z.array(z.string().max(64)).max(10)]);
@@ -110,8 +84,9 @@ export const businessCheckRouter = router({
   /** The details screen: records the owner as a lead before the first question. */
   start: publicProcedure.input(businessCheckStartInput).mutation(async ({ input, ctx }) => {
     const ip = (ctx.req.ip || "unknown").toLowerCase();
-    if (!allowStartFromIp(ip) || !allowStart(`${ip}:${input.email.toLowerCase()}`)) {
-      throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Kindly wait a few minutes before starting another Business Check." });
+    // The address cap first, so flooding with new emails cannot get past it; both count the attempt.
+    if (!(await consumeLimit(LIMITS.checkStartIp, ip)) || !(await consumeLimit(LIMITS.checkStartEmail, `${ip}:${input.email}`))) {
+      throw tooMany("Kindly wait a few minutes before starting another Business Check.");
     }
     const db = await database("start your Business Check");
     const token = randomBytes(24).toString("base64url");
@@ -130,7 +105,7 @@ export const businessCheckRouter = router({
 
   /** Saves answers as the owner goes, so an unfinished check still tells the team where they were. */
   saveProgress: publicProcedure.input(z.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }) => {
-    if (!allowSave(input.token)) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many updates. Your answers are still kept on this device." });
+    if (!(await consumeLimit(LIMITS.checkSave, input.token))) throw tooMany("Too many updates. Your answers are still kept on this device.");
     const db = await database("save your progress");
     const check = await findCheck(db, input.token);
     // A finished check is final; later edits on the device do not change what was submitted.
@@ -141,6 +116,8 @@ export const businessCheckRouter = router({
 
   /** Finishes the check: works out the result on the server, writes the summary and emails both sides once. */
   submit: publicProcedure.input(z.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }): Promise<BusinessCheckResponse> => {
+    // Each submission can run the AI summary and send two emails, so one check gets a few an hour (a retry included).
+    if (!(await consumeLimit(LIMITS.checkSubmit, input.token))) throw tooMany("Your Business Check has been sent. Kindly wait a while before sending it again.");
     const db = await database("record your Business Check");
     const check = await findCheck(db, input.token);
     if (check.completedAt && check.resultJson && check.summaryJson && check.summarySource) {
@@ -192,6 +169,8 @@ export const businessCheckRouter = router({
       calendlyEventUri: z.string().regex(CALENDLY_EVENT_URI).optional(),
     }))
     .mutation(async ({ input }) => {
+      // Each request can email the office and look up Calendly: a handful a day per check is plenty.
+      if (!(await consumeLimit(LIMITS.checkNext, input.token))) throw tooMany("Your request has been recorded. Kindly wait before sending another.");
       const db = await database("record your request");
       const check = await findCheck(db, input.token);
       if (!check.completedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "Kindly finish the Business Check first." });

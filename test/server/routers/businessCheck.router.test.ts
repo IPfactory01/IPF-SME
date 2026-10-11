@@ -6,10 +6,12 @@ const source = readFileSync(resolve(process.cwd(), "server/routers/businessCheck
 const procedure = (name: string) => source.slice(source.indexOf(`  ${name}: publicProcedure`), source.indexOf("\n  }),", source.indexOf(`  ${name}: publicProcedure`)));
 
 describe("business check routes", () => {
-  it("rate-limits starting a check and saving progress, and refuses incomplete checks", () => {
-    expect(procedure("start")).toContain("allowStart(");
-    expect(procedure("start")).toContain("allowStartFromIp(ip)");
-    expect(procedure("saveProgress")).toContain("allowSave(input.token)");
+  it("rate-limits starting, saving, sending and asking for the next step through the shared counters, and refuses incomplete checks", () => {
+    expect(procedure("start")).toContain("consumeLimit(LIMITS.checkStartIp, ip)");
+    expect(procedure("start")).toContain("consumeLimit(LIMITS.checkStartEmail, `${ip}:${input.email}`)");
+    expect(procedure("saveProgress")).toContain("consumeLimit(LIMITS.checkSave, input.token)");
+    expect(procedure("submit")).toContain("consumeLimit(LIMITS.checkSubmit, input.token)");
+    expect(procedure("requestNext")).toContain("consumeLimit(LIMITS.checkNext, input.token)");
     expect(source).toContain('code: "TOO_MANY_REQUESTS"');
     expect(procedure("submit")).toContain("if (!isComplete(answers))");
   });

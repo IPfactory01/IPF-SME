@@ -1,4 +1,5 @@
 import { TRPCError } from "@trpc/server";
+import { consumeLimit, LIMITS } from "../rateLimit";
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { randomBytes } from "crypto";
 import { z } from "zod";
@@ -141,6 +142,7 @@ export const adminAccessRouter = router({
   confirmPasswordReset: publicProcedure
     .input(z.object({ token: z.string().min(30).max(200), password: passwordSchema, confirmPassword: passwordSchema }))
     .mutation(async ({ ctx, input }) => {
+      if (!(await consumeLimit(LIMITS.publicLookup, ctx.req.ip || "unknown"))) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many attempts. Kindly try again later." });
       if (input.password !== input.confirmPassword) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "The password confirmation does not match." });
       }
@@ -338,7 +340,8 @@ export const adminAccessRouter = router({
 
   inviteStatus: publicProcedure
     .input(z.object({ token: z.string().min(30).max(200) }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
+      if (!(await consumeLimit(LIMITS.publicLookup, ctx.req.ip || "unknown"))) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many attempts. Kindly try again later." });
       const db = await getDb();
       if (!db) return { valid: false };
       const result = await db.select({ inviteeName: adminInvitations.inviteeName, expiresAt: adminInvitations.expiresAt, status: adminInvitations.status }).from(adminInvitations).where(eq(adminInvitations.tokenHash, sha256(input.token))).limit(1);

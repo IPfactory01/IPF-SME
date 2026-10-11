@@ -151,6 +151,14 @@ for (const target of targets) {
         expect((await rowFor(token)).stage).toBe("operating");
       });
 
+      it("lets a check be sent a few times an hour (a retry included), then asks the owner to wait", async () => {
+        const token = await started("submit-limit@example.test");
+        await caller().submit({ token, answers: businessCheckProfiles.growingMaker });
+        await caller().submit({ token, answers: businessCheckProfiles.growingMaker });
+        await caller().submit({ token, answers: businessCheckProfiles.growingMaker });
+        await expect(caller().submit({ token, answers: businessCheckProfiles.growingMaker })).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
+      });
+
       it("refuses an incomplete check", async () => {
         const token = await started("submit-incomplete@example.test");
         await expect(caller().submit({ token, answers: { p_stage: "operating" } })).rejects.toMatchObject({ code: "BAD_REQUEST" });
@@ -193,6 +201,12 @@ for (const target of targets) {
 
       it("rejects an unknown token", async () => {
         await expect(caller().requestNext({ token: "x".repeat(24), choice: "call" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+      });
+
+      it("takes a handful of requests a day per check, then asks the owner to wait", async () => {
+        const token = await submitted("next-limit@example.test");
+        for (let attempt = 0; attempt < 5; attempt += 1) await caller().requestNext({ token, choice: "call" });
+        await expect(caller().requestNext({ token, choice: "call" })).rejects.toMatchObject({ code: "TOO_MANY_REQUESTS" });
       });
 
       it("refuses a request before the check is finished", async () => {

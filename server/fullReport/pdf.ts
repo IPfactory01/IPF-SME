@@ -1,6 +1,6 @@
 import PDFDocument from "pdfkit";
 import { BRAND } from "../../shared/brand";
-import type { FullReport, ReportBlock, ReportHealth } from "../../shared/fullReport/build";
+import type { Benchmark, FullReport, PlanMove, ReportBlock, ReportHealth, ScoreRow } from "../../shared/fullReport/build";
 import { PLAYFAIR_DISPLAY_700, PLUS_JAKARTA_SANS_400, PLUS_JAKARTA_SANS_600, PLUS_JAKARTA_SANS_700 } from "./fonts";
 import { PRINT_LOGO_PNG_BASE64, PRINT_LOGO_SIZE } from "./logo";
 
@@ -239,6 +239,220 @@ function reading(doc: Doc, block: Extract<ReportBlock, { kind: "reading" }>) {
   doc.moveDown(0.4);
 }
 
+/** The heat map: a coloured cell per area, then the finding. */
+function scorecard(doc: Doc, rows: ScoreRow[], compact = false) {
+  const areaWidth = compact ? 118 : 132;
+  const cellWidth = 66;
+  const findingX = M.left + areaWidth + cellWidth + 10;
+  const findingWidth = W - areaWidth - cellWidth - 10;
+  const size = compact ? 8.5 : 9;
+  const heightOf = (row: ScoreRow) => {
+    doc.font(SANS).fontSize(size);
+    const finding = doc.heightOfString(row.finding, { width: findingWidth - 6, lineGap: 1.5 });
+    doc.font(SANS_600).fontSize(size);
+    const area = doc.heightOfString(row.area, { width: areaWidth - 12 });
+    return Math.max(finding, area, 12) + (compact ? 9 : 12);
+  };
+  ensure(doc, Math.min(rows.reduce((sum, row) => sum + heightOf(row) + 2, 0), 300));
+  for (const row of rows) {
+    const height = heightOf(row);
+    ensure(doc, height + 2);
+    const y = doc.y;
+    const style = HEALTH[row.health];
+    doc.rect(M.left, y, W, height).fill(C["brand-tint-softer"]);
+    doc.rect(M.left, y, 3, height).fill(style.fg);
+    doc.fillColor(C.ink).font(SANS_600).fontSize(size).text(row.area, M.left + 10, y + (compact ? 4.5 : 6), { width: areaWidth - 12 });
+    doc.rect(M.left + areaWidth, y, cellWidth, height).fill(style.bg);
+    doc.fillColor(style.fg).font(SANS_700).fontSize(7.5).text(style.label.toUpperCase(), M.left + areaWidth, y + height / 2 - 4, { width: cellWidth, align: "center", characterSpacing: 0.8, lineBreak: false });
+    doc.fillColor(C["ink-soft"]).font(SANS).fontSize(size).text(row.finding, findingX, y + (compact ? 4.5 : 6), { width: findingWidth - 6, lineGap: 1.5 });
+    doc.x = M.left;
+    doc.y = y + height + 2;
+  }
+  doc.moveDown(0.8);
+}
+
+/** Numbered points: a filled number, a bold headline, a line of detail. */
+function takeaways(doc: Doc, title: string, items: { headline: string; detail: string; health?: ReportHealth }[]) {
+  subhead(doc, title);
+  const x = M.left + 30;
+  const width = W - 30;
+  items.forEach((item, index) => {
+    doc.font(SANS_700).fontSize(10.5);
+    const headline = doc.heightOfString(item.headline, { width });
+    doc.font(SANS).fontSize(9.5);
+    const detail = doc.heightOfString(item.detail, { width, lineGap: 2 });
+    ensure(doc, headline + detail + 12);
+    const y = doc.y;
+    doc.circle(M.left + 10, y + 8, 10).fill(C.brand);
+    doc.fillColor(C["paper-raised"]).font(SANS_700).fontSize(10).text(String(index + 1), M.left, y + 3, { width: 20, align: "center", lineBreak: false });
+    doc.fillColor(C.ink).font(SANS_700).fontSize(10.5).text(item.headline, x, y, { width });
+    if (item.health) {
+      const after = doc.y;
+      doc.font(SANS_700).fontSize(10.5);
+      chip(doc, item.health, x + doc.widthOfString(item.headline) + 8, y - 0.5);
+      doc.y = after;
+    }
+    doc.fillColor(C["ink-soft"]).font(SANS).fontSize(9.5).text(item.detail, x, doc.y + 2, { width, lineGap: 2 });
+    doc.x = M.left;
+    doc.y += 10;
+  });
+  doc.moveDown(0.3);
+}
+
+/** The "so what": implications in a box, each after an arrow. */
+function soWhat(doc: Doc, title: string, items: string[]) {
+  const x = M.left + 16;
+  const width = W - 30;
+  box(doc, C["highlight-ink"], (measure) => {
+    doc.font(SANS_700).fontSize(7.5);
+    let total = doc.heightOfString(title.toUpperCase(), { width, characterSpacing: 1.1 }) + 6;
+    if (!measure) {
+      doc.fillColor(C["highlight-ink"]).font(SANS_700).fontSize(7.5).text(title.toUpperCase(), x, doc.y, { width, characterSpacing: 1.1 });
+      doc.y += 6;
+    }
+    for (const item of items) {
+      doc.font(SANS_600).fontSize(9.5);
+      const height = doc.heightOfString(item, { width: width - 16, lineGap: 2 });
+      if (!measure) {
+        const y = doc.y;
+        doc.polygon([x, y + 3], [x + 7, y + 6.5], [x, y + 10]).fill(C["highlight-ink"]);
+        doc.fillColor(C.ink).font(SANS_600).fontSize(9.5).text(item, x + 16, y, { width: width - 16, lineGap: 2 });
+        doc.y += 6;
+      }
+      total += height + 6;
+    }
+    return total - 6;
+  });
+}
+
+/** Bullet bars: coloured zones, a marker at the owner's number, the number itself and what good looks like. */
+function benchmarks(doc: Doc, items: Benchmark[], title?: string) {
+  const labelWidth = 112;
+  const valueWidth = 116;
+  const barX = M.left + labelWidth;
+  const barWidth = W - labelWidth - valueWidth - 12;
+  const rowHeight = 38;
+  // The title moves with the chart, so it is never left alone at the foot of a page.
+  ensure(doc, rowHeight * items.length + (title ? 34 : 10));
+  if (title) subhead(doc, title);
+  for (const item of items) {
+    const y = doc.y;
+    const scale = (value: number) => barX + ((Math.min(Math.max(value, item.min), item.max) - item.min) / (item.max - item.min)) * barWidth;
+    doc.fillColor(C.ink).font(SANS_600).fontSize(8.5).text(item.label, M.left, y + 3, { width: labelWidth - 8 });
+    let from = item.min;
+    for (const zone of item.zones) {
+      doc.rect(scale(from), y + 2, scale(zone.to) - scale(from), 12).fill(HEALTH[zone.health].bg);
+      from = zone.to;
+    }
+    const marker = scale(item.value);
+    const style = HEALTH[item.health];
+    doc.rect(marker - 1.5, y - 1, 3, 18).fill(style.fg);
+    doc.fillColor(style.fg).font(SANS_700).fontSize(9).text(item.display, barX + barWidth + 12, y + 3, { width: valueWidth, lineBreak: false });
+    doc.fillColor(C["ink-muted"]).font(SANS).fontSize(7.5).text(item.target, barX, y + 19, { width: barWidth, lineBreak: false });
+    doc.x = M.left;
+    doc.y = y + rowHeight;
+  }
+  doc.moveDown(0.4);
+}
+
+/** Money in, costs out, what is left: three bars on one naira scale, costs floating down from money in. */
+function waterfall(doc: Doc, steps: { label: string; amount: number; display: string }[]) {
+  const chartHeight = 130;
+  ensure(doc, chartHeight + 50);
+  const top = doc.y + 16;
+  const [income, costs, left] = steps.map((step) => step.amount);
+  const high = Math.max(income, 0);
+  const low = Math.min(0, left);
+  const y = (value: number) => top + ((high - value) / (high - low || 1)) * chartHeight;
+  const columnWidth = W / 3;
+  const barWidth = 64;
+  const bars: [number, number, string][] = [[0, income, C.brand], [income, income + costs, C["brand-slate"]], [0, left, left < 0 ? C["health-stuck"] : C["health-clear"]]];
+  bars.forEach(([from, to, color], index) => {
+    const x = M.left + index * columnWidth + (columnWidth - barWidth) / 2;
+    const y1 = Math.min(y(from), y(to));
+    const height = Math.max(Math.abs(y(from) - y(to)), 1.5);
+    doc.rect(x, y1, barWidth, height).fill(color);
+    if (index < 2) doc.moveTo(x + barWidth, y(to)).lineTo(x + columnWidth, y(to)).lineWidth(0.6).dash(2, { space: 2 }).strokeColor(C["ink-muted"]).stroke().undash();
+    doc.fillColor(color).font(SANS_700).fontSize(9).text(steps[index].display, x - 30, y1 - 13, { width: barWidth + 60, align: "center", lineBreak: false });
+    doc.fillColor(C["ink-muted"]).font(SANS_600).fontSize(8).text(steps[index].label, x - 30, top + chartHeight + 8, { width: barWidth + 60, align: "center", lineBreak: false });
+  });
+  doc.moveTo(M.left, y(0)).lineTo(M.left + W, y(0)).lineWidth(0.6).strokeColor(C.line).stroke();
+  doc.x = M.left;
+  doc.y = top + chartHeight + 30;
+}
+
+/** Likelihood across, impact up: tinted by how much the two together matter, each risk a numbered dot. */
+function riskMatrix(doc: Doc, risks: { number: number; likelihood: number; impact: number }[]) {
+  const cellWidth = 92;
+  const cellHeight = 38;
+  const gridX = M.left + (W - cellWidth * 3) / 2 + 30;
+  ensure(doc, cellHeight * 3 + 62);
+  const top = doc.y + 14;
+  const levels = ["Low", "Medium", "High"];
+  for (let impact = 3; impact >= 1; impact -= 1) {
+    for (let likelihood = 1; likelihood <= 3; likelihood += 1) {
+      const score = impact * likelihood;
+      const health: ReportHealth = score >= 6 ? "stuck" : score >= 3 ? "watch" : "clear";
+      const x = gridX + (likelihood - 1) * cellWidth;
+      const cellY = top + (3 - impact) * cellHeight;
+      doc.rect(x, cellY, cellWidth - 2, cellHeight - 2).fill(HEALTH[health].bg);
+      const here = risks.filter((risk) => risk.likelihood === likelihood && risk.impact === impact);
+      here.forEach((risk, index) => {
+        const cx = x + (cellWidth - 2) / 2 + (index - (here.length - 1) / 2) * 22;
+        doc.circle(cx, cellY + (cellHeight - 2) / 2, 9).fill(C.brand);
+        doc.fillColor(C["paper-raised"]).font(SANS_700).fontSize(8.5).text(String(risk.number), cx - 9, cellY + (cellHeight - 2) / 2 - 4.5, { width: 18, align: "center", lineBreak: false });
+      });
+    }
+    doc.fillColor(C["ink-muted"]).font(SANS_600).fontSize(7.5).text(levels[impact - 1], gridX - 66, top + (3 - impact) * cellHeight + cellHeight / 2 - 5, { width: 58, align: "right", lineBreak: false });
+  }
+  levels.forEach((level, index) => doc.fillColor(C["ink-muted"]).font(SANS_600).fontSize(7.5).text(level, gridX + index * cellWidth, top + cellHeight * 3 + 3, { width: cellWidth - 2, align: "center", lineBreak: false }));
+  doc.fillColor(C.brand).font(SANS_700).fontSize(7).text("LIKELIHOOD", gridX, top + cellHeight * 3 + 16, { width: cellWidth * 3, align: "center", characterSpacing: 1, lineBreak: false });
+  doc.fillColor(C.brand).font(SANS_700).fontSize(7).text("IMPACT", gridX - 66, top - 12, { width: 58, align: "right", characterSpacing: 1, lineBreak: false });
+  doc.x = M.left;
+  doc.y = top + cellHeight * 3 + 36;
+}
+
+/** The 90-day plan as columns under arrow-shaped month headers. */
+function timeline(doc: Doc, moves: PlanMove[], title?: string) {
+  if (!moves.length) return;
+  const gap = 6;
+  const width = (W - gap * (moves.length - 1)) / moves.length;
+  const inner = width - 16;
+  const sections = (move: PlanMove): [string, string, string][] => [["Move", move.move, SANS_600], ["This week", move.thisWeek, SANS], ["Measure of Success", move.watch, SANS]];
+  const heightOf = (move: PlanMove) => {
+    doc.font(SANS_700).fontSize(10);
+    let total = doc.heightOfString(move.area, { width: inner }) + 8;
+    for (const [label, text, font] of sections(move)) {
+      doc.font(SANS_700).fontSize(6.5);
+      total += doc.heightOfString(label.toUpperCase(), { width: inner, characterSpacing: 0.8 }) + 2;
+      doc.font(font).fontSize(8.5);
+      total += doc.heightOfString(text, { width: inner, lineGap: 1.5 }) + 7;
+    }
+    return total + 8;
+  };
+  const height = Math.max(...moves.map(heightOf));
+  ensure(doc, height + (title ? 54 : 30));
+  if (title) subhead(doc, title);
+  const top = doc.y;
+  const shades = [C.brand, C["brand-slate"], C["brand-plum"]];
+  moves.forEach((move, index) => {
+    const x = M.left + index * (width + gap);
+    const tip = 10;
+    doc.polygon([x, top], [x + width - tip, top], [x + width, top + 11], [x + width - tip, top + 22], [x, top + 22], ...(index ? [[x + tip, top + 11]] as [number, number][] : [])).fill(shades[index % shades.length]);
+    doc.fillColor(C["paper-raised"]).font(SANS_700).fontSize(8).text(move.month.toUpperCase(), x + (index ? tip + 6 : 8), top + 7, { width: width - tip * 2 - 8, characterSpacing: 1, lineBreak: false });
+    doc.rect(x, top + 26, width, height).fill(C["brand-tint-softer"]);
+    doc.fillColor(C.ink).font(SANS_700).fontSize(10).text(move.area, x + 8, top + 34, { width: inner });
+    doc.y += 8;
+    for (const [label, text, font] of sections(move)) {
+      doc.fillColor(C.brand).font(SANS_700).fontSize(6.5).text(label.toUpperCase(), x + 8, doc.y, { width: inner, characterSpacing: 0.8 });
+      doc.fillColor(C.ink).font(font).fontSize(8.5).text(text, x + 8, doc.y + 2, { width: inner, lineGap: 1.5 });
+      doc.y += 7;
+    }
+  });
+  doc.x = M.left;
+  doc.y = top + 26 + height + 14;
+}
+
 function blocks(doc: Doc, items: ReportBlock[]) {
   for (const block of items) {
     switch (block.kind) {
@@ -250,6 +464,12 @@ function blocks(doc: Doc, items: ReportBlock[]) {
       case "table": table(doc, block); break;
       case "reading": reading(doc, block); break;
       case "callout": callout(doc, block.title, block.text); break;
+      case "scorecard": scorecard(doc, block.rows); break;
+      case "takeaways": takeaways(doc, block.title, block.items); break;
+      case "benchmarks": benchmarks(doc, block.items, "Against what good looks like"); break;
+      case "waterfall": waterfall(doc, block.steps); break;
+      case "riskMatrix": riskMatrix(doc, block.risks); break;
+      case "timeline": timeline(doc, block.moves); break;
     }
   }
 }
@@ -297,7 +517,7 @@ function cover(doc: Doc, report: FullReport) {
 
   doc.y = Math.max(doc.y + 10, 520);
   eyebrow(doc, "What is inside", C.brand);
-  const entries: [string, string][] = [["", "The one-page answer"], ...report.parts.map((part) => [String(part.number), part.title] as [string, string]), ["A", "Appendix: your answers"]];
+  const entries: [string, string][] = [["", "Executive summary"], ...report.parts.map((part) => [String(part.number), part.title] as [string, string]), ["A", "Appendix: your answers"]];
   for (const [number, title] of entries) {
     const y = doc.y;
     doc.font(SANS_700).fontSize(9).fillColor(C["highlight-ink"]).text(number, M.left, y, { width: 20, lineBreak: false });
@@ -307,23 +527,19 @@ function cover(doc: Doc, report: FullReport) {
 }
 
 function onePage(doc: Doc, report: FullReport) {
+  const summary = report.onePage;
   doc.addPage();
-  partHeading(doc, "The one-page answer", "Where you stand", report.onePage.position);
-  const tally = report.onePage.tally;
-  let x = M.left;
-  const y = doc.y - 6;
-  for (const health of ["clear", "watch", "stuck"] as const) {
-    x += chip(doc, health, x, y);
-    doc.font(SANS_700).fontSize(10).fillColor(C.ink).text(String(tally[health]), x + 6, y + 2, { lineBreak: false });
-    x += 26;
-  }
-  doc.x = M.left;
-  doc.y = y + 28;
-  callout(doc, `Fix this first: ${report.onePage.fixFirst.area}`, report.onePage.fixFirst.finding);
-  metrics(doc, report.onePage.keyNumbers);
-  subhead(doc, "Your first moves");
-  table(doc, { kind: "table", columns: ["When", "Move", "This week"], widths: [0.14, 0.46, 0.4], rows: report.onePage.moves.map((move) => [move.month, move.move, move.thisWeek]) });
-  callout(doc, "The one number to watch", report.onePage.watch, C.highlight);
+  partHeading(doc, "Executive summary", "Where you stand", summary.position);
+  takeaways(doc, "Key takeaways", summary.takeaways);
+  soWhat(doc, "What this means for you", summary.implications);
+  metrics(doc, summary.keyNumbers);
+
+  doc.addPage();
+  partHeading(doc, "Executive summary", "Scorecard and first moves", `Fix this first: ${summary.fixFirst.area.toLowerCase()}.`);
+  scorecard(doc, summary.scorecard, true);
+  if (summary.benchmarks.length) benchmarks(doc, summary.benchmarks, "Your numbers against what good looks like");
+  timeline(doc, summary.moves, "Your 90-day plan");
+  callout(doc, "The one number to watch", summary.watch, C.highlight);
 }
 
 function appendix(doc: Doc, report: FullReport) {

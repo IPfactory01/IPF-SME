@@ -113,8 +113,14 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
   (*branch*).
 - **Fully deterministic:** no AI and no analyst. The report is built by fixed rules and emailed as a branded PDF the moment
   the form is submitted; the owner can also download it on the page. Same answers, same report, word for word.
-- Structure: a one-page answer, then eleven parts (business today, where it is going, market, offer and model, customers
-  and sales, how it runs, risks, numbers, diagnosis, 90-day plan, how we can help) and an appendix of every answer.
+- Structure: an executive summary (key takeaways, what they mean for you, key numbers, the scorecard of every area,
+  the numbers against what good looks like, and the 90-day plan as a timeline), then eleven parts (business today, where
+  it is going, market, offer and model, customers and sales, how it runs, risks, numbers, diagnosis, 90-day plan, how we
+  can help) and an appendix of every answer.
+- Layout of a consulting document: an action title on every part, short bullets, numbers in tiles, and charts drawn from
+  the answers: benchmark bars coloured by the same thresholds the readings use, last month as a cash waterfall, a
+  likelihood-and-impact risk matrix numbered like the register, and the scorecard heat map. A chart is left out when
+  the owner did not give its numbers.
 - The team can see the report status, resend the form link (the old link stops working) and download the report.
 - **Status: Built** (`shared/fullReport/*`, `server/fullReport/*`, `client/src/pages/FullReportPage.tsx`).
 

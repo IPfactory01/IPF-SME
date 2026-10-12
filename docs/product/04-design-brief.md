@@ -150,6 +150,15 @@ from the plain-text body so both versions say the same thing:
   business name in Playfair 34 pt, a facts table (prepared for, date, reference) and the contents.
 - **Parts:** crimson eyebrow, title in brand blue, the finding in Playfair 19 pt, a health chip, then blocks (facts,
   metrics tiles with a brand top bar, tables with tinted headers, readings, call-outs with an accent bar).
+- **Executive summary** (two or three pages): the position in Playfair; **Key takeaways** as numbered brand circles
+  with a health chip; **What this means for you** in a crimson-accent box with triangle markers; the key number tiles;
+  then the scorecard (a heat-map row per area: a 3 pt health bar, the health cell in its tint, the finding), the
+  benchmark bars and the 90-day plan as arrow-headed month columns (brand, slate, plum).
+- **Charts,** drawn in PDFKit from `BRAND.palette` only: benchmark bars (zones in the health tints, a marker in the
+  health colour, "Good: …" underneath); the cash waterfall (money in brand, costs slate, what is left green or red,
+  dashed connectors); the risk matrix (3 × 3, cells tinted by likelihood × impact, numbered brand dots). A chart's
+  title moves with it so it is never left alone at the foot of a page. No glyph outside the brand fonts: arrows are
+  drawn as shapes.
 - **Footer** on every page after the cover: "The Shift, by IP Factory · Full business check report · {business} ·
   {reference}" and "n / N".
 - Short tables never split across pages; values shrink to fit their tile.

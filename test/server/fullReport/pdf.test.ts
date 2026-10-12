@@ -14,7 +14,7 @@ const fontkit = createRequire(createRequire(import.meta.url).resolve("pdfkit"))(
 const DATE = new Date("2026-10-09T10:00:00Z");
 
 describe("the full report PDF", () => {
-  it("is an A4 PDF with a cover, the one-page answer, eleven parts and the appendix, in the brand fonts and logo", async () => {
+  it("is an A4 PDF with a cover, the executive summary, eleven parts and the appendix, in the brand fonts and logo", async () => {
     const answers = { ...businessCheckProfiles.smallOperatingTrader, p_name: "Adunni Fabrics" };
     const report = buildFullReport({ reference: "TS-R-000012", date: DATE, contact: { fullName: "Adunni Example" }, answers, result: evaluate(answers), intake: sampleIntake });
     const pdf = await renderFullReportPdf(report, DATE);

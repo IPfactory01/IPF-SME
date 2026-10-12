@@ -223,10 +223,124 @@ exports[`the full report > is deterministic: the same answers give the same repo
   "descriptor": "A retail business that buys and sells goods, trading for two to five years",
   "method": "Built by The Shift's fixed rules from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on 9 October 2026. It is not an audit, a valuation, or financial, legal or tax advice.",
   "onePage": {
+    "benchmarks": [
+      {
+        "display": "1 to 5 weeks",
+        "health": "stuck",
+        "label": "Cash cover",
+        "max": 16,
+        "min": 0,
+        "target": "Good: 8 weeks of costs or more",
+        "value": 2.5193798449612403,
+        "zones": [
+          {
+            "health": "stuck",
+            "to": 4,
+          },
+          {
+            "health": "watch",
+            "to": 8,
+          },
+          {
+            "health": "clear",
+            "to": 16,
+          },
+        ],
+      },
+      {
+        "display": "10% of revenue",
+        "health": "clear",
+        "label": "Left after costs",
+        "max": 40,
+        "min": -20,
+        "target": "Good: 10% of revenue or more",
+        "value": 10.416666666666668,
+        "zones": [
+          {
+            "health": "stuck",
+            "to": 0,
+          },
+          {
+            "health": "watch",
+            "to": 10,
+          },
+          {
+            "health": "clear",
+            "to": 40,
+          },
+        ],
+      },
+      {
+        "display": "25% to 50%",
+        "health": "watch",
+        "label": "Gross margin",
+        "max": 100,
+        "min": 0,
+        "target": "Good: 50% or more of each sale",
+        "value": 37.5,
+        "zones": [
+          {
+            "health": "stuck",
+            "to": 25,
+          },
+          {
+            "health": "watch",
+            "to": 50,
+          },
+          {
+            "health": "clear",
+            "to": 100,
+          },
+        ],
+      },
+      {
+        "display": "0.2 months of sales",
+        "health": "clear",
+        "label": "Owed to you",
+        "max": 3,
+        "min": 0,
+        "target": "Good: under one month of sales",
+        "value": 0.20833333333333334,
+        "zones": [
+          {
+            "health": "clear",
+            "to": 1,
+          },
+          {
+            "health": "watch",
+            "to": 3,
+          },
+        ],
+      },
+      {
+        "display": "3 in 10",
+        "health": "clear",
+        "label": "Enquiries that buy",
+        "max": 10,
+        "min": 0,
+        "target": "Good: 3 in 10 or more",
+        "value": 3,
+        "zones": [
+          {
+            "health": "watch",
+            "to": 2,
+          },
+          {
+            "health": "clear",
+            "to": 10,
+          },
+        ],
+      },
+    ],
     "fixFirst": {
       "area": "Financials",
       "finding": "Cash is always tight and prices are guesses, so the business runs without a dashboard.",
     },
+    "implications": [
+      "Start with financials: the first job is to see the problem clearly, with numbers, before spending on a fix.",
+      "Cash would cover 1 to 5 weeks of costs. Until it covers 8 weeks, plan every spend against a 13-week cash forecast.",
+      "Seven areas are stuck, but they are rarely separate problems. Fixing the root first should ease the rest.",
+    ],
     "keyNumbers": [
       {
         "label": "Last month in",
@@ -273,6 +387,70 @@ exports[`the full report > is deterministic: the same answers give the same repo
       },
     ],
     "position": "Adunni Fabrics buys and sells goods and has traded for two to five years. Of the 9 areas we looked at, 2 need watching and 7 are stuck.",
+    "scorecard": [
+      {
+        "area": "Founder readiness",
+        "finding": "Intermediate: ready, with gaps to close",
+        "health": "watch",
+      },
+      {
+        "area": "Strategic intent",
+        "finding": "You are busy every day without a clear destination, so effort spreads thin.",
+        "health": "stuck",
+      },
+      {
+        "area": "Market and industry",
+        "finding": "You know your customers, but not the competitors and market around them.",
+        "health": "watch",
+      },
+      {
+        "area": "Service and offering",
+        "finding": "People like what you do, but not enough of them buy it.",
+        "health": "stuck",
+      },
+      {
+        "area": "Business model",
+        "finding": "Money comes in, but the business still does not make money.",
+        "health": "stuck",
+      },
+      {
+        "area": "Market entry and sales",
+        "finding": "Customers do not arrive consistently, so sales rise and fall without warning.",
+        "health": "stuck",
+      },
+      {
+        "area": "Operations and people",
+        "finding": "Nothing moves unless you are there, so the business is capped at your hours.",
+        "health": "stuck",
+      },
+      {
+        "area": "Financials",
+        "finding": "Cash is always tight and prices are guesses, so the business runs without a dashboard.",
+        "health": "stuck",
+      },
+      {
+        "area": "Risk and compliance",
+        "finding": "One tax visit, one resignation or one bad month could end the business.",
+        "health": "stuck",
+      },
+    ],
+    "takeaways": [
+      {
+        "detail": "Cash is always tight and prices are guesses, so the business runs without a dashboard.",
+        "headline": "Financials",
+        "health": "stuck",
+      },
+      {
+        "detail": "Money comes in, but the business still does not make money.",
+        "headline": "Business model",
+        "health": "stuck",
+      },
+      {
+        "detail": "Customers do not arrive consistently, so sales rise and fall without warning.",
+        "headline": "Market entry and sales",
+        "health": "stuck",
+      },
+    ],
     "tally": {
       "clear": 0,
       "stuck": 7,
@@ -511,6 +689,34 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "kind": "metrics",
         },
         {
+          "items": [
+            {
+              "display": "25% to 50%",
+              "health": "watch",
+              "label": "Gross margin",
+              "max": 100,
+              "min": 0,
+              "target": "Good: 50% or more of each sale",
+              "value": 37.5,
+              "zones": [
+                {
+                  "health": "stuck",
+                  "to": 25,
+                },
+                {
+                  "health": "watch",
+                  "to": 50,
+                },
+                {
+                  "health": "clear",
+                  "to": 100,
+                },
+              ],
+            },
+          ],
+          "kind": "benchmarks",
+        },
+        {
           "area": "Service and offering",
           "good": "Customers understand what you sell, why it is better for them and what it costs. Your range is focused on what sells.",
           "health": "stuck",
@@ -613,6 +819,30 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "kind": "metrics",
         },
         {
+          "items": [
+            {
+              "display": "3 in 10",
+              "health": "clear",
+              "label": "Enquiries that buy",
+              "max": 10,
+              "min": 0,
+              "target": "Good: 3 in 10 or more",
+              "value": 3,
+              "zones": [
+                {
+                  "health": "watch",
+                  "to": 2,
+                },
+                {
+                  "health": "clear",
+                  "to": 10,
+                },
+              ],
+            },
+          ],
+          "kind": "benchmarks",
+        },
+        {
           "area": "Market entry and sales",
           "good": "New customers arrive steadily from two or three channels you understand, and you know where each one came from.",
           "health": "stuck",
@@ -671,7 +901,31 @@ exports[`the full report > is deterministic: the same answers give the same repo
     {
       "blocks": [
         {
+          "kind": "riskMatrix",
+          "risks": [
+            {
+              "impact": 3,
+              "likelihood": 3,
+              "number": 1,
+              "risk": "Cash runs out in a bad month",
+            },
+            {
+              "impact": 3,
+              "likelihood": 2,
+              "number": 2,
+              "risk": "Losing a big customer",
+            },
+            {
+              "impact": 3,
+              "likelihood": 2,
+              "number": 3,
+              "risk": "The business stops without you or a key person",
+            },
+          ],
+        },
+        {
           "columns": [
+            "#",
             "Risk",
             "Likelihood",
             "Impact",
@@ -680,18 +934,21 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "kind": "table",
           "rows": [
             [
+              "1",
               "Cash runs out in a bad month",
               "High",
               "High",
               "A 13-week cash forecast, updated every Monday.",
             ],
             [
+              "2",
               "Losing a big customer",
               "Medium",
               "High",
               "Written agreements with the top customers, and a target for new ones.",
             ],
             [
+              "3",
               "The business stops without you or a key person",
               "Medium",
               "High",
@@ -699,10 +956,11 @@ exports[`the full report > is deterministic: the same answers give the same repo
             ],
           ],
           "widths": [
-            0.3,
-            0.14,
-            0.12,
-            0.44,
+            0.06,
+            0.27,
+            0.15,
+            0.11,
+            0.41,
           ],
         },
         {
@@ -753,6 +1011,100 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "kind": "metrics",
         },
         {
+          "kind": "heading",
+          "text": "Last month in naira",
+        },
+        {
+          "kind": "waterfall",
+          "steps": [
+            {
+              "amount": 2400000,
+              "display": "₦2,400,000",
+              "label": "Money in",
+            },
+            {
+              "amount": -2150000,
+              "display": "−₦2,150,000",
+              "label": "Costs",
+            },
+            {
+              "amount": 250000,
+              "display": "₦250,000",
+              "label": "Left over",
+            },
+          ],
+        },
+        {
+          "items": [
+            {
+              "display": "1 to 5 weeks",
+              "health": "stuck",
+              "label": "Cash cover",
+              "max": 16,
+              "min": 0,
+              "target": "Good: 8 weeks of costs or more",
+              "value": 2.5193798449612403,
+              "zones": [
+                {
+                  "health": "stuck",
+                  "to": 4,
+                },
+                {
+                  "health": "watch",
+                  "to": 8,
+                },
+                {
+                  "health": "clear",
+                  "to": 16,
+                },
+              ],
+            },
+            {
+              "display": "10% of revenue",
+              "health": "clear",
+              "label": "Left after costs",
+              "max": 40,
+              "min": -20,
+              "target": "Good: 10% of revenue or more",
+              "value": 10.416666666666668,
+              "zones": [
+                {
+                  "health": "stuck",
+                  "to": 0,
+                },
+                {
+                  "health": "watch",
+                  "to": 10,
+                },
+                {
+                  "health": "clear",
+                  "to": 40,
+                },
+              ],
+            },
+            {
+              "display": "0.2 months of sales",
+              "health": "clear",
+              "label": "Owed to you",
+              "max": 3,
+              "min": 0,
+              "target": "Good: under one month of sales",
+              "value": 0.20833333333333334,
+              "zones": [
+                {
+                  "health": "clear",
+                  "to": 1,
+                },
+                {
+                  "health": "watch",
+                  "to": 3,
+                },
+              ],
+            },
+          ],
+          "kind": "benchmarks",
+        },
+        {
           "area": "Financials",
           "good": "You know your margin on every product and your cash for the next 13 weeks, and you decide with numbers rather than feel.",
           "health": "stuck",
@@ -781,63 +1133,53 @@ exports[`the full report > is deterministic: the same answers give the same repo
     {
       "blocks": [
         {
-          "columns": [
-            "Area",
-            "Where you are",
-            "Finding",
-          ],
-          "kind": "table",
+          "kind": "scorecard",
           "rows": [
-            [
-              "Founder readiness",
-              "Watch",
-              "Intermediate: ready, with gaps to close",
-            ],
-            [
-              "Strategic intent",
-              "Stuck",
-              "You are busy every day without a clear destination, so effort spreads thin.",
-            ],
-            [
-              "Market and industry",
-              "Watch",
-              "You know your customers, but not the competitors and market around them.",
-            ],
-            [
-              "Service and offering",
-              "Stuck",
-              "People like what you do, but not enough of them buy it.",
-            ],
-            [
-              "Business model",
-              "Stuck",
-              "Money comes in, but the business still does not make money.",
-            ],
-            [
-              "Market entry and sales",
-              "Stuck",
-              "Customers do not arrive consistently, so sales rise and fall without warning.",
-            ],
-            [
-              "Operations and people",
-              "Stuck",
-              "Nothing moves unless you are there, so the business is capped at your hours.",
-            ],
-            [
-              "Financials",
-              "Stuck",
-              "Cash is always tight and prices are guesses, so the business runs without a dashboard.",
-            ],
-            [
-              "Risk and compliance",
-              "Stuck",
-              "One tax visit, one resignation or one bad month could end the business.",
-            ],
-          ],
-          "widths": [
-            0.26,
-            0.14,
-            0.6,
+            {
+              "area": "Founder readiness",
+              "finding": "Intermediate: ready, with gaps to close",
+              "health": "watch",
+            },
+            {
+              "area": "Strategic intent",
+              "finding": "You are busy every day without a clear destination, so effort spreads thin.",
+              "health": "stuck",
+            },
+            {
+              "area": "Market and industry",
+              "finding": "You know your customers, but not the competitors and market around them.",
+              "health": "watch",
+            },
+            {
+              "area": "Service and offering",
+              "finding": "People like what you do, but not enough of them buy it.",
+              "health": "stuck",
+            },
+            {
+              "area": "Business model",
+              "finding": "Money comes in, but the business still does not make money.",
+              "health": "stuck",
+            },
+            {
+              "area": "Market entry and sales",
+              "finding": "Customers do not arrive consistently, so sales rise and fall without warning.",
+              "health": "stuck",
+            },
+            {
+              "area": "Operations and people",
+              "finding": "Nothing moves unless you are there, so the business is capped at your hours.",
+              "health": "stuck",
+            },
+            {
+              "area": "Financials",
+              "finding": "Cash is always tight and prices are guesses, so the business runs without a dashboard.",
+              "health": "stuck",
+            },
+            {
+              "area": "Risk and compliance",
+              "finding": "One tax visit, one resignation or one bad month could end the business.",
+              "health": "stuck",
+            },
           ],
         },
         {
@@ -859,38 +1201,29 @@ exports[`the full report > is deterministic: the same answers give the same repo
     {
       "blocks": [
         {
-          "columns": [
-            "When",
-            "Move",
-            "This week",
-            "Measure of Success",
-          ],
-          "kind": "table",
-          "rows": [
-            [
-              "Month 1",
-              "Work out the full cost of each main product: materials, labour and a share of overheads.",
-              "Add up what it cost to make or deliver your best seller last month, and divide by the units sold.",
-              "Weeks of costs covered by cash in the bank",
-            ],
-            [
-              "Month 2",
-              "Set a limit on the share of sales from your biggest customer, and win new customers to bring it down.",
-              "Work out what share of last month's sales came from your biggest customer.",
-              "Gross margin, product by product",
-            ],
-            [
-              "Month 3",
-              "Follow up every enquiry within a day, and record why the people who do not buy say no.",
-              "Call back the last ten people who enquired and did not buy, and ask why.",
-              "New customers a month, by channel",
-            ],
-          ],
-          "widths": [
-            0.13,
-            0.37,
-            0.3,
-            0.2,
+          "kind": "timeline",
+          "moves": [
+            {
+              "area": "Financials",
+              "month": "Month 1",
+              "move": "Work out the full cost of each main product: materials, labour and a share of overheads.",
+              "thisWeek": "Add up what it cost to make or deliver your best seller last month, and divide by the units sold.",
+              "watch": "Weeks of costs covered by cash in the bank",
+            },
+            {
+              "area": "Business model",
+              "month": "Month 2",
+              "move": "Set a limit on the share of sales from your biggest customer, and win new customers to bring it down.",
+              "thisWeek": "Work out what share of last month's sales came from your biggest customer.",
+              "watch": "Gross margin, product by product",
+            },
+            {
+              "area": "Market entry and sales",
+              "month": "Month 3",
+              "move": "Follow up every enquiry within a day, and record why the people who do not buy say no.",
+              "thisWeek": "Call back the last ten people who enquired and did not buy, and ask why.",
+              "watch": "New customers a month, by channel",
+            },
           ],
         },
         {
@@ -943,6 +1276,6 @@ exports[`the full report > is deterministic: the same answers give the same repo
     },
   ],
   "reference": "TS-R-000012",
-  "version": 2,
+  "version": 3,
 }
 `;

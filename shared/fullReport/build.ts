@@ -17,8 +17,12 @@ import {
  * describe the business today, the diagnosis, a 90-day plan, how we can help, and the owner's answers.
  */
 
-/** 2: products can be charged as a percentage of the deal, and the owner can type their margin. */
-export const REPORT_VERSION = 2;
+/**
+ * 2: products can be charged as a percentage of the deal, and the owner can type their margin.
+ * 3: the consulting layout: a scorecard, key takeaways and what they mean, benchmark bars, the month's cash
+ * waterfall, a risk matrix and the 90-day plan as a timeline.
+ */
+export const REPORT_VERSION = 3;
 
 export type ReportHealth = Health | "not_assessed";
 
@@ -30,7 +34,33 @@ export type ReportBlock =
   | { kind: "metrics"; items: { label: string; value: string; note: string }[] }
   | { kind: "table"; columns: string[]; rows: string[][]; widths?: number[] }
   | { kind: "reading"; area: string; health: ReportHealth; theirWords: string; shows: string[]; meaning: string[]; good: string; move: string; thisWeek: string; watch: string }
-  | { kind: "callout"; title: string; text: string };
+  | { kind: "callout"; title: string; text: string }
+  /** The heat map: every area we looked at, its health and the finding in one line. */
+  | { kind: "scorecard"; rows: ScoreRow[] }
+  /** Numbered points, each a bold headline and a line under it. */
+  | { kind: "takeaways"; title: string; items: { headline: string; detail: string; health?: ReportHealth }[] }
+  /** Bullet bars: the owner's number against the thresholds the rules use, coloured stuck, watch and clear. */
+  | { kind: "benchmarks"; items: Benchmark[] }
+  /** The month in naira: money in, costs out, what is left. */
+  | { kind: "waterfall"; steps: { label: string; amount: number; display: string }[] }
+  /** Likelihood against impact, each risk a numbered dot that matches the register's numbering. */
+  | { kind: "riskMatrix"; risks: { number: number; risk: string; likelihood: number; impact: number }[] }
+  | { kind: "timeline"; moves: PlanMove[] };
+
+export type ScoreRow = { area: string; health: ReportHealth; finding: string };
+
+/** A scale from min to max cut into coloured zones; `value` is clamped to the scale when drawn. */
+export type Benchmark = {
+  label: string;
+  value: number;
+  display: string;
+  min: number;
+  max: number;
+  zones: { to: number; health: Health }[];
+  /** What good looks like, in words, printed under the bar. */
+  target: string;
+  health: Health;
+};
 
 export type ReportPart = {
   number: number;
@@ -58,6 +88,10 @@ export type FullReport = {
     watch: string;
     keyNumbers: { label: string; value: string; note: string }[];
     tally: Record<Health, number>;
+    scorecard: ScoreRow[];
+    takeaways: { headline: string; detail: string; health?: Health }[];
+    implications: string[];
+    benchmarks: Benchmark[];
   };
   parts: ReportPart[];
   appendix: { title: string; rows: { question: string; answer: string }[] }[];
@@ -379,6 +413,8 @@ export function buildFullReport(input: ReportInput): FullReport {
     ],
   });
 
+  const bench = benchmarks(intake, metrics, { cover: coverHealth, result: deficit ? "stuck" : thinResult ? "watch" : "clear", owed: (metrics.owedMonths ?? 0) >= 1 ? "watch" : "clear", conversion: lowConversion ? "watch" : "clear" });
+
   const intent = idea ? null : reading({
     area: 1, answers, result, intake, metrics, intakeHealth: "clear",
     intakeFinding: "You have set a goal for the next 12 months; the work is to turn it into three priorities.",
@@ -446,6 +482,7 @@ export function buildFullReport(input: ReportInput): FullReport {
         { label: "Top three customers", value: labelOf(TOP_CUSTOMER_SHARE, intake.topCustomerShare), note: "Share of your sales" },
         { label: "Your prices", value: labelOf(PRICE_POSITION, intake.pricePosition), note: "Against competitors" },
       ] },
+      ...benchmarkBlock(bench.filter((item) => item.label === "Gross margin")),
       offer.block, model.block,
       { kind: "heading", text: "Your business model on one page" },
       { kind: "facts", rows: [
@@ -466,13 +503,14 @@ export function buildFullReport(input: ReportInput): FullReport {
         { label: "Buy, of every 10", value: intake.conversion !== null ? String(intake.conversion) : "Not known", note: "Your conversion rate" },
         { label: "New customers a month", value: customersText(metrics.newCustomers), note: "Worked out from the two" },
       ] },
+      ...benchmarkBlock(bench.filter((item) => item.label === "Enquiries that buy")),
       sales.block,
     ],
   });
   parts.push({ number: 6, title: "How the business runs", method: "Operational plan", finding: operations.finding, health: operations.health, blocks: [operations.block] });
   parts.push({
     number: 7, title: "What could go wrong", method: "Risk assessment", finding: risk.finding, health: worst(risk.health, ...extraReadings.map((item) => item.health)),
-    blocks: [riskRegister(answers, result, intake, metrics), risk.block, ...extraReadings.map((item) => item.block)],
+    blocks: [...riskRegister(answers, result, intake, metrics), risk.block, ...extraReadings.map((item) => item.block)],
   });
   parts.push({
     number: 8, title: "The numbers", method: "Financial analysis", finding: finance.finding, health: finance.health,
@@ -482,6 +520,12 @@ export function buildFullReport(input: ReportInput): FullReport {
         { label: "Left after costs", value: metrics.result !== null ? `${metrics.result < 0 ? "−" : ""}${formatNaira(Math.abs(metrics.result))}` : "Not known", note: metrics.resultMargin !== null ? `${Math.round(metrics.resultMargin * 100)}% of revenue` : "Revenue minus all costs" },
         { label: "Cash cover", value: coverText(metrics.cover), note: "Weeks of costs your cash would pay" },
       ] },
+      ...(metrics.revenue !== null && metrics.costs !== null && metrics.result !== null ? [{ kind: "heading" as const, text: "Last month in naira" }, { kind: "waterfall" as const, steps: [
+        { label: "Money in", amount: metrics.revenue, display: formatNaira(metrics.revenue) },
+        { label: "Costs", amount: -metrics.costs, display: `−${formatNaira(metrics.costs)}` },
+        { label: metrics.result < 0 ? "Shortfall" : "Left over", amount: metrics.result, display: `${metrics.result < 0 ? "−" : ""}${formatNaira(Math.abs(metrics.result))}` },
+      ] }] : []),
+      ...benchmarkBlock(bench.filter((item) => ["Cash cover", "Left after costs", "Owed to you"].includes(item.label))),
       finance.block,
     ],
   });
@@ -501,16 +545,17 @@ export function buildFullReport(input: ReportInput): FullReport {
   const stuck = order.filter((area) => areaHealth.get(area)!.health === "stuck").map((area) => AREA_NAMES[area]);
   const watchList = order.filter((area) => areaHealth.get(area)!.health === "watch").map((area) => AREA_NAMES[area]);
   const gap = result.primaryGap;
+  const scorecard: ScoreRow[] = [
+    ...(outlineRow(result, 0) ? [{ area: AREA_NAMES[0], health: outlineRow(result, 0)!.health, finding: READINESS_LABELS[founder.level] }] : []),
+    ...Array.from(areaHealth.keys()).sort((a, b) => a - b).map((area) => ({ area: AREA_NAMES[area], health: areaHealth.get(area)!.health, finding: areaHealth.get(area)!.finding })),
+  ];
 
   parts.push({
     number: 9, title: "The diagnosis", method: "Synthesis",
     finding: mainArea !== undefined ? `The place to start is ${AREA_NAMES[mainArea].toLowerCase()}: ${lower(areaHealth.get(mainArea)!.finding)}` : "No area is stuck or needs watching: the work is to protect what is working and grow from it.",
     health: mainArea !== undefined ? areaHealth.get(mainArea)!.health : "clear",
     blocks: [
-      { kind: "table", columns: ["Area", "Where you are", "Finding"], widths: [0.26, 0.14, 0.6], rows: [
-        ...(outlineRow(result, 0) ? [[AREA_NAMES[0], healthWord(outlineRow(result, 0)!.health), READINESS_LABELS[founder.level]]] : []),
-        ...Array.from(areaHealth.keys()).sort((a, b) => a - b).map((area) => [AREA_NAMES[area], healthWord(areaHealth.get(area)!.health), areaHealth.get(area)!.finding]),
-      ] },
+      { kind: "scorecard", rows: scorecard },
       { kind: "paragraph", text: stuck.length || watchList.length
         ? `${stuck.length ? `${list(stuck)} ${stuck.length === 1 ? "is" : "are"} stuck. ` : ""}${watchList.length ? `${list(watchList)} need${watchList.length === 1 ? "s" : ""} watching. ` : ""}These are rarely separate problems. Money and business-model problems usually sit underneath sales, offer and people problems, so the plan starts where the root is, not where the pain is loudest.`
         : "Every area we looked at is clear. The risk for a business in good shape is standing still: keep the routines that got you here and choose the next growth step on purpose." },
@@ -538,7 +583,7 @@ export function buildFullReport(input: ReportInput): FullReport {
     number: 10, title: "What to fix first: your 90-day plan", method: "Recommendation",
     finding: moves.length ? `${moves.length === 1 ? "One move" : `${["", "One", "Two", "Three"][moves.length]} moves`} over 90 days, starting with ${moves[0].area.toLowerCase()}.` : "Keep doing what works, and review the numbers monthly.",
     blocks: [
-      { kind: "table", columns: ["When", "Move", "This week", "Measure of Success"], widths: [0.13, 0.37, 0.3, 0.2], rows: moves.map((move) => [move.month, move.move, move.thisWeek, move.watch]) },
+      { kind: "timeline", moves },
       { kind: "paragraph", text: `Your goal for the year, in your words: “${intake.goal.replace(/[.\s]+$/, "")}.” Check each month whether these moves are bringing it closer, and drop anything that is not.` },
     ],
   });
@@ -576,12 +621,36 @@ export function buildFullReport(input: ReportInput): FullReport {
         parts[7].blocks[0].items[2],
       ] : [],
       tally,
+      scorecard,
+      takeaways: takeaways(),
+      implications: implications(),
+      benchmarks: bench,
     },
     parts,
     appendix: appendix(answers, intake),
     method: `Built by The Shift's fixed rules from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on ${reportDate(input.date)}. It is not an audit, a valuation, or financial, legal or tax advice.`,
   };
 
+  /** The three findings that matter most, root cause first. */
+  function takeaways() {
+    const ranked = [...(mainArea !== undefined ? [mainArea] : []), ...order.filter((area) => area !== mainArea && areaHealth.get(area)!.health === "stuck"), ...order.filter((area) => area !== mainArea && areaHealth.get(area)!.health === "watch")];
+    if (!ranked.length) return [{ headline: "Every area we looked at is clear", detail: "The risk for a business in good shape is standing still." }];
+    return ranked.slice(0, 3).map((area) => ({
+      headline: area === 1 && idea ? "Your idea" : AREA_NAMES[area],
+      detail: areaHealth.get(area)!.finding,
+      health: areaHealth.get(area)!.health,
+    }));
+  }
+  /** What the findings mean for the owner's next decisions: the "so what". */
+  function implications() {
+    if (mainArea === undefined) return ["Protect what works: keep the routines that got you here.", "Choose the next growth step on purpose, and review the numbers every month."];
+    const items = [`Start with ${AREA_NAMES[mainArea].toLowerCase()}: ${gap ? GAP_ADVICE[gap].replace(/^So t/, "t") : "fix the root before the symptoms."}`];
+    if (deficit) items.push(`At last month's pace the business spends ${money(-metrics.result!)} more than it brings in each month. Only higher prices, lower costs or more sales close that gap: choose which this month.`);
+    if (coverHealth) items.push(`Cash would cover ${lower(coverText(metrics.cover))} of costs. Until it covers 8 weeks, plan every spend against a 13-week cash forecast.`);
+    if (stuck.length >= 2) items.push(`${upperFirst(["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][stuck.length] ?? String(stuck.length))} areas are stuck, but they are rarely separate problems. Fixing the root first should ease the rest.`);
+    if (items.length < 3) items.push(`Measure progress by ${lower(mainArea === 1 && idea ? IDEA_CONTENT.watch : AREA_CONTENT[mainArea].watch)}, checked every month.`);
+    return items.slice(0, 3);
+  }
   function healthWord(health: Health) {
     return health === "clear" ? "Clear" : health === "watch" ? "Watch" : "Stuck";
   }
@@ -654,7 +723,25 @@ function swot(result: CheckResult, intake: ReportIntake, metrics: ReportMetrics)
 }
 
 /** The risks the answers point to, worst first, each with a first control. */
-function riskRegister(answers: Answers, result: CheckResult, intake: ReportIntake, metrics: ReportMetrics): ReportBlock {
+/** What a typed or banded gross margin looks like on the scale: the middle of the band the owner chose. */
+const MARGIN_MID: Record<string, number> = { under_25: 85, "25_50": 62.5, "50_75": 37.5, over_75: 15 };
+
+/**
+ * The owner's numbers against the thresholds the readings above already use, so a bar's colour always agrees with
+ * the part's health. A number the owner did not give is left out.
+ */
+function benchmarks(intake: ReportIntake, metrics: ReportMetrics, health: { cover?: Health; result: Health; owed: Health; conversion: Health }): Benchmark[] {
+  const items: Benchmark[] = [];
+  if (metrics.coverMid !== null) items.push({ label: "Cash cover", value: metrics.coverMid, display: coverText(metrics.cover), min: 0, max: 16, zones: [{ to: 4, health: "stuck" }, { to: 8, health: "watch" }, { to: 16, health: "clear" }], target: "Good: 8 weeks of costs or more", health: health.cover ?? "clear" });
+  if (metrics.resultMargin !== null) items.push({ label: "Left after costs", value: metrics.resultMargin * 100, display: `${metrics.resultMargin < 0 ? "−" : ""}${Math.round(Math.abs(metrics.resultMargin) * 100)}% of revenue`, min: -20, max: 40, zones: [{ to: 0, health: "stuck" }, { to: 10, health: "watch" }, { to: 40, health: "clear" }], target: "Good: 10% of revenue or more", health: health.result });
+  if (metrics.margin) items.push({ label: "Gross margin", value: intake.marginPercent ?? MARGIN_MID[intake.costShare] ?? 0, display: metrics.margin.text, min: 0, max: 100, zones: [{ to: 25, health: "stuck" }, { to: 50, health: "watch" }, { to: 100, health: "clear" }], target: `Good: 50% or more of each ${metrics.per}`, health: metrics.margin.health });
+  if (metrics.owedMonths !== null) items.push({ label: "Owed to you", value: metrics.owedMonths, display: `${metrics.owedMonths === 0 ? "Nothing" : `${metrics.owedMonths.toFixed(1)} months of sales`}`, min: 0, max: 3, zones: [{ to: 1, health: "clear" }, { to: 3, health: "watch" }], target: "Good: under one month of sales", health: health.owed });
+  if (intake.conversion !== null) items.push({ label: "Enquiries that buy", value: intake.conversion, display: `${intake.conversion} in 10`, min: 0, max: 10, zones: [{ to: 2, health: "watch" }, { to: 10, health: "clear" }], target: "Good: 3 in 10 or more", health: health.conversion });
+  return items;
+}
+const benchmarkBlock = (items: Benchmark[]): ReportBlock[] => (items.length ? [{ kind: "benchmarks", items }] : []);
+
+function riskRegister(answers: Answers, result: CheckResult, intake: ReportIntake, metrics: ReportMetrics): ReportBlock[] {
   type Risk = { risk: string; likelihood: number; impact: number; control: string };
   const risks: Risk[] = [];
   if (metrics.coverMid !== null && metrics.coverMid < 8) risks.push({ risk: "Cash runs out in a bad month", likelihood: metrics.coverMid < 4 ? 3 : 2, impact: 3, control: "A 13-week cash forecast, updated every Monday." });
@@ -670,8 +757,11 @@ function riskRegister(answers: Answers, result: CheckResult, intake: ReportIntak
   const level = (value: number) => (value >= 3 ? "High" : value === 2 ? "Medium" : "Low");
   const sorted = risks.sort((a, b) => b.likelihood * b.impact - a.likelihood * a.impact).slice(0, 6);
   return sorted.length
-    ? { kind: "table", columns: ["Risk", "Likelihood", "Impact", "First control"], widths: [0.3, 0.14, 0.12, 0.44], rows: sorted.map((item) => [item.risk, level(item.likelihood), level(item.impact), item.control]) }
-    : { kind: "paragraph", text: "Your answers did not point to a pressing risk. Keep a short list of the five things that could hurt the business most, and review it once a year." };
+    ? [
+      { kind: "riskMatrix", risks: sorted.map((item, index) => ({ number: index + 1, risk: item.risk, likelihood: item.likelihood, impact: item.impact })) },
+      { kind: "table", columns: ["#", "Risk", "Likelihood", "Impact", "First control"], widths: [0.06, 0.27, 0.15, 0.11, 0.41], rows: sorted.map((item, index) => [String(index + 1), item.risk, level(item.likelihood), level(item.impact), item.control]) },
+    ]
+    : [{ kind: "paragraph", text: "Your answers did not point to a pressing risk. Keep a short list of the five things that could hurt the business most, and review it once a year." }];
 }
 
 function appendix(answers: Answers, intake: ReportIntake): FullReport["appendix"] {

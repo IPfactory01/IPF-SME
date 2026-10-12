@@ -10204,7 +10204,7 @@ function intakeWording(question, byDeal) {
 var labelOf = (options, value) => options.find((option) => option.value === value)?.label ?? value;
 
 // shared/fullReport/build.ts
-var REPORT_VERSION = 2;
+var REPORT_VERSION = 3;
 var HEALTH_RANK2 = { clear: 0, watch: 1, stuck: 2 };
 var worst2 = (...values2) => values2.reduce((current, value) => value && HEALTH_RANK2[value] > HEALTH_RANK2[current] ? value : current, "clear");
 var lower2 = (text4) => /^(I\b|I'|[A-Z][A-Za-z]*[A-Z])/.test(text4) ? text4 : text4.charAt(0).toLowerCase() + text4.slice(1);
@@ -10491,6 +10491,7 @@ function buildFullReport(input) {
       ...answer(answers, "s8_detail") ? [`What worries you most: ${lower2(optionLabel("s8_detail", answers.s8_detail) ?? "")}.`] : []
     ]
   });
+  const bench = benchmarks(intake, metrics2, { cover: coverHealth, result: deficit ? "stuck" : thinResult ? "watch" : "clear", owed: (metrics2.owedMonths ?? 0) >= 1 ? "watch" : "clear", conversion: lowConversion ? "watch" : "clear" });
   const intent = idea ? null : reading({
     area: 1,
     answers,
@@ -10565,6 +10566,7 @@ function buildFullReport(input) {
         { label: "Top three customers", value: labelOf(TOP_CUSTOMER_SHARE, intake.topCustomerShare), note: "Share of your sales" },
         { label: "Your prices", value: labelOf(PRICE_POSITION, intake.pricePosition), note: "Against competitors" }
       ] },
+      ...benchmarkBlock(bench.filter((item2) => item2.label === "Gross margin")),
       offer.block,
       model.block,
       { kind: "heading", text: "Your business model on one page" },
@@ -10590,6 +10592,7 @@ function buildFullReport(input) {
         { label: "Buy, of every 10", value: intake.conversion !== null ? String(intake.conversion) : "Not known", note: "Your conversion rate" },
         { label: "New customers a month", value: customersText(metrics2.newCustomers), note: "Worked out from the two" }
       ] },
+      ...benchmarkBlock(bench.filter((item2) => item2.label === "Enquiries that buy")),
       sales.block
     ]
   });
@@ -10600,7 +10603,7 @@ function buildFullReport(input) {
     method: "Risk assessment",
     finding: risk.finding,
     health: worst2(risk.health, ...extraReadings.map((item2) => item2.health)),
-    blocks: [riskRegister(answers, result, intake, metrics2), risk.block, ...extraReadings.map((item2) => item2.block)]
+    blocks: [...riskRegister(answers, result, intake, metrics2), risk.block, ...extraReadings.map((item2) => item2.block)]
   });
   parts.push({
     number: 8,
@@ -10614,6 +10617,12 @@ function buildFullReport(input) {
         { label: "Left after costs", value: metrics2.result !== null ? `${metrics2.result < 0 ? "\u2212" : ""}${formatNaira(Math.abs(metrics2.result))}` : "Not known", note: metrics2.resultMargin !== null ? `${Math.round(metrics2.resultMargin * 100)}% of revenue` : "Revenue minus all costs" },
         { label: "Cash cover", value: coverText(metrics2.cover), note: "Weeks of costs your cash would pay" }
       ] },
+      ...metrics2.revenue !== null && metrics2.costs !== null && metrics2.result !== null ? [{ kind: "heading", text: "Last month in naira" }, { kind: "waterfall", steps: [
+        { label: "Money in", amount: metrics2.revenue, display: formatNaira(metrics2.revenue) },
+        { label: "Costs", amount: -metrics2.costs, display: `\u2212${formatNaira(metrics2.costs)}` },
+        { label: metrics2.result < 0 ? "Shortfall" : "Left over", amount: metrics2.result, display: `${metrics2.result < 0 ? "\u2212" : ""}${formatNaira(Math.abs(metrics2.result))}` }
+      ] }] : [],
+      ...benchmarkBlock(bench.filter((item2) => ["Cash cover", "Left after costs", "Owed to you"].includes(item2.label))),
       finance.block
     ]
   });
@@ -10629,6 +10638,10 @@ function buildFullReport(input) {
   const stuck = order.filter((area) => areaHealth.get(area).health === "stuck").map((area) => AREA_NAMES[area]);
   const watchList = order.filter((area) => areaHealth.get(area).health === "watch").map((area) => AREA_NAMES[area]);
   const gap = result.primaryGap;
+  const scorecard2 = [
+    ...outlineRow(result, 0) ? [{ area: AREA_NAMES[0], health: outlineRow(result, 0).health, finding: READINESS_LABELS[founder.level] }] : [],
+    ...Array.from(areaHealth.keys()).sort((a, b) => a - b).map((area) => ({ area: AREA_NAMES[area], health: areaHealth.get(area).health, finding: areaHealth.get(area).finding }))
+  ];
   parts.push({
     number: 9,
     title: "The diagnosis",
@@ -10636,10 +10649,7 @@ function buildFullReport(input) {
     finding: mainArea !== void 0 ? `The place to start is ${AREA_NAMES[mainArea].toLowerCase()}: ${lower2(areaHealth.get(mainArea).finding)}` : "No area is stuck or needs watching: the work is to protect what is working and grow from it.",
     health: mainArea !== void 0 ? areaHealth.get(mainArea).health : "clear",
     blocks: [
-      { kind: "table", columns: ["Area", "Where you are", "Finding"], widths: [0.26, 0.14, 0.6], rows: [
-        ...outlineRow(result, 0) ? [[AREA_NAMES[0], healthWord(outlineRow(result, 0).health), READINESS_LABELS[founder.level]]] : [],
-        ...Array.from(areaHealth.keys()).sort((a, b) => a - b).map((area) => [AREA_NAMES[area], healthWord(areaHealth.get(area).health), areaHealth.get(area).finding])
-      ] },
+      { kind: "scorecard", rows: scorecard2 },
       { kind: "paragraph", text: stuck.length || watchList.length ? `${stuck.length ? `${list(stuck)} ${stuck.length === 1 ? "is" : "are"} stuck. ` : ""}${watchList.length ? `${list(watchList)} need${watchList.length === 1 ? "s" : ""} watching. ` : ""}These are rarely separate problems. Money and business-model problems usually sit underneath sales, offer and people problems, so the plan starts where the root is, not where the pain is loudest.` : "Every area we looked at is clear. The risk for a business in good shape is standing still: keep the routines that got you here and choose the next growth step on purpose." },
       ...gap ? [{ kind: "callout", title: `The kind of gap: ${GAP_LABELS[gap].name.toLowerCase()}`, text: `${GAP_LABELS[gap].meaning} ${GAP_ADVICE[gap]}` }] : []
     ]
@@ -10665,7 +10675,7 @@ function buildFullReport(input) {
     method: "Recommendation",
     finding: moves.length ? `${moves.length === 1 ? "One move" : `${["", "One", "Two", "Three"][moves.length]} moves`} over 90 days, starting with ${moves[0].area.toLowerCase()}.` : "Keep doing what works, and review the numbers monthly.",
     blocks: [
-      { kind: "table", columns: ["When", "Move", "This week", "Measure of Success"], widths: [0.13, 0.37, 0.3, 0.2], rows: moves.map((move) => [move.month, move.move, move.thisWeek, move.watch]) },
+      { kind: "timeline", moves },
       { kind: "paragraph", text: `Your goal for the year, in your words: \u201C${intake.goal.replace(/[.\s]+$/, "")}.\u201D Check each month whether these moves are bringing it closer, and drop anything that is not.` }
     ]
   });
@@ -10697,12 +10707,34 @@ function buildFullReport(input) {
         { label: "Gross margin", value: metrics2.margin?.text ?? "Not known", note: `Left from each ${metrics2.per} after direct costs` },
         parts[7].blocks[0].items[2]
       ] : [],
-      tally
+      tally,
+      scorecard: scorecard2,
+      takeaways: takeaways2(),
+      implications: implications(),
+      benchmarks: bench
     },
     parts,
     appendix: appendix(answers, intake),
     method: `Built by The Shift's fixed rules from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on ${reportDate(input.date)}. It is not an audit, a valuation, or financial, legal or tax advice.`
   };
+  function takeaways2() {
+    const ranked = [...mainArea !== void 0 ? [mainArea] : [], ...order.filter((area) => area !== mainArea && areaHealth.get(area).health === "stuck"), ...order.filter((area) => area !== mainArea && areaHealth.get(area).health === "watch")];
+    if (!ranked.length) return [{ headline: "Every area we looked at is clear", detail: "The risk for a business in good shape is standing still." }];
+    return ranked.slice(0, 3).map((area) => ({
+      headline: area === 1 && idea ? "Your idea" : AREA_NAMES[area],
+      detail: areaHealth.get(area).finding,
+      health: areaHealth.get(area).health
+    }));
+  }
+  function implications() {
+    if (mainArea === void 0) return ["Protect what works: keep the routines that got you here.", "Choose the next growth step on purpose, and review the numbers every month."];
+    const items = [`Start with ${AREA_NAMES[mainArea].toLowerCase()}: ${gap ? GAP_ADVICE[gap].replace(/^So t/, "t") : "fix the root before the symptoms."}`];
+    if (deficit) items.push(`At last month's pace the business spends ${money(-metrics2.result)} more than it brings in each month. Only higher prices, lower costs or more sales close that gap: choose which this month.`);
+    if (coverHealth) items.push(`Cash would cover ${lower2(coverText(metrics2.cover))} of costs. Until it covers 8 weeks, plan every spend against a 13-week cash forecast.`);
+    if (stuck.length >= 2) items.push(`${upperFirst(["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][stuck.length] ?? String(stuck.length))} areas are stuck, but they are rarely separate problems. Fixing the root first should ease the rest.`);
+    if (items.length < 3) items.push(`Measure progress by ${lower2(mainArea === 1 && idea ? IDEA_CONTENT.watch : AREA_CONTENT[mainArea].watch)}, checked every month.`);
+    return items.slice(0, 3);
+  }
   function healthWord(health) {
     return health === "clear" ? "Clear" : health === "watch" ? "Watch" : "Stuck";
   }
@@ -10777,6 +10809,17 @@ function swot(result, intake, metrics2) {
   ];
   return { kind: "table", columns: ["Your position at a glance", ""], widths: [0.24, 0.76], rows };
 }
+var MARGIN_MID = { under_25: 85, "25_50": 62.5, "50_75": 37.5, over_75: 15 };
+function benchmarks(intake, metrics2, health) {
+  const items = [];
+  if (metrics2.coverMid !== null) items.push({ label: "Cash cover", value: metrics2.coverMid, display: coverText(metrics2.cover), min: 0, max: 16, zones: [{ to: 4, health: "stuck" }, { to: 8, health: "watch" }, { to: 16, health: "clear" }], target: "Good: 8 weeks of costs or more", health: health.cover ?? "clear" });
+  if (metrics2.resultMargin !== null) items.push({ label: "Left after costs", value: metrics2.resultMargin * 100, display: `${metrics2.resultMargin < 0 ? "\u2212" : ""}${Math.round(Math.abs(metrics2.resultMargin) * 100)}% of revenue`, min: -20, max: 40, zones: [{ to: 0, health: "stuck" }, { to: 10, health: "watch" }, { to: 40, health: "clear" }], target: "Good: 10% of revenue or more", health: health.result });
+  if (metrics2.margin) items.push({ label: "Gross margin", value: intake.marginPercent ?? MARGIN_MID[intake.costShare] ?? 0, display: metrics2.margin.text, min: 0, max: 100, zones: [{ to: 25, health: "stuck" }, { to: 50, health: "watch" }, { to: 100, health: "clear" }], target: `Good: 50% or more of each ${metrics2.per}`, health: metrics2.margin.health });
+  if (metrics2.owedMonths !== null) items.push({ label: "Owed to you", value: metrics2.owedMonths, display: `${metrics2.owedMonths === 0 ? "Nothing" : `${metrics2.owedMonths.toFixed(1)} months of sales`}`, min: 0, max: 3, zones: [{ to: 1, health: "clear" }, { to: 3, health: "watch" }], target: "Good: under one month of sales", health: health.owed });
+  if (intake.conversion !== null) items.push({ label: "Enquiries that buy", value: intake.conversion, display: `${intake.conversion} in 10`, min: 0, max: 10, zones: [{ to: 2, health: "watch" }, { to: 10, health: "clear" }], target: "Good: 3 in 10 or more", health: health.conversion });
+  return items;
+}
+var benchmarkBlock = (items) => items.length ? [{ kind: "benchmarks", items }] : [];
 function riskRegister(answers, result, intake, metrics2) {
   const risks = [];
   if (metrics2.coverMid !== null && metrics2.coverMid < 8) risks.push({ risk: "Cash runs out in a bad month", likelihood: metrics2.coverMid < 4 ? 3 : 2, impact: 3, control: "A 13-week cash forecast, updated every Monday." });
@@ -10791,7 +10834,10 @@ function riskRegister(answers, result, intake, metrics2) {
   if (intake.loans === "over_10m" || intake.loans === "1m_10m" && metrics2.result !== null && metrics2.result < 0) risks.push({ risk: "Loan repayments the business cannot carry", likelihood: 2, impact: 3, control: "A repayment schedule set against the cash forecast; talk to the lender early." });
   const level = (value) => value >= 3 ? "High" : value === 2 ? "Medium" : "Low";
   const sorted = risks.sort((a, b) => b.likelihood * b.impact - a.likelihood * a.impact).slice(0, 6);
-  return sorted.length ? { kind: "table", columns: ["Risk", "Likelihood", "Impact", "First control"], widths: [0.3, 0.14, 0.12, 0.44], rows: sorted.map((item2) => [item2.risk, level(item2.likelihood), level(item2.impact), item2.control]) } : { kind: "paragraph", text: "Your answers did not point to a pressing risk. Keep a short list of the five things that could hurt the business most, and review it once a year." };
+  return sorted.length ? [
+    { kind: "riskMatrix", risks: sorted.map((item2, index2) => ({ number: index2 + 1, risk: item2.risk, likelihood: item2.likelihood, impact: item2.impact })) },
+    { kind: "table", columns: ["#", "Risk", "Likelihood", "Impact", "First control"], widths: [0.06, 0.27, 0.15, 0.11, 0.41], rows: sorted.map((item2, index2) => [String(index2 + 1), item2.risk, level(item2.likelihood), level(item2.impact), item2.control]) }
+  ] : [{ kind: "paragraph", text: "Your answers did not point to a pressing risk. Keep a short list of the five things that could hurt the business most, and review it once a year." }];
 }
 function appendix(answers, intake) {
   const check = [];
@@ -11054,6 +11100,205 @@ function reading2(doc, block) {
   });
   doc.moveDown(0.4);
 }
+function scorecard(doc, rows, compact = false) {
+  const areaWidth = compact ? 118 : 132;
+  const cellWidth = 66;
+  const findingX = M.left + areaWidth + cellWidth + 10;
+  const findingWidth = W - areaWidth - cellWidth - 10;
+  const size = compact ? 8.5 : 9;
+  const heightOf = (row) => {
+    doc.font(SANS2).fontSize(size);
+    const finding = doc.heightOfString(row.finding, { width: findingWidth - 6, lineGap: 1.5 });
+    doc.font(SANS_600).fontSize(size);
+    const area = doc.heightOfString(row.area, { width: areaWidth - 12 });
+    return Math.max(finding, area, 12) + (compact ? 9 : 12);
+  };
+  ensure(doc, Math.min(rows.reduce((sum, row) => sum + heightOf(row) + 2, 0), 300));
+  for (const row of rows) {
+    const height = heightOf(row);
+    ensure(doc, height + 2);
+    const y = doc.y;
+    const style = HEALTH[row.health];
+    doc.rect(M.left, y, W, height).fill(C2["brand-tint-softer"]);
+    doc.rect(M.left, y, 3, height).fill(style.fg);
+    doc.fillColor(C2.ink).font(SANS_600).fontSize(size).text(row.area, M.left + 10, y + (compact ? 4.5 : 6), { width: areaWidth - 12 });
+    doc.rect(M.left + areaWidth, y, cellWidth, height).fill(style.bg);
+    doc.fillColor(style.fg).font(SANS_700).fontSize(7.5).text(style.label.toUpperCase(), M.left + areaWidth, y + height / 2 - 4, { width: cellWidth, align: "center", characterSpacing: 0.8, lineBreak: false });
+    doc.fillColor(C2["ink-soft"]).font(SANS2).fontSize(size).text(row.finding, findingX, y + (compact ? 4.5 : 6), { width: findingWidth - 6, lineGap: 1.5 });
+    doc.x = M.left;
+    doc.y = y + height + 2;
+  }
+  doc.moveDown(0.8);
+}
+function takeaways(doc, title, items) {
+  subhead(doc, title);
+  const x = M.left + 30;
+  const width = W - 30;
+  items.forEach((item2, index2) => {
+    doc.font(SANS_700).fontSize(10.5);
+    const headline = doc.heightOfString(item2.headline, { width });
+    doc.font(SANS2).fontSize(9.5);
+    const detail = doc.heightOfString(item2.detail, { width, lineGap: 2 });
+    ensure(doc, headline + detail + 12);
+    const y = doc.y;
+    doc.circle(M.left + 10, y + 8, 10).fill(C2.brand);
+    doc.fillColor(C2["paper-raised"]).font(SANS_700).fontSize(10).text(String(index2 + 1), M.left, y + 3, { width: 20, align: "center", lineBreak: false });
+    doc.fillColor(C2.ink).font(SANS_700).fontSize(10.5).text(item2.headline, x, y, { width });
+    if (item2.health) {
+      const after = doc.y;
+      doc.font(SANS_700).fontSize(10.5);
+      chip(doc, item2.health, x + doc.widthOfString(item2.headline) + 8, y - 0.5);
+      doc.y = after;
+    }
+    doc.fillColor(C2["ink-soft"]).font(SANS2).fontSize(9.5).text(item2.detail, x, doc.y + 2, { width, lineGap: 2 });
+    doc.x = M.left;
+    doc.y += 10;
+  });
+  doc.moveDown(0.3);
+}
+function soWhat(doc, title, items) {
+  const x = M.left + 16;
+  const width = W - 30;
+  box(doc, C2["highlight-ink"], (measure) => {
+    doc.font(SANS_700).fontSize(7.5);
+    let total = doc.heightOfString(title.toUpperCase(), { width, characterSpacing: 1.1 }) + 6;
+    if (!measure) {
+      doc.fillColor(C2["highlight-ink"]).font(SANS_700).fontSize(7.5).text(title.toUpperCase(), x, doc.y, { width, characterSpacing: 1.1 });
+      doc.y += 6;
+    }
+    for (const item2 of items) {
+      doc.font(SANS_600).fontSize(9.5);
+      const height = doc.heightOfString(item2, { width: width - 16, lineGap: 2 });
+      if (!measure) {
+        const y = doc.y;
+        doc.polygon([x, y + 3], [x + 7, y + 6.5], [x, y + 10]).fill(C2["highlight-ink"]);
+        doc.fillColor(C2.ink).font(SANS_600).fontSize(9.5).text(item2, x + 16, y, { width: width - 16, lineGap: 2 });
+        doc.y += 6;
+      }
+      total += height + 6;
+    }
+    return total - 6;
+  });
+}
+function benchmarks2(doc, items, title) {
+  const labelWidth = 112;
+  const valueWidth = 116;
+  const barX = M.left + labelWidth;
+  const barWidth = W - labelWidth - valueWidth - 12;
+  const rowHeight = 38;
+  ensure(doc, rowHeight * items.length + (title ? 34 : 10));
+  if (title) subhead(doc, title);
+  for (const item2 of items) {
+    const y = doc.y;
+    const scale = (value) => barX + (Math.min(Math.max(value, item2.min), item2.max) - item2.min) / (item2.max - item2.min) * barWidth;
+    doc.fillColor(C2.ink).font(SANS_600).fontSize(8.5).text(item2.label, M.left, y + 3, { width: labelWidth - 8 });
+    let from = item2.min;
+    for (const zone of item2.zones) {
+      doc.rect(scale(from), y + 2, scale(zone.to) - scale(from), 12).fill(HEALTH[zone.health].bg);
+      from = zone.to;
+    }
+    const marker = scale(item2.value);
+    const style = HEALTH[item2.health];
+    doc.rect(marker - 1.5, y - 1, 3, 18).fill(style.fg);
+    doc.fillColor(style.fg).font(SANS_700).fontSize(9).text(item2.display, barX + barWidth + 12, y + 3, { width: valueWidth, lineBreak: false });
+    doc.fillColor(C2["ink-muted"]).font(SANS2).fontSize(7.5).text(item2.target, barX, y + 19, { width: barWidth, lineBreak: false });
+    doc.x = M.left;
+    doc.y = y + rowHeight;
+  }
+  doc.moveDown(0.4);
+}
+function waterfall(doc, steps) {
+  const chartHeight = 130;
+  ensure(doc, chartHeight + 50);
+  const top = doc.y + 16;
+  const [income, costs, left] = steps.map((step) => step.amount);
+  const high = Math.max(income, 0);
+  const low = Math.min(0, left);
+  const y = (value) => top + (high - value) / (high - low || 1) * chartHeight;
+  const columnWidth = W / 3;
+  const barWidth = 64;
+  const bars = [[0, income, C2.brand], [income, income + costs, C2["brand-slate"]], [0, left, left < 0 ? C2["health-stuck"] : C2["health-clear"]]];
+  bars.forEach(([from, to, color], index2) => {
+    const x = M.left + index2 * columnWidth + (columnWidth - barWidth) / 2;
+    const y1 = Math.min(y(from), y(to));
+    const height = Math.max(Math.abs(y(from) - y(to)), 1.5);
+    doc.rect(x, y1, barWidth, height).fill(color);
+    if (index2 < 2) doc.moveTo(x + barWidth, y(to)).lineTo(x + columnWidth, y(to)).lineWidth(0.6).dash(2, { space: 2 }).strokeColor(C2["ink-muted"]).stroke().undash();
+    doc.fillColor(color).font(SANS_700).fontSize(9).text(steps[index2].display, x - 30, y1 - 13, { width: barWidth + 60, align: "center", lineBreak: false });
+    doc.fillColor(C2["ink-muted"]).font(SANS_600).fontSize(8).text(steps[index2].label, x - 30, top + chartHeight + 8, { width: barWidth + 60, align: "center", lineBreak: false });
+  });
+  doc.moveTo(M.left, y(0)).lineTo(M.left + W, y(0)).lineWidth(0.6).strokeColor(C2.line).stroke();
+  doc.x = M.left;
+  doc.y = top + chartHeight + 30;
+}
+function riskMatrix(doc, risks) {
+  const cellWidth = 92;
+  const cellHeight = 38;
+  const gridX = M.left + (W - cellWidth * 3) / 2 + 30;
+  ensure(doc, cellHeight * 3 + 62);
+  const top = doc.y + 14;
+  const levels = ["Low", "Medium", "High"];
+  for (let impact = 3; impact >= 1; impact -= 1) {
+    for (let likelihood = 1; likelihood <= 3; likelihood += 1) {
+      const score = impact * likelihood;
+      const health = score >= 6 ? "stuck" : score >= 3 ? "watch" : "clear";
+      const x = gridX + (likelihood - 1) * cellWidth;
+      const cellY = top + (3 - impact) * cellHeight;
+      doc.rect(x, cellY, cellWidth - 2, cellHeight - 2).fill(HEALTH[health].bg);
+      const here = risks.filter((risk) => risk.likelihood === likelihood && risk.impact === impact);
+      here.forEach((risk, index2) => {
+        const cx = x + (cellWidth - 2) / 2 + (index2 - (here.length - 1) / 2) * 22;
+        doc.circle(cx, cellY + (cellHeight - 2) / 2, 9).fill(C2.brand);
+        doc.fillColor(C2["paper-raised"]).font(SANS_700).fontSize(8.5).text(String(risk.number), cx - 9, cellY + (cellHeight - 2) / 2 - 4.5, { width: 18, align: "center", lineBreak: false });
+      });
+    }
+    doc.fillColor(C2["ink-muted"]).font(SANS_600).fontSize(7.5).text(levels[impact - 1], gridX - 66, top + (3 - impact) * cellHeight + cellHeight / 2 - 5, { width: 58, align: "right", lineBreak: false });
+  }
+  levels.forEach((level, index2) => doc.fillColor(C2["ink-muted"]).font(SANS_600).fontSize(7.5).text(level, gridX + index2 * cellWidth, top + cellHeight * 3 + 3, { width: cellWidth - 2, align: "center", lineBreak: false }));
+  doc.fillColor(C2.brand).font(SANS_700).fontSize(7).text("LIKELIHOOD", gridX, top + cellHeight * 3 + 16, { width: cellWidth * 3, align: "center", characterSpacing: 1, lineBreak: false });
+  doc.fillColor(C2.brand).font(SANS_700).fontSize(7).text("IMPACT", gridX - 66, top - 12, { width: 58, align: "right", characterSpacing: 1, lineBreak: false });
+  doc.x = M.left;
+  doc.y = top + cellHeight * 3 + 36;
+}
+function timeline(doc, moves, title) {
+  if (!moves.length) return;
+  const gap = 6;
+  const width = (W - gap * (moves.length - 1)) / moves.length;
+  const inner = width - 16;
+  const sections = (move) => [["Move", move.move, SANS_600], ["This week", move.thisWeek, SANS2], ["Measure of Success", move.watch, SANS2]];
+  const heightOf = (move) => {
+    doc.font(SANS_700).fontSize(10);
+    let total = doc.heightOfString(move.area, { width: inner }) + 8;
+    for (const [label, text4, font] of sections(move)) {
+      doc.font(SANS_700).fontSize(6.5);
+      total += doc.heightOfString(label.toUpperCase(), { width: inner, characterSpacing: 0.8 }) + 2;
+      doc.font(font).fontSize(8.5);
+      total += doc.heightOfString(text4, { width: inner, lineGap: 1.5 }) + 7;
+    }
+    return total + 8;
+  };
+  const height = Math.max(...moves.map(heightOf));
+  ensure(doc, height + (title ? 54 : 30));
+  if (title) subhead(doc, title);
+  const top = doc.y;
+  const shades = [C2.brand, C2["brand-slate"], C2["brand-plum"]];
+  moves.forEach((move, index2) => {
+    const x = M.left + index2 * (width + gap);
+    const tip = 10;
+    doc.polygon([x, top], [x + width - tip, top], [x + width, top + 11], [x + width - tip, top + 22], [x, top + 22], ...index2 ? [[x + tip, top + 11]] : []).fill(shades[index2 % shades.length]);
+    doc.fillColor(C2["paper-raised"]).font(SANS_700).fontSize(8).text(move.month.toUpperCase(), x + (index2 ? tip + 6 : 8), top + 7, { width: width - tip * 2 - 8, characterSpacing: 1, lineBreak: false });
+    doc.rect(x, top + 26, width, height).fill(C2["brand-tint-softer"]);
+    doc.fillColor(C2.ink).font(SANS_700).fontSize(10).text(move.area, x + 8, top + 34, { width: inner });
+    doc.y += 8;
+    for (const [label, text4, font] of sections(move)) {
+      doc.fillColor(C2.brand).font(SANS_700).fontSize(6.5).text(label.toUpperCase(), x + 8, doc.y, { width: inner, characterSpacing: 0.8 });
+      doc.fillColor(C2.ink).font(font).fontSize(8.5).text(text4, x + 8, doc.y + 2, { width: inner, lineGap: 1.5 });
+      doc.y += 7;
+    }
+  });
+  doc.x = M.left;
+  doc.y = top + 26 + height + 14;
+}
 function blocks(doc, items) {
   for (const block of items) {
     switch (block.kind) {
@@ -11084,6 +11329,24 @@ function blocks(doc, items) {
         break;
       case "callout":
         callout(doc, block.title, block.text);
+        break;
+      case "scorecard":
+        scorecard(doc, block.rows);
+        break;
+      case "takeaways":
+        takeaways(doc, block.title, block.items);
+        break;
+      case "benchmarks":
+        benchmarks2(doc, block.items, "Against what good looks like");
+        break;
+      case "waterfall":
+        waterfall(doc, block.steps);
+        break;
+      case "riskMatrix":
+        riskMatrix(doc, block.risks);
+        break;
+      case "timeline":
+        timeline(doc, block.moves);
         break;
     }
   }
@@ -11127,7 +11390,7 @@ function cover(doc, report) {
   ]);
   doc.y = Math.max(doc.y + 10, 520);
   eyebrow(doc, "What is inside", C2.brand);
-  const entries = [["", "The one-page answer"], ...report.parts.map((part) => [String(part.number), part.title]), ["A", "Appendix: your answers"]];
+  const entries = [["", "Executive summary"], ...report.parts.map((part) => [String(part.number), part.title]), ["A", "Appendix: your answers"]];
   for (const [number, title] of entries) {
     const y = doc.y;
     doc.font(SANS_700).fontSize(9).fillColor(C2["highlight-ink"]).text(number, M.left, y, { width: 20, lineBreak: false });
@@ -11136,23 +11399,18 @@ function cover(doc, report) {
   }
 }
 function onePage(doc, report) {
+  const summary = report.onePage;
   doc.addPage();
-  partHeading(doc, "The one-page answer", "Where you stand", report.onePage.position);
-  const tally = report.onePage.tally;
-  let x = M.left;
-  const y = doc.y - 6;
-  for (const health of ["clear", "watch", "stuck"]) {
-    x += chip(doc, health, x, y);
-    doc.font(SANS_700).fontSize(10).fillColor(C2.ink).text(String(tally[health]), x + 6, y + 2, { lineBreak: false });
-    x += 26;
-  }
-  doc.x = M.left;
-  doc.y = y + 28;
-  callout(doc, `Fix this first: ${report.onePage.fixFirst.area}`, report.onePage.fixFirst.finding);
-  metrics(doc, report.onePage.keyNumbers);
-  subhead(doc, "Your first moves");
-  table(doc, { kind: "table", columns: ["When", "Move", "This week"], widths: [0.14, 0.46, 0.4], rows: report.onePage.moves.map((move) => [move.month, move.move, move.thisWeek]) });
-  callout(doc, "The one number to watch", report.onePage.watch, C2.highlight);
+  partHeading(doc, "Executive summary", "Where you stand", summary.position);
+  takeaways(doc, "Key takeaways", summary.takeaways);
+  soWhat(doc, "What this means for you", summary.implications);
+  metrics(doc, summary.keyNumbers);
+  doc.addPage();
+  partHeading(doc, "Executive summary", "Scorecard and first moves", `Fix this first: ${summary.fixFirst.area.toLowerCase()}.`);
+  scorecard(doc, summary.scorecard, true);
+  if (summary.benchmarks.length) benchmarks2(doc, summary.benchmarks, "Your numbers against what good looks like");
+  timeline(doc, summary.moves, "Your 90-day plan");
+  callout(doc, "The one number to watch", summary.watch, C2.highlight);
 }
 function appendix2(doc, report) {
   doc.addPage();

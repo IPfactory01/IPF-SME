@@ -106,7 +106,7 @@ screenshots before it ships, because every page's line lengths change.
 ## 6. Words
 
 **Name the method (ET, 10 October 2026).** Every stage, artefact and ritual has a proper name, used the same way on the
-site, in the admin, in the room and in email, from one list in `shared/method.ts`: Business Check, Debrief, Full Report,
+site, in the admin, in the room and in email, from one list in `shared/method.ts`: Business Check, Discovery Call, Full Report,
 Report Intake, Current State Assessment, Work Plan, Data Request, Session, Findings, Problem Statement, Prescription,
 The Fix, Weekly Check-in, Measure of Success, Day-30 Review, Sign-off, Deliverables, Engagement, Your Plan.
 

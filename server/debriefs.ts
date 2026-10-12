@@ -5,12 +5,12 @@ import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 
 /**
- * The Debrief: the free call after the Business Check, written up by the analyst within the hour, following the
+ * The Discovery Call: the free call after the Business Check, written up by the analyst within the hour, following the
  * firm's Client Debrief Meeting guide cut to The Shift. One record per business check. It informs the Work Plan,
  * and once shared it opens the owner's room warm. Nothing here decides who may call it: the routers do.
  */
 
-export const DEBRIEF_MISSING_MESSAGE = "The Debrief record is not set up in the database yet (migration 0009).";
+export const DEBRIEF_MISSING_MESSAGE = "The Discovery Call record is not set up in the database yet (migration 0009).";
 
 export function isMissingDebriefTable(error: unknown) {
   const code = (error as { code?: string })?.code ?? (error as { cause?: { code?: string } })?.cause?.code;
@@ -27,7 +27,7 @@ export type DebriefInput = {
   nextSteps: string | null;
 };
 
-/** What the owner sees of the Debrief once it is shared: the summary, never who captured it. */
+/** What the owner sees of the Discovery Call once it is shared: the summary, never who captured it. */
 export type SharedDebrief = { heldAt: Date | null; heard: string | null; problemInOwnerWords: string | null; successLooksLike: string | null; tried: string | null; nextSteps: string | null; sharedAt: Date };
 
 async function requireCheck(db: Pick<Database, "select">, businessCheckId: number) {
@@ -36,12 +36,12 @@ async function requireCheck(db: Pick<Database, "select">, businessCheckId: numbe
   return check;
 }
 
-/** The team's view of the Debrief for a business check, or null when none has been written up yet. */
+/** The team's view of the Discovery Call for a business check, or null when none has been written up yet. */
 export async function getDebrief(db: Pick<Database, "select">, businessCheckId: number) {
   return (await db.select().from(debriefs).where(eq(debriefs.businessCheckId, businessCheckId)).limit(1))[0] ?? null;
 }
 
-/** Writes the Debrief up, or rewrites it: one record per business check. Sharing is a separate, deliberate step. */
+/** Writes the Discovery Call up, or rewrites it: one record per business check. Sharing is a separate, deliberate step. */
 export async function saveDebrief(db: Database, input: DebriefInput, actorUserId: number) {
   const check = await requireCheck(db, input.businessCheckId);
   const values = { heldAt: input.heldAt, heard: input.heard, problemInOwnerWords: input.problemInOwnerWords, successLooksLike: input.successLooksLike, tried: input.tried, nextSteps: input.nextSteps, capturedByUserId: actorUserId };
@@ -54,18 +54,18 @@ export async function saveDebrief(db: Database, input: DebriefInput, actorUserId
   });
 }
 
-/** Lets the owner see the Debrief in their room, or takes it back. The room shows it only to the owner and full-access staff. */
+/** Lets the owner see the Discovery Call in their room, or takes it back. The room shows it only to the owner and full-access staff. */
 export async function shareDebrief(db: Database, input: { businessCheckId: number; shared: boolean }, actorUserId: number) {
   const check = await requireCheck(db, input.businessCheckId);
   return db.transaction(async tx => {
     const updated = await tx.update(debriefs).set({ sharedAt: input.shared ? new Date() : null }).where(eq(debriefs.businessCheckId, check.id)).returning({ id: debriefs.id });
-    if (!updated.length) throw new TRPCError({ code: "NOT_FOUND", message: "Write the Debrief up before sharing it." });
+    if (!updated.length) throw new TRPCError({ code: "NOT_FOUND", message: "Write the Discovery Call up before sharing it." });
     await recordAudit(tx, { action: "debrief_shared", actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, debriefId: updated[0].id, shared: input.shared } });
     return { success: true } as const;
   });
 }
 
-/** The shared Debrief for the owner's room; null when none, not shared, or the table is not there yet (0009). */
+/** The shared Discovery Call for the owner's room; null when none, not shared, or the table is not there yet (0009). */
 export async function sharedDebriefFor(db: Pick<Database, "select">, businessCheckId: number): Promise<SharedDebrief | null> {
   try {
     const row = await getDebrief(db, businessCheckId);

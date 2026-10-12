@@ -4,7 +4,7 @@ import { CURRENT_STATE } from "@shared/businessSupport";
 import React, { useState } from "react";
 import { toast } from "sonner";
 
-const STAGE_NAMES: Record<string, string> = { lead: "Lead", qualified_lead: "Qualified lead", call_booked: "Debrief requested", opportunity: "Opportunity", won: "Won", lost: "Lost", nurture: "Nurture", referred: "Referred" };
+const STAGE_NAMES: Record<string, string> = { lead: "Lead", qualified_lead: "Qualified lead", call_booked: "Discovery Call requested", opportunity: "Opportunity", won: "Won", lost: "Lost", nurture: "Nurture", referred: "Referred" };
 const INVITATION_NAMES: Record<string, string> = { pending: "Link sent, waiting", accepted: "Accepted", revoked: "Revoked", expired: "Expired" };
 
 const formatDate = (value: Date | string | null) => (value ? new Date(value).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "-");
@@ -101,7 +101,7 @@ export default function ClientOnboardingPanel() {
       <section>
         <h3 className="mb-2 font-serif text-lg">Business Checks</h3>
         {candidates.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
-          <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-line text-xs uppercase tracking-wider text-ink-muted"><th className="py-2 pr-3">Name</th><th className="pr-3">Business</th><th className="pr-3">Email</th><th className="pr-3">Debrief</th><th className="pr-3">Stage</th><th className="pr-3">Onboarding link</th><th /></tr></thead><tbody>
+          <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-line text-xs uppercase tracking-wider text-ink-muted"><th className="py-2 pr-3">Name</th><th className="pr-3">Business</th><th className="pr-3">Email</th><th className="pr-3">Discovery Call</th><th className="pr-3">Stage</th><th className="pr-3">Onboarding link</th><th /></tr></thead><tbody>
             {candidates.data?.map(item => (
               <tr key={item.id} className="border-b border-line-soft">
                 <td className="py-2 pr-3">{item.fullName}</td><td className="pr-3">{item.businessName ?? "-"}</td><td className="pr-3">{item.email}</td><td className="pr-3">{item.callRequestedAt ? `Requested ${formatDate(item.callRequestedAt)}` : "Not requested"}</td><td className="pr-3">{STAGE_NAMES[item.pipelineStage] ?? item.pipelineStage}</td><td className="pr-3">{item.invitationStatus ? INVITATION_NAMES[item.invitationStatus] ?? item.invitationStatus : "None"}</td>

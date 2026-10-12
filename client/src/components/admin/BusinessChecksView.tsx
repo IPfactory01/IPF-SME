@@ -43,7 +43,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Summary">
         <AdminMetricCard label="Business Checks" value={rows.length} />
         <AdminMetricCard label="Completed" value={rows.filter(row => row.completedAt).length} />
-        <AdminMetricCard label="Debriefs requested" value={rows.filter(row => row.callRequestedAt).length} />
+        <AdminMetricCard label="Discovery Calls requested" value={rows.filter(row => row.callRequestedAt).length} />
         <AdminMetricCard label="Ready to onboard" value={rows.filter(row => isReadyToOnboard(row.status)).length} />
         <AdminMetricCard label="Full Reports requested" value={rows.filter(row => row.reportRequestedAt).length} />
       </dl>

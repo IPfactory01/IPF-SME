@@ -38,7 +38,7 @@ export default function DiscoveryCallDetail({ row, onOpenSection, onClose }: { r
     void utils.businessSupport.checks.invalidate();
     void utils.onboarding.candidates.invalidate();
   };
-  const schedule = trpc.businessSupport.scheduleCall.useMutation({ onSuccess: () => { toast.success("Debrief time saved."); refresh(); }, onError: error => toast.error(error.message) });
+  const schedule = trpc.businessSupport.scheduleCall.useMutation({ onSuccess: () => { toast.success("Discovery Call time saved."); refresh(); }, onError: error => toast.error(error.message) });
   const decide = trpc.businessSupport.recordOutcome.useMutation({ onSuccess: () => { toast.success("Outcome recorded."); refresh(); }, onError: error => toast.error(error.message) });
 
   const [date, setDate] = useState(toDateInput(row.callScheduledFor));
@@ -69,7 +69,7 @@ export default function DiscoveryCallDetail({ row, onOpenSection, onClose }: { r
         </dl>
       </DetailSection>
 
-      <DetailSection title="Schedule the Debrief">
+      <DetailSection title="Schedule the Discovery Call">
         {row.callScheduledFor && (
           <dl className="mb-3 grid grid-cols-2 gap-x-6">
             <DetailField label="Scheduled for">{formatDate(row.callScheduledFor)}</DetailField>
@@ -84,20 +84,20 @@ export default function DiscoveryCallDetail({ row, onOpenSection, onClose }: { r
               if (when) schedule.mutate({ businessCheckId: row.id, scheduledFor: when });
             }}
           >
-            <p className="text-xs text-ink-muted">Calendly bookings fill in the time by themselves. For a Debrief agreed another way, record the time here.</p>
+            <p className="text-xs text-ink-muted">Calendly bookings fill in the time by themselves. For a Discovery Call agreed another way, record the time here.</p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1"><Label htmlFor={`call-date-${row.id}`}>Date</Label><Input id={`call-date-${row.id}`} type="date" value={date} onChange={event => setDate(event.target.value)} className="h-9 rounded-none" /></div>
               <div className="space-y-1"><Label htmlFor={`call-time-${row.id}`}>Time</Label><Input id={`call-time-${row.id}`} type="time" value={time} onChange={event => setTime(event.target.value)} className="h-9 rounded-none" /></div>
             </div>
-            <Button type="submit" variant="outline" disabled={busy || !when} className="rounded-none text-xs uppercase tracking-wider">{row.callScheduledFor ? "Reschedule the Debrief" : "Save the Debrief time"}</Button>
+            <Button type="submit" variant="outline" disabled={busy || !when} className="rounded-none text-xs uppercase tracking-wider">{row.callScheduledFor ? "Reschedule the Discovery Call" : "Save the Discovery Call time"}</Button>
           </form>
-        ) : !row.callScheduledFor ? <p className="text-sm text-ink-muted">No time was recorded for this Debrief.</p> : null}
+        ) : !row.callScheduledFor ? <p className="text-sm text-ink-muted">No time was recorded for this Discovery Call.</p> : null}
       </DetailSection>
 
       <DebriefSummary businessCheckId={row.id} heldAt={row.callScheduledFor} />
 
       {!afterOnboarding && (
-        <DetailSection title="Record the Debrief outcome">
+        <DetailSection title="Record the Discovery Call outcome">
           {decided && <p className="mb-3 text-sm text-ink-muted">Recorded: <span className="font-medium text-ink">{OUTCOME_NAME[decided]}</span>. You can change it.</p>}
           <div className="flex flex-wrap gap-2">
             <Button type="button" disabled={busy || decided === "fit"} className="rounded-none bg-brand text-xs uppercase tracking-wider text-white" onClick={() => decide.mutate({ businessCheckId: row.id, outcome: "fit" })}>Opportunity</Button>
@@ -134,7 +134,7 @@ const DEBRIEF_FIELDS = [
 type DebriefKey = (typeof DEBRIEF_FIELDS)[number]["key"];
 
 /**
- * The Debrief written up within the hour, following the Client Debrief Meeting guide cut to The Shift. It informs the
+ * The Discovery Call written up within the hour, following the Client Debrief Meeting guide cut to The Shift. It informs the
  * Work Plan and, once shared, opens the owner's room warm. Saving and sharing are separate, deliberate steps.
  */
 function DebriefSummary({ businessCheckId, heldAt }: { businessCheckId: number; heldAt: Date | string | null }) {
@@ -146,15 +146,15 @@ function DebriefSummary({ businessCheckId, heldAt }: { businessCheckId: number; 
     if (row) setForm({ heard: row.heard ?? "", problemInOwnerWords: row.problemInOwnerWords ?? "", successLooksLike: row.successLooksLike ?? "", tried: row.tried ?? "", nextSteps: row.nextSteps ?? "" });
   }, [debrief.data]);
   const refresh = () => void utils.businessSupport.debrief.invalidate({ businessCheckId });
-  const save = trpc.businessSupport.saveDebrief.useMutation({ onSuccess: () => { toast.success("Debrief saved."); refresh(); }, onError: error => toast.error(error.message) });
-  const share = trpc.businessSupport.shareDebrief.useMutation({ onSuccess: (_, input) => { toast.success(input.shared ? "The owner can see the Debrief in their room." : "The Debrief is internal again."); refresh(); }, onError: error => toast.error(error.message) });
+  const save = trpc.businessSupport.saveDebrief.useMutation({ onSuccess: () => { toast.success("Discovery Call saved."); refresh(); }, onError: error => toast.error(error.message) });
+  const share = trpc.businessSupport.shareDebrief.useMutation({ onSuccess: (_, input) => { toast.success(input.shared ? "The owner can see the Discovery Call in their room." : "The Discovery Call is internal again."); refresh(); }, onError: error => toast.error(error.message) });
   if (!debrief.data) return null;
-  if (!debrief.data.setUp) return <DetailSection title="Debrief summary"><p className="text-sm text-ink-muted">The Debrief record is not set up in the database yet (migration 0009).</p></DetailSection>;
+  if (!debrief.data.setUp) return <DetailSection title="Discovery Call summary"><p className="text-sm text-ink-muted">The Discovery Call record is not set up in the database yet (migration 0009).</p></DetailSection>;
   const row = debrief.data.debrief;
   const busy = save.isPending || share.isPending;
   const filled = DEBRIEF_FIELDS.some(field => form[field.key].trim());
   return (
-    <DetailSection title="Debrief summary">
+    <DetailSection title="Discovery Call summary">
       <p className="mb-3 text-xs text-ink-muted">Write it up within the hour. It shapes the Work Plan, and once shared it is the first thing the owner reads in their room.</p>
       <form className="space-y-3" onSubmit={event => { event.preventDefault(); save.mutate({ businessCheckId, heldAt: heldAt ? new Date(heldAt) : null, ...form }); }}>
         {DEBRIEF_FIELDS.map(field => (
@@ -164,7 +164,7 @@ function DebriefSummary({ businessCheckId, heldAt }: { businessCheckId: number; 
           </div>
         ))}
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="submit" disabled={busy || !filled} className="rounded-none bg-brand text-xs uppercase tracking-wider text-white">{row ? "Save the Debrief" : "Write up the Debrief"}</Button>
+          <Button type="submit" disabled={busy || !filled} className="rounded-none bg-brand text-xs uppercase tracking-wider text-white">{row ? "Save the Discovery Call" : "Write up the Discovery Call"}</Button>
           {row && (
             <Button type="button" variant="outline" disabled={busy} className="rounded-none text-xs uppercase tracking-wider" onClick={() => share.mutate({ businessCheckId, shared: !row.sharedAt })}>
               {row.sharedAt ? "Keep it internal" : "Share with the owner"}

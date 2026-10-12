@@ -41,7 +41,7 @@ export const businessSupportRouter = router({
   recordOutcome: prospects
     .input(z.object({ businessCheckId: z.number().int().positive(), outcome: z.enum(CALL_OUTCOMES) }))
     .mutation(async ({ ctx, input }) => recordDiscoveryCallOutcome(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
-  /** The Debrief as written up so far; `setUp` is false until migration 0009 is applied. */
+  /** The Discovery Call as written up so far; `setUp` is false until migration 0009 is applied. */
   debrief: prospects
     .input(z.object({ businessCheckId: z.number().int().positive() }))
     .query(async ({ input }) => {

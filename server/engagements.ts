@@ -588,7 +588,7 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     checkinsOf(db, engagement.id),
   ]);
   const fullView = viewer.kind === "owner" || viewer.access === "full";
-  // Where the engagement came from: the check's main finding and readiness, and the Debrief once the team shares it.
+  // Where the engagement came from: the check's main finding and readiness, and the Discovery Call once the team shares it.
   const check = (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor })
     .from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   const report = (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq(fullReports.businessCheckId, engagement.businessCheckId)).limit(1))[0] ?? null;

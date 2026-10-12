@@ -54,9 +54,9 @@ const PAYMENT_HISTORY = { payment_details_sent: "Payment details sent", payment_
 const REPORT_HISTORY = { full_report_link_sent: "Report Intake link sent again", full_report_delivered: "Full Report sent" } as const;
 /** "lead" is where every check starts, so the team never moves a check back to it. */
 /**
- * For a finished check that never asked for a Debrief on the result page. The owner may have booked from the link in
+ * For a finished check that never asked for a Discovery Call on the result page. The owner may have booked from the link in
  * their summary email (Calendly bookings are picked up by themselves) or agreed a time another way: recording it here
- * counts as the request and puts the check in Debriefs.
+ * counts as the request and puts the check in Discovery Calls.
  */
 function RecordDebriefTime({ businessCheckId }: { businessCheckId: number }) {
   const utils = trpc.useUtils();
@@ -64,7 +64,7 @@ function RecordDebriefTime({ businessCheckId }: { businessCheckId: number }) {
   const [time, setTime] = useState("");
   const schedule = trpc.businessSupport.scheduleCall.useMutation({
     onSuccess: () => {
-      toast.success("Debrief time saved.");
+      toast.success("Discovery Call time saved.");
       void utils.businessSupport.checkDetail.invalidate({ businessCheckId });
       void utils.businessSupport.checks.invalidate();
       void utils.businessSupport.discoveryCalls.invalidate();
@@ -74,12 +74,12 @@ function RecordDebriefTime({ businessCheckId }: { businessCheckId: number }) {
   const when = combineDateAndTime(date, time);
   return (
     <form className="space-y-3" onSubmit={event => { event.preventDefault(); if (when) schedule.mutate({ businessCheckId, scheduledFor: when }); }}>
-      <p className="text-sm text-ink-muted">No Debrief was requested from the result page. A Calendly booking made from the email link is picked up by itself; for a Debrief agreed another way, record the time here. It counts as the request.</p>
+      <p className="text-sm text-ink-muted">No Discovery Call was requested from the result page. A Calendly booking made from the email link is picked up by itself; for a Discovery Call agreed another way, record the time here. It counts as the request.</p>
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1"><Label htmlFor={`debrief-date-${businessCheckId}`} className="text-xs text-ink-muted">Date</Label><Input id={`debrief-date-${businessCheckId}`} type="date" value={date} onChange={event => setDate(event.target.value)} className="h-9 rounded-none" /></div>
         <div className="space-y-1"><Label htmlFor={`debrief-time-${businessCheckId}`} className="text-xs text-ink-muted">Time</Label><Input id={`debrief-time-${businessCheckId}`} type="time" value={time} onChange={event => setTime(event.target.value)} className="h-9 rounded-none" /></div>
       </div>
-      <Button type="submit" variant="outline" size="sm" disabled={schedule.isPending || !when} className="rounded-none text-xs">Save the Debrief time</Button>
+      <Button type="submit" variant="outline" size="sm" disabled={schedule.isPending || !when} className="rounded-none text-xs">Save the Discovery Call time</Button>
     </form>
   );
 }
@@ -137,7 +137,7 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
   const nextStep: { label: string; section: AdminSectionId; primary: boolean } | null =
     isReadyToOnboard(status) ? { label: "Continue to Client Onboarding", section: "onboarding", primary: true }
     : status === "onboarding" ? { label: "View the onboarding link", section: "onboarding", primary: false }
-    : status === "call_requested" || status === "call_scheduled" ? { label: "Go to the Debrief", section: "calls", primary: false }
+    : status === "call_requested" || status === "call_scheduled" ? { label: "Go to the Discovery Call", section: "calls", primary: false }
     : null;
   const go = (section: AdminSectionId) => {
     onClose();
@@ -146,9 +146,9 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
 
   const history = [
     { label: check.completedAt ? "Business Check completed" : "Business Check started", at: check.completedAt ?? check.createdAt },
-    ...(check.callRequestedAt ? [{ label: "Debrief requested", at: check.callRequestedAt }] : []),
+    ...(check.callRequestedAt ? [{ label: "Discovery Call requested", at: check.callRequestedAt }] : []),
     ...(check.reportRequestedAt ? [{ label: "Full Report requested", at: check.reportRequestedAt }] : []),
-    ...(check.callScheduledFor ? [{ label: "Debrief booked for", at: check.callScheduledFor, withTime: true }] : []),
+    ...(check.callScheduledFor ? [{ label: "Discovery Call booked for", at: check.callScheduledFor, withTime: true }] : []),
   ];
 
   return (
@@ -221,7 +221,7 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
       </DetailSection>
 
       {check.completedAt && !check.callRequestedAt && check.pipelineStage !== "won" && (
-        <DetailSection title="Debrief time">
+        <DetailSection title="Discovery Call time">
           <RecordDebriefTime businessCheckId={check.id} />
         </DetailSection>
       )}
@@ -247,7 +247,7 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
                     : event.action === "business_check_call_booked"
                     ? <>Booked on Calendly{event.scheduledFor ? ` for ${formatDateTime(event.scheduledFor)}` : ""}</>
                     : event.action === "business_check_call_scheduled"
-                    ? <>Debrief time recorded{event.scheduledFor ? ` for ${formatDateTime(event.scheduledFor)}` : ""}</>
+                    ? <>Discovery Call time recorded{event.scheduledFor ? ` for ${formatDateTime(event.scheduledFor)}` : ""}</>
                     : <><span className="font-medium">{stageName(event.to)}</span> <span className="text-ink-muted">from {stageName(event.from)}</span></>}
                 </p>
                 <p className="text-xs text-ink-muted">{event.by ?? (event.via === "paystack" ? "Paystack (paid online)" : event.action === "payment_details_sent" || event.action === "full_report_delivered" ? "Sent automatically" : "Team")} · {formatDateTime(event.at)}</p>

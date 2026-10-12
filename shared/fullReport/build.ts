@@ -546,10 +546,10 @@ export function buildFullReport(input: ReportInput): FullReport {
   // ---- How we can help -----------------------------------------------------------------------
   parts.push({
     number: 11, title: "How we can help", method: "Services that fit",
-    finding: result.offerings.length ? "If you want support with the plan, these are the services that fit what you told us." : "If you want support with the plan, start with a free Debrief.",
+    finding: result.offerings.length ? "If you want support with the plan, these are the services that fit what you told us." : "If you want support with the plan, start with a free Discovery Call.",
     blocks: [
       ...(result.offerings.length ? [{ kind: "table" as const, columns: ["Service", "What it does"], widths: [0.38, 0.62], rows: result.offerings.map((offering) => [offering.name, offering.summary]) }] : []),
-      { kind: "callout", title: `${CURRENT_STATE.name} · ${formatNaira(PRICES.currentState)}`, text: `${CURRENT_STATE.what} ${CURRENT_STATE.start} It starts with a free Debrief, where we tell you honestly whether we can help.` },
+      { kind: "callout", title: `${CURRENT_STATE.name} · ${formatNaira(PRICES.currentState)}`, text: `${CURRENT_STATE.what} ${CURRENT_STATE.start} It starts with a free Discovery Call, where we tell you honestly whether we can help.` },
     ],
   });
 

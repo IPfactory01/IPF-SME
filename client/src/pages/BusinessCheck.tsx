@@ -886,7 +886,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
                   </motion.p>
                 ) : (
                   <motion.button key="book" type="button" onClick={bookCall} disabled={requestNext.isPending} exit={{ opacity: 0, scale: 0.96 }} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} className="group mt-6 inline-flex h-14 w-full items-center justify-center bg-highlight px-8 text-sm font-semibold uppercase tracking-widest text-brand-deep shadow-[0_18px_40px_-18px_rgba(54,183,224,0.9)] transition-colors hover:bg-highlight-hover disabled:opacity-60">
-                    <CalendarDays className="mr-2 h-4 w-4" /> {booking.kind === "calendly" && calendarOpen ? "Choose a time below" : booking.kind === "none" ? "Request my free Debrief" : "Book my free Debrief"}
+                    <CalendarDays className="mr-2 h-4 w-4" /> {booking.kind === "calendly" && calendarOpen ? "Choose a time below" : booking.kind === "none" ? "Request my free Discovery Call" : "Book my free Discovery Call"}
                   </motion.button>
                 )}
               </AnimatePresence>
@@ -923,13 +923,13 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
           {booking.kind === "calendly" && calendarOpen && !requested.call && (
             <motion.div key="calendar" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.45, ease: EASE }} className="mt-4 overflow-hidden border border-line bg-paper-raised">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line px-5 py-3">
-                <p className="text-sm font-semibold text-ink">Choose a time for your free Debrief</p>
+                <p className="text-sm font-semibold text-ink">Choose a time for your free Discovery Call</p>
                 {/* Some browsers, blockers and networks stop embedded calendars; the same calendar opens in a new tab. */}
                 <a href={booking.openUrl} target="_blank" rel="noopener noreferrer" onClick={() => { setOpenedInTab(true); recordCall(); }} className="text-xs font-semibold text-brand underline underline-offset-2 hover:text-brand-deep">
                   Calendar not showing? Open it in a new tab
                 </a>
               </div>
-              <iframe title="Book your free Debrief" src={booking.embedUrl} className="h-[720px] w-full" />
+              <iframe title="Book your free Discovery Call" src={booking.embedUrl} className="h-[720px] w-full" />
             </motion.div>
           )}
         </AnimatePresence>

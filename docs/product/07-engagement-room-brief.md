@@ -29,19 +29,19 @@ The owner, and the one person they bring in, on a phone, between calls. They mee
 Walked through by ET on 10 October:
 
 1. The owner fills the **business check**. We get a first sense of the business and send the results.
-2. They book the **free call**: the debrief. Shorter than the firm's usual debrief (twenty minutes, mostly the owner
+2. They book the **free call**: the Discovery Call. Shorter than the firm's usual debrief (twenty minutes, mostly the owner
    telling us), but the same shape as the *Client Debrief Meeting Engagement Guide*: hear the client out, reiterate the
    problem as they see it, the intervention expected and what success looks like, agree next steps, and follow up the
    same day.
 3. They buy the **report** (₦100,000) and, when ready, commit to the **Current State Assessment** (₦500,000): *an
    assessment that tests both internal and external factors to find where the problem of the business is and the
    possible solutions.*
-4. **The debrief informs the work plan. The work plan sets the activities for the two weeks.** The room shows today
+4. **The Discovery Call informs the work plan. The work plan sets the activities for the two weeks.** The room shows today
    against that plan.
 5. Findings and the one problem; the fix; day 30.
 
-**One correction to make it work.** Today the debrief leaves no record in the platform: it is a Calendly booking and
-the analyst's memory. For the room to start warm on day 1, the analyst captures a **debrief summary** within the hour,
+**One correction to make it work.** Today the Discovery Call leaves no record in the platform: it is a Calendly booking and
+the analyst's memory. For the room to start warm on day 1, the analyst captures a **Discovery Call summary** within the hour,
 in the admin, following the guide's summary template cut to The Shift: what we heard, the problem as the owner sees it,
 what success looks like, what they have tried, next steps. It is shared to the owner. That is the follow-up email the
 guide already requires, kept as a record. Without it the room cannot answer "where are we today" on day 1.
@@ -55,9 +55,9 @@ In this order, one column, phone first:
 - **Your one thing.** The single next action for the owner, with its date and its button (upload, confirm, book, sign
   off). Others wait below in the plan; the room never opens with a list of eight.
 - **Next call.** Date, time in Lagos, Join.
-- **Your journey, numbered 1 to 7.** Business check, debrief call, report, Current State Assessment, what we found,
+- **Your journey, numbered 1 to 7.** Business check, Discovery Call, report, Current State Assessment, what we found,
   the fix, day 30. Each step has a state (done with its date, now, next with its date) and opens to its content: the
-  check's main finding; what we heard at the debrief; the report; the two-week work plan with numbered activities,
+  check's main finding; what we heard at the Discovery Call; the report; the two-week work plan with numbered activities,
   who (you, us, together), when and status; the findings and the one problem; the number week by week; the day-30
   check. The current step is open when the page loads.
 - **Your team**, and the one seat the owner can give.
@@ -75,8 +75,8 @@ For the implementation plan, once the mock is approved:
 
 | Need | Today | Change |
 |---|---|---|
-| Debrief summary | **Built 10 October (migration 0009):** `debriefs`, captured in the admin's Debriefs section in the guide's five parts, shared to the owner as a separate step | Done |
-| The work plan | **Built 10 October (migration 0009):** tasks and sessions carry a week and an order; tasks a factor (internal, external); the template places nine Data Requests, two team actions and both calls in week 1 and 2 | The analyst shapes it from the Debrief; the desk lead reviews |
+| Discovery Call summary | **Built 10 October (migration 0009):** `debriefs`, captured in the admin's Discovery Calls section in the guide's five parts, shared to the owner as a separate step | Done |
+| The work plan | **Built 10 October (migration 0009):** tasks and sessions carry a week and an order; tasks a factor (internal, external); the template places nine Data Requests, two team actions and both calls in week 1 and 2 | The analyst shapes it from the Discovery Call; the desk lead reviews |
 | The check and the report in the room | Linked by id, not shown | The room reads the main finding, readiness and the report link |
 | "Now" | The stage only | Day X of 14 and week X of 6 from the stage dates |
 | Day 30 | Planned (migration 0009) | As planned |

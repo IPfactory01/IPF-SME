@@ -3,10 +3,14 @@
  * the same way on the site, in the admin, in the room and in email. Term first, meaning second: the name is the
  * heading, the sentence under it says what it means in plain English. Brand lines ("Find it. Fix it. See the
  * results.", "The Shift") are not method names and do not change.
+ *
+ * The free 20-minute call is the Discovery Call (ET, 12 October 2026), not the Debrief: "Debrief" is kept free for one
+ * of the Current State Assessment's sessions. The code and the database still say debrief for it (the `debriefs`
+ * table, `businessSupport.debrief`), which owners and the team never see.
  */
 export const METHOD = {
   businessCheck: "Business Check",
-  debrief: "Debrief",
+  discoveryCall: "Discovery Call",
   fullReport: "Full Report",
   reportIntake: "Report Intake",
   currentState: "Current State Assessment",
@@ -30,7 +34,7 @@ export const METHOD = {
 /** What each name means, in one plain sentence, for the line under the heading. */
 export const METHOD_MEANING: Record<keyof typeof METHOD, string> = {
   businessCheck: "Ten minutes on your phone: a first read on where your business is stuck.",
-  debrief: "A free 20-minute call: we walk through your Business Check results, hear the problem in your words and agree next steps.",
+  discoveryCall: "A free 20-minute call: we walk through your Business Check results, hear the problem in your words and agree next steps.",
   fullReport: "What to do about what the Business Check found, in order, with the number to watch for each.",
   reportIntake: "A short form after payment; your Full Report is built from it the moment you finish.",
   currentState: "Two weeks and two sessions that test the internal and external factors of your business, to locate the one problem to fix first and what to do about it.",

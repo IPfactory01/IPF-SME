@@ -118,7 +118,7 @@ export function reportEmail(report: FullReport, downloadUrl: string) {
       "",
       `Download it again: ${downloadUrl}`,
       "",
-      `If you would like help with the plan, reply to this email or book a free Debrief: ${ENV.discoveryCallUrl}`,
+      `If you would like help with the plan, reply to this email or book a free Discovery Call: ${ENV.discoveryCallUrl}`,
       "",
       BRAND.organisationName,
     ].join("\n"),

@@ -59,10 +59,10 @@ set up, and nothing else changes. Apply with `pnpm db:migrate`, or paste
 changing nothing, unless exactly `0000` to `0009` are recorded and none of the new tables or indexes exist, then applies
 the migration and records `0010` with the file hash and journal timestamp.
 
-**`0009` and deployment order.** The Debrief record (`debriefs`) and the Work Plan fields (`weekNumber`, `sortOrder` on
+**`0009` and deployment order.** The Discovery Call record (`debriefs`) and the Work Plan fields (`weekNumber`, `sortOrder` on
 `engagement_sessions` and `engagement_tasks`; `factor` on `engagement_tasks`). Additive only, but the engagement queries read
 the new columns, so **apply it with the deployment that carries it**: until then the admin Engagements section and the
-client room say the room is not up to date (migration 0009), the Debrief summary says it is not set up, and confirming a
+client room say the room is not up to date (migration 0009), the Discovery Call summary says it is not set up, and confirming a
 Current State Assessment payment still confirms it (the engagement is started once `0009` is applied, from "Paid, but no
 engagement yet"). Apply with `pnpm db:migrate`, or paste `drizzle/supabase/apply-0009-debrief-work-plan.sql` into the
 Supabase SQL Editor and press Run: it stops, changing nothing, unless exactly `0000` to `0008` are recorded, no `debriefs`

@@ -458,7 +458,7 @@ function writeSummary(input: {
     return {
       found: "Your business is at a scale where a short questionnaire would miss most of what matters.",
       think: "The right first step is a conversation with a senior adviser, who will look at the business as a whole.",
-      next: "Book the free Debrief. We will come prepared with questions for a business of your size.",
+      next: "Book the free Discovery Call. We will come prepared with questions for a business of your size.",
     };
   }
 
@@ -471,7 +471,7 @@ function writeSummary(input: {
       think: gap
         ? `The main gap is ${GAP_LABELS[gap].name.toLowerCase()}: ${lower(GAP_LABELS[gap].meaning)} Before money is committed, test the idea and the founder together.`
         : "You look ready to test the idea properly with real buyers before committing more money.",
-      next: "Book the free Debrief to agree a go or no-go test and a first-90-days plan.",
+      next: "Book the free Discovery Call to agree a go or no-go test and a first-90-days plan.",
     };
   }
 
@@ -479,7 +479,7 @@ function writeSummary(input: {
     return {
       found: `${founderLine} The business is still mostly you, at an early revenue level.`,
       think: "At this stage the biggest lever is the founder: pricing, money basics and a simple weekly routine. A full engagement would be too much, too soon.",
-      next: "Book the free Debrief and we will point you to the training and tools that fit this stage.",
+      next: "Book the free Discovery Call and we will point you to the training and tools that fit this stage.",
     };
   }
 
@@ -496,5 +496,5 @@ function writeSummary(input: {
     ? ` After more than ten years with revenue ${input.answers.p_trend === "declining" ? "falling" : "flat"}, that usually means the way the business makes money has stopped working, not that the effort has dropped.`
     : "";
 
-  return { found, think: think + matureNote, next: "Book the free 20-minute Debrief. We will tell you honestly whether we can help, and what to fix first." };
+  return { found, think: think + matureNote, next: "Book the free 20-minute Discovery Call. We will tell you honestly whether we can help, and what to fix first." };
 }

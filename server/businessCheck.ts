@@ -50,7 +50,7 @@ const OUTPUT_SCHEMA = {
     properties: {
       found: { type: "string", description: "What we found: 2 to 4 sentences." },
       think: { type: "string", description: "What we think it is: 2 to 4 sentences naming the main problem and the gap." },
-      next: { type: "string", description: "One sentence inviting the owner to the free Debrief." },
+      next: { type: "string", description: "One sentence inviting the owner to the free Discovery Call." },
       offerings: {
         type: "array",
         maxItems: 3,
@@ -116,7 +116,7 @@ The owner's one-line description is your main source for making the result speci
 
 Then check the result against our service catalogue (below) and choose up to three offerings that fit what the owner described, most relevant first, using only these ids. Prefer the ones the rules matched unless the answers clearly point elsewhere. For an idea-stage founder or a very small business, recommend at most one offering and only if it truly fits; the founder comes first. For route "advisory" recommend none.
 
-"found" says what the answers show (2 to 4 sentences, specific to this business and its sector). "think" says what we think the real problem is and why (2 to 4 sentences). "next" invites them to book the free 20-minute Debrief, in one sentence. Each "why" ties the offering to something the owner said, in one sentence.
+"found" says what the answers show (2 to 4 sentences, specific to this business and its sector). "think" says what we think the real problem is and why (2 to 4 sentences). "next" invites them to book the free 20-minute Discovery Call, in one sentence. Each "why" ties the offering to something the owner said, in one sentence.
 
 Service catalogue:
 ${CATALOGUE_TEXT}`;

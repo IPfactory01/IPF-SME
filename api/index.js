@@ -324,8 +324,8 @@ function formatNaira(amount) {
 }
 var JOURNEY = [
   { id: "business-check", name: "Free Business Check", body: `Ten minutes. A first read on where you are stuck. Want the Full Report? ${formatNaira(PRICES.fullReport)}, by email.` },
-  { id: "discovery-call", name: "Debrief: a free 20-minute call", body: "We walk through your Business Check results, hear the problem in your words and tell you honestly whether we can help." },
-  { id: "current-state", name: CURRENT_STATE.name, body: `${CURRENT_STATE.what} ${formatNaira(PRICES.currentState)}, paid after the Debrief. ${CURRENT_STATE.start}` },
+  { id: "discovery-call", name: "Discovery Call: a free 20-minute call", body: "We walk through your Business Check results, hear the problem in your words and tell you honestly whether we can help." },
+  { id: "current-state", name: CURRENT_STATE.name, body: `${CURRENT_STATE.what} ${formatNaira(PRICES.currentState)}, paid after the Discovery Call. ${CURRENT_STATE.start}` },
   { id: "fix", name: "The Fix: six weeks", body: `One problem, one Measure of Success. You do the work; we give you the Prescription and the tools, and check it at a Weekly Check-in. ${formatNaira(PRICES.fix)}.` },
   { id: "plan", name: "Your Plan", body: `We stop at about ${formatNaira(PRICES.standardEngagementCap)} with a plan in your hands. Want us to stay? We agree what that looks like.` }
 ];
@@ -333,7 +333,7 @@ var JOURNEY = [
 // shared/method.ts
 var METHOD = {
   businessCheck: "Business Check",
-  debrief: "Debrief",
+  discoveryCall: "Discovery Call",
   fullReport: "Full Report",
   reportIntake: "Report Intake",
   currentState: "Current State Assessment",
@@ -3399,7 +3399,7 @@ var LIMITS = {
   checkSave: { scope: "check_save", max: 300, windowMs: 15 * MINUTE },
   /** Submissions per check: each runs the AI summary and sends two emails. */
   checkSubmit: { scope: "check_submit", max: 3, windowMs: HOUR2 },
-  /** Debrief and Full Report requests per check: each can email and look up Calendly. */
+  /** Discovery Call and Full Report requests per check: each can email and look up Calendly. */
   checkNext: { scope: "check_next", max: 5, windowMs: DAY },
   /** Report Intake reads and submissions per report link. */
   reportForm: { scope: "report_form", max: 30, windowMs: HOUR2 },
@@ -8320,7 +8320,7 @@ function writeSummary(input) {
     return {
       found: "Your business is at a scale where a short questionnaire would miss most of what matters.",
       think: "The right first step is a conversation with a senior adviser, who will look at the business as a whole.",
-      next: "Book the free Debrief. We will come prepared with questions for a business of your size."
+      next: "Book the free Discovery Call. We will come prepared with questions for a business of your size."
     };
   }
   const founderLine = `Founder readiness reads as ${READINESS_LABELS[founder.level].split(":")[0].toLowerCase()}.${style ? ` Under pressure you lead as ${/^[aeiou]/i.test(style.name) ? "an" : "a"} ${style.name.toLowerCase()}: ${lower(style.strength)}` : ""}${founder.needsDriver ? " Nobody in the business reliably makes the hard call yet; that role needs an owner." : ""}`;
@@ -8329,14 +8329,14 @@ function writeSummary(input) {
     return {
       found: `${founderLine} On the idea itself, ${ideaRow?.health === "clear" ? "the basics are in place: a first customer, a first offer and some proof." : "some basics are still open: who buys first, what you sell first, or whether anyone has paid yet."}`,
       think: gap ? `The main gap is ${GAP_LABELS[gap].name.toLowerCase()}: ${lower(GAP_LABELS[gap].meaning)} Before money is committed, test the idea and the founder together.` : "You look ready to test the idea properly with real buyers before committing more money.",
-      next: "Book the free Debrief to agree a go or no-go test and a first-90-days plan."
+      next: "Book the free Discovery Call to agree a go or no-go test and a first-90-days plan."
     };
   }
   if (route === "foundation") {
     return {
       found: `${founderLine} The business is still mostly you, at an early revenue level.`,
       think: "At this stage the biggest lever is the founder: pricing, money basics and a simple weekly routine. A full engagement would be too much, too soon.",
-      next: "Book the free Debrief and we will point you to the training and tools that fit this stage."
+      next: "Book the free Discovery Call and we will point you to the training and tools that fit this stage."
     };
   }
   const found = [
@@ -8346,7 +8346,7 @@ function writeSummary(input) {
   ].filter(Boolean).join(" ");
   const think = main ? `The place to start is ${main.name.toLowerCase()}${gap ? `, and the gap looks like ${GAP_LABELS[gap].name.toLowerCase()}: ${lower(GAP_LABELS[gap].meaning)}` : "."}${offerings.length ? ` That points to ${offerings.map((offering) => offering.name).join(", ")}.` : ""}` : "The business looks in good shape on what we asked. The next gains are likely in sharper priorities and stronger numbers.";
   const matureNote = isMatureAndStruggling(input.answers) && main?.area === 4 ? ` After more than ten years with revenue ${input.answers.p_trend === "declining" ? "falling" : "flat"}, that usually means the way the business makes money has stopped working, not that the effort has dropped.` : "";
-  return { found, think: think + matureNote, next: "Book the free 20-minute Debrief. We will tell you honestly whether we can help, and what to fix first." };
+  return { found, think: think + matureNote, next: "Book the free 20-minute Discovery Call. We will tell you honestly whether we can help, and what to fix first." };
 }
 
 // server/businessCheck.ts
@@ -8613,7 +8613,7 @@ var OUTPUT_SCHEMA = {
     properties: {
       found: { type: "string", description: "What we found: 2 to 4 sentences." },
       think: { type: "string", description: "What we think it is: 2 to 4 sentences naming the main problem and the gap." },
-      next: { type: "string", description: "One sentence inviting the owner to the free Debrief." },
+      next: { type: "string", description: "One sentence inviting the owner to the free Discovery Call." },
       offerings: {
         type: "array",
         maxItems: 3,
@@ -8673,7 +8673,7 @@ The owner's one-line description is your main source for making the result speci
 
 Then check the result against our service catalogue (below) and choose up to three offerings that fit what the owner described, most relevant first, using only these ids. Prefer the ones the rules matched unless the answers clearly point elsewhere. For an idea-stage founder or a very small business, recommend at most one offering and only if it truly fits; the founder comes first. For route "advisory" recommend none.
 
-"found" says what the answers show (2 to 4 sentences, specific to this business and its sector). "think" says what we think the real problem is and why (2 to 4 sentences). "next" invites them to book the free 20-minute Debrief, in one sentence. Each "why" ties the offering to something the owner said, in one sentence.
+"found" says what the answers show (2 to 4 sentences, specific to this business and its sector). "think" says what we think the real problem is and why (2 to 4 sentences). "next" invites them to book the free 20-minute Discovery Call, in one sentence. Each "why" ties the offering to something the owner said, in one sentence.
 
 Service catalogue:
 ${CATALOGUE_TEXT}`;
@@ -8830,7 +8830,7 @@ async function shareDebrief(db, input, actorUserId) {
   const check = await requireCheck(db, input.businessCheckId);
   return db.transaction(async (tx) => {
     const updated = await tx.update(debriefs).set({ sharedAt: input.shared ? /* @__PURE__ */ new Date() : null }).where(eq15(debriefs.businessCheckId, check.id)).returning({ id: debriefs.id });
-    if (!updated.length) throw new TRPCError13({ code: "NOT_FOUND", message: "Write the Debrief up before sharing it." });
+    if (!updated.length) throw new TRPCError13({ code: "NOT_FOUND", message: "Write the Discovery Call up before sharing it." });
     await recordAudit(tx, { action: "debrief_shared", actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, debriefId: updated[0].id, shared: input.shared } });
     return { success: true };
   });
@@ -10681,10 +10681,10 @@ function buildFullReport(input) {
     number: 11,
     title: "How we can help",
     method: "Services that fit",
-    finding: result.offerings.length ? "If you want support with the plan, these are the services that fit what you told us." : "If you want support with the plan, start with a free Debrief.",
+    finding: result.offerings.length ? "If you want support with the plan, these are the services that fit what you told us." : "If you want support with the plan, start with a free Discovery Call.",
     blocks: [
       ...result.offerings.length ? [{ kind: "table", columns: ["Service", "What it does"], widths: [0.38, 0.62], rows: result.offerings.map((offering) => [offering.name, offering.summary]) }] : [],
-      { kind: "callout", title: `${CURRENT_STATE.name} \xB7 ${formatNaira(PRICES.currentState)}`, text: `${CURRENT_STATE.what} ${CURRENT_STATE.start} It starts with a free Debrief, where we tell you honestly whether we can help.` }
+      { kind: "callout", title: `${CURRENT_STATE.name} \xB7 ${formatNaira(PRICES.currentState)}`, text: `${CURRENT_STATE.what} ${CURRENT_STATE.start} It starts with a free Discovery Call, where we tell you honestly whether we can help.` }
     ]
   });
   const position = idea ? `${businessName} is an idea not yet trading. Of the ${areaHealth.size + (outlineRow(result, 0) ? 1 : 0)} areas we looked at, ${tallyText(tally)}.` : `${businessName} ${MODEL[typeKey]}${answers.p_age ? ` and has traded for ${AGE[String(answers.p_age)]}` : ""}. Of the ${areaHealth.size + (outlineRow(result, 0) ? 1 : 0)} areas we looked at, ${tallyText(tally)}.`;
@@ -11302,7 +11302,7 @@ function reportEmail(report, downloadUrl) {
       "",
       `Download it again: ${downloadUrl}`,
       "",
-      `If you would like help with the plan, reply to this email or book a free Debrief: ${ENV.discoveryCallUrl}`,
+      `If you would like help with the plan, reply to this email or book a free Discovery Call: ${ENV.discoveryCallUrl}`,
       "",
       BRAND.organisationName
     ].join("\n")
@@ -11889,7 +11889,7 @@ var businessCheckRouter = router({
     const already = check.callRequestedAt;
     if (!already) {
       await db.update(businessChecks).set({ callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq21(businessChecks.id, check.id));
-      const what = "a free Debrief";
+      const what = "a free Discovery Call";
       await deliverEmail({
         sender: "business_support",
         idempotencyKey: `business_checks:${check.id}:${input.choice}:office`,
@@ -12282,15 +12282,15 @@ async function setPipelineStage(db, input) {
 async function requestedCheck(db, businessCheckId) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq23(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError23({ code: "NOT_FOUND", message: "That Business Check does not exist." });
-  if (!check.callRequestedAt) throw new TRPCError23({ code: "BAD_REQUEST", message: "This Business Check has not asked for a Debrief." });
-  if (check.pipelineStage === "won") throw new TRPCError23({ code: "CONFLICT", message: "This business has already been won, so its Debrief outcome can no longer be changed here." });
+  if (!check.callRequestedAt) throw new TRPCError23({ code: "BAD_REQUEST", message: "This Business Check has not asked for a Discovery Call." });
+  if (check.pipelineStage === "won") throw new TRPCError23({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call outcome can no longer be changed here." });
   return check;
 }
 async function scheduleDiscoveryCall(db, input) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt }).from(businessChecks).where(eq23(businessChecks.id, input.businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError23({ code: "NOT_FOUND", message: "That Business Check does not exist." });
-  if (!check.completedAt) throw new TRPCError23({ code: "BAD_REQUEST", message: "This Business Check is not finished yet, so there is no Debrief to schedule." });
-  if (check.pipelineStage === "won") throw new TRPCError23({ code: "CONFLICT", message: "This business has already been won, so its Debrief can no longer be changed here." });
+  if (!check.completedAt) throw new TRPCError23({ code: "BAD_REQUEST", message: "This Business Check is not finished yet, so there is no Discovery Call to schedule." });
+  if (check.pipelineStage === "won") throw new TRPCError23({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call can no longer be changed here." });
   await db.transaction(async (tx) => {
     await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, callRequestedAt: check.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq23(businessChecks.id, check.id));
     await recordAudit(tx, { action: "business_check_call_scheduled", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: input.scheduledFor.toISOString(), ...check.callRequestedAt ? {} : { requested: "by_hand" } } });
@@ -12337,7 +12337,7 @@ var businessSupportRouter = router({
   discoveryCalls: prospects.query(async () => listDiscoveryCalls(await businessSupportDb())),
   scheduleCall: prospects.input(z20.object({ businessCheckId: z20.number().int().positive(), scheduledFor: z20.coerce.date() })).mutation(async ({ ctx, input }) => scheduleDiscoveryCall(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
   recordOutcome: prospects.input(z20.object({ businessCheckId: z20.number().int().positive(), outcome: z20.enum(CALL_OUTCOMES) })).mutation(async ({ ctx, input }) => recordDiscoveryCallOutcome(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
-  /** The Debrief as written up so far; `setUp` is false until migration 0009 is applied. */
+  /** The Discovery Call as written up so far; `setUp` is false until migration 0009 is applied. */
   debrief: prospects.input(z20.object({ businessCheckId: z20.number().int().positive() })).query(async ({ input }) => {
     try {
       return { setUp: true, debrief: await getDebrief(await businessSupportDb(), input.businessCheckId) };

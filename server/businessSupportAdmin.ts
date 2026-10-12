@@ -41,12 +41,12 @@ const CHECK_COLUMNS = {
 
 /** How many waiting calls are looked up in Calendly per page load, so the admin console stays quick. */
 const CALENDLY_SYNC_LIMIT = 10;
-/** A finished check that never asked for a Debrief on the result page is looked up for this long: the summary email carries the Calendly link. */
+/** A finished check that never asked for a Discovery Call on the result page is looked up for this long: the summary email carries the Calendly link. */
 const CALENDLY_LOOKUP_DAYS = 14;
 
 type ListedCheck = { id: number; email: string; pipelineStage: PipelineStage; callRequestedAt: Date | null; callScheduledFor: Date | null; completedAt: Date | null };
 
-/** A check whose Debrief may be booked in Calendly without the console knowing: asked for on the page, or finished recently (the email link). */
+/** A check whose Discovery Call may be booked in Calendly without the console knowing: asked for on the page, or finished recently (the email link). */
 function awaitsCalendlyLookup(row: ListedCheck, now: number) {
   if (row.callScheduledFor || !row.completedAt) return false;
   if (row.pipelineStage === "call_booked") return true;
@@ -54,10 +54,10 @@ function awaitsCalendlyLookup(row: ListedCheck, now: number) {
 }
 
 /**
- * Fills in the time of Debriefs booked in IP Factory's Calendly account that the console does not know about yet:
+ * Fills in the time of Discovery Calls booked in IP Factory's Calendly account that the console does not know about yet:
  * calls asked for on the result page before CALENDLY_API_TOKEN was set or booked in a new tab, and bookings made from
  * the link in the summary email by owners who never pressed the button (looked up for 14 days after they finished).
- * A found booking counts as the request: it moves the check to "Debrief booked". Each found time is saved, so it is
+ * A found booking counts as the request: it moves the check to "Discovery Call booked". Each found time is saved, so it is
  * looked up once. Without the token this does nothing.
  */
 async function syncCalendlyBookings<T extends ListedCheck>(db: Database, rows: T[]): Promise<T[]> {
@@ -214,23 +214,23 @@ export async function setPipelineStage(db: Database, input: { businessCheckId: n
 async function requestedCheck(db: Pick<Database, "select">, businessCheckId: number) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Check does not exist." });
-  if (!check.callRequestedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This Business Check has not asked for a Debrief." });
+  if (!check.callRequestedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This Business Check has not asked for a Discovery Call." });
   // A paid client's record is not reopened from the call list.
-  if (check.pipelineStage === "won") throw new TRPCError({ code: "CONFLICT", message: "This business has already been won, so its Debrief outcome can no longer be changed here." });
+  if (check.pipelineStage === "won") throw new TRPCError({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call outcome can no longer be changed here." });
   return check;
 }
 
 /**
- * Records the time agreed for the Debrief, for any finished check: one the owner asked for on the result page (the
+ * Records the time agreed for the Discovery Call, for any finished check: one the owner asked for on the result page (the
  * request is kept as it was), or one booked from the email link or agreed another way, which this records as the
- * request too. The stage moves to "Debrief booked" if it was behind.
+ * request too. The stage moves to "Discovery Call booked" if it was behind.
  */
 export async function scheduleDiscoveryCall(db: Database, input: { businessCheckId: number; scheduledFor: Date; actorUserId: number }) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt })
     .from(businessChecks).where(eq(businessChecks.id, input.businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Check does not exist." });
-  if (!check.completedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This Business Check is not finished yet, so there is no Debrief to schedule." });
-  if (check.pipelineStage === "won") throw new TRPCError({ code: "CONFLICT", message: "This business has already been won, so its Debrief can no longer be changed here." });
+  if (!check.completedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This Business Check is not finished yet, so there is no Discovery Call to schedule." });
+  if (check.pipelineStage === "won") throw new TRPCError({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call can no longer be changed here." });
   await db.transaction(async tx => {
     await tx.update(businessChecks)
       .set({ callScheduledFor: input.scheduledFor, callRequestedAt: check.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") })

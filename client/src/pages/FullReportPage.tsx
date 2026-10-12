@@ -224,7 +224,7 @@ export default function FullReportPage() {
             <Download className="mr-2 h-4 w-4" aria-hidden /> Download your Full Report
           </Button>
           {problem && <p role="alert" className="text-sm text-danger-strong">{problem}</p>}
-          <p className="text-sm text-ink-muted">If you would like help with the plan in your Full Report, reply to the email or book a free Debrief.</p>
+          <p className="text-sm text-ink-muted">If you would like help with the plan in your Full Report, reply to the email or book a free Discovery Call.</p>
         </div>
       </Shell>
     );

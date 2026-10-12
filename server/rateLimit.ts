@@ -28,7 +28,7 @@ export const LIMITS = {
   checkSave: { scope: "check_save", max: 300, windowMs: 15 * MINUTE },
   /** Submissions per check: each runs the AI summary and sends two emails. */
   checkSubmit: { scope: "check_submit", max: 3, windowMs: HOUR },
-  /** Debrief and Full Report requests per check: each can email and look up Calendly. */
+  /** Discovery Call and Full Report requests per check: each can email and look up Calendly. */
   checkNext: { scope: "check_next", max: 5, windowMs: DAY },
   /** Report Intake reads and submissions per report link. */
   reportForm: { scope: "report_form", max: 30, windowMs: HOUR },

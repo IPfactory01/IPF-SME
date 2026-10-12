@@ -262,7 +262,7 @@ for (const target of targets) {
     });
 
     describe("the client's side: membership and what was shared", () => {
-      it("opens the room warm: the check's main finding and readiness, the Work Plan by week, and the Debrief once the team shares it", async () => {
+      it("opens the room warm: the check's main finding and readiness, the Work Plan by week, and the Discovery Call once the team shares it", async () => {
         const { owner, businessCheckId, businessId } = await client("warm");
         const admin = await superAdmin.call();
         const before = (await (await owner.call()).engagement.client.room())!;

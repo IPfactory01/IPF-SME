@@ -207,7 +207,7 @@ export const businessCheckRouter = router({
         await db.update(businessChecks)
           .set({ callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") })
           .where(eq(businessChecks.id, check.id));
-        const what = "a free Debrief";
+        const what = "a free Discovery Call";
         await deliverEmail({
           sender: "business_support",
           idempotencyKey: `business_checks:${check.id}:${input.choice}:office`,

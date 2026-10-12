@@ -233,7 +233,7 @@ for (const target of targets) {
         expect(stored.pipelineStage).toBe("call_booked");
         expect(stored.callScheduledFor).toBeNull();
         expect(mocked.deliverEmail).toHaveBeenCalledTimes(1);
-        expect(mocked.deliverEmail.mock.calls[0][0].subject).toMatch(/asked for a free Debrief/);
+        expect(mocked.deliverEmail.mock.calls[0][0].subject).toMatch(/asked for a free Discovery Call/);
 
         const call = (await (await superAdmin.call()).businessSupport.discoveryCalls()).find((item: { email: string }) => item.email === email)!;
         expect(call).toMatchObject({ pipelineStage: "call_booked", callScheduledFor: null, whatsapp: "+2348000000001" });
@@ -278,7 +278,7 @@ for (const target of targets) {
         expect(events.some((event: { details: string }) => event.details.includes(`"businessCheckId":${id}`))).toBe(true);
       });
 
-      it("records a Debrief agreed outside the result page for any finished check: it counts as the request and the check joins Debriefs", async () => {
+      it("records a Discovery Call agreed outside the result page for any finished check: it counts as the request and the check joins Discovery Calls", async () => {
         const { token, email, visitor } = await finishedCheck("email-link");
         const id = (await rowFor(token)).id as number;
         expect((await rowFor(token)).callRequestedAt).toBeNull();
@@ -291,12 +291,12 @@ for (const target of targets) {
         expect((await (await superAdmin.call()).businessSupport.discoveryCalls()).some((listed: { email: string }) => listed.email === email)).toBe(true);
         const events = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "business_check_call_scheduled"));
         expect(events.some((event: { details: string }) => event.details.includes(`"businessCheckId":${id}`) && event.details.includes('"requested":"by_hand"'))).toBe(true);
-        // From here the Debrief outcome can be recorded like any other.
+        // From here the Discovery Call outcome can be recorded like any other.
         expect(await (await superAdmin.call()).businessSupport.recordOutcome({ businessCheckId: id, outcome: "fit" })).toEqual({ success: true, pipelineStage: "opportunity" });
         void visitor;
       });
 
-      it("refuses to schedule a Debrief for a Business Check that is not finished", async () => {
+      it("refuses to schedule a Discovery Call for a Business Check that is not finished", async () => {
         const visitor = browser();
         const { token } = await (await visitor.call()).businessCheck.start({ fullName: "Ada Unfinished", email: uniqueEmail("unfinished"), whatsapp: "+2348000000001" });
         const id = (await rowFor(token)).id as number;
@@ -417,7 +417,7 @@ for (const target of targets) {
         expect(mocked.findBookedCall).not.toHaveBeenCalledWith(call.email);
       });
 
-      it("picks up a booking made from the email link: a finished check that never pressed the button gets its time, its request and the Debrief stage", async () => {
+      it("picks up a booking made from the email link: a finished check that never pressed the button gets its time, its request and the Discovery Call stage", async () => {
         const check = await finishedCheck("calendly-email-link");
         const id = (await rowFor(check.token)).id as number;
         const when = new Date("2026-10-16T10:00:00Z");

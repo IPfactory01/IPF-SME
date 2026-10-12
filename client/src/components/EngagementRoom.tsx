@@ -221,14 +221,14 @@ function stepsOf(room: Room, now: number): Step[] {
       ) : null,
     },
     {
-      n: 2, title: METHOD.debrief, state: debriefHeld ? "done" : "next", when: debriefHeld ? done(debriefWhen ? lagos(debriefWhen, false) : "held") : "Not held", summary: METHOD_MEANING.debrief,
+      n: 2, title: METHOD.discoveryCall, state: debriefHeld ? "done" : "next", when: debriefHeld ? done(debriefWhen ? lagos(debriefWhen, false) : "held") : "Not held", summary: METHOD_MEANING.discoveryCall,
       body: room.debrief ? (
         <div className="space-y-3 text-sm">
           {([["What we heard", room.debrief.heard], ["The problem, in your words", room.debrief.problemInOwnerWords], ["What success looks like", room.debrief.successLooksLike], ["What you have tried", room.debrief.tried], ["Next steps we agreed", room.debrief.nextSteps]] as const).filter(([, text]) => text).map(([label, text]) => (
             <div key={label}><p className={KICKER}>{label}</p><p className="mt-1 whitespace-pre-line">{text}</p></div>
           ))}
         </div>
-      ) : <p className="text-sm text-ink-muted">Your {METHOD.debrief} notes appear here once your team shares them.</p>,
+      ) : <p className="text-sm text-ink-muted">Your {METHOD.discoveryCall} notes appear here once your team shares them.</p>,
     },
     {
       n: 3, title: METHOD.fullReport, state: room.report?.deliveredAt ? "done" : "next", when: room.report?.deliveredAt ? done(lagos(room.report.deliveredAt, false)) : room.report ? `Requested · ${METHOD.reportIntake} to complete` : check?.reportRequestedAt ? `Requested · ${lagos(check.reportRequestedAt, false)}` : "Optional · not taken", summary: METHOD_MEANING.fullReport,

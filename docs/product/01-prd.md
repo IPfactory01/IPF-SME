@@ -193,7 +193,7 @@ Rules:
   shown to the owner and their full-access staff once the team sets it. The owner's **Your team** card
   invites one person as Full or Contributor, changes their access or removes them. **Designed 10 October:** the room in the
   site's dress (design brief §9): the business, the stage, the next call and what to send first at the top, the journey bar,
-  two columns on a desktop; account details moved to the settings pages. **Built 10 October (migration 0009):** the Debrief
+  two columns on a desktop; account details moved to the settings pages. **Built 10 October (migration 0009):** the Discovery Call
   record (written up in the admin, shared to the owner as a separate step) and the Work Plan (every request, action and call
   placed in a week, in order, tagged internal or external), the two things the room brief (document 07) needs. **Rebuilt 10 October to the room brief:** now, the next
   action, the next Session, the Engagement timeline 1 to 7 with the Work Plan by week, in the method's vocabulary.

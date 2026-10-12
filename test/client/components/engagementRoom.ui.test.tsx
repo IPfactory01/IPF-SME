@@ -101,15 +101,15 @@ describe("the client's room", () => {
     const timeline = screen.getByRole("list", { name: "Engagement timeline" });
     const items = within(timeline).getAllByRole("listitem").filter(item => item.id.startsWith("step-"));
     expect(items.map(item => item.querySelector("button")!.textContent)).toEqual([
-      "Business CheckDone · Fri 9 Oct", "DebriefDone · Tue 13 Oct", "Full ReportDone · Wed 14 Oct", "Current State AssessmentDone · two weeks", "FindingsNowShared Fri 30 Oct", "The Fix6 weeks, after your Sign-off", "Day-30 Review30 days after The Fix ends",
+      "Business CheckDone · Fri 9 Oct", "Discovery CallDone · Tue 13 Oct", "Full ReportDone · Wed 14 Oct", "Current State AssessmentDone · two weeks", "FindingsNowShared Fri 30 Oct", "The Fix6 weeks, after your Sign-off", "Day-30 Review30 days after The Fix ends",
     ]);
     expect(timeline.querySelector('[aria-current="step"]')!.id).toBe("step-5");
     expect(within(timeline).getByRole("button", { name: /^Findings/ }).getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByRole("heading", { name: "Findings" })).toBeTruthy();
-    expect(within(timeline).getByRole("button", { name: /^Debrief/ }).getAttribute("aria-expanded")).toBe("false");
-    // Opening the Debrief shows what the team shared; the Business Check shows the main finding and readiness.
-    fireEvent.click(within(timeline).getByRole("button", { name: /^Debrief/ }));
-    const debrief = within(screen.getByRole("region", { name: "Step 2: Debrief" }));
+    expect(within(timeline).getByRole("button", { name: /^Discovery Call/ }).getAttribute("aria-expanded")).toBe("false");
+    // Opening the Discovery Call shows what the team shared; the Business Check shows the main finding and readiness.
+    fireEvent.click(within(timeline).getByRole("button", { name: /^Discovery Call/ }));
+    const debrief = within(screen.getByRole("region", { name: "Step 2: Discovery Call" }));
     expect(debrief.getByText("Two outlets and a van.")).toBeTruthy();
     expect(debrief.getByText("Cash runs out in week three.")).toBeTruthy();
     fireEvent.click(within(timeline).getByRole("button", { name: /^Business Check/ }));
@@ -163,7 +163,7 @@ describe("the client's room", () => {
     expect(screen.getByRole("link", { name: /Open the Findings/ }).getAttribute("href")).toBe("#step-5");
   });
 
-  it("does not offer a staff member the owner's decisions, or the Debrief", () => {
+  it("does not offer a staff member the owner's decisions, or the Discovery Call", () => {
     render(<EngagementRoom room={room({ viewer: { kind: "member", access: "full" }, tasks: [] })} />);
     expect(screen.queryByRole("button", { name: /Sign off the/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Share with my team" })).toBeNull();

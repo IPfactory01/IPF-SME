@@ -288,8 +288,8 @@ describe("business check page", { timeout: 20_000 }, () => {
   it("without a booking page configured, records the call request and never promises a WhatsApp call-back", async () => {
     resultFor("");
     // With no booking page, the button says what it does: it requests a call, it does not book one.
-    expect(screen.queryByRole("button", { name: /book my free debrief/i })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /request my free debrief/i }));
+    expect(screen.queryByRole("button", { name: /book my free discovery call/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /request my free discovery call/i }));
     expect(api.calls.requestNext).toEqual([{ token: TOKEN, choice: "call" }]);
     expect(await screen.findByText("Thank you. Your request has been sent to the IPF team. We'll email you to agree a time.")).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/WhatsApp/);
@@ -297,8 +297,8 @@ describe("business check page", { timeout: 20_000 }, () => {
 
   it("books the call in an embedded Calendly calendar, and counts it as booked only when Calendly confirms", async () => {
     resultFor("https://calendly.com/ip-factory/discovery-call");
-    fireEvent.click(screen.getByRole("button", { name: /book my free debrief/i }));
-    const calendar = (await screen.findByTitle("Book your free Debrief")) as HTMLIFrameElement;
+    fireEvent.click(screen.getByRole("button", { name: /book my free discovery call/i }));
+    const calendar = (await screen.findByTitle("Book your free Discovery Call")) as HTMLIFrameElement;
     const src = new URL(calendar.src);
     expect(src.origin + src.pathname).toBe("https://calendly.com/ip-factory/discovery-call");
     expect(src.searchParams.get("name")).toBe("Ada Example");
@@ -316,7 +316,7 @@ describe("business check page", { timeout: 20_000 }, () => {
 
   it("offers the same calendar in a new tab when the embedded one is blocked, and records the request without claiming a booking", async () => {
     resultFor("https://calendly.com/ip-factory/discovery-call");
-    fireEvent.click(screen.getByRole("button", { name: /book my free debrief/i }));
+    fireEvent.click(screen.getByRole("button", { name: /book my free discovery call/i }));
     const link = (await screen.findByRole("link", { name: "Calendar not showing? Open it in a new tab" })) as HTMLAnchorElement;
     const href = new URL(link.href);
     expect(href.origin + href.pathname).toBe("https://calendly.com/ip-factory/discovery-call");
@@ -355,7 +355,7 @@ describe("business check page", { timeout: 20_000 }, () => {
       preload({ token: TOKEN, answers, response: responseWith({ emailStatus: "Simulated" }) });
       api.replies.requestNext = () => ({ success: true, choice: "call" });
       render(React.createElement(BusinessCheck));
-      fireEvent.click(screen.getByRole("button", { name: /request my free debrief/i }));
+      fireEvent.click(screen.getByRole("button", { name: /request my free discovery call/i }));
       expect(await screen.findByText("Thank you. Your request has been sent to the IPF team. We'll email you to agree a time.")).toBeTruthy();
       expect(document.body.textContent).not.toMatch(/within one working day|your slot|is booked|has been booked|WhatsApp/i);
     });

@@ -128,7 +128,7 @@ describe("which sections each person sees (decided from what the server resolved
   it("shows the Super Admin every section, in funnel order, opening on Business Checks", () => {
     expect(visibleAdminSections(SUPER).map(section => section.id)).toEqual(["checks", "calls", "onboarding", "engagements", "clients", "team", "jump"]);
     renderConsole();
-    expect(tabs()).toEqual(["Business Checks", "Debriefs", "Client Onboarding", "Engagements", "Clients", "Admin Team", "JUMP Programme (Legacy)"]);
+    expect(tabs()).toEqual(["Business Checks", "Discovery Calls", "Client Onboarding", "Engagements", "Clients", "Admin Team", "JUMP Programme (Legacy)"]);
     expect(screen.getByRole("button", { name: "Business Checks" }).getAttribute("aria-current")).toBe("page");
     expect(screen.getByRole("heading", { name: "Business Checks" })).toBeTruthy();
     expect(screen.queryByText("JUMP REGISTRATION DESK")).toBeNull();
@@ -195,7 +195,7 @@ describe("Business Checks table", () => {
 
   it("does not spread database fields across the table", () => {
     renderConsole();
-    for (const raw of ["Email", "WhatsApp", "Route", "Readiness", "Completed", "Debrief requested", "Debrief requested date", "Stage", "Main area"]) expect(headers()).not.toContain(raw);
+    for (const raw of ["Email", "WhatsApp", "Route", "Readiness", "Completed", "Discovery Call requested", "Discovery Call requested date", "Stage", "Main area"]) expect(headers()).not.toContain(raw);
     const text = rowOf("Ada Okafor").textContent!;
     expect(text).not.toContain("Programme");
     expect(text).not.toContain(READINESS_LABELS.intermediate);
@@ -217,14 +217,14 @@ describe("Business Checks table", () => {
     expect(within(row).getByText("Lead")).toBeTruthy();
   });
 
-  it("shows a call with no time yet as 'Debrief requested', and as 'Debrief booked' only once its time is known", () => {
+  it("shows a call with no time yet as 'Discovery Call requested', and as 'Discovery Call booked' only once its time is known", () => {
     renderConsole();
-    expect(within(rowOf("Ada Okafor")).getByText("Debrief requested")).toBeTruthy();
-    expect(within(rowOf("Ada Okafor")).queryByText("Debrief booked")).toBeNull();
+    expect(within(rowOf("Ada Okafor")).getByText("Discovery Call requested")).toBeTruthy();
+    expect(within(rowOf("Ada Okafor")).queryByText("Discovery Call booked")).toBeNull();
     cleanup();
     api.checks = [check({ callScheduledFor: new Date("2026-10-08T13:00:00Z") })];
     renderConsole();
-    expect(within(rowOf("Ada Okafor")).getByText("Debrief booked")).toBeTruthy();
+    expect(within(rowOf("Ada Okafor")).getByText("Discovery Call booked")).toBeTruthy();
   });
 
   it("labels each stage in plain words", () => {
@@ -246,7 +246,7 @@ describe("Business Checks table", () => {
     api.checks = [check(), check({ id: 2, fullName: "B", callRequestedAt: null, pipelineStage: "qualified_lead", reportRequestedAt: new Date("2026-10-06T10:00:00Z") }), check({ id: 3, fullName: "C", pipelineStage: "opportunity" }), check({ id: 4, fullName: "D", completedAt: null, callRequestedAt: null, pipelineStage: "lead" })];
     renderConsole();
     const counts = Object.fromEntries(Array.from(screen.getByLabelText("Summary").children).map(item => [item.querySelector("dt")!.textContent, item.querySelector("dd")!.textContent]));
-    expect(counts).toEqual({ "Business Checks": "4", Completed: "3", "Debriefs requested": "2", "Ready to onboard": "1", "Full Reports requested": "1" });
+    expect(counts).toEqual({ "Business Checks": "4", Completed: "3", "Discovery Calls requested": "2", "Ready to onboard": "1", "Full Reports requested": "1" });
   });
 
   it("searches and filters, and keeps them when a record is opened and closed", () => {
@@ -255,9 +255,9 @@ describe("Business Checks table", () => {
     expect(screen.queryByText("Ada Okafor")).toBeNull();
     expect(screen.getByText("Bola Quiet")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Search Business Checks"), { target: { value: "" } });
-    // The stage tabs replace the old "Debrief requested only" checkbox.
-    expect(screen.queryByLabelText("Debrief requested only")).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: "Debrief booked 1" }));
+    // The stage tabs replace the old "Discovery Call requested only" checkbox.
+    expect(screen.queryByLabelText("Discovery Call requested only")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "Discovery Call booked 1" }));
     expect(screen.queryByText("Bola Quiet")).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Qualified lead 1" }));
     expect(screen.queryByText("Ada Okafor")).toBeNull();
@@ -333,16 +333,16 @@ describe("Business Check record drawer", () => {
     renderConsole();
     openRow("Ada Okafor");
     const funnel = drawer().getByRole("heading", { name: "Funnel" }).closest("section")!;
-    for (const text of ["Business Check completed", "Debrief requested", "Debrief booked for", "5 Oct 2026", "Current stage", "Debrief booked"]) expect(funnel.textContent).toContain(text);
+    for (const text of ["Business Check completed", "Discovery Call requested", "Discovery Call booked for", "5 Oct 2026", "Current stage", "Discovery Call booked"]) expect(funnel.textContent).toContain(text);
   });
 
-  it("offers only the action that fits: a requested call leads to Debriefs", () => {
+  it("offers only the action that fits: a requested call leads to Discovery Calls", () => {
     renderConsole();
     openRow("Ada Okafor");
     expect(drawer().queryByRole("button", { name: "Continue to Client Onboarding" })).toBeNull();
-    fireEvent.click(drawer().getByRole("button", { name: "Go to the Debrief" }));
+    fireEvent.click(drawer().getByRole("button", { name: "Go to the Discovery Call" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Debriefs" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Discovery Calls" })).toBeTruthy();
   });
 
   it("offers Client Onboarding for a fit, and nothing for a check with no next step", () => {
@@ -379,14 +379,14 @@ describe("Business Check record drawer", () => {
   });
 });
 
-describe("Debriefs table", () => {
-  const open = () => { renderConsole(); openSection("Debriefs"); };
+describe("Discovery Calls table", () => {
+  const open = () => { renderConsole(); openSection("Discovery Calls"); };
 
   it("shows five compact columns and nothing else", () => {
     open();
     expect(headers()).toEqual(["Prospect", "Business", "Requested", "Scheduled For", "Status"]);
     const row = rowOf("Ada Okafor");
-    for (const text of ["ada@example.test", "Ada Foods", "5 Oct 2026", "No time yet", "Debrief requested"]) expect(row.textContent).toContain(text);
+    for (const text of ["ada@example.test", "Ada Foods", "5 Oct 2026", "No time yet", "Discovery Call requested"]) expect(row.textContent).toContain(text);
   });
 
   it("keeps scheduling and outcome controls out of the table", () => {
@@ -404,20 +404,20 @@ describe("Debriefs table", () => {
     const row = rowOf("Ada Okafor");
     expect(row.textContent).toContain("8 Oct 2026");
     expect(row.textContent).toMatch(/\d{1,2}:\d{2} [AP]M/);
-    expect(row.textContent).toContain("Debrief booked");
+    expect(row.textContent).toContain("Discovery Call booked");
   });
 
   it("shows restrained summary counts", () => {
     api.calls = [check(), check({ id: 2, fullName: "Two", callScheduledFor: new Date("2026-10-08T13:00:00Z") }), check({ id: 3, fullName: "Three", pipelineStage: "opportunity" }), check({ id: 4, fullName: "Four", pipelineStage: "lost" })];
     open();
     const counts = Object.fromEntries(Array.from(screen.getByLabelText("Summary").children).map(item => [item.querySelector("dt")!.textContent, item.querySelector("dd")!.textContent]));
-    expect(counts).toEqual({ "Debrief requests": "4", "No time yet": "1", Booked: "1", Opportunity: "1" });
+    expect(counts).toEqual({ "Discovery Call requests": "4", "No time yet": "1", Booked: "1", Opportunity: "1" });
   });
 
   it("searches and filters by status", () => {
     api.calls = [check(), check({ id: 2, fullName: "Bola Quiet", email: "bola@example.test", pipelineStage: "opportunity" }), check({ id: 3, fullName: "Cee Decline", email: "cee@example.test", pipelineStage: "lost" })];
     open();
-    expect(Array.from((screen.getByLabelText("Filter by status") as HTMLSelectElement).options).map(option => option.textContent)).toEqual(["All", "Debrief requested", "Debrief booked", "Opportunity", "Referred", "Lost"]);
+    expect(Array.from((screen.getByLabelText("Filter by status") as HTMLSelectElement).options).map(option => option.textContent)).toEqual(["All", "Discovery Call requested", "Discovery Call booked", "Opportunity", "Referred", "Lost"]);
     fireEvent.change(screen.getByLabelText("Filter by status"), { target: { value: "fit" } });
     expect(screen.queryByText("Ada Okafor")).toBeNull();
     expect(screen.getByText("Bola Quiet")).toBeTruthy();
@@ -425,7 +425,7 @@ describe("Debriefs table", () => {
     expect(screen.getByText("Cee Decline")).toBeTruthy();
     expect(screen.queryByText("Bola Quiet")).toBeNull();
     fireEvent.change(screen.getByLabelText("Filter by status"), { target: { value: "all" } });
-    fireEvent.change(screen.getByLabelText("Search Debriefs"), { target: { value: "cee@" } });
+    fireEvent.change(screen.getByLabelText("Search Discovery Calls"), { target: { value: "cee@" } });
     expect(screen.queryByText("Ada Okafor")).toBeNull();
     expect(screen.getByText("Cee Decline")).toBeTruthy();
   });
@@ -433,28 +433,28 @@ describe("Debriefs table", () => {
   it("says so when no one has asked yet", () => {
     api.calls = [];
     open();
-    expect(screen.getByText("No one has asked for a Debrief yet.")).toBeTruthy();
+    expect(screen.getByText("No one has asked for a Discovery Call yet.")).toBeTruthy();
   });
 });
 
 describe("Discovery Call record drawer", () => {
-  const open = (name = "Ada Okafor") => { renderConsole(); openSection("Debriefs"); openRow(name); };
+  const open = (name = "Ada Okafor") => { renderConsole(); openSection("Discovery Calls"); openRow(name); };
 
   it("opens from the row with the prospect, contact and request details", () => {
     open();
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Ada Okafor")).toBeTruthy();
     expect(within(dialog).getByText("Ada Foods")).toBeTruthy();
-    expect(within(dialog).getAllByText("Debrief requested").length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText("Discovery Call requested").length).toBeGreaterThan(0);
     expect(within(dialog).getByRole("link", { name: "ada@example.test" }).getAttribute("href")).toBe("mailto:ada@example.test");
     expect(within(dialog).getByRole("link", { name: "+234 800 000 0001" }).getAttribute("href")).toBe("https://wa.me/2348000000001");
     const request = within(dialog).getByRole("heading", { name: "Request" }).closest("section")!;
     for (const text of ["5 Oct 2026", "Financials", "Intermediate readiness"]) expect(request.textContent).toContain(text);
   });
 
-  it("saves the Debrief time with the existing action, only once a date and time are chosen", () => {
+  it("saves the Discovery Call time with the existing action, only once a date and time are chosen", () => {
     open();
-    const save = drawer().getByRole("button", { name: "Save the Debrief time" }) as HTMLButtonElement;
+    const save = drawer().getByRole("button", { name: "Save the Discovery Call time" }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     fireEvent.change(drawer().getByLabelText("Date"), { target: { value: "2026-10-12" } });
     expect(save.disabled).toBe(true);
@@ -467,19 +467,19 @@ describe("Discovery Call record drawer", () => {
   it("shows the scheduled time and allows rescheduling", () => {
     api.calls = [check({ callScheduledFor: new Date("2026-10-08T13:00:00Z") })];
     open();
-    const schedule = drawer().getByRole("heading", { name: "Schedule the Debrief" }).closest("section")!;
+    const schedule = drawer().getByRole("heading", { name: "Schedule the Discovery Call" }).closest("section")!;
     expect(schedule.textContent).toContain("Scheduled for");
     expect(schedule.textContent).toContain("8 Oct 2026");
-    expect(drawer().queryByRole("button", { name: "Save the Debrief time" })).toBeNull();
-    fireEvent.click(drawer().getByRole("button", { name: "Reschedule the Debrief" }));
+    expect(drawer().queryByRole("button", { name: "Save the Discovery Call time" })).toBeNull();
+    fireEvent.click(drawer().getByRole("button", { name: "Reschedule the Discovery Call" }));
     expect(api.mutations.schedule).toHaveLength(1);
   });
 
-  it("writes the Debrief up in the guide's five parts, saves it, then shares it with the owner as a separate step", () => {
+  it("writes the Discovery Call up in the guide's five parts, saves it, then shares it with the owner as a separate step", () => {
     api.calls = [check({ callScheduledFor: new Date("2026-10-13T13:00:00Z") })];
     open();
-    const summary = drawer().getByRole("heading", { name: "Debrief summary" }).closest("section")!;
-    const save = within(summary).getByRole("button", { name: "Write up the Debrief" }) as HTMLButtonElement;
+    const summary = drawer().getByRole("heading", { name: "Discovery Call summary" }).closest("section")!;
+    const save = within(summary).getByRole("button", { name: "Write up the Discovery Call" }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     expect(within(summary).queryByRole("button", { name: "Share with the owner" })).toBeNull();
     fireEvent.change(within(summary).getByLabelText("What we heard"), { target: { value: "Two outlets and a van." } });
@@ -490,7 +490,7 @@ describe("Discovery Call record drawer", () => {
     cleanup();
     api.debrief = { setUp: true, debrief: { id: 1, businessCheckId: 1, heldAt: null, heard: "Two outlets and a van.", problemInOwnerWords: null, successLooksLike: null, tried: null, nextSteps: null, sharedAt: null } };
     open();
-    const again = drawer().getByRole("heading", { name: "Debrief summary" }).closest("section")!;
+    const again = drawer().getByRole("heading", { name: "Discovery Call summary" }).closest("section")!;
     expect((within(again).getByLabelText("What we heard") as HTMLTextAreaElement).value).toBe("Two outlets and a van.");
     expect(again.textContent).toContain("Internal: the owner cannot see it yet");
     fireEvent.click(within(again).getByRole("button", { name: "Share with the owner" }));
@@ -498,12 +498,12 @@ describe("Discovery Call record drawer", () => {
     cleanup();
     api.debrief = { setUp: false, debrief: null };
     open();
-    expect(drawer().getByText("The Debrief record is not set up in the database yet (migration 0009).")).toBeTruthy();
+    expect(drawer().getByText("The Discovery Call record is not set up in the database yet (migration 0009).")).toBeTruthy();
   });
 
   it("offers Opportunity, Refer and Lost with different weight, and records them with the existing actions", () => {
     open();
-    expect(drawer().getByRole("heading", { name: "Record the Debrief outcome" })).toBeTruthy();
+    expect(drawer().getByRole("heading", { name: "Record the Discovery Call outcome" })).toBeTruthy();
     const fit = drawer().getByRole("button", { name: "Opportunity" });
     const refer = drawer().getByRole("button", { name: "Refer" });
     const decline = drawer().getByRole("button", { name: "Lost" });
@@ -538,7 +538,7 @@ describe("Discovery Call record drawer", () => {
     cleanup();
     api.calls = [check({ pipelineStage: "opportunity", invitationStatus: "pending" })];
     open();
-    expect(screen.queryByRole("heading", { name: "Record the Debrief outcome" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Record the Discovery Call outcome" })).toBeNull();
     expect(drawer().getByText("An onboarding link has been generated for this prospect.")).toBeTruthy();
   });
 
@@ -546,7 +546,7 @@ describe("Discovery Call record drawer", () => {
     open();
     fireEvent.click(drawer().getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Debriefs" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Discovery Calls" })).toBeTruthy();
     expect(screen.getByText("Ada Okafor")).toBeTruthy();
   });
 });
@@ -598,7 +598,7 @@ describe("Client Onboarding view", () => {
     api.candidates = [check({ invitationStatus: "pending" }), check({ id: 2, fullName: "Bola Quiet", email: "bola@example.test", callRequestedAt: null, pipelineStage: "qualified_lead", invitationStatus: null })];
     open();
     const ada = rowOf("Ada Okafor");
-    for (const text of ["Ada Foods", "ada@example.test", "Requested 5 Oct 2026", "Debrief requested", "Link sent, waiting"]) expect(ada.textContent).toContain(text);
+    for (const text of ["Ada Foods", "ada@example.test", "Requested 5 Oct 2026", "Discovery Call requested", "Link sent, waiting"]) expect(ada.textContent).toContain(text);
     const bola = rowOf("Bola Quiet");
     for (const text of ["Not requested", "Qualified lead", "None"]) expect(bola.textContent).toContain(text);
   });
@@ -660,7 +660,7 @@ describe("the commercial pipeline in Business Checks", () => {
     ];
     renderConsole();
     const names = within(screen.getByRole("tablist", { name: "Pipeline stage" })).getAllByRole("tab").map(tab => tab.textContent);
-    expect(names).toEqual(["All 5", "Lead 1", "Qualified lead 0", "Debrief booked 0", "Opportunity 1", "Won 2", "Lost 0", "Nurture 1", "Referred 0"]);
+    expect(names).toEqual(["All 5", "Lead 1", "Qualified lead 0", "Discovery Call booked 0", "Opportunity 1", "Won 2", "Lost 0", "Nurture 1", "Referred 0"]);
     fireEvent.click(screen.getByRole("tab", { name: "Won 2" }));
     expect(screen.getByText("P Two")).toBeTruthy();
     expect(screen.getByText("P Four")).toBeTruthy();
@@ -669,22 +669,22 @@ describe("the commercial pipeline in Business Checks", () => {
     expect(screen.getByText("P One")).toBeTruthy();
   });
 
-  it("offers to record a Debrief time only for a finished check that never asked for one, and the time counts as the request", () => {
+  it("offers to record a Discovery Call time only for a finished check that never asked for one, and the time counts as the request", () => {
     renderConsole();
     openRow("Ada Okafor");
-    expect(drawer().queryByText("Debrief time")).toBeNull();
+    expect(drawer().queryByText("Discovery Call time")).toBeNull();
     cleanup();
 
     api.details[1] = detailFor({ callRequestedAt: null, pipelineStage: "qualified_lead" });
     renderConsole();
     openRow("Ada Okafor");
-    const section = within(drawer().getByText("Debrief time").closest("section")!);
-    expect(section.getByText(/No Debrief was requested from the result page/).textContent).toContain("It counts as the request.");
-    const save = section.getByRole("button", { name: "Save the Debrief time" }) as HTMLButtonElement;
+    const section = within(drawer().getByText("Discovery Call time").closest("section")!);
+    expect(section.getByText(/No Discovery Call was requested from the result page/).textContent).toContain("It counts as the request.");
+    const save = section.getByRole("button", { name: "Save the Discovery Call time" }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
     fireEvent.change(section.getByLabelText("Date"), { target: { value: "2026-10-16" } });
     fireEvent.change(section.getByLabelText("Time"), { target: { value: "10:00" } });
-    fireEvent.click(section.getByRole("button", { name: "Save the Debrief time" }));
+    fireEvent.click(section.getByRole("button", { name: "Save the Discovery Call time" }));
     expect(api.mutations.schedule).toEqual([{ businessCheckId: 1, scheduledFor: new Date("2026-10-16T10:00") }]);
   });
 
@@ -693,7 +693,7 @@ describe("the commercial pipeline in Business Checks", () => {
     openRow("Ada Okafor");
     const move = within(drawer().getByText("Move to").closest("section")!);
     // The current stage, the starting stage and Won (set only by a confirmed payment) are not offered.
-    expect(move.queryByRole("button", { name: "Debrief requested" })).toBeNull();
+    expect(move.queryByRole("button", { name: "Discovery Call requested" })).toBeNull();
     expect(move.queryByRole("button", { name: "Lead" })).toBeNull();
     expect(move.queryByRole("button", { name: "Won" })).toBeNull();
     expect(move.getByText("Won is set by confirming the Current State Assessment payment.")).toBeTruthy();
@@ -718,8 +718,8 @@ describe("the commercial pipeline in Business Checks", () => {
     const history = drawer().getByRole("list", { name: "Stage history" });
     const items = within(history).getAllByRole("listitem").map(item => item.textContent);
     expect(items[0]).toMatch(/^Won from Opportunity.*Emmanuel Tarfa · 7 Oct 2026.*Paid by transfer$/);
-    expect(items[1]).toMatch(/^Opportunity from Debrief booked/);
-    expect(items[2]).toMatch(/^Debrief time recorded for 6 Oct 2026.*Team ·/);
+    expect(items[1]).toMatch(/^Opportunity from Discovery Call booked/);
+    expect(items[2]).toMatch(/^Discovery Call time recorded for 6 Oct 2026.*Team ·/);
     expect(items[3]).toMatch(/^Booked on Calendly for 6 Oct 2026.*Team ·/);
     expect(drawer().getByText("This business has been won, so its stage is final.")).toBeTruthy();
     expect(drawer().queryByLabelText("Note (optional)")).toBeNull();

@@ -292,7 +292,7 @@ function Tasks({ data, engagementId }: { data: Detail; engagementId: number }) {
   const inWeek = (week: number | null) => data.tasks.filter(task => weekOf(task) === week).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
   return (
     <DetailSection title="Work Plan">
-      <p className="text-xs text-ink-muted">Data Requests from the client and actions on both sides, by week and in order: the plan the Debrief shaped. The client sees their side and ours; contributors see only what is given to them.</p>
+      <p className="text-xs text-ink-muted">Data Requests from the client and actions on both sides, by week and in order: the plan the Discovery Call shaped. The client sees their side and ours; contributors see only what is given to them.</p>
       {weeks.map(week => (
         <div key={week ?? "none"} className="space-y-2">
           <p className={`${LABEL} mt-3`}>{week === null ? "No week" : `Week ${week}`}</p>

@@ -234,6 +234,43 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(await screen.findByText("Which best describes you today?")).toBeTruthy();
   });
 
+  it("steps back through every earlier answer and forward again in order, so no answer becomes unreachable", async () => {
+    render(React.createElement(BusinessCheck));
+    await giveDetails();
+    await pick(/questions/i);
+    await pick(/I have an idea and haven't started/);
+    await type("What will the business be called?", "Zobo Express");
+    await pick(/^Continue/);
+    await pick(/We make things/);
+    await pick("Food and drink");
+    expect(await screen.findByText("In one line, what is the idea?")).toBeTruthy();
+
+    // Back, one question at a time, all the way to the first.
+    await pick(/back/i);
+    expect(await screen.findByText("Which sector is it in?")).toBeTruthy();
+    await pick(/back/i);
+    expect(await screen.findByText("How will the business make money?")).toBeTruthy();
+    await pick(/back/i);
+    expect(await screen.findByText("What will the business be called?")).toBeTruthy();
+    await pick(/back/i);
+    expect(await screen.findByText("Which best describes you today?")).toBeTruthy();
+
+    // Changing nothing and going forward again visits each answered question in turn, with its answer kept.
+    await pick(/I have an idea and haven't started/);
+    expect(await screen.findByText("What will the business be called?")).toBeTruthy();
+    expect((screen.getByRole("textbox", { name: "What will the business be called?" }) as HTMLInputElement).value).toBe("Zobo Express");
+    await pick(/^Continue/);
+    expect(await screen.findByText("How will the business make money?")).toBeTruthy();
+    await pick(/We make things/);
+    expect(await screen.findByText("Which sector is it in?")).toBeTruthy();
+    // And back from here still reaches the earlier ones.
+    await pick(/back/i);
+    expect(await screen.findByText("How will the business make money?")).toBeTruthy();
+    await pick(/We make things/);
+    await pick("Food and drink");
+    expect(await screen.findByText("In one line, what is the idea?")).toBeTruthy();
+  });
+
   it("asks for the details first when resuming a check started before they were given", async () => {
     preload({ answers: { p_stage: "operating" }, history: ["p_stage"], seen: ["profile"] });
     render(React.createElement(BusinessCheck));

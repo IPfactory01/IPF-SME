@@ -171,25 +171,29 @@ export default function BusinessCheck() {
     setState({ ...FRESH, started: true, contact: state.contact });
   };
 
+  // Back and forward follow the order of the questions on the owner's path, so an earlier answer can be changed and
+  // every later one is still there to review: forward from an edited question goes to the next question, answered or not.
   const answer = (question: Question, value: string | string[], advance = true) => {
-    const at = state.history.indexOf(question.id);
-    const history = at >= 0 ? state.history.slice(0, at) : state.history;
-    update({ answers: { ...state.answers, [question.id]: value }, history: advance ? [...history, question.id] : state.history });
-    if (advance) {
-      setDirection(1);
-      setEditing(null);
-    }
+    const nextAnswers = { ...state.answers, [question.id]: value };
+    update({ answers: nextAnswers, history: advance && !state.history.includes(question.id) ? [...state.history, question.id] : state.history });
+    if (!advance) return;
+    setDirection(1);
+    const cleaned = cleanAnswers(nextAnswers);
+    const nextPath = questionPath(cleaned);
+    const following = nextPath[nextPath.findIndex((item) => item.question.id === question.id) + 1];
+    setEditing(following && isAnswered(following.question, cleaned) ? following.question.id : null);
   };
 
   const back = () => {
     setDirection(-1);
-    const previous = state.history[state.history.length - 1];
+    const current = step ? path.findIndex((item) => item.question.id === step.question.id) : path.length;
+    const previous = current > 0 ? path[current - 1] : undefined;
     if (!previous) {
+      setEditing(null);
       update({ started: false });
       return;
     }
-    update({ history: state.history.slice(0, -1) });
-    setEditing(previous);
+    setEditing(previous.question.id);
   };
 
   let screen: React.ReactNode;

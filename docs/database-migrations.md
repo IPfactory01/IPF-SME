@@ -17,6 +17,13 @@ run `pnpm db:verify` (read-only, needs `MIGRATION_DATABASE_URL`). It reports PAS
 | `0006_payment_requests` | 9 October 2026 | `payment_requests` (one row per business check and item: full report or Current State Assessment; amount, transfer reference, status requested / proof received / confirmed, who sent and confirmed it); 3 enum types (53 total); 3 foreign keys (15 total); unique index per check and item. Additive: one new table, nothing existing changes. |
 | `0007_full_reports` | 9 October 2026 | `full_reports` (one per business check: the Report Intake link hash, status awaiting intake / delivered, the intake answers, when it was submitted and sent, the report version); 2 enum types (55 total); 2 foreign keys (17 total). Additive. |
 | `0008_engagement_room` | 10 October 2026 (Supabase SQL Editor, the guarded script `drizzle/supabase/apply-0008-engagement-room.sql`) | The engagement room: `engagements`, `engagement_team`, `engagement_sessions`, `engagement_tasks`, `engagement_deliverables`, `engagement_files`, `engagement_comments`, `engagement_measures`, `engagement_checkins`, `business_member_access`, `account_invitations`; 14 enum types (69 total); 34 foreign keys (51 total). Additive: no existing table changes. |
+| `0009_debrief_work_plan` | before 12 October 2026 (found recorded on 12 October, when its guarded script refused to run a second time) | `debriefs` (one per business check); `weekNumber` and `sortOrder` on `engagement_sessions` and `engagement_tasks`; `factor` on `engagement_tasks`. Additive |
+| `0010_rate_limits_reset_tokens_indexes` | 12 October 2026 (Supabase SQL Editor, the guarded script `drizzle/supabase/apply-0010-rate-limits-reset-tokens-indexes.sql`) | `rate_limit_counters`, `user_password_reset_tokens` and the first index set (business checks, audit log, sessions, engagement comments, files and tasks). Additive |
+
+On 12 October, after `0010`, `pnpm db:verify` found 11 migrations recorded, 52 tables, 71 enums, every declared index
+and all 55 foreign keys. Its two failures that day were in the checker, fixed the same day: it did not read the precision
+of `numeric(p, s)` columns (from `0008`), and on a Windows checkout it hashed the migration files with CRLF line endings
+(it now hashes them as git stores them, with LF; `.gitattributes` keeps `*.sql` as LF on every checkout).
 
 After `0003`, `pnpm db:verify` passed 27/27 (35 tables, 49 enums). After `0004` it expects 36 tables, 50 enums and 12 foreign keys.
 Until `0004` is applied, `db:verify` fails and workspace switching, platform roles and the new account context cannot work against

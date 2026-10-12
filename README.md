@@ -17,7 +17,7 @@ Live at https://ipf-sme.vercel.app (Vercel, deploying `main`).
   on `/dashboard` (where we are, what we need from you, what we have found). Needs migration 0008.
 - **Files:** uploads against data requests and on deliverables, in a private Supabase bucket (needs the storage settings).
 - **The fix:** the one number (baseline, target) and the weekly check-in, recorded in order; the client sees the reading and the next step.
-- **Next:** Paystack once the key is in Vercel; the close and day-30 check (migration 0009) in December.
+- **Next:** Paystack once the key is in Vercel; the close and day-30 check (migration 0011) in December.
 
 **Product documents:** [`docs/product/`](docs/product/README.md) holds the PRD, technical requirements, app flow, design
 brief, backend schema and implementation plan. Start there.

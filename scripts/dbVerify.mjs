@@ -49,8 +49,15 @@ function expectedColumnType(column) {
   if (column.typeSchema) return { dataType: "USER-DEFINED", udt: column.type };
   const varchar = /^varchar\((\d+)\)$/.exec(column.type);
   if (varchar) return { dataType: "character varying", length: Number(varchar[1]) };
+  const numeric = /^numeric\((\d+)(?:,\s*(\d+))?\)$/.exec(column.type);
+  if (numeric) return { dataType: "numeric", precision: Number(numeric[1]), scale: Number(numeric[2] ?? 0) };
   return { dataType: column.type };
 }
+const actualColumnType = row =>
+  row.data_type === "numeric" && row.numeric_precision != null ? `numeric(${row.numeric_precision}, ${row.numeric_scale ?? 0})` : `${row.data_type}${row.udt_name ? `/${row.udt_name}` : ""}`;
+// Git stores the migrations with LF line endings; a Windows checkout may rewrite them as CRLF. drizzle-kit hashed the LF
+// text, so the line endings are normalised before hashing, and any other difference in a file still fails the check.
+const migrationHash = text => createHash("sha256").update(text.replace(/\r\n/g, "\n")).digest("hex");
 const normaliseDefault = value => (value == null ? null : String(value).replace(/::[\w\s."]+(\[\])?/g, "").replace(/^\((.*)\)$/, "$1").trim());
 
 // ---- connection ----
@@ -138,7 +145,8 @@ async function main() {
 
     // ---- columns, nullability, defaults, identity ----
     const columnRows = await query(
-      `select table_name, column_name, data_type, udt_name, is_nullable, column_default, is_identity, character_maximum_length
+      `select table_name, column_name, data_type, udt_name, is_nullable, column_default, is_identity, character_maximum_length,
+              numeric_precision, numeric_scale
          from information_schema.columns where table_schema = $1`, [SCHEMA],
     );
     const actualColumns = new Map(columnRows.map(row => [`${row.table_name}.${row.column_name}`, row]));
@@ -153,8 +161,9 @@ async function main() {
         const actual = actualColumns.get(key);
         if (!actual) { failures.missing.push(key); continue; }
         const type = expectedColumnType(column);
-        const typeOk = actual.data_type === type.dataType && (type.udt ? actual.udt_name === type.udt : true) && (type.length ? actual.character_maximum_length === type.length : true);
-        if (!typeOk) failures.type.push(`${key} (expected ${column.type}, found ${actual.data_type}${actual.udt_name ? `/${actual.udt_name}` : ""})`);
+        const typeOk = actual.data_type === type.dataType && (type.udt ? actual.udt_name === type.udt : true) && (type.length ? actual.character_maximum_length === type.length : true) &&
+          (type.precision ? actual.numeric_precision === type.precision && actual.numeric_scale === type.scale : true);
+        if (!typeOk) failures.type.push(`${key} (expected ${column.type}, found ${actualColumnType(actual)})`);
         if ((actual.is_nullable === "NO") !== Boolean(column.notNull)) failures.nullability.push(`${key} (expected ${column.notNull ? "NOT NULL" : "nullable"})`);
         if (column.identity) {
           if (actual.is_identity !== "YES") failures.identity.push(key);
@@ -240,7 +249,7 @@ async function main() {
       check("applied migration count equals journal entries", applied.length === journal.entries.length, `${applied.length} applied / ${journal.entries.length} expected`);
       const hashMismatches = journal.entries.filter((entry, index) => {
         const file = resolve(MIGRATIONS, `${entry.tag}.sql`);
-        const expectedHash = existsSync(file) ? createHash("sha256").update(readFileSync(file, "utf8")).digest("hex") : null;
+        const expectedHash = existsSync(file) ? migrationHash(readFileSync(file, "utf8")) : null;
         return !applied[index] || applied[index].hash !== expectedHash || Number(applied[index].created_at) !== entry.when;
       }).map(entry => entry.tag);
       check("applied migration hashes and timestamps match the journal", hashMismatches.length === 0, hashMismatches.join(", "));

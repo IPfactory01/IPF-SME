@@ -190,7 +190,7 @@ procedure grants assigned-only access.
    one role; a seat invitation creates the person with a membership and an access level, in the owner's business only,
    within the included seat. Accepting is one transaction; an existing account is never merged.
 
-Still to build: the close and the day-30 check, which need an `engagement_closes` table (migration 0009, December).
+Still to build: the close and the day-30 check, which need an `engagement_closes` table (migration 0011, December).
 
 ## 6. Findings to fix
 
@@ -200,7 +200,7 @@ Found while writing this document.
 |---|---|---|
 | `business_checks.publicToken` is stored in plain text and works as a bearer token for that check | Someone with database read access could resume or submit another person's check | Store a hash, as every other token does; migrate existing rows |
 | Full report links (`full_reports.tokenHash`) never expire and the report procedures have no rate limit | A forwarded link opens the report indefinitely | Add an expiry after delivery (or limit downloads) and a rate limit like onboarding's |
-| ~~The 30 tables from the baseline migration have no foreign keys or indexes beyond primary and unique keys~~ | Migration 0010 (11 October) indexes `business_checks` (created, call requested, stage, `lower(email)`), the audit log (action, created), `user_sessions` (user, expiry), engagement comments, files and tasks. The JUMP-era tables keep no indexes | Done for The Shift's tables (once 0010 is applied) |
+| ~~The 30 tables from the baseline migration have no foreign keys or indexes beyond primary and unique keys~~ | Migration 0010 (11 October) indexes `business_checks` (created, call requested, stage, `lower(email)`), the audit log (action, created), `user_sessions` (user, expiry), engagement comments, files and tasks. The JUMP-era tables keep no indexes | Done for The Shift's tables (0010 applied 12 October) |
 | ~~No engagement assignment table~~ | Fixed by 0008: `engagement_team`; `view_assigned_businesses` now opens the engagements a person is on | Done (once 0008 is applied) |
 | ~~`adminAccess.listTeam` lists only legacy admins~~ | Fixed 9 October: Admin Team now shows a Staff list from `user_platform_roles` above the legacy list | Done |
 | `businessSupport.downloadReport` needs `manage_client_onboarding` while `resendReportLink` needs `manage_payments` | Finance can resend but not download | Decide which permission owns the report |

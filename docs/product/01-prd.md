@@ -36,7 +36,7 @@ One person has one identity; roles and assignments are added to it (see `AGENTS.
 | **Analyst** | Richard Kehinde, Collins Tobenna, Olamide Akin-Alamu, Lovelyn Nzubechukwu | Their assigned clients only: preparation, check-ins, the record |
 | **Partner** | Mr Tarfa (ET), Victor Anagor | Current State Assessment calls and key reviews for clients above ₦10,000,000 a month |
 | **Subject-matter expert** | Group co-founders and partners | Access to one engagement or problem area when invited |
-| **Finance** | To be named | Payment requests, proof, confirmation and reconciliation, without the diagnostic detail |
+| **Finance** | To be named | Payment links, Paystack reconciliation and the confirm-by-hand fallback, without the diagnostic detail |
 | **Admin / Super Admin** | Lewis (Super Admin), Richard (admin) per D5 | Staff, roles, permissions and platform settings |
 | **System actors** | The AI summary, the report builder, scheduled reminders, Paystack (confirming online payments) | Server-controlled and audited; never an interactive account |
 
@@ -49,7 +49,7 @@ The whole journey is shown up front with prices (concept note D1). Prices live i
 | 1 | Free business check | Free | Ten minutes on a phone; a colour-coded outline of the ten problem areas; one of four gaps; a summary | **Built** |
 | 1a | Full report (optional) | ₦100,000 | A business-plan-depth report, built from the check and a 17-question form, emailed as a PDF the moment the form is finished | **Built** |
 | 2 | Discovery call | Free, 20 minutes at most | An honest answer: can we help, and with what | **Built** (booking and outcome) |
-| 3 | Payment for Current State Assessment | ₦500,000 (fixed) | Paid after the call, within 48 hours: online with Paystack, which confirms itself, or by bank transfer with manual confirmation | **Built** (Paystack live once its keys are in Vercel) |
+| 3 | Payment for Current State Assessment | ₦500,000 (fixed) | Paid after the call, within 48 hours: on Paystack, which confirms itself | **Built** (Paystack live once its keys are in Vercel) |
 | 4 | Getting set up (onboarding) | Included | Three working days: client account, welcome note, data request, analyst assigned, both Current State Assessment calls booked | **Partly built** (account only) |
 | 5 | Current State Assessment | Included in step 3 | Two weeks, one 90-minute call a week; ends with proceed, fix the basics first, or refer to Advisory | **Not built** in the platform |
 | 6 | The six-week fix | ₦1,200,000 | One problem; what to do and the tools; a weekly 45-minute check-in; one measure tracked | **Not built** |
@@ -104,8 +104,9 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
 ### F3. Full report (₦100,000)
 
 - Independent of Current State Assessment: it is simply the report, and it is never credited against later fees.
-- Request from the result page → payment details emailed (with a reference such as `TS-R-000123`) → owner sends proof
-  → the team marks proof received and confirms payment → the owner is emailed a private link to a 17-question form.
+- "Get my Full Report" on the result page, or "Pay for your Full Report" in the summary email → Paystack's checkout (card,
+  bank transfer or USSD), with a reference such as `TS-R-000123` → the payment confirms itself → the owner is emailed a
+  private link to a 17-question form.
 - The form is about 12 minutes. Question 3 asks how each product is charged: a set price, a percentage of the deal
   (commission or success fee, with an optional typical deal size), or a price that varies. When any line is a percentage,
   the money questions ask about fees, not deal money passed on. The owner can type a margin instead of choosing a band
@@ -127,30 +128,30 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
   Won is set only by confirming the Current State Assessment payment.
 - **Status: Built.**
 
-### F5. Payments (online with Paystack, or bank transfer)
+### F5. Payments (Paystack only)
 
 - Items: full report (₦100,000) and Current State Assessment (₦500,000). References `TS-R-` and `TS-CS-` with a six-digit number.
-- Statuses: awaiting payment → proof received → paid. Only `manage_payments` (finance, Super Admin) can send details, mark
-  proof or confirm.
-- Bank details come from the hosting settings. Until all three are set, emails show a test account marked
-  "TEST DETAILS - DO NOT PAY".
-- **The 48-hour window** (concept note §7): payment details hold for 48 hours, and the email says when to pay by, in
-  Lagos time. After that the team sees "48 hours passed" and either sends the details again (a new 48 hours) or moves
-  the business to Lost. The stage never moves on its own, and money that still arrives can always be confirmed.
+- **Paystack is the only way to pay** (ET, 12 October 2026). Its hosted checkout takes card, bank transfer or USSD, so
+  there are no bank details to send, no proof of payment and nothing for the team to check: the payment confirms itself.
+- The Full Report is paid straight from the result page or the summary email. The Current State Assessment link is sent
+  by the team after the Discovery Call ("Send the payment link"); only `manage_payments` (finance, Super Admin) can send it.
+- **The 48-hour window** (concept note §7): the Current State Assessment link holds for 48 hours, and the email says when
+  to pay by, in Lagos time. After that the team sees "48 hours passed" and either sends the link again (a new 48 hours)
+  or moves the business to Lost. The stage never moves on its own. The owner's own Full Report link opens again by itself.
 - Confirming Current State Assessment moves the business to Won and sends the client account invitation.
-- **Paying online with Paystack** (concept note §11): the payment details email leads with a "Pay online" button to the
-  pay page (`/pay/:token/:item`), and keeps the bank details below as the alternative. The owner pays on Paystack's
-  hosted checkout (card or bank) and the payment confirms itself, through the same confirmation as "Confirm payment":
-  the same emails, the Report Intake link, Won and the client account invitation. The owner is charged exactly the
-  price (₦100,000 or ₦500,000, read from the payment request, never from the browser); IP Factory absorbs Paystack's
-  fee. Paystack is a system actor: recorded with no person as the actor, the note "Paid online with Paystack, reference
-  …" and how the money arrived in the audit. The office is emailed when a payment confirms itself, and when money moved
-  but could not be confirmed (a wrong amount, or an item already paid).
-- **Off, test, live.** No `PAYSTACK_SECRET_KEY`: no online payment is offered anywhere, bank transfer only. A test key:
-  every pay page and payment email says "TEST MODE: NO REAL MONEY MOVES", and the payment's note starts "TEST: ". A live
-  key: real payments. The pay link holds for the same 48 hours as the bank details.
-- **Status: Built** (manual confirmation and Paystack). Paystack takes payments once its keys are in Vercel and the
-  webhook is set in Paystack ([implementation plan §4](06-implementation-plan.md)).
+- **How a payment confirms** (concept note §11): Paystack's signed webhook, or the owner's return page, asks Paystack
+  about the transaction again and, if the reference, status, currency and amount all match, confirms it: the same
+  emails, the Report Intake link, Won and the client account invitation. The owner is charged exactly the price
+  (₦100,000 or ₦500,000, read from the payment request, never from the browser); IP Factory absorbs Paystack's fee.
+  Paystack is a system actor: recorded with no person as the actor, the note "Paid online with Paystack, reference …"
+  and how the money arrived in the audit. The office is emailed when a payment confirms itself, and when money moved but
+  could not be confirmed (a wrong amount, or an item already paid).
+- **Confirm by hand** is a fallback only, for a payment Paystack shows as paid that has not confirmed itself here.
+- **Off, test, live.** `PAYSTACK_SECRET_KEY` is required in production (`/api/health` answers 503 without it); with
+  none, nothing can be paid and the emails say a link is coming. A test key: every pay page and payment email says
+  "TEST MODE: NO REAL MONEY MOVES", and the payment's note starts "TEST: ". A live key: real payments.
+- **Status: Built.** Live once the live keys are in Vercel and the live webhook is set in Paystack
+  ([implementation plan §4](06-implementation-plan.md)).
 
 ### F6. Client account and onboarding
 
@@ -291,7 +292,8 @@ From concept note §13. The platform must make these countable without a spreads
 | The report form (intake) comes after payment; no five-day turnaround | ET |
 | The full report is independent of the Current State Assessment and is not credited against it | ET |
 | Manual payment confirmation (details by email, proof, the team confirms) was the interim method until Paystack; placeholder details until real ones are set | ET |
-| Both items can be paid online with Paystack; bank transfer with manual confirmation stays as the alternative | ET |
+| Both items can be paid online with Paystack; bank transfer with manual confirmation stays as the alternative (superseded 12 October: Paystack only) | ET |
+| Paystack is the only way to pay: no bank details, no proof of payment; Paystack's checkout covers card, bank transfer and USSD; "Get my Full Report" opens Paystack directly | ET, 12 October 2026 |
 | The owner pays exactly the price; IP Factory absorbs Paystack's fee | ET |
 | Paystack's hosted checkout, reached by redirect (no Paystack script on the site, so the security policy does not change) | ET |
 | Online payment is off, test or live by the Paystack secret key; test mode says "TEST MODE: NO REAL MONEY MOVES" on every pay page and payment email | ET |
@@ -339,7 +341,7 @@ decided. "Confirmed" means a change made while building and confirmed by ET on 9
 | Built on IP Factory's copy of Jump, on Manus (D5, D7, D8) | Vercel, Supabase and GitHub; Manus remains only for the AI summary and old file storage | Decided |
 | Product name "Operating Partner [working name]" | "The Shift, by IP Factory" | Decided (Lewis, 7 October) |
 | Hero: "You know what your business needs…" | Headline "Find it. Fix it. See the results." | Decided |
-| A Paystack link after the call | A "Pay online" button in the payment details email opens Paystack; bank transfer with manual confirmation stays as the alternative | Built (12 October) |
+| A Paystack link after the call | A "Pay online" button in the payment details email opens Paystack; Paystack is the only way to pay (12 October) | Built (12 October) |
 | Full report "by email", from the check | Paid, then a 17-question form; a deterministic PDF sent the moment it is finished | Decided (ET, 8 October) |
 | Discovery calls booked in two blocks a week on the platform | Calendly, embedded on the result | Decided |
 | Client area = the Jump portal (uploads, feedback, files) | Invitation-only client accounts; the engagement room is next. The Jump portal is legacy, so uploads wait for phase 3 | Decided |

@@ -14,7 +14,7 @@ const PAY_LINK_NOTE = "Started paying online from the link in their Business Che
 
 /**
  * The owner asks for the Full Report of a finished Business Check. The first time, it records when they asked, emails
- * them the payment details (the reference, the pay link and the bank transfer alternative) and tells Business Support
+ * them the payment link (the amount, the reference and the "Pay online" button) and tells Business Support
  * once. From the pay link it also files the payment request when an earlier attempt to send the details failed, so the
  * owner can always pay. Asking again from the result page does nothing.
  */

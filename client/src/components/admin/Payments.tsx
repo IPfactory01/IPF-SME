@@ -10,10 +10,11 @@ import { toast } from "sonner";
 import { formatDate, formatDateTime } from "./format";
 
 /**
- * Payment by bank transfer until online payment is ready: send the details (the owner is emailed the amount, account
- * and reference), note when proof arrives, and confirm when the money is in the account. The server checks the
- * permission (manage_payments) and records every step; confirming the Current State Assessment wins the business and sends the client
- * account invitation.
+ * Payment is online with Paystack only: send the payment link (the owner is emailed the amount, the reference and a
+ * "Pay online" button) and the payment confirms itself when Paystack confirms it. "Confirm by hand" is a fallback for a
+ * payment Paystack shows as paid that has not confirmed itself here. The server checks the permission (manage_payments)
+ * and records every step; confirming the Current State Assessment wins the business and sends the client account
+ * invitation.
  */
 
 type Payment = {
@@ -106,14 +107,7 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
   const send = trpc.businessSupport.requestPayment.useMutation({
     onSuccess: result => {
       if (result.deliveryStatus === "Failed") toast.error(`Saved as ${result.reference}, but the email failed. Try sending it again.`);
-      else toast.success(`Payment details sent. Reference ${result.reference}.`);
-      refresh();
-    },
-    onError: error => toast.error(error.message),
-  });
-  const proof = trpc.businessSupport.markProofReceived.useMutation({
-    onSuccess: () => {
-      toast.success("Proof of payment noted. Confirm once the money is in the account.");
+      else toast.success(`Payment link sent. Reference ${result.reference}.`);
       refresh();
     },
     onError: error => toast.error(error.message),
@@ -136,7 +130,7 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
     },
     onError: error => toast.error(error.message),
   });
-  const busy = send.isPending || proof.isPending || confirm.isPending || resendConfirmation.isPending;
+  const busy = send.isPending || confirm.isPending || resendConfirmation.isPending;
   const { name, amount } = PAYMENT_ITEM_DETAILS[item];
   const open = payment && payment.status !== "confirmed";
 
@@ -149,15 +143,15 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
       {payment ? (
         <div className="mt-1.5 space-y-0.5 text-[13px]">
           <p><span className={`inline-block border px-1.5 py-0.5 text-[11px] font-medium ${CHIP[payment.displayStatus]}`}>{PAYMENT_DISPLAY_LABELS[payment.displayStatus]}</span> <span className="ml-1 text-ink-muted">Reference</span> <span className="font-medium tabular-nums text-ink">{payment.reference}</span></p>
-          <p className="text-ink-muted">Details sent {formatDate(payment.requestedAt)}{payment.deliveryStatus === "Failed" ? " · the email failed" : ""}{payment.status === "requested" ? ` · pay by ${formatDateTime(payment.payBy)}` : ""}</p>
+          <p className="text-ink-muted">Link sent {formatDate(payment.requestedAt)}{payment.deliveryStatus === "Failed" ? " · the email failed" : ""}{payment.status === "requested" ? ` · pay by ${formatDateTime(payment.payBy)}` : ""}</p>
           {payment.displayStatus === "expired" && (
-            <p className="text-danger">The {PAYMENT_WINDOW_HOURS} hours have passed with no payment. Send the details again for a new window, or move the business to Lost. Money that still arrives can be confirmed.</p>
+            <p className="text-danger">The {PAYMENT_WINDOW_HOURS} hours have passed with no payment. Send the link again for a new window, or move the business to Lost.</p>
           )}
           {payment.proofReceivedAt && <p className="text-ink-muted">Proof received {formatDate(payment.proofReceivedAt)}</p>}
           {payment.confirmedAt && <p className="text-ink-muted">Paid, confirmed {formatDate(payment.confirmedAt)}</p>}
           {payment.note && <p className="text-ink">{payment.note}</p>}
         </div>
-      ) : <p className="mt-1.5 text-[13px] text-ink-muted">Payment details not sent.</p>}
+      ) : <p className="mt-1.5 text-[13px] text-ink-muted">Payment link not sent.</p>}
 
       {item === "full_report" && payment?.status === "confirmed" && <ReportLine businessCheckId={businessCheckId} report={report} />}
       {item === "current_state" && payment?.status === "confirmed" && (
@@ -169,13 +163,10 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
       {payment?.status !== "confirmed" && !confirming && (
         <div className="mt-3 flex flex-wrap gap-2">
           <Button type="button" variant="outline" size="sm" className="rounded-none text-xs" disabled={busy} onClick={() => send.mutate({ businessCheckId, item })}>
-            {payment ? "Send the details again" : "Send payment details"}
+            {payment ? "Send the link again" : "Send the payment link"}
           </Button>
-          {payment?.status === "requested" && (
-            <Button type="button" variant="outline" size="sm" className="rounded-none text-xs" disabled={busy} onClick={() => proof.mutate({ paymentRequestId: payment.id })}>Proof received</Button>
-          )}
           {open && (
-            <Button type="button" size="sm" className="rounded-none bg-ink text-xs text-paper hover:bg-charcoal" disabled={busy} onClick={() => setConfirming(true)}>Confirm payment</Button>
+            <Button type="button" size="sm" className="rounded-none bg-ink text-xs text-paper hover:bg-charcoal" disabled={busy} onClick={() => setConfirming(true)}>Confirm by hand</Button>
           )}
         </div>
       )}
@@ -183,15 +174,15 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
       {confirming && payment && (
         <div className="mt-3 space-y-2 border-t border-line-soft pt-3">
           <p className="text-[13px] text-ink">
-            Only confirm once you have seen {formatNaira(payment.amountNaira)} with reference {payment.reference} in the account. The owner is emailed
+            Payments confirm themselves when Paystack confirms them. Only confirm by hand if Paystack shows {formatNaira(payment.amountNaira)} paid with a reference starting {payment.reference} and it has not confirmed itself here. The owner is emailed
             {item === "current_state" ? ", the business moves to Won and they get a link to set up their client account, where the Current State Assessment starts." : " with the Report Intake link; their Full Report is emailed the moment they finish it."}
           </p>
           <div className="space-y-1">
             <Label htmlFor={`payment-note-${payment.id}`} className="text-xs text-ink-muted">Note (optional)</Label>
-            <Textarea id={`payment-note-${payment.id}`} value={note} onChange={event => setNote(event.target.value)} maxLength={500} rows={2} placeholder="For example, the bank's transaction reference" className="rounded-none text-sm" />
+            <Textarea id={`payment-note-${payment.id}`} value={note} onChange={event => setNote(event.target.value)} maxLength={500} rows={2} placeholder="The Paystack reference, for example TS-R-000123-1a2b3c4d" className="rounded-none text-sm" />
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" className="rounded-none bg-ink text-xs text-paper hover:bg-charcoal" disabled={busy} onClick={() => confirm.mutate({ paymentRequestId: payment.id, note: note.trim() || undefined })}>Yes, the money is in</Button>
+            <Button type="button" size="sm" className="rounded-none bg-ink text-xs text-paper hover:bg-charcoal" disabled={busy} onClick={() => confirm.mutate({ paymentRequestId: payment.id, note: note.trim() || undefined })}>Yes, Paystack shows it paid</Button>
             <Button type="button" variant="outline" size="sm" className="rounded-none text-xs" disabled={busy} onClick={() => setConfirming(false)}>Cancel</Button>
           </div>
         </div>

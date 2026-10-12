@@ -186,6 +186,6 @@ The room follows document 07, in the site's dress (`client/src/components/Accoun
 | `test/server/emailTemplates.test.ts` | Business email uses only palette colours; logo beside "The Shift"; crimson headings; cyan button with navy text; the three-colour rule; no JUMP wording |
 | `test/server/emailLogo.test.ts` | The embedded logo is the brand file at twice its display size |
 | `test/server/fullReport/pdf.test.ts` | A4; the brand fonts are embedded and cover ₦; the logo is the print file |
-| `test/server/payments.test.ts` | The "TEST DETAILS - DO NOT PAY" and "TEST MODE - NO REAL MONEY MOVES" labels use the crimson token; "Pay online" is the email's button |
+| `test/server/payments.test.ts` | The "TEST MODE - NO REAL MONEY MOVES" label uses the crimson token; "Pay online" is the email's button |
 | `test/client/pages/payPage.ui.test.tsx` | The pay page names the amount in full ("Pay ₦100,000 securely with Paystack") and shows "TEST MODE: NO REAL MONEY MOVES" in test mode |
 | `test/server/interactiveAffordances.test.ts` | Pointer and not-allowed cursor rules are present |

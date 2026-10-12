@@ -12,7 +12,7 @@ import {
   setPipelineStage,
   type SettableStage,
 } from "../businessSupportAdmin";
-import { confirmPayment, markProofReceived, requestPayment, resendPaymentConfirmation } from "../payments";
+import { confirmPayment, requestPayment, resendPaymentConfirmation } from "../payments";
 import { getDebrief, isMissingDebriefTable, saveDebrief, shareDebrief } from "../debriefs";
 import { adminDownloadReport, resendReportLink } from "../fullReport/service";
 import { PAYMENT_ITEMS } from "../../shared/payments";
@@ -71,14 +71,10 @@ export const businessSupportRouter = router({
     .input(z.object({ businessCheckId: z.number().int().positive(), stage: z.enum(SETTABLE_STAGES as [SettableStage, ...SettableStage[]]), note: z.string().trim().max(500).optional() }))
     .mutation(async ({ ctx, input }) => setPipelineStage(await businessSupportDb(), { ...input, note: input.note || undefined, actorUserId: ctx.user.id })),
   clients: clients.query(async () => listClients(await businessSupportDb())),
-  /** Emails the owner the payment details for the full report or the Current State Assessment (again, if already sent). */
+  /** Emails the owner the Paystack payment link for the Full Report or the Current State Assessment (again, if already sent). */
   requestPayment: payments
     .input(z.object({ businessCheckId: z.number().int().positive(), item: z.enum(PAYMENT_ITEMS) }))
     .mutation(async ({ ctx, input }) => requestPayment(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
-  /** The owner sent proof of payment; the money is not confirmed yet. */
-  markProofReceived: payments
-    .input(z.object({ paymentRequestId: z.number().int().positive() }))
-    .mutation(async ({ ctx, input }) => markProofReceived(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
   /** The sent full report, rebuilt from the owner's stored answers, as a PDF. */
   downloadReport: prospects
     .input(z.object({ businessCheckId: z.number().int().positive() }))
@@ -91,7 +87,10 @@ export const businessSupportRouter = router({
   resendPaymentConfirmation: payments
     .input(z.object({ paymentRequestId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => resendPaymentConfirmation(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
-  /** The money is in the account. For the Current State Assessment this wins the business and sends the client account invitation. */
+  /**
+   * A fallback only: payments confirm themselves when Paystack confirms them. For a payment Paystack shows as paid that
+   * has not confirmed itself here. For the Current State Assessment this wins the business and sends the invitation.
+   */
   confirmPayment: payments
     .input(z.object({ paymentRequestId: z.number().int().positive(), note: z.string().trim().max(500).optional() }))
     .mutation(async ({ ctx, input }) => confirmPayment(await businessSupportDb(), { ...input, note: input.note || undefined, actorUserId: ctx.user.id })),

@@ -215,14 +215,16 @@ for (const target of targets) {
         const details = emails().find(sent => sent.to === email && sent.subject === "Payment details for your Full Report")!;
         expect(details.body).toContain(`Pay online: http://localhost:3000/pay/${encodeURIComponent(token)}/full_report`);
         expect(details.body).toContain(EMAIL_TEST_NOTICE);
-        expect(details.body).toContain("OR PAY BY BANK TRANSFER");
+        // Paystack is the only way to pay: no bank details, nothing to send back.
+        expect(details.body).not.toMatch(/BANK TRANSFER|Bank:|Account number|proof of payment/);
       });
 
       it("shows the item, the amount on the payment request, the mode and where it stands, and nothing else", async () => {
         const { token, id } = await reportAskedFor("page");
         expect(await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).toEqual({ item: "full_report", name: "Full Report", amountNaira: 100_000, mode: "test", state: "open" });
         await db.update(schema.paymentRequests).set({ status: "proof_received" }).where(eq(schema.paymentRequests.id, (await paymentOf(id, "full_report")).id));
-        expect((await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).state).toBe("proof_received");
+        // An old record that noted proof of a bank transfer can still be paid online.
+        expect((await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).state).toBe("open");
         ENV.paystackSecretKey = "";
         expect((await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).mode).toBe("off");
       });
@@ -247,12 +249,13 @@ for (const target of targets) {
         expect(body).toContain("Online payment is in Paystack's test mode while we test it, so paying online moves no real money.");
       });
 
-      it("keeps asking for a reply while Paystack is off", async () => {
+      it("promises a link, and offers no bank details, while Paystack is off", async () => {
         ENV.paystackSecretKey = "";
         const { email } = await finishedCheck("summary-off");
         const body = summaryOf(email).body;
-        expect(body).toContain('Reply "report" and we will email you the payment details.');
+        expect(body).toContain('Online payment opens soon: reply "report" and we will email you a link to pay when it does.');
         expect(body).not.toContain("/pay/");
+        expect(body).not.toMatch(/bank/i);
       });
 
       it("works before the owner has asked: the page offers ₦100,000, and paying files the request as the result page does, once", async () => {
@@ -321,7 +324,7 @@ for (const target of targets) {
       it("refuses while online payment is off, without calling Paystack", async () => {
         const { token } = await reportAskedFor("off");
         ENV.paystackSecretKey = "";
-        await expect((await browser().call()).onlinePayment.start({ token, item: "full_report" })).rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: expect.stringContaining("Please pay by bank transfer") });
+        await expect((await browser().call()).onlinePayment.start({ token, item: "full_report" })).rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: expect.stringContaining("Online payment is not open yet") });
         expect(paystack.initialized).toHaveLength(0);
       });
 

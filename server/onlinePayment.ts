@@ -23,12 +23,12 @@ import { getTrustedApplicationOrigin } from "./security";
  * their Business Check's unguessable token), the server opens a Paystack transaction for the amount on the payment
  * request, and Paystack sends them back to /pay/return. The payment is confirmed by whichever arrives first, Paystack's
  * signed webhook or the return page, and only after Paystack itself confirms the transaction to the server. Both go
- * through `confirmPayment`, the path the team uses for bank transfers, with Paystack recorded as a system actor.
+ * through `confirmPayment` (the team's "Confirm by hand" fallback uses it too), with Paystack recorded as a system actor.
  */
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND", message: "We could not find this payment. Use the link in your payment email." });
 
-export const ONLINE_PAYMENT_OFF_MESSAGE = "Online payment is not available yet. Please pay by bank transfer, using the details in your payment email.";
+export const ONLINE_PAYMENT_OFF_MESSAGE = "Online payment is not open yet. Please try again later, or reply to your payment email and we will send you a link when it is.";
 
 /** Refuses when Paystack is off (no secret key): nothing online is offered then. Returns the mode otherwise. */
 export function requireOnlinePayment(): Exclude<OnlinePaymentMode, "off"> {
@@ -56,7 +56,8 @@ const ownerMayStart = (check: Pick<BusinessCheck, "completedAt">, item: PaymentI
 const requestByReference = async (db: Pick<Database, "select">, reference: string) =>
   (await db.select().from(paymentRequests).where(eq(paymentRequests.reference, reference)).limit(1))[0];
 
-const PAGE_STATE = { requested: "open", expired: "expired", proof_received: "proof_received", confirmed: "paid" } as const satisfies Record<PaymentDisplayStatus, PayPageState>;
+// An old record with proof of a bank transfer (from before Paystack only) can still be paid online.
+const PAGE_STATE = { requested: "open", expired: "expired", proof_received: "open", confirmed: "paid" } as const satisfies Record<PaymentDisplayStatus, PayPageState>;
 
 /** What the pay page needs, and nothing else: the item, its amount, whether online payment is on, and where it stands. */
 export async function onlinePaymentPage(db: Pick<Database, "select">, input: { token: string; item: PaymentItem }) {
@@ -95,10 +96,10 @@ export async function startOnlinePayment(db: Database, input: { token: string; i
     if (!request) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute, or reply to your summary email." });
   }
   if (request.status === "confirmed") return { alreadyPaid: true };
-  // The link holds for the same 48 hours as the bank details; sending the details again opens a new window.
+  // The link holds for 48 hours; sending it again opens a new window.
   if (effectivePaymentStatus(request) === "expired") {
     if (!ownerMayStart(check, request.item)) {
-      throw new TRPCError({ code: "PRECONDITION_FAILED", message: "These payment details have passed their 48 hours. Reply to your payment email and we will send fresh ones." });
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: "This payment link has passed its 48 hours. Reply to your payment email and we will send you a new one." });
     }
     // The owner chose the report themselves: a new 48 hours, with fresh details by email, as if they had asked again.
     await requestPayment(db, { businessCheckId: check.id, item: request.item, actorUserId: null });
@@ -117,7 +118,7 @@ export async function startOnlinePayment(db: Database, input: { token: string; i
     return { alreadyPaid: false, url: authorizationUrl };
   } catch (error) {
     console.error(`[Paystack] Could not open a payment for ${request.reference}:`, error instanceof Error ? error.message : "unknown error");
-    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute, or pay by bank transfer." });
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute." });
   }
 }
 

@@ -20,7 +20,7 @@ const TOKEN = "t".repeat(32);
 
 /** Each mutation records its inputs; start answers with a token, like the server. */
 const api = vi.hoisted(() => {
-  const calls: Record<string, unknown[]> = { start: [], saveProgress: [], submit: [], requestNext: [] };
+  const calls: Record<string, unknown[]> = { start: [], saveProgress: [], submit: [], requestNext: [], payStart: [] };
   const replies: Record<string, ((input: unknown) => unknown) | undefined> = {};
   const mutation = (name: string) => (options?: { onSuccess?: (data: unknown) => void }) => ({
     isPending: false,
@@ -44,8 +44,14 @@ vi.mock("@/lib/trpc", () => ({
       submit: { useMutation: api.mutation("submit") },
       requestNext: { useMutation: api.mutation("requestNext") },
     },
+    onlinePayment: {
+      start: { useMutation: api.mutation("payStart") },
+    },
   },
 }));
+/** Leaving for Paystack is a full-page navigation, which jsdom cannot do: the page's call is recorded instead. */
+const payOnline = vi.hoisted(() => ({ openCheckout: vi.fn(), rememberPayPage: vi.fn() }));
+vi.mock("@/lib/payOnline", () => payOnline);
 
 import BusinessCheck from "@/pages/BusinessCheck";
 
@@ -78,6 +84,9 @@ describe("business check page", { timeout: 20_000 }, () => {
     api.replies.start = () => ({ token: TOKEN });
     api.replies.submit = undefined;
     api.replies.requestNext = (input) => ({ success: true, choice: (input as { choice: string }).choice });
+    api.replies.payStart = () => ({ alreadyPaid: false, url: "https://checkout.paystack.com/TS-R-000001-1a2b3c4d" });
+    payOnline.openCheckout.mockClear();
+    payOnline.rememberPayPage.mockClear();
   });
   afterEach(cleanup);
 
@@ -274,15 +283,29 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(rows.map((text) => Number(text.split(".")[0]))).toEqual([...rows.map((text) => Number(text.split(".")[0]))].sort((a, b) => a - b));
   });
 
-  it("gives the ₦100,000 full report its own offer, with what is inside, and records the request", async () => {
+  it("gives the ₦100,000 full report its own offer, with what is inside, and opens Paystack straight away", async () => {
     resultFor();
     expect(screen.getByText("The Business Check summary tells you where you stand. The Full Report tells you what to do about it.")).toBeTruthy();
     expect(screen.getByText("Your Full Report")).toBeTruthy();
     expect(screen.getByText("₦100,000", { selector: "p" })).toBeTruthy();
     expect(screen.getByText(/The root cause behind each red and amber/)).toBeTruthy();
+    expect(screen.getByText("You pay securely on Paystack, by card, bank transfer or USSD, and come straight back.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /get my full report/i }));
-    expect(api.calls.requestNext).toEqual([{ token: TOKEN, choice: "report" }]);
-    expect(await screen.findByText(/The payment details are on their way to ada@example.com. Once your payment is confirmed, you complete the Report Intake and your Full Report arrives straight away/)).toBeTruthy();
+    // Paystack is the only way to pay: no payment details email to wait for, no bank details, no proof to send.
+    expect(api.calls.payStart).toEqual([{ token: TOKEN, item: "full_report" }]);
+    expect(api.calls.requestNext).toEqual([]);
+    expect(payOnline.rememberPayPage).toHaveBeenCalledWith(`/pay/${TOKEN}/full_report`);
+    expect(payOnline.openCheckout).toHaveBeenCalledWith("https://checkout.paystack.com/TS-R-000001-1a2b3c4d");
+    expect(await screen.findByRole("button", { name: /opening paystack/i })).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/bank details|proof of payment|payment details are on their way/i);
+  });
+
+  it("says the Full Report is already paid instead of opening Paystack again", async () => {
+    api.replies.payStart = () => ({ alreadyPaid: true });
+    resultFor();
+    fireEvent.click(screen.getByRole("button", { name: /get my full report/i }));
+    expect(await screen.findByText("Your Full Report is already paid. The link to your Report Intake is in your email at ada@example.com.")).toBeTruthy();
+    expect(payOnline.openCheckout).not.toHaveBeenCalled();
   });
 
   it("without a booking page configured, records the call request and never promises a WhatsApp call-back", async () => {

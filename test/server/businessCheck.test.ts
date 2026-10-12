@@ -108,11 +108,13 @@ describe("business check summary", () => {
     expect(email.body).toContain("Book it from your result page");
   });
 
-  it("links the Full Report straight to paying online when Paystack is on, and asks for a reply when it is off", () => {
+  it("links the Full Report straight to paying online when Paystack is on, and promises a link when it is off", () => {
     const result = evaluate(answers);
     const summary = { ...result.summary, offerings: [] };
     const off = ownerEmail({ contact, result, summary, fullReportPay: null }).body;
-    expect(off).toContain('Reply "report" and we will email you the payment details.');
+    // Paystack is the only way to pay, so with it off there are no bank details to offer: only a link to come.
+    expect(off).toContain('Online payment opens soon: reply "report" and we will email you a link to pay when it does.');
+    expect(off).not.toMatch(/payment details|bank/i);
     expect(off).not.toContain("Pay for your Full Report");
 
     const live = ownerEmail({ contact, result, summary, fullReportPay: { url: "https://ipf.example.com/pay/TOKEN123/full_report", mode: "live" } }).body;

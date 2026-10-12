@@ -69,8 +69,10 @@ describe("the pay page", () => {
     const banner = screen.getByRole("note", { name: "Test mode" });
     expect(banner.textContent).toContain("TEST MODE: NO REAL MONEY MOVES");
     expect(payButton()!.textContent).toBe("Pay ₦100,000 securely with Paystack");
-    // Bank transfer stays the alternative.
-    expect(screen.getByRole("region", { name: "Pay by bank transfer" }).textContent).toContain("reply to that email with your proof of payment");
+    // Paystack is the only way to pay: its checkout takes card, bank transfer or USSD; there are no bank details here.
+    expect(screen.getByText(/pay by card, bank transfer or USSD/)).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Pay by bank transfer" })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/proof of payment|bank details/i);
   });
 
   it("asks the server to open Paystack, then sends the owner there and remembers the page for the return", () => {
@@ -106,33 +108,34 @@ describe("the pay page", () => {
     expect(api.opened).toEqual([]);
   });
 
-  it("offers no online payment while it is off: bank transfer only", () => {
+  it("offers no way to pay while Paystack is off, and no bank details either", () => {
     api.page = { ...(api.page as object), mode: "off" };
     renderPage();
     expect(payButton()).toBeNull();
     expect(screen.queryByRole("note", { name: "Test mode" })).toBeNull();
-    expect(screen.getByText(/Online payment is not available yet/)).toBeTruthy();
+    expect(screen.getByText("Online payment is not open yet. Please try again later, or reply to your payment email and we will send you a link when it is.")).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/bank details|proof of payment/i);
   });
 
   it("offers nothing once the 48 hours have passed", () => {
     api.page = { ...(api.page as object), state: "expired" };
     renderPage();
     expect(payButton()).toBeNull();
-    expect(screen.getByRole("alert").textContent).toContain("passed their 48 hours");
+    expect(screen.getByRole("alert").textContent).toBe("This payment link has passed its 48 hours. Reply to your payment email and we will send you a new one.");
   });
 
-  it("warns an owner who already sent proof of a transfer not to pay twice", () => {
+  it("lets an owner pay online on an old record that noted proof of a bank transfer", () => {
     api.page = { ...(api.page as object), state: "proof_received" };
     renderPage();
-    expect(screen.getByText(/If you paid that way, you do not need to pay again/)).toBeTruthy();
     expect(payButton()).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/proof/i);
   });
 
   it("shows the server's message when Paystack cannot be opened", () => {
-    api.startError = { message: "We could not open Paystack just now. Please try again in a minute, or pay by bank transfer." };
+    api.startError = { message: "We could not open Paystack just now. Please try again in a minute." };
     renderPage();
     fireEvent.click(payButton()!);
-    expect(screen.getByRole("alert").textContent).toBe("We could not open Paystack just now. Please try again in a minute, or pay by bank transfer.");
+    expect(screen.getByRole("alert").textContent).toBe("We could not open Paystack just now. Please try again in a minute.");
     expect(api.opened).toEqual([]);
   });
 

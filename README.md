@@ -7,9 +7,9 @@ Live at https://ipf-sme.vercel.app (Vercel, deploying `main`).
 
 - **Free business check:** ten minutes on a phone; a colour-coded outline of the ten places a business gets stuck, one
   of four gaps, and a summary. Saved as a lead from the first screen.
-- **Full report (₦100,000):** paid online with Paystack or by bank transfer, then a 17-question form; a deterministic PDF report is emailed the
+- **Full report (₦100,000):** paid on Paystack (card, bank transfer or USSD), straight from the result page or the summary email, then a 17-question form; a deterministic PDF report is emailed the
   moment the form is finished.
-- **Discovery call and Current State Assessment payment:** Calendly booking, call outcome, payment details, then online payment with Paystack (confirms itself) or bank transfer with proof and confirmation.
+- **Discovery call and Current State Assessment payment:** Calendly booking, call outcome, the payment link, then payment on Paystack, which confirms itself. Paystack is the only way to pay.
 - **Client accounts:** created by invitation once the Current State Assessment is paid; one identity per person, businesses as
   workspaces, client isolation enforced on the server.
 - **Admin console:** leads, pipeline, payments, reports, onboarding, staff roles and permissions, audit trail.

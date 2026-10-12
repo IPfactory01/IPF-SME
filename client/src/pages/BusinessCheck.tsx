@@ -6,7 +6,9 @@
  */
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { openCheckout, rememberPayPage } from "@/lib/payOnline";
 import { trpc } from "@/lib/trpc";
+import { payPath } from "@shared/payments";
 import { BRAND } from "@shared/brand";
 import { CAPABILITIES, offeringById } from "@shared/businessCheck/catalogue";
 import {
@@ -716,6 +718,24 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
   const requestNext = trpc.businessCheck.requestNext.useMutation({
     onSuccess: (data) => setRequested((current) => ({ ...current, [data.choice]: true })),
   });
+  // The Full Report is paid on Paystack only: the button opens Paystack's checkout (card, bank transfer or USSD).
+  const [reportPaid, setReportPaid] = useState(false);
+  const [leavingForPaystack, setLeavingForPaystack] = useState(false);
+  const [reportProblem, setReportProblem] = useState<string | null>(null);
+  const startReport = trpc.onlinePayment.start.useMutation({
+    onSuccess: (data) => {
+      if (data.alreadyPaid) return setReportPaid(true);
+      setLeavingForPaystack(true);
+      rememberPayPage(payPath(response.token, "full_report"));
+      try {
+        openCheckout(data.url);
+      } catch (error) {
+        setLeavingForPaystack(false);
+        setReportProblem(error instanceof Error ? error.message : "We could not open Paystack.");
+      }
+    },
+    onError: (error) => setReportProblem(error.message),
+  });
   const tally = (["stuck", "watch", "clear"] as const).map((health) => ({ health, count: result.outline.filter((row) => row.health === health).length }));
   // Areas the check left out for this business sit in the outline, greyed, so the whole method shows.
   const notAssessed = areasNotAssessed(answers);
@@ -905,17 +925,19 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
             </ul>
             <p className="mt-4 text-xs text-ink-muted">{FULL_REPORT.delivery}</p>
             <AnimatePresence mode="wait" initial={false}>
-              {requested.report ? (
-                <motion.p key="requested" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="mt-6 flex items-start gap-3 border border-highlight-ink/40 bg-paper p-4 text-sm leading-relaxed text-ink-700">
+              {reportPaid ? (
+                <motion.p key="paid" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="mt-6 flex items-start gap-3 border border-highlight-ink/40 bg-paper p-4 text-sm leading-relaxed text-ink-700">
                   <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-highlight-ink" />
-                  Thank you. The payment details are on their way to {contact.email}. Once your payment is confirmed, you complete the Report Intake and your Full Report arrives straight away.
+                  Your Full Report is already paid. The link to your Report Intake is in your email at {contact.email}.
                 </motion.p>
               ) : (
-                <motion.button key="get" type="button" onClick={() => requestNext.mutate({ token: response.token, choice: "report" })} disabled={requestNext.isPending} exit={{ opacity: 0, scale: 0.96 }} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} className="group mt-6 inline-flex h-14 w-full items-center justify-center bg-highlight-ink px-8 text-sm font-semibold uppercase tracking-widest text-paper shadow-[0_18px_40px_-18px_rgba(203,55,86,0.8)] transition-opacity hover:opacity-90 disabled:opacity-60">
-                  <FileText className="mr-2 h-4 w-4" /> Get my Full Report
+                <motion.button key="get" type="button" onClick={() => { setReportProblem(null); startReport.mutate({ token: response.token, item: "full_report" }); }} disabled={startReport.isPending || leavingForPaystack} exit={{ opacity: 0, scale: 0.96 }} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} className="group mt-6 inline-flex h-14 w-full items-center justify-center bg-highlight-ink px-8 text-sm font-semibold uppercase tracking-widest text-paper shadow-[0_18px_40px_-18px_rgba(203,55,86,0.8)] transition-opacity hover:opacity-90 disabled:opacity-60">
+                  <FileText className="mr-2 h-4 w-4" /> {startReport.isPending || leavingForPaystack ? "Opening Paystack…" : "Get my Full Report"}
                 </motion.button>
               )}
             </AnimatePresence>
+            {!reportPaid && <p className="mt-3 text-xs text-ink-muted">You pay securely on Paystack, by card, bank transfer or USSD, and come straight back.</p>}
+            {reportProblem && <p role="alert" className="mt-3 text-sm text-danger-strong">{reportProblem}</p>}
           </div>
         </div>
 

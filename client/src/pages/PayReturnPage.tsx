@@ -113,7 +113,6 @@ export default function PayReturnPage() {
         {back
           ? <Link href={back} className="inline-flex h-12 items-center bg-highlight-ink px-6 text-sm font-semibold uppercase tracking-widest text-paper hover:opacity-90">Try again</Link>
           : <p className="text-ink-soft">Use the Pay online button in your payment email to try again.</p>}
-        <p className="text-sm text-ink-muted">You can also pay by bank transfer, using the details in your payment email.</p>
       </div>
     </PaymentShell>
   );

@@ -2,10 +2,9 @@ import { CURRENT_STATE, FULL_REPORT, formatNaira, PRICES } from "./businessSuppo
 import { METHOD } from "./method";
 
 /**
- * Paying for The Shift. The payment details email offers two ways to pay: online with Paystack (once its keys are set),
- * which confirms itself, and bank transfer, where the owner replies with proof and the team confirms the money arrived.
- * Both confirm through the same path. Confirming the Current State Assessment payment is what starts the Current State
- * Assessment.
+ * Paying for The Shift: online with Paystack only. The payment email carries a "Pay online" link; Paystack's checkout
+ * takes card, bank transfer or USSD, and the payment confirms itself. There are no bank details and no proof of payment.
+ * Confirming the Current State Assessment payment is what starts the Current State Assessment.
  */
 
 export const PAYMENT_ITEMS = ["full_report", "current_state"] as const;
@@ -16,7 +15,7 @@ export const PAYMENT_ITEM_DETAILS: Record<PaymentItem, { name: string; amount: n
   current_state: { name: CURRENT_STATE.name, amount: PRICES.currentState, code: "CS" },
 };
 
-/** requested: details emailed · proof_received: the owner sent proof, not yet checked · confirmed: the money arrived. */
+/** requested: the payment link emailed · confirmed: paid. proof_received is from bank transfers before Paystack only, kept for old records. */
 export const PAYMENT_STATUSES = ["requested", "proof_received", "confirmed"] as const;
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
 
@@ -57,7 +56,7 @@ export function describePayment(item: PaymentItem) {
 
 /**
  * Online payment through Paystack's hosted checkout. The mode follows the secret key (server/paystack.ts): `sk_test_`
- * is test, where no real money moves; `sk_live_` is live; anything else is off, and only bank transfer is offered.
+ * is test, where no real money moves; `sk_live_` is live; anything else is off, and nothing can be paid (/api/health says so).
  */
 export const ONLINE_PAYMENT_MODES = ["off", "test", "live"] as const;
 export type OnlinePaymentMode = (typeof ONLINE_PAYMENT_MODES)[number];

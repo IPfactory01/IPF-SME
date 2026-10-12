@@ -5,7 +5,6 @@ import { BRAND } from "../shared/brand";
 import { CURRENT_STATE, FULL_REPORT, formatNaira } from "../shared/businessSupport";
 import { effectivePaymentStatus, ONLINE_TEST_NOTICE, PAYMENT_ITEM_DETAILS, PAYMENT_WINDOW_HOURS, paymentDeadline, paymentReference, payPath, type PaymentDisplayStatus, type PaymentItem } from "../shared/payments";
 import type { PipelineStage } from "../shared/businessCheck/pipeline";
-import { ENV } from "./_core/env";
 import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { startEngagementSafely, type EngagementStart } from "./engagements";
@@ -17,21 +16,11 @@ import { paystackMode } from "./paystack";
 import { getTrustedApplicationOrigin } from "./security";
 
 /**
- * Paying for The Shift: the owner is emailed the amount, a reference and two ways to pay. Online with Paystack (once its
- * keys are set, server/onlinePayment.ts), the payment confirms itself; by bank transfer, they reply with proof and the
- * team confirms the money arrived. Both confirm through `confirmPayment`. Confirming the Current State Assessment payment
- * wins the business and sends the client account invitation, which is where the Current State Assessment starts.
+ * Paying for The Shift: online with Paystack only (server/onlinePayment.ts). The owner is emailed the amount, a reference
+ * and a "Pay online" link; Paystack's checkout takes card, bank transfer or USSD, and the payment confirms itself through
+ * `confirmPayment`. There is no bank account to pay into and no proof of payment to send. Confirming the Current State
+ * Assessment payment wins the business and sends the client account invitation, which is where the assessment starts.
  */
-
-export const PLACEHOLDER_BANK_DETAILS = { bankName: "Test Bank", accountName: "IP Factory (test account)", accountNumber: "0000000000" } as const;
-
-/** The account owners pay into: PAYMENT_* in the hosting settings, or clearly marked placeholder details until all are set. */
-export function bankDetails() {
-  if (ENV.paymentBankName && ENV.paymentAccountName && ENV.paymentAccountNumber) {
-    return { bankName: ENV.paymentBankName, accountName: ENV.paymentAccountName, accountNumber: ENV.paymentAccountNumber, placeholder: false };
-  }
-  return { ...PLACEHOLDER_BANK_DETAILS, placeholder: true };
-}
 
 const firstName = (fullName: string) => fullName.trim().split(/\s+/)[0] || "there";
 
@@ -48,78 +37,44 @@ export function onlinePaymentOffer(publicToken: string, item: PaymentItem): Onli
 }
 
 /**
- * The email with the payment details. Plain text; the business support layout turns it into the branded HTML. With
- * online payment on, it leads with a "Pay online" button and keeps the bank details below as the alternative.
+ * The email with the payment link. Plain text; the business support layout turns it into the branded HTML, with the
+ * "Pay online" line as a button. Paystack's checkout takes card, bank transfer or USSD, so there are no bank details
+ * here and nothing to send back. With online payment off (no Paystack key, which /api/health reports) it says the link
+ * is coming, and the team sends it again once Paystack is on.
  */
 export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem; reference: string; deadline: Date; online?: OnlinePaymentOffer | null }) {
-  const bank = bankDetails();
   const { amount } = PAYMENT_ITEM_DETAILS[input.item];
   const report = input.item === "full_report";
-  const subject = report ? "Payment details for your Full Report" : `Payment details for your ${CURRENT_STATE.name}`;
-  const opening = [
-    `Dear ${firstName(input.fullName)},`,
-    "",
-    report
-      ? "Thank you for asking for your Full Report. Here is how to pay for it."
-      : `Thank you for choosing to start your ${CURRENT_STATE.name} with us. Here is how to pay for it.`,
-    "",
-  ];
-  const placeholder = bank.placeholder ? ["TEST DETAILS - DO NOT PAY", "These are placeholder details while we test this email. Please do not make a transfer to them.", ""] : [];
   const afterwards = report
     ? `Then we send you the Report Intake, a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your Full Report is emailed to you the moment you finish it.`
     : `Then your ${CURRENT_STATE.name} starts. ${CURRENT_STATE.start}`;
-  if (input.online) {
-    return {
-      subject,
-      body: [
-        ...opening,
-        ...(input.online.mode === "test" ? [EMAIL_TEST_NOTICE, "Online payment is in Paystack's test mode while we test it, so paying online moves no real money.", ""] : []),
-        "HOW TO PAY",
-        `Amount: ${formatNaira(amount)}`,
-        `Reference: ${input.reference}`,
-        `Pay by: ${lagosTime(input.deadline)} (Lagos time)`,
-        "",
-        "PAY ONLINE",
-        "Pay securely with Paystack, by card or bank. Your payment is confirmed straight away.",
-        `Pay online: ${input.online.url}`,
-        "",
-        ...placeholder,
-        "OR PAY BY BANK TRANSFER",
-        `Bank: ${bank.bankName}`,
-        `Account name: ${bank.accountName}`,
-        `Account number: ${bank.accountNumber}`,
-        "",
-        "Please put the reference on your transfer, so we can match your payment to you.",
-        `These details hold for ${PAYMENT_WINDOW_HOURS} hours. If you need more time, reply to this email and we will send them again.`,
-        "",
-        "AFTER YOU PAY",
-        "Paid online? There is nothing more to do. We email you as soon as Paystack confirms your payment.",
-        "Paid by bank transfer? Reply to this email with your proof of payment: a screenshot of the transfer or your bank's receipt. We will confirm by email once the payment arrives.",
-        afterwards,
-        "",
-        BRAND.organisationName,
-      ].join("\n"),
-    };
-  }
   return {
-    subject,
+    subject: report ? "Payment details for your Full Report" : `Payment details for your ${CURRENT_STATE.name}`,
     body: [
-      ...opening,
-      ...placeholder,
+      `Dear ${firstName(input.fullName)},`,
+      "",
+      report
+        ? "Thank you for asking for your Full Report. Here is how to pay for it."
+        : `Thank you for choosing to start your ${CURRENT_STATE.name} with us. Here is how to pay for it.`,
+      "",
+      ...(input.online?.mode === "test" ? [EMAIL_TEST_NOTICE, "Online payment is in Paystack's test mode while we test it, so paying online moves no real money.", ""] : []),
       "HOW TO PAY",
       `Amount: ${formatNaira(amount)}`,
-      `Bank: ${bank.bankName}`,
-      `Account name: ${bank.accountName}`,
-      `Account number: ${bank.accountNumber}`,
       `Reference: ${input.reference}`,
-      `Pay by: ${lagosTime(input.deadline)} (Lagos time)`,
+      // The owner's own Full Report link reopens by itself; the assessment's holds for the 48 hours after the call.
+      ...(report ? [] : [`Pay by: ${lagosTime(input.deadline)} (Lagos time)`]),
       "",
-      "Please put the reference on your transfer, so we can match your payment to you.",
-      `These details hold for ${PAYMENT_WINDOW_HOURS} hours. If you need more time, reply to this email and we will send them again.`,
+      ...(input.online
+        ? [
+          "Pay securely with Paystack, by card, bank transfer or USSD. Your payment is confirmed straight away.",
+          `Pay online: ${input.online.url}`,
+        ]
+        : ["Online payment is not open yet. We will email you a link to pay as soon as it is."]),
       "",
       "AFTER YOU PAY",
-      "Reply to this email with your proof of payment: a screenshot of the transfer or your bank's receipt. We will confirm by email once the payment arrives.",
+      "There is nothing more to do. We email you as soon as Paystack confirms your payment.",
       afterwards,
+      ...(report ? [] : ["", `If you need more than ${PAYMENT_WINDOW_HOURS} hours, reply to this email and we will send you a new link.`]),
       "",
       BRAND.organisationName,
     ].join("\n"),
@@ -261,30 +216,6 @@ async function loadRequest(db: Pick<Database, "select">, paymentRequestId: numbe
   const request = (await db.select().from(paymentRequests).where(eq(paymentRequests.id, paymentRequestId)).limit(1))[0];
   if (!request) throw new TRPCError({ code: "NOT_FOUND", message: "That payment request does not exist." });
   return request;
-}
-
-const alreadyConfirmed = () => new TRPCError({ code: "CONFLICT", message: "This payment is already confirmed." });
-
-/**
- * The owner sent proof of payment (usually by replying to the payment email); the money is not yet confirmed. The move
- * is claimed in one conditional statement, so two people pressing the button together record it once.
- */
-export async function markProofReceived(db: Database, input: { paymentRequestId: number; actorUserId: number }) {
-  const request = await loadRequest(db, input.paymentRequestId);
-  if (request.status === "confirmed") throw alreadyConfirmed();
-  if (request.status === "proof_received") return { success: true, changed: false } as const;
-  const check = await loadCheck(db, request.businessCheckId);
-  const changed = await db.transaction(async tx => {
-    const [claimed] = await tx.update(paymentRequests).set({ status: "proof_received", proofReceivedAt: new Date() })
-      .where(and(eq(paymentRequests.id, request.id), eq(paymentRequests.status, "requested"))).returning({ id: paymentRequests.id });
-    if (!claimed) return false;
-    await recordAudit(tx, { action: "payment_proof_received", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference } });
-    return true;
-  });
-  if (changed) return { success: true, changed: true } as const;
-  // Someone else moved it first: answer as they would have been answered.
-  if ((await loadRequest(db, request.id)).status === "confirmed") throw alreadyConfirmed();
-  return { success: true, changed: false } as const;
 }
 
 /** What happened to the client account invitation when a Current State Assessment payment was confirmed. */

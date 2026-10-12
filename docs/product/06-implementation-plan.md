@@ -17,7 +17,7 @@
 | Free business check: details first, decision tree, outline, four gaps, AI summary with rules fallback, saved progress | `test/shared/businessCheck/*`, golden snapshots |
 | Discovery call booking (Calendly) and outcome (Fit, Refer, Decline, Nurture) | `test/server/businessCheck*`, `test/db/*` |
 | Staff sign-in, roles and permissions, invitations, audit trail | `test/server/accountAuth.test.ts`, `test/shared/platformPermissions.test.ts`, `test/db/*` |
-| Payments by bank transfer: details, proof, confirmation (full report, Current State Assessment) | `test/server/payments.test.ts`, `test/db/payments.db.test.ts` |
+| Payments on Paystack only: the payment link, self-confirmation, the confirm-by-hand fallback (full report, Current State Assessment) | `test/server/payments.test.ts`, `test/db/payments.db.test.ts` |
 | Paying online with Paystack: pay page, hosted checkout, signed webhook and return page, confirming through the same path (12 October, on the working branch) | `test/server/paystack.test.ts`, `test/server/onlinePayment.test.ts`, `test/server/routers/onlinePayment.router.test.ts`, `test/db/onlinePayment.db.test.ts`, `test/client/pages/pay*.ui.test.tsx` |
 | Full report: 17-question form, deterministic PDF emailed at once, admin status and download | `test/shared/fullReport/*`, `test/server/fullReport/*` |
 | Client account by invitation after Current State Assessment is paid; Won stage | `test/server/clientOnboarding.test.ts`, `test/db/payments.db.test.ts` (whole journey) |
@@ -37,7 +37,7 @@ window; the problem questions at the end of the check.
 | # | Task | Owner | Blocks |
 |---|---|---|---|
 | 0.1 | Add the Resend DNS records for `ipfactory.co`; then set `EMAIL_FROM` to `IP Factory <info@ipfactory.co>` in Vercel | DG, then Lewis | Every email to an owner |
-| 0.2 | Set `PAYMENT_BANK_NAME`, `PAYMENT_ACCOUNT_NAME`, `PAYMENT_ACCOUNT_NUMBER` in Vercel (until then emails say "TEST DETAILS - DO NOT PAY") | ET, Lewis | Real payments |
+| 0.2 | ~~Set the bank account settings in Vercel~~ **Dropped 12 October**: Paystack is the only way to pay, so there are no bank details | — | — |
 | 0.3 | Push the branch to `main` | ET ("push to main") | The four branch changes |
 | 0.4 | Name the finance person and grant roles to the analysts on the platform | Lewis | Phase 1 assignments |
 | 0.5 | Open IP Factory's Paystack business account. Put the **test** secret key in Vercel (`PAYSTACK_SECRET_KEY`, `sk_test_…`), redeploy, and in Paystack → Settings → API Keys & Webhooks set the test webhook URL to `https://ipf-sme.vercel.app/api/paystack/webhook`. Pay both items with Paystack's test card (every page and email says "TEST MODE: NO REAL MONEY MOVES"). Then the **live** key and the live webhook URL (the same address) | ET, Lewis | Online payment (section 4) |
@@ -71,7 +71,7 @@ the team and Paystack confirm through the same path, and manual confirmation sta
 | P1 | **Checkout:** a "Pay online" button in the payment email opens the pay page (`/pay/:token/:item`), which opens Paystack's hosted checkout for the exact amount, with a reference per attempt | The owner can pay the full report or Current State Assessment by card or bank on Paystack | **Built.** Not yet linked from the result page: the payment email carries it |
 | P2 | **Webhook:** Paystack's signed notification (`/api/paystack/webhook`) confirms the payment request automatically, after checking the signature, then asking Paystack again and checking the reference, the status, the currency and the amount; the return page (`/pay/return`) does the same if it arrives first | The same emails and effects as "Confirm payment": the report link, or Won plus the engagement and the client invitation. A forged or mismatched notification changes nothing; a repeat confirms nothing twice | **Built** |
 | P3 | **Admin:** a payment confirmed online carries the note "Paid online with Paystack, reference …" and the stage history names Paystack; the office is emailed when a payment confirms itself or needs a look; manual "Proof received" and "Confirm payment" stay for direct transfers | The team can tell at a glance how each payment arrived | **Built** |
-| P4 | **Copy:** payment emails lead with "Pay online"; bank details stay as the alternative | No email asks for proof when the owner paid on Paystack | **Built** |
+| P4 | **Copy:** payment emails carry the amount, the reference and "Pay online"; no bank details and no proof of payment (Paystack only, 12 October); "Get my Full Report" on the result page opens Paystack directly | No email or page asks for proof or offers bank details | **Built** |
 
 Tests use a fake Paystack behind a stubbed `fetch`: no real keys and no network in tests. Webhook signatures are checked
 with `PAYSTACK_SECRET_KEY`. To go live: task 0.5.

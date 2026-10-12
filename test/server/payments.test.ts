@@ -1,118 +1,61 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ENV } from "@server/_core/env";
 import { buildBusinessSupportEmailHtml } from "@server/emailTemplates";
-import { bankDetails, EMAIL_TEST_NOTICE, isMissingPaymentTable, onlinePaymentNote, onlinePaymentOffer, paymentConfirmedEmail, paymentDetailsEmail, paymentStatusesByCheck } from "@server/payments";
+import { EMAIL_TEST_NOTICE, isMissingPaymentTable, onlinePaymentNote, onlinePaymentOffer, paymentConfirmedEmail, paymentDetailsEmail, paymentStatusesByCheck } from "@server/payments";
 import { BRAND } from "@shared/brand";
 import { lagosTime } from "@server/lagosTime";
 
-const saved = { bank: ENV.paymentBankName, name: ENV.paymentAccountName, number: ENV.paymentAccountNumber, paystack: ENV.paystackSecretKey };
+const saved = { paystack: ENV.paystackSecretKey };
 afterEach(() => {
-  ENV.paymentBankName = saved.bank;
-  ENV.paymentAccountName = saved.name;
-  ENV.paymentAccountNumber = saved.number;
   ENV.paystackSecretKey = saved.paystack;
 });
-const configure = () => {
-  ENV.paymentBankName = "Example Bank";
-  ENV.paymentAccountName = "Intellectual Property Factory Ltd";
-  ENV.paymentAccountNumber = "0123456789";
-};
-const clear = () => {
-  ENV.paymentBankName = "";
-  ENV.paymentAccountName = "";
-  ENV.paymentAccountNumber = "";
-};
 
-describe("the bank account owners pay into", () => {
-  it("uses the hosting settings once all three are set", () => {
-    configure();
-    expect(bankDetails()).toEqual({ bankName: "Example Bank", accountName: "Intellectual Property Factory Ltd", accountNumber: "0123456789", placeholder: false });
-  });
-
-  it("falls back to clearly marked placeholder details until then, even when only some are set", () => {
-    clear();
-    ENV.paymentBankName = "Example Bank";
-    expect(bankDetails()).toMatchObject({ accountNumber: "0000000000", placeholder: true });
-  });
-});
-
-/** 48 hours after details sent at 3:05 pm Lagos time on Friday 9 October 2026. */
+/** 48 hours after the link was sent at 3:05 pm Lagos time on Friday 9 October 2026. */
 const DEADLINE = new Date("2026-10-11T14:05:00Z");
+const PAY_URL = "https://app.example.test/pay/CHECKTOKEN1234567890/full_report";
+const email = (item: "full_report" | "current_state", mode: "test" | "live" | null = "live") =>
+  paymentDetailsEmail({ fullName: "Ada Example", item, reference: item === "full_report" ? "TS-R-000012" : "TS-CS-000012", deadline: DEADLINE, online: mode ? { url: PAY_URL, mode } : null });
 
-describe("the payment details email", () => {
-  it("says when to pay by, in Lagos time, and that the details hold for 48 hours", () => {
-    configure();
-    const email = paymentDetailsEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012", deadline: DEADLINE });
-    expect(lagosTime(DEADLINE)).toMatch(/^Sun, 11 Oct 2026, 3:05\s?pm$/);
-    expect(email.body).toContain(`Pay by: ${lagosTime(DEADLINE)} (Lagos time)`);
-    expect(email.body).toContain("These details hold for 48 hours. If you need more time, reply to this email and we will send them again.");
-    // It sits in the details table with the amount and the reference.
-    expect(buildBusinessSupportEmailHtml(email.body)).toMatch(/>Pay by<\/td><td[^>]*>Sun, 11 Oct 2026/);
-  });
-
-
-  it("gives the amount, the account, the reference and how to send proof", () => {
-    configure();
-    const email = paymentDetailsEmail({ fullName: "Ada Example", item: "full_report", reference: "TS-R-000012" , deadline: DEADLINE });
-    expect(email.subject).toBe("Payment details for your Full Report");
-    for (const line of ["Dear Ada,", "Amount: ₦100,000", "Bank: Example Bank", "Account name: Intellectual Property Factory Ltd", "Account number: 0123456789", "Reference: TS-R-000012", "Reply to this email with your proof of payment", "Your Full Report is emailed to you the moment you finish it."]) {
-      expect(email.body).toContain(line);
+describe("the payment email: Paystack only", () => {
+  it("gives the amount, the reference and a Pay online button, and no bank details or proof of payment", () => {
+    const message = email("full_report");
+    expect(message.subject).toBe("Payment details for your Full Report");
+    for (const line of ["Dear Ada,", "Amount: ₦100,000", "Reference: TS-R-000012", "Pay securely with Paystack, by card, bank transfer or USSD.", `Pay online: ${PAY_URL}`, "There is nothing more to do. We email you as soon as Paystack confirms your payment.", "Your Full Report is emailed to you the moment you finish it."]) {
+      expect(message.body).toContain(line);
     }
-    expect(email.body).not.toContain("DO NOT PAY");
-  });
-
-  it("says Current State Assessment starts once the payment is confirmed", () => {
-    configure();
-    const email = paymentDetailsEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012" , deadline: DEADLINE });
-    expect(email.subject).toBe("Payment details for your Current State Assessment");
-    expect(email.body).toContain("Amount: ₦500,000");
-    expect(email.body).toContain("Then your Current State Assessment starts. Three working days to get set up, then we start.");
-  });
-
-  it("warns in capitals, as a heading, when the details are placeholders", () => {
-    clear();
-    const email = paymentDetailsEmail({ fullName: "Ada Example", item: "full_report", reference: "TS-R-000012" , deadline: DEADLINE });
-    expect(email.body).toContain("TEST DETAILS - DO NOT PAY");
-    const html = buildBusinessSupportEmailHtml(email.body);
-    expect(html).toContain(`color:${BRAND.palette["highlight-ink"]};font-weight:700;">TEST DETAILS - DO NOT PAY<`);
-    expect(html).toMatch(/>Reference<\/td><td[^>]*>TS-R-000012<\/td>/);
-  });
-});
-
-describe("the payment details email with online payment", () => {
-  const PAY_URL = "https://app.example.test/pay/CHECKTOKEN1234567890/full_report";
-  const online = (mode: "test" | "live") => paymentDetailsEmail({ fullName: "Ada Example", item: "full_report", reference: "TS-R-000012", deadline: DEADLINE, online: { url: PAY_URL, mode } });
-
-  it("leads with a Pay online button and keeps the bank details below as the alternative", () => {
-    configure();
-    const email = online("live");
-    expect(email.subject).toBe("Payment details for your Full Report");
-    const body = email.body;
-    for (const line of ["Amount: ₦100,000", "Reference: TS-R-000012", `Pay by: ${lagosTime(DEADLINE)} (Lagos time)`, "PAY ONLINE", `Pay online: ${PAY_URL}`, "OR PAY BY BANK TRANSFER", "Bank: Example Bank", "Account number: 0123456789"]) {
-      expect(body).toContain(line);
-    }
-    expect(body.indexOf("PAY ONLINE")).toBeLessThan(body.indexOf("OR PAY BY BANK TRANSFER"));
-    // Nobody who paid online is asked for proof.
-    expect(body).toContain("Paid online? There is nothing more to do.");
-    expect(body).toContain("Paid by bank transfer? Reply to this email with your proof of payment");
-    expect(body).not.toContain("TEST MODE");
-    const html = buildBusinessSupportEmailHtml(body);
+    expect(message.body).not.toMatch(/Bank:|Account name|Account number|proof of payment|BANK TRANSFER|DO NOT PAY/);
+    const html = buildBusinessSupportEmailHtml(message.body);
     expect(html).toContain(`<a href="${PAY_URL}"`);
     expect(html).toMatch(/>Pay online<\/a>/);
   });
 
-  it("says in capitals, as a heading, that no real money moves in test mode", () => {
-    configure();
-    const email = online("test");
-    expect(email.body).toContain(EMAIL_TEST_NOTICE);
-    expect(EMAIL_TEST_NOTICE).toBe("TEST MODE - NO REAL MONEY MOVES");
-    expect(email.body.indexOf(EMAIL_TEST_NOTICE)).toBeLessThan(email.body.indexOf("PAY ONLINE"));
-    expect(buildBusinessSupportEmailHtml(email.body)).toContain(`color:${BRAND.palette["highlight-ink"]};font-weight:700;">TEST MODE - NO REAL MONEY MOVES<`);
+  it("gives the Current State Assessment a pay-by time in Lagos time, and a new link on request after 48 hours", () => {
+    const message = email("current_state");
+    expect(message.subject).toBe("Payment details for your Current State Assessment");
+    expect(message.body).toContain("Amount: ₦500,000");
+    expect(lagosTime(DEADLINE)).toMatch(/^Sun, 11 Oct 2026, 3:05\s?pm$/);
+    expect(message.body).toContain(`Pay by: ${lagosTime(DEADLINE)} (Lagos time)`);
+    expect(message.body).toContain("If you need more than 48 hours, reply to this email and we will send you a new link.");
+    expect(message.body).toContain("Then your Current State Assessment starts. Three working days to get set up, then we start.");
+    expect(buildBusinessSupportEmailHtml(message.body)).toMatch(/>Pay by<\/td><td[^>]*>Sun, 11 Oct 2026/);
   });
 
-  it("still warns that placeholder bank details are not real", () => {
-    clear();
-    expect(online("live").body).toContain("TEST DETAILS - DO NOT PAY");
+  it("gives the Full Report no pay-by time: the owner's own link opens again by itself", () => {
+    expect(email("full_report").body).not.toMatch(/Pay by:|48 hours/);
+  });
+
+  it("says in capitals, as a heading, that no real money moves in test mode", () => {
+    const message = email("full_report", "test");
+    expect(EMAIL_TEST_NOTICE).toBe("TEST MODE - NO REAL MONEY MOVES");
+    expect(message.body.indexOf(EMAIL_TEST_NOTICE)).toBeLessThan(message.body.indexOf("HOW TO PAY"));
+    expect(buildBusinessSupportEmailHtml(message.body)).toContain(`color:${BRAND.palette["highlight-ink"]};font-weight:700;">TEST MODE - NO REAL MONEY MOVES<`);
+    expect(email("full_report", "live").body).not.toContain("TEST MODE");
+  });
+
+  it("says the link is coming, with no way to pay offered, while Paystack is off", () => {
+    const message = email("full_report", null);
+    expect(message.body).toContain("Online payment is not open yet. We will email you a link to pay as soon as it is.");
+    expect(message.body).not.toMatch(/Pay online:|Bank:|proof of payment/);
   });
 
   it("offers the pay page only while Paystack is on, keyed by the Business Check's token", () => {
@@ -122,13 +65,6 @@ describe("the payment details email with online payment", () => {
     expect(onlinePaymentOffer("CHECKTOKEN1234567890", "current_state")).toEqual({ url: "http://localhost:3000/pay/CHECKTOKEN1234567890/current_state", mode: "test" });
     ENV.paystackSecretKey = "sk_live_fixture_not_a_real_key";
     expect(onlinePaymentOffer("CHECKTOKEN1234567890", "full_report")?.mode).toBe("live");
-  });
-
-  it("is unchanged, with no button, while online payment is off", () => {
-    configure();
-    const email = paymentDetailsEmail({ fullName: "Ada Example", item: "full_report", reference: "TS-R-000012", deadline: DEADLINE, online: null });
-    expect(email.body).not.toMatch(/Pay online|PAY ONLINE|Paystack/);
-    expect(email.body).toContain("HOW TO PAY");
   });
 });
 

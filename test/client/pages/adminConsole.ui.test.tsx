@@ -17,7 +17,7 @@ const hoisted = vi.hoisted(() => {
     debrief: { setUp: true, debrief: null as unknown },
     metrics: { businessChecks: 3, users: 2, portalUsers: 1, businesses: 1, memberships: 1, pendingInvitations: 0, platformRoleAssignments: 0 },
     error: undefined as { message: string } | undefined,
-    mutations: { schedule: [] as unknown[], outcome: [] as unknown[], saveDebrief: [] as unknown[], shareDebrief: [] as unknown[], stage: [] as unknown[], invite: [] as unknown[], revoke: [] as unknown[], requestPayment: [] as unknown[], proof: [] as unknown[], confirmPayment: [] as unknown[], downloadReport: [] as unknown[], resendReportLink: [] as unknown[], resendConfirmation: [] as unknown[] },
+    mutations: { schedule: [] as unknown[], outcome: [] as unknown[], saveDebrief: [] as unknown[], shareDebrief: [] as unknown[], stage: [] as unknown[], invite: [] as unknown[], revoke: [] as unknown[], requestPayment: [] as unknown[], confirmPayment: [] as unknown[], downloadReport: [] as unknown[], resendReportLink: [] as unknown[], resendConfirmation: [] as unknown[] },
     inviteResult: { invitationUrl: "https://app.example.test/onboarding/TOKEN123", deliveryStatus: "Simulated", expiresAt: new Date(), invitationId: 1 } as Record<string, unknown>,
   };
   const query = (key: "checks" | "calls" | "clients" | "candidates" | "invitations" | "metrics") => () => ({ data: api[key], isLoading: false, error: api.error });
@@ -52,7 +52,6 @@ vi.mock("@/lib/trpc", () => ({
       recordOutcome: { useMutation: hoisted.mutation("outcome") },
       setStage: { useMutation: hoisted.mutation("stage", () => ({ success: true, pipelineStage: "won", changed: true })) },
       requestPayment: { useMutation: hoisted.mutation("requestPayment", () => ({ reference: "TS-CS-000001", deliveryStatus: "Simulated" })) },
-      markProofReceived: { useMutation: hoisted.mutation("proof") },
       confirmPayment: { useMutation: hoisted.mutation("confirmPayment", () => ({ success: true, changed: true, invitation: "sent" })) },
       downloadReport: { useMutation: hoisted.mutation("downloadReport", () => ({ fileName: "report.pdf", pdf: "JVBERi0=" })) },
       resendReportLink: { useMutation: hoisted.mutation("resendReportLink", () => ({ success: true, deliveryStatus: "Simulated" })) },
@@ -118,7 +117,7 @@ beforeEach(() => {
   api.invitations = [];
   api.details = { 1: detailFor(), 2: detailFor({ id: 2, fullName: "Bola Quiet", businessName: "Bola Bakes", email: "bola@example.test", whatsapp: null, pipelineStage: "qualified_lead", callRequestedAt: null }) };
   api.error = undefined;
-  api.mutations = { schedule: [], outcome: [], saveDebrief: [], shareDebrief: [], stage: [], invite: [], revoke: [], requestPayment: [], proof: [], confirmPayment: [], downloadReport: [], resendReportLink: [], resendConfirmation: [] };
+  api.mutations = { schedule: [], outcome: [], saveDebrief: [], shareDebrief: [], stage: [], invite: [], revoke: [], requestPayment: [], confirmPayment: [], downloadReport: [], resendReportLink: [], resendConfirmation: [] };
   api.debrief = { setUp: true, debrief: null };
   api.inviteResult = { invitationUrl: "https://app.example.test/onboarding/TOKEN123", deliveryStatus: "Simulated", expiresAt: new Date(), invitationId: 1 };
 });
@@ -787,14 +786,14 @@ describe("payments in Business Checks", () => {
     expect(within(rowOf("Bola Quiet")).queryByText("Full Report requested")).toBeNull();
   });
 
-  it("sends Current State Assessment payment details from the record", () => {
+  it("sends the Current State Assessment payment link from the record", () => {
     renderConsole();
     openRow("Ada Okafor");
     expect(payments().getByText("Your Full Report")).toBeTruthy();
     expect(payments().getByText("₦500,000")).toBeTruthy();
-    expect(payments().getAllByText("Payment details not sent.")).toHaveLength(2);
+    expect(payments().getAllByText("Payment link not sent.")).toHaveLength(2);
     const currentState = within(payments().getByRole("listitem", { name: "Current State Assessment" }));
-    fireEvent.click(currentState.getByRole("button", { name: "Send payment details" }));
+    fireEvent.click(currentState.getByRole("button", { name: "Send the payment link" }));
     expect(api.mutations.requestPayment).toEqual([{ businessCheckId: 1, item: "current_state" }]);
   });
 
@@ -812,22 +811,22 @@ describe("payments in Business Checks", () => {
     expect(history[0]).toMatch(/^Payment confirmation emailed: Current State Assessment \(TS-CS-000001\) · the email failed/);
   });
 
-  it("notes proof, and confirms only after saying what confirming does", () => {
+  it("has no proof-of-payment step: confirming by hand is a fallback for Paystack, explained before it happens", () => {
     api.details[1] = detailFor({ payments: [payment()] });
     renderConsole();
     openRow("Ada Okafor");
     const currentState = within(payments().getByRole("listitem", { name: "Current State Assessment" }));
     expect(currentState.getByText("Awaiting payment")).toBeTruthy();
     expect(currentState.getByText("TS-CS-000001")).toBeTruthy();
-    fireEvent.click(currentState.getByRole("button", { name: "Proof received" }));
-    expect(api.mutations.proof).toEqual([{ paymentRequestId: 7 }]);
+    expect(currentState.queryByRole("button", { name: "Proof received" })).toBeNull();
 
-    fireEvent.click(currentState.getByRole("button", { name: "Confirm payment" }));
+    fireEvent.click(currentState.getByRole("button", { name: "Confirm by hand" }));
     expect(api.mutations.confirmPayment).toEqual([]);
+    expect(currentState.getByText(/Payments confirm themselves when Paystack confirms them. Only confirm by hand if Paystack shows ₦500,000 paid with a reference starting TS-CS-000001/)).toBeTruthy();
     expect(currentState.getByText(/the business moves to Won and they get a link to set up their client account, where the Current State Assessment starts/)).toBeTruthy();
-    fireEvent.change(currentState.getByLabelText("Note (optional)"), { target: { value: " GTB ref 123 " } });
-    fireEvent.click(currentState.getByRole("button", { name: "Yes, the money is in" }));
-    expect(api.mutations.confirmPayment).toEqual([{ paymentRequestId: 7, note: "GTB ref 123" }]);
+    fireEvent.change(currentState.getByLabelText("Note (optional)"), { target: { value: " TS-CS-000001-1a2b3c4d " } });
+    fireEvent.click(currentState.getByRole("button", { name: "Yes, Paystack shows it paid" }));
+    expect(api.mutations.confirmPayment).toEqual([{ paymentRequestId: 7, note: "TS-CS-000001-1a2b3c4d" }]);
   });
 
   it("shows a paid item as final: no payment actions, only sending the confirmation again", () => {
@@ -854,11 +853,8 @@ describe("payments in Business Checks", () => {
     openRow("Ada Okafor");
     const currentState = within(payments().getByRole("listitem", { name: "Current State Assessment" }));
     expect(currentState.getByText("48 hours passed")).toBeTruthy();
-    expect(currentState.getByText(/Send the details again for a new window, or move the business to Lost/)).toBeTruthy();
-    // Money that still arrives can be recorded and confirmed.
-    expect(currentState.getByRole("button", { name: "Send the details again" })).toBeTruthy();
-    expect(currentState.getByRole("button", { name: "Proof received" })).toBeTruthy();
-    expect(currentState.getByRole("button", { name: "Confirm payment" })).toBeTruthy();
+    expect(currentState.getByText("The 48 hours have passed with no payment. Send the link again for a new window, or move the business to Lost.")).toBeTruthy();
+    expect(currentState.getAllByRole("button").map(button => button.textContent)).toEqual(["Send the link again", "Confirm by hand"]);
   });
 
   it("says when the payment table is not in the database yet", () => {

@@ -54,7 +54,7 @@ describe("online payment routes", () => {
   it("refuse to start when Paystack is off, with a clear message, before the database is touched", async () => {
     ENV.paystackSecretKey = "";
     await expect(caller().start({ token: TOKEN, item: "full_report" })).rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: ONLINE_PAYMENT_OFF_MESSAGE });
-    expect(ONLINE_PAYMENT_OFF_MESSAGE).toBe("Online payment is not available yet. Please pay by bank transfer, using the details in your payment email.");
+    expect(ONLINE_PAYMENT_OFF_MESSAGE).toBe("Online payment is not open yet. Please try again later, or reply to your payment email and we will send you a link when it is.");
   });
 
   it("allow 10 starts per Business Check an hour, then throttle; another check has its own allowance", async () => {

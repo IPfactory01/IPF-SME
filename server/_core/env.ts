@@ -19,7 +19,7 @@ function vercelDeploymentOrigin() {
  * missing, and the server logs them once when it starts, so a deployment without them is visible at once instead of
  * quietly using someone else's domain or address.
  */
-export const REQUIRED_IN_PRODUCTION = ["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY"] as const;
+export const REQUIRED_IN_PRODUCTION = ["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY", "PAYSTACK_SECRET_KEY"] as const;
 
 export function missingProductionSettings(env: NodeJS.ProcessEnv = process.env) {
   return env.NODE_ENV === "production" ? REQUIRED_IN_PRODUCTION.filter(name => !env[name]?.trim()) : [];
@@ -45,20 +45,13 @@ export const ENV = {
   googleRefreshToken: process.env.GOOGLE_REFRESH_TOKEN ?? "",
   jumpGmailRefreshToken: process.env.JUMP_GMAIL_REFRESH_TOKEN ?? "",
   googleCalendarId: process.env.GOOGLE_CALENDAR_ID ?? "primary",
-  /**
-   * The account business owners pay into by bank transfer until online payment is ready (server/payments.ts). Until all
-   * three are set, payment email shows placeholder test details and says in capitals that they are not real.
-   */
-  paymentBankName: process.env.PAYMENT_BANK_NAME?.trim() ?? "",
-  paymentAccountName: process.env.PAYMENT_ACCOUNT_NAME?.trim() ?? "",
-  paymentAccountNumber: process.env.PAYMENT_ACCOUNT_NUMBER?.trim() ?? "",
   /** Private file storage for the engagement room (Supabase Storage, server/fileStorage.ts). Uploads switch on once set. */
   supabaseUrl: process.env.SUPABASE_URL?.trim() ?? "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "",
   supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET?.trim() || "engagement-files",
   /**
    * Paystack (server/paystack.ts). The secret key decides the mode: `sk_test_` is test (no real money moves), `sk_live_`
-   * is live, unset is off and only bank transfer is offered. It also checks the webhook's signature. The public key is
+   * is live, unset is off and nothing can be paid (required in production). It also checks the webhook's signature. The public key is
    * not needed by the hosted checkout, and nothing reads it today.
    */
   paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY?.trim() ?? "",

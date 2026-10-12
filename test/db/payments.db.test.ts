@@ -67,7 +67,7 @@ type EmailCall = { to: string; subject: string; body: string; sender?: string; a
 const completeAnswers = cleanAnswers(businessCheckProfiles.growingMaker);
 
 for (const target of targets) {
-  describe.skipIf(!target.enabled)(`Payment by bank transfer on ${target.name}`, target.timeout ? { timeout: target.timeout } : {}, () => {
+  describe.skipIf(!target.enabled)(`Payment on ${target.name}`, target.timeout ? { timeout: target.timeout } : {}, () => {
     let harness: DbHarness;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let db: any;
@@ -140,7 +140,7 @@ for (const target of targets) {
     });
 
     describe("the full report", () => {
-      it("emails the owner the payment details as soon as they ask for the report, and tells the office", async () => {
+      it("emails the owner the payment link as soon as they ask for the report, and tells the office", async () => {
         const { token, email, visitor, id } = await finishedCheck("report");
         mocked.deliverEmail.mockClear();
         await (await visitor.call()).businessCheck.requestNext({ token, choice: "report" });
@@ -153,9 +153,9 @@ for (const target of targets) {
         expect(toOwner).toMatchObject({ subject: "Payment details for your Full Report", sender: "business_support" });
         expect(toOwner.body).toContain("Amount: ₦100,000");
         expect(toOwner.body).toContain(`Reference: ${reference}`);
-        expect(toOwner.body).toContain("Reply to this email with your proof of payment");
-        // No bank details are configured in tests, so the placeholder warning must be there.
-        expect(toOwner.body).toContain("TEST DETAILS - DO NOT PAY");
+        // Paystack is the only way to pay: no bank details and no proof of payment. Paystack is off in these tests.
+        expect(toOwner.body).not.toMatch(/Bank:|Account number|proof of payment|DO NOT PAY/);
+        expect(toOwner.body).toContain("Online payment is not open yet. We will email you a link to pay as soon as it is.");
         const toOffice = emails().find(sent => sent.to === "info@ipfactory.co")!;
         expect(toOffice.body).toContain(`Payment details sent: ${reference}`);
         expect(await auditsFor("payment_details_sent", id)).toHaveLength(1);
@@ -174,19 +174,16 @@ for (const target of targets) {
         expect(toOffice.body).toMatch(/Payment details: TS-R-\d{6}, but the email to the owner failed \(You can only send testing emails to your own email address\)\. Send them again from admin once that is fixed\./);
       });
 
-      it("records proof, confirms once, emails the owner and never reopens a confirmed payment", async () => {
+      it("confirms by hand once, as the fallback for Paystack, emails the owner and never reopens a confirmed payment", async () => {
         const { token, email, visitor, id } = await finishedCheck("report-paid");
         await (await visitor.call()).businessCheck.requestNext({ token, choice: "report" });
         const [payment] = await paymentsOf(id);
 
-        await (await superAdmin.call()).businessSupport.markProofReceived({ paymentRequestId: payment.id });
-        expect((await paymentsOf(id))[0]).toMatchObject({ status: "proof_received" });
-        expect((await paymentsOf(id))[0].proofReceivedAt).toBeInstanceOf(Date);
-
         mocked.deliverEmail.mockClear();
-        const confirmed = await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: payment.id, note: "GTB ref 123456" });
+        const note = `${payment.reference}-1a2b3c4d`;
+        const confirmed = await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: payment.id, note });
         expect(confirmed).toMatchObject({ changed: true, invitation: null });
-        expect((await paymentsOf(id))[0]).toMatchObject({ status: "confirmed", note: "GTB ref 123456" });
+        expect((await paymentsOf(id))[0]).toMatchObject({ status: "confirmed", note });
         const receipt = emails().find(sent => sent.to === email)!;
         expect(receipt.subject).toBe("Payment received: your Full Report");
         expect(receipt.body).toMatch(/Complete your Report Intake: https?:\/\/\S+\/report\/\S+/);
@@ -197,20 +194,12 @@ for (const target of targets) {
         expect(await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: payment.id })).toMatchObject({ changed: false });
         expect(mocked.deliverEmail).not.toHaveBeenCalled();
         await expect((await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "full_report" })).rejects.toMatchObject({ code: "CONFLICT" });
-        await expect((await superAdmin.call()).businessSupport.markProofReceived({ paymentRequestId: payment.id })).rejects.toMatchObject({ code: "CONFLICT" });
       });
 
-      it("records proof once when two people press the button together", async () => {
-        const { token, visitor, id } = await finishedCheck("proof-twice");
-        await (await visitor.call()).businessCheck.requestNext({ token, choice: "report" });
-        const [payment] = await paymentsOf(id);
-        const [first, second] = await Promise.all([superAdmin.call(), superAdmin.call()]);
-        const results = await together([
-          () => first.businessSupport.markProofReceived({ paymentRequestId: payment.id }),
-          () => second.businessSupport.markProofReceived({ paymentRequestId: payment.id }),
-        ]);
-        expect(results.filter(result => result.changed)).toHaveLength(1);
-        expect(await auditsFor("payment_proof_received", id)).toHaveLength(1);
+      it("has no proof-of-payment step: Paystack confirms the money, so there is nothing for an owner to send", async () => {
+        const procedures = Object.keys((appRouter as unknown as { _def: { procedures: Record<string, unknown> } })._def.procedures);
+        expect(procedures).not.toContain("businessSupport.markProofReceived");
+        expect(procedures).toContain("businessSupport.confirmPayment");
       });
 
       it("confirms once, with one email, one link and one audit row, when two people confirm together", async () => {
@@ -295,13 +284,13 @@ for (const target of targets) {
         expect(audit).toEqual([expect.objectContaining({ item: "current_state", amountNaira: 500_000, from: "opportunity", to: "won" })]);
       });
 
-      it("holds the details for 48 hours; after that the team sees it, can send fresh details, and can still confirm money that arrives", async () => {
+      it("holds the link for 48 hours; after that the team sees it and can send a fresh link, and a late payment can still be confirmed by hand", async () => {
         const { token, email, id } = await finishedCheck("window");
         mocked.deliverEmail.mockClear();
         const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
         const details = emails().find(sent => sent.to === email)!;
         expect(details.body).toMatch(/Pay by: .+ \(Lagos time\)/);
-        expect(details.body).toContain("These details hold for 48 hours.");
+        expect(details.body).toContain("If you need more than 48 hours, reply to this email and we will send you a new link.");
         const detailOf = async () => (await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id })).payments![0];
         const listedOf = async () => (await (await superAdmin.call()).businessSupport.checks()).find((row: { id: number }) => row.id === id)!.payments;
         expect(await detailOf()).toMatchObject({ status: "requested", displayStatus: "requested" });
@@ -377,8 +366,8 @@ for (const target of targets) {
         const report = (await paymentsOf(id)).find((row: { item: string }) => row.item === "full_report");
         expect(emails().some(sent => sent.to === email && sent.subject === "Payment details for your Full Report")).toBe(true);
 
-        // 2. They pay for the report and reply with proof; the team confirms; they answer the form and get the report.
-        await (await superAdmin.call()).businessSupport.markProofReceived({ paymentRequestId: report.id });
+        // 2. They pay for the report (the Paystack path is covered in onlinePayment.db.test.ts; the team's fallback stands in
+        //    here); they answer the form and get the report.
         await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: report.id });
         const formLink = emails().find(sent => sent.to === email && sent.subject === "Payment received: your Full Report")!.body.match(/Complete your Report Intake: (\S+)/)![1];
         await (await browser().call()).fullReport.submit({ token: decodeURIComponent(formLink.split("/report/")[1]), intake: sampleIntake });
@@ -387,7 +376,6 @@ for (const target of targets) {
         // 3. After the call, the team sends the Current State Assessment details; the owner pays; the team confirms.
         const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
         expect((await rowFor(token)).pipelineStage).toBe("opportunity");
-        await (await superAdmin.call()).businessSupport.markProofReceived({ paymentRequestId });
         mocked.deliverEmail.mockClear();
         expect(await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId })).toMatchObject({ invitation: "sent" });
         expect((await rowFor(token)).pipelineStage).toBe("won");
@@ -410,7 +398,8 @@ for (const target of targets) {
         const actions = detail.stageHistory.map(event => event.action);
         expect(actions.filter(action => action === "payment_confirmed")).toHaveLength(2);
         expect(actions.filter(action => action === "payment_details_sent")).toHaveLength(2);
-        expect(actions.filter(action => action === "payment_proof_received")).toHaveLength(2);
+        // There is no proof-of-payment step any more.
+        expect(actions).not.toContain("payment_proof_received");
         expect(actions).toContain("full_report_delivered");
         expect(detail.report).toMatchObject({ status: "delivered" });
       });
@@ -565,7 +554,6 @@ for (const target of targets) {
         for (const b of [clientSession, browser(), bareAdmin, analyst]) {
           await expect((await b.call()).businessSupport.requestPayment({ businessCheckId: id, item: "full_report" })).rejects.toMatchObject({ code: "FORBIDDEN" });
           await expect((await b.call()).businessSupport.confirmPayment({ paymentRequestId })).rejects.toMatchObject({ code: "FORBIDDEN" });
-          await expect((await b.call()).businessSupport.markProofReceived({ paymentRequestId })).rejects.toMatchObject({ code: "FORBIDDEN" });
         }
         expect((await paymentsOf(id))[0]).toMatchObject({ status: "requested" });
       });

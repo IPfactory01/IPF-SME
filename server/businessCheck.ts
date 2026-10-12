@@ -209,14 +209,14 @@ export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary
     summary.next,
     ENV.discoveryCallUrl ? `Pick a time here: ${ENV.discoveryCallUrl}` : "Book it from your result page on our website.",
     "",
-    // With Paystack on, the Full Report is one click from paying; without it, the owner replies for the bank details.
+    // The Full Report is paid on Paystack only. With Paystack off (/api/health reports it), the owner replies for a link.
     ...(input.fullReportPay
       ? [
         `Want the Full Report? It costs ${formatNaira(PRICES.fullReport)} and comes by email. Pay securely online with Paystack, by card or bank.`,
         ...(input.fullReportPay.mode === "test" ? ["Online payment is in Paystack's test mode while we test it, so paying online moves no real money."] : []),
         `Pay for your Full Report: ${input.fullReportPay.url}`,
       ]
-      : [`Want the Full Report? It costs ${formatNaira(PRICES.fullReport)} and comes by email. Reply "report" and we will email you the payment details.`]),
+      : [`Want the Full Report? It costs ${formatNaira(PRICES.fullReport)} and comes by email. Online payment opens soon: reply "report" and we will email you a link to pay when it does.`]),
     "",
     `${BRAND.organisationName}`,
   ].join("\n");

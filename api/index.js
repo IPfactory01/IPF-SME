@@ -124,7 +124,7 @@ var init_env = __esm({
   "server/_core/env.ts"() {
     "use strict";
     init_brand();
-    REQUIRED_IN_PRODUCTION = ["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY"];
+    REQUIRED_IN_PRODUCTION = ["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY", "PAYSTACK_SECRET_KEY"];
     ENV = {
       appId: process.env.VITE_APP_ID ?? "",
       cookieSecret: process.env.JWT_SECRET ?? "",
@@ -145,20 +145,13 @@ var init_env = __esm({
       googleRefreshToken: process.env.GOOGLE_REFRESH_TOKEN ?? "",
       jumpGmailRefreshToken: process.env.JUMP_GMAIL_REFRESH_TOKEN ?? "",
       googleCalendarId: process.env.GOOGLE_CALENDAR_ID ?? "primary",
-      /**
-       * The account business owners pay into by bank transfer until online payment is ready (server/payments.ts). Until all
-       * three are set, payment email shows placeholder test details and says in capitals that they are not real.
-       */
-      paymentBankName: process.env.PAYMENT_BANK_NAME?.trim() ?? "",
-      paymentAccountName: process.env.PAYMENT_ACCOUNT_NAME?.trim() ?? "",
-      paymentAccountNumber: process.env.PAYMENT_ACCOUNT_NUMBER?.trim() ?? "",
       /** Private file storage for the engagement room (Supabase Storage, server/fileStorage.ts). Uploads switch on once set. */
       supabaseUrl: process.env.SUPABASE_URL?.trim() ?? "",
       supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "",
       supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET?.trim() || "engagement-files",
       /**
        * Paystack (server/paystack.ts). The secret key decides the mode: `sk_test_` is test (no real money moves), `sk_live_`
-       * is live, unset is off and only bank transfer is offered. It also checks the webhook's signature. The public key is
+       * is live, unset is off and nothing can be paid (required in production). It also checks the webhook's signature. The public key is
        * not needed by the hosted checkout, and nothing reads it today.
        */
       paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY?.trim() ?? "",
@@ -8755,12 +8748,12 @@ function ownerEmail(input) {
     summary.next,
     ENV.discoveryCallUrl ? `Pick a time here: ${ENV.discoveryCallUrl}` : "Book it from your result page on our website.",
     "",
-    // With Paystack on, the Full Report is one click from paying; without it, the owner replies for the bank details.
+    // The Full Report is paid on Paystack only. With Paystack off (/api/health reports it), the owner replies for a link.
     ...input.fullReportPay ? [
       `Want the Full Report? It costs ${formatNaira(PRICES.fullReport)} and comes by email. Pay securely online with Paystack, by card or bank.`,
       ...input.fullReportPay.mode === "test" ? ["Online payment is in Paystack's test mode while we test it, so paying online moves no real money."] : [],
       `Pay for your Full Report: ${input.fullReportPay.url}`
-    ] : [`Want the Full Report? It costs ${formatNaira(PRICES.fullReport)} and comes by email. Reply "report" and we will email you the payment details.`],
+    ] : [`Want the Full Report? It costs ${formatNaira(PRICES.fullReport)} and comes by email. Online payment opens soon: reply "report" and we will email you a link to pay when it does.`],
     "",
     `${BRAND.organisationName}`
   ].join("\n");
@@ -8796,7 +8789,6 @@ function officeEmail(input) {
 import { and as and14, desc as desc10, eq as eq19, inArray as inArray5, ne as ne2 } from "drizzle-orm";
 import { TRPCError as TRPCError17 } from "@trpc/server";
 init_brand();
-init_env();
 
 // server/engagements.ts
 import { TRPCError as TRPCError14 } from "@trpc/server";
@@ -11395,13 +11387,6 @@ async function resendReportLink(db, input) {
 var lagosTime = (date2) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(date2);
 
 // server/payments.ts
-var PLACEHOLDER_BANK_DETAILS = { bankName: "Test Bank", accountName: "IP Factory (test account)", accountNumber: "0000000000" };
-function bankDetails() {
-  if (ENV.paymentBankName && ENV.paymentAccountName && ENV.paymentAccountNumber) {
-    return { bankName: ENV.paymentBankName, accountName: ENV.paymentAccountName, accountNumber: ENV.paymentAccountNumber, placeholder: false };
-  }
-  return { ...PLACEHOLDER_BANK_DETAILS, placeholder: true };
-}
 var firstName = (fullName) => fullName.trim().split(/\s+/)[0] || "there";
 var EMAIL_TEST_NOTICE = ONLINE_TEST_NOTICE.replace(": ", " - ");
 function onlinePaymentOffer(publicToken, item2) {
@@ -11409,70 +11394,32 @@ function onlinePaymentOffer(publicToken, item2) {
   return mode === "off" ? null : { url: `${getTrustedApplicationOrigin()}${payPath(publicToken, item2)}`, mode };
 }
 function paymentDetailsEmail(input) {
-  const bank = bankDetails();
   const { amount } = PAYMENT_ITEM_DETAILS[input.item];
   const report = input.item === "full_report";
-  const subject = report ? "Payment details for your Full Report" : `Payment details for your ${CURRENT_STATE.name}`;
-  const opening = [
-    `Dear ${firstName(input.fullName)},`,
-    "",
-    report ? "Thank you for asking for your Full Report. Here is how to pay for it." : `Thank you for choosing to start your ${CURRENT_STATE.name} with us. Here is how to pay for it.`,
-    ""
-  ];
-  const placeholder = bank.placeholder ? ["TEST DETAILS - DO NOT PAY", "These are placeholder details while we test this email. Please do not make a transfer to them.", ""] : [];
   const afterwards = report ? `Then we send you the Report Intake, a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your Full Report is emailed to you the moment you finish it.` : `Then your ${CURRENT_STATE.name} starts. ${CURRENT_STATE.start}`;
-  if (input.online) {
-    return {
-      subject,
-      body: [
-        ...opening,
-        ...input.online.mode === "test" ? [EMAIL_TEST_NOTICE, "Online payment is in Paystack's test mode while we test it, so paying online moves no real money.", ""] : [],
-        "HOW TO PAY",
-        `Amount: ${formatNaira(amount)}`,
-        `Reference: ${input.reference}`,
-        `Pay by: ${lagosTime(input.deadline)} (Lagos time)`,
-        "",
-        "PAY ONLINE",
-        "Pay securely with Paystack, by card or bank. Your payment is confirmed straight away.",
-        `Pay online: ${input.online.url}`,
-        "",
-        ...placeholder,
-        "OR PAY BY BANK TRANSFER",
-        `Bank: ${bank.bankName}`,
-        `Account name: ${bank.accountName}`,
-        `Account number: ${bank.accountNumber}`,
-        "",
-        "Please put the reference on your transfer, so we can match your payment to you.",
-        `These details hold for ${PAYMENT_WINDOW_HOURS} hours. If you need more time, reply to this email and we will send them again.`,
-        "",
-        "AFTER YOU PAY",
-        "Paid online? There is nothing more to do. We email you as soon as Paystack confirms your payment.",
-        "Paid by bank transfer? Reply to this email with your proof of payment: a screenshot of the transfer or your bank's receipt. We will confirm by email once the payment arrives.",
-        afterwards,
-        "",
-        BRAND.organisationName
-      ].join("\n")
-    };
-  }
   return {
-    subject,
+    subject: report ? "Payment details for your Full Report" : `Payment details for your ${CURRENT_STATE.name}`,
     body: [
-      ...opening,
-      ...placeholder,
+      `Dear ${firstName(input.fullName)},`,
+      "",
+      report ? "Thank you for asking for your Full Report. Here is how to pay for it." : `Thank you for choosing to start your ${CURRENT_STATE.name} with us. Here is how to pay for it.`,
+      "",
+      ...input.online?.mode === "test" ? [EMAIL_TEST_NOTICE, "Online payment is in Paystack's test mode while we test it, so paying online moves no real money.", ""] : [],
       "HOW TO PAY",
       `Amount: ${formatNaira(amount)}`,
-      `Bank: ${bank.bankName}`,
-      `Account name: ${bank.accountName}`,
-      `Account number: ${bank.accountNumber}`,
       `Reference: ${input.reference}`,
-      `Pay by: ${lagosTime(input.deadline)} (Lagos time)`,
+      // The owner's own Full Report link reopens by itself; the assessment's holds for the 48 hours after the call.
+      ...report ? [] : [`Pay by: ${lagosTime(input.deadline)} (Lagos time)`],
       "",
-      "Please put the reference on your transfer, so we can match your payment to you.",
-      `These details hold for ${PAYMENT_WINDOW_HOURS} hours. If you need more time, reply to this email and we will send them again.`,
+      ...input.online ? [
+        "Pay securely with Paystack, by card, bank transfer or USSD. Your payment is confirmed straight away.",
+        `Pay online: ${input.online.url}`
+      ] : ["Online payment is not open yet. We will email you a link to pay as soon as it is."],
       "",
       "AFTER YOU PAY",
-      "Reply to this email with your proof of payment: a screenshot of the transfer or your bank's receipt. We will confirm by email once the payment arrives.",
+      "There is nothing more to do. We email you as soon as Paystack confirms your payment.",
       afterwards,
+      ...report ? [] : ["", `If you need more than ${PAYMENT_WINDOW_HOURS} hours, reply to this email and we will send you a new link.`],
       "",
       BRAND.organisationName
     ].join("\n")
@@ -11578,22 +11525,6 @@ async function loadRequest(db, paymentRequestId) {
   const request = (await db.select().from(paymentRequests).where(eq19(paymentRequests.id, paymentRequestId)).limit(1))[0];
   if (!request) throw new TRPCError17({ code: "NOT_FOUND", message: "That payment request does not exist." });
   return request;
-}
-var alreadyConfirmed = () => new TRPCError17({ code: "CONFLICT", message: "This payment is already confirmed." });
-async function markProofReceived(db, input) {
-  const request = await loadRequest(db, input.paymentRequestId);
-  if (request.status === "confirmed") throw alreadyConfirmed();
-  if (request.status === "proof_received") return { success: true, changed: false };
-  const check = await loadCheck(db, request.businessCheckId);
-  const changed = await db.transaction(async (tx) => {
-    const [claimed] = await tx.update(paymentRequests).set({ status: "proof_received", proofReceivedAt: /* @__PURE__ */ new Date() }).where(and14(eq19(paymentRequests.id, request.id), eq19(paymentRequests.status, "requested"))).returning({ id: paymentRequests.id });
-    if (!claimed) return false;
-    await recordAudit(tx, { action: "payment_proof_received", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference } });
-    return true;
-  });
-  if (changed) return { success: true, changed: true };
-  if ((await loadRequest(db, request.id)).status === "confirmed") throw alreadyConfirmed();
-  return { success: true, changed: false };
 }
 var NOT_CONFIRMED = { success: true, changed: false, invitation: null, engagement: null };
 var ONLINE_NOTE = "Paid online with Paystack, reference ";
@@ -12359,17 +12290,18 @@ var businessSupportRouter = router({
   /** Moves a business check to a later stage (Opportunity, Lost, Nurture, Referred…), with an optional note. Won comes only from a confirmed payment. */
   setStage: prospects.input(z20.object({ businessCheckId: z20.number().int().positive(), stage: z20.enum(SETTABLE_STAGES), note: z20.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => setPipelineStage(await businessSupportDb(), { ...input, note: input.note || void 0, actorUserId: ctx.user.id })),
   clients: clients.query(async () => listClients(await businessSupportDb())),
-  /** Emails the owner the payment details for the full report or the Current State Assessment (again, if already sent). */
+  /** Emails the owner the Paystack payment link for the Full Report or the Current State Assessment (again, if already sent). */
   requestPayment: payments.input(z20.object({ businessCheckId: z20.number().int().positive(), item: z20.enum(PAYMENT_ITEMS) })).mutation(async ({ ctx, input }) => requestPayment(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
-  /** The owner sent proof of payment; the money is not confirmed yet. */
-  markProofReceived: payments.input(z20.object({ paymentRequestId: z20.number().int().positive() })).mutation(async ({ ctx, input }) => markProofReceived(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
   /** The sent full report, rebuilt from the owner's stored answers, as a PDF. */
   downloadReport: prospects.input(z20.object({ businessCheckId: z20.number().int().positive() })).mutation(async ({ input }) => adminDownloadReport(await businessSupportDb(), input.businessCheckId)),
   /** Sends the owner a new link to the Report Intake. */
   resendReportLink: payments.input(z20.object({ businessCheckId: z20.number().int().positive() })).mutation(async ({ ctx, input }) => resendReportLink(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
   /** Sends the "payment received" email again for a confirmed Current State Assessment payment. */
   resendPaymentConfirmation: payments.input(z20.object({ paymentRequestId: z20.number().int().positive() })).mutation(async ({ ctx, input }) => resendPaymentConfirmation(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
-  /** The money is in the account. For the Current State Assessment this wins the business and sends the client account invitation. */
+  /**
+   * A fallback only: payments confirm themselves when Paystack confirms them. For a payment Paystack shows as paid that
+   * has not confirmed itself here. For the Current State Assessment this wins the business and sends the invitation.
+   */
   confirmPayment: payments.input(z20.object({ paymentRequestId: z20.number().int().positive(), note: z20.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => confirmPayment(await businessSupportDb(), { ...input, note: input.note || void 0, actorUserId: ctx.user.id }))
 });
 
@@ -12802,7 +12734,7 @@ import { TRPCError as TRPCError29 } from "@trpc/server";
 import { and as and19, eq as eq25 } from "drizzle-orm";
 init_brand();
 var notFound2 = () => new TRPCError29({ code: "NOT_FOUND", message: "We could not find this payment. Use the link in your payment email." });
-var ONLINE_PAYMENT_OFF_MESSAGE = "Online payment is not available yet. Please pay by bank transfer, using the details in your payment email.";
+var ONLINE_PAYMENT_OFF_MESSAGE = "Online payment is not open yet. Please try again later, or reply to your payment email and we will send you a link when it is.";
 function requireOnlinePayment() {
   const mode = paystackMode();
   if (mode === "off") throw new TRPCError29({ code: "PRECONDITION_FAILED", message: ONLINE_PAYMENT_OFF_MESSAGE });
@@ -12816,7 +12748,7 @@ async function lookup(db, token3, item2) {
 }
 var ownerMayStart = (check, item2) => item2 === "full_report" && Boolean(check.completedAt);
 var requestByReference = async (db, reference2) => (await db.select().from(paymentRequests).where(eq25(paymentRequests.reference, reference2)).limit(1))[0];
-var PAGE_STATE = { requested: "open", expired: "expired", proof_received: "proof_received", confirmed: "paid" };
+var PAGE_STATE = { requested: "open", expired: "expired", proof_received: "open", confirmed: "paid" };
 async function onlinePaymentPage(db, input) {
   const { check, request } = await lookup(db, input.token, input.item);
   if (!request) {
@@ -12847,7 +12779,7 @@ async function startOnlinePayment(db, input) {
   if (request.status === "confirmed") return { alreadyPaid: true };
   if (effectivePaymentStatus(request) === "expired") {
     if (!ownerMayStart(check, request.item)) {
-      throw new TRPCError29({ code: "PRECONDITION_FAILED", message: "These payment details have passed their 48 hours. Reply to your payment email and we will send fresh ones." });
+      throw new TRPCError29({ code: "PRECONDITION_FAILED", message: "This payment link has passed its 48 hours. Reply to your payment email and we will send you a new one." });
     }
     await requestPayment(db, { businessCheckId: check.id, item: request.item, actorUserId: null });
     request = (await lookup(db, input.token, input.item)).request ?? request;
@@ -12865,7 +12797,7 @@ async function startOnlinePayment(db, input) {
     return { alreadyPaid: false, url: authorizationUrl };
   } catch (error) {
     console.error(`[Paystack] Could not open a payment for ${request.reference}:`, error instanceof Error ? error.message : "unknown error");
-    throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute, or pay by bank transfer." });
+    throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute." });
   }
 }
 function transactionProblem(request, transaction) {

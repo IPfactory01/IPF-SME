@@ -83,7 +83,7 @@ describe("the return page after Paystack", () => {
     renderPage();
     expect(screen.getByRole("heading", { name: "Payment not completed" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Try again" }).getAttribute("href")).toBe("/pay/CHECKTOKEN1234567890abcdef/full_report");
-    expect(screen.getByText(/pay by bank transfer/)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/bank transfer, using the details|proof of payment/i);
   });
 
   it("points to the payment email when it does not know the pay page", () => {

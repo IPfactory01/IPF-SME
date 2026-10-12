@@ -11,9 +11,9 @@ import React, { useState } from "react";
 import { useParams } from "wouter";
 
 /**
- * The pay page, reached from the "Pay online" button in the payment details email. The server decides everything on
- * it: the amount comes from the payment request, and the button only asks the server to open Paystack's checkout.
- * Bank transfer stays described as the alternative.
+ * The pay page, reached from the "Pay online" button in the payment email or "Pay for your Full Report" in the Business
+ * Check summary email. The server decides everything on it: the amount comes from the payment request, and the button
+ * only asks the server to open Paystack's checkout, which takes card, bank transfer or USSD. Paystack is the only way to pay.
  */
 
 const MEANING: Record<PaymentItem, string> = { full_report: METHOD_MEANING.fullReport, current_state: METHOD_MEANING.currentState };
@@ -28,17 +28,6 @@ const ALREADY_PAID: Record<PaymentItem, string> = {
   full_report: `Your ${METHOD.reportIntake} link is in your email. If you cannot find it, reply to your payment email.`,
   current_state: `Your ${METHOD.currentState} has started. Look for the email with the link to set up your client account on ${BRAND.productName}.`,
 };
-
-function BankTransfer() {
-  return (
-    <section aria-label="Pay by bank transfer" className="mt-10 border-t border-line pt-6">
-      <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-brand">Prefer to pay by bank transfer?</h2>
-      <p className="mt-2 text-sm leading-relaxed text-ink-soft">
-        Use the bank details and the reference in your payment email. Then reply to that email with your proof of payment. We confirm by email once the money arrives.
-      </p>
-    </section>
-  );
-}
 
 export default function PayPage() {
   const params = useParams<{ token: string; item: string }>();
@@ -110,17 +99,12 @@ export default function PayPage() {
 
       {state === "expired" && (
         <p role="alert" className="mt-6 border border-danger-line bg-danger-tint p-4 text-sm text-danger-strong">
-          These payment details have passed their 48 hours. Reply to your payment email and we will send fresh ones.
+          This payment link has passed its 48 hours. Reply to your payment email and we will send you a new one.
         </p>
       )}
       {mode === "off" && state !== "expired" && (
         <p className="mt-6 border border-line bg-paper-raised p-4 text-sm text-ink-soft">
-          Online payment is not available yet. Please pay by bank transfer, using the details and the reference in your payment email.
-        </p>
-      )}
-      {state === "proof_received" && online && (
-        <p className="mt-6 border border-brand-line bg-brand-tint p-4 text-sm text-ink-700">
-          You have sent us proof of a bank transfer. If you paid that way, you do not need to pay again: we confirm by email once the money arrives.
+          Online payment is not open yet. Please try again later, or reply to your payment email and we will send you a link when it is.
         </p>
       )}
 
@@ -131,7 +115,7 @@ export default function PayPage() {
             <Lock className="mr-2 h-4 w-4" aria-hidden />
             {start.isPending || leaving ? "Opening Paystack…" : `Pay ${amount} securely with Paystack`}
           </Button>
-          <p className="text-xs leading-relaxed text-ink-muted">You go to Paystack's secure page to pay by card or bank, then come back here. Your payment is confirmed straight away.</p>
+          <p className="text-xs leading-relaxed text-ink-muted">You go to Paystack's secure page to pay by card, bank transfer or USSD, then come back here. Your payment is confirmed straight away.</p>
           {problem && <p role="alert" className="text-sm text-danger-strong">{problem}</p>}
         </div>
       )}
@@ -141,7 +125,6 @@ export default function PayPage() {
         <p className="mt-2 text-sm leading-relaxed text-ink-soft">{AFTER_PAYING[item]}</p>
       </section>
 
-      <BankTransfer />
     </PaymentShell>
   );
 }

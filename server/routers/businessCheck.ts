@@ -11,7 +11,8 @@ import { officeEmail, ownerEmail, summariseCheck, type CheckContact, type CheckS
 import { getDb } from "../db";
 import { databaseNow } from "../dbHelpers";
 import { BUSINESS_SUPPORT_MAILBOX, deliverEmail } from "../email";
-import { requestPayment } from "../payments";
+import { onlinePaymentOffer } from "../payments";
+import { askForFullReport } from "../fullReportRequest";
 import { ENV } from "../_core/env";
 import { bookedCallTime, CALENDLY_EVENT_URI, findBookedCall } from "../calendly";
 import { recordAudit } from "../audit";
@@ -153,7 +154,7 @@ export const businessCheckRouter = router({
     }
 
     const office = officeEmail({ contact, answers, summary, source, result });
-    const owner = ownerEmail({ contact, summary, result, answers });
+    const owner = ownerEmail({ contact, summary, result, answers, fullReportPay: onlinePaymentOffer(check.publicToken, "full_report") });
     // A delivery problem never undoes the check: the result is already saved and the page says whether email went out.
     const failed = { status: "Failed" as const };
     const [officeDelivery, ownerDelivery] = await Promise.all([
@@ -182,6 +183,11 @@ export const businessCheckRouter = router({
       const db = await database("record your request");
       const check = await findCheck(db, input.token);
       if (!check.completedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "Kindly finish the Business Check first." });
+      // The Full Report: the same step as paying from the link in the summary email.
+      if (input.choice === "report") {
+        await askForFullReport(db, check, { source: "result_page", note: input.note });
+        return { success: true, choice: input.choice };
+      }
 
       // A Calendly booking: record when the call is, so the admin console shows it as booked.
       // If the booking itself cannot be read, look for the owner's booking by email instead.
@@ -196,28 +202,12 @@ export const businessCheckRouter = router({
         await recordAudit(db, { action: "business_check_call_booked", targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: bookedFor.toISOString(), source: "calendly" } });
       }
 
-      const already = input.choice === "call" ? check.callRequestedAt : check.reportRequestedAt;
+      const already = check.callRequestedAt;
       if (!already) {
         await db.update(businessChecks)
-          .set(input.choice === "call"
-            ? { callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }
-            : { reportRequestedAt: databaseNow() })
+          .set({ callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") })
           .where(eq(businessChecks.id, check.id));
-        const what = input.choice === "call" ? "a free Debrief" : "the Full Report";
-        // The owner is emailed the report's payment details straight away; the office notice says whether that worked.
-        let payment = "";
-        if (input.choice === "report") {
-          try {
-            const sent = await requestPayment(db, { businessCheckId: check.id, item: "full_report", actorUserId: null });
-            payment = sent.deliveryStatus === "Failed"
-              ? `Payment details: ${sent.reference}, but the email to the owner failed (${sent.deliveryProblem ?? "no reason given"}). Send them again from admin once that is fixed.`
-              : `Payment details sent: ${sent.reference}`;
-          } catch (error) {
-            const paid = error instanceof TRPCError && error.code === "CONFLICT";
-            if (!paid) console.error("[BusinessCheck] Could not send the report payment details:", error instanceof Error ? error.message : error);
-            payment = paid ? "Payment: already paid" : "Payment details: NOT SENT. Send them from the admin console.";
-          }
-        }
+        const what = "a free Debrief";
         await deliverEmail({
           sender: "business_support",
           idempotencyKey: `business_checks:${check.id}:${input.choice}:office`,
@@ -230,7 +220,6 @@ export const businessCheckRouter = router({
             `WhatsApp: ${check.whatsapp || "Not given"}`,
             `Business: ${check.businessName || "Not given"}`,
             `Note: ${input.note || "None"}`,
-            ...(payment ? [payment] : []),
             ...(bookedFor ? [`Booked on Calendly for: ${lagosTime(bookedFor)} (Lagos time)`] : []),
             "",
             `Business Check #${check.id}, completed ${lagosTime(check.completedAt)} (Lagos time).`,

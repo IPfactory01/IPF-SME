@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { TRPCError } from "@trpc/server";
 import { and, eq } from "drizzle-orm";
-import { businessChecks, paymentRequests, type PaymentRequest } from "../drizzle/schema";
+import { businessChecks, paymentRequests, type BusinessCheck, type PaymentRequest } from "../drizzle/schema";
 import { BRAND } from "../shared/brand";
 import { formatNaira } from "../shared/businessSupport";
 import {
@@ -13,7 +13,8 @@ import { recordAudit } from "./audit";
 import { getDb } from "./db";
 import { BUSINESS_SUPPORT_MAILBOX, deliverEmail } from "./email";
 import { lagosTime } from "./lagosTime";
-import { confirmPayment, type OnlineConfirmation } from "./payments";
+import { askForFullReport } from "./fullReportRequest";
+import { confirmPayment, requestPayment, type OnlineConfirmation } from "./payments";
 import { initializeTransaction, isValidPaystackSignature, onlineReference, paymentReferenceOf, paystackMode, verifyTransaction, type VerifiedTransaction } from "./paystack";
 import { getTrustedApplicationOrigin } from "./security";
 
@@ -36,16 +37,21 @@ export function requireOnlinePayment(): Exclude<OnlinePaymentMode, "off"> {
   return mode;
 }
 
-/** The payment request for one item of one Business Check, found by the check's token. Unknown token or item: NOT_FOUND. */
-async function requestFor(db: Pick<Database, "select">, token: string, item: PaymentItem) {
-  const [row] = await db.select({ request: paymentRequests, email: businessChecks.email })
-    .from(paymentRequests)
-    .innerJoin(businessChecks, eq(businessChecks.id, paymentRequests.businessCheckId))
-    .where(and(eq(businessChecks.publicToken, token), eq(paymentRequests.item, item)))
-    .limit(1);
-  if (!row) throw notFound();
-  return row;
+/** The Business Check behind a pay link (its unguessable token), and its payment request for the item if one exists. */
+async function lookup(db: Pick<Database, "select">, token: string, item: PaymentItem) {
+  const check = (await db.select().from(businessChecks).where(eq(businessChecks.publicToken, token)).limit(1))[0];
+  if (!check) throw notFound();
+  const request = (await db.select().from(paymentRequests)
+    .where(and(eq(paymentRequests.businessCheckId, check.id), eq(paymentRequests.item, item))).limit(1))[0];
+  return { check, request };
 }
+
+/**
+ * The owner may start paying for the Full Report themselves, from the link in their summary email, once their check is
+ * finished: before they have asked, and after an earlier 48 hours have passed. The Current State Assessment is offered
+ * only by the team, after the Discovery Call, so it always needs payment details the team sent.
+ */
+const ownerMayStart = (check: Pick<BusinessCheck, "completedAt">, item: PaymentItem) => item === "full_report" && Boolean(check.completedAt);
 
 const requestByReference = async (db: Pick<Database, "select">, reference: string) =>
   (await db.select().from(paymentRequests).where(eq(paymentRequests.reference, reference)).limit(1))[0];
@@ -54,13 +60,20 @@ const PAGE_STATE = { requested: "open", expired: "expired", proof_received: "pro
 
 /** What the pay page needs, and nothing else: the item, its amount, whether online payment is on, and where it stands. */
 export async function onlinePaymentPage(db: Pick<Database, "select">, input: { token: string; item: PaymentItem }) {
-  const { request } = await requestFor(db, input.token, input.item);
+  const { check, request } = await lookup(db, input.token, input.item);
+  if (!request) {
+    // Not asked for yet: the Full Report at today's price, filed when the owner presses pay.
+    if (!ownerMayStart(check, input.item)) throw notFound();
+    return { item: input.item, name: PAYMENT_ITEM_TITLES[input.item], amountNaira: PAYMENT_ITEM_DETAILS[input.item].amount, mode: paystackMode(), state: "open" as PayPageState };
+  }
+  const display = effectivePaymentStatus(request);
   return {
     item: request.item,
     name: PAYMENT_ITEM_TITLES[request.item],
     amountNaira: request.amountNaira,
     mode: paystackMode(),
-    state: PAGE_STATE[effectivePaymentStatus(request)],
+    // An owner's own Full Report link never dead-ends: pressing pay starts a new 48 hours.
+    state: display === "expired" && ownerMayStart(check, request.item) ? "open" : PAGE_STATE[display],
   };
 }
 
@@ -69,14 +82,29 @@ export async function onlinePaymentPage(db: Pick<Database, "select">, input: { t
  * (whole naira, times 100 for kobo): the browser never names an amount. Each attempt has its own reference, because
  * Paystack refuses a reference twice and an owner may abandon a first try.
  */
-export async function startOnlinePayment(db: Pick<Database, "select">, input: { token: string; item: PaymentItem }): Promise<{ alreadyPaid: true } | { alreadyPaid: false; url: string }> {
+export async function startOnlinePayment(db: Database, input: { token: string; item: PaymentItem }): Promise<{ alreadyPaid: true } | { alreadyPaid: false; url: string }> {
   requireOnlinePayment();
-  const { request, email } = await requestFor(db, input.token, input.item);
+  const found = await lookup(db, input.token, input.item);
+  const { check } = found;
+  let request = found.request;
+  if (!request) {
+    // Paying from the summary email before asking: filed exactly as "Get my Full Report" on the result page would.
+    if (!ownerMayStart(check, input.item)) throw notFound();
+    await askForFullReport(db, check, { source: "pay_link" });
+    request = (await lookup(db, input.token, input.item)).request;
+    if (!request) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute, or reply to your summary email." });
+  }
   if (request.status === "confirmed") return { alreadyPaid: true };
   // The link holds for the same 48 hours as the bank details; sending the details again opens a new window.
   if (effectivePaymentStatus(request) === "expired") {
-    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "These payment details have passed their 48 hours. Reply to your payment email and we will send fresh ones." });
+    if (!ownerMayStart(check, request.item)) {
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: "These payment details have passed their 48 hours. Reply to your payment email and we will send fresh ones." });
+    }
+    // The owner chose the report themselves: a new 48 hours, with fresh details by email, as if they had asked again.
+    await requestPayment(db, { businessCheckId: check.id, item: request.item, actorUserId: null });
+    request = (await lookup(db, input.token, input.item)).request ?? request;
   }
+  const email = check.email;
   const reference = onlineReference(request.reference);
   try {
     const { authorizationUrl } = await initializeTransaction({

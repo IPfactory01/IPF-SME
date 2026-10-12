@@ -13,6 +13,7 @@ import { areasNotAssessed, DISC_STYLES, NOT_ASSESSED_NOTE, READINESS_LABELS, typ
 import { GAP_LABELS, SECTIONS, type Answers } from "../shared/businessCheck/questions";
 import { invokeLLM } from "./_core/llm";
 import { ENV } from "./_core/env";
+import type { OnlinePaymentOffer } from "./payments";
 
 export type CheckSummary = {
   found: string;
@@ -178,7 +179,7 @@ export async function summariseCheck(input: { answers: Answers; result: CheckRes
   }
 }
 
-export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary; result: CheckResult; answers?: Answers }) {
+export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary; result: CheckResult; answers?: Answers; fullReportPay?: OnlinePaymentOffer | null }) {
   const { contact, summary, result } = input;
   // Areas the check left out for this business are listed too, so the owner sees the whole method.
   const notAssessed = input.answers ? areasNotAssessed(input.answers) : [];
@@ -208,7 +209,14 @@ export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary
     summary.next,
     ENV.discoveryCallUrl ? `Pick a time here: ${ENV.discoveryCallUrl}` : "Book it from your result page on our website.",
     "",
-    `Want the Full Report? It costs ${formatNaira(PRICES.fullReport)} and comes by email. Reply "report" and we will email you the payment details.`,
+    // With Paystack on, the Full Report is one click from paying; without it, the owner replies for the bank details.
+    ...(input.fullReportPay
+      ? [
+        `Want the Full Report? It costs ${formatNaira(PRICES.fullReport)} and comes by email. Pay securely online with Paystack, by card or bank.`,
+        ...(input.fullReportPay.mode === "test" ? ["Online payment is in Paystack's test mode while we test it, so paying online moves no real money."] : []),
+        `Pay for your Full Report: ${input.fullReportPay.url}`,
+      ]
+      : [`Want the Full Report? It costs ${formatNaira(PRICES.fullReport)} and comes by email. Reply "report" and we will email you the payment details.`]),
     "",
     `${BRAND.organisationName}`,
   ].join("\n");

@@ -236,6 +236,65 @@ for (const target of targets) {
       });
     });
 
+    describe("paying from the summary email", () => {
+      const summaryOf = (email: string) => emails().find(sent => sent.to === email && sent.subject === "Your Business Check: Findings")!;
+
+      it("links the Full Report in the summary email straight to the pay page while Paystack is on", async () => {
+        const { token, email } = await finishedCheck("summary-link");
+        const body = summaryOf(email).body;
+        expect(body).toContain(`Pay for your Full Report: http://localhost:3000/pay/${encodeURIComponent(token)}/full_report`);
+        expect(body).not.toContain('Reply "report"');
+        expect(body).toContain("Online payment is in Paystack's test mode while we test it, so paying online moves no real money.");
+      });
+
+      it("keeps asking for a reply while Paystack is off", async () => {
+        ENV.paystackSecretKey = "";
+        const { email } = await finishedCheck("summary-off");
+        const body = summaryOf(email).body;
+        expect(body).toContain('Reply "report" and we will email you the payment details.');
+        expect(body).not.toContain("/pay/");
+      });
+
+      it("works before the owner has asked: the page offers ₦100,000, and paying files the request as the result page does, once", async () => {
+        const { token, email, id } = await finishedCheck("self-serve");
+        expect(await paymentOf(id, "full_report")).toBeUndefined();
+        expect(await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).toEqual({ item: "full_report", name: "Full Report", amountNaira: 100_000, mode: "test", state: "open" });
+        mocked.deliverEmail.mockClear();
+
+        const reference = await start(token, "full_report");
+        const request = await paymentOf(id, "full_report");
+        expect(request).toMatchObject({ status: "requested", amountNaira: 100_000, requestedByUserId: null });
+        expect(reference).toMatch(new RegExp(`^${request.reference}-[0-9a-f]{8}$`));
+        expect(paystack.initialized.at(-1)).toMatchObject({ email, amount: 10_000_000, currency: "NGN" });
+        expect((await rowFor(token)).reportRequestedAt).toBeInstanceOf(Date);
+        // The same as "Get my Full Report" on the result page: the details by email (the reference and the bank
+        // transfer fallback), and one notice to the office.
+        expect(emails().filter(sent => sent.to === email).map(sent => sent.subject)).toEqual(["Payment details for your Full Report"]);
+        const office = emails().filter(sent => sent.to === OFFICE);
+        expect(office).toHaveLength(1);
+        expect(office[0].subject).toMatch(/asked for the Full Report$/);
+        expect(office[0].body).toContain("Note: Started paying online from the link in their Business Check summary email.");
+        expect(office[0].body).toContain(`Payment details sent: ${request.reference}`);
+
+        // A second try opens Paystack again without filing or emailing anything new.
+        mocked.deliverEmail.mockClear();
+        await start(token, "full_report");
+        expect(mocked.deliverEmail).not.toHaveBeenCalled();
+        expect(await auditsFor("payment_details_sent", id)).toHaveLength(1);
+      });
+
+      it("never starts the Current State Assessment from the owner's side, nor a report for an unfinished check", async () => {
+        const { token } = await finishedCheck("no-self-assessment");
+        await expect((await browser().call()).onlinePayment.page({ token, item: "current_state" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect((await browser().call()).onlinePayment.start({ token, item: "current_state" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        const visitor = browser();
+        const { token: unfinished } = await (await visitor.call()).businessCheck.start({ fullName: "Ada Unfinished", email: uniqueEmail("unfinished"), whatsapp: "+2348000000001" });
+        await expect((await browser().call()).onlinePayment.page({ token: unfinished, item: "full_report" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect((await browser().call()).onlinePayment.start({ token: unfinished, item: "full_report" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        expect(paystack.initialized).toHaveLength(0);
+      });
+    });
+
     describe("starting a payment", () => {
       it("opens Paystack for the amount in the database, never one from the browser, with the owner's email and our return page", async () => {
         const { token, email, id } = await reportAskedFor("start");
@@ -274,13 +333,28 @@ for (const target of targets) {
         expect((await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).state).toBe("paid");
       });
 
-      it("holds the link for the same 48 hours as the bank details, and opens again when the details are sent again", async () => {
-        const { token, id } = await reportAskedFor("expired");
-        await db.update(schema.paymentRequests).set({ requestedAt: new Date(Date.now() - 49 * 3_600_000) }).where(eq(schema.paymentRequests.id, (await paymentOf(id, "full_report")).id));
-        expect((await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).state).toBe("expired");
-        await expect((await browser().call()).onlinePayment.start({ token, item: "full_report" })).rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: expect.stringContaining("48 hours") });
-        await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "full_report" });
+      it("holds the Current State Assessment link for the same 48 hours as the bank details, and opens again when the team sends them again", async () => {
+        const { token, id } = await assessmentAskedFor("expired");
+        await db.update(schema.paymentRequests).set({ requestedAt: new Date(Date.now() - 49 * 3_600_000) }).where(eq(schema.paymentRequests.id, (await paymentOf(id, "current_state")).id));
+        expect((await (await browser().call()).onlinePayment.page({ token, item: "current_state" })).state).toBe("expired");
+        await expect((await browser().call()).onlinePayment.start({ token, item: "current_state" })).rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: expect.stringContaining("48 hours") });
+        await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+        expect((await (await browser().call()).onlinePayment.start({ token, item: "current_state" })).alreadyPaid).toBe(false);
+      });
+
+      it("reopens an expired Full Report link by itself when the owner pays: a new 48 hours and fresh details by email", async () => {
+        const { token, email, id } = await reportAskedFor("expired-report");
+        const before = await paymentOf(id, "full_report");
+        await db.update(schema.paymentRequests).set({ requestedAt: new Date(Date.now() - 49 * 3_600_000) }).where(eq(schema.paymentRequests.id, before.id));
+        // The owner chooses the report themselves, so the link in their summary email never dead-ends.
+        expect((await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).state).toBe("open");
+        mocked.deliverEmail.mockClear();
         expect((await (await browser().call()).onlinePayment.start({ token, item: "full_report" })).alreadyPaid).toBe(false);
+        const after = await paymentOf(id, "full_report");
+        expect(after.reference).toBe(before.reference);
+        expect(after.requestedAt.getTime()).toBeGreaterThan(Date.now() - 60_000);
+        expect(emails().filter(sent => sent.to === email).map(sent => sent.subject)).toEqual(["Payment details for your Full Report"]);
+        expect(paystack.initialized.at(-1)!.reference).toMatch(new RegExp(`^${before.reference}-[0-9a-f]{8}$`));
       });
     });
 

@@ -17,7 +17,7 @@ added without being documented here.
 | `/` | `Home.tsx` | Anyone | The site in the owner's words: problem, ten problem areas, how it works and prices, questions | "Free business check" → `/check` |
 | `/check` | `BusinessCheck.tsx` | Anyone | The free business check, from contact details to the result | Book a call (Calendly) or ask for the full report |
 | `/report/:token` | `FullReportPage.tsx` | Link in the "payment received" email | The 17-question report form, then the download | Report emailed; download on the page |
-| `/pay/:token/:item` | `PayPage.tsx` | The "Pay online" button in a payment details email (`:token` is the Business Check's token, `:item` is `full_report` or `current_state`) | The item, its amount from the payment request (₦100,000 or ₦500,000), "Pay ₦… securely with Paystack", and bank transfer as the alternative. "TEST MODE: NO REAL MONEY MOVES" while Paystack is on its test keys; "Already paid" once confirmed; no button while online payment is off or after the 48 hours | Paystack's checkout, then `/pay/return` |
+| `/pay/:token/:item` | `PayPage.tsx` | The "Pay online" button in a payment details email, or "Pay for your Full Report" in the Business Check summary email (Full Report only, before or after asking) (`:token` is the Business Check's token, `:item` is `full_report` or `current_state`) | The item, its amount from the payment request (₦100,000 or ₦500,000), "Pay ₦… securely with Paystack", and bank transfer as the alternative. "TEST MODE: NO REAL MONEY MOVES" while Paystack is on its test keys; "Already paid" once confirmed; no button while online payment is off or after the 48 hours | Paystack's checkout, then `/pay/return` |
 | `/pay/return` | `PayReturnPage.tsx` | Paystack sends the owner back here with `?reference=` | Asks the server how the payment stands (section 4): "Payment received" with what happens next, "Still confirming" with "Check again", or "Payment not completed" with "Try again" (back to the pay page this tab came from) | — |
 | `/onboarding/:token` | `OnboardingPage.tsx` | Link in the client account invitation | Create the client account | `/dashboard` |
 | `/join/:token` | `JoinPage.tsx` | Link in a staff invitation or an owner's seat invitation | Set a password; staff land on `/admin` with their role, the owner's staff on `/dashboard` in that business | `/admin`, `/dashboard` |
@@ -57,6 +57,7 @@ flowchart TD
   D --> E[Result: outline, gap, summary]
   E -->|Book my free call| F[Calendly booking]
   E -->|Get my full report| G[Payment details emailed]
+  E -->|Pay for your Full Report, in the summary email| G
   G -->|Pay online| GP[/pay/:token/full_report: Paystack/]
   GP -->|Paystack confirms| G3
   G --> G2[Owner pays by transfer and sends proof]
@@ -100,6 +101,7 @@ every answer.
 | Step | Who | What happens | Email | Stage or status |
 |---|---|---|---|---|
 | "Get my full report" | Owner | `businessCheck.requestNext({ choice: "report" })` | Owner: *Payment details for your Full Report* (with a "Pay online" button while Paystack is on, and the bank details); office: *… asked for the Full Report* | Payment: **requested** |
+| "Pay for your Full Report" in the summary email | Owner | While Paystack is on, the summary email links to `/pay/:token/full_report` instead of asking for a reply. The page offers ₦100,000 before the owner has asked; pressing pay files the request exactly as "Get my full report" does (`askForFullReport`, `server/fullReportRequest.ts`), then opens Paystack. An expired Full Report link opens again with a new 48 hours and fresh details. The Current State Assessment is never started from the owner's side | As for "Get my full report", once; office note: *Started paying online from the link in their Business Check summary email.* | Payment: **requested**, then paid as below |
 | "Pay online" in the email | Owner | Opens `/pay/:token/full_report`; `onlinePayment.page` shows the item, the amount and the mode | — | — |
 | "Pay ₦100,000 securely with Paystack" | Owner | `onlinePayment.start`: the server opens a Paystack transaction for the amount on the payment request, with its own reference (`TS-R-000123-1a2b3c4d`), and sends the owner to Paystack's checkout | — | — |
 | Pays on Paystack | Owner | Paystack posts a signed `charge.success` to `/api/paystack/webhook` and sends the owner to `/pay/return`, which calls `onlinePayment.status`. Whichever comes first asks Paystack about the transaction again and, if the reference, status, currency and amount all match, confirms it through the same path as "Confirm payment" below, with Paystack as the actor | Owner: *Payment received: your Full Report* (with the form link); office: *Paid online: …* | Payment: **paid**; report: **awaiting form** |

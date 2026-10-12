@@ -108,6 +108,25 @@ describe("business check summary", () => {
     expect(email.body).toContain("Book it from your result page");
   });
 
+  it("links the Full Report straight to paying online when Paystack is on, and asks for a reply when it is off", () => {
+    const result = evaluate(answers);
+    const summary = { ...result.summary, offerings: [] };
+    const off = ownerEmail({ contact, result, summary, fullReportPay: null }).body;
+    expect(off).toContain('Reply "report" and we will email you the payment details.');
+    expect(off).not.toContain("Pay for your Full Report");
+
+    const live = ownerEmail({ contact, result, summary, fullReportPay: { url: "https://ipf.example.com/pay/TOKEN123/full_report", mode: "live" } }).body;
+    expect(live).not.toContain('Reply "report"');
+    expect(live).toContain("Want the Full Report? It costs ₦100,000 and comes by email. Pay securely online with Paystack, by card or bank.");
+    // A lone "Label: https://…" line is a button in the branded layout.
+    expect(live).toContain("\nPay for your Full Report: https://ipf.example.com/pay/TOKEN123/full_report\n");
+    expect(live).not.toMatch(/test mode/i);
+    expect(buildBusinessSupportEmailHtml(live)).toMatch(/<a href="https:\/\/ipf\.example\.com\/pay\/TOKEN123\/full_report"[^>]*>Pay for your Full Report<\/a>/);
+
+    const test = ownerEmail({ contact, result, summary, fullReportPay: { url: "https://ipf.example.com/pay/TOKEN123/full_report", mode: "test" } }).body;
+    expect(test).toContain("Online payment is in Paystack's test mode while we test it, so paying online moves no real money.");
+  });
+
   it("lists the areas the check left out as not assessed, in area order, and says the Current State Assessment covers all ten", () => {
     const side = complete({ p_stage: "side", p_type: "expert", p_staff: "3to5", p_revenue: "1to3m" });
     const result = evaluate(side);

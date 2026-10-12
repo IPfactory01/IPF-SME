@@ -156,8 +156,13 @@ var init_env = __esm({
       supabaseUrl: process.env.SUPABASE_URL?.trim() ?? "",
       supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "",
       supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET?.trim() || "engagement-files",
-      paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
-      paystackSecretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
+      /**
+       * Paystack (server/paystack.ts). The secret key decides the mode: `sk_test_` is test (no real money moves), `sk_live_`
+       * is live, unset is off and only bank transfer is offered. It also checks the webhook's signature. The public key is
+       * not needed by the hosted checkout, and nothing reads it today.
+       */
+      paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY?.trim() ?? "",
+      paystackSecretKey: process.env.PAYSTACK_SECRET_KEY?.trim() ?? "",
       /**
        * Canonical public origin (scheme + host) used for emailed links and CSRF checks in production. Without APP_ORIGIN
        * the deployment's own Vercel address stands in (links still work; health reports the gap); locally, localhost.
@@ -244,7 +249,7 @@ var init_ics = __esm({
 // server/_core/app.ts
 import express from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
-import { TRPCError as TRPCError28 } from "@trpc/server";
+import { TRPCError as TRPCError30 } from "@trpc/server";
 
 // shared/const.ts
 var COOKIE_NAME = "app_session_id";
@@ -325,6 +330,30 @@ var JOURNEY = [
   { id: "plan", name: "Your Plan", body: `We stop at about ${formatNaira(PRICES.standardEngagementCap)} with a plan in your hands. Want us to stay? We agree what that looks like.` }
 ];
 
+// shared/method.ts
+var METHOD = {
+  businessCheck: "Business Check",
+  debrief: "Debrief",
+  fullReport: "Full Report",
+  reportIntake: "Report Intake",
+  currentState: "Current State Assessment",
+  workPlan: "Work Plan",
+  dataRequest: "Data Request",
+  dataRequests: "Data Requests",
+  session: "Session",
+  findings: "Findings",
+  problemStatement: "Problem Statement",
+  prescription: "Prescription",
+  fix: "The Fix",
+  checkin: "Weekly Check-in",
+  measure: "Measure of Success",
+  day30: "Day-30 Review",
+  signOff: "Sign-off",
+  deliverables: "Deliverables",
+  engagement: "Engagement",
+  plan: "Your Plan"
+};
+
 // shared/payments.ts
 var PAYMENT_ITEMS = ["full_report", "current_state"];
 var PAYMENT_ITEM_DETAILS = {
@@ -343,9 +372,13 @@ function effectivePaymentStatus(request, now = /* @__PURE__ */ new Date()) {
   return request.status === "requested" && now.getTime() > paymentDeadline(request.requestedAt).getTime() ? "expired" : request.status;
 }
 var PAYMENT_DISPLAY_LABELS = { ...PAYMENT_STATUS_LABELS, expired: "48 hours passed" };
-function paymentReference(item, businessCheckId) {
-  return `TS-${PAYMENT_ITEM_DETAILS[item].code}-${String(businessCheckId).padStart(6, "0")}`;
+function paymentReference(item2, businessCheckId) {
+  return `TS-${PAYMENT_ITEM_DETAILS[item2].code}-${String(businessCheckId).padStart(6, "0")}`;
 }
+var ONLINE_TEST_NOTICE = "TEST MODE: NO REAL MONEY MOVES";
+var PAYMENT_ITEM_TITLES = { full_report: METHOD.fullReport, current_state: METHOD.currentState };
+var payPath = (token3, item2) => `/pay/${encodeURIComponent(token3)}/${item2}`;
+var PAY_RETURN_PATH = "/pay/return";
 
 // shared/engagement.ts
 var ENGAGEMENT_STAGES = ["setting_up", "assessment", "fix", "plan", "closed"];
@@ -432,9 +465,9 @@ var FINDINGS_OUTLINE = [
   "7. What we looked at, and what we could not check"
 ].join("\n\n");
 function journeyOf(stage) {
-  const steps = ENGAGEMENT_STAGES.filter((item) => item !== "closed");
+  const steps = ENGAGEMENT_STAGES.filter((item2) => item2 !== "closed");
   const at = stage === "closed" ? steps.length : steps.indexOf(stage);
-  return steps.map((item, index2) => ({ stage: item, label: ENGAGEMENT_STAGE_LABELS[item], summary: ENGAGEMENT_STAGE_SUMMARIES[item], state: index2 < at ? "done" : index2 === at ? "current" : "next" }));
+  return steps.map((item2, index2) => ({ stage: item2, label: ENGAGEMENT_STAGE_LABELS[item2], summary: ENGAGEMENT_STAGE_SUMMARIES[item2], state: index2 < at ? "done" : index2 === at ? "current" : "next" }));
 }
 function clientCanSee(audience, viewer) {
   if (audience === "team") return false;
@@ -1433,11 +1466,11 @@ var OAuthService = class {
     );
     return data;
   }
-  async getUserInfoByToken(token2) {
+  async getUserInfoByToken(token3) {
     const { data } = await this.client.post(
       GET_USER_INFO_PATH,
       {
-        accessToken: token2.accessToken
+        accessToken: token3.accessToken
       }
     );
     return data;
@@ -1504,8 +1537,8 @@ var SDKServer = class {
     return new Map(Object.entries(parsed));
   }
   getSessionSecret() {
-    const secret = ENV.cookieSecret;
-    return new TextEncoder().encode(secret);
+    const secret2 = ENV.cookieSecret;
+    return new TextEncoder().encode(secret2);
   }
   /**
    * Create a session token for a Manus user openId
@@ -1786,7 +1819,7 @@ function buildBusinessSupportEmailHtml(body) {
       if (BULLET_LINE.test(line)) {
         const items = [];
         while (index2 < lines.length && BULLET_LINE.test(lines[index2])) items.push(lines[index2++].replace(BULLET_LINE, ""));
-        html.push(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 20px;">${items.map((item) => `<tr><td valign="top" style="width:18px;padding:0 0 6px;${text4}color:${C.highlight};font-weight:700;">&#8226;</td><td style="padding:0 0 6px;${text4}">${linkify(item)}</td></tr>`).join("")}</table>`);
+        html.push(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:0 0 20px;">${items.map((item2) => `<tr><td valign="top" style="width:18px;padding:0 0 6px;${text4}color:${C.highlight};font-weight:700;">&#8226;</td><td style="padding:0 0 6px;${text4}">${linkify(item2)}</td></tr>`).join("")}</table>`);
         continue;
       }
       let end = index2;
@@ -2133,10 +2166,10 @@ function isDuplicateReminderError(error) {
   const candidate = error;
   return candidate?.code === PG_UNIQUE_VIOLATION || candidate?.cause?.code === PG_UNIQUE_VIOLATION;
 }
-function isAuthorisedCronRequest(authorization, secret = ENV.cronSecret) {
-  if (!secret || !authorization?.startsWith("Bearer ")) return false;
+function isAuthorisedCronRequest(authorization, secret2 = ENV.cronSecret) {
+  if (!secret2 || !authorization?.startsWith("Bearer ")) return false;
   const digest = (value) => createHash("sha256").update(value).digest();
-  return timingSafeEqual(digest(authorization.slice("Bearer ".length)), digest(secret));
+  return timingSafeEqual(digest(authorization.slice("Bearer ".length)), digest(secret2));
 }
 async function isManusScheduledTask(req) {
   try {
@@ -2280,7 +2313,7 @@ Facilitator, ${BRAND.programmeName} \u2014 Strategy & Innovation Genius Track`;
 init_env();
 
 // server/participantAuth.ts
-import { createHash as createHash2, randomBytes, scryptSync, timingSafeEqual as timingSafeEqual2 } from "node:crypto";
+import { createHash as createHash2, randomBytes as randomBytes2, scryptSync, timingSafeEqual as timingSafeEqual3 } from "node:crypto";
 import { and as and2, eq as eq3, gt, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 
@@ -2364,6 +2397,88 @@ async function checkFileStorage() {
 
 // server/security.ts
 init_env();
+
+// server/paystack.ts
+init_env();
+import { createHmac, randomBytes, timingSafeEqual as timingSafeEqual2 } from "node:crypto";
+var PAYSTACK_API = "https://api.paystack.co";
+var PAYSTACK_WEBHOOK_PATH = "/api/paystack/webhook";
+var TIMEOUT_MS2 = 1e4;
+var secret = (key = ENV.paystackSecretKey) => key.trim();
+function paystackMode(secretKey = ENV.paystackSecretKey) {
+  const key = secret(secretKey);
+  if (key.startsWith("sk_live_")) return "live";
+  if (key.startsWith("sk_test_")) return "test";
+  return "off";
+}
+var PaystackError = class extends Error {
+  constructor(message, httpStatus) {
+    super(message);
+    this.httpStatus = httpStatus;
+    this.name = "PaystackError";
+  }
+};
+async function call(path, init) {
+  const key = secret();
+  if (paystackMode(key) === "off") throw new PaystackError("Online payment is off: PAYSTACK_SECRET_KEY is not set.");
+  let response;
+  try {
+    response = await fetch(`${PAYSTACK_API}${path}`, {
+      method: init.method,
+      headers: { Authorization: `Bearer ${key}`, ...init.body === void 0 ? {} : { "Content-Type": "application/json" } },
+      ...init.body === void 0 ? {} : { body: JSON.stringify(init.body) },
+      signal: AbortSignal.timeout(TIMEOUT_MS2)
+    });
+  } catch (error) {
+    throw new PaystackError(`Paystack did not answer (${error instanceof Error ? error.name : "unknown error"}).`);
+  }
+  let body;
+  try {
+    body = await response.json();
+  } catch {
+    throw new PaystackError(`Paystack answered ${response.status} without a readable body.`, response.status);
+  }
+  return { httpStatus: response.status, body: body ?? {} };
+}
+function onlineReference(paymentReference2) {
+  return `${paymentReference2}-${randomBytes(4).toString("hex")}`;
+}
+function paymentReferenceOf(reference2) {
+  return /^(TS-[A-Z]{1,3}-\d{6,})-[0-9a-f]{8}$/.exec(reference2)?.[1] ?? null;
+}
+async function initializeTransaction(input) {
+  if (!Number.isSafeInteger(input.amountKobo) || input.amountKobo <= 0) throw new PaystackError("The amount must be a whole number of kobo.");
+  const { httpStatus, body } = await call("/transaction/initialize", {
+    method: "POST",
+    body: { email: input.email, amount: input.amountKobo, currency: "NGN", reference: input.reference, callback_url: input.callbackUrl, metadata: input.metadata }
+  });
+  const url = body.data?.authorization_url;
+  if (httpStatus >= 400 || !body.status || !url || !/^https:\/\//.test(url)) {
+    throw new PaystackError(`Paystack refused to open the payment (${httpStatus}${body.message ? `: ${body.message}` : ""}).`, httpStatus);
+  }
+  return { authorizationUrl: url, reference: body.data?.reference ?? input.reference };
+}
+async function verifyTransaction(reference2) {
+  const { httpStatus, body } = await call(`/transaction/verify/${encodeURIComponent(reference2)}`, { method: "GET" });
+  if ((httpStatus === 400 || httpStatus === 404) && !body.status) return null;
+  if (httpStatus >= 400 || !body.status || !body.data) throw new PaystackError(`Paystack could not check the payment (${httpStatus}).`, httpStatus);
+  const { data } = body;
+  return {
+    reference: typeof data.reference === "string" ? data.reference : "",
+    status: typeof data.status === "string" ? data.status : "",
+    amount: typeof data.amount === "number" ? data.amount : Number.NaN,
+    currency: typeof data.currency === "string" ? data.currency : ""
+  };
+}
+function isValidPaystackSignature(rawBody, signatureHeader, secretKey = ENV.paystackSecretKey) {
+  const key = secret(secretKey);
+  if (!key || typeof signatureHeader !== "string" || !signatureHeader || !Buffer.isBuffer(rawBody)) return false;
+  const expected = Buffer.from(createHmac("sha512", key).update(rawBody).digest("hex"), "utf8");
+  const given = Buffer.from(signatureHeader, "utf8");
+  return given.length === expected.length && timingSafeEqual2(given, expected);
+}
+
+// server/security.ts
 var LOCAL_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i;
 function getTrustedApplicationOrigin(nodeEnv = process.env.NODE_ENV) {
   return nodeEnv === "production" ? ENV.appOrigin : "http://localhost:3000";
@@ -2426,8 +2541,9 @@ function applySecurityHeaders(req, res, next) {
   }
   next();
 }
+var ORIGIN_GUARD_EXEMPT_PATHS = [PAYSTACK_WEBHOOK_PATH];
 function requireTrustedBrowserOrigin(req, res, next) {
-  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method) || req.originalUrl.startsWith("/api/scheduled/")) {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method) || req.originalUrl.startsWith("/api/scheduled/") || ORIGIN_GUARD_EXEMPT_PATHS.includes(req.originalUrl.split("?")[0])) {
     next();
     return;
   }
@@ -2458,7 +2574,7 @@ function validateParticipantPassword(password) {
   return null;
 }
 function hashParticipantPassword(password) {
-  const salt = randomBytes(16).toString("base64url");
+  const salt = randomBytes2(16).toString("base64url");
   const hash = scryptSync(password, salt, 64).toString("base64url");
   return `scrypt$${salt}$${hash}`;
 }
@@ -2468,10 +2584,10 @@ function verifyParticipantPasswordHash(password, stored) {
   const actual = scryptSync(password, salt, 64).toString("base64url");
   const expectedBuffer = Buffer.from(expected);
   const actualBuffer = Buffer.from(actual);
-  return expectedBuffer.length === actualBuffer.length && timingSafeEqual2(expectedBuffer, actualBuffer);
+  return expectedBuffer.length === actualBuffer.length && timingSafeEqual3(expectedBuffer, actualBuffer);
 }
-function hashToken(token2) {
-  return createHash2("sha256").update(token2).digest("hex");
+function hashToken(token3) {
+  return createHash2("sha256").update(token3).digest("hex");
 }
 function readCookie(cookieHeader, name) {
   if (!cookieHeader) return void 0;
@@ -2481,8 +2597,8 @@ function getPortalOrigin(req) {
   void req;
   return getTrustedApplicationOrigin();
 }
-function buildParticipantPasswordUrl(origin, token2) {
-  return `${origin}/portal/password?token=${encodeURIComponent(token2)}`;
+function buildParticipantPasswordUrl(origin, token3) {
+  return `${origin}/portal/password?token=${encodeURIComponent(token3)}`;
 }
 function buildParticipantPasswordLinkEmail(fullName, passwordUrl, purpose) {
   const firstName2 = fullName.trim().split(/\s+/)[0] || fullName;
@@ -2556,7 +2672,7 @@ async function findEligibleParticipantByEmail(email) {
 async function issueParticipantSession(ctx, registrationId) {
   const db = await getDb();
   if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
-  const sessionToken = randomBytes(32).toString("base64url");
+  const sessionToken = randomBytes2(32).toString("base64url");
   await db.insert(participantAuthTokens).values({
     registrationId,
     tokenHash: hashToken(sessionToken),
@@ -2568,8 +2684,8 @@ async function issueParticipantSession(ctx, registrationId) {
 function getParticipantSessionCookieOptions(req) {
   return { ...getSessionCookieOptions(req), maxAge: SESSION_TTL_MS };
 }
-function isActiveParticipantToken(token2, now = /* @__PURE__ */ new Date()) {
-  return !token2.consumedAt && !token2.revokedAt && token2.expiresAt.getTime() > now.getTime();
+function isActiveParticipantToken(token3, now = /* @__PURE__ */ new Date()) {
+  return !token3.consumedAt && !token3.revokedAt && token3.expiresAt.getTime() > now.getTime();
 }
 async function createParticipantPasswordLink(registrationId, req) {
   const { db, applicant } = await validateParticipantRegistration(registrationId);
@@ -2581,10 +2697,10 @@ async function createParticipantPasswordLink(registrationId, req) {
     isNull(participantPasswordTokens.consumedAt),
     isNull(participantPasswordTokens.revokedAt)
   ));
-  const token2 = randomBytes(32).toString("base64url");
+  const token3 = randomBytes2(32).toString("base64url");
   const inserted = await db.insert(participantPasswordTokens).values({
     registrationId: applicant.id,
-    tokenHash: hashToken(token2),
+    tokenHash: hashToken(token3),
     purpose,
     expiresAt: new Date(Date.now() + PARTICIPANT_PASSWORD_LINK_TTL_MS)
   }).returning({ id: participantPasswordTokens.id });
@@ -2592,7 +2708,7 @@ async function createParticipantPasswordLink(registrationId, req) {
     applicant,
     purpose,
     tokenId: Number(inserted[0].id),
-    passwordUrl: buildParticipantPasswordUrl(getPortalOrigin(req), token2)
+    passwordUrl: buildParticipantPasswordUrl(getPortalOrigin(req), token3)
   };
 }
 async function replaceParticipantPortalLink(registrationId, req) {
@@ -2691,7 +2807,7 @@ async function getAuthenticatedParticipant(ctx) {
 }
 
 // server/adminSecurity.ts
-import { createHash as createHash3, randomBytes as randomBytes2, scryptSync as scryptSync2, timingSafeEqual as timingSafeEqual3 } from "crypto";
+import { createHash as createHash3, randomBytes as randomBytes3, scryptSync as scryptSync2, timingSafeEqual as timingSafeEqual4 } from "crypto";
 import { and as and3, eq as eq4, gt as gt2, isNull as isNull2 } from "drizzle-orm";
 init_env();
 init_brand();
@@ -2721,7 +2837,7 @@ function sha256(value) {
   return createHash3("sha256").update(value).digest("hex");
 }
 function hashAdminPassword(password) {
-  const salt = randomBytes2(16).toString("base64url");
+  const salt = randomBytes3(16).toString("base64url");
   const hash = scryptSync2(password, salt, 64).toString("base64url");
   return `scrypt$${salt}$${hash}`;
 }
@@ -2731,12 +2847,12 @@ function verifyAdminPasswordHash(password, stored) {
   const actual = scryptSync2(password, salt, 64).toString("base64url");
   const expectedBuffer = Buffer.from(expected);
   const actualBuffer = Buffer.from(actual);
-  return expectedBuffer.length === actualBuffer.length && timingSafeEqual3(expectedBuffer, actualBuffer);
+  return expectedBuffer.length === actualBuffer.length && timingSafeEqual4(expectedBuffer, actualBuffer);
 }
 function readCookie2(req, name) {
   const cookieHeader = req.headers.cookie || "";
-  for (const item of cookieHeader.split(";")) {
-    const [key, ...rawValue] = item.trim().split("=");
+  for (const item2 of cookieHeader.split(";")) {
+    const [key, ...rawValue] = item2.trim().split("=");
     if (key === name) return decodeURIComponent(rawValue.join("="));
   }
   return null;
@@ -2759,7 +2875,7 @@ async function hasVerifiedAdminAccess(req, userId) {
 async function issueAdminAccessSession(req, res, userId) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const rawToken = randomBytes2(32).toString("base64url");
+  const rawToken = randomBytes3(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ADMIN_SESSION_MAX_AGE_MS);
   await db.insert(adminAccessSessions).values({
     userId,
@@ -2885,7 +3001,7 @@ function registerStorageProxy(app) {
 }
 
 // server/accountAuth.ts
-import { randomBytes as randomBytes3 } from "crypto";
+import { randomBytes as randomBytes4 } from "crypto";
 import { and as and5, desc, eq as eq7, gt as gt3, isNotNull, isNull as isNull3, ne } from "drizzle-orm";
 import { TRPCError as TRPCError3 } from "@trpc/server";
 
@@ -3187,7 +3303,7 @@ function resolveAuthority(input) {
   }
   const legacy = new Set(isSuperAdmin2 ? ADMIN_PERMISSION_IDS : input.legacyProfile);
   for (const permission of Array.from(permissions)) for (const capability of PLATFORM_TO_LEGACY_CAPABILITIES[permission] ?? []) legacy.add(capability);
-  const order = (list2) => (item) => list2.indexOf(item);
+  const order = (list2) => (item2) => list2.indexOf(item2);
   return {
     roles: Array.from(roles2).sort((a, b) => order(PLATFORM_ROLES)(a) - order(PLATFORM_ROLES)(b)),
     permissions: Array.from(permissions).sort((a, b) => order(PLATFORM_PERMISSIONS)(a) - order(PLATFORM_PERMISSIONS)(b)),
@@ -3290,7 +3406,15 @@ var LIMITS = {
   /** Report downloads per link: each renders the PDF again. */
   reportDownload: { scope: "report_download", max: 5, windowMs: DAY },
   /** Public token lookups per address: legacy reset confirmation and invitation status. */
-  publicLookup: { scope: "public_lookup", max: 30, windowMs: HOUR2 }
+  publicLookup: { scope: "public_lookup", max: 30, windowMs: HOUR2 },
+  /** Pay page reads per Business Check token. */
+  paymentPage: { scope: "payment_page", max: 60, windowMs: HOUR2 },
+  /** Online payment starts per Business Check token: each opens a transaction on Paystack. */
+  paymentStart: { scope: "payment_start", max: 10, windowMs: HOUR2 },
+  /** Return-page checks per Paystack reference: each asks Paystack how the payment stands. */
+  paymentStatus: { scope: "payment_status", max: 20, windowMs: HOUR2 },
+  /** Return-page checks per address, across references: an invented reference must not buy unlimited calls to Paystack. */
+  paymentStatusAddress: { scope: "payment_status_ip", max: 60, windowMs: HOUR2 }
 };
 var memory = /* @__PURE__ */ new Map();
 var storeRetryAt = 0;
@@ -3383,21 +3507,21 @@ function assertSameOrigin(req) {
 }
 var dummyPasswordHash;
 function burnPasswordCheck(password) {
-  dummyPasswordHash ??= hashAdminPassword(randomBytes3(16).toString("hex"));
+  dummyPasswordHash ??= hashAdminPassword(randomBytes4(16).toString("hex"));
   verifyAdminPasswordHash(password, dummyPasswordHash);
 }
 function slugify(name) {
   const base2 = name.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
-  return `${base2 || "business"}-${randomBytes3(3).toString("hex")}`;
+  return `${base2 || "business"}-${randomBytes4(3).toString("hex")}`;
 }
 async function createSession(tx, userId, activeBusinessId = null) {
-  const token2 = randomBytes3(32).toString("base64url");
+  const token3 = randomBytes4(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ACCOUNT_SESSION_MAX_AGE_MS);
-  await tx.insert(userSessions).values({ userId, tokenHash: sha256(token2), expiresAt, activeBusinessId });
-  return { token: token2, expiresAt };
+  await tx.insert(userSessions).values({ userId, tokenHash: sha256(token3), expiresAt, activeBusinessId });
+  return { token: token3, expiresAt };
 }
-function setSessionCookie(req, res, token2) {
-  res.cookie(ACCOUNT_SESSION_COOKIE, token2, { ...getAccountSessionCookieOptions(req), maxAge: ACCOUNT_SESSION_MAX_AGE_MS });
+function setSessionCookie(req, res, token3) {
+  res.cookie(ACCOUNT_SESSION_COOKIE, token3, { ...getAccountSessionCookieOptions(req), maxAge: ACCOUNT_SESSION_MAX_AGE_MS });
 }
 function clearSessionCookie(req, res) {
   res.clearCookie(ACCOUNT_SESSION_COOKIE, { ...getAccountSessionCookieOptions(req), maxAge: -1 });
@@ -3407,8 +3531,8 @@ function hasAccountSessionCookie(req) {
 }
 function readSessionToken(req) {
   const header = req.headers.cookie || "";
-  for (const item of header.split(";")) {
-    const [key, ...rest] = item.trim().split("=");
+  for (const item2 of header.split(";")) {
+    const [key, ...rest] = item2.trim().split("=");
     if (key === ACCOUNT_SESSION_COOKIE) {
       try {
         return decodeURIComponent(rest.join("="));
@@ -3435,7 +3559,7 @@ async function loadMemberships(db, userId) {
   });
 }
 function chooseActiveBusiness(memberships, storedBusinessId) {
-  return memberships.find((item) => item.businessId === storedBusinessId) ?? memberships[0] ?? null;
+  return memberships.find((item2) => item2.businessId === storedBusinessId) ?? memberships[0] ?? null;
 }
 function buildView(user, authority, memberships, storedBusinessId = null) {
   const view = {
@@ -3448,8 +3572,8 @@ function buildView(user, authority, memberships, storedBusinessId = null) {
   return { ...view, landingPath: landingPathFor(view) };
 }
 async function resolveAccountSession(req) {
-  const token2 = readSessionToken(req);
-  if (!token2) return null;
+  const token3 = readSessionToken(req);
+  if (!token3) return null;
   const db = await getDb();
   if (!db) return null;
   const rows = await db.select({
@@ -3460,7 +3584,7 @@ async function resolveAccountSession(req) {
     email: users.email,
     role: users.role,
     status: users.status
-  }).from(userSessions).innerJoin(users, eq7(userSessions.userId, users.id)).where(and5(eq7(userSessions.tokenHash, sha256(token2)), isNull3(userSessions.revokedAt), gt3(userSessions.expiresAt, /* @__PURE__ */ new Date()), eq7(users.status, "active"))).limit(1);
+  }).from(userSessions).innerJoin(users, eq7(userSessions.userId, users.id)).where(and5(eq7(userSessions.tokenHash, sha256(token3)), isNull3(userSessions.revokedAt), gt3(userSessions.expiresAt, /* @__PURE__ */ new Date()), eq7(users.status, "active"))).limit(1);
   const row = rows[0];
   if (!row) return null;
   const [memberships, authority] = await Promise.all([
@@ -3473,7 +3597,7 @@ function toAccountView({ sessionId: _sessionId, authority: _authority, ...view }
   return view;
 }
 function requireBusinessMembership(session, businessId) {
-  const membership = session.memberships.find((item) => item.businessId === businessId);
+  const membership = session.memberships.find((item2) => item2.businessId === businessId);
   if (!membership) throw new TRPCError3({ code: "FORBIDDEN", message: ACCOUNT_AUTH_ERRORS.noBusinessAccess });
   return membership;
 }
@@ -3535,14 +3659,14 @@ async function signInAccount(req, res, rawInput, options = {}) {
 }
 async function signOutAccount(req, res) {
   assertSameOrigin(req);
-  const token2 = readSessionToken(req);
-  if (token2) {
+  const token3 = readSessionToken(req);
+  if (token3) {
     const db = await getDb();
     if (db) {
-      const live = (await db.select({ userId: userSessions.userId }).from(userSessions).where(and5(eq7(userSessions.tokenHash, sha256(token2)), isNull3(userSessions.revokedAt))).limit(1))[0];
+      const live = (await db.select({ userId: userSessions.userId }).from(userSessions).where(and5(eq7(userSessions.tokenHash, sha256(token3)), isNull3(userSessions.revokedAt))).limit(1))[0];
       if (live) {
         await db.transaction(async (tx) => {
-          await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and5(eq7(userSessions.tokenHash, sha256(token2)), isNull3(userSessions.revokedAt)));
+          await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and5(eq7(userSessions.tokenHash, sha256(token3)), isNull3(userSessions.revokedAt)));
           await recordAudit(tx, { action: "account_signed_out", actorUserId: live.userId });
         });
       }
@@ -5364,12 +5488,12 @@ function buildWorkingDiagnosticReport(applicant, draft) {
     draft.section5.strategicPriority && `Prioritise a decision on ${draft.section5.strategicPriority.toLowerCase()}.`,
     draft.section1.primaryConstraint && `Test the stated constraint: ${draft.section1.primaryConstraint}.`,
     draft.section3.materialNumberSource && `Ground the financial discussion in ${draft.section3.materialNumberSource.toLowerCase()}.`
-  ].filter((item) => Boolean(item));
+  ].filter((item2) => Boolean(item2));
   const hypotheses = [
     draft.section1.primaryConstraint && `The most immediate working constraint appears to be ${draft.section1.primaryConstraint.toLowerCase()}. This is a working hypothesis for discussion, not a conclusion.`,
     draft.section3.revenueStage && `The commercial starting point is described as \u201C${draft.section3.revenueStage}\u201D; the advisory work should calibrate priorities to that stage.`,
     draft.section4.founderCapacity && `Founder capacity is currently described as \u201C${draft.section4.founderCapacity}\u201D, which should shape the pace and ownership of recommendations.`
-  ].filter((item) => Boolean(item));
+  ].filter((item2) => Boolean(item2));
   const successMeasures = draft.section5.successMeasures?.length ? draft.section5.successMeasures.join("; ") : "To be clarified in conversation";
   return {
     type: "structured-working-report-v1",
@@ -5398,8 +5522,8 @@ function buildWorkingDiagnosticReport(applicant, draft) {
 function writeSection(doc, title, items) {
   doc.moveDown(0.8).font("Helvetica-Bold").fontSize(13).fillColor(BRAND.colorBrandDeep).text(title);
   doc.moveDown(0.3).font("Helvetica").fontSize(10).fillColor("#1E293B");
-  for (const item of items) {
-    doc.text(`\u2022 ${item}`, { indent: 10, lineGap: 3 });
+  for (const item2 of items) {
+    doc.text(`\u2022 ${item2}`, { indent: 10, lineGap: 3 });
   }
 }
 function renderWorkingDiagnosticReportPdf(report) {
@@ -5416,7 +5540,7 @@ function renderWorkingDiagnosticReportPdf(report) {
     doc.fillColor("#1E293B").font("Helvetica").fontSize(10).text(`Generated ${new Date(report.generatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}`, 54, 168);
     doc.moveDown(2.5).font("Helvetica-Bold").fontSize(13).fillColor(BRAND.colorBrandDeep).text("Executive readout");
     doc.moveDown(0.4).font("Helvetica").fontSize(10).fillColor("#1E293B").text(report.executiveReadout, { lineGap: 4 });
-    writeSection(doc, "Current position", report.currentPosition.map((item) => `${item.label}: ${item.value}`));
+    writeSection(doc, "Current position", report.currentPosition.map((item2) => `${item2.label}: ${item2.value}`));
     writeSection(doc, "Working hypotheses to test", report.workingHypotheses);
     writeSection(doc, "Decision priorities", report.decisionPriorities);
     writeSection(doc, "Early advisory focus", report.advisoryFocus);
@@ -6280,7 +6404,7 @@ You can now review your inferred diagnostic findings, strategic hypotheses, and 
 // server/routers/adminAccess.ts
 import { TRPCError as TRPCError10 } from "@trpc/server";
 import { and as and9, desc as desc5, eq as eq11, gt as gt4, isNull as isNull4 } from "drizzle-orm";
-import { randomBytes as randomBytes4 } from "crypto";
+import { randomBytes as randomBytes5 } from "crypto";
 import { z as z8 } from "zod";
 init_brand();
 var passwordSchema = z8.string().min(12).max(160);
@@ -6350,7 +6474,7 @@ var adminAccessRouter = router({
     if (!db) throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     const email = normalizeAdminEmail(ctx.user.email);
     if (!email) throw new TRPCError10({ code: "BAD_REQUEST", message: "This administrator account does not have a verified email address." });
-    const token2 = randomBytes4(32).toString("base64url");
+    const token3 = randomBytes5(32).toString("base64url");
     const expiresAt = new Date(Date.now() + PASSWORD_RESET_TOKEN_MAX_AGE_MS);
     await db.update(adminPasswordResetTokens).set({ revokedAt: /* @__PURE__ */ new Date() }).where(and9(
       eq11(adminPasswordResetTokens.userId, ctx.user.id),
@@ -6359,13 +6483,13 @@ var adminAccessRouter = router({
     ));
     const inserted = await db.insert(adminPasswordResetTokens).values({
       userId: ctx.user.id,
-      tokenHash: sha256(token2),
+      tokenHash: sha256(token3),
       expiresAt,
       deliveryStatus: "Simulated"
     }).returning({ id: adminPasswordResetTokens.id });
     const resetId = Number(inserted[0].id);
     const baseUrl = getTrustedApplicationOrigin();
-    const resetUrl = `${baseUrl}/admin/reset?token=${encodeURIComponent(token2)}`;
+    const resetUrl = `${baseUrl}/admin/reset?token=${encodeURIComponent(token3)}`;
     const delivery = await deliverEmail({
       to: email,
       subject: `Reset your ${BRAND.programmeShortName} administrator password`,
@@ -6443,21 +6567,21 @@ ${BRAND.senderDisplayName}`
     if (email === OWNER_ADMIN_EMAIL) throw new TRPCError10({ code: "BAD_REQUEST", message: "The super administrator already has permanent access." });
     const existingAdmin = await db.select({ id: users.id }).from(users).where(and9(emailEquals(users.email, email), eq11(users.role, "admin"))).limit(1);
     if (existingAdmin.length) throw new TRPCError10({ code: "CONFLICT", message: `That email is already an active ${BRAND.programmeShortName} administrator.` });
-    const token2 = randomBytes4(32).toString("base64url");
+    const token3 = randomBytes5(32).toString("base64url");
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1e3);
     const permissions = parseAdminPermissions(JSON.stringify(input.permissions));
     await db.update(adminInvitations).set({ status: "Revoked" }).where(and9(eq11(adminInvitations.email, email), eq11(adminInvitations.status, "Pending")));
     const inserted = await db.insert(adminInvitations).values({
       email,
       inviteeName: input.inviteeName || null,
-      tokenHash: sha256(token2),
+      tokenHash: sha256(token3),
       createdByUserId: ctx.user.id,
       expiresAt,
       proposedPermissionsJson: serializeAdminPermissions(permissions)
     }).returning({ id: adminInvitations.id });
     const invitationId = Number(inserted[0].id);
     const baseUrl = getTrustedApplicationOrigin();
-    const invitationUrl = `${baseUrl}/admin/invite?token=${encodeURIComponent(token2)}`;
+    const invitationUrl = `${baseUrl}/admin/invite?token=${encodeURIComponent(token3)}`;
     const name = input.inviteeName ? ` ${input.inviteeName}` : "";
     const delivery = await deliverEmail({
       to: email,
@@ -7001,8 +7125,8 @@ async function getJumpMailboxMessages(allowedSenderEmails) {
   if (!listResponse.ok) throw new Error(`Google inbox listing failed (${listResponse.status}).`);
   const list2 = await listResponse.json();
   const messages = [];
-  for (const item of list2.messages ?? []) {
-    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(item.id)}?format=full`, {
+  for (const item2 of list2.messages ?? []) {
+    const response = await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(item2.id)}?format=full`, {
       headers: { authorization: `Bearer ${accessToken}` }
     });
     if (!response.ok) continue;
@@ -7172,7 +7296,7 @@ var pricingRequestsRouter = router({
 
 // server/routers/businessCheck.ts
 import { TRPCError as TRPCError18 } from "@trpc/server";
-import { randomBytes as randomBytes7 } from "crypto";
+import { randomBytes as randomBytes8 } from "crypto";
 import { and as and15, eq as eq20, isNull as isNull7 } from "drizzle-orm";
 import { z as z16 } from "zod";
 
@@ -8025,7 +8149,7 @@ function validValue(question, value, answers) {
   const options = optionsFor(question, answers);
   const allowed = new Set(options.map((option) => option.value));
   if (question.kind === "multi") {
-    const values2 = Array.isArray(value) ? Array.from(new Set(value.filter((item) => allowed.has(item)))) : [];
+    const values2 = Array.isArray(value) ? Array.from(new Set(value.filter((item2) => allowed.has(item2)))) : [];
     const exclusive = options.find((option) => option.exclusive && values2.includes(option.value));
     if (exclusive) return [exclusive.value];
     return values2.length ? values2 : void 0;
@@ -8072,7 +8196,7 @@ function founderRead(answers) {
 var HEALTH_RANK = { clear: 0, watch: 1, stuck: 2 };
 var worst = (a, b) => HEALTH_RANK[b] > HEALTH_RANK[a] ? b : a;
 function chosenOption(questionId, sectionId, answers) {
-  const question = SECTIONS[sectionId].questions.find((item) => item.id === questionId);
+  const question = SECTIONS[sectionId].questions.find((item2) => item2.id === questionId);
   const value = answers[questionId];
   return question && typeof value === "string" ? optionsFor(question, answers).find((option) => option.value === value) : void 0;
 }
@@ -8136,7 +8260,7 @@ function primaryArea(outline, answers = {}) {
   const priority = isMatureAndStruggling(answers) ? MATURE_STRUGGLING_PRIORITY : AREA_PRIORITY;
   for (const health of ["stuck", "watch"]) {
     for (const area of priority) {
-      const row = outline.find((item) => item.area === area && item.health === health);
+      const row = outline.find((item2) => item2.area === area && item2.health === health);
       if (row) return row;
     }
   }
@@ -8516,7 +8640,7 @@ function describeAnswers(answers) {
       const value = answers[question.id];
       if (!value || Array.isArray(value) && !value.length) continue;
       const options = [...question.options, ...question.ideaOptions ?? []];
-      const labels = (Array.isArray(value) ? value : [value]).map((item) => options.find((option) => option.value === item)?.label ?? item);
+      const labels = (Array.isArray(value) ? value : [value]).map((item2) => options.find((option) => option.value === item2)?.label ?? item2);
       lines.push(`[${section.title}] ${question.prompt} \u2192 ${labels.join("; ")}`);
     }
   }
@@ -8594,7 +8718,7 @@ async function summariseCheck(input) {
     const content = response.choices[0]?.message.content;
     const text4 = typeof content === "string" ? content : content?.map((part) => "text" in part ? part.text : "").join("");
     const parsed = aiOutput.parse(JSON.parse(text4 ?? ""));
-    const offerings = input.result.route === "advisory" ? [] : parsed.offerings.map((item) => ({ item, offering: offeringById(item.id) })).filter((entry) => entry.offering).map(({ item, offering }) => ({ id: offering.id, name: offering.name, why: item.why }));
+    const offerings = input.result.route === "advisory" ? [] : parsed.offerings.map((item2) => ({ item: item2, offering: offeringById(item2.id) })).filter((entry) => entry.offering).map(({ item: item2, offering }) => ({ id: offering.id, name: offering.name, why: item2.why }));
     return {
       source: "AI",
       summary: { found: parsed.found, think: parsed.think, next: parsed.next, offerings: offerings.length || input.result.route === "advisory" ? offerings : fallback.summary.offerings }
@@ -8751,39 +8875,39 @@ async function startEngagement(db, input) {
     if (!created) return { engagementId: null, created: false };
     const dueFor = (week) => addWorkingDays(now, week === 1 ? 3 : 8);
     await tx.insert(engagementTasks).values([
-      ...ASSESSMENT_TEMPLATE.dataRequests.map((item) => ({
+      ...ASSESSMENT_TEMPLATE.dataRequests.map((item2) => ({
         engagementId: created.id,
         kind: "data_request",
         side: "client",
-        title: item.title,
-        detail: item.detail,
-        dueOn: dueFor(item.week),
-        weekNumber: item.week,
-        sortOrder: item.order,
-        factor: item.factor,
+        title: item2.title,
+        detail: item2.detail,
+        dueOn: dueFor(item2.week),
+        weekNumber: item2.week,
+        sortOrder: item2.order,
+        factor: item2.factor,
         createdByUserId: input.actorUserId
       })),
-      ...ASSESSMENT_TEMPLATE.teamActions.map((item) => ({
+      ...ASSESSMENT_TEMPLATE.teamActions.map((item2) => ({
         engagementId: created.id,
         kind: "action",
         side: "ipf",
-        title: item.title,
-        detail: item.detail,
-        dueOn: dueFor(item.week),
-        weekNumber: item.week,
-        sortOrder: item.order,
-        factor: item.factor,
+        title: item2.title,
+        detail: item2.detail,
+        dueOn: dueFor(item2.week),
+        weekNumber: item2.week,
+        sortOrder: item2.order,
+        factor: item2.factor,
         createdByUserId: input.actorUserId
       }))
     ]);
-    await tx.insert(engagementSessions).values(ASSESSMENT_TEMPLATE.sessions.map((item) => ({
+    await tx.insert(engagementSessions).values(ASSESSMENT_TEMPLATE.sessions.map((item2) => ({
       engagementId: created.id,
-      kind: item.kind,
-      title: item.title,
-      durationMinutes: item.durationMinutes,
-      agenda: item.agenda,
-      weekNumber: item.week,
-      sortOrder: item.order,
+      kind: item2.kind,
+      title: item2.title,
+      durationMinutes: item2.durationMinutes,
+      agenda: item2.agenda,
+      weekNumber: item2.week,
+      sortOrder: item2.order,
       createdByUserId: input.actorUserId
     })));
     await recordAudit(tx, { action: "engagement_started", actorUserId: input.actorUserId, details: { engagementId: created.id, businessCheckId: input.businessCheckId } });
@@ -8875,7 +8999,7 @@ async function listStaffEngagements(db, actor) {
   const now = Date.now();
   return rows.map((row) => {
     const open = tasks.filter((task) => task.engagementId === row.id && task.side === "client" && (task.status === "open" || task.status === "needs_more"));
-    const next = sessions.filter((item) => item.engagementId === row.id && item.status === "planned" && item.scheduledFor && item.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime())[0];
+    const next = sessions.filter((item2) => item2.engagementId === row.id && item2.status === "planned" && item2.scheduledFor && item2.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime())[0];
     return {
       id: row.id,
       stage: row.stage,
@@ -8888,7 +9012,7 @@ async function listStaffEngagements(db, actor) {
       team: team.filter((member) => member.engagementId === row.id).map((member) => ({ name: member.name ?? "", role: member.role, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
       openClientRequests: open.length,
       overdueClientRequests: open.filter((task) => task.dueOn && task.dueOn < new Date(now).toISOString().slice(0, 10)).length,
-      unscheduledSessions: sessions.filter((item) => item.engagementId === row.id && item.status === "planned" && !item.scheduledFor).length,
+      unscheduledSessions: sessions.filter((item2) => item2.engagementId === row.id && item2.status === "planned" && !item2.scheduledFor).length,
       nextSession: next ? { title: next.title, scheduledFor: next.scheduledFor } : null
     };
   });
@@ -8919,7 +9043,7 @@ async function getStaffEngagement(db, actor, engagementId) {
     clientPeople,
     sessions,
     tasks: tasks.map((task) => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id) })),
-    deliverables: deliverables.map((item) => ({ ...item, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item.kind), comments: comments.filter((comment) => comment.deliverableId === item.id), files: filesFor("deliverableId", item.id) })),
+    deliverables: deliverables.map((item2) => ({ ...item2, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item2.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item2.kind), comments: comments.filter((comment) => comment.deliverableId === item2.id), files: filesFor("deliverableId", item2.id) })),
     measure,
     checkins,
     can: {
@@ -9118,7 +9242,7 @@ async function staffComment(db, actor, input) {
   return { success: true };
 }
 async function clientViewerFor(db, session, businessId) {
-  const membership = session.memberships.find((item) => item.businessId === businessId);
+  const membership = session.memberships.find((item2) => item2.businessId === businessId);
   if (!membership) throw notFound();
   if (membership.role !== "member") return { kind: "owner" };
   const access = (await db.select({ access: businessMemberAccess.access }).from(businessMemberAccess).innerJoin(businessMemberships, eq16(businessMemberAccess.membershipId, businessMemberships.id)).where(and11(eq16(businessMemberships.businessId, businessId), eq16(businessMemberships.userId, session.user.id))).limit(1))[0];
@@ -9144,12 +9268,12 @@ async function getClientRoom(db, session) {
   const check = (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor }).from(businessChecks).where(eq16(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   const report = (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq16(fullReports.businessCheckId, engagement.businessCheckId)).limit(1))[0] ?? null;
   const debrief = fullView ? await sharedDebriefFor(db, engagement.businessCheckId) : null;
-  const visibleDeliverables = deliverables.filter((item) => clientCanSee(item.audience, viewer));
+  const visibleDeliverables = deliverables.filter((item2) => clientCanSee(item2.audience, viewer));
   const clientFiles = (where, id3) => files.filter((file) => file[where] === id3 && clientFileVisible(file, viewer, session.user.id)).map((file) => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === session.user.id, fromTeam: file.fromTeam }));
   const now = Date.now();
-  const scheduled = sessions.filter((item) => item.status !== "cancelled");
-  const next = scheduled.filter((item) => item.status === "planned" && item.scheduledFor && item.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime())[0];
-  const notesVisible = (item) => Boolean(item.notesSharedAt && item.clientNotes && clientCanSee(item.notesAudience, viewer));
+  const scheduled = sessions.filter((item2) => item2.status !== "cancelled");
+  const next = scheduled.filter((item2) => item2.status === "planned" && item2.scheduledFor && item2.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime())[0];
+  const notesVisible = (item2) => Boolean(item2.notesSharedAt && item2.clientNotes && clientCanSee(item2.notesAudience, viewer));
   return {
     engagementId: engagement.id,
     uploadsEnabled: isFileStorageConfigured(),
@@ -9170,19 +9294,19 @@ async function getClientRoom(db, session) {
     measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,
     team: team.map((member) => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
-    sessions: scheduled.map((item) => ({
-      id: item.id,
-      title: item.title,
-      scheduledFor: item.scheduledFor,
-      durationMinutes: item.durationMinutes,
-      meetingLink: item.meetingLink,
-      status: item.status,
-      weekNumber: item.weekNumber,
-      sortOrder: item.sortOrder,
-      agenda: item.agenda,
-      notes: notesVisible(item) ? item.clientNotes : null,
-      notesSharedAt: notesVisible(item) ? item.notesSharedAt : null,
-      notesAudience: notesVisible(item) ? item.notesAudience : null
+    sessions: scheduled.map((item2) => ({
+      id: item2.id,
+      title: item2.title,
+      scheduledFor: item2.scheduledFor,
+      durationMinutes: item2.durationMinutes,
+      meetingLink: item2.meetingLink,
+      status: item2.status,
+      weekNumber: item2.weekNumber,
+      sortOrder: item2.sortOrder,
+      agenda: item2.agenda,
+      notes: notesVisible(item2) ? item2.clientNotes : null,
+      notesSharedAt: notesVisible(item2) ? item2.notesSharedAt : null,
+      notesAudience: notesVisible(item2) ? item2.notesAudience : null
     })),
     tasks: tasks.filter((task) => task.status !== "cancelled" && clientCanSeeTask(task, viewer)).map((task) => ({
       id: task.id,
@@ -9200,18 +9324,18 @@ async function getClientRoom(db, session) {
       factor: task.factor,
       files: clientFiles("taskId", task.id)
     })),
-    deliverables: visibleDeliverables.map((item) => ({
-      id: item.id,
-      kind: item.kind,
-      kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind],
-      title: item.title,
-      summary: item.summary,
-      sharedAt: item.sharedAt,
-      audience: item.audience,
-      audienceLabel: ENGAGEMENT_AUDIENCE_LABELS[item.audience],
-      accepted: item.clientAcceptedAt !== null,
-      files: clientFiles("deliverableId", item.id),
-      comments: comments.filter((comment) => comment.deliverableId === item.id).map((comment) => ({ body: comment.body, createdAt: comment.createdAt, authorName: comment.authorName ?? "" }))
+    deliverables: visibleDeliverables.map((item2) => ({
+      id: item2.id,
+      kind: item2.kind,
+      kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item2.kind],
+      title: item2.title,
+      summary: item2.summary,
+      sharedAt: item2.sharedAt,
+      audience: item2.audience,
+      audienceLabel: ENGAGEMENT_AUDIENCE_LABELS[item2.audience],
+      accepted: item2.clientAcceptedAt !== null,
+      files: clientFiles("deliverableId", item2.id),
+      comments: comments.filter((comment) => comment.deliverableId === item2.id).map((comment) => ({ body: comment.body, createdAt: comment.createdAt, authorName: comment.authorName ?? "" }))
     }))
   };
 }
@@ -9263,11 +9387,11 @@ async function setClientAudience(db, session, input) {
     if (viewer.kind !== "owner") throw new TRPCError14({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
     await db.update(engagementDeliverables).set({ audience: input.audience }).where(eq16(engagementDeliverables.id, deliverable.id));
   } else {
-    const item = (await db.select().from(engagementSessions).where(eq16(engagementSessions.id, input.id)).limit(1))[0];
-    if (!item || !item.notesSharedAt) throw notFound();
-    const { viewer } = await requireClientEngagement(db, session, item.engagementId);
+    const item2 = (await db.select().from(engagementSessions).where(eq16(engagementSessions.id, input.id)).limit(1))[0];
+    if (!item2 || !item2.notesSharedAt) throw notFound();
+    const { viewer } = await requireClientEngagement(db, session, item2.engagementId);
     if (viewer.kind !== "owner") throw new TRPCError14({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
-    await db.update(engagementSessions).set({ notesAudience: input.audience }).where(eq16(engagementSessions.id, item.id));
+    await db.update(engagementSessions).set({ notesAudience: input.audience }).where(eq16(engagementSessions.id, item2.id));
   }
   await recordAudit(db, { action: "engagement_audience_changed", actorUserId: session.user.id, details: { item: input.item, id: input.id, audience: input.audience } });
   return { success: true };
@@ -9453,7 +9577,7 @@ async function saveCheckin(db, actor, input) {
 }
 
 // server/clientOnboarding.ts
-import { randomBytes as randomBytes5, randomUUID as randomUUID2 } from "crypto";
+import { randomBytes as randomBytes6, randomUUID as randomUUID2 } from "crypto";
 import { and as and12, count, desc as desc9, eq as eq17, gt as gt5, isNull as isNull6 } from "drizzle-orm";
 import { TRPCError as TRPCError15 } from "@trpc/server";
 init_brand();
@@ -9500,6 +9624,8 @@ async function assessmentPaid(db, businessCheckId) {
   }
 }
 async function createOnboardingInvitation(input) {
+  const createdBy = input.actorUserId ?? input.createdByUserId ?? null;
+  if (createdBy === null) throw new TRPCError15({ code: "PRECONDITION_FAILED", message: "Nobody on the team is named to send this invitation. Send it from Client Onboarding." });
   const db = await requireDatabase();
   const check = (await db.select().from(businessChecks).where(eq17(businessChecks.id, input.businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError15({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
@@ -9509,7 +9635,7 @@ async function createOnboardingInvitation(input) {
   const paid = await assessmentPaid(db, check.id);
   const override = input.overrideReason?.trim() ?? "";
   if (!paid && !override) throw new TRPCError15({ code: "PRECONDITION_FAILED", message: ONBOARDING_ERRORS.unpaid });
-  const token2 = randomBytes5(32).toString("base64url");
+  const token3 = randomBytes6(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ONBOARDING_INVITATION_TTL_MS);
   const invitation = await db.transaction(async (tx) => {
     await tx.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and12(eq17(clientOnboardingInvitations.businessCheckId, check.id), eq17(clientOnboardingInvitations.status, "pending")));
@@ -9518,13 +9644,13 @@ async function createOnboardingInvitation(input) {
       email,
       fullNameSnapshot: check.fullName,
       businessNameSnapshot: check.businessName ?? "",
-      tokenHash: sha256(token2),
+      tokenHash: sha256(token3),
       expiresAt,
-      createdByUserId: input.actorUserId
+      createdByUserId: createdBy
     }).returning({ id: clientOnboardingInvitations.id });
     return row;
   });
-  const invitationUrl = `${getTrustedApplicationOrigin()}/onboarding/${encodeURIComponent(token2)}`;
+  const invitationUrl = `${getTrustedApplicationOrigin()}/onboarding/${encodeURIComponent(token3)}`;
   const message = buildOnboardingEmail({ fullName: check.fullName, businessName: check.businessName ?? "", url: invitationUrl });
   const delivery = await deliverEmail({ to: email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `client_onboarding_invitations:${invitation.id}` });
   await db.update(clientOnboardingInvitations).set({
@@ -9535,7 +9661,7 @@ async function createOnboardingInvitation(input) {
     actorUserId: input.actorUserId,
     action: "client_onboarding_invitation_created",
     targetEmail: email,
-    details: JSON.stringify({ invitationId: invitation.id, businessCheckId: check.id, deliveryStatus: delivery.status, paid, ...paid ? {} : { override } })
+    details: JSON.stringify({ invitationId: invitation.id, businessCheckId: check.id, deliveryStatus: delivery.status, paid, ...paid ? {} : { override }, ...input.via ? { via: input.via, recordedAgainstUserId: createdBy } : {} })
   });
   return { invitationId: invitation.id, invitationUrl, expiresAt, deliveryStatus: delivery.status };
 }
@@ -9551,10 +9677,10 @@ async function revokeOnboardingInvitation(input) {
   });
   return { success: true };
 }
-async function previewOnboardingInvitation(req, token2) {
+async function previewOnboardingInvitation(req, token3) {
   if (!await consumeRateLimit("onboarding", req, "preview", 60)) throw new TRPCError15({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const db = await requireDatabase();
-  const invitation = (await db.select().from(clientOnboardingInvitations).where(eq17(clientOnboardingInvitations.tokenHash, sha256(token2))).limit(1))[0];
+  const invitation = (await db.select().from(clientOnboardingInvitations).where(eq17(clientOnboardingInvitations.tokenHash, sha256(token3))).limit(1))[0];
   if (!invitation || effectiveInvitationStatus(invitation) !== "pending") return { available: false };
   return { available: true, email: invitation.email, fullName: invitation.fullNameSnapshot, businessName: invitation.businessNameSnapshot };
 }
@@ -9679,7 +9805,7 @@ async function onboardingMetrics() {
 }
 
 // server/fullReport/service.ts
-import { randomBytes as randomBytes6 } from "node:crypto";
+import { randomBytes as randomBytes7 } from "node:crypto";
 import { and as and13, eq as eq18 } from "drizzle-orm";
 import { TRPCError as TRPCError16 } from "@trpc/server";
 init_brand();
@@ -9986,18 +10112,18 @@ var product = z15.preprocess(
     /** For a commission or success fee: the percentage of the deal, and optionally a typical deal size in naira. */
     percent: percentage.nullable().default(null),
     dealSize: naira2.default(null)
-  }).superRefine((item, context) => {
-    if (item.basis === "price" && item.price === null) context.addIssue({ code: "custom", path: ["price"], message: `Enter the price of ${item.name || "each product"}, or choose It varies.` });
-    if (item.basis === "percent" && item.percent === null) context.addIssue({ code: "custom", path: ["percent"], message: `Enter the percentage of the deal you earn on ${item.name || "each service"}.` });
-  }).transform((item) => ({
-    name: item.name,
-    basis: item.basis,
-    price: item.basis === "price" ? item.price : null,
-    percent: item.basis === "percent" ? item.percent : null,
-    dealSize: item.basis === "percent" ? item.dealSize : null
+  }).superRefine((item2, context) => {
+    if (item2.basis === "price" && item2.price === null) context.addIssue({ code: "custom", path: ["price"], message: `Enter the price of ${item2.name || "each product"}, or choose It varies.` });
+    if (item2.basis === "percent" && item2.percent === null) context.addIssue({ code: "custom", path: ["percent"], message: `Enter the percentage of the deal you earn on ${item2.name || "each service"}.` });
+  }).transform((item2) => ({
+    name: item2.name,
+    basis: item2.basis,
+    price: item2.basis === "price" ? item2.price : null,
+    percent: item2.basis === "percent" ? item2.percent : null,
+    dealSize: item2.basis === "percent" ? item2.dealSize : null
   }))
 );
-var earnsByDeal = (products) => products.some((item) => item.basis === "percent");
+var earnsByDeal = (products) => products.some((item2) => item2.basis === "percent");
 function costShareForMargin(margin) {
   if (margin > 75) return "under_25";
   if (margin >= 50) return "25_50";
@@ -10100,10 +10226,10 @@ function money(amount) {
 }
 function optionLabel(questionId, value) {
   for (const section of Object.values(SECTIONS)) {
-    const question = section.questions.find((item) => item.id === questionId);
+    const question = section.questions.find((item2) => item2.id === questionId);
     if (!question) continue;
     const options = [...question.options, ...question.ideaOptions ?? []];
-    if (Array.isArray(value)) return value.map((item) => options.find((option) => option.value === item)?.label ?? item).join("; ");
+    if (Array.isArray(value)) return value.map((item2) => options.find((option) => option.value === item2)?.label ?? item2).join("; ");
     return options.find((option) => option.value === value)?.label;
   }
   return void 0;
@@ -10208,7 +10334,7 @@ function reading(input) {
     health,
     theirWords: row?.answer ? `\u201C${row.answer}\u201D` : "From your Report Intake answers",
     shows: input.shows,
-    meaning: [status?.meaning, detailOf(area, answers)?.meaning, ...input.notes ?? []].filter((item) => Boolean(item)),
+    meaning: [status?.meaning, detailOf(area, answers)?.meaning, ...input.notes ?? []].filter((item2) => Boolean(item2)),
     good: AREA_CONTENT[area].good,
     move: detail.move,
     thisWeek: detail.thisWeek,
@@ -10476,8 +10602,8 @@ function buildFullReport(input) {
     title: "What could go wrong",
     method: "Risk assessment",
     finding: risk.finding,
-    health: worst2(risk.health, ...extraReadings.map((item) => item.health)),
-    blocks: [riskRegister(answers, result, intake, metrics2), risk.block, ...extraReadings.map((item) => item.block)]
+    health: worst2(risk.health, ...extraReadings.map((item2) => item2.health)),
+    blocks: [riskRegister(answers, result, intake, metrics2), risk.block, ...extraReadings.map((item2) => item2.block)]
   });
   parts.push({
     number: 8,
@@ -10497,7 +10623,7 @@ function buildFullReport(input) {
   const areaHealth = /* @__PURE__ */ new Map();
   if (intent) areaHealth.set(1, { health: intent.health, finding: intent.finding });
   if (idea) areaHealth.set(1, { health: outlineRow(result, 1)?.health ?? "watch", finding: parts[1].finding });
-  for (const item of [market, offer, model, sales, operations, finance, risk, ...extraReadings]) areaHealth.set(item.area, { health: item.health, finding: item.finding });
+  for (const item2 of [market, offer, model, sales, operations, finance, risk, ...extraReadings]) areaHealth.set(item2.area, { health: item2.health, finding: item2.finding });
   const order = ROOT_ORDER.filter((area) => areaHealth.has(area));
   const mainArea = result.primaryArea && areaHealth.has(result.primaryArea.area) && areaHealth.get(result.primaryArea.area).health !== "clear" ? result.primaryArea.area : ["stuck", "watch"].map((health) => order.find((area) => areaHealth.get(area).health === health)).find((area) => area !== void 0);
   const tally = { clear: 0, watch: 0, stuck: 0 };
@@ -10668,7 +10794,7 @@ function riskRegister(answers, result, intake, metrics2) {
   if (intake.loans === "over_10m" || intake.loans === "1m_10m" && metrics2.result !== null && metrics2.result < 0) risks.push({ risk: "Loan repayments the business cannot carry", likelihood: 2, impact: 3, control: "A repayment schedule set against the cash forecast; talk to the lender early." });
   const level = (value) => value >= 3 ? "High" : value === 2 ? "Medium" : "Low";
   const sorted = risks.sort((a, b) => b.likelihood * b.impact - a.likelihood * a.impact).slice(0, 6);
-  return sorted.length ? { kind: "table", columns: ["Risk", "Likelihood", "Impact", "First control"], widths: [0.3, 0.14, 0.12, 0.44], rows: sorted.map((item) => [item.risk, level(item.likelihood), level(item.impact), item.control]) } : { kind: "paragraph", text: "Your answers did not point to a pressing risk. Keep a short list of the five things that could hurt the business most, and review it once a year." };
+  return sorted.length ? { kind: "table", columns: ["Risk", "Likelihood", "Impact", "First control"], widths: [0.3, 0.14, 0.12, 0.44], rows: sorted.map((item2) => [item2.risk, level(item2.likelihood), level(item2.impact), item2.control]) } : { kind: "paragraph", text: "Your answers did not point to a pressing risk. Keep a short list of the five things that could hurt the business most, and review it once a year." };
 }
 function appendix(answers, intake) {
   const check = [];
@@ -10764,13 +10890,13 @@ function subhead(doc, text4) {
   doc.moveDown(0.35);
 }
 function bullets(doc, items) {
-  for (const item of items) {
+  for (const item2 of items) {
     doc.font(SANS2).fontSize(9.5);
-    const height = doc.heightOfString(item, { width: W - 14, lineGap: 2.5 });
+    const height = doc.heightOfString(item2, { width: W - 14, lineGap: 2.5 });
     ensure(doc, height + 4);
     const y = doc.y;
     doc.fillColor(C2.highlight).font(SANS_700).text("\u2022", M.left, y, { lineBreak: false });
-    doc.fillColor(C2.ink).font(SANS2).fontSize(9.5).text(item, M.left + 14, y, { width: W - 14, lineGap: 2.5 });
+    doc.fillColor(C2.ink).font(SANS2).fontSize(9.5).text(item2, M.left + 14, y, { width: W - 14, lineGap: 2.5 });
     doc.moveDown(0.3);
   }
   doc.moveDown(0.3);
@@ -10846,25 +10972,25 @@ function metrics(doc, items) {
     while (size > 10 && doc.fontSize(size).widthOfString(value) > inner) size -= 0.5;
     return size;
   };
-  const heightOf = (item) => {
+  const heightOf = (item2) => {
     doc.font(SANS_700).fontSize(7);
-    const label = doc.heightOfString(item.label.toUpperCase(), { width: inner, characterSpacing: 0.8 });
-    doc.font(SANS_700).fontSize(valueSize(item.value));
-    const value = doc.heightOfString(item.value, { width: inner });
+    const label = doc.heightOfString(item2.label.toUpperCase(), { width: inner, characterSpacing: 0.8 });
+    doc.font(SANS_700).fontSize(valueSize(item2.value));
+    const value = doc.heightOfString(item2.value, { width: inner });
     doc.font(SANS2).fontSize(8);
-    const note = doc.heightOfString(item.note, { width: inner, lineGap: 1.5 });
+    const note = doc.heightOfString(item2.note, { width: inner, lineGap: 1.5 });
     return label + value + note + 30;
   };
   const height = Math.max(...items.map(heightOf));
   ensure(doc, height + 10);
   const y = doc.y;
-  items.forEach((item, index2) => {
+  items.forEach((item2, index2) => {
     const x = M.left + index2 * (width + gap);
     doc.rect(x, y, width, height).lineWidth(0.6).strokeColor(C2["brand-line"]).stroke();
     doc.rect(x, y, width, 2.5).fill(C2.brand);
-    doc.fillColor(C2["ink-muted"]).font(SANS_700).fontSize(7).text(item.label.toUpperCase(), x + 10, y + 12, { width: inner, characterSpacing: 0.8 });
-    doc.fillColor(C2.ink).font(SANS_700).fontSize(valueSize(item.value)).text(item.value, x + 10, doc.y + 4, { width: inner });
-    doc.fillColor(C2["ink-muted"]).font(SANS2).fontSize(8).text(item.note, x + 10, doc.y + 3, { width: inner, lineGap: 1.5 });
+    doc.fillColor(C2["ink-muted"]).font(SANS_700).fontSize(7).text(item2.label.toUpperCase(), x + 10, y + 12, { width: inner, characterSpacing: 0.8 });
+    doc.fillColor(C2.ink).font(SANS_700).fontSize(valueSize(item2.value)).text(item2.value, x + 10, doc.y + 4, { width: inner });
+    doc.fillColor(C2["ink-muted"]).font(SANS2).fontSize(8).text(item2.note, x + 10, doc.y + 3, { width: inner, lineGap: 1.5 });
   });
   doc.x = M.left;
   doc.y = y + height + 14;
@@ -11097,18 +11223,18 @@ var REPORT_ERRORS = {
   alreadySent: "Your Full Report has already been sent. You can download it again below.",
   notReady: "Your Full Report is not ready yet. Complete the Report Intake first."
 };
-var reportUrl = (token2) => `${getTrustedApplicationOrigin()}/report/${encodeURIComponent(token2)}`;
+var reportUrl = (token3) => `${getTrustedApplicationOrigin()}/report/${encodeURIComponent(token3)}`;
 async function issueReportLink(db, input) {
-  const token2 = randomBytes6(32).toString("base64url");
+  const token3 = randomBytes7(32).toString("base64url");
   const existing = (await db.select().from(fullReports).where(eq18(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
   if (existing?.status === "delivered") return null;
-  if (existing) await db.update(fullReports).set({ tokenHash: sha256(token2) }).where(eq18(fullReports.id, existing.id));
-  else await db.insert(fullReports).values({ businessCheckId: input.businessCheckId, paymentRequestId: input.paymentRequestId, tokenHash: sha256(token2) });
-  return reportUrl(token2);
+  if (existing) await db.update(fullReports).set({ tokenHash: sha256(token3) }).where(eq18(fullReports.id, existing.id));
+  else await db.insert(fullReports).values({ businessCheckId: input.businessCheckId, paymentRequestId: input.paymentRequestId, tokenHash: sha256(token3) });
+  return reportUrl(token3);
 }
-async function recordFor(db, token2) {
-  if (!token2 || token2.length > 200) throw new TRPCError16({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
-  const record = (await db.select().from(fullReports).where(eq18(fullReports.tokenHash, sha256(token2))).limit(1))[0];
+async function recordFor(db, token3) {
+  if (!token3 || token3.length > 200) throw new TRPCError16({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
+  const record = (await db.select().from(fullReports).where(eq18(fullReports.tokenHash, sha256(token3))).limit(1))[0];
   if (!record) throw new TRPCError16({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
   return record;
 }
@@ -11117,8 +11243,8 @@ async function checkFor(db, businessCheckId) {
   if (!check) throw new TRPCError16({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
   return check;
 }
-async function reportForm(db, token2) {
-  const record = await recordFor(db, token2);
+async function reportForm(db, token3) {
+  const record = await recordFor(db, token3);
   const check = await checkFor(db, record.businessCheckId);
   return { status: record.status, fullName: check.fullName, businessName: check.businessName ?? "", email: check.email, deliveredAt: record.deliveredAt };
 }
@@ -11177,8 +11303,8 @@ function reportEmail(report, downloadUrl) {
     ].join("\n")
   };
 }
-async function submitReportIntake(db, token2, rawIntake) {
-  const record = await recordFor(db, token2);
+async function submitReportIntake(db, token3, rawIntake) {
+  const record = await recordFor(db, token3);
   if (record.status === "delivered") throw new TRPCError16({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
   const parsed = intakeSchema.safeParse(rawIntake);
   if (!parsed.success) throw new TRPCError16({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Please check your answers." });
@@ -11186,7 +11312,7 @@ async function submitReportIntake(db, token2, rawIntake) {
   if (!claimed) throw new TRPCError16({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
   const { report, generatedAt, email } = await assemble(db, claimed);
   const pdf = await renderFullReportPdf(report, generatedAt);
-  const message = reportEmail(report, reportUrl(token2));
+  const message = reportEmail(report, reportUrl(token3));
   const delivery = await deliverEmail({
     sender: "business_support",
     idempotencyKey: `full_reports:${claimed.id}:report`,
@@ -11215,8 +11341,8 @@ async function submitReportIntake(db, token2, rawIntake) {
   }).catch(() => void 0);
   return { delivered: true, deliveryStatus: delivery.status, fileName: fileName(report), pdf: pdf.toString("base64") };
 }
-async function downloadReport(db, token2) {
-  const record = await recordFor(db, token2);
+async function downloadReport(db, token3) {
+  const record = await recordFor(db, token3);
   if (record.status !== "delivered") throw new TRPCError16({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
   const { report, generatedAt } = await assemble(db, record);
   return { fileName: fileName(report), pdf: (await renderFullReportPdf(report, generatedAt)).toString("base64") };
@@ -11272,18 +11398,62 @@ function bankDetails() {
   return { ...PLACEHOLDER_BANK_DETAILS, placeholder: true };
 }
 var firstName = (fullName) => fullName.trim().split(/\s+/)[0] || "there";
+var EMAIL_TEST_NOTICE = ONLINE_TEST_NOTICE.replace(": ", " - ");
+function onlinePaymentOffer(publicToken, item2) {
+  const mode = paystackMode();
+  return mode === "off" ? null : { url: `${getTrustedApplicationOrigin()}${payPath(publicToken, item2)}`, mode };
+}
 function paymentDetailsEmail(input) {
   const bank = bankDetails();
   const { amount } = PAYMENT_ITEM_DETAILS[input.item];
   const report = input.item === "full_report";
+  const subject = report ? "Payment details for your Full Report" : `Payment details for your ${CURRENT_STATE.name}`;
+  const opening = [
+    `Dear ${firstName(input.fullName)},`,
+    "",
+    report ? "Thank you for asking for your Full Report. Here is how to pay for it." : `Thank you for choosing to start your ${CURRENT_STATE.name} with us. Here is how to pay for it.`,
+    ""
+  ];
+  const placeholder = bank.placeholder ? ["TEST DETAILS - DO NOT PAY", "These are placeholder details while we test this email. Please do not make a transfer to them.", ""] : [];
+  const afterwards = report ? `Then we send you the Report Intake, a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your Full Report is emailed to you the moment you finish it.` : `Then your ${CURRENT_STATE.name} starts. ${CURRENT_STATE.start}`;
+  if (input.online) {
+    return {
+      subject,
+      body: [
+        ...opening,
+        ...input.online.mode === "test" ? [EMAIL_TEST_NOTICE, "Online payment is in Paystack's test mode while we test it, so paying online moves no real money.", ""] : [],
+        "HOW TO PAY",
+        `Amount: ${formatNaira(amount)}`,
+        `Reference: ${input.reference}`,
+        `Pay by: ${lagosTime(input.deadline)} (Lagos time)`,
+        "",
+        "PAY ONLINE",
+        "Pay securely with Paystack, by card or bank. Your payment is confirmed straight away.",
+        `Pay online: ${input.online.url}`,
+        "",
+        ...placeholder,
+        "OR PAY BY BANK TRANSFER",
+        `Bank: ${bank.bankName}`,
+        `Account name: ${bank.accountName}`,
+        `Account number: ${bank.accountNumber}`,
+        "",
+        "Please put the reference on your transfer, so we can match your payment to you.",
+        `These details hold for ${PAYMENT_WINDOW_HOURS} hours. If you need more time, reply to this email and we will send them again.`,
+        "",
+        "AFTER YOU PAY",
+        "Paid online? There is nothing more to do. We email you as soon as Paystack confirms your payment.",
+        "Paid by bank transfer? Reply to this email with your proof of payment: a screenshot of the transfer or your bank's receipt. We will confirm by email once the payment arrives.",
+        afterwards,
+        "",
+        BRAND.organisationName
+      ].join("\n")
+    };
+  }
   return {
-    subject: report ? "Payment details for your Full Report" : `Payment details for your ${CURRENT_STATE.name}`,
+    subject,
     body: [
-      `Dear ${firstName(input.fullName)},`,
-      "",
-      report ? "Thank you for asking for your Full Report. Here is how to pay for it." : `Thank you for choosing to start your ${CURRENT_STATE.name} with us. Here is how to pay for it.`,
-      "",
-      ...bank.placeholder ? ["TEST DETAILS - DO NOT PAY", "These are placeholder details while we test this email. Please do not make a transfer to them.", ""] : [],
+      ...opening,
+      ...placeholder,
       "HOW TO PAY",
       `Amount: ${formatNaira(amount)}`,
       `Bank: ${bank.bankName}`,
@@ -11297,7 +11467,7 @@ function paymentDetailsEmail(input) {
       "",
       "AFTER YOU PAY",
       "Reply to this email with your proof of payment: a screenshot of the transfer or your bank's receipt. We will confirm by email once the payment arrives.",
-      report ? `Then we send you the Report Intake, a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your Full Report is emailed to you the moment you finish it.` : `Then your ${CURRENT_STATE.name} starts. ${CURRENT_STATE.start}`,
+      afterwards,
       "",
       BRAND.organisationName
     ].join("\n")
@@ -11305,7 +11475,10 @@ function paymentDetailsEmail(input) {
 }
 function paymentConfirmedEmail(input) {
   const { amount } = PAYMENT_ITEM_DETAILS[input.item];
-  const received = `Thank you. We have received your payment of ${formatNaira(amount)} (reference ${input.reference}).`;
+  const received = [
+    `Thank you. We have received your payment of ${formatNaira(amount)} (reference ${input.reference}).`,
+    ...input.testMode ? ["", EMAIL_TEST_NOTICE, "This payment was made in Paystack's test mode, so no real money moved."] : []
+  ].join("\n");
   if (input.item === "full_report") {
     return {
       subject: "Payment received: your Full Report",
@@ -11367,7 +11540,7 @@ async function paymentStatusesByCheck(db, businessCheckIds) {
   return byCheck;
 }
 async function loadCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq19(businessChecks.id, businessCheckId)).limit(1))[0];
+  const check = (await db.select({ id: businessChecks.id, publicToken: businessChecks.publicToken, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq19(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError17({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   return check;
 }
@@ -11376,25 +11549,25 @@ async function requestPayment(db, input) {
   const check = await loadCheck(db, input.businessCheckId);
   const existing = (await db.select().from(paymentRequests).where(and14(eq19(paymentRequests.businessCheckId, check.id), eq19(paymentRequests.item, input.item))).limit(1))[0];
   if (existing?.status === "confirmed") throw new TRPCError17({ code: "CONFLICT", message: "This has already been paid." });
-  const reference = paymentReference(input.item, check.id);
+  const reference2 = paymentReference(input.item, check.id);
   const amountNaira = PAYMENT_ITEM_DETAILS[input.item].amount;
   const stageTo = input.item === "current_state" && BEFORE_OPPORTUNITY.includes(check.pipelineStage) ? "opportunity" : check.pipelineStage;
   const request = await db.transaction(async (tx) => {
-    const [row] = await tx.insert(paymentRequests).values({ businessCheckId: check.id, item: input.item, amountNaira, reference, requestedByUserId: input.actorUserId }).onConflictDoUpdate({ target: [paymentRequests.businessCheckId, paymentRequests.item], set: { amountNaira, requestedByUserId: input.actorUserId, requestedAt: /* @__PURE__ */ new Date() } }).returning();
+    const [row] = await tx.insert(paymentRequests).values({ businessCheckId: check.id, item: input.item, amountNaira, reference: reference2, requestedByUserId: input.actorUserId }).onConflictDoUpdate({ target: [paymentRequests.businessCheckId, paymentRequests.item], set: { amountNaira, requestedByUserId: input.actorUserId, requestedAt: /* @__PURE__ */ new Date() } }).returning();
     if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq19(businessChecks.id, check.id));
     await recordAudit(tx, {
       action: "payment_details_sent",
       actorUserId: input.actorUserId,
       targetEmail: check.email,
-      details: { businessCheckId: check.id, item: input.item, reference, amountNaira, again: Boolean(existing), ...stageTo !== check.pipelineStage ? { from: check.pipelineStage, to: stageTo } : {} }
+      details: { businessCheckId: check.id, item: input.item, reference: reference2, amountNaira, again: Boolean(existing), ...stageTo !== check.pipelineStage ? { from: check.pipelineStage, to: stageTo } : {} }
     });
     return row;
   });
-  const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference, deadline: paymentDeadline(request.requestedAt) });
+  const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference: reference2, deadline: paymentDeadline(request.requestedAt), online: onlinePaymentOffer(check.publicToken, input.item) });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:details:${request.requestedAt.getTime()}` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
   await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq19(paymentRequests.id, request.id));
   const deliveryProblem = delivery.status === "Failed" ? delivery.reason : null;
-  return { paymentRequestId: request.id, reference, status: request.status, deliveryStatus: delivery.status, deliveryProblem, pipelineStage: stageTo };
+  return { paymentRequestId: request.id, reference: reference2, status: request.status, deliveryStatus: delivery.status, deliveryProblem, pipelineStage: stageTo };
 }
 async function loadRequest(db, paymentRequestId) {
   const request = (await db.select().from(paymentRequests).where(eq19(paymentRequests.id, paymentRequestId)).limit(1))[0];
@@ -11418,22 +11591,30 @@ async function markProofReceived(db, input) {
   return { success: true, changed: false };
 }
 var NOT_CONFIRMED = { success: true, changed: false, invitation: null, engagement: null };
+var ONLINE_NOTE = "Paid online with Paystack, reference ";
+var TEST_NOTE = "TEST: ";
+function onlinePaymentNote(online) {
+  return `${online.mode === "test" ? TEST_NOTE : ""}${ONLINE_NOTE}${online.reference}`;
+}
+var viaDetails = (online) => online ? { via: online.provider, paystackReference: online.reference, mode: online.mode } : {};
 async function confirmPayment(db, input) {
   const request = await loadRequest(db, input.paymentRequestId);
   if (request.status === "confirmed") return NOT_CONFIRMED;
   const check = await loadCheck(db, request.businessCheckId);
   const stageTo = request.item === "current_state" ? "won" : check.pipelineStage;
+  const note = input.online ? onlinePaymentNote(input.online) : input.note || null;
+  const via = viaDetails(input.online);
   let outcome;
   try {
     outcome = await db.transaction(async (tx) => {
-      const [claimed] = await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note: input.note || null }).where(and14(eq19(paymentRequests.id, request.id), ne2(paymentRequests.status, "confirmed"))).returning({ id: paymentRequests.id });
+      const [claimed] = await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note }).where(and14(eq19(paymentRequests.id, request.id), ne2(paymentRequests.status, "confirmed"))).returning({ id: paymentRequests.id });
       if (!claimed) return null;
       if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq19(businessChecks.id, check.id));
       await recordAudit(tx, {
         action: "payment_confirmed",
         actorUserId: input.actorUserId,
         targetEmail: check.email,
-        details: { businessCheckId: check.id, item: request.item, reference: request.reference, amountNaira: request.amountNaira, ...input.note ? { note: input.note } : {}, ...stageTo !== check.pipelineStage ? { from: check.pipelineStage, to: stageTo } : {} }
+        details: { businessCheckId: check.id, item: request.item, reference: request.reference, amountNaira: request.amountNaira, ...note ? { note } : {}, ...via, ...stageTo !== check.pipelineStage ? { from: check.pipelineStage, to: stageTo } : {} }
       });
       const reportLink = request.item === "full_report" ? await issueReportLink(tx, { businessCheckId: check.id, paymentRequestId: request.id }) : null;
       return { reportLink };
@@ -11443,14 +11624,14 @@ async function confirmPayment(db, input) {
     throw error;
   }
   if (!outcome) return NOT_CONFIRMED;
-  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink });
+  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink, testMode: input.online?.mode === "test" });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:confirmed` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
-  await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference, delivery: delivery.status, again: false } });
+  await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference, delivery: delivery.status, again: false, ...via } });
   let invitation = null;
   let engagement = null;
   if (request.item === "current_state") {
     engagement = await startEngagementSafely(db, { businessCheckId: check.id, paymentRequestId: request.id, actorUserId: input.actorUserId });
-    invitation = await inviteToClientAccount(db, check.id, input.actorUserId);
+    invitation = await inviteToClientAccount(db, check.id, input.online ? { actorUserId: null, createdByUserId: request.requestedByUserId, via: input.online.provider } : { actorUserId: input.actorUserId });
   }
   return { success: true, changed: true, invitation, engagement };
 }
@@ -11459,18 +11640,19 @@ async function resendPaymentConfirmation(db, input) {
   if (request.status !== "confirmed") throw new TRPCError17({ code: "CONFLICT", message: "This payment is not confirmed yet." });
   if (request.item !== "current_state") throw new TRPCError17({ code: "CONFLICT", message: "For the Full Report, send the Report Intake link again instead." });
   const check = await loadCheck(db, request.businessCheckId);
-  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: null });
+  const testMode = request.confirmedByUserId === null && Boolean(request.note?.startsWith(`${TEST_NOTE}${ONLINE_NOTE}`));
+  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: null, testMode });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:confirmed:${Date.now()}` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
   await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference, delivery: delivery.status, again: true } });
   return { success: true, deliveryStatus: delivery.status };
 }
-async function inviteToClientAccount(db, businessCheckId, actorUserId) {
+async function inviteToClientAccount(db, businessCheckId, actor) {
   const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt }).from(clientOnboardingInvitations).where(eq19(clientOnboardingInvitations.businessCheckId, businessCheckId)).orderBy(desc10(clientOnboardingInvitations.id)).limit(1))[0];
   const status = latest ? effectiveInvitationStatus(latest) : null;
   if (status === "accepted") return "has_account";
   if (status === "pending") return "already_invited";
   try {
-    await createOnboardingInvitation({ businessCheckId, actorUserId });
+    await createOnboardingInvitation({ businessCheckId, ...actor });
     return "sent";
   } catch (error) {
     if (error instanceof TRPCError17 && error.code === "CONFLICT") return "has_account";
@@ -11557,8 +11739,8 @@ async function database(what) {
   if (!db) throw unavailable2(what);
   return db;
 }
-async function findCheck(db, token2) {
-  const [check] = await db.select().from(businessChecks).where(eq20(businessChecks.publicToken, token2)).limit(1);
+async function findCheck(db, token3) {
+  const [check] = await db.select().from(businessChecks).where(eq20(businessChecks.publicToken, token3)).limit(1);
   if (!check) throw new TRPCError18({ code: "NOT_FOUND", message: "We could not find that Business Check. Kindly start again." });
   return check;
 }
@@ -11578,9 +11760,9 @@ var businessCheckRouter = router({
       throw tooMany("Kindly wait a few minutes before starting another Business Check.");
     }
     const db = await database("start your Business Check");
-    const token2 = randomBytes7(24).toString("base64url");
+    const token3 = randomBytes8(24).toString("base64url");
     await db.insert(businessChecks).values({
-      publicToken: token2,
+      publicToken: token3,
       pipelineStage: "lead",
       fullName: input.fullName,
       email: input.email,
@@ -11589,7 +11771,7 @@ var businessCheckRouter = router({
       stage: "unknown",
       answersJson: "{}"
     });
-    return { token: token2 };
+    return { token: token3 };
   }),
   /** Saves answers as the owner goes, so an unfinished check still tells the team where they were. */
   saveProgress: publicProcedure.input(z16.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }) => {
@@ -11699,7 +11881,7 @@ var businessCheckRouter = router({
 import { z as z17 } from "zod";
 
 // server/accountRecovery.ts
-import { randomBytes as randomBytes8 } from "node:crypto";
+import { randomBytes as randomBytes9 } from "node:crypto";
 import { and as and16, eq as eq21, gt as gt6, isNull as isNull8 } from "drizzle-orm";
 import { TRPCError as TRPCError19 } from "@trpc/server";
 init_brand();
@@ -11756,13 +11938,13 @@ async function issuePasswordReset(db, input) {
   if (await protectedPerson(db, target) && !isSuperAdmin(input.actor.authority)) {
     throw new TRPCError19({ code: "FORBIDDEN", message: "Only a Super Admin can issue a reset link for a Super Admin." });
   }
-  const token2 = randomBytes8(32).toString("base64url");
+  const token3 = randomBytes9(32).toString("base64url");
   const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
   let resetId;
   try {
     resetId = await db.transaction(async (tx) => {
       await tx.update(userPasswordResetTokens).set({ revokedAt: databaseNow() }).where(and16(eq21(userPasswordResetTokens.userId, target.id), isNull8(userPasswordResetTokens.consumedAt), isNull8(userPasswordResetTokens.revokedAt)));
-      const [row] = await tx.insert(userPasswordResetTokens).values({ userId: target.id, tokenHash: sha256(token2), expiresAt, issuedByUserId: input.actor.id }).returning({ id: userPasswordResetTokens.id });
+      const [row] = await tx.insert(userPasswordResetTokens).values({ userId: target.id, tokenHash: sha256(token3), expiresAt, issuedByUserId: input.actor.id }).returning({ id: userPasswordResetTokens.id });
       await recordAudit(tx, { action: "account_password_reset_issued", actorUserId: input.actor.id, targetEmail: target.email, details: { targetUserId: target.id, resetId: row.id, expiresAt: expiresAt.toISOString() } });
       return row.id;
     });
@@ -11770,25 +11952,25 @@ async function issuePasswordReset(db, input) {
     if (isUndefinedTable(error)) throw notSetUp();
     throw error;
   }
-  const resetUrl = `${getTrustedApplicationOrigin()}${RESET_PATH}/${encodeURIComponent(token2)}`;
+  const resetUrl = `${getTrustedApplicationOrigin()}${RESET_PATH}/${encodeURIComponent(token3)}`;
   const message = buildResetEmail({ name: target.name ?? "", url: resetUrl });
   const delivery = await deliverEmail({ to: target.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `user_password_reset_tokens:${resetId}` });
   await db.update(userPasswordResetTokens).set({ deliveryStatus: delivery.status }).where(eq21(userPasswordResetTokens.id, resetId));
   return { resetId, resetUrl, expiresAt, deliveryStatus: delivery.status };
 }
-async function openReset(db, token2) {
-  if (!token2 || token2.length > 200) return null;
+async function openReset(db, token3) {
+  if (!token3 || token3.length > 200) return null;
   return (await db.select({ id: userPasswordResetTokens.id, userId: users.id, email: users.email, status: users.status }).from(userPasswordResetTokens).innerJoin(users, eq21(users.id, userPasswordResetTokens.userId)).where(and16(
-    eq21(userPasswordResetTokens.tokenHash, sha256(token2)),
+    eq21(userPasswordResetTokens.tokenHash, sha256(token3)),
     isNull8(userPasswordResetTokens.consumedAt),
     isNull8(userPasswordResetTokens.revokedAt),
     gt6(userPasswordResetTokens.expiresAt, /* @__PURE__ */ new Date())
   )).limit(1))[0] ?? null;
 }
-async function previewPasswordReset(db, req, token2) {
+async function previewPasswordReset(db, req, token3) {
   if (!await consumeLimit(LIMITS.publicLookup, requestIp2(req))) throw tooMany2();
   try {
-    const reset = await openReset(db, token2);
+    const reset = await openReset(db, token3);
     return reset && reset.status === "active" && reset.email ? { available: true, email: reset.email } : { available: false };
   } catch (error) {
     if (isUndefinedTable(error)) return { available: false };
@@ -11998,7 +12180,7 @@ var parseJson = (text4) => {
 async function paymentsOf(db, businessCheckId) {
   try {
     const now = /* @__PURE__ */ new Date();
-    return (await paymentRequestsFor(db, [businessCheckId])).map(({ id: id3, item, amountNaira, reference, status, requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }) => ({ id: id3, item, amountNaira, reference, status, displayStatus: effectivePaymentStatus({ status, requestedAt }, now), payBy: paymentDeadline(requestedAt), requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }));
+    return (await paymentRequestsFor(db, [businessCheckId])).map(({ id: id3, item: item2, amountNaira, reference: reference2, status, requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }) => ({ id: id3, item: item2, amountNaira, reference: reference2, status, displayStatus: effectivePaymentStatus({ status, requestedAt }, now), payBy: paymentDeadline(requestedAt), requestedAt, deliveryStatus, proofReceivedAt, confirmedAt, note }));
   } catch (error) {
     if (!isMissingPaymentTable(error)) throw error;
     console.error("[Payments] The payment_requests table is missing: apply migration 0006 with pnpm db:migrate.");
@@ -12042,7 +12224,7 @@ async function stageHistoryFor(db, businessCheckId) {
   const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq22(users.id, adminAccessAuditEvents.actorUserId)).where(and17(inArray6(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql8`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc11(adminAccessAuditEvents.createdAt), desc11(adminAccessAuditEvents.id)).limit(100);
   return events.map((event) => {
     const details = parseJson(event.details) ?? {};
-    return { id: event.id, action: event.action, from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, delivery: details.delivery ?? null, by: event.by ?? null, at: event.at };
+    return { id: event.id, action: event.action, from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, delivery: details.delivery ?? null, via: details.via === "paystack" ? "paystack" : null, by: event.by ?? null, at: event.at };
   });
 }
 var SETTABLE_STAGES = PIPELINE_STAGES.filter((stage) => stage !== "lead" && stage !== "won");
@@ -12317,7 +12499,7 @@ import { TRPCError as TRPCError26 } from "@trpc/server";
 import { z as z24 } from "zod";
 
 // server/accountInvitations.ts
-import { randomBytes as randomBytes9, randomUUID as randomUUID3 } from "crypto";
+import { randomBytes as randomBytes10, randomUUID as randomUUID3 } from "crypto";
 import { and as and18, desc as desc12, eq as eq23, gt as gt7, inArray as inArray7, isNull as isNull10, ne as ne3 } from "drizzle-orm";
 import { TRPCError as TRPCError25 } from "@trpc/server";
 import { z as z23 } from "zod";
@@ -12365,7 +12547,7 @@ function buildInvitationEmail(input) {
   };
 }
 async function issue(db, input) {
-  const token2 = randomBytes9(32).toString("base64url");
+  const token3 = randomBytes10(32).toString("base64url");
   let invitation;
   try {
     invitation = await db.transaction(async (tx) => {
@@ -12377,7 +12559,7 @@ async function issue(db, input) {
         platformRole: input.platformRole ?? null,
         businessId: input.businessId ?? null,
         access: input.access ?? null,
-        tokenHash: sha256(token2),
+        tokenHash: sha256(token3),
         expiresAt: new Date(Date.now() + ONBOARDING_INVITATION_TTL_MS),
         createdByUserId: input.actorUserId
       }).returning({ id: accountInvitations.id });
@@ -12388,7 +12570,7 @@ async function issue(db, input) {
     if (isUniqueViolation(error)) throw new TRPCError25({ code: "CONFLICT", message: "An invitation to this address is already out." });
     throw error;
   }
-  const invitationUrl = `${getTrustedApplicationOrigin()}${JOIN_PATH}/${encodeURIComponent(token2)}`;
+  const invitationUrl = `${getTrustedApplicationOrigin()}${JOIN_PATH}/${encodeURIComponent(token3)}`;
   const message = buildInvitationEmail({ kind: input.kind, fullName: input.fullName, url: invitationUrl, inviterName: input.inviterName, businessName: input.businessName, access: input.access });
   const delivery = await deliverEmail({ to: input.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `account_invitations:${invitation.id}` });
   await db.update(accountInvitations).set({ deliveryStatus: delivery.status }).where(eq23(accountInvitations.id, invitation.id));
@@ -12439,12 +12621,12 @@ async function listSeats(db, session) {
     db.select({ membershipId: businessMemberships.id, userId: users.id, name: users.name, email: users.email, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq23(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq23(businessMemberAccess.membershipId, businessMemberships.id)).where(and18(eq23(businessMemberships.businessId, business.businessId), eq23(businessMemberships.role, "member"), eq23(businessMemberships.status, "active"))),
     db.select().from(accountInvitations).where(and18(eq23(accountInvitations.kind, "business_member"), eq23(accountInvitations.businessId, business.businessId), eq23(accountInvitations.status, "pending")))
   ]);
-  const pending = invitations.filter((item) => invitationState(item) === "pending");
+  const pending = invitations.filter((item2) => invitationState(item2) === "pending");
   return {
     included: TEAM_SEATS_INCLUDED,
     used: members.length + pending.length,
     members: members.map((member) => ({ membershipId: member.membershipId, name: member.name ?? "", email: member.email ?? "", access: member.access ?? "full" })),
-    invitations: pending.map((item) => ({ id: item.id, fullName: item.fullName, email: item.email, access: item.access, expiresAt: item.expiresAt, deliveryStatus: item.deliveryStatus }))
+    invitations: pending.map((item2) => ({ id: item2.id, fullName: item2.fullName, email: item2.email, access: item2.access, expiresAt: item2.expiresAt, deliveryStatus: item2.deliveryStatus }))
   };
 }
 async function inviteSeat(db, session, rawInput) {
@@ -12473,9 +12655,9 @@ async function setSeatAccess(db, session, input) {
   await db.insert(businessMemberAccess).values({ membershipId: membership.id, access: input.access, grantedByUserId: session.user.id }).onConflictDoUpdate({ target: businessMemberAccess.membershipId, set: { access: input.access, grantedByUserId: session.user.id } });
   return { success: true };
 }
-async function previewAccountInvitation(db, req, token2) {
+async function previewAccountInvitation(db, req, token3) {
   if (!await consumeRateLimit("onboarding", req, "join-preview", 60)) throw new TRPCError25({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
-  const invitation = (await db.select().from(accountInvitations).where(eq23(accountInvitations.tokenHash, sha256(token2))).limit(1))[0];
+  const invitation = (await db.select().from(accountInvitations).where(eq23(accountInvitations.tokenHash, sha256(token3))).limit(1))[0];
   if (!invitation || invitationState(invitation) !== "pending") return { available: false };
   const business = invitation.businessId ? (await db.select({ name: businesses.name }).from(businesses).where(eq23(businesses.id, invitation.businessId)).limit(1))[0] : null;
   return { available: true, kind: invitation.kind, email: invitation.email, fullName: invitation.fullName, businessName: business?.name ?? null, access: invitation.access };
@@ -12576,6 +12758,256 @@ var peopleRouter = router({
   setStatus: manageUsers.input(z25.object({ userId: z25.number().int().positive(), status: z25.enum(["active", "suspended"]), reason: z25.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => setAccountStatus(await database5(), { actor: { id: ctx.user.id, email: ctx.user.email ?? null, authority: ctx.authority }, targetUserId: input.userId, status: input.status, reason: input.reason }))
 });
 
+// server/routers/onlinePayment.ts
+import { TRPCError as TRPCError29 } from "@trpc/server";
+import { z as z26 } from "zod";
+
+// server/onlinePayment.ts
+import { TRPCError as TRPCError28 } from "@trpc/server";
+import { and as and19, eq as eq24 } from "drizzle-orm";
+init_brand();
+var notFound2 = () => new TRPCError28({ code: "NOT_FOUND", message: "We could not find this payment. Use the link in your payment email." });
+var ONLINE_PAYMENT_OFF_MESSAGE = "Online payment is not available yet. Please pay by bank transfer, using the details in your payment email.";
+function requireOnlinePayment() {
+  const mode = paystackMode();
+  if (mode === "off") throw new TRPCError28({ code: "PRECONDITION_FAILED", message: ONLINE_PAYMENT_OFF_MESSAGE });
+  return mode;
+}
+async function requestFor(db, token3, item2) {
+  const [row] = await db.select({ request: paymentRequests, email: businessChecks.email }).from(paymentRequests).innerJoin(businessChecks, eq24(businessChecks.id, paymentRequests.businessCheckId)).where(and19(eq24(businessChecks.publicToken, token3), eq24(paymentRequests.item, item2))).limit(1);
+  if (!row) throw notFound2();
+  return row;
+}
+var requestByReference = async (db, reference2) => (await db.select().from(paymentRequests).where(eq24(paymentRequests.reference, reference2)).limit(1))[0];
+var PAGE_STATE = { requested: "open", expired: "expired", proof_received: "proof_received", confirmed: "paid" };
+async function onlinePaymentPage(db, input) {
+  const { request } = await requestFor(db, input.token, input.item);
+  return {
+    item: request.item,
+    name: PAYMENT_ITEM_TITLES[request.item],
+    amountNaira: request.amountNaira,
+    mode: paystackMode(),
+    state: PAGE_STATE[effectivePaymentStatus(request)]
+  };
+}
+async function startOnlinePayment(db, input) {
+  requireOnlinePayment();
+  const { request, email } = await requestFor(db, input.token, input.item);
+  if (request.status === "confirmed") return { alreadyPaid: true };
+  if (effectivePaymentStatus(request) === "expired") {
+    throw new TRPCError28({ code: "PRECONDITION_FAILED", message: "These payment details have passed their 48 hours. Reply to your payment email and we will send fresh ones." });
+  }
+  const reference2 = onlineReference(request.reference);
+  try {
+    const { authorizationUrl } = await initializeTransaction({
+      email,
+      amountKobo: request.amountNaira * 100,
+      reference: reference2,
+      callbackUrl: `${getTrustedApplicationOrigin()}${PAY_RETURN_PATH}`,
+      metadata: { paymentRequestId: request.id, businessCheckId: request.businessCheckId, item: request.item }
+    });
+    return { alreadyPaid: false, url: authorizationUrl };
+  } catch (error) {
+    console.error(`[Paystack] Could not open a payment for ${request.reference}:`, error instanceof Error ? error.message : "unknown error");
+    throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute, or pay by bank transfer." });
+  }
+}
+function transactionProblem(request, transaction) {
+  if (!transaction.reference.startsWith(`${request.reference}-`)) return "reference";
+  if (transaction.status !== "success") return "status";
+  if (transaction.currency !== "NGN") return "currency";
+  if (transaction.amount !== request.amountNaira * 100) return "amount";
+  return null;
+}
+var STILL_OPEN = /* @__PURE__ */ new Set(["ongoing", "pending", "processing", "queued"]);
+var paidBy = (request, reference2) => Boolean(request.note?.includes(reference2));
+async function checkOf(db, businessCheckId) {
+  return (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, businessName: businessChecks.businessName }).from(businessChecks).where(eq24(businessChecks.id, businessCheckId)).limit(1))[0];
+}
+var PROBLEM_TEXT = {
+  reference: () => "The Paystack reference does not belong to this payment.",
+  currency: (transaction) => `The payment was not in naira (${transaction.currency || "no currency given"}).`,
+  amount: (transaction, request) => `The amount does not match: ${Number.isFinite(transaction.amount) ? formatNaira(transaction.amount / 100) : "no amount"} paid, ${formatNaira(request.amountNaira)} expected.`,
+  paid_twice: () => "This item was already paid, so this may be a second payment for it."
+};
+async function needsALook(db, request, transaction, problem, source) {
+  const reason = PROBLEM_TEXT[problem](transaction, request);
+  console.error(`[Paystack] ${source}: ${transaction.reference} was not confirmed for ${request.reference}: ${problem}.`);
+  const check = await checkOf(db, request.businessCheckId);
+  await recordAudit(db, {
+    action: "payment_online_refused",
+    actorUserId: null,
+    targetEmail: check?.email ?? null,
+    details: { businessCheckId: request.businessCheckId, item: request.item, reference: request.reference, via: "paystack", paystackReference: transaction.reference, mode: paystackMode(), problem, amountKobo: transaction.amount, currency: transaction.currency }
+  });
+  await deliverEmail({
+    to: BUSINESS_SUPPORT_MAILBOX,
+    sender: "business_support",
+    idempotencyKey: `paystack:${transaction.reference}:${problem}:office`,
+    subject: `Paystack payment needs a look: ${request.reference}`,
+    body: [
+      "A payment on Paystack was not confirmed automatically. Check it in Paystack, then confirm it by hand in the admin console or refund it.",
+      "",
+      `Reason: ${reason}`,
+      `Reference: ${request.reference}`,
+      `Paystack reference: ${transaction.reference}`,
+      `Owner: ${check ? `${check.fullName} (${check.email})` : "Not found"}`,
+      `Item: ${PAYMENT_ITEM_TITLES[request.item]}`,
+      "",
+      `Business Check #${request.businessCheckId}.`
+    ].join("\n")
+  }).catch((error) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
+}
+async function tellOfficePaid(db, request, online, result) {
+  const check = await checkOf(db, request.businessCheckId);
+  const test = online.mode === "test";
+  const next = request.item === "full_report" ? ["The payment confirmation with the Report Intake link has been emailed to the owner."] : [
+    "The business is now Won.",
+    `Engagement: ${result.engagement === "started" || result.engagement === "exists" ? "started" : "NOT STARTED. Start it from Engagements."}`,
+    `Client account invitation: ${result.invitation === "sent" ? "sent" : result.invitation === "already_invited" ? "already out" : result.invitation === "has_account" ? "they already have an account" : "NOT SENT. Send it from Client Onboarding."}`
+  ];
+  await deliverEmail({
+    to: BUSINESS_SUPPORT_MAILBOX,
+    sender: "business_support",
+    idempotencyKey: `payment_requests:${request.id}:paid_online:office`,
+    subject: `${test ? "TEST: " : ""}Paid online: ${check?.businessName || check?.fullName || request.reference}, ${PAYMENT_ITEM_TITLES[request.item]}`,
+    body: [
+      ...test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : [],
+      `${check?.fullName ?? "The owner"} paid ${formatNaira(request.amountNaira)} for the ${PAYMENT_ITEM_TITLES[request.item]} with Paystack. It is confirmed: nothing to do in the admin console.`,
+      "",
+      `Email: ${check?.email ?? "Not found"}`,
+      `Business: ${check?.businessName || "Not given"}`,
+      `Reference: ${request.reference}`,
+      `Paystack reference: ${online.reference}`,
+      `Confirmed: ${lagosTime(/* @__PURE__ */ new Date())} (Lagos time)`,
+      "",
+      ...next,
+      "",
+      `Business Check #${request.businessCheckId}. ${BRAND.organisationName}`
+    ].join("\n")
+  }).catch((error) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
+}
+async function settle(db, request, reference2, source) {
+  if (request.status === "confirmed" && paidBy(request, reference2)) return "already_paid";
+  const transaction = await verifyTransaction(reference2);
+  if (!transaction || transaction.reference !== reference2) {
+    console.warn(`[Paystack] ${source}: Paystack does not know ${reference2}; nothing was confirmed.`);
+    return "failed";
+  }
+  const problem = transactionProblem(request, transaction);
+  if (problem === "status") return STILL_OPEN.has(transaction.status) ? "pending" : "failed";
+  if (problem) {
+    await needsALook(db, request, transaction, problem, source);
+    return "refused";
+  }
+  const mode = paystackMode();
+  if (mode === "off") throw new Error("Paystack was switched off while a payment was being confirmed.");
+  const online = { provider: "paystack", reference: reference2, mode };
+  if (request.status !== "confirmed") {
+    const result = await confirmPayment(db, { paymentRequestId: request.id, actorUserId: null, online });
+    if (result.changed) {
+      await tellOfficePaid(db, request, online, result);
+      return "confirmed";
+    }
+  }
+  const now = await requestByReference(db, request.reference);
+  if (now && !paidBy(now, reference2)) await needsALook(db, now, transaction, "paid_twice", source);
+  return "already_paid";
+}
+async function settleOnlinePayment(db, reference2, source) {
+  const prefix = paymentReferenceOf(reference2);
+  const request = prefix ? await requestByReference(db, prefix) : void 0;
+  if (!request) return "unknown";
+  return settle(db, request, reference2, source);
+}
+function itemOfReference(paymentReference2) {
+  const code = /^TS-([A-Z]{1,3})-/.exec(paymentReference2)?.[1];
+  return PAYMENT_ITEMS.find((item2) => PAYMENT_ITEM_DETAILS[item2].code === code) ?? null;
+}
+async function onlinePaymentStatus(db, reference2) {
+  const prefix = paymentReferenceOf(reference2);
+  const item2 = prefix ? itemOfReference(prefix) : null;
+  if (!prefix || !item2) throw notFound2();
+  const mode = paystackMode();
+  const answer2 = (status) => ({ status, item: item2, mode });
+  const request = await requestByReference(db, prefix);
+  if (!request) return answer2(mode === "off" ? "pending" : "failed");
+  const paidByThis = request.status === "confirmed" && paidBy(request, reference2);
+  if (mode === "off") return answer2(paidByThis ? "paid" : "pending");
+  let settlement;
+  try {
+    settlement = await settle(db, request, reference2, "return");
+  } catch (error) {
+    console.error(`[Paystack] Could not check ${reference2} for the return page:`, error instanceof Error ? error.message : "unknown error");
+    return answer2(paidByThis ? "paid" : "pending");
+  }
+  if (settlement === "confirmed" || settlement === "already_paid") return answer2("paid");
+  if (settlement === "failed") return answer2("failed");
+  return answer2("pending");
+}
+function parseEvent(raw) {
+  try {
+    const parsed = JSON.parse(raw.toString("utf8"));
+    return { event: typeof parsed?.event === "string" ? parsed.event : "", reference: typeof parsed?.data?.reference === "string" ? parsed.data.reference : null };
+  } catch {
+    return null;
+  }
+}
+async function handlePaystackWebhook(req, res) {
+  const raw = Buffer.isBuffer(req.body) ? req.body : null;
+  if (!raw || !isValidPaystackSignature(raw, req.headers["x-paystack-signature"])) {
+    res.status(401).json({ message: "Invalid signature." });
+    return;
+  }
+  const event = parseEvent(raw);
+  if (event?.event !== "charge.success" || !event.reference) {
+    res.status(200).json({ received: true });
+    return;
+  }
+  try {
+    const db = await getDb();
+    if (!db) throw new Error("the database is not available");
+    const settlement = await settleOnlinePayment(db, event.reference, "webhook");
+    if (settlement === "unknown") console.warn(`[Paystack] webhook: ${event.reference} is not a payment of ours; ignored.`);
+    res.status(200).json({ received: true });
+  } catch (error) {
+    console.error("[Paystack] webhook not processed; Paystack will send it again:", error instanceof Error ? error.message : "unknown error");
+    res.status(500).json({ message: "Not processed. Please send it again." });
+  }
+}
+
+// server/routers/onlinePayment.ts
+async function database6() {
+  const db = await getDb();
+  if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach your payment just now. Please try again in a minute." });
+  return db;
+}
+async function allow2(rule, subject) {
+  if (!await consumeLimit(rule, subject)) throw new TRPCError29({ code: "TOO_MANY_REQUESTS", message: "Too many requests for this payment. Kindly try again later." });
+}
+var token2 = z26.string().trim().min(16).max(64);
+var item = z26.enum(PAYMENT_ITEMS);
+var reference = z26.string().trim().min(1).max(64);
+var onlinePaymentRouter = router({
+  /** Public: the pay page, opened from the payment details email. Answers the item, its amount, the mode and where it stands. */
+  page: publicProcedure.input(z26.object({ token: token2, item })).query(async ({ input }) => {
+    await allow2(LIMITS.paymentPage, input.token);
+    return onlinePaymentPage(await database6(), input);
+  }),
+  /** Public: "Pay securely with Paystack". Opens a transaction for the amount in the database and returns Paystack's checkout page. */
+  start: publicProcedure.input(z26.object({ token: token2, item })).mutation(async ({ input }) => {
+    await allow2(LIMITS.paymentStart, input.token);
+    requireOnlinePayment();
+    return startOnlinePayment(await database6(), input);
+  }),
+  /** Public: the return page after Paystack. Confirms through the shared path if the webhook has not yet; answers paid, pending or failed. */
+  status: publicProcedure.input(z26.object({ reference })).mutation(async ({ ctx, input }) => {
+    await allow2(LIMITS.paymentStatusAddress, ctx.req.ip || "unknown");
+    await allow2(LIMITS.paymentStatus, input.reference);
+    return onlinePaymentStatus(await database6(), input.reference);
+  })
+});
+
 // server/routers.ts
 var appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -12608,11 +13040,12 @@ var appRouter = router({
   businessSupport: businessSupportRouter,
   engagement: engagementRouter,
   invitations: invitationsRouter,
-  people: peopleRouter
+  people: peopleRouter,
+  onlinePayment: onlinePaymentRouter
 });
 
 // server/_core/context.ts
-import { eq as eq24 } from "drizzle-orm";
+import { eq as eq25 } from "drizzle-orm";
 async function createContext(opts) {
   let user = null;
   let authChannel;
@@ -12627,7 +13060,7 @@ async function createContext(opts) {
       const session = await resolveAccountSession(opts.req);
       if (session && session.authority.roles.length > 0) {
         const db = await getDb();
-        const row = db ? (await db.select().from(users).where(eq24(users.id, session.user.id)).limit(1))[0] : void 0;
+        const row = db ? (await db.select().from(users).where(eq25(users.id, session.user.id)).limit(1))[0] : void 0;
         if (row && row.status === "active") {
           user = row;
           authChannel = "account";
@@ -12741,6 +13174,7 @@ function createApp() {
     const report = healthReport();
     res.status(report.status).json(report.body);
   });
+  app.post(PAYSTACK_WEBHOOK_PATH, express.raw({ type: () => true, limit: "256kb" }), handlePaystackWebhook);
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ limit: "32kb", extended: true }));
   app.use("/api", requireTrustedBrowserOrigin);
@@ -12768,7 +13202,7 @@ function createApp() {
       return res.status(201).json(uploaded);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to upload the file.";
-      const status = error instanceof TRPCError28 && error.code === "UNAUTHORIZED" ? 401 : 500;
+      const status = error instanceof TRPCError30 && error.code === "UNAUTHORIZED" ? 401 : 500;
       console.warn("[Participant upload] Failed:", message);
       return res.status(status).json({ message: status === 401 ? "Kindly sign in to your participant portal again and try again." : "We could not store this file. Kindly try again shortly." });
     }
@@ -12788,7 +13222,7 @@ function createApp() {
       return res.status(201).json(uploaded);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to upload the payment receipt.";
-      const status = error instanceof TRPCError28 && error.code === "UNAUTHORIZED" ? 401 : 500;
+      const status = error instanceof TRPCError30 && error.code === "UNAUTHORIZED" ? 401 : 500;
       console.warn("[Payment receipt upload] Failed:", message);
       return res.status(status).json({ message: status === 401 ? "Kindly sign in to your participant portal again and try again." : "We could not store the receipt. Kindly try again shortly." });
     }

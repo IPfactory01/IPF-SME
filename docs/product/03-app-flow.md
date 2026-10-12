@@ -1,6 +1,6 @@
 # 3. App flow
 
-**What happens when someone clicks, and which page comes next.** Last reviewed 9 October 2026, against the code on the
+**What happens when someone clicks, and which page comes next.** Last reviewed 12 October 2026, against the code on the
 working branch. Diagrams use Mermaid, which GitHub renders.
 
 Every route listed in `client/src/App.tsx` appears in section 1. `test/docs/productDocs.test.ts` fails if a route is
@@ -17,6 +17,8 @@ added without being documented here.
 | `/` | `Home.tsx` | Anyone | The site in the owner's words: problem, ten problem areas, how it works and prices, questions | "Free business check" → `/check` |
 | `/check` | `BusinessCheck.tsx` | Anyone | The free business check, from contact details to the result | Book a call (Calendly) or ask for the full report |
 | `/report/:token` | `FullReportPage.tsx` | Link in the "payment received" email | The 17-question report form, then the download | Report emailed; download on the page |
+| `/pay/:token/:item` | `PayPage.tsx` | The "Pay online" button in a payment details email (`:token` is the Business Check's token, `:item` is `full_report` or `current_state`) | The item, its amount from the payment request (₦100,000 or ₦500,000), "Pay ₦… securely with Paystack", and bank transfer as the alternative. "TEST MODE: NO REAL MONEY MOVES" while Paystack is on its test keys; "Already paid" once confirmed; no button while online payment is off or after the 48 hours | Paystack's checkout, then `/pay/return` |
+| `/pay/return` | `PayReturnPage.tsx` | Paystack sends the owner back here with `?reference=` | Asks the server how the payment stands (section 4): "Payment received" with what happens next, "Still confirming" with "Check again", or "Payment not completed" with "Try again" (back to the pay page this tab came from) | — |
 | `/onboarding/:token` | `OnboardingPage.tsx` | Link in the client account invitation | Create the client account | `/dashboard` |
 | `/join/:token` | `JoinPage.tsx` | Link in a staff invitation or an owner's seat invitation | Set a password; staff land on `/admin` with their role, the owner's staff on `/dashboard` in that business | `/admin`, `/dashboard` |
 | `/reset/:token` | `ResetPasswordPage.tsx` | Link in a password reset email, issued by the IP Factory team from Admin Team → People | Choose a new password; the link works once, for 20 minutes, and signs the person out everywhere | `/login` |
@@ -42,7 +44,8 @@ Kept for history and for JUMP participants. Nothing in The Shift's flow links to
 | `/portal/password` | `ParticipantPasswordPage.tsx` | Set a JUMP participant password |
 | `/schedule` | `Schedule.tsx` | JUMP session booking (Decide, Learn, Apply) |
 
-The server also redirects `/portal/authenticate` and `/portal/access` to `/?participant_signin=1` (`server/_core/app.ts`).
+The server also redirects `/portal/authenticate` and `/portal/access` to `/?participant_signin=1` (`server/_core/app.ts`),
+and receives Paystack's signed notifications at `POST /api/paystack/webhook` (section 4).
 
 ## 2. The journey, end to end
 
@@ -54,7 +57,9 @@ flowchart TD
   D --> E[Result: outline, gap, summary]
   E -->|Book my free call| F[Calendly booking]
   E -->|Get my full report| G[Payment details emailed]
-  G --> G2[Owner pays and sends proof]
+  G -->|Pay online| GP[/pay/:token/full_report: Paystack/]
+  GP -->|Paystack confirms| G3
+  G --> G2[Owner pays by transfer and sends proof]
   G2 -->|Team confirms| G3[Report form link emailed]
   G3 --> G4[/report/:token: 17 questions/]
   G4 -->|Submit| G5[PDF emailed at once and downloadable]
@@ -62,7 +67,9 @@ flowchart TD
   H -->|Team records Opportunity| I[Current State Assessment payment details emailed]
   H -->|Refer| R[Referred]
   H -->|Lost| L[Lost]
-  I --> I2[Owner pays and sends proof]
+  I -->|Pay online| IP[/pay/:token/current_state: Paystack/]
+  IP -->|Paystack confirms| J
+  I --> I2[Owner pays by transfer and sends proof]
   I2 -->|Team confirms| J[Won: client account invitation emailed]
   J --> K[/onboarding/:token: create account/]
   K --> M[/dashboard/]
@@ -92,8 +99,11 @@ every answer.
 
 | Step | Who | What happens | Email | Stage or status |
 |---|---|---|---|---|
-| "Get my full report" | Owner | `businessCheck.requestNext({ choice: "report" })` | Owner: *Payment details for your full business check report*; office: *… asked for the full business check report* | Payment: **requested** |
-| Proof sent | Owner | Replies to the email with proof | — | — |
+| "Get my full report" | Owner | `businessCheck.requestNext({ choice: "report" })` | Owner: *Payment details for your Full Report* (with a "Pay online" button while Paystack is on, and the bank details); office: *… asked for the Full Report* | Payment: **requested** |
+| "Pay online" in the email | Owner | Opens `/pay/:token/full_report`; `onlinePayment.page` shows the item, the amount and the mode | — | — |
+| "Pay ₦100,000 securely with Paystack" | Owner | `onlinePayment.start`: the server opens a Paystack transaction for the amount on the payment request, with its own reference (`TS-R-000123-1a2b3c4d`), and sends the owner to Paystack's checkout | — | — |
+| Pays on Paystack | Owner | Paystack posts a signed `charge.success` to `/api/paystack/webhook` and sends the owner to `/pay/return`, which calls `onlinePayment.status`. Whichever comes first asks Paystack about the transaction again and, if the reference, status, currency and amount all match, confirms it through the same path as "Confirm payment" below, with Paystack as the actor | Owner: *Payment received: your Full Report* (with the form link); office: *Paid online: …* | Payment: **paid**; report: **awaiting form** |
+| Proof sent (bank transfer) | Owner | Replies to the email with proof | — | — |
 | "Proof received" | Finance or Super Admin | `businessSupport.markProofReceived` | — | Payment: **proof received** |
 | "Confirm payment" → "Yes, the money is in" | Finance or Super Admin | `businessSupport.confirmPayment`; the report link is issued in the same transaction, and two people confirming together confirm once | Owner: *Payment received: your full business check report* (with the form link) | Payment: **paid**; report: **awaiting form** |
 | Form submitted | Owner | `fullReport.submit`; the report is built and rendered at once | Owner: *Your full business check report: {business}* (PDF attached); office: *Full report sent: {business}* | Report: **delivered** |
@@ -102,9 +112,28 @@ every answer.
 
 The form can be submitted once. After that the same link shows "Your report has been sent" with a download button.
 
-**Interim steps:** "Proof received" and "Confirm payment" are manual only because Paystack is not set up yet. With
-Paystack, the owner pays online and the payment confirms itself, with the same emails and status changes; manual
-confirmation stays for direct transfers. The same applies to the Current State Assessment payment in section 5.
+**Two ways to pay, one confirmation.** Online with Paystack, the payment confirms itself; by bank transfer, the team
+marks proof and confirms. Both go through `confirmPayment` (`server/payments.ts`), so the emails, the Report Intake link,
+the stage and the audit are the same. A Paystack confirmation is recorded with no person as the actor, the note "Paid
+online with Paystack, reference …" ("TEST: " in front in test mode) and `via: "paystack"` in the audit; the stage
+history shows "Paystack (paid online)". The same applies to the Current State Assessment payment in section 5.
+
+**Online payment, in detail** (`server/onlinePayment.ts`, `server/paystack.ts`):
+
+- **Off, test or live** from `PAYSTACK_SECRET_KEY`: unset is off (no button anywhere; `onlinePayment.start` refuses
+  with "Online payment is not available yet…"), `sk_test_` is test (every pay page and payment email says "TEST MODE:
+  NO REAL MONEY MOVES"), `sk_live_` is live.
+- **The pay link holds for the same 48 hours** as the bank details. After that the pay page offers nothing and says to
+  reply for fresh details; sending them again opens the link again. A paid item shows "Already paid" and Paystack is
+  not called. An owner who already sent proof of a transfer is told they need not pay again.
+- **Repeats and races confirm once.** A second webhook delivery, or the webhook and the return page together, send one
+  owner email. A payment the team already confirmed by hand is left as it is.
+- **What does not match is never confirmed.** A different amount or currency, a reference that is not the request's
+  own, or a status other than success changes nothing. When money moved but does not match (wrong amount or currency,
+  or an item already paid), the office gets *Paystack payment needs a look: …* and the audit records
+  `payment_online_refused`; the return page shows "Still confirming" so the owner does not pay again.
+- **Webhook answers:** 401 for a missing or wrong signature (nothing happens); 200 for every signed event handled or
+  ignored; 500 only when Paystack or the database cannot be reached, so Paystack sends it again.
 
 ## 5. From the call to a client account
 
@@ -114,7 +143,8 @@ confirmation stays for direct transfers. The same applies to the Current State A
 | "Save the Debrief time" | Desk lead | Records the agreed time for any finished check, from Debriefs or the check's record. For an owner who booked from the link in the summary email or agreed a time another way it counts as the request. Calendly bookings are also picked up on each console load: for Debriefs asked for on the page, and for checks finished in the last 14 days | — | **Call booked** if earlier |
 | "Record call outcome" | Desk lead | **Opportunity** (fit), **Refer** or **Lost** | — | **Opportunity**, **Referred** or **Lost** |
 | "Move to" | Desk lead | Any other stage except **Won**, with a note (for example **Nurture**); Won comes only from a confirmed payment | — | As chosen |
-| "Send payment details" (Current State Assessment) | Finance or Super Admin | Payment request for ₦500,000 | Owner: *Payment details for your Current State Assessment* | Moves to **Opportunity** if earlier |
+| "Send payment details" (Current State Assessment) | Finance or Super Admin | Payment request for ₦500,000 | Owner: *Payment details for your Current State Assessment* (with "Pay online" while Paystack is on) | Moves to **Opportunity** if earlier |
+| "Pay ₦500,000 securely with Paystack" | Owner | As for the Full Report (section 4): `/pay/:token/current_state`, Paystack, then the webhook or `/pay/return` confirms through the shared path. The invitation is recorded against the person who sent the payment details, and audited with Paystack as the actor | Owner: *Payment received: your Current State Assessment starts* and *Set up your client account on The Shift*; office: *Paid online: …* (says whether the engagement started and the invitation went) | **Won** |
 | "Proof received", then "Confirm payment" | Finance or Super Admin | Payment confirmed; an invitation is created unless one is pending or accepted; what happened to the confirmation email is recorded in the stage history | Owner: *Payment received: your Current State Assessment starts* and *Set up your client account on The Shift* | **Won** |
 | "Send the confirmation again" | Finance or Super Admin | `businessSupport.resendPaymentConfirmation`: the "payment received" email again, for an owner who lost it (a paid Full Report gets its Report Intake link again instead) | Owner: *Payment received: your Current State Assessment starts* | — |
 | "Create account" | Owner | `onboarding.accept`: person, credential, business, owner membership and session in one transaction | — | Invitation: **accepted** |

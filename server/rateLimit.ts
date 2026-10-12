@@ -36,6 +36,14 @@ export const LIMITS = {
   reportDownload: { scope: "report_download", max: 5, windowMs: DAY },
   /** Public token lookups per address: legacy reset confirmation and invitation status. */
   publicLookup: { scope: "public_lookup", max: 30, windowMs: HOUR },
+  /** Pay page reads per Business Check token. */
+  paymentPage: { scope: "payment_page", max: 60, windowMs: HOUR },
+  /** Online payment starts per Business Check token: each opens a transaction on Paystack. */
+  paymentStart: { scope: "payment_start", max: 10, windowMs: HOUR },
+  /** Return-page checks per Paystack reference: each asks Paystack how the payment stands. */
+  paymentStatus: { scope: "payment_status", max: 20, windowMs: HOUR },
+  /** Return-page checks per address, across references: an invented reference must not buy unlimited calls to Paystack. */
+  paymentStatusAddress: { scope: "payment_status_ip", max: 60, windowMs: HOUR },
 } as const satisfies Record<string, RateLimitRule>;
 
 const memory = new Map<string, { count: number; resetAt: number }>();

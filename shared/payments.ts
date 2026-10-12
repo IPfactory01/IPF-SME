@@ -1,9 +1,11 @@
 import { CURRENT_STATE, FULL_REPORT, formatNaira, PRICES } from "./businessSupport";
+import { METHOD } from "./method";
 
 /**
- * Paying for The Shift before online payment (Paystack) is ready: the team emails payment details, the owner pays by
- * bank transfer and replies with proof, and the team confirms the money arrived. Confirming the Current State
- * Assessment payment is what starts the Current State Assessment.
+ * Paying for The Shift. The payment details email offers two ways to pay: online with Paystack (once its keys are set),
+ * which confirms itself, and bank transfer, where the owner replies with proof and the team confirms the money arrived.
+ * Both confirm through the same path. Confirming the Current State Assessment payment is what starts the Current State
+ * Assessment.
  */
 
 export const PAYMENT_ITEMS = ["full_report", "current_state"] as const;
@@ -52,3 +54,36 @@ export function describePayment(item: PaymentItem) {
   const { name, amount } = PAYMENT_ITEM_DETAILS[item];
   return `${formatNaira(amount)} for ${item === "full_report" ? name.charAt(0).toLowerCase() + name.slice(1) : `your ${name}`}`;
 }
+
+/**
+ * Online payment through Paystack's hosted checkout. The mode follows the secret key (server/paystack.ts): `sk_test_`
+ * is test, where no real money moves; `sk_live_` is live; anything else is off, and only bank transfer is offered.
+ */
+export const ONLINE_PAYMENT_MODES = ["off", "test", "live"] as const;
+export type OnlinePaymentMode = (typeof ONLINE_PAYMENT_MODES)[number];
+
+/** Said in capitals on every owner-facing payment page and email while Paystack runs on its test keys. */
+export const ONLINE_TEST_NOTICE = "TEST MODE: NO REAL MONEY MOVES";
+
+/** The method's name for each item, for the pay pages' headings. */
+export const PAYMENT_ITEM_TITLES: Record<PaymentItem, string> = { full_report: METHOD.fullReport, current_state: METHOD.currentState };
+
+export const isPaymentItem = (value: unknown): value is PaymentItem => (PAYMENT_ITEMS as readonly unknown[]).includes(value);
+
+/**
+ * The pay page for one item. It is keyed by the Business Check's unguessable token (the one its result page uses),
+ * never by the sequential payment reference, so nobody can reach another owner's payment by changing a number.
+ */
+export const payPath = (token: string, item: PaymentItem) => `/pay/${encodeURIComponent(token)}/${item}`;
+
+/** Where Paystack sends the owner back to, with `?reference=` added. */
+export const PAY_RETURN_PATH = "/pay/return";
+
+/**
+ * Where an online payment stands, as the return page shows it: paid (confirmed), pending (Paystack has not settled it,
+ * or it is being checked) or failed (not completed).
+ */
+export type OnlinePaymentStatus = "paid" | "pending" | "failed";
+
+/** What the pay page shows: open to pay, its 48 hours passed, proof of a transfer already sent, or paid. */
+export type PayPageState = "open" | "expired" | "proof_received" | "paid";

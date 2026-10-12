@@ -15,6 +15,8 @@ import OnboardingPage from "./pages/OnboardingPage";
 import JoinPage from "./pages/JoinPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import FullReportPage from "./pages/FullReportPage";
+import PayPage from "./pages/PayPage";
+import PayReturnPage from "./pages/PayReturnPage";
 import LoginPage from "./pages/LoginPage";
 import AccountDashboard from "./pages/AccountDashboard";
 import AccountSettingsPage from "./pages/AccountSettingsPage";
@@ -35,6 +37,9 @@ function Router() {
       <Route path="/join/:token" component={JoinPage} />
       <Route path="/reset/:token" component={ResetPasswordPage} />
       <Route path="/report/:token" component={FullReportPage} />
+      {/* Paying online with Paystack: the return page first, so it is never read as a token. */}
+      <Route path="/pay/return" component={PayReturnPage} />
+      <Route path="/pay/:token/:item" component={PayPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/dashboard" component={AccountDashboard} />
       <Route path="/settings/business" component={BusinessSettingsPage} />

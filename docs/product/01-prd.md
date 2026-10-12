@@ -38,7 +38,7 @@ One person has one identity; roles and assignments are added to it (see `AGENTS.
 | **Subject-matter expert** | Group co-founders and partners | Access to one engagement or problem area when invited |
 | **Finance** | To be named | Payment requests, proof, confirmation and reconciliation, without the diagnostic detail |
 | **Admin / Super Admin** | Lewis (Super Admin), Richard (admin) per D5 | Staff, roles, permissions and platform settings |
-| **System actors** | The AI summary, the report builder, scheduled reminders | Server-controlled and audited; never an interactive account |
+| **System actors** | The AI summary, the report builder, scheduled reminders, Paystack (confirming online payments) | Server-controlled and audited; never an interactive account |
 
 ## 3. The journey and the prices
 
@@ -49,7 +49,7 @@ The whole journey is shown up front with prices (concept note D1). Prices live i
 | 1 | Free business check | Free | Ten minutes on a phone; a colour-coded outline of the ten problem areas; one of four gaps; a summary | **Built** |
 | 1a | Full report (optional) | ₦100,000 | A business-plan-depth report, built from the check and a 17-question form, emailed as a PDF the moment the form is finished | **Built** |
 | 2 | Discovery call | Free, 20 minutes at most | An honest answer: can we help, and with what | **Built** (booking and outcome) |
-| 3 | Payment for Current State Assessment | ₦500,000 (fixed) | Paid after the call, within 48 hours. Paystack is the agreed method; until it is set up, bank transfer with manual confirmation | **Built** (manual confirmation, interim) |
+| 3 | Payment for Current State Assessment | ₦500,000 (fixed) | Paid after the call, within 48 hours: online with Paystack, which confirms itself, or by bank transfer with manual confirmation | **Built** (Paystack live once its keys are in Vercel) |
 | 4 | Getting set up (onboarding) | Included | Three working days: client account, welcome note, data request, analyst assigned, both Current State Assessment calls booked | **Partly built** (account only) |
 | 5 | Current State Assessment | Included in step 3 | Two weeks, one 90-minute call a week; ends with proceed, fix the basics first, or refer to Advisory | **Not built** in the platform |
 | 6 | The six-week fix | ₦1,200,000 | One problem; what to do and the tools; a weekly 45-minute check-in; one measure tracked | **Not built** |
@@ -127,7 +127,7 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
   Won is set only by confirming the Current State Assessment payment.
 - **Status: Built.**
 
-### F5. Payments (manual confirmation until Paystack is set up)
+### F5. Payments (online with Paystack, or bank transfer)
 
 - Items: full report (₦100,000) and Current State Assessment (₦500,000). References `TS-R-` and `TS-CS-` with a six-digit number.
 - Statuses: awaiting payment → proof received → paid. Only `manage_payments` (finance, Super Admin) can send details, mark
@@ -138,11 +138,19 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
   Lagos time. After that the team sees "48 hours passed" and either sends the details again (a new 48 hours) or moves
   the business to Lost. The stage never moves on its own, and money that still arrives can always be confirmed.
 - Confirming Current State Assessment moves the business to Won and sends the client account invitation.
-- **Paystack is the agreed way to pay** (concept note §11): the owner pays online and the payment confirms itself, with the
-  same effects as "Confirm payment". Manual confirmation is the interim method only because the Paystack account is not
-  set up yet; once it is, manual confirmation stays as a fallback for direct transfers.
-- **Status: Built** (manual confirmation). **Paystack: not built**, waiting for the account and its keys
-  ([implementation plan §4](06-implementation-plan.md)).
+- **Paying online with Paystack** (concept note §11): the payment details email leads with a "Pay online" button to the
+  pay page (`/pay/:token/:item`), and keeps the bank details below as the alternative. The owner pays on Paystack's
+  hosted checkout (card or bank) and the payment confirms itself, through the same confirmation as "Confirm payment":
+  the same emails, the Report Intake link, Won and the client account invitation. The owner is charged exactly the
+  price (₦100,000 or ₦500,000, read from the payment request, never from the browser); IP Factory absorbs Paystack's
+  fee. Paystack is a system actor: recorded with no person as the actor, the note "Paid online with Paystack, reference
+  …" and how the money arrived in the audit. The office is emailed when a payment confirms itself, and when money moved
+  but could not be confirmed (a wrong amount, or an item already paid).
+- **Off, test, live.** No `PAYSTACK_SECRET_KEY`: no online payment is offered anywhere, bank transfer only. A test key:
+  every pay page and payment email says "TEST MODE: NO REAL MONEY MOVES", and the payment's note starts "TEST: ". A live
+  key: real payments. The pay link holds for the same 48 hours as the bank details.
+- **Status: Built** (manual confirmation and Paystack). Paystack takes payments once its keys are in Vercel and the
+  webhook is set in Paystack ([implementation plan §4](06-implementation-plan.md)).
 
 ### F6. Client account and onboarding
 
@@ -282,7 +290,12 @@ From concept note §13. The platform must make these countable without a spreads
 | The full report is fully deterministic: no consultant or analyst reviews it; it goes out the moment the form is finished | ET |
 | The report form (intake) comes after payment; no five-day turnaround | ET |
 | The full report is independent of the Current State Assessment and is not credited against it | ET |
-| Manual payment confirmation (details by email, proof, the team confirms) is the interim method because Paystack is not set up yet; placeholder details until real ones are set | ET |
+| Manual payment confirmation (details by email, proof, the team confirms) was the interim method until Paystack; placeholder details until real ones are set | ET |
+| Both items can be paid online with Paystack; bank transfer with manual confirmation stays as the alternative | ET |
+| The owner pays exactly the price; IP Factory absorbs Paystack's fee | ET |
+| Paystack's hosted checkout, reached by redirect (no Paystack script on the site, so the security policy does not change) | ET |
+| Online payment is off, test or live by the Paystack secret key; test mode says "TEST MODE: NO REAL MONEY MOVES" on every pay page and payment email | ET |
+| An online payment confirms once, through the same confirmation the team uses, with Paystack recorded as a system actor | ET |
 | Built up to the start of the Current State Assessment; the engagement itself is the next phase | ET |
 | The business name and one-line description are required in the check | ET |
 | The twelve original sector options stay; Services examples are worded for any service firm | ET |
@@ -307,7 +320,7 @@ From concept note §13. The platform must make these countable without a spreads
 |---|---|---|---|
 | O1 | **Transcripts in the engagement room.** Notes reach the owner the same day (decided, §7). Should the full transcript also be visible? | Reviewed notes by default; the transcript on request. **Built that way (9 October); say if transcripts should show** | ET |
 | O3 | **Who releases what to the client.** | Analysts share notes and data requests; the desk lead approves every prescription and plan. **Built that way and enforced on the server (9 October)** | ET, Lewis |
-| O5 | Paystack go-live: who opens the business account, and by when | Open it now; the build starts the day the test keys are in Vercel (implementation plan §4) | ET, Lewis |
+| O5 | Paystack go-live: who opens the business account, and by when | Built (12 October): put the test keys in Vercel and the webhook in Paystack, test, then the live keys (implementation plan §4) | ET, Lewis |
 | O6 | Ongoing support: content and price after the first fix | Define per client at fix close (D3) | ET |
 | O7 | Who signs client terms (IPF, KIP or the venture) and the P&L owner | — | ET |
 | O8 | File storage for the engagement room (concept note uses one Google Drive folder per client) | A private Supabase Storage bucket, so files sit behind the same access rules as the record. **Proceeding (ET, 9 October); needs the bucket and its keys in Vercel** | Lewis, Richard |
@@ -326,7 +339,7 @@ decided. "Confirmed" means a change made while building and confirmed by ET on 9
 | Built on IP Factory's copy of Jump, on Manus (D5, D7, D8) | Vercel, Supabase and GitHub; Manus remains only for the AI summary and old file storage | Decided |
 | Product name "Operating Partner [working name]" | "The Shift, by IP Factory" | Decided (Lewis, 7 October) |
 | Hero: "You know what your business needs…" | Headline "Find it. Fix it. See the results." | Decided |
-| A Paystack link after the call | Bank transfer with manual confirmation until Paystack is set up; Paystack remains the agreed method | Interim |
+| A Paystack link after the call | A "Pay online" button in the payment details email opens Paystack; bank transfer with manual confirmation stays as the alternative | Built (12 October) |
 | Full report "by email", from the check | Paid, then a 17-question form; a deterministic PDF sent the moment it is finished | Decided (ET, 8 October) |
 | Discovery calls booked in two blocks a week on the platform | Calendly, embedded on the result | Decided |
 | Client area = the Jump portal (uploads, feedback, files) | Invitation-only client accounts; the engagement room is next. The Jump portal is legacy, so uploads wait for phase 3 | Decided |

@@ -250,7 +250,7 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
                     ? <>Debrief time recorded{event.scheduledFor ? ` for ${formatDateTime(event.scheduledFor)}` : ""}</>
                     : <><span className="font-medium">{stageName(event.to)}</span> <span className="text-ink-muted">from {stageName(event.from)}</span></>}
                 </p>
-                <p className="text-xs text-ink-muted">{event.by ?? (event.action === "payment_details_sent" || event.action === "full_report_delivered" ? "Sent automatically" : "Team")} · {formatDateTime(event.at)}</p>
+                <p className="text-xs text-ink-muted">{event.by ?? (event.via === "paystack" ? "Paystack (paid online)" : event.action === "payment_details_sent" || event.action === "full_report_delivered" ? "Sent automatically" : "Team")} · {formatDateTime(event.at)}</p>
                 {event.note && <p className="mt-0.5 text-[13px] text-ink">{event.note}</p>}
               </li>
             ))}

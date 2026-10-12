@@ -18,6 +18,7 @@
 | Discovery call booking (Calendly) and outcome (Fit, Refer, Decline, Nurture) | `test/server/businessCheck*`, `test/db/*` |
 | Staff sign-in, roles and permissions, invitations, audit trail | `test/server/accountAuth.test.ts`, `test/shared/platformPermissions.test.ts`, `test/db/*` |
 | Payments by bank transfer: details, proof, confirmation (full report, Current State Assessment) | `test/server/payments.test.ts`, `test/db/payments.db.test.ts` |
+| Paying online with Paystack: pay page, hosted checkout, signed webhook and return page, confirming through the same path (12 October, on the working branch) | `test/server/paystack.test.ts`, `test/server/onlinePayment.test.ts`, `test/server/routers/onlinePayment.router.test.ts`, `test/db/onlinePayment.db.test.ts`, `test/client/pages/pay*.ui.test.tsx` |
 | Full report: 17-question form, deterministic PDF emailed at once, admin status and download | `test/shared/fullReport/*`, `test/server/fullReport/*` |
 | Client account by invitation after Current State Assessment is paid; Won stage | `test/server/clientOnboarding.test.ts`, `test/db/payments.db.test.ts` (whole journey) |
 
@@ -39,7 +40,7 @@ window; the problem questions at the end of the check.
 | 0.2 | Set `PAYMENT_BANK_NAME`, `PAYMENT_ACCOUNT_NAME`, `PAYMENT_ACCOUNT_NUMBER` in Vercel (until then emails say "TEST DETAILS - DO NOT PAY") | ET, Lewis | Real payments |
 | 0.3 | Push the branch to `main` | ET ("push to main") | The four branch changes |
 | 0.4 | Name the finance person and grant roles to the analysts on the platform | Lewis | Phase 1 assignments |
-| 0.5 | Open IP Factory's Paystack business account; put the test keys, then the live keys, in Vercel (`PAYSTACK_PUBLIC_KEY`, `PAYSTACK_SECRET_KEY`) | ET, Lewis | Online payment (section 4) |
+| 0.5 | Open IP Factory's Paystack business account. Put the **test** secret key in Vercel (`PAYSTACK_SECRET_KEY`, `sk_test_…`), redeploy, and in Paystack → Settings → API Keys & Webhooks set the test webhook URL to `https://ipf-sme.vercel.app/api/paystack/webhook`. Pay both items with Paystack's test card (every page and email says "TEST MODE: NO REAL MONEY MOVES"). Then the **live** key and the live webhook URL (the same address) | ET, Lewis | Online payment (section 4) |
 | 0.6 | ✅ **Done 10 October.** **Apply migration 0008** (`drizzle/supabase/apply-0008-engagement-room.sql` in the Supabase SQL Editor, or `pnpm db:migrate`) before the first Current State Assessment payment is confirmed | Lewis | The engagement room |
 | 0.8 | ✅ **Done before 12 October** (found recorded when its script refused to run twice). **Apply migration 0009** (`drizzle/supabase/apply-0009-debrief-work-plan.sql` in the Supabase SQL Editor, or `pnpm db:migrate`): the Debrief record and the Work Plan fields. Until it is applied the Engagements section and the client room say the room is not up to date, and the Debrief summary says it is not set up | Lewis | The Debrief in the admin and the room; the Work Plan by week |
 | 0.9 | ✅ **Done 12 October**, confirmed by `pnpm db:verify` (11 migrations recorded). **Apply migration 0010** (`drizzle/supabase/apply-0010-rate-limits-reset-tokens-indexes.sql`, after 0009): rate-limit counters shared by every function instance, password reset links, and the indexes the console's queries need. Until it is applied the rate limits are per instance and reset links say they are not set up | Lewis | Durable rate limits; password reset; faster admin lists |
@@ -60,19 +61,20 @@ Each is one focused change with a test. None needs a migration except Q6.
 | Q7 | Map the shadcn colour roles to the theme, or remove their use | Components that rely on them render without colour | Design brief §4 |
 | Q8 | ~~Show staff who hold only platform roles on the Admin Team screen~~ (done 9 October); decide one permission for the report | Admin Team undercounts; finance can resend but not download | Backend schema §6 |
 
-## 4. Paystack (starts the day the test keys are in Vercel)
+## 4. Paystack (built 12 October; live once the keys are in Vercel)
 
-Manual confirmation is the interim method only because Paystack is not set up. The confirmation logic already exists
-(`confirmPayment` in `server/payments.ts`), so Paystack plugs into it rather than replacing it.
+Paystack plugs into the existing confirmation (`confirmPayment` in `server/payments.ts`) rather than replacing it:
+the team and Paystack confirm through the same path, and manual confirmation stays for direct transfers.
 
-| # | Build | Acceptance |
-|---|---|---|
-| P1 | **Checkout:** a "Pay now" link in the payment email (and on the result page for the full report) that opens Paystack for the exact amount and reference | The owner can pay the full report or Current State Assessment by card or bank on Paystack |
-| P2 | **Webhook:** Paystack's signed notification confirms the payment request automatically, after checking the signature, the amount, the currency and the reference | The same emails and effects as "Confirm payment": the report link, or Won plus the client invitation. A forged or mismatched notification changes nothing |
-| P3 | **Admin:** payments show "Paid by Paystack" with Paystack's reference; manual "Proof received" and "Confirm payment" stay for direct transfers | The team can tell at a glance how each payment arrived |
-| P4 | **Copy:** payment emails lead with "Pay now"; bank details stay as the alternative | No email asks for proof when the owner paid on Paystack |
+| # | Build | Acceptance | Status |
+|---|---|---|---|
+| P1 | **Checkout:** a "Pay online" button in the payment email opens the pay page (`/pay/:token/:item`), which opens Paystack's hosted checkout for the exact amount, with a reference per attempt | The owner can pay the full report or Current State Assessment by card or bank on Paystack | **Built.** Not yet linked from the result page: the payment email carries it |
+| P2 | **Webhook:** Paystack's signed notification (`/api/paystack/webhook`) confirms the payment request automatically, after checking the signature, then asking Paystack again and checking the reference, the status, the currency and the amount; the return page (`/pay/return`) does the same if it arrives first | The same emails and effects as "Confirm payment": the report link, or Won plus the engagement and the client invitation. A forged or mismatched notification changes nothing; a repeat confirms nothing twice | **Built** |
+| P3 | **Admin:** a payment confirmed online carries the note "Paid online with Paystack, reference …" and the stage history names Paystack; the office is emailed when a payment confirms itself or needs a look; manual "Proof received" and "Confirm payment" stay for direct transfers | The team can tell at a glance how each payment arrived | **Built** |
+| P4 | **Copy:** payment emails lead with "Pay online"; bank details stay as the alternative | No email asks for proof when the owner paid on Paystack | **Built** |
 
-Tests mock Paystack: no real keys in tests. Webhook signatures are checked with `PAYSTACK_SECRET_KEY`.
+Tests use a fake Paystack behind a stubbed `fetch`: no real keys and no network in tests. Webhook signatures are checked
+with `PAYSTACK_SECRET_KEY`. To go live: task 0.5.
 
 ## 5. Phase 1: foundation for the engagement room (needed by 23 October)
 

@@ -56,8 +56,13 @@ export const ENV = {
   supabaseUrl: process.env.SUPABASE_URL?.trim() ?? "",
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "",
   supabaseStorageBucket: process.env.SUPABASE_STORAGE_BUCKET?.trim() || "engagement-files",
-  paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY ?? "",
-  paystackSecretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
+  /**
+   * Paystack (server/paystack.ts). The secret key decides the mode: `sk_test_` is test (no real money moves), `sk_live_`
+   * is live, unset is off and only bank transfer is offered. It also checks the webhook's signature. The public key is
+   * not needed by the hosted checkout, and nothing reads it today.
+   */
+  paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY?.trim() ?? "",
+  paystackSecretKey: process.env.PAYSTACK_SECRET_KEY?.trim() ?? "",
   /**
    * Canonical public origin (scheme + host) used for emailed links and CSRF checks in production. Without APP_ORIGIN
    * the deployment's own Vercel address stands in (links still work; health reports the gap); locally, localhost.

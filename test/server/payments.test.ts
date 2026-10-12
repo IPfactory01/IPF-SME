@@ -1,15 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ENV } from "@server/_core/env";
 import { buildBusinessSupportEmailHtml } from "@server/emailTemplates";
-import { bankDetails, isMissingPaymentTable, paymentConfirmedEmail, paymentDetailsEmail, paymentStatusesByCheck } from "@server/payments";
+import { bankDetails, EMAIL_TEST_NOTICE, isMissingPaymentTable, onlinePaymentNote, onlinePaymentOffer, paymentConfirmedEmail, paymentDetailsEmail, paymentStatusesByCheck } from "@server/payments";
 import { BRAND } from "@shared/brand";
 import { lagosTime } from "@server/lagosTime";
 
-const saved = { bank: ENV.paymentBankName, name: ENV.paymentAccountName, number: ENV.paymentAccountNumber };
+const saved = { bank: ENV.paymentBankName, name: ENV.paymentAccountName, number: ENV.paymentAccountNumber, paystack: ENV.paystackSecretKey };
 afterEach(() => {
   ENV.paymentBankName = saved.bank;
   ENV.paymentAccountName = saved.name;
   ENV.paymentAccountNumber = saved.number;
+  ENV.paystackSecretKey = saved.paystack;
 });
 const configure = () => {
   ENV.paymentBankName = "Example Bank";
@@ -75,6 +76,73 @@ describe("the payment details email", () => {
     const html = buildBusinessSupportEmailHtml(email.body);
     expect(html).toContain(`color:${BRAND.palette["highlight-ink"]};font-weight:700;">TEST DETAILS - DO NOT PAY<`);
     expect(html).toMatch(/>Reference<\/td><td[^>]*>TS-R-000012<\/td>/);
+  });
+});
+
+describe("the payment details email with online payment", () => {
+  const PAY_URL = "https://app.example.test/pay/CHECKTOKEN1234567890/full_report";
+  const online = (mode: "test" | "live") => paymentDetailsEmail({ fullName: "Ada Example", item: "full_report", reference: "TS-R-000012", deadline: DEADLINE, online: { url: PAY_URL, mode } });
+
+  it("leads with a Pay online button and keeps the bank details below as the alternative", () => {
+    configure();
+    const email = online("live");
+    expect(email.subject).toBe("Payment details for your Full Report");
+    const body = email.body;
+    for (const line of ["Amount: ₦100,000", "Reference: TS-R-000012", `Pay by: ${lagosTime(DEADLINE)} (Lagos time)`, "PAY ONLINE", `Pay online: ${PAY_URL}`, "OR PAY BY BANK TRANSFER", "Bank: Example Bank", "Account number: 0123456789"]) {
+      expect(body).toContain(line);
+    }
+    expect(body.indexOf("PAY ONLINE")).toBeLessThan(body.indexOf("OR PAY BY BANK TRANSFER"));
+    // Nobody who paid online is asked for proof.
+    expect(body).toContain("Paid online? There is nothing more to do.");
+    expect(body).toContain("Paid by bank transfer? Reply to this email with your proof of payment");
+    expect(body).not.toContain("TEST MODE");
+    const html = buildBusinessSupportEmailHtml(body);
+    expect(html).toContain(`<a href="${PAY_URL}"`);
+    expect(html).toMatch(/>Pay online<\/a>/);
+  });
+
+  it("says in capitals, as a heading, that no real money moves in test mode", () => {
+    configure();
+    const email = online("test");
+    expect(email.body).toContain(EMAIL_TEST_NOTICE);
+    expect(EMAIL_TEST_NOTICE).toBe("TEST MODE - NO REAL MONEY MOVES");
+    expect(email.body.indexOf(EMAIL_TEST_NOTICE)).toBeLessThan(email.body.indexOf("PAY ONLINE"));
+    expect(buildBusinessSupportEmailHtml(email.body)).toContain(`color:${BRAND.palette["highlight-ink"]};font-weight:700;">TEST MODE - NO REAL MONEY MOVES<`);
+  });
+
+  it("still warns that placeholder bank details are not real", () => {
+    clear();
+    expect(online("live").body).toContain("TEST DETAILS - DO NOT PAY");
+  });
+
+  it("offers the pay page only while Paystack is on, keyed by the Business Check's token", () => {
+    ENV.paystackSecretKey = "";
+    expect(onlinePaymentOffer("CHECKTOKEN1234567890", "full_report")).toBeNull();
+    ENV.paystackSecretKey = "sk_test_fixture_not_a_real_key";
+    expect(onlinePaymentOffer("CHECKTOKEN1234567890", "current_state")).toEqual({ url: "http://localhost:3000/pay/CHECKTOKEN1234567890/current_state", mode: "test" });
+    ENV.paystackSecretKey = "sk_live_fixture_not_a_real_key";
+    expect(onlinePaymentOffer("CHECKTOKEN1234567890", "full_report")?.mode).toBe("live");
+  });
+
+  it("is unchanged, with no button, while online payment is off", () => {
+    configure();
+    const email = paymentDetailsEmail({ fullName: "Ada Example", item: "full_report", reference: "TS-R-000012", deadline: DEADLINE, online: null });
+    expect(email.body).not.toMatch(/Pay online|PAY ONLINE|Paystack/);
+    expect(email.body).toContain("HOW TO PAY");
+  });
+});
+
+describe("a payment confirmed online", () => {
+  it("is noted with Paystack's reference, marked TEST in test mode", () => {
+    expect(onlinePaymentNote({ provider: "paystack", reference: "TS-R-000012-1a2b3c4d", mode: "live" })).toBe("Paid online with Paystack, reference TS-R-000012-1a2b3c4d");
+    expect(onlinePaymentNote({ provider: "paystack", reference: "TS-R-000012-1a2b3c4d", mode: "test" })).toBe("TEST: Paid online with Paystack, reference TS-R-000012-1a2b3c4d");
+  });
+
+  it("tells the owner in capitals when it was a test payment", () => {
+    const email = paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012", testMode: true });
+    expect(email.body).toContain(EMAIL_TEST_NOTICE);
+    expect(email.body).toContain("This payment was made in Paystack's test mode, so no real money moved.");
+    expect(paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012" }).body).not.toContain("TEST MODE");
   });
 });
 

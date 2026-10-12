@@ -13,6 +13,8 @@ import { buildParticipantUploadKey, buildPaymentReceiptUploadKey, getParticipant
 import { applySecurityHeaders, requireTrustedBrowserOrigin } from "../security";
 import { ENV } from "./env";
 import { healthReport } from "./health";
+import { handlePaystackWebhook } from "../onlinePayment";
+import { PAYSTACK_WEBHOOK_PATH } from "../paystack";
 import multer from "multer";
 
 /**
@@ -29,6 +31,9 @@ export function createApp() {
     const report = healthReport();
     res.status(report.status).json(report.body);
   });
+  // Paystack's signed webhook: before the JSON parser, so the signature is checked on the exact bytes Paystack sent,
+  // and before the browser-origin guard, which exempts it (a server-to-server call has no Origin; the signature is the check).
+  app.post(PAYSTACK_WEBHOOK_PATH, express.raw({ type: () => true, limit: "256kb" }), handlePaystackWebhook);
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ limit: "32kb", extended: true }));
   app.use("/api", requireTrustedBrowserOrigin);

@@ -56,7 +56,7 @@ erDiagram
 | `user_sessions` | Server-side sessions behind the `ipf_session` cookie | Unique token hash; expiry; revocation; `activeBusinessId` (the workspace in use) | Token hash |
 | `user_platform_roles` | Internal IP Factory roles (super_admin, admin, desk_lead, analyst, partner, subject_matter_expert, finance) | Unique (person, role); who granted it | Who holds which role |
 | `admin_permission_profiles` | Extra capabilities chosen by the Super Admin for a person | One per user | — |
-| `admin_access_audit_events` | Append-only audit trail for staff, payments, reports, roles and onboarding | Written through `recordAudit` (`server/audit.ts`); details never contain secrets; indexed by action and time (0010) | Actor id, target email |
+| `admin_access_audit_events` | Append-only audit trail for staff, payments, reports, roles and onboarding | Written through `recordAudit` (`server/audit.ts`); details never contain secrets; indexed by action and time (0010). A system actor (Paystack confirming a payment) is a null `actorUserId` with `via` in the details, never an account | Actor id, target email |
 | `user_password_reset_tokens` | Password reset links for client and staff accounts, issued by staff with `manage_users` (migration 0010) | Only the token's SHA-256; 20 minutes; single use; a new link revokes the one still out; who issued it; delivery status | Token hash |
 | `rate_limit_counters` | Fixed-window counters behind the rate limits, shared by every function instance (migration 0010) | One row per key (`check_start:ip:…`, `check_submit:token:…`); window and count advance in one statement; expired rows are purged | Hashed keys only, no addresses in clear |
 
@@ -72,12 +72,22 @@ erDiagram
 | Table | What it holds | Keys and rules | Personal or sensitive data |
 |---|---|---|---|
 | `business_checks` | One free business check: contact, answers, result, summary, pipeline stage, call dates | Unique public token; stage from `PIPELINE_STAGES` | Name, email, WhatsApp, how they heard, business name and description, answers (including revenue band and what the problem costs each month) |
-| `payment_requests` | A bank-transfer request for the full report or Current State Assessment | Unique reference (`TS-R-000123`, `TS-CS-000123`); one per check and item; status requested, proof received, confirmed, each move claimed in one conditional statement so a double click records it once; confirming a report payment issues its `full_reports` row in the same transaction. The 48-hour window runs from `requestedAt`, which resets when the details are sent again, so "48 hours passed" is worked out, not stored | Amount, reference, the team's note (bank transaction reference). Proof arrives by email and is not stored |
+| `payment_requests` | A payment asked of the owner for the full report or Current State Assessment, paid online with Paystack or by bank transfer | Unique reference (`TS-R-000123`, `TS-CS-000123`); one per check and item; status requested, proof received, confirmed, each move claimed in one conditional statement so a double click (or Paystack's webhook and the return page together) records it once; confirming a report payment issues its `full_reports` row in the same transaction. The 48-hour window runs from `requestedAt`, which resets when the details are sent again, so "48 hours passed" is worked out, not stored. Paystack charges `amountNaira` × 100 kobo, under a reference per attempt that starts with this row's (`TS-R-000123-1a2b3c4d`); no new column holds it (see below) | Amount, reference, the team's note (bank transaction reference). Proof arrives by email and is not stored |
 | `full_reports` | The paid report: link, form answers, delivery | One per check; unique token hash; status awaiting_intake or delivered; `reportVersion` | **Financial figures**: revenue, costs, margin, prices, cash, money owed, loans, competitors |
 | `client_onboarding_invitations` | The single-use link that creates a client account | Unique token hash; one pending per check; status pending, accepted, revoked, expired; expiry | Email, name and business name at the time |
 
 The full report PDF is **not stored**: it is rebuilt from the stored form answers whenever it is emailed or downloaded,
 so the same answers always give the same document.
+
+**How an online payment is recorded** (no schema change). Paystack is a system actor, so a payment it confirms has
+`confirmedByUserId` null and `note` "Paid online with Paystack, reference TS-R-000123-1a2b3c4d" ("TEST: " in front when
+Paystack ran on its test keys). The `payment_confirmed` and `payment_confirmation_sent` audit rows have a null actor and
+`via: "paystack"`, `paystackReference` and `mode` (`test` or `live`) in their details. The client account invitation it
+sends needs a person in `client_onboarding_invitations.createdByUserId`: it is the team member who sent the payment
+details, and the `client_onboarding_invitation_created` audit row keeps the null actor with `via` and
+`recordedAgainstUserId`. A Paystack payment that moved money but could not be confirmed (another amount or currency, or
+an item already paid) is recorded as `payment_online_refused`, with the problem, and the office is emailed. Nothing
+Paystack sends is stored beyond this: no card details, no customer data.
 
 ### The engagement room (migration 0008)
 
@@ -148,6 +158,7 @@ procedure grants assigned-only access.
 | Their own business check, while taking it | ⚪ by the check's token | — | — | — | — | — | — |
 | All business checks, pipeline, call outcomes | — | — | — (needs `manage_client_onboarding`) | — | ✅ if granted `manage_client_onboarding` | — | ✅ |
 | Payment requests: send, proof, confirm | — | — | — | — | — | ✅ `manage_payments` | ✅ |
+| Pay page and return page: the item, its amount, the mode and whether it is paid; pay online | ⚪ by the check's token (pay page) or the Paystack reference (return page); nothing about the owner is returned | — | — | — | — | — | — |
 | Full report form and download | ⚪ by the report token | — | — | — | ✅ download (`manage_client_onboarding`) | ✅ resend link | ✅ |
 | Client invitations | ⚪ by the invitation token | — | — | — | ✅ `manage_client_onboarding` | — | ✅ |
 | Business profile | — | ⚪ view; owner and business_admin edit | — | — | ✅ `view_all_businesses` (Clients tab) | — | ✅ |

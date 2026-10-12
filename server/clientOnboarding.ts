@@ -106,8 +106,14 @@ async function assessmentPaid(db: Pick<Database, "select">, businessCheckId: num
  * The invitation follows the Current State Assessment payment: confirming it (server/payments.ts) calls this
  * automatically, and an administrator can send it again by hand. Before the payment is confirmed the server refuses
  * unless the administrator gives a reason, which is recorded in the audit log with the invitation.
+ *
+ * `actorUserId` is null for a system actor (Paystack confirmed the payment). The invitation row needs a person, so a
+ * system actor names the team member it is recorded against (`createdByUserId`: whoever sent the payment details); the
+ * audit row keeps the null actor and how it came about (`via`).
  */
-export async function createOnboardingInvitation(input: { businessCheckId: number; actorUserId: number; overrideReason?: string }) {
+export async function createOnboardingInvitation(input: { businessCheckId: number; actorUserId: number | null; createdByUserId?: number | null; via?: "paystack"; overrideReason?: string }) {
+  const createdBy = input.actorUserId ?? input.createdByUserId ?? null;
+  if (createdBy === null) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Nobody on the team is named to send this invitation. Send it from Client Onboarding." });
   const db = await requireDatabase();
   const check = (await db.select().from(businessChecks).where(eq(businessChecks.id, input.businessCheckId)).limit(1))[0];
   if (!check) throw new TRPCError({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
@@ -131,7 +137,7 @@ export async function createOnboardingInvitation(input: { businessCheckId: numbe
       businessNameSnapshot: check.businessName ?? "",
       tokenHash: sha256(token),
       expiresAt,
-      createdByUserId: input.actorUserId,
+      createdByUserId: createdBy,
     }).returning({ id: clientOnboardingInvitations.id });
     return row;
   });
@@ -148,7 +154,7 @@ export async function createOnboardingInvitation(input: { businessCheckId: numbe
     actorUserId: input.actorUserId,
     action: "client_onboarding_invitation_created",
     targetEmail: email,
-    details: JSON.stringify({ invitationId: invitation.id, businessCheckId: check.id, deliveryStatus: delivery.status, paid, ...(paid ? {} : { override }) }),
+    details: JSON.stringify({ invitationId: invitation.id, businessCheckId: check.id, deliveryStatus: delivery.status, paid, ...(paid ? {} : { override }), ...(input.via ? { via: input.via, recordedAgainstUserId: createdBy } : {}) }),
   });
   return { invitationId: invitation.id, invitationUrl, expiresAt, deliveryStatus: delivery.status };
 }

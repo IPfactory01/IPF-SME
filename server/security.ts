@@ -2,6 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import { BRAND } from "../shared/brand";
 import { fileStorageOrigin } from "./fileStorage";
 import { ENV } from "./_core/env";
+import { PAYSTACK_WEBHOOK_PATH } from "./paystack";
 
 
 const LOCAL_ORIGIN_PATTERN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/i;
@@ -84,8 +85,14 @@ export function applySecurityHeaders(req: Request, res: Response, next: NextFunc
   next();
 }
 
+/**
+ * Server-to-server endpoints that prove themselves another way, so they carry no browser Origin: Paystack's webhook is
+ * checked by its signature (server/onlinePayment.ts). Matched on the exact path, never as a prefix.
+ */
+export const ORIGIN_GUARD_EXEMPT_PATHS: readonly string[] = [PAYSTACK_WEBHOOK_PATH];
+
 export function requireTrustedBrowserOrigin(req: Request, res: Response, next: NextFunction) {
-  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method) || req.originalUrl.startsWith("/api/scheduled/")) {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method) || req.originalUrl.startsWith("/api/scheduled/") || ORIGIN_GUARD_EXEMPT_PATHS.includes(req.originalUrl.split("?")[0])) {
     next();
     return;
   }

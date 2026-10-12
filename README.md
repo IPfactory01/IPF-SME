@@ -7,9 +7,9 @@ Live at https://ipf-sme.vercel.app (Vercel, deploying `main`).
 
 - **Free business check:** ten minutes on a phone; a colour-coded outline of the ten places a business gets stuck, one
   of four gaps, and a summary. Saved as a lead from the first screen.
-- **Full report (₦100,000):** paid by bank transfer, then a 17-question form; a deterministic PDF report is emailed the
+- **Full report (₦100,000):** paid online with Paystack or by bank transfer, then a 17-question form; a deterministic PDF report is emailed the
   moment the form is finished.
-- **Discovery call and Current State Assessment payment:** Calendly booking, call outcome, payment details, proof and confirmation.
+- **Discovery call and Current State Assessment payment:** Calendly booking, call outcome, payment details, then online payment with Paystack (confirms itself) or bank transfer with proof and confirmation.
 - **Client accounts:** created by invitation once the Current State Assessment is paid; one identity per person, businesses as
   workspaces, client isolation enforced on the server.
 - **Admin console:** leads, pipeline, payments, reports, onboarding, staff roles and permissions, audit trail.
@@ -17,7 +17,7 @@ Live at https://ipf-sme.vercel.app (Vercel, deploying `main`).
   on `/dashboard` (where we are, what we need from you, what we have found). Needs migration 0008.
 - **Files:** uploads against data requests and on deliverables, in a private Supabase bucket (needs the storage settings).
 - **The fix:** the one number (baseline, target) and the weekly check-in, recorded in order; the client sees the reading and the next step.
-- **Next:** Paystack once the key is in Vercel; the close and day-30 check (migration 0011) in December.
+- **Next:** Paystack goes live once `PAYSTACK_SECRET_KEY` is in Vercel and the webhook is set in Paystack (test key first); the close and day-30 check (migration 0011) in December.
 
 **Product documents:** [`docs/product/`](docs/product/README.md) holds the PRD, technical requirements, app flow, design
 brief, backend schema and implementation plan. Start there.

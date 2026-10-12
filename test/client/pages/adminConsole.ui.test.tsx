@@ -724,6 +724,18 @@ describe("the commercial pipeline in Business Checks", () => {
     expect(drawer().getByText("This business has been won, so its stage is final.")).toBeTruthy();
     expect(drawer().queryByLabelText("Note (optional)")).toBeNull();
   });
+
+  it("names Paystack, not the team, when a payment confirmed itself online", () => {
+    api.details[1] = detailFor({
+      stageHistory: [
+        { id: 4, action: "payment_confirmed", from: null, to: null, note: "Paid online with Paystack, reference TS-R-000001-1a2b3c4d", scheduledFor: null, item: "full_report", reference: "TS-R-000001", delivery: null, via: "paystack", by: null, at: new Date("2026-10-08T10:00:00Z") },
+      ],
+    });
+    renderConsole();
+    openRow("Ada Okafor");
+    const [item] = within(drawer().getByRole("list", { name: "Stage history" })).getAllByRole("listitem").map(entry => entry.textContent);
+    expect(item).toMatch(/^Payment confirmed: Your Full Report \(TS-R-000001\)Paystack \(paid online\) · 8 Oct 2026.*Paid online with Paystack, reference TS-R-000001-1a2b3c4d$/);
+  });
 });
 
 describe("full report requests in Business Checks", () => {

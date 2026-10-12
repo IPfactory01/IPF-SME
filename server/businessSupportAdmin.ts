@@ -175,8 +175,9 @@ async function stageHistoryFor(db: Pick<Database, "select">, businessCheckId: nu
     .orderBy(desc(adminAccessAuditEvents.createdAt), desc(adminAccessAuditEvents.id))
     .limit(100);
   return events.map(event => {
-    const details = parseJson<{ from?: PipelineStage; to?: PipelineStage; note?: string; scheduledFor?: string; item?: PaymentItem; reference?: string; delivery?: string }>(event.details) ?? {};
-    return { id: event.id, action: event.action as (typeof HISTORY_ACTIONS)[number], from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, delivery: details.delivery ?? null, by: event.by ?? null, at: event.at };
+    const details = parseJson<{ from?: PipelineStage; to?: PipelineStage; note?: string; scheduledFor?: string; item?: PaymentItem; reference?: string; delivery?: string; via?: string }>(event.details) ?? {};
+    // "via" names a system actor (Paystack) where no person acted.
+    return { id: event.id, action: event.action as (typeof HISTORY_ACTIONS)[number], from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, delivery: details.delivery ?? null, via: details.via === "paystack" ? "paystack" as const : null, by: event.by ?? null, at: event.at };
   });
 }
 

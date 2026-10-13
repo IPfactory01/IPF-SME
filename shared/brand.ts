@@ -31,6 +31,16 @@ export const BRAND = {
   productName: "The Shift",
   productEndorsement: "The Shift, by IP Factory",
   productTagline: "Support for business owners",
+  /**
+   * The track record the site states, confirmed by ET on 13 October 2026. Every figure must stay defensible: the group
+   * and its partners are deliberately not named.
+   */
+  trackRecord: {
+    lineage: "the delivery and method arm of an established Nigerian management consulting group",
+    clients: "250+",
+    partnerYears: "50+",
+    since: 2011,
+  },
   /** External page for the free business check, if it runs elsewhere. Empty: the on-site form opens. */
   applyUrl: "",
   /**

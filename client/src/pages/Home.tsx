@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { onSectionLinkClick } from "@/lib/scrollToSection";
 import { CtaButton, Faq, Hero, Journey, NAV, StuckPicker, useActiveSection, useScrolled } from "@/components/home/HomeSections";
+import { ExperienceBehind, TrackRecord, WhyStuck } from "@/components/home/Experience";
 import { Reveal, ScrollProgress, Stagger, staggerChild } from "@/components/motion";
 import { motion } from "framer-motion";
 import { ArrowRight, CheckCircle2, KeyRound, MailCheck, X } from "lucide-react";
@@ -113,6 +114,8 @@ export default function Home() {
 
       <Hero onStart={handleStartCheck} />
 
+      <TrackRecord />
+
       {/* What business owners tell us */}
       <section id="problem" className="py-24 border-b border-line">
         <div className="container max-w-5xl mx-auto">
@@ -138,6 +141,7 @@ export default function Home() {
               </motion.button>
             ))}
           </Stagger>
+          <WhyStuck />
           <Reveal>
             <p className="font-serif text-2xl sm:text-3xl text-center text-ink max-w-3xl mx-auto leading-snug">
               If one of those is you, you don&apos;t need another course. You need someone who stays with you while you fix it.
@@ -163,6 +167,8 @@ export default function Home() {
           </Reveal>
         </div>
       </section>
+
+      <ExperienceBehind />
 
       <Journey />
 

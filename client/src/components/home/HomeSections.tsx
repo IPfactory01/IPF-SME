@@ -11,6 +11,7 @@ import { ArrowDown, ArrowRight, Plus } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
 export const NAV = [
+  { id: "experience", label: "Our experience" },
   { id: "how", label: "How it works" },
   { id: "stuck", label: "Where you're stuck" },
   { id: "for", label: "Who it's for" },

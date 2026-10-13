@@ -66,6 +66,12 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
 
 - Home page in the owner's words (concept note §16): hero, the problem in their words, what we are and are not, how it
   works with prices, the ten places a business gets stuck, who it is for, who you work with, questions, the ask.
+- Trust without names (ET, 13 October 2026): a track record strip under the hero (250+ clients, 50+ years of partner
+  experience, since 2011, every major sector; `BRAND.trackRecord`), sourced figures under the problem ("They fail
+  between knowing and doing", concept note §2–3), and **The experience behind The Shift**: IP Factory as the delivery
+  and method arm of an established Nigerian consulting group, "The same method we use with larger clients. Run at the
+  size and the price that fits your business." The group and the partners are not named; every figure must stay
+  defensible.
 - Copy rules: second person, short sentences, naira in full, no consulting words, never "door", "sprint", "playbook"
   or "retainer" (§3 front matter; `AGENTS.md`).
 - No "book a Current State Assessment" button: the call comes first and the payment request follows it.

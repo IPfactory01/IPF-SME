@@ -53,3 +53,29 @@ describe("home page sign-in", () => {
     expect(dialog.querySelector('a[href="/login"]')).toBeTruthy();
   });
 });
+
+describe("home page track record", () => {
+  it("states the track record from the brand settings, under the hero", () => {
+    renderHome();
+    const record = screen.getByRole("region", { name: "Our track record" });
+    for (const text of ["250+", "clients advised", "50+", "years of partner experience", "Since 2011", "major sector of the economy"]) expect(record.textContent).toContain(text);
+  });
+
+  it("explains the experience behind The Shift, linked from the navigation, without naming the group or its partners", () => {
+    const { container } = renderHome();
+    expect(screen.getByRole("link", { name: "Our experience" }).getAttribute("href")).toBe("#experience");
+    const section = container.querySelector("#experience")!;
+    expect(section.textContent).toContain("the delivery and method arm of an established Nigerian management consulting group");
+    expect(section.textContent).toContain("The same method we use with larger clients. Run at the size and the price that fits your business.");
+    expect(container.textContent).not.toMatch(/Enzo|Krypton|Tarfa|Anago|Kurumi/i);
+  });
+
+  it("backs the problem with sourced figures, in the site's words", () => {
+    const { container } = renderHome();
+    const problem = container.querySelector("#problem")!;
+    expect(problem.textContent).toContain("They fail between knowing and doing.");
+    for (const source of ["PwC MSME Survey, 2024", "World Bank, Nigeria, 2022", "Field trial of 852 owners, 2018"]) expect(problem.textContent).toContain(source);
+    const added = `${problem.textContent} ${container.querySelector("#experience")!.textContent}`;
+    expect(added).not.toMatch(/\b(framework|strategic|solutions?|leverage|holistic|playbook|sprint|retainer|door)\b/i);
+  });
+});

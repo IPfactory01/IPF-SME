@@ -4,7 +4,7 @@
 
 Effective date: 14 October 2026 | Contact: info@ipfactory.co
 
-> These Terms & Conditions govern access to and use of the IP Factory SME Platform and related services. They are intended to be clear and practical. They should be reviewed by qualified legal counsel before final publication.
+> These Terms & Conditions govern access to and use of the IP Factory SME Platform and related services. They are intended to be clear and practical.
 
 ## 1. About IP Factory
 

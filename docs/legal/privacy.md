@@ -4,7 +4,7 @@
 
 Effective date: 14 October 2026 | Privacy contact: info@ipfactory.co
 
-> This Privacy Policy explains how IP Factory collects, uses, shares, stores and protects personal and business information when you use the IP Factory SME Platform. It is designed to align with the platform’s current operating model and should be reviewed by qualified legal counsel before final publication.
+> This Privacy Policy explains how IP Factory collects, uses, shares, stores and protects personal and business information when you use the IP Factory SME Platform.
 
 ## 1. Who We Are
 

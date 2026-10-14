@@ -85,7 +85,8 @@ Source: `client/src/pages/BusinessCheck.tsx`; rules in `shared/businessCheck/eng
    answers (PRD F2). Typed answers (business name, one-line description) are required. Trading businesses end with
    **The problem to fix**: what they have tried (optional), what it costs each month, and who decides.
    "Back" and "Next" step through the questions in order, so every earlier answer can be opened and changed; after a
-   change, "Next" moves to the following question, not past it.
+   change, "Next" moves to the following question, not past it. The phone's back gesture (and the browser's back
+   button) does the same as "Back": one question back, never out of the check.
 5. **Reading your answers** while `businessCheck.submit` runs. If it fails: "Try again".
 6. **Result:** the tally (stuck, watch, clear), "What we found", "What we think it is", the outline with "Start here"
    and the greyed "Not assessed" areas, founder readiness in words, "Where we could help", and **Your next steps**.

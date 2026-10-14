@@ -80,15 +80,40 @@ function save(state: Saved) {
   }
 }
 
-/** Screens slide in from the side the owner is moving towards. */
+/**
+ * How long a chosen answer stays on screen before the next question: long enough to see the tick land, short enough
+ * that answering never feels like waiting. The tick itself shows on the press.
+ */
+export const ANSWER_PAUSE_MS = 120;
+
+/** Marks the history entry the check adds so the phone's back gesture stays inside it. */
+const CHECK_ENTRY = "shiftBusinessCheck";
+const isCheckEntry = (value: unknown) => typeof value === "object" && value !== null && (value as Record<string, unknown>)[CHECK_ENTRY] === true;
+/** Set while the page removes its own extra entry, so that step back is not mistaken for the owner going back. */
+let removingCheckEntry = false;
+function removeCheckEntry() {
+  removingCheckEntry = true;
+  window.addEventListener("popstate", () => window.setTimeout(() => { removingCheckEntry = false; }, 0), { once: true });
+  window.history.back();
+}
+
+/**
+ * Screens slide in from the side the owner is moving towards, on a critically damped spring (no overshoot), and the
+ * outgoing screen leaves at the same time instead of being waited for, so a tap or Back is never locked out.
+ */
+export const SCREEN_SPRING = { type: "spring", bounce: 0, duration: 0.35 } as const;
 const screenMotion: Variants = {
-  enter: (direction: number) => ({ opacity: 0, x: direction * 48 }),
-  centre: { opacity: 1, x: 0, transition: { duration: 0.42, ease: EASE } },
-  leave: (direction: number) => ({ opacity: 0, x: direction * -48, transition: { duration: 0.22, ease: "easeIn" } }),
+  enter: (direction: number) => ({ opacity: 0, x: direction * 32 }),
+  centre: { opacity: 1, x: 0, transition: SCREEN_SPRING },
+  leave: (direction: number) => ({ opacity: 0, x: direction * -32, transition: { duration: 0.15, ease: "easeOut" } }),
 };
 
-const listMotion: Variants = { hidden: {}, show: { transition: { staggerChildren: 0.05, delayChildren: 0.08 } } };
-const itemMotion: Variants = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { duration: 0.4, ease: EASE } } };
+/** A spring that settles without bouncing, for ticks and markers: bounce is kept for things the owner throws. */
+const SETTLE = { type: "spring", bounce: 0, duration: 0.25 } as const;
+
+/** Options are on screen at once: the owner reads them together, so they arrive together. */
+const listMotion: Variants = { hidden: {}, show: {} };
+const itemMotion: Variants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { duration: 0.18 } } };
 
 /** Founder readiness strengths use the outline's colours: strong is green, building amber, gap red. */
 const STRENGTH_HEALTH: Record<Strength, Health> = { strong: "clear", building: "watch", gap: "stuck" };
@@ -111,8 +136,9 @@ export default function BusinessCheck() {
   useEffect(() => {
     save(state);
   }, [state]);
+  // Jump, not glide: a smooth scroll would move the page while the next screen slides in.
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
   }, [editing, state.history.length, state.seen.length, state.started, state.response]);
 
   const answers = useMemo(() => cleanAnswers(state.answers), [state.answers]);
@@ -196,6 +222,29 @@ export default function BusinessCheck() {
     setEditing(previous.question.id);
   };
 
+  // The phone's back gesture steps back one question instead of leaving the check. While the owner is inside the
+  // check, one extra history entry sits on top; going back consumes it, steps back a question and puts it back.
+  const inFlow = state.started && !state.response;
+  const backRef = useRef(back);
+  backRef.current = back;
+  const [pops, setPops] = useState(0);
+  useEffect(() => {
+    if (!inFlow) return;
+    if (!isCheckEntry(window.history.state)) window.history.pushState({ ...(window.history.state ?? {}), [CHECK_ENTRY]: true }, "");
+    const onPop = () => {
+      if (removingCheckEntry) return;
+      backRef.current();
+      setPops((count) => count + 1);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [inFlow, pops]);
+  // Leaving the check another way (the result, or Back on the first question) removes the extra entry, so the
+  // browser's back button never needs pressing twice.
+  useEffect(() => {
+    if (!inFlow && isCheckEntry(window.history.state)) removeCheckEntry();
+  }, [inFlow]);
+
   let screen: React.ReactNode;
   let screenKey: string;
   if (state.response) {
@@ -256,8 +305,8 @@ export default function BusinessCheck() {
 
       <main className="flex-1 py-8 md:py-12">
         <div className={`container ${showOutline ? "grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] max-w-6xl" : "max-w-3xl"} mx-auto`}>
-          <div className="min-w-0">
-            <AnimatePresence mode="wait" initial={false} custom={direction}>
+          <div className="relative min-w-0">
+            <AnimatePresence mode="popLayout" initial={false} custom={direction}>
               <motion.div
                 key={screenKey}
                 custom={direction}
@@ -389,7 +438,7 @@ function SectionIntro({ step, answers, onContinue, onBack }: { step: Step; answe
       <motion.div variants={itemMotion}>
         <p className="mb-3 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">
           {section.area !== undefined && (
-            <motion.span initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 260, damping: 18, delay: 0.1 }} className="flex h-8 w-8 items-center justify-center rounded-full bg-highlight-ink font-serif text-sm text-paper">
+            <motion.span initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} transition={SETTLE} className="flex h-8 w-8 items-center justify-center rounded-full bg-highlight-ink font-serif text-sm text-paper">
               {section.area}
             </motion.span>
           )}
@@ -478,8 +527,7 @@ function QuestionScreen({ step, answers, onAnswer, onBack }: { step: Step; answe
   const choose = (value: string) => {
     if (picked) return;
     setPicked(value);
-    // A short pause so the owner sees their choice land before the next question.
-    window.setTimeout(() => onAnswer(question, value), 320);
+    window.setTimeout(() => onAnswer(question, value), ANSWER_PAUSE_MS);
   };
 
   const toggle = (value: string) => {
@@ -536,7 +584,7 @@ function QuestionScreen({ step, answers, onAnswer, onBack }: { step: Step; answe
               <motion.span aria-hidden className="absolute inset-0 origin-left bg-brand-tint" initial={false} animate={{ scaleX: on ? 1 : 0 }} transition={{ duration: 0.3, ease: EASE }} />
               {question.kind === "multi" ? (
                 <span className={`relative flex h-5 w-5 shrink-0 items-center justify-center border transition-colors ${on ? "border-brand bg-brand text-paper" : "border-line-strong bg-paper-raised"}`}>
-                  <AnimatePresence>{on && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={{ type: "spring", stiffness: 500, damping: 25 }}><Check className="h-3.5 w-3.5" /></motion.span>}</AnimatePresence>
+                  <AnimatePresence>{on && <motion.span initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={SETTLE}><Check className="h-3.5 w-3.5" /></motion.span>}</AnimatePresence>
                 </span>
               ) : cards ? (
                 <CardIcon value={option.value} on={on} />
@@ -549,7 +597,7 @@ function QuestionScreen({ step, answers, onAnswer, onBack }: { step: Step; answe
               </span>
               <AnimatePresence>
                 {on && question.kind !== "multi" && (
-                  <motion.span className={cards ? "absolute right-4 top-4" : "relative"} initial={{ scale: 0, rotate: -45 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={{ type: "spring", stiffness: 500, damping: 22 }}>
+                  <motion.span className={cards ? "absolute right-4 top-4" : "relative"} initial={{ scale: 0, rotate: -45 }} animate={{ scale: 1, rotate: 0 }} exit={{ scale: 0 }} transition={SETTLE}>
                     <CheckCircle2 className="h-5 w-5 shrink-0 text-brand" />
                   </motion.span>
                 )}

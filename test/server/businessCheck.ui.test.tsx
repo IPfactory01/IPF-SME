@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MotionGlobalConfig } from "framer-motion";
 import { evaluate } from "@shared/businessCheck/engine";
@@ -53,7 +53,7 @@ vi.mock("@/lib/trpc", () => ({
 const payOnline = vi.hoisted(() => ({ openCheckout: vi.fn(), rememberPayPage: vi.fn() }));
 vi.mock("@/lib/payOnline", () => payOnline);
 
-import BusinessCheck from "@/pages/BusinessCheck";
+import BusinessCheck, { ANSWER_PAUSE_MS, SCREEN_SPRING } from "@/pages/BusinessCheck";
 
 const STORAGE_KEY = "ipf-business-check-v1";
 const pick = async (label: RegExp | string) => {
@@ -222,6 +222,36 @@ describe("business check page", { timeout: 20_000 }, () => {
     await pick(/I run my business full-time/);
     await waitFor(() => expect(api.calls.saveProgress.length).toBeGreaterThan(0), { timeout: 3000 });
     expect(api.calls.saveProgress.at(-1)).toEqual({ token: TOKEN, answers: { p_stage: "operating" } });
+  });
+
+  it("moves on to the next question almost at once, on a spring that does not bounce", async () => {
+    expect(ANSWER_PAUSE_MS).toBeLessThanOrEqual(150);
+    expect(SCREEN_SPRING).toMatchObject({ type: "spring", bounce: 0 });
+    render(React.createElement(BusinessCheck));
+    await giveDetails();
+    await pick(/questions/i);
+    const option = await screen.findByRole("button", { name: /I run my business full-time/ });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      fireEvent.click(option);
+      expect(option.getAttribute("aria-pressed")).toBe("true");
+      act(() => { vi.advanceTimersByTime(ANSWER_PAUSE_MS); });
+      expect(screen.getByText("What is the business called?")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("treats the phone's back gesture as Back: one question back, not out of the check", async () => {
+    render(React.createElement(BusinessCheck));
+    await giveDetails();
+    await pick(/questions/i);
+    await pick(/I run my business full-time/);
+    await screen.findByText("What is the business called?");
+    expect((window.history.state as Record<string, unknown>).shiftBusinessCheck).toBe(true);
+    act(() => { window.dispatchEvent(new PopStateEvent("popstate", { state: null })); });
+    expect(await screen.findByText("Which best describes you today?")).toBeTruthy();
+    await waitFor(() => expect((window.history.state as Record<string, unknown> | null)?.shiftBusinessCheck).toBe(true));
   });
 
   it("goes back to the previous question", async () => {

@@ -100,6 +100,11 @@ screenshots before it ships, because every page's line lengths change.
 - One easing everywhere: `EASE = [0.22, 1, 0.36, 1]` (`client/src/components/motion.tsx`).
 - Reveal on scroll: fade up 24 px over 0.7 s, once. Lists stagger by 0.07 s.
 - The app respects the device's reduced-motion setting (`MotionConfig reducedMotion="user"`).
+- The Business Check moves like a native app (reviewed against Apple's fluid-interface principles, 14 October 2026):
+  a chosen answer shows its tick on the press and the next question follows after `ANSWER_PAUSE_MS` (120 ms); screens
+  slide on a critically damped spring (`SCREEN_SPRING`, no bounce, 0.35 s) and the outgoing screen leaves at the same
+  time (`AnimatePresence mode="popLayout"`), so taps and Back are never locked out; options arrive together, not one
+  by one; the page jumps to the top instead of gliding; ticks and markers settle without overshoot.
 - React effects return nothing or a cleanup function only (the claude.ai preview frame breaks otherwise).
 - UI tests set `MotionGlobalConfig.skipAnimations = true`.
 

@@ -161,6 +161,11 @@ var init_env = __esm({
       discoveryCallUrl: process.env.DISCOVERY_CALL_URL?.trim() || BRAND.discoveryCallUrl,
       /** Calendly personal access token (secret): lets the server read a booking's time for the admin console. Optional. */
       calendlyApiToken: process.env.CALENDLY_API_TOKEN?.trim() ?? "",
+      /**
+       * Calendly booking page for the Current State Assessment Sessions: one event type, booked twice (Session 1, then
+       * Session 2). Whoever hosts is set in Calendly (one person or round robin). Empty: the room shows no Book button.
+       */
+      calendlySessionUrl: process.env.CALENDLY_SESSION_URL?.trim() ?? "",
       emailFrom: process.env.EMAIL_FROM ?? `${BRAND.senderDisplayName} <${BRAND.administrationMailbox}>`,
       googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
       googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
@@ -11257,6 +11262,101 @@ async function resendReportLink(db, input) {
   return { success: true, deliveryStatus: delivery.status };
 }
 
+// server/calendly.ts
+init_env();
+var API = "https://api.calendly.com";
+var CALENDLY_EVENT_URI = /^https:\/\/api\.calendly\.com\/scheduled_events\/[A-Za-z0-9-]{8,64}$/;
+function isCalendlyConfigured() {
+  return Boolean(ENV.calendlyApiToken);
+}
+async function calendly(path) {
+  const response = await fetch(`${API}${path}`, { headers: { authorization: `Bearer ${ENV.calendlyApiToken}`, accept: "application/json" }, signal: AbortSignal.timeout(5e3) });
+  if (!response.ok) {
+    console.warn(`[Calendly] ${path.split("?")[0].replace(/[A-Za-z0-9-]{8,}/g, "\u2026")} returned ${response.status}`);
+    return null;
+  }
+  return await response.json();
+}
+var organisation = null;
+function organisationUri() {
+  organisation ??= calendly("/users/me").then((me) => {
+    const uri = me?.resource?.current_organization ?? null;
+    if (!uri) organisation = null;
+    return uri;
+  });
+  return organisation;
+}
+var sameUrl = (a, b) => a.trim().toLowerCase().replace(/\/+$/, "") === b.trim().toLowerCase().replace(/\/+$/, "");
+function isSessionBookingConfigured() {
+  return isCalendlyConfigured() && /^https:\/\/calendly\.com\/[^\s?#]+$/i.test(ENV.calendlySessionUrl);
+}
+function sessionBookingUrl(input) {
+  if (!isSessionBookingConfigured()) return null;
+  const url = new URL(ENV.calendlySessionUrl);
+  if (input.name.trim()) url.searchParams.set("name", input.name.trim());
+  url.searchParams.set("email", input.email.trim().toLowerCase());
+  return url.toString();
+}
+var sessionEventType = null;
+function sessionEventTypeUri() {
+  sessionEventType ??= (async () => {
+    const org = await organisationUri();
+    if (!org) return null;
+    const types = await calendly(`/event_types?${new URLSearchParams({ organization: org, count: "100" })}`);
+    return types?.collection?.find((type) => type.uri && type.scheduling_url && sameUrl(type.scheduling_url, ENV.calendlySessionUrl))?.uri ?? null;
+  })().then((uri) => {
+    if (!uri) sessionEventType = null;
+    return uri;
+  });
+  return sessionEventType;
+}
+async function findSessionBookings(inviteeEmail, since) {
+  if (!isSessionBookingConfigured()) return [];
+  try {
+    const [org, eventType] = [await organisationUri(), await sessionEventTypeUri()];
+    if (!org || !eventType) return [];
+    const query = new URLSearchParams({ organization: org, invitee_email: inviteeEmail.trim().toLowerCase(), status: "active", sort: "start_time:asc", min_start_time: since.toISOString(), count: "20" });
+    const events = await calendly(`/scheduled_events?${query}`);
+    return (events?.collection ?? []).filter((event) => event.status === "active" && event.event_type === eventType && event.start_time).map((event) => ({ start: new Date(event.start_time), end: event.end_time ? new Date(event.end_time) : null, joinUrl: event.location?.join_url && /^https:\/\//.test(event.location.join_url) ? event.location.join_url : null })).filter((booking) => !Number.isNaN(booking.start.getTime())).sort((a, b) => a.start.getTime() - b.start.getTime());
+  } catch (error) {
+    console.warn("[Calendly] Could not look up Session bookings:", error instanceof Error ? error.message : error);
+    return [];
+  }
+}
+async function findBookedCall(inviteeEmail, now = /* @__PURE__ */ new Date()) {
+  if (!isCalendlyConfigured()) return null;
+  try {
+    const org = await organisationUri();
+    if (!org) return null;
+    const query = new URLSearchParams({ organization: org, invitee_email: inviteeEmail.trim().toLowerCase(), status: "active", sort: "start_time:desc", count: "20" });
+    const events = await calendly(`/scheduled_events?${query}`);
+    const sessionType = isSessionBookingConfigured() ? await sessionEventTypeUri() : null;
+    const times = (events?.collection ?? []).filter((event) => event.status === "active" && event.start_time && !(sessionType && event.event_type === sessionType)).map((event) => new Date(event.start_time)).filter((time) => !Number.isNaN(time.getTime()));
+    const upcoming = times.filter((time) => time >= now).sort((a, b) => a.getTime() - b.getTime());
+    const past = times.filter((time) => time < now).sort((a, b) => b.getTime() - a.getTime());
+    return upcoming[0] ?? past[0] ?? null;
+  } catch (error) {
+    console.warn("[Calendly] Could not look up bookings:", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+async function bookedCallTime(eventUri, inviteeEmail) {
+  if (!isCalendlyConfigured() || !CALENDLY_EVENT_URI.test(eventUri)) return null;
+  const path = eventUri.slice(API.length);
+  try {
+    const event = await calendly(path);
+    const start = event?.resource?.start_time ? new Date(event.resource.start_time) : null;
+    if (!start || Number.isNaN(start.getTime()) || event?.resource?.status !== "active") return null;
+    const invitees = await calendly(`${path}/invitees?email=${encodeURIComponent(inviteeEmail)}`);
+    const email = inviteeEmail.trim().toLowerCase();
+    const matches = (invitees?.collection ?? []).some((invitee) => invitee.email?.trim().toLowerCase() === email && invitee.status !== "canceled");
+    return matches ? start : null;
+  } catch (error) {
+    console.warn("[Calendly] Could not read the booking:", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
+
 // server/engagements.ts
 var NOT_FOUND = "This engagement is not available.";
 var notFound = () => new TRPCError15({ code: "NOT_FOUND", message: NOT_FOUND });
@@ -11434,6 +11534,7 @@ async function listStaffEngagements(db, actor) {
 async function getStaffEngagement(db, actor, engagementId) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
   const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq17(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  if (check) await syncSessionBookings(db, engagement, check.email);
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq17(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
   const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins] = await Promise.all([
     db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email }).from(engagementTeam).innerJoin(users, eq17(engagementTeam.userId, users.id)).where(eq17(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
@@ -11663,6 +11764,34 @@ async function clientViewerFor(db, session, businessId) {
   const access = (await db.select({ access: businessMemberAccess.access }).from(businessMemberAccess).innerJoin(businessMemberships, eq17(businessMemberAccess.membershipId, businessMemberships.id)).where(and12(eq17(businessMemberships.businessId, businessId), eq17(businessMemberships.userId, session.user.id))).limit(1))[0];
   return { kind: "member", access: access?.access ?? "full", userId: session.user.id };
 }
+var lastSessionSync = /* @__PURE__ */ new Map();
+var SESSION_SYNC_INTERVAL_MS = 15e3;
+async function syncSessionBookings(db, engagement, inviteeEmail, now = Date.now()) {
+  if (!isSessionBookingConfigured() || !inviteeEmail) return 0;
+  if (now - (lastSessionSync.get(engagement.id) ?? 0) < SESSION_SYNC_INTERVAL_MS) return 0;
+  lastSessionSync.set(engagement.id, now);
+  const sessions = await db.select().from(engagementSessions).where(and12(eq17(engagementSessions.engagementId, engagement.id), eq17(engagementSessions.kind, "assessment_call"))).orderBy(asc(engagementSessions.weekNumber), asc(engagementSessions.sortOrder), asc(engagementSessions.id));
+  const waiting = sessions.filter((item2) => item2.status === "planned" && !item2.scheduledFor);
+  if (!waiting.length) return 0;
+  const timed = new Set(sessions.filter((item2) => item2.scheduledFor).map((item2) => item2.scheduledFor.getTime()));
+  const since = new Date(engagement.createdAt.getTime() - 864e5);
+  const bookings = (await findSessionBookings(inviteeEmail, since)).filter((booking) => !timed.has(booking.start.getTime()));
+  let recorded = 0;
+  for (let index2 = 0; index2 < waiting.length; index2++) {
+    const session = waiting[index2];
+    const booking = bookings[index2];
+    if (!booking) break;
+    const minutes = booking.end ? Math.round((booking.end.getTime() - booking.start.getTime()) / 6e4) : null;
+    await db.update(engagementSessions).set({
+      scheduledFor: booking.start,
+      ...minutes && minutes > 0 ? { durationMinutes: minutes } : {},
+      ...booking.joinUrl && !session.meetingLink ? { meetingLink: booking.joinUrl } : {}
+    }).where(and12(eq17(engagementSessions.id, session.id), isNull5(engagementSessions.scheduledFor)));
+    await recordAudit(db, { action: "engagement_session_booked", actorUserId: null, details: { engagementId: engagement.id, sessionId: session.id, via: "calendly", scheduledFor: booking.start.toISOString() } });
+    recorded += 1;
+  }
+  return recorded;
+}
 function parseJson(text4) {
   if (!text4) return null;
   try {
@@ -11681,12 +11810,20 @@ async function insightFor(db, businessCheckId, reportDelivered) {
   const result = stored && Array.isArray(stored.outline) && stored.founder ? stored : answers ? evaluate(answers) : null;
   return roomInsight({ report: null, result });
 }
+function bookingFor(sessions, viewer, owner) {
+  if (viewer.kind !== "owner" || !owner) return null;
+  const nextToBook = sessions.filter((item2) => item2.kind === "assessment_call" && item2.status === "planned" && !item2.scheduledFor).sort((a, b) => (a.weekNumber ?? 99) - (b.weekNumber ?? 99) || a.sortOrder - b.sortOrder || a.id - b.id)[0];
+  const url = nextToBook ? sessionBookingUrl({ name: owner.fullName, email: owner.email }) : null;
+  return nextToBook && url ? { sessionId: nextToBook.id, title: nextToBook.title, url } : null;
+}
 async function getClientRoom(db, session) {
   const business = session.activeBusiness;
   if (!business) return null;
   const engagement = (await db.select().from(engagements).where(eq17(engagements.businessId, business.businessId)).orderBy(desc8(engagements.id)).limit(1))[0];
   if (!engagement) return null;
   const viewer = await clientViewerFor(db, session, business.businessId);
+  const owner = (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq17(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  if (owner) await syncSessionBookings(db, engagement, owner.email);
   const [team, sessions, tasks, deliverables, comments, files, measure, checkins] = await Promise.all([
     db.select({ name: users.name, role: engagementTeam.role }).from(engagementTeam).innerJoin(users, eq17(engagementTeam.userId, users.id)).where(eq17(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq17(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
@@ -11729,6 +11866,8 @@ async function getClientRoom(db, session) {
     measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,
     team: team.map((member) => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
+    // The owner books the Current State Assessment Sessions on Calendly, in order, with their details filled in.
+    booking: bookingFor(sessions, viewer, owner ?? null),
     sessions: scheduled.map((item2) => ({
       id: item2.id,
       title: item2.title,
@@ -12701,65 +12840,6 @@ async function askForFullReport(db, check, input) {
 
 // server/routers/businessCheck.ts
 init_env();
-
-// server/calendly.ts
-init_env();
-var API = "https://api.calendly.com";
-var CALENDLY_EVENT_URI = /^https:\/\/api\.calendly\.com\/scheduled_events\/[A-Za-z0-9-]{8,64}$/;
-function isCalendlyConfigured() {
-  return Boolean(ENV.calendlyApiToken);
-}
-async function calendly(path) {
-  const response = await fetch(`${API}${path}`, { headers: { authorization: `Bearer ${ENV.calendlyApiToken}`, accept: "application/json" }, signal: AbortSignal.timeout(5e3) });
-  if (!response.ok) {
-    console.warn(`[Calendly] ${path.split("?")[0].replace(/[A-Za-z0-9-]{8,}/g, "\u2026")} returned ${response.status}`);
-    return null;
-  }
-  return await response.json();
-}
-var organisation = null;
-function organisationUri() {
-  organisation ??= calendly("/users/me").then((me) => {
-    const uri = me?.resource?.current_organization ?? null;
-    if (!uri) organisation = null;
-    return uri;
-  });
-  return organisation;
-}
-async function findBookedCall(inviteeEmail, now = /* @__PURE__ */ new Date()) {
-  if (!isCalendlyConfigured()) return null;
-  try {
-    const org = await organisationUri();
-    if (!org) return null;
-    const query = new URLSearchParams({ organization: org, invitee_email: inviteeEmail.trim().toLowerCase(), status: "active", sort: "start_time:desc", count: "20" });
-    const events = await calendly(`/scheduled_events?${query}`);
-    const times = (events?.collection ?? []).filter((event) => event.status === "active" && event.start_time).map((event) => new Date(event.start_time)).filter((time) => !Number.isNaN(time.getTime()));
-    const upcoming = times.filter((time) => time >= now).sort((a, b) => a.getTime() - b.getTime());
-    const past = times.filter((time) => time < now).sort((a, b) => b.getTime() - a.getTime());
-    return upcoming[0] ?? past[0] ?? null;
-  } catch (error) {
-    console.warn("[Calendly] Could not look up bookings:", error instanceof Error ? error.message : error);
-    return null;
-  }
-}
-async function bookedCallTime(eventUri, inviteeEmail) {
-  if (!isCalendlyConfigured() || !CALENDLY_EVENT_URI.test(eventUri)) return null;
-  const path = eventUri.slice(API.length);
-  try {
-    const event = await calendly(path);
-    const start = event?.resource?.start_time ? new Date(event.resource.start_time) : null;
-    if (!start || Number.isNaN(start.getTime()) || event?.resource?.status !== "active") return null;
-    const invitees = await calendly(`${path}/invitees?email=${encodeURIComponent(inviteeEmail)}`);
-    const email = inviteeEmail.trim().toLowerCase();
-    const matches = (invitees?.collection ?? []).some((invitee) => invitee.email?.trim().toLowerCase() === email && invitee.status !== "canceled");
-    return matches ? start : null;
-  } catch (error) {
-    console.warn("[Calendly] Could not read the booking:", error instanceof Error ? error.message : error);
-    return null;
-  }
-}
-
-// server/routers/businessCheck.ts
 var tooMany2 = (message) => new TRPCError20({ code: "TOO_MANY_REQUESTS", message });
 var answerValue = z16.union([z16.string().max(300), z16.array(z16.string().max(64)).max(10)]);
 var answersInput = z16.record(z16.string().max(32), answerValue.optional()).refine((value) => Object.keys(value).length <= 80);

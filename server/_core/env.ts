@@ -39,6 +39,11 @@ export const ENV = {
   discoveryCallUrl: process.env.DISCOVERY_CALL_URL?.trim() || BRAND.discoveryCallUrl,
   /** Calendly personal access token (secret): lets the server read a booking's time for the admin console. Optional. */
   calendlyApiToken: process.env.CALENDLY_API_TOKEN?.trim() ?? "",
+  /**
+   * Calendly booking page for the Current State Assessment Sessions: one event type, booked twice (Session 1, then
+   * Session 2). Whoever hosts is set in Calendly (one person or round robin). Empty: the room shows no Book button.
+   */
+  calendlySessionUrl: process.env.CALENDLY_SESSION_URL?.trim() ?? "",
   emailFrom: process.env.EMAIL_FROM ?? `${BRAND.senderDisplayName} <${BRAND.administrationMailbox}>`,
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",

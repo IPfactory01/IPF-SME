@@ -171,6 +171,12 @@ export default function EngagementRoom({ room, greeting, aside, now = Date.now()
               <span className="text-ink-muted">{lagos(room.nextSession.scheduledFor)} (Lagos time){room.nextSession.durationMinutes ? `, ${room.nextSession.durationMinutes} minutes` : ""}</span>
               {room.nextSession.meetingLink && <a href={room.nextSession.meetingLink} target="_blank" rel="noreferrer" className="font-semibold text-brand underline underline-offset-2">Join the {METHOD.session}</a>}
             </p>
+          ) : room.booking ? (
+            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+              <CalendarClock className="h-4 w-4 text-brand" aria-hidden />
+              <a href={room.booking.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 bg-brand px-3 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-brand-deep-hover">Book {room.booking.title}</a>
+              <span className="text-ink-muted">Pick a time on Calendly. It shows here, with the Join link, once you have booked.</span>
+            </div>
           ) : <p className="mt-4 text-sm text-ink-muted">No {METHOD.session} is booked yet. It will show here with a Join link once it is.</p>}
           </div>
         </div>
@@ -447,6 +453,7 @@ function PlanRowView({ row, room, isOwner }: { row: PlanRow; room: Room; isOwner
           <>
             {row.session.status === "planned" && row.session.agenda && <p className="mt-1 whitespace-pre-line text-xs text-ink-muted">{row.session.agenda}</p>}
             {row.session.status === "planned" && row.session.meetingLink && <a href={row.session.meetingLink} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs font-semibold text-brand underline underline-offset-2">Join the {METHOD.session}</a>}
+            {room.booking?.sessionId === row.session.id && <a href={room.booking.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs font-semibold text-brand underline underline-offset-2">Book this {METHOD.session} on Calendly</a>}
             {row.session.notes && (
               <article className="mt-2 border border-line-soft bg-paper p-3 text-ink">
                 <p className={KICKER}>{METHOD.session} notes{isOwner && row.session.notesAudience === "owner" ? " · only you can see these" : ""}</p>

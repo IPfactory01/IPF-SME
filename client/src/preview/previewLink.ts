@@ -104,6 +104,7 @@ const SAMPLE_ROOM = {
   report: { requestedAt: day(-13), deliveredAt: day(-12) },
   debrief: { heldAt: day(-10, 14), heard: "Two outlets, a kitchen and a van. Sales of about ₦4,000,000 a month, steady for a year.\nMoney runs out in week three; the second outlet's takings pay salaries.\nPrices were last set in 2024. Delivery is charged by guess.", problemInOwnerWords: "I want to pay salaries on the 25th without moving money around, and know which outlet actually makes money.", successLooksLike: "Salaries paid on the 25th from the business account, three months running.", tried: "A bookkeeper for three months in 2025. Stopped when the reports came late.", nextSteps: "The Full Report, then the Current State Assessment from Monday 19 October.", sharedAt: day(-10, 16) },
   problemStatement: null,
+  booking: null,
   measure: null,
   team: [{ name: "Femi Adebayo", roleLabel: "Engagement lead" }, { name: "Ngozi Eze", roleLabel: "Analyst" }],
   nextSession: { id: 1, title: "Current State Assessment Session 1", scheduledFor: day(0), durationMinutes: 90, meetingLink: "https://zoom.us/" },

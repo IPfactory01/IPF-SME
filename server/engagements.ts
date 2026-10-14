@@ -61,6 +61,7 @@ import { evaluate, type CheckResult } from "../shared/businessCheck/engine";
 import type { Answers } from "../shared/businessCheck/questions";
 import { roomInsight } from "../shared/fullReport/insight";
 import { reportForCheck } from "./fullReport/service";
+import { findSessionBookings, isSessionBookingConfigured, sessionBookingUrl } from "./calendly";
 
 /**
  * The engagement room (shared/engagement.ts). Every function here decides access on the server: the team by
@@ -282,6 +283,8 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
   const engagement = await requireStaffEngagement(db, actor, engagementId);
   const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName })
     .from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  // The team sees a Session the owner booked on Calendly without typing it in.
+  if (check) await syncSessionBookings(db, engagement, check.email);
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
   const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins] = await Promise.all([
     db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
@@ -575,6 +578,50 @@ export async function clientViewerFor(db: Pick<Database, "select">, session: Pic
 }
 
 /** The client's engagement in the business they are working in, or null. Only what this viewer may see leaves the server. */
+/** When each engagement last asked Calendly, so a busy room does not ask on every request. */
+const lastSessionSync = new Map<number, number>();
+const SESSION_SYNC_INTERVAL_MS = 15_000;
+
+/** Forgets when engagements were last synced (tests). */
+export function resetSessionSyncForTests() {
+  lastSessionSync.clear();
+}
+
+/**
+ * Copies the owner's Calendly bookings onto the Current State Assessment Sessions still waiting for a time, in order:
+ * the first booking fills Session 1, the next Session 2. A booking whose time is already on a Session is skipped, and
+ * a Session the team has already timed is left alone. Records the time, the length and the meeting link, and audits it
+ * as the system (Calendly), not a person. Quietly does nothing without the Calendly settings.
+ */
+export async function syncSessionBookings(db: Pick<Database, "select" | "update" | "insert">, engagement: { id: number; createdAt: Date }, inviteeEmail: string, now = Date.now()) {
+  if (!isSessionBookingConfigured() || !inviteeEmail) return 0;
+  if (now - (lastSessionSync.get(engagement.id) ?? 0) < SESSION_SYNC_INTERVAL_MS) return 0;
+  lastSessionSync.set(engagement.id, now);
+  const sessions = await db.select().from(engagementSessions)
+    .where(and(eq(engagementSessions.engagementId, engagement.id), eq(engagementSessions.kind, "assessment_call")))
+    .orderBy(asc(engagementSessions.weekNumber), asc(engagementSessions.sortOrder), asc(engagementSessions.id));
+  const waiting = sessions.filter(item => item.status === "planned" && !item.scheduledFor);
+  if (!waiting.length) return 0;
+  const timed = new Set(sessions.filter(item => item.scheduledFor).map(item => item.scheduledFor!.getTime()));
+  const since = new Date(engagement.createdAt.getTime() - 86_400_000);
+  const bookings = (await findSessionBookings(inviteeEmail, since)).filter(booking => !timed.has(booking.start.getTime()));
+  let recorded = 0;
+  for (let index = 0; index < waiting.length; index++) {
+    const session = waiting[index];
+    const booking = bookings[index];
+    if (!booking) break;
+    const minutes = booking.end ? Math.round((booking.end.getTime() - booking.start.getTime()) / 60_000) : null;
+    await db.update(engagementSessions).set({
+      scheduledFor: booking.start,
+      ...(minutes && minutes > 0 ? { durationMinutes: minutes } : {}),
+      ...(booking.joinUrl && !session.meetingLink ? { meetingLink: booking.joinUrl } : {}),
+    }).where(and(eq(engagementSessions.id, session.id), isNull(engagementSessions.scheduledFor)));
+    await recordAudit(db, { action: "engagement_session_booked", actorUserId: null, details: { engagementId: engagement.id, sessionId: session.id, via: "calendly", scheduledFor: booking.start.toISOString() } });
+    recorded += 1;
+  }
+  return recorded;
+}
+
 function parseJson<T>(text: string | null): T | null {
   if (!text) return null;
   try {
@@ -597,12 +644,25 @@ async function insightFor(db: Database, businessCheckId: number, reportDelivered
   return roomInsight({ report: null, result });
 }
 
+/** "Book Session N": the first Current State Assessment Session still without a time, for the owner only. */
+function bookingFor(sessions: (typeof engagementSessions.$inferSelect)[], viewer: { kind: string }, owner: { email: string; fullName: string } | null) {
+  if (viewer.kind !== "owner" || !owner) return null;
+  const nextToBook = sessions
+    .filter(item => item.kind === "assessment_call" && item.status === "planned" && !item.scheduledFor)
+    .sort((a, b) => (a.weekNumber ?? 99) - (b.weekNumber ?? 99) || a.sortOrder - b.sortOrder || a.id - b.id)[0];
+  const url = nextToBook ? sessionBookingUrl({ name: owner.fullName, email: owner.email }) : null;
+  return nextToBook && url ? { sessionId: nextToBook.id, title: nextToBook.title, url } : null;
+}
+
 export async function getClientRoom(db: Database, session: AccountSession) {
   const business = session.activeBusiness;
   if (!business) return null;
   const engagement = (await db.select().from(engagements).where(eq(engagements.businessId, business.businessId)).orderBy(desc(engagements.id)).limit(1))[0];
   if (!engagement) return null;
   const viewer = await clientViewerFor(db, session, business.businessId);
+  // Sessions the owner booked on Calendly since the last visit appear with their time before anything is read.
+  const owner = (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  if (owner) await syncSessionBookings(db, engagement, owner.email);
   const [team, sessions, tasks, deliverables, comments, files, measure, checkins] = await Promise.all([
     db.select({ name: users.name, role: engagementTeam.role }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
@@ -651,6 +711,8 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,
     team: team.map(member => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
+    // The owner books the Current State Assessment Sessions on Calendly, in order, with their details filled in.
+    booking: bookingFor(sessions, viewer, owner ?? null),
     sessions: scheduled.map(item => ({
       id: item.id,
       title: item.title,

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const env = vi.hoisted(() => ({ calendlyApiToken: "test-calendly-token" }));
+const env = vi.hoisted(() => ({ calendlyApiToken: "test-calendly-token", calendlySessionUrl: "" }));
 vi.mock("@server/_core/env", () => ({ ENV: env }));
 
-import { bookedCallTime, CALENDLY_EVENT_URI, findBookedCall, resetCalendlyForTests } from "@server/calendly";
+import { bookedCallTime, CALENDLY_EVENT_URI, findBookedCall, findSessionBookings, isSessionBookingConfigured, resetCalendlyForTests, sessionBookingUrl } from "@server/calendly";
 
 const EVENT = "https://api.calendly.com/scheduled_events/ABCDEF12-3456-7890";
 const START = "2026-10-14T09:00:00.000000Z";
@@ -105,5 +105,77 @@ describe("finding a booking by the owner's email", () => {
     vi.stubGlobal("fetch", fetchMock);
     expect(await findBookedCall("ada@example.com", NOW)).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("Current State Assessment Session bookings", () => {
+  const ORG = "https://api.calendly.com/organizations/ORG12345";
+  const SESSION_TYPE = "https://api.calendly.com/event_types/SESSION123";
+  const CALL_TYPE = "https://api.calendly.com/event_types/DISCOVERY1";
+  const SESSION_URL = "https://calendly.com/ipfactory-example/current-state-assessment-session";
+  function replies(events: unknown[]) {
+    return vi.fn(async (url: string) => {
+      if (url.endsWith("/users/me")) return { ok: true, status: 200, json: async () => ({ resource: { current_organization: ORG } }) };
+      if (url.includes("/event_types?")) return { ok: true, status: 200, json: async () => ({ collection: [{ uri: CALL_TYPE, scheduling_url: "https://calendly.com/ipfactory-example/discovery-call" }, { uri: SESSION_TYPE, scheduling_url: `${SESSION_URL}/` }] }) };
+      return { ok: true, status: 200, json: async () => ({ collection: events }) };
+    });
+  }
+  beforeEach(() => {
+    env.calendlyApiToken = "test-calendly-token";
+    env.calendlySessionUrl = SESSION_URL;
+    resetCalendlyForTests();
+  });
+  afterEach(() => {
+    env.calendlySessionUrl = "";
+    vi.unstubAllGlobals();
+  });
+
+  it("is on only with the token and a calendly.com booking page", () => {
+    expect(isSessionBookingConfigured()).toBe(true);
+    env.calendlySessionUrl = "https://evil.example/session";
+    expect(isSessionBookingConfigured()).toBe(false);
+    env.calendlySessionUrl = SESSION_URL;
+    env.calendlyApiToken = "";
+    expect(isSessionBookingConfigured()).toBe(false);
+    expect(sessionBookingUrl({ name: "Ada", email: "ada@example.com" })).toBeNull();
+  });
+
+  it("fills in the owner's name and email on the booking page", () => {
+    const url = new URL(sessionBookingUrl({ name: " Ada Okafor ", email: "Ada@Example.com" })!);
+    expect(url.origin + url.pathname).toBe(SESSION_URL);
+    expect(url.searchParams.get("name")).toBe("Ada Okafor");
+    expect(url.searchParams.get("email")).toBe("ada@example.com");
+  });
+
+  it("returns only Session bookings, earliest first, with their end time and meeting link; never the Discovery Call", async () => {
+    const fetchMock = replies([
+      { start_time: "2026-10-30T09:00:00Z", end_time: "2026-10-30T10:30:00Z", status: "active", event_type: SESSION_TYPE, location: { join_url: "https://zoom.example.test/j/2" } },
+      { start_time: "2026-10-23T09:00:00Z", end_time: "2026-10-23T10:30:00Z", status: "active", event_type: SESSION_TYPE, location: { join_url: "https://zoom.example.test/j/1" } },
+      { start_time: "2026-10-21T09:00:00Z", end_time: "2026-10-21T09:20:00Z", status: "active", event_type: CALL_TYPE },
+      { start_time: "2026-10-24T09:00:00Z", status: "canceled", event_type: SESSION_TYPE },
+      { start_time: "2026-10-25T09:00:00Z", status: "active", event_type: SESSION_TYPE, location: { join_url: "javascript:alert(1)" } },
+    ]);
+    vi.stubGlobal("fetch", fetchMock);
+    const bookings = await findSessionBookings("Ada@Example.com", new Date("2026-10-15T00:00:00Z"));
+    expect(bookings.map(item => item.start.toISOString())).toEqual(["2026-10-23T09:00:00.000Z", "2026-10-25T09:00:00.000Z", "2026-10-30T09:00:00.000Z"]);
+    expect(bookings[0]).toMatchObject({ end: new Date("2026-10-23T10:30:00Z"), joinUrl: "https://zoom.example.test/j/1" });
+    expect(bookings[1].joinUrl).toBeNull();
+    const query = new URL(fetchMock.mock.calls.at(-1)![0] as string).searchParams;
+    expect(query.get("invitee_email")).toBe("ada@example.com");
+    expect(query.get("min_start_time")).toBe("2026-10-15T00:00:00.000Z");
+  });
+
+  it("keeps Session bookings out of the Discovery Call lookup", async () => {
+    vi.stubGlobal("fetch", replies([
+      { start_time: "2026-10-23T09:00:00Z", status: "active", event_type: SESSION_TYPE },
+      { start_time: "2026-10-12T09:00:00Z", status: "active", event_type: CALL_TYPE },
+    ]));
+    expect(await findBookedCall("ada@example.com", new Date("2026-10-15T00:00:00Z"))).toEqual(new Date("2026-10-12T09:00:00Z"));
+  });
+
+  it("finds nothing when the booking page is not one of IP Factory's event types", async () => {
+    env.calendlySessionUrl = "https://calendly.com/ipfactory-example/not-an-event";
+    vi.stubGlobal("fetch", replies([{ start_time: "2026-10-23T09:00:00Z", status: "active", event_type: SESSION_TYPE }]));
+    expect(await findSessionBookings("ada@example.com", new Date("2026-10-15T00:00:00Z"))).toEqual([]);
   });
 });

@@ -37,9 +37,65 @@ function organisationUri() {
   return organisation;
 }
 
-/** Forgets the cached organisation (tests). */
+/** Forgets the cached organisation and session event type (tests). */
 export function resetCalendlyForTests() {
   organisation = null;
+  sessionEventType = null;
+}
+
+const sameUrl = (a: string, b: string) => a.trim().toLowerCase().replace(/\/+$/, "") === b.trim().toLowerCase().replace(/\/+$/, "");
+
+/** Whether the room can offer "Book Session N": the token reads bookings back, and the booking page is set. */
+export function isSessionBookingConfigured() {
+  return isCalendlyConfigured() && /^https:\/\/calendly\.com\/[^\s?#]+$/i.test(ENV.calendlySessionUrl);
+}
+
+/** The Session booking page with the owner's name and email filled in, as Calendly reads them from the address. */
+export function sessionBookingUrl(input: { name: string; email: string }) {
+  if (!isSessionBookingConfigured()) return null;
+  const url = new URL(ENV.calendlySessionUrl);
+  if (input.name.trim()) url.searchParams.set("name", input.name.trim());
+  url.searchParams.set("email", input.email.trim().toLowerCase());
+  return url.toString();
+}
+
+/** The Calendly event type behind CALENDLY_SESSION_URL, found once per server instance by its booking page. */
+let sessionEventType: Promise<string | null> | null = null;
+function sessionEventTypeUri() {
+  sessionEventType ??= (async () => {
+    const org = await organisationUri();
+    if (!org) return null;
+    const types = await calendly<{ collection?: { uri?: string; scheduling_url?: string }[] }>(`/event_types?${new URLSearchParams({ organization: org, count: "100" })}`);
+    return types?.collection?.find((type) => type.uri && type.scheduling_url && sameUrl(type.scheduling_url, ENV.calendlySessionUrl))?.uri ?? null;
+  })().then((uri) => {
+    if (!uri) sessionEventType = null;
+    return uri;
+  });
+  return sessionEventType;
+}
+
+export type SessionBooking = { start: Date; end: Date | null; joinUrl: string | null };
+
+/**
+ * The owner's active Session bookings since `since`, earliest first: only the Session event type, so the Discovery
+ * Call or any other booking is never mistaken for a Session. Empty when anything is missing or fails.
+ */
+export async function findSessionBookings(inviteeEmail: string, since: Date): Promise<SessionBooking[]> {
+  if (!isSessionBookingConfigured()) return [];
+  try {
+    const [org, eventType] = [await organisationUri(), await sessionEventTypeUri()];
+    if (!org || !eventType) return [];
+    const query = new URLSearchParams({ organization: org, invitee_email: inviteeEmail.trim().toLowerCase(), status: "active", sort: "start_time:asc", min_start_time: since.toISOString(), count: "20" });
+    const events = await calendly<{ collection?: { start_time?: string; end_time?: string; status?: string; event_type?: string; location?: { join_url?: string } }[] }>(`/scheduled_events?${query}`);
+    return (events?.collection ?? [])
+      .filter((event) => event.status === "active" && event.event_type === eventType && event.start_time)
+      .map((event) => ({ start: new Date(event.start_time!), end: event.end_time ? new Date(event.end_time) : null, joinUrl: event.location?.join_url && /^https:\/\//.test(event.location.join_url) ? event.location.join_url : null }))
+      .filter((booking) => !Number.isNaN(booking.start.getTime()))
+      .sort((a, b) => a.start.getTime() - b.start.getTime());
+  } catch (error) {
+    console.warn("[Calendly] Could not look up Session bookings:", error instanceof Error ? error.message : error);
+    return [];
+  }
 }
 
 /**
@@ -52,9 +108,11 @@ export async function findBookedCall(inviteeEmail: string, now = new Date()): Pr
     const org = await organisationUri();
     if (!org) return null;
     const query = new URLSearchParams({ organization: org, invitee_email: inviteeEmail.trim().toLowerCase(), status: "active", sort: "start_time:desc", count: "20" });
-    const events = await calendly<{ collection?: { start_time?: string; status?: string }[] }>(`/scheduled_events?${query}`);
+    const events = await calendly<{ collection?: { start_time?: string; status?: string; event_type?: string }[] }>(`/scheduled_events?${query}`);
+    // A Current State Assessment Session is not a Discovery Call.
+    const sessionType = isSessionBookingConfigured() ? await sessionEventTypeUri() : null;
     const times = (events?.collection ?? [])
-      .filter((event) => event.status === "active" && event.start_time)
+      .filter((event) => event.status === "active" && event.start_time && !(sessionType && event.event_type === sessionType))
       .map((event) => new Date(event.start_time!))
       .filter((time) => !Number.isNaN(time.getTime()));
     const upcoming = times.filter((time) => time >= now).sort((a, b) => a.getTime() - b.getTime());

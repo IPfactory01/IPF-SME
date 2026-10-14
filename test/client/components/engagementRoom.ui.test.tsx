@@ -61,6 +61,7 @@ const room = (over: Record<string, unknown> = {}) => ({
   debrief: null as null | { heldAt: Date | null; heard: string | null; problemInOwnerWords: string | null; successLooksLike: string | null; tried: string | null; nextSteps: string | null; sharedAt: Date },
   problemStatement: null,
   insight: null as RoomInsight | null,
+  booking: null as null | { sessionId: number; title: string; url: string },
   measure: null,
   team: [{ name: "Lewis Lead", roleLabel: "Engagement lead" }, { name: "Ola Analyst", roleLabel: "Analyst" }],
   nextSession: { id: 1, title: "Current State Assessment Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1" },
@@ -427,5 +428,23 @@ describe("a Data Request's detail", () => {
     expect(lists.length).toBeGreaterThan(0);
     expect(within(lists[0]).getAllByRole("listitem").map(item => item.textContent)).toEqual(["What do you sell, and who buys it?", "Which decisions wait for you?", "What would you fix first?"]);
     expect(screen.getAllByText("A few words each is enough.").length).toBeGreaterThan(0);
+  });
+});
+
+describe("booking the Current State Assessment Sessions", () => {
+  it("offers the owner the next Session to book on Calendly, with their details filled in, until it is booked", () => {
+    const url = "https://calendly.com/ipfactory-example/session?name=Ada&email=ada%40example.test";
+    render(<EngagementRoom room={room({ nextSession: null, booking: { sessionId: 1, title: "Current State Assessment Session 1", url } })} />);
+    const book = screen.getByRole("link", { name: "Book Current State Assessment Session 1" });
+    expect(book.getAttribute("href")).toBe(url);
+    expect(book.getAttribute("target")).toBe("_blank");
+    expect(screen.getByText(/It shows here, with the Join link, once you have booked/)).toBeTruthy();
+    expect(screen.queryByText(/No Session is booked yet/)).toBeNull();
+  });
+
+  it("shows the booked Session instead of a Book button once there is one", () => {
+    render(<EngagementRoom room={room({ booking: null })} />);
+    expect(screen.queryByRole("link", { name: /^Book / })).toBeNull();
+    expect(screen.getByText("Next Session:")).toBeTruthy();
   });
 });

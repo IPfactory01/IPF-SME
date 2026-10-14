@@ -218,6 +218,14 @@ Rules:
   record (written up in the admin, shared to the owner as a separate step) and the Work Plan (every request, action and call
   placed in a week, in order, tagged internal or external), the two things the room brief (document 07) needs. **Rebuilt 10 October to the room brief:** now, the next
   action, the next Session, the Engagement timeline 1 to 7 with the Work Plan by week, in the method's vocabulary.
+  **Built 14 October: three tabs, Founder · Business · Plan,** under the Now panel, on the site's plain background.
+  **Founder** shows Sections One and Two of the owner's Full Report (founder readiness, the four money basics, strategic
+  intent, the 12-month target and how the gap closes); **Business** shows every other area with its health and finding,
+  and a tap opens the area's reading, its numbered Recommendation and its benchmarks; **Plan** is the timeline and team as
+  before, and the tab the room opens on. Without a delivered Full Report the two tabs show what the Business Check found.
+  The tabs are rebuilt from the stored answers (`shared/fullReport/insight.ts`), so they never say something the report
+  does not; only the owner and full-access staff receive them from the server, and a contributor sees the Plan alone. A
+  report buyer who never paid for the Current State Assessment has no account, so no room: the report is theirs by email.
 
 ### F8. Engagement record and check-ins (internal)
 

@@ -190,6 +190,20 @@ export async function adminDownloadReport(db: Pick<Database, "select">, business
   return { fileName: fileName(report), pdf: (await renderFullReportPdf(report, generatedAt)).toString("base64") };
 }
 
+/**
+ * The delivered report for a business check, rebuilt from its stored intake, for the client room's Founder and Business
+ * tabs. Null when there is no delivered report, or when the stored intake no longer reads (the room still opens).
+ */
+export async function reportForCheck(db: Pick<Database, "select">, businessCheckId: number): Promise<FullReport | null> {
+  const record = (await db.select().from(fullReports).where(eq(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
+  if (!record || record.status !== "delivered") return null;
+  try {
+    return (await assemble(db, record)).report;
+  } catch {
+    return null;
+  }
+}
+
 /** Where a business check's report stands, for the admin record. */
 export async function reportStatusFor(db: Pick<Database, "select">, businessCheckId: number) {
   const record = (await db.select({ status: fullReports.status, createdAt: fullReports.createdAt, deliveredAt: fullReports.deliveredAt, deliveryStatus: fullReports.deliveryStatus })

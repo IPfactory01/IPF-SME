@@ -9,6 +9,7 @@ import { and, eq, sql } from "drizzle-orm";
 import * as schema from "../../drizzle/schema";
 import { createPgliteHarness, createRemoteHarness, type DbHarness } from "./harness";
 import { businessCheckProfiles } from "../fixtures/businessCheckProfiles";
+import { sampleIntake } from "../fixtures/reportIntake";
 
 const holder = vi.hoisted(() => {
   process.env.DATABASE_URL = "postgresql://contract:contract@localhost:5432/contract";
@@ -339,6 +340,34 @@ for (const target of targets) {
         expect(notice.body).toContain("/dashboard");
         expect(notice.body).not.toContain("pricing");
         expect(JSON.stringify(room)).not.toContain("under-reporting");
+      });
+
+      it("gives the owner and full-access staff the Founder and Business tabs, from the Business Check and then the Full Report; contributors get neither", async () => {
+        const { owner, businessCheckId, businessId } = await client("insight");
+        const full = await member(businessId, null);
+        const contributor = await member(businessId, "contributor");
+
+        const fromCheck = (await (await owner.call()).engagement.client.room())!.insight!;
+        expect(fromCheck.source).toBe("Business Check");
+        expect(fromCheck.founder.sections).toEqual([]);
+        expect(fromCheck.areas.length).toBeGreaterThan(0);
+        expect(fromCheck.areas.map(area => area.area)).not.toContain("Founder readiness");
+        expect((await (await full.browser.call()).engagement.client.room())!.insight).toEqual(fromCheck);
+        expect((await (await contributor.browser.call()).engagement.client.room())!.insight).toBeNull();
+
+        // A delivered Full Report replaces the check: the same report the owner was emailed, rebuilt from the stored intake.
+        const payment = (await db.select().from(schema.paymentRequests).where(eq(schema.paymentRequests.businessCheckId, businessCheckId)))[0];
+        await db.insert(schema.fullReports).values({ businessCheckId, paymentRequestId: payment.id, tokenHash: unique("hash").padEnd(64, "0").slice(0, 64), status: "delivered", intakeJson: JSON.stringify({ ...sampleIntake, revenueTarget: 4_000_000 }), intakeSubmittedAt: new Date("2026-10-14T09:00:00Z"), reportVersion: 4, deliveredAt: new Date("2026-10-14T09:00:00Z") });
+        const fromReport = (await (await owner.call()).engagement.client.room())!.insight!;
+        expect(fromReport.source).toBe("Full Report");
+        expect(fromReport.founder.sections.map(section => section.title)).toEqual(["Founder readiness", "Strategic intent"]);
+        expect(fromReport.founder.question?.bridge?.steps.at(-1)).toMatchObject({ label: "Target", total: true });
+        expect(fromReport.areas.some(area => area.reading?.code)).toBe(true);
+        expect((await (await contributor.browser.call()).engagement.client.room())!.insight).toBeNull();
+
+        // A stored intake that no longer reads falls back to the check rather than closing the room.
+        await db.update(schema.fullReports).set({ intakeJson: "{not json" }).where(eq(schema.fullReports.businessCheckId, businessCheckId));
+        expect((await (await owner.call()).engagement.client.room())!.insight!.source).toBe("Business Check");
       });
 
       it("shows the owner's staff only what the owner shares with them, and contributors only their own requests", async () => {

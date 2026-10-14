@@ -204,6 +204,20 @@ The room follows document 07, in the site's dress (`client/src/components/Accoun
 - **Status words, never icons alone:** "Done · Fri 9 Oct", "Shared Fri 30 Oct", "To be booked", "Received",
   "Sign-off given".
 - Account and business details live in the settings pages; the room shows nothing administrative.
+- **Founder · Business · Plan** (built 14 October, `client/src/components/room/`): a segmented control in a glass bar
+  (`paper` at 85% with blur, solid for reduced transparency) that stays under the header; the selected tab sits on a
+  `paper-raised` thumb over `paper-sunken`. The page keeps the site's plain `paper` background: no dark or tinted canvas.
+  Business carries the number of stuck areas in `health-stuck`.
+- **Panels follow the finger** on touch: critically damped springs (no bounce, 0.35 s), a flick projected from its
+  speed, resistance at the first and last tab, interruptible mid-way; with a mouse, the control changes tab and a
+  sideways drag still selects text. Reduced motion jumps instead of sliding. Hidden panels are inert.
+- **Founder** sets the report's sections as cards: the number and title, the health chip, the standfirst in the serif,
+  then the report's own blocks (facts, tables, numbered lists, Recommendations in a `brand-tint-softer` box with a
+  `highlight-ink` rule) and the bridge from today to the 12-month target (`brand-slate` today, `health-clear` levers,
+  `brand` target).
+- **Business** opens with a health tally bar and its legend, then one row per area: a health-coloured edge, the area,
+  the finding and the chip. The area sheet rises from the bottom with a grabber, follows a downward drag and closes past
+  halfway or on a quick flick; benchmark bars use the health tints with the owner's number as an `ink` marker.
 
 ## 10. Tests that guard the brand
 

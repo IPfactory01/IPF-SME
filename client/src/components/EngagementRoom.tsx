@@ -8,6 +8,8 @@ import type { inferRouterOutputs } from "@trpc/server";
 import { ArrowRight, CalendarClock, Check, ChevronDown, Download, Paperclip } from "lucide-react";
 import React, { useState } from "react";
 import { toast } from "sonner";
+import { BusinessPanel, FounderPanel } from "./room/RoomInsight";
+import RoomTabs from "./room/RoomTabs";
 import type { AppRouter } from "../../../server/routers";
 
 type Room = NonNullable<inferRouterOutputs<AppRouter>["engagement"]["client"]["room"]>;
@@ -43,6 +45,56 @@ export default function EngagementRoom({ room, greeting, aside, now = Date.now()
   const steps = stepsOf(room, now);
   const current = steps.find(step => step.state === "now")?.n ?? null;
   const shown = (n: number) => (open === null ? n === current : open === n);
+  // The Plan: the Engagement timeline and the team. With a Business Check or Full Report behind it, it sits beside
+  // the Founder and Business tabs; a limited-access member sees it alone.
+  const plan = (
+    <>
+        <section aria-labelledby="timeline-title">
+          <p className={KICKER}>{METHOD.engagement} timeline</p>
+          <h2 id="timeline-title" className="mt-1 font-serif text-2xl font-bold tracking-tight">{METHOD.businessCheck} to {METHOD.day30}</h2>
+          <ol className="mt-4" aria-label="Engagement timeline">
+            {steps.map((step, index) => {
+              const last = index === steps.length - 1;
+              const tone = step.state === "done" ? "border-brand bg-brand text-white" : step.state === "now" ? "border-highlight-ink bg-highlight-ink text-white" : "border-line bg-white text-ink-muted";
+              return (
+                <li key={step.n} id={`step-${step.n}`} aria-current={step.state === "now" ? "step" : undefined} className="relative flex gap-4 scroll-mt-24">
+                  {!last && <span aria-hidden className={`absolute left-[15px] top-8 h-full w-px ${step.state === "done" ? "bg-brand" : "bg-line"}`} />}
+                  <span className={`relative z-10 mt-1 flex h-8 w-8 shrink-0 items-center justify-center border font-serif text-sm font-bold ${tone}`}>{step.state === "done" ? <Check className="h-4 w-4" aria-hidden /> : step.n}</span>
+                  <div className={`min-w-0 flex-1 pb-6 ${step.state === "next" ? "opacity-80" : ""}`}>
+                    <button type="button" aria-expanded={shown(step.n)} onClick={() => setOpen(shown(step.n) ? -1 : step.n)} className="flex w-full items-start justify-between gap-3 text-left">
+                      <span>
+                        <span className="flex flex-wrap items-center gap-2">
+                          <span className={`font-serif text-lg font-bold tracking-tight ${step.state === "next" ? "text-ink-muted" : ""}`}>{step.title}</span>
+                          {step.state === "now" && <span className={EYEBROW}>Now</span>}
+                        </span>
+                        <span className="block text-xs text-ink-muted">{step.when}</span>
+                      </span>
+                      <ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-ink-muted transition-transform ${shown(step.n) ? "rotate-180" : ""}`} aria-hidden />
+                    </button>
+                    {shown(step.n) && (
+                      <div className="mt-3 border border-line-soft bg-paper-raised p-4 shadow-sm" role="region" aria-label={`Step ${step.n}: ${step.title}`}>
+                        <p className="text-sm text-ink-600">{step.summary}</p>
+                        {step.body && <div className="mt-3">{step.body}</div>}
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+
+        <section aria-labelledby="team-title" className={CARD}>
+          <p className={KICKER}>Your team at IP Factory</p>
+          {room.team.length ? (
+            <>
+              <h2 id="team-title" className="mt-1 font-serif text-xl font-bold tracking-tight">{room.team.map(member => member.name).join(" and ")}</h2>
+              <ul className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm">{room.team.map(member => <li key={`${member.name}-${member.roleLabel}`}><span className="font-medium">{member.name}</span> <span className="text-ink-muted">· {member.roleLabel}</span></li>)}</ul>
+            </>
+          ) : <h2 id="team-title" className="mt-1 font-serif text-xl font-bold tracking-tight">We are naming your team now.</h2>}
+        </section>
+    </>
+  );
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <section aria-labelledby="room-title" className="relative overflow-hidden border border-line-soft bg-paper-raised p-6 shadow-sm sm:p-8">
@@ -94,54 +146,26 @@ export default function EngagementRoom({ room, greeting, aside, now = Date.now()
         </div>
       </section>
 
-      <section aria-labelledby="timeline-title">
-        <p className={KICKER}>{METHOD.engagement} timeline</p>
-        <h2 id="timeline-title" className="mt-1 font-serif text-2xl font-bold tracking-tight">{METHOD.businessCheck} to {METHOD.day30}</h2>
-        <ol className="mt-4" aria-label="Engagement timeline">
-          {steps.map((step, index) => {
-            const last = index === steps.length - 1;
-            const tone = step.state === "done" ? "border-brand bg-brand text-white" : step.state === "now" ? "border-highlight-ink bg-highlight-ink text-white" : "border-line bg-white text-ink-muted";
-            return (
-              <li key={step.n} id={`step-${step.n}`} aria-current={step.state === "now" ? "step" : undefined} className="relative flex gap-4 scroll-mt-24">
-                {!last && <span aria-hidden className={`absolute left-[15px] top-8 h-full w-px ${step.state === "done" ? "bg-brand" : "bg-line"}`} />}
-                <span className={`relative z-10 mt-1 flex h-8 w-8 shrink-0 items-center justify-center border font-serif text-sm font-bold ${tone}`}>{step.state === "done" ? <Check className="h-4 w-4" aria-hidden /> : step.n}</span>
-                <div className={`min-w-0 flex-1 pb-6 ${step.state === "next" ? "opacity-80" : ""}`}>
-                  <button type="button" aria-expanded={shown(step.n)} onClick={() => setOpen(shown(step.n) ? -1 : step.n)} className="flex w-full items-start justify-between gap-3 text-left">
-                    <span>
-                      <span className="flex flex-wrap items-center gap-2">
-                        <span className={`font-serif text-lg font-bold tracking-tight ${step.state === "next" ? "text-ink-muted" : ""}`}>{step.title}</span>
-                        {step.state === "now" && <span className={EYEBROW}>Now</span>}
-                      </span>
-                      <span className="block text-xs text-ink-muted">{step.when}</span>
-                    </span>
-                    <ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-ink-muted transition-transform ${shown(step.n) ? "rotate-180" : ""}`} aria-hidden />
-                  </button>
-                  {shown(step.n) && (
-                    <div className="mt-3 border border-line-soft bg-paper-raised p-4 shadow-sm" role="region" aria-label={`Step ${step.n}: ${step.title}`}>
-                      <p className="text-sm text-ink-600">{step.summary}</p>
-                      {step.body && <div className="mt-3">{step.body}</div>}
-                    </div>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ol>
-      </section>
-
-      <section aria-labelledby="team-title" className={CARD}>
-        <p className={KICKER}>Your team at IP Factory</p>
-        {room.team.length ? (
-          <>
-            <h2 id="team-title" className="mt-1 font-serif text-xl font-bold tracking-tight">{room.team.map(member => member.name).join(" and ")}</h2>
-            <ul className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm">{room.team.map(member => <li key={`${member.name}-${member.roleLabel}`}><span className="font-medium">{member.name}</span> <span className="text-ink-muted">· {member.roleLabel}</span></li>)}</ul>
-          </>
-        ) : <h2 id="team-title" className="mt-1 font-serif text-xl font-bold tracking-tight">We are naming your team now.</h2>}
-      </section>
+      {room.insight ? (
+        <RoomTabs
+          label="Your engagement"
+          initial="plan"
+          tabs={[
+            { id: "founder", label: "Founder", content: <FounderPanel insight={room.insight} /> },
+            { id: "business", label: "Business", count: stuckCount(room.insight), content: <BusinessPanel insight={room.insight} /> },
+            { id: "plan", label: "Plan", content: <div className="space-y-6">{plan}</div> },
+          ]}
+        />
+      ) : plan}
       {aside}
     </div>
   );
 }
+
+const stuckCount = (insight: NonNullable<Room["insight"]>) => {
+  const value = insight.areas.filter(area => area.health === "stuck").length;
+  return { value, label: `${value} stuck` };
+};
 
 // ---- What the page says now ------------------------------------------------------------------------------------------
 

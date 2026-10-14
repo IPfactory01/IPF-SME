@@ -35,10 +35,10 @@ describe("the home page with reduce motion on", () => {
   });
 });
 
-describe("the site's glass headers", () => {
+describe("the site's glass headers and the client room's tab bar", () => {
   const css = readFileSync("client/src/index.css", "utf8");
   it("turn solid for people who ask for less transparency, and gain a firm edge for people who ask for more contrast", () => {
-    expect(css).toMatch(/@media \(prefers-reduced-transparency: reduce\)\s*\{\s*header\[class\*="backdrop-blur"\]\s*\{[^}]*backdrop-filter: none;[^}]*background-color: var\(--color-paper\);/);
-    expect(css).toMatch(/@media \(prefers-contrast: more\)\s*\{\s*header\[class\*="backdrop-blur"\]\s*\{[^}]*backdrop-filter: none;[^}]*border-bottom-color: var\(--color-ink-muted\);/);
+    expect(css).toMatch(/@media \(prefers-reduced-transparency: reduce\)\s*\{\s*header\[class\*="backdrop-blur"\],\s*\[data-room-tabs\]\s*\{[^}]*backdrop-filter: none;[^}]*background-color: var\(--color-paper\);/);
+    expect(css).toMatch(/@media \(prefers-contrast: more\)\s*\{\s*header\[class\*="backdrop-blur"\],\s*\[data-room-tabs\]\s*\{[^}]*backdrop-filter: none;[^}]*border-bottom-color: var\(--color-ink-muted\);/);
   });
 });

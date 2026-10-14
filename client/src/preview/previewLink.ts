@@ -8,9 +8,12 @@ import { observable } from "@trpc/server/observable";
 import type { AppRouter } from "../../../server/routers";
 import { deriveDiagnostic, type DiagnosticInput } from "../../../server/diagnostic";
 import { BRAND } from "@shared/brand";
-import { evaluate } from "@shared/businessCheck/engine";
+import { evaluate, nextStep } from "@shared/businessCheck/engine";
 import type { Answers } from "@shared/businessCheck/questions";
 import { journeyOf } from "@shared/engagement";
+import { buildFullReport } from "@shared/fullReport/build";
+import { roomInsight } from "@shared/fullReport/insight";
+import type { ReportIntake } from "@shared/fullReport/intake";
 
 const PREVIEW_NOTICE = "This is a preview: nothing was saved or sent.";
 
@@ -28,6 +31,62 @@ const SAMPLE_OWNER = {
   activeBusiness: { businessId: 1, businessName: "Ada Foods", role: "owner", status: "active", profileComplete: false, profilePercent: 60 },
   landingPath: "/dashboard",
 };
+/** Ada Foods' Business Check: the fixed answers below, every other question answered with its second option. */
+function sampleAnswers(): Answers {
+  const answers: Answers = { p_stage: "operating", p_type: "maker", p_sector: "food and drink", p_age: "2to5", p_staff: "6to10", p_revenue: "3to5m", p_trend: "flat", f_instinct: "I", f_seen: "D", f_finance: ["cash"], p_name: "Ada Foods" };
+  for (let guard = 0; guard < 100; guard++) {
+    const step = nextStep(answers);
+    if (!step) break;
+    const { question } = step;
+    if (question.kind === "text") { answers[question.id] = "A kitchen, two outlets and a delivery van in Lagos"; continue; }
+    const option = question.options[Math.min(1, question.options.length - 1)];
+    answers[question.id] = question.kind === "multi" ? [option.value] : option.value;
+  }
+  return answers;
+}
+/** Ada Foods' Report Intake. A fictional business. */
+const SAMPLE_INTAKE: ReportIntake = {
+  location: "A kitchen in Surulere and two outlets in Lagos, with deliveries by van",
+  registration: "business_name",
+  products: [
+    { name: "Lunch packs", basis: "price", price: 3_500, percent: null, dealSize: null },
+    { name: "Party trays", basis: "price", price: 45_000, percent: null, dealSize: null },
+    { name: "Office catering", basis: "varies", price: null, percent: null, dealSize: null },
+  ],
+  bestCustomer: "Offices in Yaba that order lunch for their staff every weekday",
+  competitors: ["Two kitchens on the same street", "Delivery apps"],
+  pricePosition: "lower",
+  topEarner: 0,
+  costShare: "50_75",
+  marginPercent: null,
+  topCustomerShare: "20_50",
+  channels: ["word_of_mouth", "walk_in", "social_media"],
+  enquiries: "50_200",
+  conversion: 3,
+  repeat: "occasionally",
+  roles: "Me (buying and the big customers), a cook, two outlet staff and a driver",
+  tools: ["whatsapp", "paper"],
+  lastMonthRevenue: 4_000_000,
+  monthlyCosts: 3_700_000,
+  biggestCost: "stock",
+  cash: "500k_2m",
+  owed: "under_1m",
+  loans: "none",
+  goal: "Open a third outlet and pay salaries on the 25th from the business account",
+  revenueTarget: 7_000_000,
+};
+let sampleInsight: ReturnType<typeof roomInsight> | undefined;
+/** The Founder and Business tabs, from a Full Report built the way the live site builds it. */
+function previewInsight() {
+  if (sampleInsight === undefined) {
+    const answers = sampleAnswers();
+    const result = evaluate(answers);
+    const report = buildFullReport({ reference: "TS-R-000001", date: day(-12), contact: { fullName: "Ada Okafor", businessName: "Ada Foods" }, answers, result, intake: SAMPLE_INTAKE });
+    sampleInsight = roomInsight({ report, result: null });
+  }
+  return sampleInsight;
+}
+
 /** A client on day four of the Current State Assessment: what an owner sees in their room. Sample data only. */
 const SAMPLE_ROOM = {
   engagementId: 1,
@@ -71,7 +130,7 @@ const SAMPLE_SEATS = { included: 1, used: 0, members: [], invitations: [] };
 const responders: Record<string, Responder> = {
   "auth.me": () => null,
   "account.me": () => (previewSession.signedIn ? SAMPLE_OWNER : null),
-  "engagement.client.room": () => (previewSession.signedIn ? SAMPLE_ROOM : null),
+  "engagement.client.room": () => (previewSession.signedIn ? { ...SAMPLE_ROOM, insight: previewInsight() } : null),
   "invitations.seats.list": () => SAMPLE_SEATS,
   "registration.capacity": () => ({ boardroomCount: 0 }),
   "registration.submit": (input) => {

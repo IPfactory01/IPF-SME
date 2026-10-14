@@ -137,10 +137,11 @@
 
 /*
  * Glass headers become solid for people who ask for less transparency, and gain a firm edge for people who ask for
- * more contrast. Only the site's own sticky headers are glass, so the rule targets them.
+ * more contrast. Only the site's own sticky headers and the client room's tab bar are glass, so the rule targets them.
  */
 @media (prefers-reduced-transparency: reduce) {
-  header[class*="backdrop-blur"] {
+  header[class*="backdrop-blur"],
+  [data-room-tabs] {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     background-color: var(--color-paper);
@@ -148,7 +149,8 @@
 }
 
 @media (prefers-contrast: more) {
-  header[class*="backdrop-blur"] {
+  header[class*="backdrop-blur"],
+  [data-room-tabs] {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
     background-color: var(--color-paper-raised);

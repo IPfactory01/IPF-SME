@@ -5,7 +5,12 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { journeyOf } from "@shared/engagement";
 import { AREA_NAMES } from "@shared/businessCheck/questions";
-import { READINESS_LABELS } from "@shared/businessCheck/engine";
+import { evaluate, READINESS_LABELS } from "@shared/businessCheck/engine";
+import { buildFullReport } from "@shared/fullReport/build";
+import { roomInsight, type RoomInsight } from "@shared/fullReport/insight";
+import { MotionGlobalConfig } from "framer-motion";
+import { businessCheckProfiles } from "../../fixtures/businessCheckProfiles";
+import { sampleIntake } from "../../fixtures/reportIntake";
 
 const api = vi.hoisted(() => ({ calls: { respond: [] as unknown[], comment: [] as unknown[], accept: [] as unknown[], audience: [] as unknown[], requestUpload: [] as unknown[], confirmUpload: [] as unknown[], fileLink: [] as unknown[] } }));
 const replies: Record<string, unknown> = {
@@ -54,6 +59,7 @@ const room = (over: Record<string, unknown> = {}) => ({
   report: null as null | { requestedAt: Date; deliveredAt: Date | null },
   debrief: null as null | { heldAt: Date | null; heard: string | null; problemInOwnerWords: string | null; successLooksLike: string | null; tried: string | null; nextSteps: string | null; sharedAt: Date },
   problemStatement: null,
+  insight: null as RoomInsight | null,
   measure: null,
   team: [{ name: "Lewis Lead", roleLabel: "Engagement lead" }, { name: "Ola Analyst", roleLabel: "Analyst" }],
   nextSession: { id: 1, title: "Current State Assessment Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1" },
@@ -259,5 +265,89 @@ describe("the Measure of Success", () => {
   it("shows no Measure of Success before The Fix has one", () => {
     render(<EngagementRoom room={room({ stage: "fix", stageLabel: "The Fix", journey: journeyOf("fix") })} />);
     expect(screen.queryByText("Measure of Success")).toBeNull();
+  });
+});
+
+const checkAnswers = { ...businessCheckProfiles.smallOperatingTrader, p_name: "Ada Foods" } as Record<string, string>;
+const report = buildFullReport({ reference: "TS-R-000004", date: new Date("2026-10-14T09:00:00Z"), contact: { fullName: "Ada Example", businessName: "Ada Foods" }, answers: checkAnswers, result: evaluate(checkAnswers), intake: { ...sampleIntake, revenueTarget: 4_000_000 } });
+const fromReport = roomInsight({ report, result: null })!;
+const fromCheck = roomInsight({ report: null, result: evaluate(checkAnswers) })!;
+
+describe("the room's Founder, Business and Plan tabs", () => {
+  beforeEach(() => {
+    MotionGlobalConfig.skipAnimations = true;
+    window.history.replaceState(null, "", "/dashboard");
+  });
+
+  it("shows no tabs without a Business Check or Full Report behind the room (and to limited-access staff, who get none from the server)", () => {
+    render(<EngagementRoom room={room()} />);
+    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(screen.getByRole("list", { name: "Engagement timeline" })).toBeTruthy();
+  });
+
+  it("opens on the Plan, counts the stuck areas on Business, and moves between tabs by tap and by arrow key", () => {
+    render(<EngagementRoom room={room({ insight: fromReport })} />);
+    const tabs = within(screen.getByRole("tablist", { name: "Your engagement" })).getAllByRole("tab");
+    expect(tabs.map(tab => tab.textContent)).toEqual(["Founder", `Business${fromReport.areas.filter(area => area.health === "stuck").length || ""}`, "Plan"]);
+    expect(tabs[2].getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("list", { name: "Engagement timeline" })).toBeTruthy();
+    // Hidden panels are out of reach: not in the accessibility tree.
+    expect(screen.queryByRole("heading", { name: "You, as the founder" })).toBeNull();
+
+    fireEvent.click(tabs[0]);
+    expect(tabs[0].getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("heading", { name: "You, as the founder" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /1\. Founder readiness/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /2\. Strategic intent/ })).toBeTruthy();
+    expect(screen.getByText("How the gap closes")).toBeTruthy();
+    expect(screen.queryByRole("list", { name: "Engagement timeline" })).toBeNull();
+    expect(window.location.hash).toBe("#founder");
+
+    fireEvent.keyDown(tabs[0], { key: "ArrowRight" });
+    expect(tabs[1].getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(tabs[1]);
+    fireEvent.keyDown(tabs[1], { key: "End" });
+    expect(tabs[2].getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("opens the tab a link names, and the Plan when a link points inside it", () => {
+    window.history.replaceState(null, "", "/dashboard#business");
+    render(<EngagementRoom room={room({ insight: fromReport })} />);
+    expect(screen.getByRole("tab", { name: /Business/ }).getAttribute("aria-selected")).toBe("true");
+    window.location.hash = "#step-4";
+    fireEvent(window, new HashChangeEvent("hashchange"));
+    expect(screen.getByRole("tab", { name: "Plan" }).getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("lists every business area with its health; tapping one opens its reading in a sheet that Escape closes", async () => {
+    render(<EngagementRoom room={room({ insight: fromReport })} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Business/ }));
+    const list = screen.getByRole("list", { name: "Areas of your business" });
+    const rows = within(list).getAllByRole("button");
+    expect(rows).toHaveLength(fromReport.areas.length);
+    const withReading = fromReport.areas.find(area => area.reading)!;
+    const row = rows[fromReport.areas.indexOf(withReading)];
+    fireEvent.click(row);
+    const sheet = screen.getByRole("dialog", { name: withReading.area });
+    expect(within(sheet).getByText("What your answers show")).toBeTruthy();
+    expect(within(sheet).getByText(`Recommendation ${withReading.reading!.code}`)).toBeTruthy();
+    expect(within(sheet).getByText(withReading.reading!.move)).toBeTruthy();
+    expect(document.activeElement).toBe(within(sheet).getByRole("button", { name: "Close" }));
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(document.activeElement).toBe(row);
+  });
+
+  it("without a Full Report, shows what the Business Check found and says what the report adds", () => {
+    render(<EngagementRoom room={room({ insight: fromCheck })} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Founder" }));
+    const founder = within(screen.getByRole("tabpanel", { name: "Founder" }));
+    expect(founder.getByText("From your Business Check")).toBeTruthy();
+    expect(founder.getByText(fromCheck.founder.readiness.label)).toBeTruthy();
+    expect(founder.getByText(/Your Full Report adds the four money basics/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: /Business/ }));
+    // Nothing to open without a reading: the rows are not buttons that do nothing.
+    for (const button of within(screen.getByRole("list", { name: "Areas of your business" })).getAllByRole("button")) expect((button as HTMLButtonElement).disabled).toBe(true);
   });
 });

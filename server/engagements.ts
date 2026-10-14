@@ -57,6 +57,10 @@ import { createSignedUpload, isFileStorageConfigured, objectExists, signedDownlo
 import { randomUUID } from "node:crypto";
 import { getTrustedApplicationOrigin } from "./security";
 import { BRAND } from "../shared/brand";
+import { evaluate, type CheckResult } from "../shared/businessCheck/engine";
+import type { Answers } from "../shared/businessCheck/questions";
+import { roomInsight } from "../shared/fullReport/insight";
+import { reportForCheck } from "./fullReport/service";
 
 /**
  * The engagement room (shared/engagement.ts). Every function here decides access on the server: the team by
@@ -570,6 +574,28 @@ export async function clientViewerFor(db: Pick<Database, "select">, session: Pic
 }
 
 /** The client's engagement in the business they are working in, or null. Only what this viewer may see leaves the server. */
+function parseJson<T>(text: string | null): T | null {
+  if (!text) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
+/** What the client room's Founder and Business tabs show: the delivered Full Report, else the Business Check result. */
+async function insightFor(db: Database, businessCheckId: number, reportDelivered: boolean) {
+  const report = reportDelivered ? await reportForCheck(db, businessCheckId) : null;
+  if (report) return roomInsight({ report, result: null });
+  const check = (await db.select({ answersJson: businessChecks.answersJson, resultJson: businessChecks.resultJson }).from(businessChecks).where(eq(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check) return null;
+  const answers = parseJson<Answers>(check.answersJson);
+  // The result the owner saw; an older stored shape is worked out again from their answers.
+  const stored = parseJson<CheckResult>(check.resultJson);
+  const result = stored && Array.isArray(stored.outline) && stored.founder ? stored : answers ? evaluate(answers) : null;
+  return roomInsight({ report: null, result });
+}
+
 export async function getClientRoom(db: Database, session: AccountSession) {
   const business = session.activeBusiness;
   if (!business) return null;
@@ -593,6 +619,8 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     .from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   const report = (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq(fullReports.businessCheckId, engagement.businessCheckId)).limit(1))[0] ?? null;
   const debrief = fullView ? await sharedDebriefFor(db, engagement.businessCheckId) : null;
+  // The Founder and Business tabs: the owner's own Full Report or Business Check, never shown to limited-access staff.
+  const insight = fullView ? await insightFor(db, engagement.businessCheckId, Boolean(report?.deliveredAt)) : null;
   const visibleDeliverables = deliverables.filter(item => clientCanSee(item.audience, viewer));
   const clientFiles = (where: "taskId" | "deliverableId", id: number) => files
     .filter(file => file[where] === id && clientFileVisible(file, viewer, session.user.id))
@@ -616,6 +644,7 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     check: check ? { primaryArea: check.primaryArea, readiness: check.readiness, completedAt: check.completedAt, reportRequestedAt: check.reportRequestedAt, callRequestedAt: check.callRequestedAt, callScheduledFor: check.callScheduledFor } : null,
     report: report ? { requestedAt: report.createdAt, deliveredAt: report.deliveredAt } : null,
     debrief,
+    insight,
     problemStatement: fullView ? engagement.problemStatement : null,
     // The one number: the business's own result, so the owner and their full-access staff; never the hours behind it.
     measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,

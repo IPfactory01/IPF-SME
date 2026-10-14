@@ -236,8 +236,15 @@ flowchart TD
   R -->|owner| SO[Sign off, comment, share with my team]
 ```
 
+Under the Now panel the room has three tabs, **Founder · Business · Plan** (built 14 October), opening on Plan. They
+appear for the owner and full-access staff whenever there is a Business Check behind the engagement; a contributor
+sees the Plan only. A link to `#founder`, `#business` or `#plan` opens that tab, and a link into the timeline
+(`#step-5`) opens Plan first.
+
 | The client clicks | What happens | Who can |
 |---|---|---|
+| A tab, or swipes sideways on a phone | The tab changes; a flick moves one tab, a slow drag springs back. Arrow keys, Home and End move between tabs | Owner and full-access staff |
+| An area on the Business tab | A sheet rises with what the answers show, what it means, the Recommendation (First move, This week, Number to watch) and the benchmark bars. Drag it down, tap outside, press Escape or Close to dismiss; focus returns to the area. Areas with nothing more to show do not open | Owner and full-access staff, once the Full Report is delivered |
 | "Upload a file" on a request | The browser sends the file straight to the private bucket with a one-off link, then the server records it and the request shows "Sent, we are checking"; a file that did not arrive is not recorded | Owner, full staff, and a contributor for their own requests; only when storage is set up |
 | "Download" on a file | The server checks who is asking and issues a five-minute link | Whoever may see the item it sits on, or who uploaded it |
 | "Mark as submitted" / "Sent another way" (with how they sent it), in the next action or on the Work Plan row | The Data Request shows "Sent, we are checking" for the client and the team | Owner, full staff, and a contributor for their own requests |

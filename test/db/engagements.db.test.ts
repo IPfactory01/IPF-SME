@@ -243,7 +243,7 @@ for (const target of targets) {
         expect((await (await analyst.call()).engagement.staff.list()).items.map(item => item.id)).toEqual([engagementId]);
         const detail = await (await analyst.call()).engagement.staff.detail({ engagementId });
         expect(detail.team).toEqual([expect.objectContaining({ name: "Ola Analyst", role: "analyst", roleLabel: "Analyst" })]);
-        expect(detail.can).toEqual({ manage: true, assign: false, review: false });
+        expect(detail.can).toEqual({ manage: true, assign: false, review: false, sendSignIn: false });
       });
 
       it("lets only people with assign_engagements change the team, and only to IP Factory staff", async () => {

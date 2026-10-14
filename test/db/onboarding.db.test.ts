@@ -504,5 +504,54 @@ for (const target of targets) {
         expect(await db.select().from(schema.businessMemberships).where(eq(schema.businessMemberships.businessId, rows.businesses[0].id))).toHaveLength(2);
       });
     });
+
+    describe("send sign-in link, on the client's record", () => {
+      it("sends a fresh invitation to a paid client who has not created the account; the one still out stops working", async () => {
+        const check = await businessCheck();
+        await markPaid(check.id);
+        const first = await superAdmin.call().onboarding.invite({ businessCheckId: check.id });
+        const sent = await delegatedAdmin.call().onboarding.sendSignInLink({ businessCheckId: check.id });
+        expect(sent).toMatchObject({ kind: "invitation", email: check.email.toLowerCase() });
+        expect(sent.url).toMatch(/\/onboarding\/[A-Za-z0-9_-]{43}$/);
+        expect(await browser().call().onboarding.preview({ token: tokenOf(first.invitationUrl) })).toEqual({ available: false });
+        expect(await browser().call().onboarding.preview({ token: tokenOf(sent.url) })).toMatchObject({ available: true, email: check.email.toLowerCase() });
+      });
+
+      it("keeps the payment rule: an unpaid client gets no invitation from this button", async () => {
+        const check = await businessCheck();
+        await expect(superAdmin.call().onboarding.sendSignInLink({ businessCheckId: check.id })).rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: ONBOARDING_ERRORS.unpaid });
+      });
+
+      it("sends a client with an account a password reset link that works, recorded against whoever sent it", async () => {
+        const check = await businessCheck();
+        const invitation = await invite(check.id);
+        await accept(tokenOf(invitation.invitationUrl), check.email);
+        const sent = await delegatedAdmin.call().onboarding.sendSignInLink({ businessCheckId: check.id });
+        expect(sent).toMatchObject({ kind: "reset", email: check.email.toLowerCase() });
+        const token = decodeURIComponent(sent.url.split("/reset/")[1]);
+        expect(await browser().call().account.resetPreview({ token })).toEqual({ available: true, email: check.email.toLowerCase() });
+        const { user } = await accountRows(check.email);
+        const [row] = await db.select().from(schema.userPasswordResetTokens).where(eq(schema.userPasswordResetTokens.userId, user.id));
+        expect(row.tokenHash).toBe(sha256(token));
+        await browser().call().account.resetPassword({ token, password: "a brand new one 7", confirmPassword: "a brand new one 7" });
+        await browser().call().account.signIn({ email: check.email, password: "a brand new one 7" });
+      });
+
+      it("never reaches a staff account, a suspended client, or anyone without the capability", async () => {
+        const staffCheck = await businessCheck();
+        await accept(tokenOf((await invite(staffCheck.id)).invitationUrl), staffCheck.email);
+        const staff = (await accountRows(staffCheck.email)).user;
+        await db.insert(schema.userPlatformRoles).values({ userId: staff.id, role: "analyst" });
+        await expect(superAdmin.call().onboarding.sendSignInLink({ businessCheckId: staffCheck.id })).rejects.toMatchObject({ code: "FORBIDDEN", message: "This person is also on the IP Factory team. Send their link from People." });
+
+        const suspendedCheck = await businessCheck();
+        await accept(tokenOf((await invite(suspendedCheck.id)).invitationUrl), suspendedCheck.email);
+        await db.update(schema.users).set({ status: "suspended" }).where(eq(schema.users.id, (await accountRows(suspendedCheck.email)).user.id));
+        await expect(superAdmin.call().onboarding.sendSignInLink({ businessCheckId: suspendedCheck.id })).rejects.toMatchObject({ code: "CONFLICT" });
+
+        await expect(plainAdmin.call().onboarding.sendSignInLink({ businessCheckId: suspendedCheck.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await expect(browser().call().onboarding.sendSignInLink({ businessCheckId: suspendedCheck.id })).rejects.toMatchObject({ code: expect.stringMatching(/UNAUTHORIZED|FORBIDDEN/) });
+      });
+    });
   });
 }

@@ -36,6 +36,7 @@ import {
   slugify,
   type Database,
 } from "./accountAuth";
+import { issueClientReset } from "./accountRecovery";
 import { getDb } from "./db";
 import { databaseNow, emailEquals, isUndefinedTable } from "./dbHelpers";
 import { deliverEmail } from "./email";
@@ -157,6 +158,26 @@ export async function createOnboardingInvitation(input: { businessCheckId: numbe
     details: JSON.stringify({ invitationId: invitation.id, businessCheckId: check.id, deliveryStatus: delivery.status, paid, ...(paid ? {} : { override }), ...(input.via ? { via: input.via, recordedAgainstUserId: createdBy } : {}) }),
   });
   return { invitationId: invitation.id, invitationUrl, expiresAt, deliveryStatus: delivery.status };
+}
+
+/**
+ * "Send sign-in link" on a client's record: one button that does the right thing. A client who has not accepted their
+ * invitation gets a fresh one (the one still out stops working); a client who has an account gets a password reset
+ * link. The link is emailed and returned once to the sender, as invitations and reset links already are.
+ */
+export async function sendClientSignInLink(input: { businessCheckId: number; actorUserId: number }) {
+  const db = await requireDatabase();
+  const accepted = (await db.select({ userId: clientOnboardingInvitations.acceptedByUserId, email: clientOnboardingInvitations.email })
+    .from(clientOnboardingInvitations)
+    .where(and(eq(clientOnboardingInvitations.businessCheckId, input.businessCheckId), eq(clientOnboardingInvitations.status, "accepted")))
+    .orderBy(desc(clientOnboardingInvitations.id)).limit(1))[0];
+  if (accepted?.userId) {
+    const reset = await issueClientReset(db, { actorUserId: input.actorUserId, targetUserId: accepted.userId });
+    return { kind: "reset" as const, email: accepted.email, url: reset.resetUrl, expiresAt: reset.expiresAt, deliveryStatus: reset.deliveryStatus };
+  }
+  const invitation = await createOnboardingInvitation({ businessCheckId: input.businessCheckId, actorUserId: input.actorUserId });
+  const email = (await db.select({ email: clientOnboardingInvitations.email }).from(clientOnboardingInvitations).where(eq(clientOnboardingInvitations.id, invitation.invitationId)).limit(1))[0]?.email ?? "";
+  return { kind: "invitation" as const, email, url: invitation.invitationUrl, expiresAt: invitation.expiresAt, deliveryStatus: invitation.deliveryStatus };
 }
 
 export async function revokeOnboardingInvitation(input: { invitationId: number; actorUserId: number }) {

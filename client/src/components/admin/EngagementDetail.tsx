@@ -83,6 +83,7 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
         <DetailField label="Email">{data.owner?.email ?? "-"}</DetailField>
         <DetailField label="WhatsApp">{data.owner?.whatsapp ? <a className="text-brand underline" href={whatsappLink(data.owner.whatsapp) ?? undefined} target="_blank" rel="noreferrer">{data.owner.whatsapp}</a> : "-"}</DetailField>
         <DetailField label="Client account">{data.hasAccount ? `Yes${data.clientPeople.length > 1 ? `, ${data.clientPeople.length} people` : ""}` : "Not yet: the invitation is out"}</DetailField>
+        {data.can.sendSignIn && <SendSignInLink businessCheckId={data.engagement.businessCheckId} hasAccount={data.hasAccount} />}
       </DetailSection>
       <StageAndTeam data={data} engagementId={engagementId} />
       <Problem data={data} engagementId={engagementId} />
@@ -91,6 +92,38 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
       <Deliverables data={data} engagementId={engagementId} />
       <TheFix data={data} engagementId={engagementId} />
     </>
+  );
+}
+
+/**
+ * "Send sign-in link": a client who lost their way in gets the right link by email, a password reset if they have an
+ * account, a fresh invitation if not. The link shows here once, for WhatsApp, in case the email does not arrive.
+ */
+function SendSignInLink({ businessCheckId, hasAccount }: { businessCheckId: number; hasAccount: boolean }) {
+  const [sent, setSent] = useState<{ kind: "reset" | "invitation"; email: string; url: string; deliveryStatus: string } | null>(null);
+  const send = trpc.onboarding.sendSignInLink.useMutation({
+    onSuccess: result => {
+      setSent(result);
+      toast.success(result.deliveryStatus === "Sent" ? `Sent to ${result.email}.` : "Ready. Send them the link below.");
+    },
+    onError: error => toast.error(error.message),
+  });
+  return (
+    <div className="space-y-2 border-t border-line-soft pt-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={send.isPending} onClick={() => send.mutate({ businessCheckId })}>
+          {send.isPending ? "Sending…" : "Send sign-in link"}
+        </Button>
+        <span className="text-xs text-ink-muted">{hasAccount ? "Emails a link to choose a new password. It works once, for 20 minutes." : "Emails a fresh invitation to create the account. The one still out stops working."}</span>
+      </div>
+      {sent && (
+        <div role="status" className="space-y-1 border border-brand-line bg-brand-tint p-3 text-xs">
+          <p className="font-semibold">{sent.kind === "reset" ? "Password reset link" : "Account invitation"} for {sent.email} · {sent.deliveryStatus === "Sent" ? "emailed" : "not emailed: send it yourself"}</p>
+          <p className="break-all font-mono">{sent.url}</p>
+          <p className="text-ink-muted">Shown once. Share it only with the client.</p>
+        </div>
+      )}
+    </div>
   );
 }
 

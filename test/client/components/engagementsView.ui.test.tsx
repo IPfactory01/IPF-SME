@@ -13,7 +13,7 @@ const api = vi.hoisted(() => ({
   storage: { configured: true, missing: [] as string[], bucket: "engagement-files", bucketFound: true as boolean | null, bucketPublic: false as boolean | null, problem: null as string | null },
   calls: {} as Record<string, unknown[]>,
 }));
-const replies: Record<string, unknown> = { start: { engagementId: 4, created: true }, fileLink: { url: "https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf" } };
+const replies: Record<string, unknown> = { sendSignInLink: { kind: "reset", email: "ada@example.test", url: "https://ipf-sme.example.test/reset/abc", deliveryStatus: "Simulated" }, start: { engagementId: 4, created: true }, fileLink: { url: "https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf" } };
 const mutation = (name: string) => (options?: { onSuccess?: (value: never) => void }) => ({
   isPending: false,
   mutate: (input: unknown) => { (api.calls[name] ??= []).push(input); options?.onSuccess?.((replies[name] ?? { success: true }) as never); },
@@ -23,6 +23,7 @@ vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undef
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, list: { invalidate: () => undefined }, awaitingStart: { invalidate: () => undefined } } } }),
+    onboarding: { sendSignInLink: { useMutation: mutation("sendSignInLink") } },
     engagement: {
       staff: {
         list: { useQuery: () => ({ data: api.list, isLoading: false, error: null }) },
@@ -42,7 +43,7 @@ const row = { id: 4, stage: "setting_up", stageLabel: "Getting set up", business
 const task = (over: Record<string, unknown>) => ({ id: 51, engagementId: 4, kind: "data_request", side: "client", title: "Your price list", detail: null, assigneeUserId: null, dueOn: "2026-10-21", status: "open", statusLabel: "To do", statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 4, factor: "internal", createdByUserId: 1, completedAt: null, createdAt: new Date(), updatedAt: new Date(), files: [], ...over });
 const session = { id: 31, engagementId: 4, kind: "assessment_call", title: "Current State Assessment call 1", scheduledFor: null, durationMinutes: 90, meetingLink: null, agenda: null, status: "planned", weekNumber: 1, sortOrder: 7, clientNotes: "Pricing first.", internalNotes: "Watch cash sales.", notesAudience: "owner", notesSharedAt: null, notesSharedByUserId: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() };
 const deliverable = (over: Record<string, unknown>) => ({ id: 41, engagementId: 4, kind: "prescription", kindLabel: "Prescription", title: "Daily cash count", summary: "Count every evening.", status: "draft", audience: "owner", approvedByUserId: null, approvedAt: null, sharedByUserId: null, sharedAt: null, clientAcceptedByUserId: null, clientAcceptedAt: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date(), needsApproval: true, comments: [], files: [], ...over });
-const detail = (can: { manage: boolean; assign: boolean; review: boolean }, deliverables = [deliverable({})], tasks: unknown[] = []) => ({
+const detail = (can: { manage: boolean; assign: boolean; review: boolean; sendSignIn?: boolean }, deliverables = [deliverable({})], tasks: unknown[] = []) => ({
   uploadsEnabled: true,
   engagement: { id: 4, businessCheckId: 1, businessId: 7, paymentRequestId: 2, stage: "setting_up", stageLabel: "Getting set up", problemArea: null, subProblem: null, problemStatement: null, assessmentStartedAt: null, fixStartedAt: null, closedAt: null, createdAt: new Date(), updatedAt: new Date() },
   owner: { name: "Ada Okafor", email: "ada@example.test", whatsapp: "+234 800 000 0001" },
@@ -260,5 +261,27 @@ describe("the fix on the team's side", () => {
     expect(drawer.getByRole("button", { name: "Record week 2" })).toBeTruthy();
     expect(drawer.queryByRole("button", { name: "Record week 1" })).toBeNull();
     expect(drawer.getByRole("button", { name: "Save week 1" })).toBeTruthy();
+  });
+});
+
+describe("send sign-in link on the client's record", () => {
+  it("sends the right link for the business check, says what it did, and shows the link once in case email fails", async () => {
+    api.detail = detail({ manage: true, assign: true, review: true, sendSignIn: true });
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods"));
+    expect(await screen.findByText(/Emails a link to choose a new password/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Send sign-in link" }));
+    expect(api.calls.sendSignInLink).toEqual([{ businessCheckId: 1 }]);
+    const shown = screen.getByText("https://ipf-sme.example.test/reset/abc").closest("[role=status]")!;
+    expect(shown.textContent).toContain("Password reset link for ada@example.test · not emailed: send it yourself");
+    expect(shown.textContent).toContain("Shown once.");
+  });
+
+  it("is not offered to someone without the client onboarding capability", async () => {
+    api.detail = detail({ manage: true, assign: true, review: true, sendSignIn: false });
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods"));
+    await screen.findByText("The client");
+    expect(screen.queryByRole("button", { name: "Send sign-in link" })).toBeNull();
   });
 });

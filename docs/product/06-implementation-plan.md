@@ -37,9 +37,10 @@ you, what we have found). Tests: `test/db/engagements.db.test.ts`, `test/server/
 | Business Check: Back follows the question order, fluid screens, the phone's back gesture, reduced motion | `test/server/businessCheck.ui.test.tsx`, `test/client/components/home/reducedMotion.ui.test.tsx` |
 | Client room: Founder · Business · Plan tabs from the owner's Full Report or Business Check; the desktop layout (side column with Waiting on you and Deliverables); numbered questions shown as a list | `test/shared/fullReport/insight.test.ts`, `test/client/components/engagementRoom.ui.test.tsx`, `test/db/engagements.db.test.ts`, `test/shared/engagement.test.ts` |
 | "Forgot your password?" on both sign-in pages; the owner's first password by email | `test/db/forgotPassword.db.test.ts`, `test/client/pages/adminLogin.ui.test.tsx`, `test/client/pages/accountPages.ui.test.tsx` |
+| "Send sign-in link" on the client's record in Engagements: a reset link or a fresh invitation, whichever fits | `test/db/onboarding.db.test.ts`, `test/client/components/engagementsView.ui.test.tsx` |
 
 **Next, proposed 14 October:** the room as a dashboard (prototype approved for review: charts, takeaways, a what-if on
-the 12-month target); "Send sign-in link" on the client's record in the console; booking the two Current State
+the 12-month target); booking the two Current State
 Assessment Sessions from the room through Calendly, recorded automatically.
 
 Also on `main` since 9 October: the original twelve sectors; "Not assessed" areas on the result; the report form asking

@@ -313,6 +313,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
       manage: authorityAllows(actor.authority, "manage_engagements"),
       assign: authorityAllows(actor.authority, "assign_engagements"),
       review: authorityAllows(actor.authority, "review_engagements"),
+      sendSignIn: authorityAllows(actor.authority, "manage_client_onboarding"),
     },
   };
 }

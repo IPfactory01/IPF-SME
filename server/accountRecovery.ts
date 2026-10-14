@@ -103,6 +103,23 @@ export async function issuePasswordReset(db: Database, input: { actor: Actor; ta
 }
 
 /**
+ * A reset link for a client, from their record in the console (`manage_client_onboarding`). Only for a client account:
+ * someone who is also on the team, or a Super Admin, gets their link from People (`manage_users`), so this permission
+ * never reaches a staff account.
+ */
+export async function issueClientReset(db: Database, input: { actorUserId: number; targetUserId: number }) {
+  const target = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status })
+    .from(users).innerJoin(userCredentials, eq(userCredentials.userId, users.id)).where(eq(users.id, input.targetUserId)).limit(1))[0];
+  if (!target || !target.email) throw new TRPCError({ code: "NOT_FOUND", message: "This client does not have a password account yet." });
+  if (target.status !== "active") throw new TRPCError({ code: "CONFLICT", message: "This client's account is suspended. Reinstate it in People first." });
+  const roles = await db.select({ id: userPlatformRoles.id }).from(userPlatformRoles).where(eq(userPlatformRoles.userId, target.id)).limit(1);
+  if (roles.length || (await protectedPerson(db, target))) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "This person is also on the IP Factory team. Send their link from People." });
+  }
+  return sendResetLink(db, { target: { id: target.id, name: target.name, email: target.email }, actorUserId: input.actorUserId });
+}
+
+/**
  * Stores a new link for a person (revoking the one still out), audits it and emails it. `actorUserId` is null when the
  * person asked for it themselves. The raw link is returned to the caller, which decides whether anyone may see it.
  */

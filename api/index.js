@@ -7315,9 +7315,9 @@ var pricingRequestsRouter = router({
 });
 
 // server/routers/businessCheck.ts
-import { TRPCError as TRPCError19 } from "@trpc/server";
-import { randomBytes as randomBytes8 } from "crypto";
-import { and as and15, eq as eq21, isNull as isNull7 } from "drizzle-orm";
+import { TRPCError as TRPCError20 } from "@trpc/server";
+import { randomBytes as randomBytes9 } from "crypto";
+import { and as and16, eq as eq22, isNull as isNull8 } from "drizzle-orm";
 import { z as z16 } from "zod";
 
 // shared/phone.ts
@@ -8813,8 +8813,8 @@ function officeEmail(input) {
 }
 
 // server/payments.ts
-import { and as and14, desc as desc10, eq as eq19, inArray as inArray5, ne as ne2 } from "drizzle-orm";
-import { TRPCError as TRPCError17 } from "@trpc/server";
+import { and as and15, desc as desc10, eq as eq20, inArray as inArray5, ne as ne2 } from "drizzle-orm";
+import { TRPCError as TRPCError18 } from "@trpc/server";
 init_brand();
 
 // server/engagements.ts
@@ -11463,7 +11463,8 @@ async function getStaffEngagement(db, actor, engagementId) {
     can: {
       manage: authorityAllows(actor.authority, "manage_engagements"),
       assign: authorityAllows(actor.authority, "assign_engagements"),
-      review: authorityAllows(actor.authority, "review_engagements")
+      review: authorityAllows(actor.authority, "review_engagements"),
+      sendSignIn: authorityAllows(actor.authority, "manage_client_onboarding")
     }
   };
 }
@@ -12011,19 +12012,216 @@ async function saveCheckin(db, actor, input) {
 }
 
 // server/clientOnboarding.ts
-import { randomBytes as randomBytes7, randomUUID as randomUUID2 } from "crypto";
-import { and as and13, count, desc as desc9, eq as eq18, gt as gt5, isNull as isNull6 } from "drizzle-orm";
-import { TRPCError as TRPCError16 } from "@trpc/server";
+import { randomBytes as randomBytes8, randomUUID as randomUUID3 } from "crypto";
+import { and as and14, count, desc as desc9, eq as eq19, gt as gt6, isNull as isNull7 } from "drizzle-orm";
+import { TRPCError as TRPCError17 } from "@trpc/server";
 init_brand();
 import { z as z15 } from "zod";
+
+// server/accountRecovery.ts
+import { randomBytes as randomBytes7, randomUUID as randomUUID2 } from "node:crypto";
+import { and as and13, eq as eq18, gt as gt5, isNull as isNull6 } from "drizzle-orm";
+import { TRPCError as TRPCError16 } from "@trpc/server";
+init_brand();
+var RESET_PATH = "/reset";
+var isSuperAdmin = (authority) => authority.roles.includes("super_admin");
+var unavailable = () => new TRPCError16({ code: "NOT_FOUND", message: PASSWORD_RESET_ERRORS.unavailable });
+var notSetUp = () => new TRPCError16({ code: "PRECONDITION_FAILED", message: PASSWORD_RESET_ERRORS.notSetUp });
+var tooMany = () => new TRPCError16({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+var requestIp2 = (req) => (req.ip || "unknown").trim().toLowerCase();
+async function listPeople(db) {
+  const rows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, lastSignedIn: users.lastSignedIn }).from(users).innerJoin(userCredentials, eq18(userCredentials.userId, users.id)).orderBy(users.name, users.id).limit(500);
+  const roles2 = await db.select({ userId: userPlatformRoles.userId, role: userPlatformRoles.role }).from(userPlatformRoles);
+  const memberships = await db.select({ userId: businessMemberships.userId }).from(businessMemberships).where(eq18(businessMemberships.status, "active"));
+  const rolesOf = /* @__PURE__ */ new Map();
+  for (const row of roles2) rolesOf.set(row.userId, [...rolesOf.get(row.userId) ?? [], row.role]);
+  const businessesOf = /* @__PURE__ */ new Map();
+  for (const row of memberships) businessesOf.set(row.userId, (businessesOf.get(row.userId) ?? 0) + 1);
+  return rows.map((row) => ({
+    ...row,
+    roles: rolesOf.get(row.id) ?? [],
+    businesses: businessesOf.get(row.id) ?? 0,
+    superAdmin: isOwnerAdmin({ email: row.email }) || (rolesOf.get(row.id) ?? []).includes("super_admin")
+  }));
+}
+function buildResetEmail(input) {
+  const first = input.name.trim().split(/\s+/)[0] || "there";
+  const verb = input.firstPassword ? "set" : "reset";
+  const why = input.requested ? `Someone asked to ${verb} the password for this email address on ${BRAND.productName}.` : `A member of the ${BRAND.organisationName} team issued a link to reset your password on ${BRAND.productName}.`;
+  return {
+    subject: `${input.firstPassword ? "Set" : "Reset"} your password on ${BRAND.productName}`,
+    body: [
+      `Dear ${first},`,
+      "",
+      `${why} The link works once and expires in 20 minutes.`,
+      "",
+      `${input.firstPassword ? "Set" : "Reset"} your password: ${input.url}`,
+      "",
+      `If you did not ask for this, you can ignore this email: ${input.firstPassword ? "nothing changes until the link is used" : "your password stays as it is"}.`,
+      "",
+      BRAND.organisationName
+    ].join("\n")
+  };
+}
+async function personWithPassword(db, userId) {
+  const person = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status }).from(users).innerJoin(userCredentials, eq18(userCredentials.userId, users.id)).where(eq18(users.id, userId)).limit(1))[0];
+  if (!person) throw new TRPCError16({ code: "NOT_FOUND", message: "That person does not have a password account." });
+  return person;
+}
+async function protectedPerson(db, person) {
+  return isOwnerAdmin({ email: person.email }) || (await listSuperAdminIds(db)).has(person.id);
+}
+async function issuePasswordReset(db, input) {
+  const target = await personWithPassword(db, input.targetUserId);
+  if (!target.email) throw new TRPCError16({ code: "BAD_REQUEST", message: "This account has no email address to send the link to." });
+  if (target.status !== "active") throw new TRPCError16({ code: "CONFLICT", message: "Reinstate the account before issuing a reset link." });
+  if (await protectedPerson(db, target) && !isSuperAdmin(input.actor.authority)) {
+    throw new TRPCError16({ code: "FORBIDDEN", message: "Only a Super Admin can issue a reset link for a Super Admin." });
+  }
+  return sendResetLink(db, { target: { id: target.id, name: target.name, email: target.email }, actorUserId: input.actor.id });
+}
+async function issueClientReset(db, input) {
+  const target = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status }).from(users).innerJoin(userCredentials, eq18(userCredentials.userId, users.id)).where(eq18(users.id, input.targetUserId)).limit(1))[0];
+  if (!target || !target.email) throw new TRPCError16({ code: "NOT_FOUND", message: "This client does not have a password account yet." });
+  if (target.status !== "active") throw new TRPCError16({ code: "CONFLICT", message: "This client's account is suspended. Reinstate it in People first." });
+  const roles2 = await db.select({ id: userPlatformRoles.id }).from(userPlatformRoles).where(eq18(userPlatformRoles.userId, target.id)).limit(1);
+  if (roles2.length || await protectedPerson(db, target)) {
+    throw new TRPCError16({ code: "FORBIDDEN", message: "This person is also on the IP Factory team. Send their link from People." });
+  }
+  return sendResetLink(db, { target: { id: target.id, name: target.name, email: target.email }, actorUserId: input.actorUserId });
+}
+async function sendResetLink(db, input) {
+  const { target } = input;
+  const token3 = randomBytes7(32).toString("base64url");
+  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
+  let resetId;
+  try {
+    resetId = await db.transaction(async (tx) => {
+      await tx.update(userPasswordResetTokens).set({ revokedAt: databaseNow() }).where(and13(eq18(userPasswordResetTokens.userId, target.id), isNull6(userPasswordResetTokens.consumedAt), isNull6(userPasswordResetTokens.revokedAt)));
+      const [row] = await tx.insert(userPasswordResetTokens).values({ userId: target.id, tokenHash: sha256(token3), expiresAt, issuedByUserId: input.actorUserId }).returning({ id: userPasswordResetTokens.id });
+      await recordAudit(tx, {
+        action: input.actorUserId === null ? "account_password_reset_requested" : "account_password_reset_issued",
+        actorUserId: input.actorUserId ?? target.id,
+        targetEmail: target.email,
+        details: { targetUserId: target.id, resetId: row.id, expiresAt: expiresAt.toISOString(), ...input.firstPassword ? { firstPassword: true } : {} }
+      });
+      return row.id;
+    });
+  } catch (error) {
+    if (isUndefinedTable(error)) throw notSetUp();
+    throw error;
+  }
+  const resetUrl = `${getTrustedApplicationOrigin()}${RESET_PATH}/${encodeURIComponent(token3)}`;
+  const message = buildResetEmail({ name: target.name ?? "", url: resetUrl, requested: input.actorUserId === null, firstPassword: input.firstPassword });
+  const delivery = await deliverEmail({ to: target.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `user_password_reset_tokens:${resetId}` });
+  await db.update(userPasswordResetTokens).set({ deliveryStatus: delivery.status }).where(eq18(userPasswordResetTokens.id, resetId));
+  return { resetId, resetUrl, expiresAt, deliveryStatus: delivery.status };
+}
+async function requestPasswordReset(db, req, rawInput) {
+  assertSameOrigin(req);
+  const parsed = requestPasswordResetInputSchema.safeParse(rawInput);
+  if (!parsed.success) throw new TRPCError16({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Enter the email address you sign in with." });
+  const email = parsed.data.email;
+  if (!await consumeLimit(LIMITS.resetRequest, `ip:${requestIp2(req)}`) || !await consumeLimit(LIMITS.resetRequest, `email:${email}`)) throw tooMany();
+  const owner = isOwnerAdmin({ email });
+  let person = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, credentialId: userCredentials.id }).from(users).leftJoin(userCredentials, eq18(userCredentials.userId, users.id)).where(emailEquals(users.email, email)).limit(1))[0];
+  if (!person && owner) {
+    const [created] = await db.insert(users).values({ openId: `local:${randomUUID2()}`, name: "Super Admin", email, loginMethod: "password", role: "admin", status: "active" }).returning({ id: users.id, name: users.name, email: users.email, status: users.status });
+    person = { ...created, credentialId: null };
+  }
+  if (!person || person.status !== "active" || !person.email) return { success: true };
+  if (person.credentialId === null && !owner) return { success: true };
+  await sendResetLink(db, { target: { id: person.id, name: person.name, email: person.email }, actorUserId: null, firstPassword: person.credentialId === null });
+  return { success: true };
+}
+async function openReset(db, token3) {
+  if (!token3 || token3.length > 200) return null;
+  return (await db.select({ id: userPasswordResetTokens.id, userId: users.id, email: users.email, status: users.status }).from(userPasswordResetTokens).innerJoin(users, eq18(users.id, userPasswordResetTokens.userId)).where(and13(
+    eq18(userPasswordResetTokens.tokenHash, sha256(token3)),
+    isNull6(userPasswordResetTokens.consumedAt),
+    isNull6(userPasswordResetTokens.revokedAt),
+    gt5(userPasswordResetTokens.expiresAt, /* @__PURE__ */ new Date())
+  )).limit(1))[0] ?? null;
+}
+async function previewPasswordReset(db, req, token3) {
+  if (!await consumeLimit(LIMITS.publicLookup, requestIp2(req))) throw tooMany();
+  try {
+    const reset = await openReset(db, token3);
+    return reset && reset.status === "active" && reset.email ? { available: true, email: reset.email } : { available: false };
+  } catch (error) {
+    if (isUndefinedTable(error)) return { available: false };
+    throw error;
+  }
+}
+async function confirmPasswordReset(db, req, rawInput) {
+  assertSameOrigin(req);
+  const parsed = resetPasswordInputSchema.safeParse(rawInput);
+  if (!parsed.success) throw new TRPCError16({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
+  if (!await consumeLimit(LIMITS.publicLookup, requestIp2(req))) throw tooMany();
+  const passwordHash = hashAdminPassword(parsed.data.password);
+  try {
+    return await db.transaction(async (tx) => {
+      const [claimed] = await tx.update(userPasswordResetTokens).set({ consumedAt: databaseNow() }).where(and13(
+        eq18(userPasswordResetTokens.tokenHash, sha256(parsed.data.token)),
+        isNull6(userPasswordResetTokens.consumedAt),
+        isNull6(userPasswordResetTokens.revokedAt),
+        gt5(userPasswordResetTokens.expiresAt, /* @__PURE__ */ new Date())
+      )).returning({ userId: userPasswordResetTokens.userId });
+      if (!claimed) throw unavailable();
+      const person = (await tx.select({ id: users.id, email: users.email, status: users.status }).from(users).where(eq18(users.id, claimed.userId)).limit(1))[0];
+      if (!person || person.status !== "active") throw unavailable();
+      const [credential] = await tx.update(userCredentials).set({ passwordHash, failedAttempts: 0, lockedUntil: null }).where(eq18(userCredentials.userId, person.id)).returning({ id: userCredentials.id });
+      const owner = isOwnerAdmin({ email: person.email });
+      if (!credential && !owner) throw unavailable();
+      if (!credential) await tx.insert(userCredentials).values({ userId: person.id, passwordHash });
+      if (owner) {
+        await tx.update(users).set({ role: "admin" }).where(eq18(users.id, person.id));
+        await tx.insert(userPlatformRoles).values({ userId: person.id, role: "super_admin", grantedByUserId: person.id }).onConflictDoNothing();
+      }
+      await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and13(eq18(userSessions.userId, person.id), isNull6(userSessions.revokedAt)));
+      await recordAudit(tx, { action: "account_password_reset_completed", actorUserId: person.id, targetEmail: person.email, ...credential ? {} : { details: { firstPassword: true } } });
+      return { success: true, email: person.email ?? "" };
+    });
+  } catch (error) {
+    if (isUndefinedTable(error)) throw unavailable();
+    throw error;
+  }
+}
+async function setAccountStatus(db, input) {
+  if (input.targetUserId === input.actor.id) throw new TRPCError16({ code: "CONFLICT", message: "You cannot suspend or reinstate your own account." });
+  const target = (await db.select({ id: users.id, email: users.email, status: users.status }).from(users).where(eq18(users.id, input.targetUserId)).limit(1))[0];
+  if (!target) throw new TRPCError16({ code: "NOT_FOUND", message: "That person does not exist." });
+  if (target.status === "disabled") throw new TRPCError16({ code: "CONFLICT", message: "This account is disabled and is not managed here." });
+  if (target.status === input.status) return { success: true, changed: false, status: target.status };
+  const superAdmins = await listSuperAdminIds(db);
+  if (superAdmins.has(target.id) || isOwnerAdmin({ email: target.email })) {
+    if (!isSuperAdmin(input.actor.authority)) throw new TRPCError16({ code: "FORBIDDEN", message: "Only a Super Admin can suspend or reinstate a Super Admin." });
+    if (input.status === "suspended" && isOwnerAdmin({ email: target.email })) throw new TRPCError16({ code: "CONFLICT", message: "The permanent Super Admin cannot be suspended." });
+    if (input.status === "suspended" && superAdmins.size <= 1) throw new TRPCError16({ code: "CONFLICT", message: "The last Super Admin cannot be suspended." });
+  }
+  const reason = input.reason?.trim() || "";
+  await db.transaction(async (tx) => {
+    await tx.update(users).set({ status: input.status }).where(eq18(users.id, target.id));
+    if (input.status === "suspended") await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and13(eq18(userSessions.userId, target.id), isNull6(userSessions.revokedAt)));
+    await recordAudit(tx, {
+      action: input.status === "suspended" ? "account_suspended" : "account_reinstated",
+      actorUserId: input.actor.id,
+      targetEmail: target.email,
+      details: { targetUserId: target.id, ...reason ? { reason } : {} }
+    });
+  });
+  return { success: true, changed: true, status: input.status };
+}
+
+// server/clientOnboarding.ts
 var emailSchema = z15.string().trim().email().max(320);
 function effectiveInvitationStatus(invitation, now = /* @__PURE__ */ new Date()) {
   return invitation.status === "pending" && invitation.expiresAt.getTime() <= now.getTime() ? "expired" : invitation.status;
 }
-var unavailable = () => new TRPCError16({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.unavailable });
+var unavailable2 = () => new TRPCError17({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.unavailable });
 async function requireDatabase() {
   const db = await getDb();
-  if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 async function identityConflict(db, email) {
@@ -12050,7 +12248,7 @@ function buildOnboardingEmail(input) {
 }
 async function assessmentPaid(db, businessCheckId) {
   try {
-    const paid = await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and13(eq18(paymentRequests.businessCheckId, businessCheckId), eq18(paymentRequests.item, "current_state"), eq18(paymentRequests.status, "confirmed"))).limit(1);
+    const paid = await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and14(eq19(paymentRequests.businessCheckId, businessCheckId), eq19(paymentRequests.item, "current_state"), eq19(paymentRequests.status, "confirmed"))).limit(1);
     return paid.length > 0;
   } catch (error) {
     if (isUndefinedTable(error)) return false;
@@ -12059,20 +12257,20 @@ async function assessmentPaid(db, businessCheckId) {
 }
 async function createOnboardingInvitation(input) {
   const createdBy = input.actorUserId ?? input.createdByUserId ?? null;
-  if (createdBy === null) throw new TRPCError16({ code: "PRECONDITION_FAILED", message: "Nobody on the team is named to send this invitation. Send it from Client Onboarding." });
+  if (createdBy === null) throw new TRPCError17({ code: "PRECONDITION_FAILED", message: "Nobody on the team is named to send this invitation. Send it from Client Onboarding." });
   const db = await requireDatabase();
-  const check = (await db.select().from(businessChecks).where(eq18(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError16({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
+  const check = (await db.select().from(businessChecks).where(eq19(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError17({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
   const email = normaliseAccountEmail(check.email);
-  if (!emailSchema.safeParse(email).success) throw new TRPCError16({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.invalidCheckEmail });
-  if (await identityConflict(db, email)) throw new TRPCError16({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccountAdmin });
+  if (!emailSchema.safeParse(email).success) throw new TRPCError17({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.invalidCheckEmail });
+  if (await identityConflict(db, email)) throw new TRPCError17({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccountAdmin });
   const paid = await assessmentPaid(db, check.id);
   const override = input.overrideReason?.trim() ?? "";
-  if (!paid && !override) throw new TRPCError16({ code: "PRECONDITION_FAILED", message: ONBOARDING_ERRORS.unpaid });
-  const token3 = randomBytes7(32).toString("base64url");
+  if (!paid && !override) throw new TRPCError17({ code: "PRECONDITION_FAILED", message: ONBOARDING_ERRORS.unpaid });
+  const token3 = randomBytes8(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ONBOARDING_INVITATION_TTL_MS);
   const invitation = await db.transaction(async (tx) => {
-    await tx.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and13(eq18(clientOnboardingInvitations.businessCheckId, check.id), eq18(clientOnboardingInvitations.status, "pending")));
+    await tx.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and14(eq19(clientOnboardingInvitations.businessCheckId, check.id), eq19(clientOnboardingInvitations.status, "pending")));
     const [row] = await tx.insert(clientOnboardingInvitations).values({
       businessCheckId: check.id,
       email,
@@ -12090,7 +12288,7 @@ async function createOnboardingInvitation(input) {
   await db.update(clientOnboardingInvitations).set({
     deliveryStatus: delivery.status,
     deliveryMessageId: delivery.status === "Sent" ? delivery.providerMessageId || null : null
-  }).where(eq18(clientOnboardingInvitations.id, invitation.id));
+  }).where(eq19(clientOnboardingInvitations.id, invitation.id));
   await db.insert(adminAccessAuditEvents).values({
     actorUserId: input.actorUserId,
     action: "client_onboarding_invitation_created",
@@ -12099,10 +12297,21 @@ async function createOnboardingInvitation(input) {
   });
   return { invitationId: invitation.id, invitationUrl, expiresAt, deliveryStatus: delivery.status };
 }
+async function sendClientSignInLink(input) {
+  const db = await requireDatabase();
+  const accepted = (await db.select({ userId: clientOnboardingInvitations.acceptedByUserId, email: clientOnboardingInvitations.email }).from(clientOnboardingInvitations).where(and14(eq19(clientOnboardingInvitations.businessCheckId, input.businessCheckId), eq19(clientOnboardingInvitations.status, "accepted"))).orderBy(desc9(clientOnboardingInvitations.id)).limit(1))[0];
+  if (accepted?.userId) {
+    const reset = await issueClientReset(db, { actorUserId: input.actorUserId, targetUserId: accepted.userId });
+    return { kind: "reset", email: accepted.email, url: reset.resetUrl, expiresAt: reset.expiresAt, deliveryStatus: reset.deliveryStatus };
+  }
+  const invitation = await createOnboardingInvitation({ businessCheckId: input.businessCheckId, actorUserId: input.actorUserId });
+  const email = (await db.select({ email: clientOnboardingInvitations.email }).from(clientOnboardingInvitations).where(eq19(clientOnboardingInvitations.id, invitation.invitationId)).limit(1))[0]?.email ?? "";
+  return { kind: "invitation", email, url: invitation.invitationUrl, expiresAt: invitation.expiresAt, deliveryStatus: invitation.deliveryStatus };
+}
 async function revokeOnboardingInvitation(input) {
   const db = await requireDatabase();
-  const revoked = await db.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and13(eq18(clientOnboardingInvitations.id, input.invitationId), eq18(clientOnboardingInvitations.status, "pending"))).returning({ id: clientOnboardingInvitations.id, email: clientOnboardingInvitations.email });
-  if (revoked.length !== 1) throw new TRPCError16({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
+  const revoked = await db.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and14(eq19(clientOnboardingInvitations.id, input.invitationId), eq19(clientOnboardingInvitations.status, "pending"))).returning({ id: clientOnboardingInvitations.id, email: clientOnboardingInvitations.email });
+  if (revoked.length !== 1) throw new TRPCError17({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
   await db.insert(adminAccessAuditEvents).values({
     actorUserId: input.actorUserId,
     action: "client_onboarding_invitation_revoked",
@@ -12112,29 +12321,29 @@ async function revokeOnboardingInvitation(input) {
   return { success: true };
 }
 async function previewOnboardingInvitation(req, token3) {
-  if (!await consumeRateLimit("onboarding", req, "preview", 60)) throw new TRPCError16({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!await consumeRateLimit("onboarding", req, "preview", 60)) throw new TRPCError17({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const db = await requireDatabase();
-  const invitation = (await db.select().from(clientOnboardingInvitations).where(eq18(clientOnboardingInvitations.tokenHash, sha256(token3))).limit(1))[0];
+  const invitation = (await db.select().from(clientOnboardingInvitations).where(eq19(clientOnboardingInvitations.tokenHash, sha256(token3))).limit(1))[0];
   if (!invitation || effectiveInvitationStatus(invitation) !== "pending") return { available: false };
   return { available: true, email: invitation.email, fullName: invitation.fullNameSnapshot, businessName: invitation.businessNameSnapshot };
 }
 async function acceptOnboardingInvitation(req, res, rawInput) {
   assertSameOrigin(req);
   const parsed = onboardingAcceptInputSchema.safeParse(rawInput);
-  if (!parsed.success) throw new TRPCError16({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
+  if (!parsed.success) throw new TRPCError17({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
   const input = parsed.data;
-  if (!await consumeRateLimit("onboarding", req, "accept", 10)) throw new TRPCError16({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!await consumeRateLimit("onboarding", req, "accept", 10)) throw new TRPCError17({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const db = await requireDatabase();
   const passwordHash = hashAdminPassword(input.password);
   let created;
   try {
     created = await db.transaction(async (tx) => {
-      const invitation = (await tx.select().from(clientOnboardingInvitations).where(eq18(clientOnboardingInvitations.tokenHash, sha256(input.token))).limit(1))[0];
-      if (!invitation || effectiveInvitationStatus(invitation) !== "pending") throw unavailable();
-      if (input.email !== invitation.email) throw new TRPCError16({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
-      if (await identityConflict(tx, invitation.email)) throw new TRPCError16({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
+      const invitation = (await tx.select().from(clientOnboardingInvitations).where(eq19(clientOnboardingInvitations.tokenHash, sha256(input.token))).limit(1))[0];
+      if (!invitation || effectiveInvitationStatus(invitation) !== "pending") throw unavailable2();
+      if (input.email !== invitation.email) throw new TRPCError17({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
+      if (await identityConflict(tx, invitation.email)) throw new TRPCError17({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
       const [user] = await tx.insert(users).values({
-        openId: `local:${randomUUID2()}`,
+        openId: `local:${randomUUID3()}`,
         name: input.fullName,
         email: invitation.email,
         loginMethod: "password",
@@ -12154,17 +12363,17 @@ async function acceptOnboardingInvitation(req, res, rawInput) {
         acceptedAt: databaseNow(),
         acceptedByUserId: user.id,
         businessId: business.id
-      }).where(and13(
-        eq18(clientOnboardingInvitations.id, invitation.id),
-        eq18(clientOnboardingInvitations.status, "pending"),
-        gt5(clientOnboardingInvitations.expiresAt, /* @__PURE__ */ new Date()),
-        isNull6(clientOnboardingInvitations.acceptedAt)
+      }).where(and14(
+        eq19(clientOnboardingInvitations.id, invitation.id),
+        eq19(clientOnboardingInvitations.status, "pending"),
+        gt6(clientOnboardingInvitations.expiresAt, /* @__PURE__ */ new Date()),
+        isNull7(clientOnboardingInvitations.acceptedAt)
       )).returning({ id: clientOnboardingInvitations.id });
-      if (claimed.length !== 1) throw unavailable();
+      if (claimed.length !== 1) throw unavailable2();
       return { userId: user.id, email: invitation.email, business, session, businessCheckId: invitation.businessCheckId };
     });
   } catch (error) {
-    if (isUniqueViolation(error)) throw new TRPCError16({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
+    if (isUniqueViolation(error)) throw new TRPCError17({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
     throw error;
   }
   await linkEngagementToBusiness(db, { businessCheckId: created.businessCheckId, businessId: created.business.id }).catch((error) => {
@@ -12233,8 +12442,8 @@ async function onboardingMetrics() {
     businesses: await one(db.select({ n: count() }).from(businesses)),
     memberships: await one(db.select({ n: count() }).from(businessMemberships)),
     platformRoleAssignments: await one(db.select({ n: count() }).from(userPlatformRoles)),
-    pendingInvitations: await one(db.select({ n: count() }).from(clientOnboardingInvitations).where(and13(eq18(clientOnboardingInvitations.status, "pending"), gt5(clientOnboardingInvitations.expiresAt, /* @__PURE__ */ new Date())))),
-    activeSessions: await one(db.select({ n: count() }).from(userSessions).where(and13(isNull6(userSessions.revokedAt), gt5(userSessions.expiresAt, /* @__PURE__ */ new Date()))))
+    pendingInvitations: await one(db.select({ n: count() }).from(clientOnboardingInvitations).where(and14(eq19(clientOnboardingInvitations.status, "pending"), gt6(clientOnboardingInvitations.expiresAt, /* @__PURE__ */ new Date())))),
+    activeSessions: await one(db.select({ n: count() }).from(userSessions).where(and14(isNull7(userSessions.revokedAt), gt6(userSessions.expiresAt, /* @__PURE__ */ new Date()))))
   };
 }
 
@@ -12347,21 +12556,21 @@ async function paymentStatusesByCheck(db, businessCheckIds) {
   return byCheck;
 }
 async function loadCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, publicToken: businessChecks.publicToken, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq19(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError17({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  const check = (await db.select({ id: businessChecks.id, publicToken: businessChecks.publicToken, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq20(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError18({ code: "NOT_FOUND", message: "That Business Check does not exist." });
   return check;
 }
 var BEFORE_OPPORTUNITY = ["lead", "qualified_lead", "call_booked"];
 async function requestPayment(db, input) {
   const check = await loadCheck(db, input.businessCheckId);
-  const existing = (await db.select().from(paymentRequests).where(and14(eq19(paymentRequests.businessCheckId, check.id), eq19(paymentRequests.item, input.item))).limit(1))[0];
-  if (existing?.status === "confirmed") throw new TRPCError17({ code: "CONFLICT", message: "This has already been paid." });
+  const existing = (await db.select().from(paymentRequests).where(and15(eq20(paymentRequests.businessCheckId, check.id), eq20(paymentRequests.item, input.item))).limit(1))[0];
+  if (existing?.status === "confirmed") throw new TRPCError18({ code: "CONFLICT", message: "This has already been paid." });
   const reference2 = paymentReference(input.item, check.id);
   const amountNaira = PAYMENT_ITEM_DETAILS[input.item].amount;
   const stageTo = input.item === "current_state" && BEFORE_OPPORTUNITY.includes(check.pipelineStage) ? "opportunity" : check.pipelineStage;
   const request = await db.transaction(async (tx) => {
     const [row] = await tx.insert(paymentRequests).values({ businessCheckId: check.id, item: input.item, amountNaira, reference: reference2, requestedByUserId: input.actorUserId }).onConflictDoUpdate({ target: [paymentRequests.businessCheckId, paymentRequests.item], set: { amountNaira, requestedByUserId: input.actorUserId, requestedAt: /* @__PURE__ */ new Date() } }).returning();
-    if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq19(businessChecks.id, check.id));
+    if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq20(businessChecks.id, check.id));
     await recordAudit(tx, {
       action: "payment_details_sent",
       actorUserId: input.actorUserId,
@@ -12372,13 +12581,13 @@ async function requestPayment(db, input) {
   });
   const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference: reference2, deadline: paymentDeadline(request.requestedAt), online: onlinePaymentOffer(check.publicToken, input.item) });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:details:${request.requestedAt.getTime()}` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
-  await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq19(paymentRequests.id, request.id));
+  await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq20(paymentRequests.id, request.id));
   const deliveryProblem = delivery.status === "Failed" ? delivery.reason : null;
   return { paymentRequestId: request.id, reference: reference2, status: request.status, deliveryStatus: delivery.status, deliveryProblem, pipelineStage: stageTo };
 }
 async function loadRequest(db, paymentRequestId) {
-  const request = (await db.select().from(paymentRequests).where(eq19(paymentRequests.id, paymentRequestId)).limit(1))[0];
-  if (!request) throw new TRPCError17({ code: "NOT_FOUND", message: "That payment request does not exist." });
+  const request = (await db.select().from(paymentRequests).where(eq20(paymentRequests.id, paymentRequestId)).limit(1))[0];
+  if (!request) throw new TRPCError18({ code: "NOT_FOUND", message: "That payment request does not exist." });
   return request;
 }
 var NOT_CONFIRMED = { success: true, changed: false, invitation: null, engagement: null };
@@ -12398,9 +12607,9 @@ async function confirmPayment(db, input) {
   let outcome;
   try {
     outcome = await db.transaction(async (tx) => {
-      const [claimed] = await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note }).where(and14(eq19(paymentRequests.id, request.id), ne2(paymentRequests.status, "confirmed"))).returning({ id: paymentRequests.id });
+      const [claimed] = await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note }).where(and15(eq20(paymentRequests.id, request.id), ne2(paymentRequests.status, "confirmed"))).returning({ id: paymentRequests.id });
       if (!claimed) return null;
-      if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq19(businessChecks.id, check.id));
+      if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq20(businessChecks.id, check.id));
       await recordAudit(tx, {
         action: "payment_confirmed",
         actorUserId: input.actorUserId,
@@ -12411,7 +12620,7 @@ async function confirmPayment(db, input) {
       return { reportLink };
     });
   } catch (error) {
-    if (isMissingPaymentTable(error)) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "The Full Report table is not set up yet (migration 0007). Nothing was confirmed." });
+    if (isMissingPaymentTable(error)) throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "The Full Report table is not set up yet (migration 0007). Nothing was confirmed." });
     throw error;
   }
   if (!outcome) return NOT_CONFIRMED;
@@ -12428,8 +12637,8 @@ async function confirmPayment(db, input) {
 }
 async function resendPaymentConfirmation(db, input) {
   const request = await loadRequest(db, input.paymentRequestId);
-  if (request.status !== "confirmed") throw new TRPCError17({ code: "CONFLICT", message: "This payment is not confirmed yet." });
-  if (request.item !== "current_state") throw new TRPCError17({ code: "CONFLICT", message: "For the Full Report, send the Report Intake link again instead." });
+  if (request.status !== "confirmed") throw new TRPCError18({ code: "CONFLICT", message: "This payment is not confirmed yet." });
+  if (request.item !== "current_state") throw new TRPCError18({ code: "CONFLICT", message: "For the Full Report, send the Report Intake link again instead." });
   const check = await loadCheck(db, request.businessCheckId);
   const testMode = request.confirmedByUserId === null && Boolean(request.note?.startsWith(`${TEST_NOTE}${ONLINE_NOTE}`));
   const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: null, testMode });
@@ -12438,7 +12647,7 @@ async function resendPaymentConfirmation(db, input) {
   return { success: true, deliveryStatus: delivery.status };
 }
 async function inviteToClientAccount(db, businessCheckId, actor) {
-  const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt }).from(clientOnboardingInvitations).where(eq19(clientOnboardingInvitations.businessCheckId, businessCheckId)).orderBy(desc10(clientOnboardingInvitations.id)).limit(1))[0];
+  const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt }).from(clientOnboardingInvitations).where(eq20(clientOnboardingInvitations.businessCheckId, businessCheckId)).orderBy(desc10(clientOnboardingInvitations.id)).limit(1))[0];
   const status = latest ? effectiveInvitationStatus(latest) : null;
   if (status === "accepted") return "has_account";
   if (status === "pending") return "already_invited";
@@ -12446,26 +12655,26 @@ async function inviteToClientAccount(db, businessCheckId, actor) {
     await createOnboardingInvitation({ businessCheckId, ...actor });
     return "sent";
   } catch (error) {
-    if (error instanceof TRPCError17 && error.code === "CONFLICT") return "has_account";
+    if (error instanceof TRPCError18 && error.code === "CONFLICT") return "has_account";
     console.error("[Payments] Payment confirmed, but the client account invitation could not be sent:", error instanceof Error ? error.message : error);
     return "failed";
   }
 }
 
 // server/fullReportRequest.ts
-import { TRPCError as TRPCError18 } from "@trpc/server";
-import { eq as eq20 } from "drizzle-orm";
+import { TRPCError as TRPCError19 } from "@trpc/server";
+import { eq as eq21 } from "drizzle-orm";
 var PAY_LINK_NOTE = "Started paying online from the link in their Business Check summary email.";
 async function askForFullReport(db, check, input) {
   const first = !check.reportRequestedAt;
   if (!first && input.source === "result_page") return;
-  if (first) await db.update(businessChecks).set({ reportRequestedAt: databaseNow() }).where(eq20(businessChecks.id, check.id));
+  if (first) await db.update(businessChecks).set({ reportRequestedAt: databaseNow() }).where(eq21(businessChecks.id, check.id));
   let payment;
   try {
     const sent = await requestPayment(db, { businessCheckId: check.id, item: "full_report", actorUserId: null });
     payment = sent.deliveryStatus === "Failed" ? `Payment details: ${sent.reference}, but the email to the owner failed (${sent.deliveryProblem ?? "no reason given"}). Send them again from admin once that is fixed.` : `Payment details sent: ${sent.reference}`;
   } catch (error) {
-    const paid = error instanceof TRPCError18 && error.code === "CONFLICT";
+    const paid = error instanceof TRPCError19 && error.code === "CONFLICT";
     if (!paid) console.error("[BusinessCheck] Could not send the report payment details:", error instanceof Error ? error.message : error);
     payment = paid ? "Payment: already paid" : "Payment details: NOT SENT. Send them from the admin console.";
   }
@@ -12551,7 +12760,7 @@ async function bookedCallTime(eventUri, inviteeEmail) {
 }
 
 // server/routers/businessCheck.ts
-var tooMany = (message) => new TRPCError19({ code: "TOO_MANY_REQUESTS", message });
+var tooMany2 = (message) => new TRPCError20({ code: "TOO_MANY_REQUESTS", message });
 var answerValue = z16.union([z16.string().max(300), z16.array(z16.string().max(64)).max(10)]);
 var answersInput = z16.record(z16.string().max(32), answerValue.optional()).refine((value) => Object.keys(value).length <= 80);
 var tokenInput = z16.string().min(16).max(64);
@@ -12562,15 +12771,15 @@ var businessCheckStartInput = z16.object({
   whatsapp: z16.string().trim().regex(INTERNATIONAL_PHONE, "Kindly check the WhatsApp number.").optional(),
   heardFrom: z16.string().trim().max(64).optional()
 });
-var unavailable2 = (what) => new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: `We could not ${what} just now. Kindly try again shortly.` });
+var unavailable3 = (what) => new TRPCError20({ code: "INTERNAL_SERVER_ERROR", message: `We could not ${what} just now. Kindly try again shortly.` });
 async function database(what) {
   const db = await getDb();
-  if (!db) throw unavailable2(what);
+  if (!db) throw unavailable3(what);
   return db;
 }
 async function findCheck(db, token3) {
-  const [check] = await db.select().from(businessChecks).where(eq21(businessChecks.publicToken, token3)).limit(1);
-  if (!check) throw new TRPCError19({ code: "NOT_FOUND", message: "We could not find that Business Check. Kindly start again." });
+  const [check] = await db.select().from(businessChecks).where(eq22(businessChecks.publicToken, token3)).limit(1);
+  if (!check) throw new TRPCError20({ code: "NOT_FOUND", message: "We could not find that Business Check. Kindly start again." });
   return check;
 }
 function answerColumns(answers) {
@@ -12586,10 +12795,10 @@ var businessCheckRouter = router({
   start: publicProcedure.input(businessCheckStartInput).mutation(async ({ input, ctx }) => {
     const ip = (ctx.req.ip || "unknown").toLowerCase();
     if (!await consumeLimit(LIMITS.checkStartIp, ip) || !await consumeLimit(LIMITS.checkStartEmail, `${ip}:${input.email}`)) {
-      throw tooMany("Kindly wait a few minutes before starting another Business Check.");
+      throw tooMany2("Kindly wait a few minutes before starting another Business Check.");
     }
     const db = await database("start your Business Check");
-    const token3 = randomBytes8(24).toString("base64url");
+    const token3 = randomBytes9(24).toString("base64url");
     await db.insert(businessChecks).values({
       publicToken: token3,
       pipelineStage: "lead",
@@ -12604,16 +12813,16 @@ var businessCheckRouter = router({
   }),
   /** Saves answers as the owner goes, so an unfinished check still tells the team where they were. */
   saveProgress: publicProcedure.input(z16.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }) => {
-    if (!await consumeLimit(LIMITS.checkSave, input.token)) throw tooMany("Too many updates. Your answers are still kept on this device.");
+    if (!await consumeLimit(LIMITS.checkSave, input.token)) throw tooMany2("Too many updates. Your answers are still kept on this device.");
     const db = await database("save your progress");
     const check = await findCheck(db, input.token);
     if (check.completedAt) return { saved: false };
-    await db.update(businessChecks).set(answerColumns(cleanAnswers(input.answers))).where(eq21(businessChecks.id, check.id));
+    await db.update(businessChecks).set(answerColumns(cleanAnswers(input.answers))).where(eq22(businessChecks.id, check.id));
     return { saved: true };
   }),
   /** Finishes the check: works out the result on the server, writes the summary and emails both sides once. */
   submit: publicProcedure.input(z16.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }) => {
-    if (!await consumeLimit(LIMITS.checkSubmit, input.token)) throw tooMany("Your Business Check has been sent. Kindly wait a while before sending it again.");
+    if (!await consumeLimit(LIMITS.checkSubmit, input.token)) throw tooMany2("Your Business Check has been sent. Kindly wait a while before sending it again.");
     const db = await database("record your Business Check");
     const check = await findCheck(db, input.token);
     if (check.completedAt && check.resultJson && check.summaryJson && check.summarySource) {
@@ -12621,7 +12830,7 @@ var businessCheckRouter = router({
     }
     const answers = cleanAnswers(input.answers);
     if (!isComplete(answers)) {
-      throw new TRPCError19({ code: "BAD_REQUEST", message: "Some questions are still unanswered. Kindly go back and complete them." });
+      throw new TRPCError20({ code: "BAD_REQUEST", message: "Some questions are still unanswered. Kindly go back and complete them." });
     }
     const result = evaluate(answers);
     const contact = contactOf(check, answers);
@@ -12636,7 +12845,7 @@ var businessCheckRouter = router({
       summaryJson: JSON.stringify(summary),
       summarySource: source,
       completedAt: databaseNow()
-    }).where(and15(eq21(businessChecks.id, check.id), isNull7(businessChecks.completedAt))).returning({ id: businessChecks.id });
+    }).where(and16(eq22(businessChecks.id, check.id), isNull8(businessChecks.completedAt))).returning({ id: businessChecks.id });
     if (!claimed) {
       const recorded = await findCheck(db, input.token);
       return { token: recorded.publicToken, result: JSON.parse(recorded.resultJson ?? "null") ?? result, summary: JSON.parse(recorded.summaryJson ?? "null") ?? summary, summarySource: recorded.summarySource ?? source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: recorded.notificationStatus };
@@ -12648,7 +12857,7 @@ var businessCheckRouter = router({
       deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, subject: office.subject, body: office.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:office` }).catch(() => failed),
       deliverEmail({ to: check.email, subject: owner.subject, body: owner.body, sender: "business_support", idempotencyKey: `business_checks:${check.id}:summary:owner` }).catch(() => failed)
     ]);
-    await db.update(businessChecks).set({ notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent" }).where(eq21(businessChecks.id, check.id));
+    await db.update(businessChecks).set({ notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent" }).where(eq22(businessChecks.id, check.id));
     return { token: check.publicToken, result, summary, summarySource: source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: ownerDelivery.status === "Sent" ? "Sent" : ownerDelivery.status === "Failed" ? "Failed" : "Simulated" };
   }),
   /** The owner asks for the free call or the full report from the result screen. */
@@ -12659,22 +12868,22 @@ var businessCheckRouter = router({
     /** Sent when Calendly confirms a booking; the time itself is read from Calendly on the server. */
     calendlyEventUri: z16.string().regex(CALENDLY_EVENT_URI).optional()
   })).mutation(async ({ input }) => {
-    if (!await consumeLimit(LIMITS.checkNext, input.token)) throw tooMany("Your request has been recorded. Kindly wait before sending another.");
+    if (!await consumeLimit(LIMITS.checkNext, input.token)) throw tooMany2("Your request has been recorded. Kindly wait before sending another.");
     const db = await database("record your request");
     const check = await findCheck(db, input.token);
-    if (!check.completedAt) throw new TRPCError19({ code: "BAD_REQUEST", message: "Kindly finish the Business Check first." });
+    if (!check.completedAt) throw new TRPCError20({ code: "BAD_REQUEST", message: "Kindly finish the Business Check first." });
     if (input.choice === "report") {
       await askForFullReport(db, check, { source: "result_page", note: input.note });
       return { success: true, choice: input.choice };
     }
     const bookedFor = input.choice === "call" && input.calendlyEventUri ? await bookedCallTime(input.calendlyEventUri, check.email) ?? await findBookedCall(check.email) : null;
     if (bookedFor) {
-      await db.update(businessChecks).set({ callScheduledFor: bookedFor }).where(eq21(businessChecks.id, check.id));
+      await db.update(businessChecks).set({ callScheduledFor: bookedFor }).where(eq22(businessChecks.id, check.id));
       await recordAudit(db, { action: "business_check_call_booked", targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: bookedFor.toISOString(), source: "calendly" } });
     }
     const already = check.callRequestedAt;
     if (!already) {
-      await db.update(businessChecks).set({ callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq21(businessChecks.id, check.id));
+      await db.update(businessChecks).set({ callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq22(businessChecks.id, check.id));
       const what = "a free Discovery Call";
       await deliverEmail({
         sender: "business_support",
@@ -12700,193 +12909,6 @@ var businessCheckRouter = router({
 
 // server/routers/account.ts
 import { z as z17 } from "zod";
-
-// server/accountRecovery.ts
-import { randomBytes as randomBytes9, randomUUID as randomUUID3 } from "node:crypto";
-import { and as and16, eq as eq22, gt as gt6, isNull as isNull8 } from "drizzle-orm";
-import { TRPCError as TRPCError20 } from "@trpc/server";
-init_brand();
-var RESET_PATH = "/reset";
-var isSuperAdmin = (authority) => authority.roles.includes("super_admin");
-var unavailable3 = () => new TRPCError20({ code: "NOT_FOUND", message: PASSWORD_RESET_ERRORS.unavailable });
-var notSetUp = () => new TRPCError20({ code: "PRECONDITION_FAILED", message: PASSWORD_RESET_ERRORS.notSetUp });
-var tooMany2 = () => new TRPCError20({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
-var requestIp2 = (req) => (req.ip || "unknown").trim().toLowerCase();
-async function listPeople(db) {
-  const rows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, lastSignedIn: users.lastSignedIn }).from(users).innerJoin(userCredentials, eq22(userCredentials.userId, users.id)).orderBy(users.name, users.id).limit(500);
-  const roles2 = await db.select({ userId: userPlatformRoles.userId, role: userPlatformRoles.role }).from(userPlatformRoles);
-  const memberships = await db.select({ userId: businessMemberships.userId }).from(businessMemberships).where(eq22(businessMemberships.status, "active"));
-  const rolesOf = /* @__PURE__ */ new Map();
-  for (const row of roles2) rolesOf.set(row.userId, [...rolesOf.get(row.userId) ?? [], row.role]);
-  const businessesOf = /* @__PURE__ */ new Map();
-  for (const row of memberships) businessesOf.set(row.userId, (businessesOf.get(row.userId) ?? 0) + 1);
-  return rows.map((row) => ({
-    ...row,
-    roles: rolesOf.get(row.id) ?? [],
-    businesses: businessesOf.get(row.id) ?? 0,
-    superAdmin: isOwnerAdmin({ email: row.email }) || (rolesOf.get(row.id) ?? []).includes("super_admin")
-  }));
-}
-function buildResetEmail(input) {
-  const first = input.name.trim().split(/\s+/)[0] || "there";
-  const verb = input.firstPassword ? "set" : "reset";
-  const why = input.requested ? `Someone asked to ${verb} the password for this email address on ${BRAND.productName}.` : `A member of the ${BRAND.organisationName} team issued a link to reset your password on ${BRAND.productName}.`;
-  return {
-    subject: `${input.firstPassword ? "Set" : "Reset"} your password on ${BRAND.productName}`,
-    body: [
-      `Dear ${first},`,
-      "",
-      `${why} The link works once and expires in 20 minutes.`,
-      "",
-      `${input.firstPassword ? "Set" : "Reset"} your password: ${input.url}`,
-      "",
-      `If you did not ask for this, you can ignore this email: ${input.firstPassword ? "nothing changes until the link is used" : "your password stays as it is"}.`,
-      "",
-      BRAND.organisationName
-    ].join("\n")
-  };
-}
-async function personWithPassword(db, userId) {
-  const person = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status }).from(users).innerJoin(userCredentials, eq22(userCredentials.userId, users.id)).where(eq22(users.id, userId)).limit(1))[0];
-  if (!person) throw new TRPCError20({ code: "NOT_FOUND", message: "That person does not have a password account." });
-  return person;
-}
-async function protectedPerson(db, person) {
-  return isOwnerAdmin({ email: person.email }) || (await listSuperAdminIds(db)).has(person.id);
-}
-async function issuePasswordReset(db, input) {
-  const target = await personWithPassword(db, input.targetUserId);
-  if (!target.email) throw new TRPCError20({ code: "BAD_REQUEST", message: "This account has no email address to send the link to." });
-  if (target.status !== "active") throw new TRPCError20({ code: "CONFLICT", message: "Reinstate the account before issuing a reset link." });
-  if (await protectedPerson(db, target) && !isSuperAdmin(input.actor.authority)) {
-    throw new TRPCError20({ code: "FORBIDDEN", message: "Only a Super Admin can issue a reset link for a Super Admin." });
-  }
-  return sendResetLink(db, { target: { id: target.id, name: target.name, email: target.email }, actorUserId: input.actor.id });
-}
-async function sendResetLink(db, input) {
-  const { target } = input;
-  const token3 = randomBytes9(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
-  let resetId;
-  try {
-    resetId = await db.transaction(async (tx) => {
-      await tx.update(userPasswordResetTokens).set({ revokedAt: databaseNow() }).where(and16(eq22(userPasswordResetTokens.userId, target.id), isNull8(userPasswordResetTokens.consumedAt), isNull8(userPasswordResetTokens.revokedAt)));
-      const [row] = await tx.insert(userPasswordResetTokens).values({ userId: target.id, tokenHash: sha256(token3), expiresAt, issuedByUserId: input.actorUserId }).returning({ id: userPasswordResetTokens.id });
-      await recordAudit(tx, {
-        action: input.actorUserId === null ? "account_password_reset_requested" : "account_password_reset_issued",
-        actorUserId: input.actorUserId ?? target.id,
-        targetEmail: target.email,
-        details: { targetUserId: target.id, resetId: row.id, expiresAt: expiresAt.toISOString(), ...input.firstPassword ? { firstPassword: true } : {} }
-      });
-      return row.id;
-    });
-  } catch (error) {
-    if (isUndefinedTable(error)) throw notSetUp();
-    throw error;
-  }
-  const resetUrl = `${getTrustedApplicationOrigin()}${RESET_PATH}/${encodeURIComponent(token3)}`;
-  const message = buildResetEmail({ name: target.name ?? "", url: resetUrl, requested: input.actorUserId === null, firstPassword: input.firstPassword });
-  const delivery = await deliverEmail({ to: target.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `user_password_reset_tokens:${resetId}` });
-  await db.update(userPasswordResetTokens).set({ deliveryStatus: delivery.status }).where(eq22(userPasswordResetTokens.id, resetId));
-  return { resetId, resetUrl, expiresAt, deliveryStatus: delivery.status };
-}
-async function requestPasswordReset(db, req, rawInput) {
-  assertSameOrigin(req);
-  const parsed = requestPasswordResetInputSchema.safeParse(rawInput);
-  if (!parsed.success) throw new TRPCError20({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Enter the email address you sign in with." });
-  const email = parsed.data.email;
-  if (!await consumeLimit(LIMITS.resetRequest, `ip:${requestIp2(req)}`) || !await consumeLimit(LIMITS.resetRequest, `email:${email}`)) throw tooMany2();
-  const owner = isOwnerAdmin({ email });
-  let person = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, credentialId: userCredentials.id }).from(users).leftJoin(userCredentials, eq22(userCredentials.userId, users.id)).where(emailEquals(users.email, email)).limit(1))[0];
-  if (!person && owner) {
-    const [created] = await db.insert(users).values({ openId: `local:${randomUUID3()}`, name: "Super Admin", email, loginMethod: "password", role: "admin", status: "active" }).returning({ id: users.id, name: users.name, email: users.email, status: users.status });
-    person = { ...created, credentialId: null };
-  }
-  if (!person || person.status !== "active" || !person.email) return { success: true };
-  if (person.credentialId === null && !owner) return { success: true };
-  await sendResetLink(db, { target: { id: person.id, name: person.name, email: person.email }, actorUserId: null, firstPassword: person.credentialId === null });
-  return { success: true };
-}
-async function openReset(db, token3) {
-  if (!token3 || token3.length > 200) return null;
-  return (await db.select({ id: userPasswordResetTokens.id, userId: users.id, email: users.email, status: users.status }).from(userPasswordResetTokens).innerJoin(users, eq22(users.id, userPasswordResetTokens.userId)).where(and16(
-    eq22(userPasswordResetTokens.tokenHash, sha256(token3)),
-    isNull8(userPasswordResetTokens.consumedAt),
-    isNull8(userPasswordResetTokens.revokedAt),
-    gt6(userPasswordResetTokens.expiresAt, /* @__PURE__ */ new Date())
-  )).limit(1))[0] ?? null;
-}
-async function previewPasswordReset(db, req, token3) {
-  if (!await consumeLimit(LIMITS.publicLookup, requestIp2(req))) throw tooMany2();
-  try {
-    const reset = await openReset(db, token3);
-    return reset && reset.status === "active" && reset.email ? { available: true, email: reset.email } : { available: false };
-  } catch (error) {
-    if (isUndefinedTable(error)) return { available: false };
-    throw error;
-  }
-}
-async function confirmPasswordReset(db, req, rawInput) {
-  assertSameOrigin(req);
-  const parsed = resetPasswordInputSchema.safeParse(rawInput);
-  if (!parsed.success) throw new TRPCError20({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
-  if (!await consumeLimit(LIMITS.publicLookup, requestIp2(req))) throw tooMany2();
-  const passwordHash = hashAdminPassword(parsed.data.password);
-  try {
-    return await db.transaction(async (tx) => {
-      const [claimed] = await tx.update(userPasswordResetTokens).set({ consumedAt: databaseNow() }).where(and16(
-        eq22(userPasswordResetTokens.tokenHash, sha256(parsed.data.token)),
-        isNull8(userPasswordResetTokens.consumedAt),
-        isNull8(userPasswordResetTokens.revokedAt),
-        gt6(userPasswordResetTokens.expiresAt, /* @__PURE__ */ new Date())
-      )).returning({ userId: userPasswordResetTokens.userId });
-      if (!claimed) throw unavailable3();
-      const person = (await tx.select({ id: users.id, email: users.email, status: users.status }).from(users).where(eq22(users.id, claimed.userId)).limit(1))[0];
-      if (!person || person.status !== "active") throw unavailable3();
-      const [credential] = await tx.update(userCredentials).set({ passwordHash, failedAttempts: 0, lockedUntil: null }).where(eq22(userCredentials.userId, person.id)).returning({ id: userCredentials.id });
-      const owner = isOwnerAdmin({ email: person.email });
-      if (!credential && !owner) throw unavailable3();
-      if (!credential) await tx.insert(userCredentials).values({ userId: person.id, passwordHash });
-      if (owner) {
-        await tx.update(users).set({ role: "admin" }).where(eq22(users.id, person.id));
-        await tx.insert(userPlatformRoles).values({ userId: person.id, role: "super_admin", grantedByUserId: person.id }).onConflictDoNothing();
-      }
-      await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and16(eq22(userSessions.userId, person.id), isNull8(userSessions.revokedAt)));
-      await recordAudit(tx, { action: "account_password_reset_completed", actorUserId: person.id, targetEmail: person.email, ...credential ? {} : { details: { firstPassword: true } } });
-      return { success: true, email: person.email ?? "" };
-    });
-  } catch (error) {
-    if (isUndefinedTable(error)) throw unavailable3();
-    throw error;
-  }
-}
-async function setAccountStatus(db, input) {
-  if (input.targetUserId === input.actor.id) throw new TRPCError20({ code: "CONFLICT", message: "You cannot suspend or reinstate your own account." });
-  const target = (await db.select({ id: users.id, email: users.email, status: users.status }).from(users).where(eq22(users.id, input.targetUserId)).limit(1))[0];
-  if (!target) throw new TRPCError20({ code: "NOT_FOUND", message: "That person does not exist." });
-  if (target.status === "disabled") throw new TRPCError20({ code: "CONFLICT", message: "This account is disabled and is not managed here." });
-  if (target.status === input.status) return { success: true, changed: false, status: target.status };
-  const superAdmins = await listSuperAdminIds(db);
-  if (superAdmins.has(target.id) || isOwnerAdmin({ email: target.email })) {
-    if (!isSuperAdmin(input.actor.authority)) throw new TRPCError20({ code: "FORBIDDEN", message: "Only a Super Admin can suspend or reinstate a Super Admin." });
-    if (input.status === "suspended" && isOwnerAdmin({ email: target.email })) throw new TRPCError20({ code: "CONFLICT", message: "The permanent Super Admin cannot be suspended." });
-    if (input.status === "suspended" && superAdmins.size <= 1) throw new TRPCError20({ code: "CONFLICT", message: "The last Super Admin cannot be suspended." });
-  }
-  const reason = input.reason?.trim() || "";
-  await db.transaction(async (tx) => {
-    await tx.update(users).set({ status: input.status }).where(eq22(users.id, target.id));
-    if (input.status === "suspended") await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and16(eq22(userSessions.userId, target.id), isNull8(userSessions.revokedAt)));
-    await recordAudit(tx, {
-      action: input.status === "suspended" ? "account_suspended" : "account_reinstated",
-      actorUserId: input.actor.id,
-      targetEmail: target.email,
-      details: { targetUserId: target.id, ...reason ? { reason } : {} }
-    });
-  });
-  return { success: true, changed: true, status: input.status };
-}
-
-// server/routers/account.ts
 import { TRPCError as TRPCError21 } from "@trpc/server";
 async function database2() {
   const db = await getDb();
@@ -12939,6 +12961,8 @@ var clientOnboardingRouter = router({
   metrics: manage.query(() => onboardingMetrics()),
   /** Before the Current State Assessment payment is confirmed, a reason is required and recorded with the invitation. */
   invite: manage.input(z18.object({ businessCheckId: z18.number().int().positive(), overrideReason: z18.string().trim().min(5, "Give the reason for inviting before payment.").max(500).optional() })).mutation(({ ctx, input }) => createOnboardingInvitation({ businessCheckId: input.businessCheckId, actorUserId: ctx.user.id, overrideReason: input.overrideReason })),
+  /** One button on the client's record: a fresh invitation if they have no account yet, else a password reset link. */
+  sendSignInLink: manage.input(z18.object({ businessCheckId: z18.number().int().positive() })).mutation(({ ctx, input }) => sendClientSignInLink({ businessCheckId: input.businessCheckId, actorUserId: ctx.user.id })),
   revoke: manage.input(z18.object({ invitationId: z18.number().int().positive() })).mutation(({ ctx, input }) => revokeOnboardingInvitation({ invitationId: input.invitationId, actorUserId: ctx.user.id }))
 });
 

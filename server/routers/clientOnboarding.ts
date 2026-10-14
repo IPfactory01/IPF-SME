@@ -7,6 +7,7 @@ import {
   onboardingMetrics,
   previewOnboardingInvitation,
   revokeOnboardingInvitation,
+  sendClientSignInLink,
 } from "../clientOnboarding";
 import { adminPermissionProcedure, publicProcedure, router } from "../_core/trpc";
 
@@ -30,6 +31,10 @@ export const clientOnboardingRouter = router({
   invite: manage
     .input(z.object({ businessCheckId: z.number().int().positive(), overrideReason: z.string().trim().min(5, "Give the reason for inviting before payment.").max(500).optional() }))
     .mutation(({ ctx, input }) => createOnboardingInvitation({ businessCheckId: input.businessCheckId, actorUserId: ctx.user.id, overrideReason: input.overrideReason })),
+  /** One button on the client's record: a fresh invitation if they have no account yet, else a password reset link. */
+  sendSignInLink: manage
+    .input(z.object({ businessCheckId: z.number().int().positive() }))
+    .mutation(({ ctx, input }) => sendClientSignInLink({ businessCheckId: input.businessCheckId, actorUserId: ctx.user.id })),
   revoke: manage
     .input(z.object({ invitationId: z.number().int().positive() }))
     .mutation(({ ctx, input }) => revokeOnboardingInvitation({ invitationId: input.invitationId, actorUserId: ctx.user.id })),

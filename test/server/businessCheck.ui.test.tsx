@@ -350,6 +350,21 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(rows.map((text) => Number(text.split(".")[0]))).toEqual([...rows.map((text) => Number(text.split(".")[0]))].sort((a, b) => a - b));
   });
 
+  it("links the Terms & Conditions and Privacy Policy before the owner gives their details, and before paying for the Full Report", async () => {
+    render(React.createElement(BusinessCheck));
+    await pick(/take the business check/i);
+    expect(await screen.findByText("First, who are we talking to?")).toBeTruthy();
+    const privacy = screen.getAllByRole("link", { name: "Privacy Policy" })[0];
+    expect(privacy.getAttribute("href")).toBe("/privacy");
+    // Leaving the form would lose what has been typed, so the policy opens beside it.
+    expect(privacy.getAttribute("target")).toBe("_blank");
+    expect(screen.getAllByRole("link", { name: "Terms & Conditions" })[0].getAttribute("href")).toBe("/terms");
+    cleanup();
+    resultFor();
+    expect(screen.getByText(/By proceeding with payment, you agree to the/).textContent).toContain("acknowledge the Privacy Policy");
+    expect(screen.getAllByRole("link", { name: "Terms & Conditions" }).some((link) => link.getAttribute("href") === "/terms")).toBe(true);
+  });
+
   it("gives the ₦100,000 full report its own offer, with what is inside, and opens Paystack straight away", async () => {
     resultFor();
     expect(screen.getByText("The Business Check summary tells you where you stand. The Full Report tells you what to do about it.")).toBeTruthy();

@@ -80,6 +80,12 @@ describe("admin sign-in page", () => {
     expect(screen.queryByRole("button", { name: /gmail|google/i })).toBeNull();
   });
 
+  it("links the Terms & Conditions and Privacy Policy", () => {
+    renderPage();
+    expect(screen.getByRole("link", { name: "Terms & Conditions" }).getAttribute("href")).toBe("/terms");
+    expect(screen.getByRole("link", { name: "Privacy Policy" }).getAttribute("href")).toBe("/privacy");
+  });
+
   it("signs in with the universal account and opens the admin area", async () => {
     const location = renderPage();
     fill("Email", "staff@example.test");

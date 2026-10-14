@@ -4,6 +4,7 @@
  * what comes next (shared/businessCheck/engine.ts). Every area opens with what it means and an
  * example for the kind of business the owner described. The result is written on the server.
  */
+import { LegalFooterLinks, PrivacyLink, TermsLink } from "@/components/LegalLinks";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { openCheckout, rememberPayPage } from "@/lib/payOnline";
@@ -322,6 +323,9 @@ export default function BusinessCheck() {
           {showOutline && <OutlinePanel answers={answers} />}
         </div>
       </main>
+      <footer className="border-t border-line py-4">
+        <LegalFooterLinks />
+      </footer>
     </div>
   );
 }
@@ -689,6 +693,9 @@ function DetailsScreen({ contact, pending, error, onChange, onBack, onSubmit }: 
       <AnimatePresence>
         {error && <motion.p initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: [0, -6, 6, -3, 0] }} exit={{ opacity: 0 }} className="border border-danger-line bg-danger-tint p-3 text-sm text-danger-strong">{error}</motion.p>}
       </AnimatePresence>
+      <motion.p variants={itemMotion} className="text-xs leading-relaxed text-ink-muted">
+        By continuing, you agree to our <TermsLink newTab /> and acknowledge our <PrivacyLink newTab />.
+      </motion.p>
       <motion.div variants={itemMotion} className="flex items-center justify-between gap-4">
         <BackButton onClick={onBack} />
         <PrimaryButton type="submit" disabled={!valid || pending}>{pending ? "Starting…" : "Start the Business Check"}</PrimaryButton>
@@ -989,6 +996,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
                 </motion.button>
               )}
             </AnimatePresence>
+            {!reportPaid && <p className="mt-3 text-xs text-ink-muted">By proceeding with payment, you agree to the <TermsLink newTab /> and acknowledge the <PrivacyLink newTab />.</p>}
             {!reportPaid && <p className="mt-3 text-xs text-ink-muted">You pay securely on Paystack, by card, bank transfer or USSD, and come straight back.</p>}
             {reportProblem && <p role="alert" className="mt-3 text-sm text-danger-strong">{reportProblem}</p>}
           </div>

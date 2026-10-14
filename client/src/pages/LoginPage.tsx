@@ -1,3 +1,4 @@
+import { LegalFooterLinks } from "@/components/LegalLinks";
 import ForgotPassword from "@/components/ForgotPassword";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +67,7 @@ export default function LoginPage() {
           </CardContent>
         </Card>
         <p className="text-center text-sm text-ink-muted">Client access is created during onboarding.</p>
+        <LegalFooterLinks />
         <p className="text-center text-xs text-ink-muted">On the {BRAND.programmeName} programme? <a href="/portal" className="font-semibold text-brand underline underline-offset-2">Go to the participant portal</a>.</p>
       </div>
     </main>

@@ -76,6 +76,14 @@ describe("joining by invitation", () => {
     await waitFor(() => expect(location.history.at(-1)).toBe("/admin"));
   });
 
+  it("says that creating the account accepts the Terms & Conditions and the Privacy Policy", () => {
+    api.preview = { available: true, kind: "staff", email: "ola@example.com", fullName: "Ola Analyst", businessName: null, access: null };
+    renderJoin();
+    expect(screen.getByText(/By creating your account, you agree to the/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Terms & Conditions" }).getAttribute("href")).toBe("/terms");
+    expect(screen.getByRole("link", { name: "Privacy Policy" }).getAttribute("href")).toBe("/privacy");
+  });
+
   it("tells the owner's staff whose business it is and what they will see", () => {
     api.preview = { available: true, kind: "business_member", email: "chidi@example.com", fullName: "Chidi", businessName: "Ada Foods", access: "contributor" };
     renderJoin();

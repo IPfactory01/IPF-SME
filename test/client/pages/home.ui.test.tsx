@@ -104,4 +104,11 @@ describe("home page on touch screens", () => {
     expect(prompts.length).toBe(4);
     for (const prompt of prompts) expect(prompt.className).toContain("[@media(hover:none)]:opacity-100");
   });
+
+  it("links the Terms & Conditions and Privacy Policy in the footer", () => {
+    const { container } = render(<Router hook={memoryLocation({ path: "/" }).hook}><Home /></Router>);
+    const footer = container.querySelector("footer")!;
+    expect(within(footer).getByRole("link", { name: "Terms & Conditions" }).getAttribute("href")).toBe("/terms");
+    expect(within(footer).getByRole("link", { name: "Privacy Policy" }).getAttribute("href")).toBe("/privacy");
+  });
 });

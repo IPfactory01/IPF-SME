@@ -1,3 +1,4 @@
+import { LegalFooterLinks } from "@/components/LegalLinks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -184,6 +185,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <span className="border-l border-line pl-4 text-xs font-semibold uppercase tracking-widest text-ink-muted">{BRAND.productName}</span>
         </header>
         {children}
+        <LegalFooterLinks className="mt-10 !justify-start" />
       </div>
     </main>
   );

@@ -1,3 +1,4 @@
+import { LegalFooterLinks } from "@/components/LegalLinks";
 import { BRAND } from "@shared/brand";
 import { ONLINE_TEST_NOTICE } from "@shared/payments";
 import { AlertTriangle } from "lucide-react";
@@ -14,6 +15,7 @@ export function PaymentShell({ children }: { children: React.ReactNode }) {
           <span className="border-l border-line pl-4 text-xs font-semibold uppercase tracking-widest text-ink-muted">{BRAND.productName}</span>
         </header>
         {children}
+        <LegalFooterLinks className="mt-10 !justify-start" />
       </div>
     </main>
   );

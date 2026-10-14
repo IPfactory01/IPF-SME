@@ -179,6 +179,14 @@ describe("onboarding screen (invitation only)", () => {
     expect(screen.getByRole("button", { name: "Create account" })).toBeTruthy();
   });
 
+  it("says that creating the account accepts the Terms & Conditions and the Privacy Policy, with links", () => {
+    api.state.preview = INVITED;
+    renderOnboarding();
+    expect(screen.getByText(/By creating your account, you agree to the/).textContent).toBe("By creating your account, you agree to the Terms & Conditions and acknowledge the Privacy Policy.");
+    expect(screen.getByRole("link", { name: "Terms & Conditions" }).getAttribute("href")).toBe("/terms");
+    expect(screen.getByRole("link", { name: "Privacy Policy" }).getAttribute("href")).toBe("/privacy");
+  });
+
   it("asks for nothing beyond the account and the business name", () => {
     api.state.preview = INVITED;
     renderOnboarding();
@@ -301,6 +309,13 @@ describe("no public registration", () => {
 });
 
 describe("sign-in screen", () => {
+  it("links the Terms & Conditions and Privacy Policy without asking for consent", () => {
+    renderAt("/login", <LoginPage />);
+    expect(screen.getByRole("link", { name: "Terms & Conditions" }).getAttribute("href")).toBe("/terms");
+    expect(screen.getByRole("link", { name: "Privacy Policy" }).getAttribute("href")).toBe("/privacy");
+    expect(screen.queryByRole("checkbox")).toBeNull();
+  });
+
   it("signs in and opens the dashboard", async () => {
     api.replies.signIn = SESSION;
     const location = renderAt("/login", <LoginPage />);

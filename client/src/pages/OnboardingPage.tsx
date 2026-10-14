@@ -1,3 +1,4 @@
+import { PrivacyLink, TermsLink } from "@/components/LegalLinks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -130,6 +131,7 @@ export default function OnboardingPage() {
             <Label htmlFor="onboarding-business-name">Business name</Label>
             <Input id="onboarding-business-name" autoComplete="organization" value={values.businessName} onChange={set("businessName")} />
           </div>
+          <p className="text-xs leading-relaxed text-ink-muted">By creating your account, you agree to the <TermsLink newTab /> and acknowledge the <PrivacyLink newTab />.</p>
           <Button disabled={accept.isPending} type="submit" size="lg" className="w-full rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">
             {accept.isPending ? "Creating account…" : "Create account"}
           </Button>

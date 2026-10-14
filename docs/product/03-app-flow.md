@@ -16,6 +16,8 @@ added without being documented here.
 |---|---|---|---|---|
 | `/` | `Home.tsx` | Anyone | The site in the owner's words: track record, problem with its evidence, the experience behind The Shift, ten problem areas, how it works and prices, questions | "Free business check" → `/check` |
 | `/check` | `BusinessCheck.tsx` | Anyone | The free business check, from contact details to the result | Book a call (Calendly) or ask for the full report |
+| `/terms` | `LegalPage.tsx` | Anyone | The approved Terms & Conditions (`docs/legal/terms.md`, from the approved Word document), a plain reading page with no sign-in | Back to the site |
+| `/privacy` | `LegalPage.tsx` | Anyone | The approved Privacy Policy (`docs/legal/privacy.md`, from the approved Word document), a plain reading page with no sign-in | Back to the site |
 | `/report/:token` | `FullReportPage.tsx` | Link in the "payment received" email | The 17-question report form, then the download | Report emailed; download on the page |
 | `/pay/:token/:item` | `PayPage.tsx` | The "Pay online" button in a payment details email, or "Pay for your Full Report" in the Business Check summary email (Full Report only, before or after asking) (`:token` is the Business Check's token, `:item` is `full_report` or `current_state`) | The item, its amount from the payment request (₦100,000 or ₦500,000), "Pay ₦… securely with Paystack" (card, bank transfer or USSD on Paystack; no bank details on the site). "TEST MODE: NO REAL MONEY MOVES" while Paystack is on its test keys; "Already paid" once confirmed; no button while online payment is off or after the 48 hours | Paystack's checkout, then `/pay/return` |
 | `/pay/return` | `PayReturnPage.tsx` | Paystack sends the owner back here with `?reference=` | Asks the server how the payment stands (section 4): "Payment received" with what happens next, "Still confirming" with "Check again", or "Payment not completed" with "Try again" (back to the pay page this tab came from) | — |
@@ -280,3 +282,14 @@ Found while writing this document. Each is small and listed in the implementatio
 | The `/admin` gate and side menu still say "Registration Desk" and Gmail | Old wording | Rebrand the labels |
 | ~~"Invite to onboard" invites at any stage without a question~~ | Fixed 11 October: before Won the server requires a reason, which is recorded; "Move to" no longer offers Won | Done |
 | The JUMP "Email selected" button opens nothing | Legacy only | Remove with the JUMP screens |
+
+## Terms & Conditions and Privacy Policy (14 October 2026)
+
+The approved wording lives in `docs/legal/` (the Word documents are the source of truth; `terms.md` and `privacy.md` are
+faithful conversions that the site renders at `/terms` and `/privacy`). The links appear: in the home page footer; under
+the contact details at the start of the Business Check ("By continuing, you agree to our Terms & Conditions and
+acknowledge our Privacy Policy"); beside every button that sends the owner to Paystack (the result page and the pay
+page: "By proceeding with payment, you agree…"); above "Create account" on `/onboarding/<token>` and `/join/<token>`;
+as a quiet line on sign-in, password reset, the Full Report intake, the pay pages, the Business Check and the signed-in
+pages; and in the footer of every Business Support email (absolute links on `APP_ORIGIN`). In the middle of a form or a
+payment the links open in a new tab so nothing typed is lost. No consent is stored; there is no consent column.

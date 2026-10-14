@@ -75,6 +75,14 @@ describe("the pay page", () => {
     expect(document.body.textContent).not.toMatch(/proof of payment|bank details/i);
   });
 
+  it("offers the Terms & Conditions and Privacy Policy before the button that opens Paystack", () => {
+    renderPage();
+    expect(screen.getByText(/By proceeding with payment, you agree to the/).textContent).toBe("By proceeding with payment, you agree to the Terms & Conditions and acknowledge the Privacy Policy.");
+    expect(screen.getAllByRole("link", { name: "Terms & Conditions" })[0].getAttribute("href")).toBe("/terms");
+    expect(screen.getAllByRole("link", { name: "Privacy Policy" })[0].getAttribute("href")).toBe("/privacy");
+    expect(api.startCalls).toEqual([]);
+  });
+
   it("asks the server to open Paystack, then sends the owner there and remembers the page for the return", () => {
     renderPage();
     fireEvent.click(payButton()!);

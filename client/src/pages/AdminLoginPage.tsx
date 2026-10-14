@@ -1,3 +1,4 @@
+import { LegalFooterLinks } from "@/components/LegalLinks";
 import { useAuth } from "@/_core/hooks/useAuth";
 import ForgotPassword from "@/components/ForgotPassword";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,7 @@ export default function AdminLoginPage() {
             )}
           </CardContent>
         </Card>
+        <LegalFooterLinks />
       </div>
     </div>
   );

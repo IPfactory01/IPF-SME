@@ -1,3 +1,4 @@
+import { PrivacyLink, TermsLink } from "@/components/LegalLinks";
 import { PaymentShell, TestModeBanner } from "@/components/PaymentShell";
 import { Button } from "@/components/ui/button";
 import { openCheckout, rememberPayPage } from "@/lib/payOnline";
@@ -115,6 +116,7 @@ export default function PayPage() {
             <Lock className="mr-2 h-4 w-4" aria-hidden />
             {start.isPending || leaving ? "Opening Paystack…" : `Pay ${amount} securely with Paystack`}
           </Button>
+          <p className="text-xs leading-relaxed text-ink-muted">By proceeding with payment, you agree to the <TermsLink newTab /> and acknowledge the <PrivacyLink newTab />.</p>
           <p className="text-xs leading-relaxed text-ink-muted">You go to Paystack's secure page to pay by card, bank transfer or USSD, then come back here. Your payment is confirmed straight away.</p>
           {problem && <p role="alert" className="text-sm text-danger-strong">{problem}</p>}
         </div>

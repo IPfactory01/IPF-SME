@@ -1,3 +1,4 @@
+import { LegalFooterLinks } from "@/components/LegalLinks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,7 @@ export default function ResetPasswordPage() {
 
   const shell = (children: React.ReactNode) => (
     <main className="flex min-h-screen items-center justify-center bg-paper p-6 text-ink">
-      <div className="w-full max-w-md space-y-6">{children}</div>
+      <div className="w-full max-w-md space-y-6">{children}<LegalFooterLinks /></div>
     </main>
   );
   const card = (title: string, description: React.ReactNode, body?: React.ReactNode) => (

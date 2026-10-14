@@ -1,3 +1,4 @@
+import { PrivacyLink, TermsLink } from "@/components/LegalLinks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -92,6 +93,7 @@ export default function JoinPage() {
       <div className="space-y-2"><Label htmlFor="join-email">Email</Label><Input id="join-email" type="email" autoComplete="email" value={invited.email} readOnly aria-readonly="true" className="bg-paper" /></div>
       <div className="space-y-2"><Label htmlFor="join-password">Password</Label><Input id="join-password" type="password" autoComplete="new-password" value={values.password} onChange={set("password")} /></div>
       <div className="space-y-2"><Label htmlFor="join-confirm-password">Confirm password</Label><Input id="join-confirm-password" type="password" autoComplete="new-password" value={values.confirmPassword} onChange={set("confirmPassword")} /></div>
+      <p className="text-xs leading-relaxed text-ink-muted">By creating your account, you agree to the <TermsLink newTab /> and acknowledge the <PrivacyLink newTab />.</p>
       <Button disabled={accept.isPending} type="submit" size="lg" className="w-full rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">{accept.isPending ? "Creating account…" : "Create account"}</Button>
     </form>
   )));

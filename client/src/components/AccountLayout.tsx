@@ -1,3 +1,4 @@
+import { LegalFooterLinks } from "@/components/LegalLinks";
 import { Button } from "@/components/ui/button";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import { useAccount } from "@/hooks/useAccount";
@@ -67,7 +68,10 @@ export default function AccountLayout({ children, heading, width = "reading" }: 
         {heading && <h1 className="font-serif text-3xl font-bold tracking-tight">{heading}</h1>}
         {children(account)}
       </div>
-      <footer className="border-t border-line py-6 text-center text-xs text-ink-muted">{BRAND.productEndorsement}</footer>
+      <footer className="space-y-2 border-t border-line py-6 text-center text-xs text-ink-muted">
+        <LegalFooterLinks />
+        <p>{BRAND.productEndorsement}</p>
+      </footer>
     </main>
   );
 }

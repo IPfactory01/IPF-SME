@@ -9,7 +9,7 @@ import { Reveal, ScrollProgress, Stagger, staggerChild } from "@/components/moti
 import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, CheckCircle2, KeyRound, MailCheck, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
 
 export default function Home() {
@@ -282,10 +282,13 @@ export default function Home() {
             <img src={BRAND.logoUrl} alt={BRAND.organisationName} className="h-16 w-auto" />
             <p>© 2026 {BRAND.organisationLegalName} ({BRAND.organisationName}). {BRAND.productName}: {BRAND.productTagline.toLowerCase()}.</p>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2">
             <a href="#how" onClick={onSectionLinkClick} className="hover:text-ink">How it works</a>
             <a href="#stuck" onClick={onSectionLinkClick} className="hover:text-ink">Where you're stuck</a>
             <a href="#questions" onClick={onSectionLinkClick} className="hover:text-ink">Questions</a>
+            <Link href="/terms" className="hover:text-ink">Terms &amp; Conditions</Link>
+            <Link href="/privacy" className="hover:text-ink">Privacy Policy</Link>
+            <a href={`mailto:${BRAND.businessSupportMailbox}`} className="hover:text-ink">{BRAND.businessSupportMailbox}</a>
           </div>
         </div>
       </footer>

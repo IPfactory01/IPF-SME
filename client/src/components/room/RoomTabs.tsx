@@ -109,7 +109,7 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
   return (
     <div>
       <div className="sticky z-30 border border-line bg-paper/85 p-2 backdrop-blur-md" style={{ top }} data-room-tabs>
-        <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="relative grid bg-paper-sunken p-1" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+        <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="relative grid bg-paper-sunken p-1 lg:max-w-md" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
           <motion.span
             aria-hidden
             className="absolute bottom-1 left-1 top-1 border border-line-soft bg-paper-raised shadow-sm"

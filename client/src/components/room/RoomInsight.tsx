@@ -5,6 +5,7 @@ import { animate, motion, useDragControls, useMotionValue, useReducedMotion, use
 import { ChevronRight, X } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useWide } from "@/hooks/useWide";
 import { project, TAB_SPRING } from "./RoomTabs";
 
 /**
@@ -48,6 +49,8 @@ export function FounderPanel({ insight }: { insight: RoomInsight }) {
   return (
     <div className="space-y-4">
       <Heading title="You, as the founder" source={sourceLine(insight)} />
+      {/* One section under the other on a phone; Founder readiness beside Strategic intent on a wide screen. */}
+      <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0">
       {founder.sections.length ? founder.sections.map(section => (
         <article key={section.number} className={CARD} aria-labelledby={`founder-${section.number}`}>
           <div className="flex items-start justify-between gap-3">
@@ -69,6 +72,7 @@ export function FounderPanel({ insight }: { insight: RoomInsight }) {
           <p className="mt-4 text-sm text-ink-muted">Your {METHOD.fullReport} adds the four money basics, your goal and how the gap to it closes. Without it, this tab shows what your {METHOD.businessCheck} found.</p>
         </article>
       )}
+      </div>
     </div>
   );
 }
@@ -221,21 +225,22 @@ export function BusinessPanel({ insight }: { insight: RoomInsight }) {
   const summary = tally.filter(item => item.n).map(item => `${item.n} ${HEALTH[item.health].label.toLowerCase()}`).join(", ");
   return (
     <div className="space-y-4">
-      <Heading title="Your business" source={insight.areas.some(area => area.reading) ? "Tap an area for detail" : sourceLine(insight)} />
+      <Heading title="Your business" source={insight.areas.some(area => area.reading) ? "Open an area for detail" : sourceLine(insight)} />
       <div className={CARD}>
         <div className="flex h-2.5 gap-0.5" role="img" aria-label={summary}>{tally.filter(item => item.n).map(item => <i key={item.health} className={`block h-full ${HEALTH[item.health].bar}`} style={{ flex: item.n }} />)}</div>
         <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-ink-600 tabular-nums">
           {tally.map(item => <span key={item.health} className="inline-flex items-center gap-1.5"><i aria-hidden className={`h-2 w-2 rounded-full ${HEALTH[item.health].bar}`} />{item.n} {HEALTH[item.health].label.toLowerCase()}</span>)}
         </p>
       </div>
-      <ul className="space-y-2" aria-label="Areas of your business">
+      {/* A list on a phone; a grid of the whole business at once on a wide screen. */}
+      <ul className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0 xl:grid-cols-3" aria-label="Areas of your business">
         {insight.areas.map(area => (
-          <li key={area.area}>
+          <li key={area.area} className="lg:flex">
             <button
               type="button"
               disabled={!area.reading && !area.benchmarks.length}
               onClick={event => { opener.current = event.currentTarget; setOpen(area); }}
-              className="grid w-full grid-cols-[4px_1fr_auto] items-stretch gap-x-4 border border-line-soft bg-paper-raised text-left shadow-sm transition-[transform,border-color] duration-100 hover:border-brand-line active:scale-[0.985] disabled:cursor-default disabled:active:scale-100 motion-reduce:transition-none"
+              className="grid w-full grid-cols-[4px_1fr_auto] items-stretch gap-x-4 border lg:h-full border-line-soft bg-paper-raised text-left shadow-sm transition-[transform,border-color] duration-100 hover:border-brand-line active:scale-[0.985] disabled:cursor-default disabled:active:scale-100 motion-reduce:transition-none"
             >
               <span aria-hidden className={HEALTH[area.health].bar} />
               <span className="min-w-0 py-3">
@@ -256,27 +261,30 @@ export function BusinessPanel({ insight }: { insight: RoomInsight }) {
 }
 
 /**
- * The detail for one area, in a sheet that rises from below and follows the finger down. Let go quickly, or past
- * halfway, and it closes; otherwise it springs back. Escape, the scrim and the close button close it too.
+ * The detail for one area. On a phone, a sheet that rises from below and follows the finger down: let go quickly, or
+ * past halfway, and it closes; otherwise it springs back. On a wide screen, a panel that slides in from the right, with
+ * the page still in view beside it. Escape, the scrim and the close button close either.
  */
 function AreaSheet({ area, source, onClose }: { area: InsightArea; source: RoomInsight["source"]; onClose: () => void }) {
   const reduce = useReducedMotion();
-  const y = useMotionValue(reduce ? 0 : 1200);
-  const scrim = useTransform(y, [0, 600], [1, 0]);
+  const side = useWide();
+  const offset = useMotionValue(reduce ? 0 : 1200);
+  const scrim = useTransform(offset, [0, 600], [1, 0]);
   const sheet = useRef<HTMLElement>(null);
   const close = useRef<HTMLButtonElement>(null);
   const controls = useDragControls();
   const closing = useRef(false);
+  const size = () => (side ? sheet.current?.offsetWidth : sheet.current?.offsetHeight) ?? 600;
 
   const dismiss = (velocity = 0) => {
     if (closing.current) return;
     closing.current = true;
     if (reduce) { onClose(); return; }
-    animate(y, (sheet.current?.offsetHeight ?? 600) + 24, { ...TAB_SPRING, duration: 0.3, velocity, onComplete: onClose });
+    animate(offset, size() + 24, { ...TAB_SPRING, duration: 0.3, velocity, onComplete: onClose });
   };
 
   useEffect(() => {
-    if (!reduce) animate(y, 0, { ...TAB_SPRING, duration: 0.32 });
+    if (!reduce) animate(offset, 0, { ...TAB_SPRING, duration: 0.32 });
     close.current?.focus();
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") dismiss(); };
     document.addEventListener("keydown", onKey);
@@ -286,9 +294,8 @@ function AreaSheet({ area, source, onClose }: { area: InsightArea; source: RoomI
   }, []);
 
   const onDragEnd = (_: unknown, info: PanInfo) => {
-    const height = sheet.current?.offsetHeight ?? 600;
-    if ((y.get() + project(info.velocity.y)) / height > 0.45) dismiss(info.velocity.y);
-    else animate(y, 0, { ...TAB_SPRING, duration: 0.3, velocity: info.velocity.y });
+    if ((offset.get() + project(info.velocity.y)) / size() > 0.45) dismiss(info.velocity.y);
+    else animate(offset, 0, { ...TAB_SPRING, duration: 0.3, velocity: info.velocity.y });
   };
 
   if (typeof document === "undefined") return null;
@@ -300,9 +307,12 @@ function AreaSheet({ area, source, onClose }: { area: InsightArea; source: RoomI
         role="dialog"
         aria-modal="true"
         aria-labelledby="area-sheet-title"
-        className="fixed inset-x-0 bottom-0 z-[61] mx-auto flex max-h-[88vh] max-w-2xl flex-col border border-line-soft bg-paper-raised shadow-xl"
-        style={{ y }}
-        drag="y"
+        data-placement={side ? "side" : "bottom"}
+        className={side
+          ? "fixed inset-y-0 right-0 z-[61] flex w-[min(34rem,100vw)] flex-col border-l border-line-soft bg-paper-raised shadow-xl"
+          : "fixed inset-x-0 bottom-0 z-[61] mx-auto flex max-h-[88vh] max-w-2xl flex-col border border-line-soft bg-paper-raised shadow-xl"}
+        style={side ? { x: offset } : { y: offset }}
+        drag={side ? false : "y"}
         dragControls={controls}
         dragListener={false}
         dragConstraints={{ top: 0, bottom: 0 }}
@@ -310,8 +320,8 @@ function AreaSheet({ area, source, onClose }: { area: InsightArea; source: RoomI
         dragMomentum={false}
         onDragEnd={onDragEnd}
       >
-        <div className="touch-none cursor-grab px-5 pb-3 pt-2" onPointerDown={event => controls.start(event)}>
-          <div aria-hidden className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />
+        <div className={side ? "px-6 pb-3 pt-6" : "touch-none cursor-grab px-5 pb-3 pt-2"} onPointerDown={side ? undefined : event => controls.start(event)}>
+          {!side && <div aria-hidden className="mx-auto mb-3 h-1 w-10 rounded-full bg-line" />}
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className={KICKER}>{HEALTH[area.health].label} · from your {source}</p>
@@ -320,7 +330,7 @@ function AreaSheet({ area, source, onClose }: { area: InsightArea; source: RoomI
             <button ref={close} type="button" onClick={() => dismiss()} aria-label="Close" className="flex h-8 w-8 shrink-0 items-center justify-center bg-paper-sunken text-ink-muted hover:text-ink"><X className="h-4 w-4" aria-hidden /></button>
           </div>
         </div>
-        <div className="space-y-4 overflow-y-auto overscroll-contain px-5 pb-8">
+        <div className={`space-y-4 overflow-y-auto overscroll-contain pb-8 ${side ? "px-6" : "px-5"}`}>
           <p className="font-serif text-lg leading-snug">{area.finding}</p>
           {area.benchmarks.length > 0 && <div><p className={KICKER}>Against what good looks like</p><div className="mt-2"><Benchmarks items={area.benchmarks} /></div></div>}
           {area.reading && <Reading reading={area.reading} />}

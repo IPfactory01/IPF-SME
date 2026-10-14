@@ -9,6 +9,7 @@ import { evaluate, READINESS_LABELS } from "@shared/businessCheck/engine";
 import { buildFullReport } from "@shared/fullReport/build";
 import { roomInsight, type RoomInsight } from "@shared/fullReport/insight";
 import { MotionGlobalConfig } from "framer-motion";
+import { WIDE_QUERY } from "@/hooks/useWide";
 import { businessCheckProfiles } from "../../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../../fixtures/reportIntake";
 
@@ -329,6 +330,7 @@ describe("the room's Founder, Business and Plan tabs", () => {
     const row = rows[fromReport.areas.indexOf(withReading)];
     fireEvent.click(row);
     const sheet = screen.getByRole("dialog", { name: withReading.area });
+    expect(sheet.getAttribute("data-placement")).toBe("bottom");
     expect(within(sheet).getByText("What your answers show")).toBeTruthy();
     expect(within(sheet).getByText(`Recommendation ${withReading.reading!.code}`)).toBeTruthy();
     expect(within(sheet).getByText(withReading.reading!.move)).toBeTruthy();
@@ -349,5 +351,69 @@ describe("the room's Founder, Business and Plan tabs", () => {
     fireEvent.click(screen.getByRole("tab", { name: /Business/ }));
     // Nothing to open without a reading: the rows are not buttons that do nothing.
     for (const button of within(screen.getByRole("list", { name: "Areas of your business" })).getAllByRole("button")) expect((button as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+/** A laptop or desktop: the browser reports the room's wide-screen query as matching. */
+const onWideScreen = () => vi.stubGlobal("matchMedia", (query: string) => ({
+  matches: query === WIDE_QUERY, media: query, onchange: null,
+  addEventListener: () => undefined, removeEventListener: () => undefined, addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false,
+}));
+
+describe("the room on a laptop or desktop", () => {
+  beforeEach(() => {
+    MotionGlobalConfig.skipAnimations = true;
+    window.history.replaceState(null, "", "/dashboard");
+  });
+
+  it("keeps the phone layout where the screen is narrow: no column beside the timeline, the seat card at the end", () => {
+    render(<EngagementRoom room={room()} aside={<p>Seat card</p>} />);
+    expect(screen.queryByRole("complementary", { name: "At a glance" })).toBeNull();
+    expect(screen.getAllByText("Seat card")).toHaveLength(1);
+  });
+
+  it("puts what is waiting on the owner and the Deliverables beside the timeline, and the two team cards under it", () => {
+    onWideScreen();
+    render(<EngagementRoom room={room({ report: { requestedAt: new Date("2026-10-14T09:00:00Z"), deliveredAt: new Date("2026-10-14T10:00:00Z") } })} aside={<p>Seat card</p>} />);
+    const glance = within(screen.getByRole("complementary", { name: "At a glance" }));
+    // Two open Data Requests (one needing more) and the Findings to sign off; never the team's own action or a received one.
+    const waiting = within(glance.getByRole("region", { name: "Waiting on you" }));
+    expect(waiting.getByText("3")).toBeTruthy();
+    expect(waiting.getByRole("link", { name: "Your Sign-off on the Findings" })).toBeTruthy();
+    expect(waiting.getByRole("link", { name: "Your last 12 months of sales" })).toBeTruthy();
+    expect(waiting.getByText(/We need a bit more/)).toBeTruthy();
+    expect(waiting.queryByText("Send the cash template")).toBeNull();
+    expect(waiting.queryByText("Who works in the business")).toBeNull();
+    const deliverables = within(glance.getByRole("region", { name: "Deliverables" }));
+    expect(deliverables.getByRole("link", { name: "Full Report" })).toBeTruthy();
+    expect(deliverables.getByRole("link", { name: "Findings" })).toBeTruthy();
+    expect(deliverables.getByText("Your Sign-off")).toBeTruthy();
+    // The seat card is shown once, beside the team, not in the column.
+    expect(screen.getAllByText("Seat card")).toHaveLength(1);
+    expect(glance.queryByText("Seat card")).toBeNull();
+    expect(screen.getByRole("heading", { name: "Lewis Lead and Ola Analyst" })).toBeTruthy();
+
+    // A link in the column opens the step that holds it.
+    fireEvent.click(waiting.getByRole("link", { name: "Your Sign-off on the Findings" }));
+    expect(screen.getByRole("region", { name: "Step 5: Findings" })).toBeTruthy();
+  });
+
+  it("tells a staff member with full access that the Sign-off is the owner's, and says when nothing is waiting", () => {
+    onWideScreen();
+    render(<EngagementRoom room={room({ viewer: { kind: "member", access: "full" }, tasks: [] })} />);
+    const glance = within(screen.getByRole("complementary", { name: "At a glance" }));
+    expect(glance.getByText("Nothing outstanding. We will tell you here when there is.")).toBeTruthy();
+    expect(glance.getByText("Awaiting Sign-off")).toBeTruthy();
+  });
+
+  it("opens an area's detail in a panel from the right, beside the page, instead of a sheet from below", async () => {
+    onWideScreen();
+    render(<EngagementRoom room={room({ insight: fromReport })} />);
+    fireEvent.click(screen.getByRole("tab", { name: /Business/ }));
+    const withReading = fromReport.areas.find(area => area.reading)!;
+    fireEvent.click(within(screen.getByRole("list", { name: "Areas of your business" })).getAllByRole("button")[fromReport.areas.indexOf(withReading)]);
+    expect(screen.getByRole("dialog", { name: withReading.area }).getAttribute("data-placement")).toBe("side");
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });

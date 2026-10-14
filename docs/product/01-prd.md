@@ -226,6 +226,9 @@ Rules:
   The tabs are rebuilt from the stored answers (`shared/fullReport/insight.ts`), so they never say something the report
   does not; only the owner and full-access staff receive them from the server, and a contributor sees the Plan alone. A
   report buyer who never paid for the Current State Assessment has no account, so no room: the report is theirs by email.
+  **Built 14 October: the desktop layout.** On a laptop or desktop the room spreads like the site instead of showing a
+  phone-width column: where you are beside what to do next, the timeline beside a column that stays in view with what
+  is waiting on the client and the Deliverables, the Founder sections side by side and the business areas in a grid.
 
 ### F8. Engagement record and check-ins (internal)
 

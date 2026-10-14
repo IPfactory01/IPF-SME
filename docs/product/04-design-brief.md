@@ -187,7 +187,14 @@ The room follows document 07, in the site's dress (`client/src/components/Accoun
 
 - **The signed-in shell** carries the mark, the product name and the gradient rule, with the site's nav underline;
   `container` width for the room, a reading width for the settings pages; the endorsement in the footer.
-- **One column, phone first,** at most 42 rem wide: a page that reads top to bottom, not a tray of cards.
+- **One column on a phone,** at most 42 rem wide: a page that reads top to bottom, not a tray of cards.
+- **Spread on a laptop or desktop** (from 1,024 px, Tailwind `lg`), like the site: the room uses the `container` width.
+  The Now panel puts where you are on the left and the next action with the next Session on the right. The Plan sets
+  the timeline beside a column that stays in view as it scrolls: **Waiting on you** (everything the client owes,
+  earliest first, and the owner's Sign-offs) and **Deliverables** (each with its Sign-off state). The two team cards
+  (IP Factory's team, and the owner's staff seat) sit side by side under them. Founder shows its two sections side by
+  side; Business shows the areas in a grid, two or three across, and an area opens in a panel from the right instead
+  of a sheet from below. The tab control keeps its width at the left of its bar. The phone layout is unchanged.
 - **Now** is the headline: the stage with its week and day ("Current State Assessment · Week 1 of 2", "Day 4 of 14"
   on a gradient progress line), one sentence on what the stage is for. The greeting and the business name are the
   eyebrow in `highlight-ink`. The logo's colours sit softly behind, as on the site's hero.

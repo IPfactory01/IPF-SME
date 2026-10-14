@@ -14,7 +14,7 @@ export const TRACK_RECORD = [
   { value: RECORD.clients, label: "clients advised" },
   { value: RECORD.partnerYears, label: "years of partner experience" },
   { value: `Since ${RECORD.since}`, label: "advising Nigerian businesses" },
-  { value: "Every", label: "major sector of the economy" },
+  { value: `${RECORD.sectors.length}`, label: "sectors of the economy" },
 ] as const;
 
 /** Research on small businesses in Nigeria and on what help works, each with its source. */
@@ -78,8 +78,17 @@ export function ExperienceBehind() {
           <span className="text-xs uppercase tracking-widest text-ink-muted font-semibold block mb-3">The experience behind {BRAND.productName}</span>
           <h2 className="font-serif text-4xl font-bold tracking-tight mb-6">Years of consulting, built for a business your size.</h2>
           <p className="text-lg text-ink-600 leading-relaxed">
-            {BRAND.productName} is run by {BRAND.organisationName}, {RECORD.lineage}. Since {RECORD.since}, our partners have advised more than {RECORD.clients.replace("+", "")} clients, from owner-run businesses to boards and development agencies, in every major sector of the economy.
+            {BRAND.productName} is run by {BRAND.organisationName}, the delivery and method arm of{" "}
+            {RECORD.groupUrl
+              ? <a href={RECORD.groupUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand underline underline-offset-4 hover:text-highlight-ink">{RECORD.groupName}</a>
+              : <span className="font-semibold text-ink">{RECORD.groupName}</span>}
+            , {RECORD.lineage}. Since {RECORD.since}, our partners have advised more than {RECORD.clients.replace("+", "")} clients, from owner-run businesses to boards and development agencies.
           </p>
+          <ul aria-label="Sectors we have worked in" className="mt-6 flex flex-wrap gap-2">
+            {RECORD.sectors.map((sector) => (
+              <li key={sector} className="border border-brand-line bg-paper-raised px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand">{sector}</li>
+            ))}
+          </ul>
         </Reveal>
         <Reveal delay={0.1}>
           <blockquote className="my-12 border-l-4 border-highlight-ink bg-brand-tint px-6 py-6 font-serif text-2xl italic leading-snug text-brand-deep sm:text-3xl">

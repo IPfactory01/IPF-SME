@@ -32,14 +32,17 @@ var init_brand = __esm({
       productEndorsement: "The Shift, by IP Factory",
       productTagline: "Support for business owners",
       /**
-       * The track record the site states, confirmed by ET on 13 October 2026. Every figure must stay defensible: the group
-       * and its partners are deliberately not named.
+       * The track record the site states, confirmed by ET on 13 October 2026. Every figure must stay defensible. The parent
+       * firm is named (ET, 14 October 2026); the partners are not. groupUrl links the name when set; empty shows plain text.
        */
       trackRecord: {
-        lineage: "the delivery and method arm of an established Nigerian management consulting group",
+        groupName: "Enzo Krypton & Co.",
+        groupUrl: "",
+        lineage: "an established Nigerian management consulting firm",
         clients: "250+",
         partnerYears: "50+",
-        since: 2011
+        since: 2011,
+        sectors: ["Hospitality", "Food and restaurants", "Retail and fashion", "Education", "Agriculture", "Health", "Financial services", "Technology and media", "Public sector and development"]
       },
       /** External page for the free business check, if it runs elsewhere. Empty: the on-site form opens. */
       applyUrl: "",

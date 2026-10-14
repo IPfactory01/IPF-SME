@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MotionGlobalConfig } from "framer-motion";
 import { Router } from "wouter";
@@ -26,6 +26,7 @@ vi.mock("@/lib/trpc", () => ({
 }));
 
 const { default: Home } = await import("@/pages/Home");
+const { BRAND } = await import("@shared/brand");
 
 const renderHome = (path = "/") => {
   window.history.replaceState({}, "", path);
@@ -58,16 +59,23 @@ describe("home page track record", () => {
   it("states the track record from the brand settings, under the hero", () => {
     renderHome();
     const record = screen.getByRole("region", { name: "Our track record" });
-    for (const text of ["250+", "clients advised", "50+", "years of partner experience", "Since 2011", "major sector of the economy"]) expect(record.textContent).toContain(text);
+    for (const text of ["250+", "clients advised", "50+", "years of partner experience", "Since 2011", `${BRAND.trackRecord.sectors.length}`, "sectors of the economy"]) expect(record.textContent).toContain(text);
   });
 
-  it("explains the experience behind The Shift, linked from the navigation, without naming the group or its partners", () => {
+  it("names the parent firm and the sectors, links the firm when its address is set, and never names a partner", () => {
     const { container } = renderHome();
     expect(screen.getByRole("link", { name: "Our experience" }).getAttribute("href")).toBe("#experience");
     const section = container.querySelector("#experience")!;
-    expect(section.textContent).toContain("the delivery and method arm of an established Nigerian management consulting group");
+    expect(section.textContent).toContain(`the delivery and method arm of ${BRAND.trackRecord.groupName}, an established Nigerian management consulting firm`);
     expect(section.textContent).toContain("The same method we use with larger clients. Run at the size and the price that fits your business.");
-    expect(container.textContent).not.toMatch(/Enzo|Krypton|Tarfa|Anago|Kurumi/i);
+    const sectors = within(screen.getByRole("list", { name: "Sectors we have worked in" })).getAllByRole("listitem").map((item) => item.textContent);
+    expect(sectors).toEqual(BRAND.trackRecord.sectors);
+    const link = screen.queryByRole("link", { name: BRAND.trackRecord.groupName });
+    if (BRAND.trackRecord.groupUrl) {
+      expect(link?.getAttribute("href")).toBe(BRAND.trackRecord.groupUrl);
+      expect(link?.getAttribute("rel")).toContain("noopener");
+    } else expect(link).toBeNull();
+    expect(container.textContent).not.toMatch(/Tarfa|Anago|Kurumi/i);
   });
 
   it("backs the problem with sourced figures, in the site's words", () => {

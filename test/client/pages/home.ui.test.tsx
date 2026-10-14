@@ -78,6 +78,15 @@ describe("home page track record", () => {
     expect(container.textContent).not.toMatch(/Tarfa|Anago|Kurumi/i);
   });
 
+  it("lists the clients named with their agreement, each with its sector and the work, and no client figures", () => {
+    renderHome();
+    const items = within(screen.getByRole("list", { name: "Clients we have worked with" })).getAllByRole("listitem");
+    expect(items.map((item) => item.querySelector("p")!.textContent)).toEqual(BRAND.trackRecord.namedClients.map((client) => client.name));
+    expect(items.map((item) => item.textContent)).toEqual(BRAND.trackRecord.namedClients.map((client) => `${client.name}${client.sector}${client.work}`));
+    for (const item of items) expect(item.textContent).not.toMatch(/₦|\$|\d+%/);
+    expect(screen.getByText(/Named with their agreement\./).textContent).toBe(`And more than 250 businesses since ${BRAND.trackRecord.since}. Named with their agreement.`);
+  });
+
   it("backs the problem with sourced figures, in the site's words", () => {
     const { container } = renderHome();
     const problem = container.querySelector("#problem")!;

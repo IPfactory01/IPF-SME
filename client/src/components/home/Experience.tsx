@@ -9,6 +9,8 @@ import { BookOpenCheck, Scale, UserCheck } from "lucide-react";
 import React from "react";
 
 const RECORD = BRAND.trackRecord;
+/** "250+" as words for a sentence: "250". */
+const RECORD_TOTAL = RECORD.clients.replace("+", "");
 
 export const TRACK_RECORD = [
   { value: RECORD.clients, label: "clients advised" },
@@ -82,7 +84,7 @@ export function ExperienceBehind() {
             {RECORD.groupUrl
               ? <a href={RECORD.groupUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand underline underline-offset-4 hover:text-highlight-ink">{RECORD.groupName}</a>
               : <span className="font-semibold text-ink">{RECORD.groupName}</span>}
-            , {RECORD.lineage}. Since {RECORD.since}, our partners have advised more than {RECORD.clients.replace("+", "")} clients, from owner-run businesses to boards and development agencies.
+            , {RECORD.lineage}. Since {RECORD.since}, our partners have advised more than {RECORD_TOTAL} clients, from owner-run businesses to boards and development agencies.
           </p>
           <ul aria-label="Sectors we have worked in" className="mt-6 flex flex-wrap gap-2">
             {RECORD.sectors.map((sector) => (
@@ -94,6 +96,19 @@ export function ExperienceBehind() {
           <blockquote className="my-12 border-l-4 border-highlight-ink bg-brand-tint px-6 py-6 font-serif text-2xl italic leading-snug text-brand-deep sm:text-3xl">
             The same method we use with larger clients. Run at the size and the price that fits your business.
           </blockquote>
+        </Reveal>
+        <Reveal className="mb-12">
+          <h3 className="mb-5 text-xs font-semibold uppercase tracking-widest text-ink-muted">Some of the businesses we have worked with</h3>
+          <ul aria-label="Clients we have worked with" className="grid grid-cols-1 gap-px border border-line bg-line md:grid-cols-3">
+            {RECORD.namedClients.map((client) => (
+              <li key={client.name} className="bg-paper-raised p-6">
+                <p className="font-serif text-2xl font-bold text-ink">{client.name}</p>
+                <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-highlight-ink">{client.sector}</p>
+                <p className="mt-3 text-ink-600 leading-relaxed">{client.work}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-4 text-sm text-ink-muted">And more than {RECORD_TOTAL} businesses since {RECORD.since}. Named with their agreement.</p>
         </Reveal>
         <Stagger className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {POINTS.map(({ icon: Icon, title, text }) => (

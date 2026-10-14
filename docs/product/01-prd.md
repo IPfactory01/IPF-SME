@@ -70,8 +70,10 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
   experience, since 2011, the number of sectors; `BRAND.trackRecord`), sourced figures under the problem ("They fail
   between knowing and doing", concept note §2–3), and **The experience behind The Shift**: IP Factory as the delivery
   and method arm of Enzo Krypton & Co. (named from 14 October; linked when `trackRecord.groupUrl` is set), the sectors
-  as a list, and "The same method we use with larger clients. Run at the size and the price that fits your business."
-  Partners are not named; every figure must stay defensible.
+  as a list, "The same method we use with larger clients. Run at the size and the price that fits your business.", and
+  **Some of the businesses we have worked with**: Ruff 'n' Tumble, SKLD (formerly School Kits) and MAX, each named with
+  its agreement, with the sector and the work and no client figures (`trackRecord.namedClients`). Partners are not
+  named; every figure must stay defensible.
 - Copy rules: second person, short sentences, naira in full, no consulting words, never "door", "sprint", "playbook"
   or "retainer" (§3 front matter; `AGENTS.md`).
 - No "book a Current State Assessment" button: the call comes first and the payment request follows it.

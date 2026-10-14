@@ -37,11 +37,20 @@ var init_brand = __esm({
        */
       trackRecord: {
         groupName: "Enzo Krypton & Co.",
-        groupUrl: "",
+        groupUrl: "https://enzokrypton.com/",
         lineage: "an established Nigerian management consulting firm",
         clients: "250+",
         partnerYears: "50+",
         since: 2011,
+        /**
+         * Clients named on the site, each with their agreement (confirmed by ET, 14 October 2026). Describe the work, never
+         * the client's problems, and never a client's figures without separate written permission.
+         */
+        namedClients: [
+          { name: "Ruff 'n' Tumble", sector: "Children's fashion retail", work: "An 18-month transformation: a cost review, a new organisation design and goals tracked every month." },
+          { name: "SKLD (formerly School Kits)", sector: "School supplies", work: "A transformation plan, and written procedures for how each part of the business runs." },
+          { name: "MAX", sector: "Mobility and logistics", work: "A business transformation." }
+        ],
         sectors: ["Hospitality", "Food and restaurants", "Retail and fashion", "Education", "Agriculture", "Health", "Financial services", "Technology and media", "Public sector and development"]
       },
       /** External page for the free business check, if it runs elsewhere. Empty: the on-site form opens. */

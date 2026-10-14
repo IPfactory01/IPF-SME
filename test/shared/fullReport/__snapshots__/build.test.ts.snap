@@ -212,12 +212,78 @@ exports[`the full report > is deterministic: the same answers give the same repo
         },
         {
           "answer": "Open a second shop in Yaba and reach ₦4 million a month",
-          "question": "What would make the next 12 months a success?",
+          "question": "What would make the next 12 months a success, and what monthly sales do you want by then?",
         },
       ],
       "title": "Your Report Intake",
     },
   ],
+  "background": {
+    "engagement": [
+      "Your Business Check: the ten places a business gets stuck, and you as a founder, in your words.",
+      "Your Report Intake, completed 9 October 2026: what you sell, who buys, how the business runs, and the numbers.",
+      "This plan: built by fixed rules from both, so every finding traces back to an answer you gave.",
+    ],
+    "facts": [
+      {
+        "detail": "Cash is always tight and prices are guesses, so the business runs without a dashboard.",
+        "headline": "Financials",
+      },
+      {
+        "detail": "Money comes in, but the business still does not make money.",
+        "headline": "Business model",
+      },
+    ],
+    "headline": [
+      "Start with financials: the first job is to see the problem clearly, with numbers, before spending on a fix.",
+      "Cash would cover 1 to 5 weeks of costs. Until it covers 8 weeks, plan every spend against a 13-week cash forecast.",
+      "Seven areas are stuck, but they are rarely separate problems. Fixing the root first should ease the rest.",
+    ],
+    "overview": "You took the Business Check and completed the Report Intake. This plan brings what you told us into one place, as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers.",
+    "position": [
+      {
+        "figure": "2 to 5 years",
+        "label": "Trading for",
+        "meaning": "Revenue has been flat for the last 12 months.",
+      },
+      {
+        "figure": "₦2,400,000",
+        "label": "Money in last month",
+        "meaning": "Within the typical month you described",
+      },
+      {
+        "figure": "₦250,000",
+        "label": "Left after costs",
+        "meaning": "A real surplus",
+      },
+      {
+        "figure": "25% to 50%",
+        "label": "Gross margin",
+        "meaning": "Workable, with little room for mistakes",
+      },
+      {
+        "figure": "1 to 5 weeks",
+        "label": "Cash cover",
+        "meaning": "One bad month is a crisis",
+      },
+      {
+        "figure": "50 to 200; 3 in 10 buy",
+        "label": "Enquiries a month",
+        "meaning": "The demand the plan starts from",
+      },
+      {
+        "figure": "1 to 2",
+        "label": "People",
+        "meaning": "You and a co-founder or partner",
+      },
+      {
+        "figure": "A fifth to a half",
+        "label": "Top three customers",
+        "meaning": "Share of your sales",
+      },
+    ],
+    "question": undefined,
+  },
   "businessName": "Adunni Fabrics",
   "date": "9 October 2026",
   "descriptor": "A retail business that buys and sells goods, trading for two to five years",
@@ -459,107 +525,95 @@ exports[`the full report > is deterministic: the same answers give the same repo
     "watch": "Weeks of costs covered by cash in the bank",
   },
   "ownerName": "Adunni Example",
-  "parts": [
+  "reference": "TS-R-000012",
+  "sections": [
     {
       "blocks": [
         {
-          "kind": "facts",
-          "rows": [
-            {
-              "label": "Business",
-              "value": "Adunni Fabrics",
-            },
-            {
-              "label": "What it does",
-              "value": "A fictional business used to test the business check.",
-            },
-            {
-              "label": "Where it sells",
-              "value": "A shop in Balogun Market, Lagos, and orders on WhatsApp",
-            },
-            {
-              "label": "Registration",
-              "value": "A registered business name (CAC)",
-            },
-            {
-              "label": "Sector",
-              "value": "Retail",
-            },
-            {
-              "label": "Trading for",
-              "value": "2 to 5 years",
-            },
-            {
-              "label": "People",
-              "value": "1 to 2",
-            },
-            {
-              "label": "A typical month",
-              "value": "₦1 million to ₦3 million",
-            },
-            {
-              "label": "Last month",
-              "value": "₦2,400,000 came in",
-            },
-            {
-              "label": "Last 12 months",
-              "value": "Flat, stuck at the same level",
-            },
-          ],
-        },
-        {
-          "columns": [
-            "What you sell",
-            "Price",
-            "",
-          ],
-          "kind": "table",
-          "rows": [
-            [
-              "Ankara fabric (6 yards)",
-              "₦18,000",
-              "",
-            ],
-            [
-              "Lace fabric (5 yards)",
-              "₦65,000",
-              "Top earner",
-            ],
-            [
-              "Aso-oke sets",
-              "Varies",
-              "",
-            ],
-          ],
-          "widths": [
-            0.6,
-            0.25,
-            0.15,
-          ],
-        },
-        {
-          "kind": "heading",
-          "text": "You and your team",
+          "code": "1.1",
+          "kind": "subsection",
+          "title": "Your behavioural profile",
         },
         {
           "kind": "facts",
           "rows": [
-            {
-              "label": "Founder readiness",
-              "value": "Intermediate: ready, with gaps to close",
-            },
             {
               "label": "Under pressure",
               "value": "Influencer. You sell, persuade and rally people.",
             },
             {
               "label": "Others see you as",
-              "value": "Influencer",
+              "value": "Influencer. You sell, persuade and rally people.",
             },
             {
               "label": "Watch for",
               "value": "Follow-through and the numbers can slip.",
             },
+          ],
+        },
+        {
+          "items": [
+            "On your own, behaviour is a matter of style. With a team, it becomes how the business runs.",
+            "Your watch-out is a pattern, not a flaw: follow-through and the numbers can slip. Name it, then design around it.",
+          ],
+          "kind": "numbered",
+          "title": "Why it matters now",
+        },
+        {
+          "code": "1.2",
+          "kind": "subsection",
+          "title": "The four money basics",
+        },
+        {
+          "columns": [
+            "The basic",
+            "Today",
+            "Weight in this plan",
+          ],
+          "kind": "table",
+          "rows": [
+            [
+              "Read a profit and loss statement",
+              "Not yet",
+              "High",
+            ],
+            [
+              "Tell profit from cash",
+              "Yes",
+              "Critical",
+            ],
+            [
+              "Work out a unit cost",
+              "Not yet",
+              "Critical",
+            ],
+            [
+              "Know your margin",
+              "Not yet",
+              "Critical",
+            ],
+          ],
+          "widths": [
+            0.5,
+            0.2,
+            0.3,
+          ],
+        },
+        {
+          "code": "1.1",
+          "kind": "recommendation",
+          "lines": [
+            "Use your own numbers as the classroom. One hour in the first week of each month: work out last month's margin and cash, change one price or cost on paper, and watch what moves. Three months of that will cover most of what is missing: reading a profit and loss statement, working out a unit cost and knowing your margin.",
+          ],
+        },
+        {
+          "code": "1.3",
+          "kind": "subsection",
+          "title": "Time, the hard calls and the bottleneck",
+        },
+        {
+          "kind": "facts",
+          "rows": [
             {
               "label": "Who carries it with you",
               "value": "You and a co-founder or partner",
@@ -569,22 +623,56 @@ exports[`the full report > is deterministic: the same answers give the same repo
               "value": "2 to 4 hours a week",
             },
             {
-              "label": "Money skills",
-              "value": "You can tell profit from cash.",
+              "label": "Readiness",
+              "value": "Intermediate: ready, with gaps to close",
             },
           ],
         },
+        {
+          "code": "1.2",
+          "kind": "recommendation",
+          "lines": [
+            "Before your next hire, write down five decisions you will keep and five you will hand over. Hiring removes work from your hands only if the decision moves with it.",
+          ],
+        },
       ],
-      "finding": "Adunni Fabrics buys and sells goods and has traded for two to five years. Revenue has been flat for the last 12 months.",
       "health": "watch",
-      "method": "Business overview",
       "number": 1,
-      "title": "Your business today",
+      "overview": "This section asks whether you are equipped for the business this plan describes, and names the gaps to close first. It is built from your answers about yourself in the Business Check.",
+      "scope": [
+        "Your behavioural profile.",
+        "The four money basics.",
+        "Time, the hard calls and who carries the business with you.",
+      ],
+      "standfirst": "Intermediate: ready, with gaps to close. No business outgrows the person running it.",
+      "title": "Founder readiness",
     },
     {
       "blocks": [
         {
+          "code": "2.1",
+          "kind": "subsection",
+          "title": "Your goal",
+        },
+        {
+          "kind": "paragraph",
+          "text": "In your words: “Open a second shop in Yaba and reach ₦4 million a month.”",
+        },
+        {
+          "code": "2.1",
+          "kind": "recommendation",
+          "lines": [
+            "State the goal in two parts: the long ambition, which is yours and not ours to moderate, and a twelve-month definition of arrival that can be tested: a monthly sales figure, a margin, and the hours you work.",
+          ],
+        },
+        {
+          "code": "2.2",
+          "kind": "subsection",
+          "title": "What your answers say",
+        },
+        {
           "area": "Strategic intent",
+          "code": "2.2",
           "good": "You can say in two sentences where the business will be in three years. You have three priorities for this year, and most of your week goes on them.",
           "health": "stuck",
           "kind": "reading",
@@ -601,17 +689,57 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "thisWeek": "Book two hours with your partners to answer one question: where must the business be in 12 months?",
           "watch": "Hours a week spent on your three priorities",
         },
+        {
+          "code": "2.3",
+          "kind": "subsection",
+          "title": "The order of priorities",
+        },
+        {
+          "kind": "paragraph",
+          "text": "One goal per phase, not three. The most common failure is not a bad plan but five good plans running at once, none of them finished.",
+        },
+        {
+          "columns": [
+            "Months",
+            "The single goal",
+          ],
+          "kind": "table",
+          "rows": [
+            [
+              "1 to 3",
+              "Fix the root: Financials, Business model, and Market entry and sales, and start the weekly numbers. No growth target.",
+            ],
+            [
+              "4 to 9",
+              "Work through Service and offering, Operations and people, Strategic intent, and Risk and compliance; move towards your goal.",
+            ],
+            [
+              "10 to 12",
+              "Hold the gains, and make the business depend less on you.",
+            ],
+          ],
+          "widths": [
+            0.2,
+            0.8,
+          ],
+        },
       ],
-      "finding": "You are busy every day without a clear destination, so effort spreads thin.",
       "health": "stuck",
-      "method": "Strategic intent",
       "number": 2,
-      "title": "Where it is going",
+      "overview": "Strategic intent is not a sentence for a website. It is a rule that lets you say no to things that look like opportunities, and it is tested by what it makes you refuse.",
+      "scope": [
+        "Your goal and its horizon.",
+        "What your answers say about direction.",
+        "The order of priorities across twelve months.",
+      ],
+      "standfirst": "You are busy every day without a clear destination, so effort spreads thin.",
+      "title": "Strategic intent",
     },
     {
       "blocks": [
         {
           "area": "Market and industry",
+          "code": "3.1",
           "good": "You can describe your best customers, what they pay and why they choose you, and name the two or three competitors they compare you with.",
           "health": "watch",
           "kind": "reading",
@@ -629,6 +757,11 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "theirWords": "“I know my customers, but little about competitors or the wider market”",
           "thisWeek": "Visit, call or browse three competitors as a customer would, and note their prices.",
           "watch": "Share of sales from your target customer group",
+        },
+        {
+          "code": "3.1",
+          "kind": "subsection",
+          "title": "Your position at a glance",
         },
         {
           "columns": [
@@ -660,14 +793,54 @@ exports[`the full report > is deterministic: the same answers give the same repo
           ],
         },
       ],
-      "finding": "You know your customers, but not the competitors and market around them.",
       "health": "watch",
-      "method": "Market and industry assessment",
       "number": 3,
-      "title": "Your market",
+      "overview": "This section tests whether the ground will carry the plan: who buys, who else sells to them, and where your prices sit.",
+      "scope": [
+        "Your best customer and your competitors.",
+        "Where your prices sit.",
+        "Your position at a glance.",
+      ],
+      "standfirst": "You know your customers, but not the competitors and market around them.",
+      "title": "Market and industry",
     },
     {
       "blocks": [
+        {
+          "code": "4.1",
+          "kind": "subsection",
+          "title": "What you sell",
+        },
+        {
+          "columns": [
+            "What you sell",
+            "Price",
+            "",
+          ],
+          "kind": "table",
+          "rows": [
+            [
+              "Ankara fabric (6 yards)",
+              "₦18,000",
+              "",
+            ],
+            [
+              "Lace fabric (5 yards)",
+              "₦65,000",
+              "Top earner",
+            ],
+            [
+              "Aso-oke sets",
+              "Varies",
+              "",
+            ],
+          ],
+          "widths": [
+            0.6,
+            0.25,
+            0.15,
+          ],
+        },
         {
           "items": [
             {
@@ -717,7 +890,13 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "kind": "benchmarks",
         },
         {
+          "code": "4.2",
+          "kind": "subsection",
+          "title": "The offer",
+        },
+        {
           "area": "Service and offering",
+          "code": "4.1",
           "good": "Customers understand what you sell, why it is better for them and what it costs. Your range is focused on what sells.",
           "health": "stuck",
           "kind": "reading",
@@ -736,7 +915,13 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "watch": "Average sale value, and how many enquiries become sales",
         },
         {
+          "code": "4.3",
+          "kind": "subsection",
+          "title": "How it makes money",
+        },
+        {
           "area": "Business model",
+          "code": "4.2",
           "good": "You know which products and customers make money. Your margins cover your costs with room to spare, and no single customer can sink you.",
           "health": "stuck",
           "kind": "reading",
@@ -757,8 +942,9 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "watch": "Gross margin, product by product",
         },
         {
-          "kind": "heading",
-          "text": "Your business model on one page",
+          "code": "4.4",
+          "kind": "subsection",
+          "title": "Your business model on one page",
         },
         {
           "kind": "facts",
@@ -790,14 +976,24 @@ exports[`the full report > is deterministic: the same answers give the same repo
           ],
         },
       ],
-      "finding": "Money comes in, but the business still does not make money.",
       "health": "stuck",
-      "method": "Service description and business model",
       "number": 4,
-      "title": "What you sell and how it makes money",
+      "overview": "What you sell, at what price, and how much of each sale the business keeps. The offer is what persuades a customer to choose you; the model is whether that choice makes money.",
+      "scope": [
+        "What you sell and how you charge.",
+        "What each sale leaves behind.",
+        "The offer and the business model.",
+      ],
+      "standfirst": "Money comes in, but the business still does not make money.",
+      "title": "Offer and proposition",
     },
     {
       "blocks": [
+        {
+          "code": "5.1",
+          "kind": "subsection",
+          "title": "Winning and keeping customers",
+        },
         {
           "items": [
             {
@@ -844,6 +1040,7 @@ exports[`the full report > is deterministic: the same answers give the same repo
         },
         {
           "area": "Market entry and sales",
+          "code": "5.1",
           "good": "New customers arrive steadily from two or three channels you understand, and you know where each one came from.",
           "health": "stuck",
           "kind": "reading",
@@ -862,17 +1059,14 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "thisWeek": "Call back the last ten people who enquired and did not buy, and ask why.",
           "watch": "New customers a month, by channel",
         },
-      ],
-      "finding": "Customers do not arrive consistently, so sales rise and fall without warning.",
-      "health": "stuck",
-      "method": "Go-to-market",
-      "number": 5,
-      "title": "How customers find you and buy",
-    },
-    {
-      "blocks": [
+        {
+          "code": "5.2",
+          "kind": "subsection",
+          "title": "How the business runs",
+        },
         {
           "area": "Operations and people",
+          "code": "5.2",
           "good": "The business runs for a week without you. Roles are clear, the main processes are written down and the same mistakes do not repeat.",
           "health": "stuck",
           "kind": "reading",
@@ -891,15 +1085,328 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "thisWeek": "List the decisions you made last week that someone else could have made.",
           "watch": "Hours a week the business runs without you",
         },
+        {
+          "code": "5.3",
+          "kind": "subsection",
+          "title": "The six numbers to watch every week",
+        },
+        {
+          "kind": "paragraph",
+          "text": "Run the business on a few numbers looked at often, rather than many looked at never. Thirty minutes, the same day each week.",
+        },
+        {
+          "columns": [
+            "Number",
+            "Why it matters",
+            "Target",
+          ],
+          "kind": "table",
+          "rows": [
+            [
+              "Sales this week",
+              "The plan made visible",
+              "Up on the same week last month",
+            ],
+            [
+              "Enquiries, and how many buy",
+              "Where sales are won or lost",
+              "5 in 10",
+            ],
+            [
+              "Cash in the bank",
+              "The number that ends businesses profitable on paper",
+              "8 weeks of costs",
+            ],
+            [
+              "Money owed to you",
+              "The cheapest money you can raise",
+              "Under one month of sales",
+            ],
+            [
+              "Margin on Lace fabric (5 yards)",
+              "Whether you are selling or giving away",
+              "50% or more",
+            ],
+            [
+              "Hours on the business, not in it",
+              "The founder bottleneck",
+              "At least 2 a week",
+            ],
+          ],
+          "widths": [
+            0.32,
+            0.4,
+            0.28,
+          ],
+        },
+        {
+          "code": "5.4",
+          "kind": "subsection",
+          "title": "The rhythm of reviews",
+        },
+        {
+          "columns": [
+            "Rhythm",
+            "The habit",
+            "What it produces",
+          ],
+          "kind": "table",
+          "rows": [
+            [
+              "Weekly",
+              "The six numbers",
+              "Thirty minutes: sales, enquiries, cash, money owed, margin and your hours.",
+            ],
+            [
+              "Monthly",
+              "The one-hour close",
+              "One page: money in, costs out, cash, and the number you are watching. Filed, not discussed.",
+            ],
+            [
+              "Quarterly",
+              "The review",
+              "Progress against Section Eight and the risks in Section Seven, with one person outside the business who reads the numbers first.",
+            ],
+            [
+              "Yearly",
+              "Renewals and the plan",
+              "Registration, tax, insurance and the lease in one sitting. Then this plan, rewritten.",
+            ],
+          ],
+          "widths": [
+            0.16,
+            0.34,
+            0.5,
+          ],
+        },
+        {
+          "code": "5.3",
+          "kind": "recommendation",
+          "lines": [
+            "Start the weekly six numbers and the monthly close this month, before any other change. Every later decision in this plan is better made with them in front of you.",
+          ],
+        },
       ],
-      "finding": "Nothing moves unless you are there, so the business is capped at your hours.",
       "health": "stuck",
-      "method": "Operational plan",
-      "number": 6,
-      "title": "How the business runs",
+      "number": 5,
+      "overview": "A business that cannot deliver without its owner present does not have an operation: it has a job with paperwork. This section covers how customers come in and how the work gets done, and sets the rhythm that keeps the plan honest.",
+      "scope": [
+        "Winning and keeping customers.",
+        "How the business runs.",
+        "The six numbers to watch every week.",
+        "The rhythm of reviews.",
+      ],
+      "standfirst": "Customers do not arrive consistently, so sales rise and fall without warning.",
+      "title": "Operational plan",
     },
     {
       "blocks": [
+        {
+          "items": [
+            {
+              "label": "Last month in",
+              "note": "Revenue, not profit",
+              "value": "₦2,400,000",
+            },
+            {
+              "label": "Left after costs",
+              "note": "10% of revenue",
+              "value": "₦250,000",
+            },
+            {
+              "label": "Cash cover",
+              "note": "Weeks of costs your cash would pay",
+              "value": "1 to 5 weeks",
+            },
+          ],
+          "kind": "metrics",
+        },
+        {
+          "code": "6.1",
+          "kind": "subsection",
+          "title": "Last month in naira",
+        },
+        {
+          "kind": "waterfall",
+          "steps": [
+            {
+              "amount": 2400000,
+              "display": "₦2,400,000",
+              "label": "Money in",
+            },
+            {
+              "amount": -2150000,
+              "display": "−₦2,150,000",
+              "label": "Costs",
+            },
+            {
+              "amount": 250000,
+              "display": "₦250,000",
+              "label": "Left over",
+            },
+          ],
+        },
+        {
+          "code": "6.2",
+          "kind": "subsection",
+          "title": "Against what good looks like",
+        },
+        {
+          "items": [
+            {
+              "display": "1 to 5 weeks",
+              "health": "stuck",
+              "label": "Cash cover",
+              "max": 16,
+              "min": 0,
+              "target": "Good: 8 weeks of costs or more",
+              "value": 2.5193798449612403,
+              "zones": [
+                {
+                  "health": "stuck",
+                  "to": 4,
+                },
+                {
+                  "health": "watch",
+                  "to": 8,
+                },
+                {
+                  "health": "clear",
+                  "to": 16,
+                },
+              ],
+            },
+            {
+              "display": "10% of revenue",
+              "health": "clear",
+              "label": "Left after costs",
+              "max": 40,
+              "min": -20,
+              "target": "Good: 10% of revenue or more",
+              "value": 10.416666666666668,
+              "zones": [
+                {
+                  "health": "stuck",
+                  "to": 0,
+                },
+                {
+                  "health": "watch",
+                  "to": 10,
+                },
+                {
+                  "health": "clear",
+                  "to": 40,
+                },
+              ],
+            },
+            {
+              "display": "25% to 50%",
+              "health": "watch",
+              "label": "Gross margin",
+              "max": 100,
+              "min": 0,
+              "target": "Good: 50% or more of each sale",
+              "value": 37.5,
+              "zones": [
+                {
+                  "health": "stuck",
+                  "to": 25,
+                },
+                {
+                  "health": "watch",
+                  "to": 50,
+                },
+                {
+                  "health": "clear",
+                  "to": 100,
+                },
+              ],
+            },
+            {
+              "display": "0.2 months of sales",
+              "health": "clear",
+              "label": "Owed to you",
+              "max": 3,
+              "min": 0,
+              "target": "Good: under one month of sales",
+              "value": 0.20833333333333334,
+              "zones": [
+                {
+                  "health": "clear",
+                  "to": 1,
+                },
+                {
+                  "health": "watch",
+                  "to": 3,
+                },
+              ],
+            },
+            {
+              "display": "3 in 10",
+              "health": "clear",
+              "label": "Enquiries that buy",
+              "max": 10,
+              "min": 0,
+              "target": "Good: 3 in 10 or more",
+              "value": 3,
+              "zones": [
+                {
+                  "health": "watch",
+                  "to": 2,
+                },
+                {
+                  "health": "clear",
+                  "to": 10,
+                },
+              ],
+            },
+          ],
+          "kind": "benchmarks",
+        },
+        {
+          "code": "6.3",
+          "kind": "subsection",
+          "title": "What it means",
+        },
+        {
+          "area": "Financials",
+          "code": "6.1",
+          "good": "You know your margin on every product and your cash for the next 13 weeks, and you decide with numbers rather than feel.",
+          "health": "stuck",
+          "kind": "reading",
+          "meaning": [
+            "Tight cash and guessed prices usually go together: prices that do not cover costs drain cash month after month.",
+            "Without your true cost per product, you cannot know whether a sale makes or loses money.",
+          ],
+          "move": "Work out the full cost of each main product: materials, labour and a share of overheads.",
+          "shows": [
+            "Last month in: ₦2,400,000. Costs: ₦2,150,000. Biggest cost: stock or materials.",
+            "Cash in the bank: ₦500,000 to ₦2 million. Owed to you: less than ₦1 million. Loans: none.",
+            "Your biggest money worry: I don't know my true cost per product or service.",
+          ],
+          "theirWords": "“Cash is always tight and my prices are guesses”",
+          "thisWeek": "Add up what it cost to make or deliver your best seller last month, and divide by the units sold.",
+          "watch": "Weeks of costs covered by cash in the bank",
+        },
+      ],
+      "health": "stuck",
+      "number": 6,
+      "overview": "The arithmetic of the business today, what it leaves behind each month, and what your target requires. It summarises your answers; it is not an audit.",
+      "scope": [
+        "Last month in naira.",
+        "Your numbers against what good looks like.",
+        "What it means and what to do.",
+      ],
+      "standfirst": "Cash is always tight and prices are guesses, so the business runs without a dashboard.",
+      "title": "The financial case",
+    },
+    {
+      "blocks": [
+        {
+          "code": "7.1",
+          "kind": "subsection",
+          "title": "The risk map and register",
+        },
         {
           "kind": "riskMatrix",
           "risks": [
@@ -964,7 +1471,13 @@ exports[`the full report > is deterministic: the same answers give the same repo
           ],
         },
         {
+          "code": "7.2",
+          "kind": "subsection",
+          "title": "What your answers show",
+        },
+        {
           "area": "Risk and compliance",
+          "code": "7.1",
           "good": "Registrations and taxes are up to date, you know your top risks, and each has a control or cover in place.",
           "health": "stuck",
           "kind": "reading",
@@ -982,224 +1495,49 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "watch": "Top risks with a control in place",
         },
       ],
-      "finding": "One tax visit, one resignation or one bad month could end the business.",
       "health": "stuck",
-      "method": "Risk assessment",
       "number": 7,
-      "title": "What could go wrong",
-    },
-    {
-      "blocks": [
-        {
-          "items": [
-            {
-              "label": "Last month in",
-              "note": "Revenue, not profit",
-              "value": "₦2,400,000",
-            },
-            {
-              "label": "Left after costs",
-              "note": "10% of revenue",
-              "value": "₦250,000",
-            },
-            {
-              "label": "Cash cover",
-              "note": "Weeks of costs your cash would pay",
-              "value": "1 to 5 weeks",
-            },
-          ],
-          "kind": "metrics",
-        },
-        {
-          "kind": "heading",
-          "text": "Last month in naira",
-        },
-        {
-          "kind": "waterfall",
-          "steps": [
-            {
-              "amount": 2400000,
-              "display": "₦2,400,000",
-              "label": "Money in",
-            },
-            {
-              "amount": -2150000,
-              "display": "−₦2,150,000",
-              "label": "Costs",
-            },
-            {
-              "amount": 250000,
-              "display": "₦250,000",
-              "label": "Left over",
-            },
-          ],
-        },
-        {
-          "items": [
-            {
-              "display": "1 to 5 weeks",
-              "health": "stuck",
-              "label": "Cash cover",
-              "max": 16,
-              "min": 0,
-              "target": "Good: 8 weeks of costs or more",
-              "value": 2.5193798449612403,
-              "zones": [
-                {
-                  "health": "stuck",
-                  "to": 4,
-                },
-                {
-                  "health": "watch",
-                  "to": 8,
-                },
-                {
-                  "health": "clear",
-                  "to": 16,
-                },
-              ],
-            },
-            {
-              "display": "10% of revenue",
-              "health": "clear",
-              "label": "Left after costs",
-              "max": 40,
-              "min": -20,
-              "target": "Good: 10% of revenue or more",
-              "value": 10.416666666666668,
-              "zones": [
-                {
-                  "health": "stuck",
-                  "to": 0,
-                },
-                {
-                  "health": "watch",
-                  "to": 10,
-                },
-                {
-                  "health": "clear",
-                  "to": 40,
-                },
-              ],
-            },
-            {
-              "display": "0.2 months of sales",
-              "health": "clear",
-              "label": "Owed to you",
-              "max": 3,
-              "min": 0,
-              "target": "Good: under one month of sales",
-              "value": 0.20833333333333334,
-              "zones": [
-                {
-                  "health": "clear",
-                  "to": 1,
-                },
-                {
-                  "health": "watch",
-                  "to": 3,
-                },
-              ],
-            },
-          ],
-          "kind": "benchmarks",
-        },
-        {
-          "area": "Financials",
-          "good": "You know your margin on every product and your cash for the next 13 weeks, and you decide with numbers rather than feel.",
-          "health": "stuck",
-          "kind": "reading",
-          "meaning": [
-            "Tight cash and guessed prices usually go together: prices that do not cover costs drain cash month after month.",
-            "Without your true cost per product, you cannot know whether a sale makes or loses money.",
-          ],
-          "move": "Work out the full cost of each main product: materials, labour and a share of overheads.",
-          "shows": [
-            "Last month in: ₦2,400,000. Costs: ₦2,150,000. Biggest cost: stock or materials.",
-            "Cash in the bank: ₦500,000 to ₦2 million. Owed to you: less than ₦1 million. Loans: none.",
-            "Your biggest money worry: I don't know my true cost per product or service.",
-          ],
-          "theirWords": "“Cash is always tight and my prices are guesses”",
-          "thisWeek": "Add up what it cost to make or deliver your best seller last month, and divide by the units sold.",
-          "watch": "Weeks of costs covered by cash in the bank",
-        },
+      "overview": "What could stop the business, how likely it is and how much it would hurt, with a first control for each. A risk you have named is one you can fence.",
+      "scope": [
+        "The risk map.",
+        "The register, worst first.",
+        "Registration, compliance and dependence.",
       ],
-      "finding": "Cash is always tight and prices are guesses, so the business runs without a dashboard.",
-      "health": "stuck",
-      "method": "Financial analysis",
-      "number": 8,
-      "title": "The numbers",
+      "standfirst": "One tax visit, one resignation or one bad month could end the business.",
+      "title": "Risk",
     },
     {
       "blocks": [
         {
-          "kind": "scorecard",
+          "columns": [
+            "Phase",
+            "Months",
+            "The single objective",
+          ],
+          "kind": "table",
           "rows": [
-            {
-              "area": "Founder readiness",
-              "finding": "Intermediate: ready, with gaps to close",
-              "health": "watch",
-            },
-            {
-              "area": "Strategic intent",
-              "finding": "You are busy every day without a clear destination, so effort spreads thin.",
-              "health": "stuck",
-            },
-            {
-              "area": "Market and industry",
-              "finding": "You know your customers, but not the competitors and market around them.",
-              "health": "watch",
-            },
-            {
-              "area": "Service and offering",
-              "finding": "People like what you do, but not enough of them buy it.",
-              "health": "stuck",
-            },
-            {
-              "area": "Business model",
-              "finding": "Money comes in, but the business still does not make money.",
-              "health": "stuck",
-            },
-            {
-              "area": "Market entry and sales",
-              "finding": "Customers do not arrive consistently, so sales rise and fall without warning.",
-              "health": "stuck",
-            },
-            {
-              "area": "Operations and people",
-              "finding": "Nothing moves unless you are there, so the business is capped at your hours.",
-              "health": "stuck",
-            },
-            {
-              "area": "Financials",
-              "finding": "Cash is always tight and prices are guesses, so the business runs without a dashboard.",
-              "health": "stuck",
-            },
-            {
-              "area": "Risk and compliance",
-              "finding": "One tax visit, one resignation or one bad month could end the business.",
-              "health": "stuck",
-            },
+            [
+              "Phase One: Build",
+              "1 to 3",
+              "Fix the root: Financials, Business model, and Market entry and sales, and start the weekly numbers. No growth target.",
+            ],
+            [
+              "Phase Two: Execute",
+              "4 to 9",
+              "Work through Service and offering, Operations and people, Strategic intent, and Risk and compliance; move towards your goal.",
+            ],
+            [
+              "Phase Three: Consolidate",
+              "10 to 12",
+              "Hold the gains, and make the business depend less on you.",
+            ],
+          ],
+          "widths": [
+            0.26,
+            0.14,
+            0.6,
           ],
         },
-        {
-          "kind": "paragraph",
-          "text": "Financials, Business model, Market entry and sales, Service and offering, Operations and people, Strategic intent and Risk and compliance are stuck. Market and industry needs watching. These are rarely separate problems. Money and business-model problems usually sit underneath sales, offer and people problems, so the plan starts where the root is, not where the pain is loudest.",
-        },
-        {
-          "kind": "callout",
-          "text": "It isn't yet clear what is really wrong, or what good would look like. So the first job is to see the problem clearly, with numbers, before spending on a fix.",
-          "title": "The kind of gap: clarity",
-        },
-      ],
-      "finding": "The place to start is financials: cash is always tight and prices are guesses, so the business runs without a dashboard.",
-      "health": "stuck",
-      "method": "Synthesis",
-      "number": 9,
-      "title": "The diagnosis",
-    },
-    {
-      "blocks": [
         {
           "kind": "timeline",
           "moves": [
@@ -1227,17 +1565,228 @@ exports[`the full report > is deterministic: the same answers give the same repo
           ],
         },
         {
-          "kind": "paragraph",
-          "text": "Your goal for the year, in your words: “Open a second shop in Yaba and reach ₦4 million a month.” Check each month whether these moves are bringing it closer, and drop anything that is not.",
+          "code": "8.1",
+          "kind": "subsection",
+          "title": "Phase One: Build (months 1 to 3)",
+        },
+        {
+          "columns": [
+            "#",
+            "Action",
+            "Owner",
+            "Month",
+          ],
+          "kind": "table",
+          "rows": [
+            [
+              "1",
+              "Start the six weekly numbers and the one-hour monthly close (Section Five)",
+              "You",
+              "1",
+            ],
+            [
+              "2",
+              "Work out the full cost of each main product: materials, labour and a share of overheads. (Recommendation 6.1)",
+              "You",
+              "1",
+            ],
+            [
+              "3",
+              "Set a limit on the share of sales from your biggest customer, and win new customers to bring it down. (Recommendation 4.2)",
+              "You",
+              "2",
+            ],
+            [
+              "4",
+              "Follow up every enquiry within a day, and record why the people who do not buy say no. (Recommendation 5.1)",
+              "You",
+              "3",
+            ],
+            [
+              "5",
+              "Phase One review: are the numbers tracked weekly, and has the first measure moved?",
+              "You",
+              "3",
+            ],
+          ],
+          "widths": [
+            0.06,
+            0.6,
+            0.2,
+            0.14,
+          ],
+        },
+        {
+          "kind": "callout",
+          "text": "Do not move to Phase Two until three things are true. One: weeks of costs covered by cash in the bank is tracked every week and moving the right way. Two: the monthly close has run three times. Three: the items in Section Nine are closed. If any one is not true, extend Phase One rather than moving on.",
+          "title": "The gate at the end of Phase One",
+        },
+        {
+          "code": "8.2",
+          "kind": "subsection",
+          "title": "Phase Two: Execute (months 4 to 9)",
+        },
+        {
+          "columns": [
+            "#",
+            "Action",
+            "Owner",
+            "Month",
+          ],
+          "kind": "table",
+          "rows": [
+            [
+              "6",
+              "Write one sentence that says why a customer should choose you, and use it everywhere you sell. (Recommendation 4.1)",
+              "You",
+              "4",
+            ],
+            [
+              "7",
+              "Decide which decisions staff can make alone, up to what amount, and tell them. (Recommendation 5.2)",
+              "You",
+              "5",
+            ],
+            [
+              "8",
+              "Agree one written goal for the year with your partners, and who decides what. (Recommendation 2.2)",
+              "You",
+              "6",
+            ],
+            [
+              "9",
+              "Write down what each key person knows and does, and train a second person on the most important parts. (Recommendation 7.1)",
+              "You",
+              "7",
+            ],
+            [
+              "10",
+              "Build cash towards 8 weeks of costs, a fixed share of every month's sales set aside",
+              "You",
+              "4 to 9",
+            ],
+            [
+              "11",
+              "Mid-plan review: check progress against your goal and reforecast the year",
+              "You",
+              "6",
+            ],
+          ],
+          "widths": [
+            0.06,
+            0.6,
+            0.2,
+            0.14,
+          ],
+        },
+        {
+          "code": "8.3",
+          "kind": "subsection",
+          "title": "Phase Three: Consolidate (months 10 to 12)",
+        },
+        {
+          "columns": [
+            "#",
+            "Action",
+            "Owner",
+            "Month",
+          ],
+          "kind": "table",
+          "rows": [
+            [
+              "12",
+              "Hold the gains through a full quarter: the six numbers steady or rising",
+              "You",
+              "10 to 12",
+            ],
+            [
+              "13",
+              "Test the business against a month without you: what would be waiting when you came back?",
+              "You",
+              "11",
+            ],
+            [
+              "14",
+              "Rewrite this plan for the next twelve months",
+              "You",
+              "12",
+            ],
+          ],
+          "widths": [
+            0.06,
+            0.6,
+            0.2,
+            0.14,
+          ],
         },
       ],
-      "finding": "Three moves over 90 days, starting with financials.",
-      "method": "Recommendation",
-      "number": 10,
-      "title": "What to fix first: your 90-day plan",
+      "number": 8,
+      "overview": "This is the part to work from. Phase One is judged on what exists at the end of month three, not on what it earned along the way.",
+      "scope": [
+        "The three phases.",
+        "Phase One: Build, months 1 to 3.",
+        "Phase Two: Execute, months 4 to 9.",
+        "Phase Three: Consolidate, months 10 to 12.",
+      ],
+      "standfirst": "Twelve months, three phases, 14 actions. Every Recommendation in this plan, sequenced, with an owner and a month.",
+      "title": "The work plan",
     },
     {
       "blocks": [
+        {
+          "code": "9.1",
+          "kind": "subsection",
+          "title": "What we need from you",
+        },
+        {
+          "columns": [
+            "#",
+            "Item",
+            "Why it matters",
+          ],
+          "kind": "table",
+          "rows": [
+            [
+              "1",
+              "The monthly sales you want in 12 months",
+              "It turns your goal into a number this plan can be measured against.",
+            ],
+          ],
+          "widths": [
+            0.06,
+            0.44,
+            0.5,
+          ],
+        },
+        {
+          "code": "9.2",
+          "kind": "subsection",
+          "title": "Open on the record",
+        },
+        {
+          "items": [
+            "You price below competitors on a thin margin, so you may be buying sales rather than earning them.",
+          ],
+          "kind": "numbered",
+        },
+        {
+          "code": "9.3",
+          "kind": "subsection",
+          "title": "How to use this document",
+        },
+        {
+          "items": [
+            "Read it once in full, then work from Section Eight. Its measure is not whether the analysis was right, but whether Phase One's actions are done by the end of month three.",
+            "Mark it up. Tell us what is wrong, what is missing and what you would do differently, by replying to the email this plan came with.",
+            "Review it twice: at the Phase One gate in month three, and at the mid-plan review in month six. A plan that is never revisited becomes an old plan.",
+          ],
+          "kind": "numbered",
+        },
+        {
+          "code": "9.4",
+          "kind": "subsection",
+          "title": "If you want help",
+        },
         {
           "columns": [
             "Service",
@@ -1269,13 +1818,18 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "title": "Current State Assessment · ₦500,000",
         },
       ],
-      "finding": "If you want support with the plan, these are the services that fit what you told us.",
-      "method": "Services that fit",
-      "number": 11,
-      "title": "How we can help",
+      "number": 9,
+      "overview": "This plan is deliberately explicit about its own gaps. Nothing below stops Phase One from starting, but each item makes the plan sharper, and only you can close them.",
+      "scope": [
+        "What we need from you.",
+        "Open on the record.",
+        "How to use this document.",
+        "If you want help.",
+      ],
+      "standfirst": "One thing we still need from you before this plan is complete.",
+      "title": "Outstanding items",
     },
   ],
-  "reference": "TS-R-000012",
-  "version": 3,
+  "version": 4,
 }
 `;

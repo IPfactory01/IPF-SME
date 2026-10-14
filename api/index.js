@@ -3348,8 +3348,8 @@ async function loadAuthority(db, person) {
 }
 async function listSuperAdminIds(db) {
   const stored = await db.select({ id: users.id }).from(userPlatformRoles).innerJoin(users, eq5(userPlatformRoles.userId, users.id)).where(and4(eq5(userPlatformRoles.role, "super_admin"), eq5(users.status, "active")));
-  const bridge = OWNER_ADMIN_EMAIL ? await db.select({ id: users.id }).from(users).where(and4(emailEquals(users.email, normalizeAdminEmail(OWNER_ADMIN_EMAIL)), eq5(users.status, "active"))) : [];
-  return new Set([...stored, ...bridge].map((row) => row.id));
+  const bridge2 = OWNER_ADMIN_EMAIL ? await db.select({ id: users.id }).from(users).where(and4(emailEquals(users.email, normalizeAdminEmail(OWNER_ADMIN_EMAIL)), eq5(users.status, "active"))) : [];
+  return new Set([...stored, ...bridge2].map((row) => row.id));
 }
 async function grantPlatformRole(db, input) {
   const { actor, targetUserId, role } = input;
@@ -10176,7 +10176,9 @@ var intakeSchema = z15.object({
   cash: z15.enum(values(CASH)),
   owed: z15.enum(values(OWED)),
   loans: z15.enum(values(LOANS)),
-  goal: text2(300).min(2, "Tell us what would make the next 12 months a success.")
+  goal: text2(300).min(2, "Tell us what would make the next 12 months a success."),
+  /** The monthly sales the owner wants in 12 months, in naira; null when they would rather not say. Added in report v4. */
+  revenueTarget: naira2.default(null)
 }).superRefine((intake, context) => {
   if (intake.topEarner !== null && intake.topEarner >= intake.products.length) {
     context.addIssue({ code: "custom", path: ["topEarner"], message: "Choose one of the products you listed." });
@@ -10216,7 +10218,7 @@ var INTAKE_QUESTIONS = [
     dealHint: "Count only your commission and fees, not the deal money you pass on to others. Costs include salaries, rent, travel and everything else."
   },
   { id: "cash", group: "The numbers", prompt: "Cash in the bank today, money customers owe you, and any loans." },
-  { id: "goal", group: "Your goal", prompt: "What would make the next 12 months a success?", hint: "In your words. A number helps: a sales level, a new shop, a hire." }
+  { id: "goal", group: "Your goal", prompt: "What would make the next 12 months a success, and what monthly sales do you want by then?", hint: "In your words: a sales level, a new shop, a hire. Then, if you can, the monthly sales you are aiming for." }
 ];
 function intakeWording(question, byDeal) {
   const prompt = byDeal && "dealPrompt" in question ? question.dealPrompt : question.prompt;
@@ -10226,7 +10228,7 @@ function intakeWording(question, byDeal) {
 var labelOf = (options, value) => options.find((option) => option.value === value)?.label ?? value;
 
 // shared/fullReport/build.ts
-var REPORT_VERSION = 3;
+var REPORT_VERSION = 4;
 var HEALTH_RANK2 = { clear: 0, watch: 1, stuck: 2 };
 var worst2 = (...values2) => values2.reduce((current, value) => value && HEALTH_RANK2[value] > HEALTH_RANK2[current] ? value : current, "clear");
 var lower2 = (text4) => /^(I\b|I'|[A-Z][A-Za-z]*[A-Z])/.test(text4) ? text4 : text4.charAt(0).toLowerCase() + text4.slice(1);
@@ -10361,7 +10363,7 @@ function reading(input) {
   };
   if (!block.meaning.length) block.meaning = [detail.meaning || input.intakeFinding];
   const finding = status && !(row?.health === "clear" && HEALTH_RANK2[input.intakeHealth] > 0) ? status.finding : input.intakeFinding;
-  return { block, health, finding, area };
+  return { block, health, finding, area, notes: input.notes ?? [] };
 }
 var AGE = { under2: "under two years", "2to5": "two to five years", "5to10": "five to ten years", over10: "more than ten years" };
 var MODEL = { maker: "makes and sells its own products", trader: "buys and sells goods", expert: "sells expertise and services", mixed: "mixes making, trading and services" };
@@ -10369,6 +10371,7 @@ var TREND = { growing: "Revenue has grown over the last 12 months.", flat: "Reve
 var TEAM = { solo: "Mostly you", cofounder: "You and a co-founder or partner", team: "You and a small management team", family: "You, with family members" };
 var HOURS = { lt2: "Less than 2 hours a week", "2to4": "2 to 4 hours a week", "5plus": "5 hours or more a week" };
 var TOUGH = { me_easy: "You do, and it comes naturally", me_avoid: "You do, but you put it off", nobody: "It often does not happen" };
+var BASIC_PRACTICE = { pl: "reading a profit and loss statement", cash: "telling profit from cash", unit: "working out a unit cost", margin: "knowing your margin" };
 var FINANCE_SKILLS = { pl: "read a profit and loss statement", cash: "tell profit from cash", unit: "work out a unit cost", margin: "know your margin" };
 var ROOT_ORDER = [7, 4, 5, 3, 6, 1, 2, 8, 9, 10];
 function buildFullReport(input) {
@@ -10711,6 +10714,325 @@ function buildFullReport(input) {
       { kind: "callout", title: `${CURRENT_STATE.name} \xB7 ${formatNaira(PRICES.currentState)}`, text: `${CURRENT_STATE.what} ${CURRENT_STATE.start} It starts with a free Discovery Call, where we tell you honestly whether we can help.` }
     ]
   });
+  const recCodes = /* @__PURE__ */ new Map();
+  const section = (number) => {
+    let sub = 0;
+    let rec = 0;
+    return {
+      sub: (title) => ({ kind: "subsection", code: `${number}.${++sub}`, title }),
+      rec: (lines) => ({ kind: "recommendation", code: `${number}.${++rec}`, lines }),
+      read: (item2) => {
+        const code = `${number}.${++rec}`;
+        recCodes.set(item2.area, code);
+        return { ...item2.block, code };
+      }
+    };
+  };
+  const partBlocks = (number) => parts.find((part) => part.number === number).blocks;
+  const metricsOf = (number) => partBlocks(number).find((block) => block.kind === "metrics");
+  const revenue = intake.lastMonthRevenue;
+  const target = intake.revenueTarget ?? null;
+  const productsTable = partBlocks(1).find((block) => block.kind === "table");
+  const question = (() => {
+    if (target === null || revenue === null || revenue <= 0 || idea) return void 0;
+    const factor = target / revenue;
+    if (factor <= 1) return { text: [`Your target of ${money(target)} a month is at or below last month's ${money(revenue)}. The work is to hold that level while fixing the areas this plan names, not to chase growth.`], levers: [] };
+    const priceLift = intake.pricePosition === "lower" ? 1.15 : intake.pricePosition === "same" ? 1.1 : intake.pricePosition === "not_sure" ? 1.05 : 1;
+    const conversion = intake.conversion;
+    const convLift = conversion !== null && conversion > 0 && conversion < 5 ? Math.min(Math.min(conversion + 2, 5) / conversion, 2) : 1;
+    const reach = factor / (priceLift * convLift);
+    const times = (value) => `\xD7${value >= 10 ? value.toFixed(0) : value < 2 ? String(Number(value.toFixed(2))) : value.toFixed(1)}`;
+    const levers = [
+      { lever: "Price", factor: times(priceLift), fromTo: priceLift > 1 ? `Prices up about ${Math.round((priceLift - 1) * 100)}%, ${intake.pricePosition === "lower" ? "from below competitors to level with them" : intake.pricePosition === "same" ? "with the offer made worth it" : "once you know where you stand"}` : "Hold your prices: you already charge more than competitors", difficulty: priceLift > 1 ? "A decision" : "Holding is the work" },
+      { lever: "Conversion", factor: times(convLift), fromTo: convLift > 1 ? `From ${conversion} to ${Math.min(conversion + 2, 5)} of every 10 people who ask` : conversion === null ? "Not known yet: count enquiries and sales for a month" : "Already strong: keep the follow-up", difficulty: convLift > 1 ? "Achievable with follow-up" : "Keep it" },
+      { lever: "Reach and capacity", factor: times(Math.max(reach, 1)), fromTo: reach > 1 ? "More customers reached, and the people and stock to serve them" : "Not needed: price and conversion close the gap", difficulty: reach > 2 ? "The hard one" : reach > 1 ? "Planned growth" : "None" }
+    ];
+    const round = (value) => Math.round(value / 1e3) * 1e3;
+    const steps = [
+      { label: "Today", amount: round(revenue), total: true },
+      ...priceLift > 1 ? [{ label: "Price", amount: round(revenue * (priceLift - 1)) }] : [],
+      ...convLift > 1 ? [{ label: "Conversion", amount: round(revenue * priceLift * (convLift - 1)) }] : [],
+      ...reach > 1 ? [{ label: "Reach", amount: round(target - revenue * priceLift * convLift) }] : [],
+      { label: "Target", amount: round(target), total: true }
+    ].map((step) => ({ ...step, display: `${step.total ? "" : "+"}${money(step.amount)}` }));
+    return {
+      text: [
+        `The gap from ${money(revenue)} a month to the ${money(target)} you want is a factor of about ${factor.toFixed(1)}. It is less frightening broken into three ordinary parts.`,
+        reach > 2 ? "Most of the gap is reach: more customers and the capacity to serve them. That is where the plan has to be strongest." : reach > 1 ? "Price and conversion carry much of it; the rest is planned growth in reach." : "Price and conversion alone would close the gap, which makes this a plan about decisions rather than expansion."
+      ],
+      levers,
+      bridge: { kind: "bridge", steps }
+    };
+  })();
+  const phaseTwoAreas = planAreas.filter((area, index2) => planAreas.indexOf(area) === index2 && !chosen.includes(area)).slice(0, 4);
+  const areaList = (areas) => {
+    const names = areas.map((area) => idea && area === 1 ? "Your idea" : AREA_NAMES[area]);
+    return names.length <= 2 ? names.join(" and ") : `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+  };
+  const firstFocus = chosen.length ? areaList(chosen) : "the weekly numbers";
+  const phases = [
+    { phase: "Phase One: Build", months: "1 to 3", goal: `Fix the root: ${firstFocus}, and start the weekly numbers. No growth target.` },
+    { phase: "Phase Two: Execute", months: "4 to 9", goal: phaseTwoAreas.length ? `Work through ${areaList(phaseTwoAreas)}; move towards your goal.` : "Grow from the base: the next step, chosen on purpose." },
+    { phase: "Phase Three: Consolidate", months: "10 to 12", goal: "Hold the gains, and make the business depend less on you." }
+  ];
+  const gateMeasure = moves[0]?.watch ? lower2(moves[0].watch) : "the first measure";
+  const needs = [
+    ...revenue === null ? [["Last month's money in", "Every figure in Section Six depends on it."]] : [],
+    ...intake.monthlyCosts === null ? [["Last month's running costs", "Without them the plan cannot tell profit from loss."]] : [],
+    ...intake.cash === "not_sure" ? [["Cash in the bank today", "Cash cover is the number that ends businesses that look profitable on paper."]] : [],
+    ...intake.costShare === "not_sure" && intake.marginPercent === null ? [["How much of each \u20A6100 goes on direct costs", "Pricing and the business model in Section Four rest on it."]] : [],
+    ...target === null && !idea ? [["The monthly sales you want in 12 months", "It turns your goal into a number this plan can be measured against."]] : [],
+    ...intake.conversion === null ? [["How many of every 10 people who ask go on to buy", "It shows whether sales are lost before or after people ask."]] : [],
+    ...intake.enquiries === "not_sure" ? [["How many people ask about buying each month", "Section Five's demand numbers start here."]] : [],
+    ...intake.topEarner === null ? [["Which product or service earns the most", "The offer should be built around a clear winner."]] : [],
+    ...intake.competitors.length === 0 ? [["Up to three competitors, by name", "You cannot price against a competitor you cannot name."]] : [],
+    ...intake.pricePosition === "not_sure" ? [["Where your prices sit against theirs", "The price lever in the Background depends on it."]] : [],
+    ...intake.topCustomerShare === "not_sure" ? [["How much of your sales come from your three biggest customers", "Dependence on a few customers is a risk Section Seven cannot size without it."]] : [],
+    ...intake.owed === "not_sure" ? [["Money customers owe you", "Collecting it is the cheapest money the business can raise."]] : [],
+    ...intake.loans === "not_sure" ? [["Loans and what they cost each month", "Repayments come before growth."]] : [],
+    ...intake.registration === "not_sure" ? [["How the business is registered", "It decides which contracts, loans and tax rules apply."]] : [],
+    ...intake.repeat === "not_sure" ? [["Whether customers come back", "Repeat business is the cheapest growth there is."]] : [],
+    ...!founder.instinct ? [["The behaviour questions in the Business Check", "Section One is left open without them."]] : []
+  ];
+  const openRecord = [market, offer, model, sales, operations, finance, risk, ...extraReadings].flatMap((item2) => item2.notes);
+  const s1 = section(1);
+  const missingBasics = Object.keys(FINANCE_SKILLS).filter((key) => !(Array.isArray(answers.f_finance) && answers.f_finance.includes(key)));
+  const sectionOne = {
+    number: 1,
+    title: "Founder readiness",
+    standfirst: `${READINESS_LABELS[founder.level]}. No business outgrows the person running it.`,
+    health: outlineRow(result, 0)?.health ?? "not_assessed",
+    overview: "This section asks whether you are equipped for the business this plan describes, and names the gaps to close first. It is built from your answers about yourself in the Business Check.",
+    scope: ["Your behavioural profile.", "The four money basics.", "Time, the hard calls and who carries the business with you."],
+    blocks: [
+      s1.sub("Your behavioural profile"),
+      ...style ? [
+        { kind: "facts", rows: [{ label: "Under pressure", value: `${style.name}. ${style.strength}` }, ...seen ? [{ label: "Others see you as", value: `${seen.name}. ${seen.strength}` }] : [], { label: "Watch for", value: style.watch }] },
+        { kind: "numbered", title: "Why it matters now", items: ["On your own, behaviour is a matter of style. With a team, it becomes how the business runs.", ...seen && seen.name !== style.name ? [`You see yourself as a ${style.name.toLowerCase()} and others see a ${seen.name.toLowerCase()}. Ask two people who work with you which is right: the gap is where misunderstandings start.`] : [], `Your watch-out is a pattern, not a flaw: ${lower2(style.watch)} Name it, then design around it.`] }
+      ] : [{ kind: "paragraph", text: "You did not complete the behaviour questions in the Business Check, so this part is left open rather than guessed at. Section Nine lists it." }],
+      ...Array.isArray(answers.f_finance) ? [
+        s1.sub("The four money basics"),
+        { kind: "table", columns: ["The basic", "Today", "Weight in this plan"], widths: [0.5, 0.2, 0.3], rows: Object.entries(FINANCE_SKILLS).map(([key, skill]) => [upperFirst(skill), answers.f_finance.includes(key) ? "Yes" : "Not yet", key === "pl" ? "High" : "Critical"]) },
+        ...missingBasics.length ? [s1.rec([`Use your own numbers as the classroom. One hour in the first week of each month: work out last month's margin and cash, change one price or cost on paper, and watch what moves. Three months of that will cover most of what is missing: ${list(missingBasics.map((key) => BASIC_PRACTICE[key]))}.`])] : []
+      ] : [],
+      s1.sub("Time, the hard calls and the bottleneck"),
+      { kind: "facts", rows: [
+        ...answers.f_team ? [{ label: "Who carries it with you", value: TEAM[String(answers.f_team)] ?? "" }] : [],
+        ...answers.f_tough ? [{ label: "The hard calls", value: TOUGH[String(answers.f_tough)] ?? "" }] : [],
+        ...answers.f_hours ? [{ label: "Time on the business", value: HOURS[String(answers.f_hours)] ?? "" }] : [],
+        { label: "Readiness", value: READINESS_LABELS[founder.level] }
+      ] },
+      ...founder.needsDriver ? [s1.rec(["Decide who owns the hard calls: chasing debts, closing deals, letting someone go. If it is you, give them a fixed slot each week rather than waiting until they cannot be avoided."])] : [],
+      ...answers.f_hours === "lt2" ? [s1.rec(["Protect two hours a week to work on the business rather than in it: the same day, the same time, phone away. Every action in Section Eight needs them."])] : [],
+      ...idea ? [] : [s1.rec(["Before your next hire, write down five decisions you will keep and five you will hand over. Hiring removes work from your hands only if the decision moves with it."])]
+    ]
+  };
+  const s2 = section(2);
+  const sectionTwo = {
+    number: 2,
+    title: "Strategic intent",
+    standfirst: parts[1].finding,
+    health: parts[1].health,
+    overview: "Strategic intent is not a sentence for a website. It is a rule that lets you say no to things that look like opportunities, and it is tested by what it makes you refuse.",
+    scope: ["Your goal and its horizon.", "What your answers say about direction.", "The order of priorities across twelve months."],
+    blocks: [
+      s2.sub("Your goal"),
+      { kind: "paragraph", text: `In your words: \u201C${intake.goal.replace(/[.\s]+$/, "")}.\u201D` },
+      ...target !== null && revenue !== null ? [{ kind: "facts", rows: [{ label: "Monthly sales wanted", value: formatNaira(target) }, { label: "Last month", value: formatNaira(revenue) }, { label: "The gap", value: target > revenue ? `About \xD7${(target / revenue).toFixed(1)}: the Background breaks it down` : "None: the work is to hold it" }] }] : [],
+      s2.rec(["State the goal in two parts: the long ambition, which is yours and not ours to moderate, and a twelve-month definition of arrival that can be tested: a monthly sales figure, a margin, and the hours you work."]),
+      s2.sub("What your answers say"),
+      ...intent ? [s2.read(intent)] : partBlocks(2),
+      s2.sub("The order of priorities"),
+      { kind: "paragraph", text: "One goal per phase, not three. The most common failure is not a bad plan but five good plans running at once, none of them finished." },
+      { kind: "table", columns: ["Months", "The single goal"], widths: [0.2, 0.8], rows: phases.map((phase) => [phase.months, phase.goal]) }
+    ]
+  };
+  const s3 = section(3);
+  const sectionThree = {
+    number: 3,
+    title: "Market and industry",
+    standfirst: market.finding,
+    health: market.health,
+    overview: "This section tests whether the ground will carry the plan: who buys, who else sells to them, and where your prices sit.",
+    scope: ["Your best customer and your competitors.", "Where your prices sit.", "Your position at a glance."],
+    blocks: [s3.read(market), s3.sub("Your position at a glance"), partBlocks(3)[1]]
+  };
+  const s4 = section(4);
+  const sectionFour = {
+    number: 4,
+    title: "Offer and proposition",
+    standfirst: (HEALTH_RANK2[model.health] >= HEALTH_RANK2[offer.health] ? model : offer).finding,
+    health: worst2(offer.health, model.health),
+    overview: "What you sell, at what price, and how much of each sale the business keeps. The offer is what persuades a customer to choose you; the model is whether that choice makes money.",
+    scope: ["What you sell and how you charge.", "What each sale leaves behind.", "The offer and the business model."],
+    blocks: [
+      s4.sub("What you sell"),
+      productsTable,
+      ...partBlocks(4).filter((block) => block.kind === "metrics" || block.kind === "benchmarks"),
+      s4.sub("The offer"),
+      s4.read(offer),
+      s4.sub("How it makes money"),
+      s4.read(model),
+      s4.sub("Your business model on one page"),
+      partBlocks(4).find((block) => block.kind === "facts")
+    ]
+  };
+  const s5 = section(5);
+  const weeklyTarget = target !== null ? `${money(Math.round(target / 4.33 / 1e3) * 1e3)} a week by month 12` : "Up on the same week last month";
+  const sectionFive = {
+    number: 5,
+    title: "Operational plan",
+    standfirst: worst2(sales.health, operations.health) === sales.health && sales.health !== "clear" ? sales.finding : operations.finding,
+    health: worst2(sales.health, operations.health),
+    overview: "A business that cannot deliver without its owner present does not have an operation: it has a job with paperwork. This section covers how customers come in and how the work gets done, and sets the rhythm that keeps the plan honest.",
+    scope: ["Winning and keeping customers.", "How the business runs.", "The six numbers to watch every week.", "The rhythm of reviews."],
+    blocks: [
+      s5.sub("Winning and keeping customers"),
+      ...partBlocks(5).filter((block) => block.kind !== "reading"),
+      s5.read(sales),
+      s5.sub("How the business runs"),
+      s5.read(operations),
+      s5.sub("The six numbers to watch every week"),
+      { kind: "paragraph", text: "Run the business on a few numbers looked at often, rather than many looked at never. Thirty minutes, the same day each week." },
+      { kind: "table", columns: ["Number", "Why it matters", "Target"], widths: [0.32, 0.4, 0.28], rows: [
+        ["Sales this week", "The plan made visible", weeklyTarget],
+        ["Enquiries, and how many buy", "Where sales are won or lost", intake.conversion !== null && intake.conversion < 5 ? `${Math.min(intake.conversion + 2, 5)} in 10` : "3 in 10 or more"],
+        ["Cash in the bank", "The number that ends businesses profitable on paper", "8 weeks of costs"],
+        ["Money owed to you", "The cheapest money you can raise", "Under one month of sales"],
+        [`Margin on ${topProduct ?? "your top earner"}`, "Whether you are selling or giving away", "50% or more"],
+        ["Hours on the business, not in it", "The founder bottleneck", "At least 2 a week"]
+      ] },
+      s5.sub("The rhythm of reviews"),
+      { kind: "table", columns: ["Rhythm", "The habit", "What it produces"], widths: [0.16, 0.34, 0.5], rows: [
+        ["Weekly", "The six numbers", "Thirty minutes: sales, enquiries, cash, money owed, margin and your hours."],
+        ["Monthly", "The one-hour close", "One page: money in, costs out, cash, and the number you are watching. Filed, not discussed."],
+        ["Quarterly", "The review", "Progress against Section Eight and the risks in Section Seven, with one person outside the business who reads the numbers first."],
+        ["Yearly", "Renewals and the plan", "Registration, tax, insurance and the lease in one sitting. Then this plan, rewritten."]
+      ] },
+      s5.rec(["Start the weekly six numbers and the monthly close this month, before any other change. Every later decision in this plan is better made with them in front of you."])
+    ]
+  };
+  const s6 = section(6);
+  const sectionSix = {
+    number: 6,
+    title: "The financial case",
+    standfirst: finance.finding,
+    health: finance.health,
+    overview: "The arithmetic of the business today, what it leaves behind each month, and what your target requires. It summarises your answers; it is not an audit.",
+    scope: ["Last month in naira.", "Your numbers against what good looks like.", ...question?.levers.length ? ["The arithmetic of your target."] : [], "What it means and what to do."],
+    blocks: [
+      ...partBlocks(8).filter((block) => block.kind === "metrics"),
+      ...partBlocks(8).some((block) => block.kind === "waterfall") ? [s6.sub("Last month in naira"), ...partBlocks(8).filter((block) => block.kind === "waterfall")] : [],
+      ...bench.length ? [s6.sub("Against what good looks like"), { kind: "benchmarks", items: bench }] : [],
+      ...question?.levers.length ? [
+        s6.sub("The arithmetic of your target"),
+        ...question.text.map((text4) => ({ kind: "paragraph", text: text4 })),
+        { kind: "table", columns: ["Lever", "Factor", "From and to", "Difficulty"], widths: [0.2, 0.12, 0.46, 0.22], rows: question.levers.map((lever) => [lever.lever, lever.factor, lever.fromTo, lever.difficulty]) },
+        question.bridge
+      ] : [],
+      s6.sub("What it means"),
+      s6.read(finance)
+    ]
+  };
+  const s7 = section(7);
+  const sectionSeven = {
+    number: 7,
+    title: "Risk",
+    standfirst: risk.finding,
+    health: parts[6].health,
+    overview: "What could stop the business, how likely it is and how much it would hurt, with a first control for each. A risk you have named is one you can fence.",
+    scope: ["The risk map.", "The register, worst first.", "Registration, compliance and dependence."],
+    blocks: [
+      s7.sub("The risk map and register"),
+      ...partBlocks(7).filter((block) => block.kind === "riskMatrix" || block.kind === "table" || block.kind === "paragraph"),
+      s7.sub("What your answers show"),
+      s7.read(risk),
+      ...extraReadings.map((item2) => s7.read(item2))
+    ]
+  };
+  const unregisteredNow = intake.registration === "not_registered";
+  const phaseOne = [
+    { action: "Start the six weekly numbers and the one-hour monthly close (Section Five)", owner: "You", month: "1" },
+    ...moves.map((move, index2) => ({ action: `${move.move}${recCodes.has(chosen[index2]) ? ` (Recommendation ${recCodes.get(chosen[index2])})` : ""}`, owner: "You", month: String(index2 + 1) })),
+    ...unregisteredNow ? [{ action: "Register with CAC, get a tax identification number and diarise the filing dates", owner: "You, with an accountant", month: "2" }] : [],
+    { action: "Phase One review: are the numbers tracked weekly, and has the first measure moved?", owner: "You", month: "3" }
+  ];
+  const phaseTwo = [
+    ...phaseTwoAreas.map((area, index2) => ({ action: `${moveFor(area).move}${recCodes.has(area) ? ` (Recommendation ${recCodes.get(area)})` : ""}`, owner: "You", month: String(4 + index2) })),
+    ...coverHealth ? [{ action: "Build cash towards 8 weeks of costs, a fixed share of every month's sales set aside", owner: "You", month: "4 to 9" }] : [],
+    { action: "Mid-plan review: check progress against your goal and reforecast the year", owner: "You", month: "6" },
+    ...phaseTwoAreas.length ? [] : [{ action: "Choose the next growth step on purpose, and test it small before committing", owner: "You", month: "7 to 9" }]
+  ];
+  const phaseThree = [
+    { action: "Hold the gains through a full quarter: the six numbers steady or rising", owner: "You", month: "10 to 12" },
+    { action: "Test the business against a month without you: what would be waiting when you came back?", owner: "You", month: "11" },
+    { action: "Rewrite this plan for the next twelve months", owner: "You", month: "12" }
+  ];
+  let actionNumber = 0;
+  const actionRows = (items) => items.map((item2) => [String(++actionNumber), item2.action, item2.owner, item2.month]);
+  const actionTable = (items) => ({ kind: "table", columns: ["#", "Action", "Owner", "Month"], widths: [0.06, 0.6, 0.2, 0.14], rows: actionRows(items) });
+  const sectionEight = {
+    number: 8,
+    title: "The work plan",
+    standfirst: `Twelve months, three phases, ${phaseOne.length + phaseTwo.length + phaseThree.length} actions. Every Recommendation in this plan, sequenced, with an owner and a month.`,
+    overview: "This is the part to work from. Phase One is judged on what exists at the end of month three, not on what it earned along the way.",
+    scope: ["The three phases.", "Phase One: Build, months 1 to 3.", "Phase Two: Execute, months 4 to 9.", "Phase Three: Consolidate, months 10 to 12."],
+    blocks: [
+      { kind: "table", columns: ["Phase", "Months", "The single objective"], widths: [0.26, 0.14, 0.6], rows: phases.map((phase) => [phase.phase, phase.months, phase.goal]) },
+      { kind: "timeline", moves },
+      { kind: "subsection", code: "8.1", title: "Phase One: Build (months 1 to 3)" },
+      actionTable(phaseOne),
+      { kind: "callout", title: "The gate at the end of Phase One", text: `Do not move to Phase Two until three things are true. One: ${gateMeasure} is tracked every week and moving the right way. Two: the monthly close has run three times. Three: the items in Section Nine are closed. If any one is not true, extend Phase One rather than moving on.` },
+      { kind: "subsection", code: "8.2", title: "Phase Two: Execute (months 4 to 9)" },
+      actionTable(phaseTwo),
+      { kind: "subsection", code: "8.3", title: "Phase Three: Consolidate (months 10 to 12)" },
+      actionTable(phaseThree)
+    ]
+  };
+  const s9 = section(9);
+  const sectionNine = {
+    number: 9,
+    title: "Outstanding items",
+    standfirst: needs.length ? `${upperFirst(["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][needs.length] ?? String(needs.length))} thing${needs.length === 1 ? "" : "s"} we still need from you before this plan is complete.` : "Nothing outstanding: every question was answered.",
+    overview: "This plan is deliberately explicit about its own gaps. Nothing below stops Phase One from starting, but each item makes the plan sharper, and only you can close them.",
+    scope: ["What we need from you.", "Open on the record.", "How to use this document.", "If you want help."],
+    blocks: [
+      s9.sub("What we need from you"),
+      needs.length ? { kind: "table", columns: ["#", "Item", "Why it matters"], widths: [0.06, 0.44, 0.5], rows: needs.map(([item2, why], index2) => [String(index2 + 1), item2, why]) } : { kind: "paragraph", text: "You answered every question. Keep the answers current: the weekly numbers in Section Five will replace most of them with measured figures." },
+      ...openRecord.length ? [s9.sub("Open on the record"), { kind: "numbered", items: openRecord }] : [],
+      s9.sub("How to use this document"),
+      { kind: "numbered", items: [
+        "Read it once in full, then work from Section Eight. Its measure is not whether the analysis was right, but whether Phase One's actions are done by the end of month three.",
+        "Mark it up. Tell us what is wrong, what is missing and what you would do differently, by replying to the email this plan came with.",
+        "Review it twice: at the Phase One gate in month three, and at the mid-plan review in month six. A plan that is never revisited becomes an old plan."
+      ] },
+      s9.sub("If you want help"),
+      ...partBlocks(11)
+    ]
+  };
+  const sections = [sectionOne, sectionTwo, sectionThree, sectionFour, sectionFive, sectionSix, sectionSeven, sectionEight, sectionNine];
+  const positionRows = [
+    ...answers.p_age ? [{ label: "Trading for", figure: optionLabel("p_age", answers.p_age) ?? "", meaning: idea ? "Not yet trading" : TREND[String(answers.p_trend)] ?? "" }] : [],
+    { label: "Money in last month", figure: revenue !== null ? formatNaira(revenue) : "Not known", meaning: metrics2.revenueVsTypical === "within" ? "Within the typical month you described" : metrics2.revenueVsTypical ? `${upperFirst(metrics2.revenueVsTypical)} the typical month you described` : "Revenue, not profit" },
+    { label: "Left after costs", figure: metrics2.result !== null ? `${metrics2.result < 0 ? "\u2212" : ""}${formatNaira(Math.abs(metrics2.result))}` : "Not known", meaning: deficit ? "Costs ran ahead of sales" : thinResult ? "Thin: under 10% of revenue" : metrics2.result !== null ? "A real surplus" : "Needs last month's costs" },
+    { label: "Gross margin", figure: metrics2.margin?.text ?? "Not known", meaning: metrics2.margin ? metrics2.margin.health === "clear" ? `Healthy for each ${metrics2.per}` : metrics2.margin.health === "watch" ? "Workable, with little room for mistakes" : "Too thin to carry the business" : "Needs your direct costs" },
+    { label: "Cash cover", figure: coverText(metrics2.cover), meaning: coverHealth === "stuck" ? "One bad month is a crisis" : coverHealth === "watch" ? "Below the 8 weeks a business needs" : metrics2.cover ? "A cushion for a bad month" : "Needs cash and costs" },
+    { label: "Enquiries a month", figure: `${labelOf(ENQUIRIES, intake.enquiries)}${intake.conversion !== null ? `; ${intake.conversion} in 10 buy` : ""}`, meaning: lowConversion ? "Sales are lost after people ask" : "The demand the plan starts from" },
+    ...answers.p_staff ? [{ label: "People", figure: optionLabel("p_staff", answers.p_staff) ?? "", meaning: answers.f_team ? TEAM[String(answers.f_team)] ?? "" : "" }] : [],
+    { label: "Top three customers", figure: labelOf(TOP_CUSTOMER_SHARE, intake.topCustomerShare), meaning: intake.topCustomerShare === "over_50" ? "Losing one would change the business overnight" : "Share of your sales" }
+  ];
+  const background2 = {
+    overview: `You took the Business Check and completed the Report Intake. This plan brings what you told us into one place, as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers.`,
+    engagement: [
+      "Your Business Check: the ten places a business gets stuck, and you as a founder, in your words.",
+      `Your Report Intake, completed ${reportDate(input.date)}: what you sell, who buys, how the business runs, and the numbers.`,
+      "This plan: built by fixed rules from both, so every finding traces back to an answer you gave."
+    ],
+    position: positionRows,
+    facts: takeaways2().slice(0, 2).map(({ headline, detail }) => ({ headline, detail })),
+    question,
+    headline: implications()
+  };
   const position = idea ? `${businessName} is an idea not yet trading. Of the ${areaHealth.size + (outlineRow(result, 0) ? 1 : 0)} areas we looked at, ${tallyText(tally)}.` : `${businessName} ${MODEL[typeKey]}${answers.p_age ? ` and has traded for ${AGE[String(answers.p_age)]}` : ""}. Of the ${areaHealth.size + (outlineRow(result, 0) ? 1 : 0)} areas we looked at, ${tallyText(tally)}.`;
   return {
     version: REPORT_VERSION,
@@ -10735,7 +11057,8 @@ function buildFullReport(input) {
       implications: implications(),
       benchmarks: bench
     },
-    parts,
+    background: background2,
+    sections,
     appendix: appendix(answers, intake),
     method: `Built by The Shift's fixed rules from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on ${reportDate(input.date)}. It is not an audit, a valuation, or financial, legal or tax advice.`
   };
@@ -10888,7 +11211,7 @@ function appendix(answers, intake) {
     tools: intake.tools.map((value) => labelOf(TOOLS, value)).join("; "),
     lastMonthRevenue: `In: ${intake.lastMonthRevenue !== null ? formatNaira(intake.lastMonthRevenue) : "not sure"}; costs: ${intake.monthlyCosts !== null ? formatNaira(intake.monthlyCosts) : "not sure"}; biggest cost: ${labelOf(BIGGEST_COST, intake.biggestCost)}`,
     cash: `Cash: ${labelOf(CASH, intake.cash)}; owed to you: ${labelOf(OWED, intake.owed)}; loans: ${labelOf(LOANS, intake.loans)}`,
-    goal: intake.goal
+    goal: intake.revenueTarget ? `${sentence(intake.goal)} Monthly sales wanted in 12 months: ${formatNaira(intake.revenueTarget)}.` : intake.goal
   };
   return [
     { title: "Your Business Check", rows: check },
@@ -11103,9 +11426,17 @@ function reading2(doc, block) {
   paragraph(doc, block.good);
   const x = M.left + 16;
   const width = W - 30;
-  box(doc, C2.highlight, (measure) => {
+  box(doc, C2["highlight-ink"], (measure) => {
     const lines = [["First move", block.move, SANS_600], ["This week", block.thisWeek, SANS2], ["Number to watch", block.watch, SANS2]];
     let total = 0;
+    if (block.code) {
+      doc.font(SANS_700).fontSize(7.5);
+      total += doc.heightOfString(`RECOMMENDATION ${block.code}`, { width, characterSpacing: 1.1 }) + 6;
+      if (!measure) {
+        doc.fillColor(C2["highlight-ink"]).font(SANS_700).fontSize(7.5).text(`RECOMMENDATION ${block.code}`, x, doc.y, { width, characterSpacing: 1.1 });
+        doc.y += 6;
+      }
+    }
     for (const [label, text4, font] of lines) {
       doc.font(SANS_700).fontSize(7);
       const labelHeight = doc.heightOfString(label.toUpperCase(), { width, characterSpacing: 0.8 });
@@ -11321,56 +11652,162 @@ function timeline(doc, moves, title) {
   doc.x = M.left;
   doc.y = top + 26 + height + 14;
 }
-function blocks(doc, items) {
-  for (const block of items) {
-    switch (block.kind) {
-      case "paragraph":
-        ensure(doc, 40);
-        paragraph(doc, block.text);
-        break;
-      case "heading":
-        ensure(doc, 60);
-        doc.moveDown(0.3);
-        doc.font(SANS_700).fontSize(11.5).fillColor(C2.ink).text(block.text, M.left, doc.y, { width: W });
-        doc.moveDown(0.5);
-        break;
-      case "facts":
-        facts(doc, block.rows);
-        break;
-      case "bullets":
-        bullets(doc, block.items);
-        break;
-      case "metrics":
-        metrics(doc, block.items);
-        break;
-      case "table":
-        table(doc, block);
-        break;
-      case "reading":
-        reading2(doc, block);
-        break;
-      case "callout":
-        callout(doc, block.title, block.text);
-        break;
-      case "scorecard":
-        scorecard(doc, block.rows);
-        break;
-      case "takeaways":
-        takeaways(doc, block.title, block.items);
-        break;
-      case "benchmarks":
-        benchmarks2(doc, block.items, "Against what good looks like");
-        break;
-      case "waterfall":
-        waterfall(doc, block.steps);
-        break;
-      case "riskMatrix":
-        riskMatrix(doc, block.risks);
-        break;
-      case "timeline":
-        timeline(doc, block.moves);
-        break;
+function subsection(doc, code, title) {
+  ensure(doc, 90);
+  doc.moveDown(0.5);
+  doc.font(displayFont(title)).fontSize(13.5).fillColor(C2.ink).text(`${code}  ${title}`, M.left, doc.y, { width: W });
+  doc.moveDown(0.45);
+}
+function recommendation(doc, code, lines) {
+  const x = M.left + 16;
+  const width = W - 30;
+  box(doc, C2["highlight-ink"], (measure) => {
+    doc.font(SANS_700).fontSize(7.5);
+    let total = doc.heightOfString(`RECOMMENDATION ${code}`, { width, characterSpacing: 1.1 }) + 6;
+    if (!measure) {
+      doc.fillColor(C2["highlight-ink"]).font(SANS_700).fontSize(7.5).text(`RECOMMENDATION ${code}`, x, doc.y, { width, characterSpacing: 1.1 });
+      doc.y += 6;
     }
+    lines.forEach((line, index2) => {
+      doc.font(SANS2).fontSize(10);
+      const height = doc.heightOfString(line, { width, lineGap: 2.5 });
+      if (!measure) {
+        doc.fillColor(C2.ink).font(SANS2).fontSize(10).text(line, x, doc.y, { width, lineGap: 2.5 });
+        if (index2 < lines.length - 1) doc.y += 6;
+      }
+      total += height + (index2 < lines.length - 1 ? 6 : 0);
+    });
+    return total;
+  });
+}
+function numbered(doc, items, title) {
+  if (title) {
+    ensure(doc, 40);
+    doc.font(SANS_700).fontSize(7.5).fillColor(C2["highlight-ink"]).text(title.toUpperCase(), M.left, doc.y, { width: W, characterSpacing: 1.1 });
+    doc.moveDown(0.4);
+  }
+  items.forEach((item2, index2) => {
+    doc.font(SANS2).fontSize(9.5);
+    const height = doc.heightOfString(item2, { width: W - 18, lineGap: 2.5 });
+    ensure(doc, height + 4);
+    const y = doc.y;
+    doc.fillColor(C2["highlight-ink"]).font(SANS_700).fontSize(9.5).text(`${index2 + 1}.`, M.left, y, { width: 16, lineBreak: false });
+    doc.fillColor(C2.ink).font(SANS2).fontSize(9.5).text(item2, M.left + 18, y, { width: W - 18, lineGap: 2.5 });
+    doc.moveDown(0.3);
+  });
+  doc.moveDown(0.4);
+}
+function bridge(doc, steps) {
+  const chartHeight = 140;
+  ensure(doc, chartHeight + 56);
+  const top = doc.y + 18;
+  const high = Math.max(...steps.filter((step) => step.total).map((step) => step.amount), 1);
+  const y = (value) => top + chartHeight - value / high * chartHeight;
+  const columnWidth = W / steps.length;
+  const barWidth = Math.min(64, columnWidth - 24);
+  let running = 0;
+  steps.forEach((step, index2) => {
+    const from = step.total ? 0 : running;
+    const to = step.total ? step.amount : running + step.amount;
+    running = to;
+    const x = M.left + index2 * columnWidth + (columnWidth - barWidth) / 2;
+    const color = step.total ? index2 === 0 ? C2["brand-slate"] : C2.brand : C2["health-clear"];
+    const y1 = Math.min(y(from), y(to));
+    doc.rect(x, y1, barWidth, Math.max(Math.abs(y(from) - y(to)), 1.5)).fill(color);
+    if (index2 < steps.length - 1) doc.moveTo(x + barWidth, y(to)).lineTo(x + columnWidth, y(to)).lineWidth(0.6).dash(2, { space: 2 }).strokeColor(C2["ink-muted"]).stroke().undash();
+    doc.fillColor(color).font(SANS_700).fontSize(8.5).text(step.display, x - 30, y1 - 13, { width: barWidth + 60, align: "center", lineBreak: false });
+    doc.fillColor(C2["ink-muted"]).font(SANS_600).fontSize(8).text(step.label, x - 30, top + chartHeight + 8, { width: barWidth + 60, align: "center", lineBreak: false });
+  });
+  doc.moveTo(M.left, top + chartHeight).lineTo(M.left + W, top + chartHeight).lineWidth(0.6).strokeColor(C2.line).stroke();
+  doc.x = M.left;
+  doc.y = top + chartHeight + 30;
+}
+function minimumHeight(block) {
+  switch (block?.kind) {
+    case "benchmarks":
+      return block.items.length * 38 + 40;
+    case "reading":
+      return 180;
+    case "riskMatrix":
+      return 190;
+    case "bridge":
+    case "waterfall":
+      return 200;
+    case "timeline":
+      return 230;
+    case "metrics":
+      return 110;
+    default:
+      return 70;
+  }
+}
+function blocks(doc, items) {
+  items.forEach((block, index2) => {
+    if (block.kind === "subsection") ensure(doc, 40 + minimumHeight(items[index2 + 1]));
+    drawBlock(doc, block, items[index2 - 1]);
+  });
+}
+function drawBlock(doc, block, previous) {
+  switch (block.kind) {
+    case "paragraph":
+      ensure(doc, 40);
+      paragraph(doc, block.text);
+      break;
+    case "heading":
+      ensure(doc, 60);
+      doc.moveDown(0.3);
+      doc.font(SANS_700).fontSize(11.5).fillColor(C2.ink).text(block.text, M.left, doc.y, { width: W });
+      doc.moveDown(0.5);
+      break;
+    case "facts":
+      facts(doc, block.rows);
+      break;
+    case "bullets":
+      bullets(doc, block.items);
+      break;
+    case "metrics":
+      metrics(doc, block.items);
+      break;
+    case "table":
+      table(doc, block);
+      break;
+    case "reading":
+      reading2(doc, block);
+      break;
+    case "callout":
+      callout(doc, block.title, block.text);
+      break;
+    case "scorecard":
+      scorecard(doc, block.rows);
+      break;
+    case "takeaways":
+      takeaways(doc, block.title, block.items);
+      break;
+    // A numbered subsection already names the chart; otherwise it carries its own label.
+    case "benchmarks":
+      benchmarks2(doc, block.items, previous?.kind === "subsection" ? void 0 : "Against what good looks like");
+      break;
+    case "waterfall":
+      waterfall(doc, block.steps);
+      break;
+    case "riskMatrix":
+      riskMatrix(doc, block.risks);
+      break;
+    case "timeline":
+      timeline(doc, block.moves);
+      break;
+    case "subsection":
+      subsection(doc, block.code, block.title);
+      break;
+    case "recommendation":
+      recommendation(doc, block.code, block.lines);
+      break;
+    case "numbered":
+      numbered(doc, block.items, block.title);
+      break;
+    case "bridge":
+      bridge(doc, block.steps);
+      break;
   }
 }
 function brandRule(doc, y, height = 4, x = 0, width = PAGE.width) {
@@ -11399,40 +11836,84 @@ function cover(doc, report) {
   doc.moveTo(M.left + logoWidth + 18, 62).lineTo(M.left + logoWidth + 18, 56 + logoHeight - 6).lineWidth(0.8).strokeColor(C2.line).stroke();
   doc.font(SANS_700).fontSize(10).fillColor(C2["ink-muted"]).text(BRAND.productName.toUpperCase(), M.left + logoWidth + 34, 56 + logoHeight / 2 - 6, { characterSpacing: 2.4, lineBreak: false });
   doc.x = M.left;
-  doc.y = 250;
-  eyebrow(doc, "Full business check report");
+  doc.y = 200;
+  eyebrow(doc, `${BRAND.productName} \xB7 Full Report \xB7 Strategic plan`);
   doc.font(displayFont(report.businessName)).fontSize(34).fillColor(C2.ink).text(report.businessName, M.left, doc.y, { width: W, lineGap: 2 });
-  doc.moveDown(0.4);
-  paragraph(doc, report.descriptor, { size: 13 });
-  doc.moveDown(0.6);
+  doc.moveDown(0.3);
+  paragraph(doc, `A twelve-month strategic plan. ${report.descriptor}.`, { size: 13, color: C2["highlight-ink"] });
+  doc.moveTo(M.left, doc.y + 4).lineTo(M.left + W, doc.y + 4).lineWidth(0.8).strokeColor(C2["highlight-ink"]).stroke();
+  doc.y += 16;
   facts(doc, [
     { label: "Prepared for", value: report.ownerName },
+    { label: "Prepared by", value: `${BRAND.organisationName}, ${BRAND.productEndorsement.replace(/, by .*/, "")}` },
+    { label: "Built from", value: "Your Business Check and your Report Intake" },
     { label: "Date", value: report.date },
     { label: "Reference", value: report.reference }
   ]);
-  doc.y = Math.max(doc.y + 10, 520);
-  eyebrow(doc, "What is inside", C2.brand);
-  const entries = [["", "Executive summary"], ...report.parts.map((part) => [String(part.number), part.title]), ["A", "Appendix: your answers"]];
-  for (const [number, title] of entries) {
+  callout(doc, "What this document is", "The outcome of your Business Check and Report Intake, brought into one place as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers. Read it as the start of a conversation: Section Nine lists what we still need from you.", C2["highlight-ink"]);
+}
+var WORDS = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+function contents(doc, report) {
+  doc.addPage();
+  eyebrow(doc, "Contents");
+  doc.font(DISPLAY).fontSize(22).fillColor(C2.ink).text("What this document contains", M.left, doc.y, { width: W });
+  doc.moveDown(0.3);
+  doc.moveTo(M.left, doc.y).lineTo(M.left + W, doc.y).lineWidth(0.8).strokeColor(C2["highlight-ink"]).stroke();
+  doc.moveDown(0.8);
+  const entries = [["Background", "Where the business stands and what this plan is for"], ...report.sections.map((item2) => [`Section ${WORDS[item2.number]}`, item2.title]), ["Appendix", "Your answers"]];
+  for (const [label, title] of entries) {
     const y = doc.y;
-    doc.font(SANS_700).fontSize(9).fillColor(C2["highlight-ink"]).text(number, M.left, y, { width: 20, lineBreak: false });
-    doc.font(SANS2).fontSize(9.5).fillColor(C2.ink).text(title, M.left + 24, y, { width: W - 24 });
-    doc.y = y + 15;
+    doc.font(SANS_700).fontSize(10).fillColor(C2["highlight-ink"]).text(label, M.left, y, { lineBreak: false });
+    const offset = doc.widthOfString(label) + 10;
+    doc.font(SANS2).fontSize(10).fillColor(C2.ink).text(title, M.left + offset, y, { width: W - offset });
+    doc.y = y + 19;
   }
 }
-function onePage(doc, report) {
-  const summary = report.onePage;
+function sectionHeading(doc, eyebrowText, title, standfirst, health) {
+  eyebrow(doc, eyebrowText);
+  doc.font(DISPLAY).fontSize(24).fillColor(C2.ink).text(title, M.left, doc.y, { width: W });
+  doc.moveDown(0.25);
+  doc.moveTo(M.left, doc.y).lineTo(M.left + W, doc.y).lineWidth(0.8).strokeColor(C2["highlight-ink"]).stroke();
+  doc.moveDown(0.6);
+  doc.font(SANS_600).fontSize(12).fillColor(C2["ink-soft"]).text(standfirst, M.left, doc.y, { width: W, lineGap: 3 });
+  doc.moveDown(0.5);
+  if (health) {
+    chip(doc, health, M.left, doc.y);
+    doc.y += 22;
+  }
+}
+function overviewAndScope(doc, item2) {
+  doc.font(SANS_700).fontSize(7.5).fillColor(C2["highlight-ink"]).text("OVERVIEW", M.left, doc.y, { width: W, characterSpacing: 1.1 });
+  doc.moveDown(0.3);
+  paragraph(doc, item2.overview, { color: C2.ink });
+  numbered(doc, item2.scope, "Scope");
+}
+function background(doc, report) {
+  const item2 = report.background;
   doc.addPage();
-  partHeading(doc, "Executive summary", "Where you stand", summary.position);
-  takeaways(doc, "Key takeaways", summary.takeaways);
-  soWhat(doc, "What this means for you", summary.implications);
-  metrics(doc, summary.keyNumbers);
+  sectionHeading(doc, "Background", "Where we have come from", "Where the business stands today, and the question this plan answers.");
+  doc.font(SANS_700).fontSize(7.5).fillColor(C2["highlight-ink"]).text("OVERVIEW", M.left, doc.y, { width: W, characterSpacing: 1.1 });
+  doc.moveDown(0.3);
+  paragraph(doc, item2.overview, { color: C2.ink });
+  numbered(doc, item2.engagement, "What this plan is built from");
+  doc.font(SANS_700).fontSize(7.5).fillColor(C2["highlight-ink"]).text("WHERE THE BUSINESS STANDS TODAY", M.left, doc.y, { width: W, characterSpacing: 1.1 });
+  doc.moveDown(0.4);
+  table(doc, { kind: "table", columns: ["The position today", "Figure", "What it means"], widths: [0.3, 0.25, 0.45], rows: item2.position.map((row) => [row.label, row.figure, row.meaning]) });
+  ensure(doc, 240);
+  subhead(doc, "Area by area");
+  scorecard(doc, report.onePage.scorecard, true);
+  takeaways(doc, item2.facts.length === 1 ? "The fact that frames this plan" : "The two facts that frame this plan", item2.facts);
+  if (item2.question) {
+    numbered(doc, item2.question.text, "The question this plan answers");
+    if (item2.question.levers.length) numbered(doc, item2.question.levers.map((lever) => `${lever.factor} on ${lever.lever.toLowerCase()}. ${lever.fromTo}.`));
+  }
+  soWhat(doc, "The headline decision", item2.headline);
+}
+function sectionPages(doc, item2) {
   doc.addPage();
-  partHeading(doc, "Executive summary", "Scorecard and first moves", `Fix this first: ${summary.fixFirst.area.toLowerCase()}.`);
-  scorecard(doc, summary.scorecard, true);
-  if (summary.benchmarks.length) benchmarks2(doc, summary.benchmarks, "Your numbers against what good looks like");
-  timeline(doc, summary.moves, "Your 90-day plan");
-  callout(doc, "The one number to watch", summary.watch, C2.highlight);
+  sectionHeading(doc, `Section ${WORDS[item2.number]}`, item2.title, item2.standfirst, item2.health);
+  overviewAndScope(doc, item2);
+  blocks(doc, item2.blocks);
 }
 function appendix2(doc, report) {
   doc.addPage();
@@ -11453,7 +11934,7 @@ function footers(doc, report) {
     doc.page.margins.bottom = 0;
     const y = PAGE.height - 40;
     doc.moveTo(M.left, y - 8).lineTo(M.left + W, y - 8).lineWidth(0.5).strokeColor(C2.line).stroke();
-    doc.font(SANS2).fontSize(7.5).fillColor(C2["ink-muted"]).text(`${BRAND.productEndorsement} \xB7 Full business check report \xB7 ${report.businessName} \xB7 ${report.reference}`, M.left, y, { width: W - 60, lineBreak: false });
+    doc.font(SANS2).fontSize(7.5).fillColor(C2["ink-muted"]).text(`${report.businessName} \xB7 Strategic plan \xB7 ${BRAND.productEndorsement} \xB7 Private and confidential`, M.left, y, { width: W - 60, lineBreak: false });
     doc.text(`${index2 + 1} / ${range.count}`, M.left + W - 60, y, { width: 60, align: "right", lineBreak: false });
     doc.page.margins.bottom = bottom;
   }
@@ -11465,7 +11946,7 @@ function renderFullReportPdf(report, generatedAt) {
       margins: M,
       bufferPages: true,
       info: {
-        Title: `${report.businessName}: full business check report`,
+        Title: `${report.businessName}: strategic plan`,
         Author: BRAND.organisationName,
         Subject: BRAND.productEndorsement,
         Creator: BRAND.productEndorsement,
@@ -11482,12 +11963,9 @@ function renderFullReportPdf(report, generatedAt) {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
     cover(doc, report);
-    onePage(doc, report);
-    for (const part of report.parts) {
-      doc.addPage();
-      partHeading(doc, `Part ${part.number} \xB7 ${part.method}`, part.title, part.finding, part.health);
-      blocks(doc, part.blocks);
-    }
+    contents(doc, report);
+    background(doc, report);
+    for (const item2 of report.sections) sectionPages(doc, item2);
     appendix2(doc, report);
     footers(doc, report);
     doc.end();

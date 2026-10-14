@@ -1,6 +1,6 @@
 import PDFDocument from "pdfkit";
 import { BRAND } from "../../shared/brand";
-import type { Benchmark, FullReport, PlanMove, ReportBlock, ReportHealth, ScoreRow } from "../../shared/fullReport/build";
+import type { Benchmark, FullReport, PlanMove, ReportBlock, ReportHealth, ReportSection, ScoreRow } from "../../shared/fullReport/build";
 import { PLAYFAIR_DISPLAY_700, PLUS_JAKARTA_SANS_400, PLUS_JAKARTA_SANS_600, PLUS_JAKARTA_SANS_700 } from "./fonts";
 import { PRINT_LOGO_PNG_BASE64, PRINT_LOGO_SIZE } from "./logo";
 
@@ -219,9 +219,17 @@ function reading(doc: Doc, block: Extract<ReportBlock, { kind: "reading" }>) {
   paragraph(doc, block.good);
   const x = M.left + 16;
   const width = W - 30;
-  box(doc, C.highlight, (measure) => {
+  box(doc, C["highlight-ink"], (measure) => {
     const lines: [string, string, string][] = [["First move", block.move, SANS_600], ["This week", block.thisWeek, SANS], ["Number to watch", block.watch, SANS]];
     let total = 0;
+    if (block.code) {
+      doc.font(SANS_700).fontSize(7.5);
+      total += doc.heightOfString(`RECOMMENDATION ${block.code}`, { width, characterSpacing: 1.1 }) + 6;
+      if (!measure) {
+        doc.fillColor(C["highlight-ink"]).font(SANS_700).fontSize(7.5).text(`RECOMMENDATION ${block.code}`, x, doc.y, { width, characterSpacing: 1.1 });
+        doc.y += 6;
+      }
+    }
     for (const [label, text, font] of lines) {
       doc.font(SANS_700).fontSize(7);
       const labelHeight = doc.heightOfString(label.toUpperCase(), { width, characterSpacing: 0.8 });
@@ -453,24 +461,126 @@ function timeline(doc: Doc, moves: PlanMove[], title?: string) {
   doc.y = top + 26 + height + 14;
 }
 
-function blocks(doc: Doc, items: ReportBlock[]) {
-  for (const block of items) {
-    switch (block.kind) {
-      case "paragraph": ensure(doc, 40); paragraph(doc, block.text); break;
-      case "heading": ensure(doc, 60); doc.moveDown(0.3); doc.font(SANS_700).fontSize(11.5).fillColor(C.ink).text(block.text, M.left, doc.y, { width: W }); doc.moveDown(0.5); break;
-      case "facts": facts(doc, block.rows); break;
-      case "bullets": bullets(doc, block.items); break;
-      case "metrics": metrics(doc, block.items); break;
-      case "table": table(doc, block); break;
-      case "reading": reading(doc, block); break;
-      case "callout": callout(doc, block.title, block.text); break;
-      case "scorecard": scorecard(doc, block.rows); break;
-      case "takeaways": takeaways(doc, block.title, block.items); break;
-      case "benchmarks": benchmarks(doc, block.items, "Against what good looks like"); break;
-      case "waterfall": waterfall(doc, block.steps); break;
-      case "riskMatrix": riskMatrix(doc, block.risks); break;
-      case "timeline": timeline(doc, block.moves); break;
+/** "1.2  The four money basics", in the display face, kept with what follows it. */
+function subsection(doc: Doc, code: string, title: string) {
+  ensure(doc, 90);
+  doc.moveDown(0.5);
+  doc.font(displayFont(title)).fontSize(13.5).fillColor(C.ink).text(`${code}  ${title}`, M.left, doc.y, { width: W });
+  doc.moveDown(0.45);
+}
+
+/** A numbered Recommendation: a crimson label and the advice, in a tinted box with an accent bar. */
+function recommendation(doc: Doc, code: string, lines: string[]) {
+  const x = M.left + 16;
+  const width = W - 30;
+  box(doc, C["highlight-ink"], (measure) => {
+    doc.font(SANS_700).fontSize(7.5);
+    let total = doc.heightOfString(`RECOMMENDATION ${code}`, { width, characterSpacing: 1.1 }) + 6;
+    if (!measure) {
+      doc.fillColor(C["highlight-ink"]).font(SANS_700).fontSize(7.5).text(`RECOMMENDATION ${code}`, x, doc.y, { width, characterSpacing: 1.1 });
+      doc.y += 6;
     }
+    lines.forEach((line, index) => {
+      doc.font(SANS).fontSize(10);
+      const height = doc.heightOfString(line, { width, lineGap: 2.5 });
+      if (!measure) {
+        doc.fillColor(C.ink).font(SANS).fontSize(10).text(line, x, doc.y, { width, lineGap: 2.5 });
+        if (index < lines.length - 1) doc.y += 6;
+      }
+      total += height + (index < lines.length - 1 ? 6 : 0);
+    });
+    return total;
+  });
+}
+
+/** A small-capitals label, then items numbered in the accent colour. */
+function numbered(doc: Doc, items: string[], title?: string) {
+  if (title) {
+    ensure(doc, 40);
+    doc.font(SANS_700).fontSize(7.5).fillColor(C["highlight-ink"]).text(title.toUpperCase(), M.left, doc.y, { width: W, characterSpacing: 1.1 });
+    doc.moveDown(0.4);
+  }
+  items.forEach((item, index) => {
+    doc.font(SANS).fontSize(9.5);
+    const height = doc.heightOfString(item, { width: W - 18, lineGap: 2.5 });
+    ensure(doc, height + 4);
+    const y = doc.y;
+    doc.fillColor(C["highlight-ink"]).font(SANS_700).fontSize(9.5).text(`${index + 1}.`, M.left, y, { width: 16, lineBreak: false });
+    doc.fillColor(C.ink).font(SANS).fontSize(9.5).text(item, M.left + 18, y, { width: W - 18, lineGap: 2.5 });
+    doc.moveDown(0.3);
+  });
+  doc.moveDown(0.4);
+}
+
+/** Today to the target: total bars at each end, each lever floating up from where the last one left off. */
+function bridge(doc: Doc, steps: { label: string; amount: number; display: string; total?: boolean }[]) {
+  const chartHeight = 140;
+  ensure(doc, chartHeight + 56);
+  const top = doc.y + 18;
+  const high = Math.max(...steps.filter((step) => step.total).map((step) => step.amount), 1);
+  const y = (value: number) => top + chartHeight - (value / high) * chartHeight;
+  const columnWidth = W / steps.length;
+  const barWidth = Math.min(64, columnWidth - 24);
+  let running = 0;
+  steps.forEach((step, index) => {
+    const from = step.total ? 0 : running;
+    const to = step.total ? step.amount : running + step.amount;
+    running = to;
+    const x = M.left + index * columnWidth + (columnWidth - barWidth) / 2;
+    const color = step.total ? (index === 0 ? C["brand-slate"] : C.brand) : C["health-clear"];
+    const y1 = Math.min(y(from), y(to));
+    doc.rect(x, y1, barWidth, Math.max(Math.abs(y(from) - y(to)), 1.5)).fill(color);
+    if (index < steps.length - 1) doc.moveTo(x + barWidth, y(to)).lineTo(x + columnWidth, y(to)).lineWidth(0.6).dash(2, { space: 2 }).strokeColor(C["ink-muted"]).stroke().undash();
+    doc.fillColor(color).font(SANS_700).fontSize(8.5).text(step.display, x - 30, y1 - 13, { width: barWidth + 60, align: "center", lineBreak: false });
+    doc.fillColor(C["ink-muted"]).font(SANS_600).fontSize(8).text(step.label, x - 30, top + chartHeight + 8, { width: barWidth + 60, align: "center", lineBreak: false });
+  });
+  doc.moveTo(M.left, top + chartHeight).lineTo(M.left + W, top + chartHeight).lineWidth(0.6).strokeColor(C.line).stroke();
+  doc.x = M.left;
+  doc.y = top + chartHeight + 30;
+}
+
+/** Roughly how much room a block needs before it is worth starting, so a heading never sits alone at a page foot. */
+function minimumHeight(block: ReportBlock | undefined) {
+  switch (block?.kind) {
+    case "benchmarks": return block.items.length * 38 + 40;
+    case "reading": return 180;
+    case "riskMatrix": return 190;
+    case "bridge":
+    case "waterfall": return 200;
+    case "timeline": return 230;
+    case "metrics": return 110;
+    default: return 70;
+  }
+}
+
+function blocks(doc: Doc, items: ReportBlock[]) {
+  items.forEach((block, index) => {
+    if (block.kind === "subsection") ensure(doc, 40 + minimumHeight(items[index + 1]));
+    drawBlock(doc, block, items[index - 1]);
+  });
+}
+
+function drawBlock(doc: Doc, block: ReportBlock, previous?: ReportBlock) {
+  switch (block.kind) {
+    case "paragraph": ensure(doc, 40); paragraph(doc, block.text); break;
+    case "heading": ensure(doc, 60); doc.moveDown(0.3); doc.font(SANS_700).fontSize(11.5).fillColor(C.ink).text(block.text, M.left, doc.y, { width: W }); doc.moveDown(0.5); break;
+    case "facts": facts(doc, block.rows); break;
+    case "bullets": bullets(doc, block.items); break;
+    case "metrics": metrics(doc, block.items); break;
+    case "table": table(doc, block); break;
+    case "reading": reading(doc, block); break;
+    case "callout": callout(doc, block.title, block.text); break;
+    case "scorecard": scorecard(doc, block.rows); break;
+    case "takeaways": takeaways(doc, block.title, block.items); break;
+    // A numbered subsection already names the chart; otherwise it carries its own label.
+    case "benchmarks": benchmarks(doc, block.items, previous?.kind === "subsection" ? undefined : "Against what good looks like"); break;
+    case "waterfall": waterfall(doc, block.steps); break;
+    case "riskMatrix": riskMatrix(doc, block.risks); break;
+    case "timeline": timeline(doc, block.moves); break;
+    case "subsection": subsection(doc, block.code, block.title); break;
+    case "recommendation": recommendation(doc, block.code, block.lines); break;
+    case "numbered": numbered(doc, block.items, block.title); break;
+    case "bridge": bridge(doc, block.steps); break;
   }
 }
 
@@ -503,43 +613,91 @@ function cover(doc: Doc, report: FullReport) {
   doc.font(SANS_700).fontSize(10).fillColor(C["ink-muted"]).text(BRAND.productName.toUpperCase(), M.left + logoWidth + 34, 56 + logoHeight / 2 - 6, { characterSpacing: 2.4, lineBreak: false });
 
   doc.x = M.left;
-  doc.y = 250;
-  eyebrow(doc, "Full business check report");
+  doc.y = 200;
+  eyebrow(doc, `${BRAND.productName} · Full Report · Strategic plan`);
   doc.font(displayFont(report.businessName)).fontSize(34).fillColor(C.ink).text(report.businessName, M.left, doc.y, { width: W, lineGap: 2 });
-  doc.moveDown(0.4);
-  paragraph(doc, report.descriptor, { size: 13 });
-  doc.moveDown(0.6);
+  doc.moveDown(0.3);
+  paragraph(doc, `A twelve-month strategic plan. ${report.descriptor}.`, { size: 13, color: C["highlight-ink"] });
+  doc.moveTo(M.left, doc.y + 4).lineTo(M.left + W, doc.y + 4).lineWidth(0.8).strokeColor(C["highlight-ink"]).stroke();
+  doc.y += 16;
   facts(doc, [
     { label: "Prepared for", value: report.ownerName },
+    { label: "Prepared by", value: `${BRAND.organisationName}, ${BRAND.productEndorsement.replace(/, by .*/, "")}` },
+    { label: "Built from", value: "Your Business Check and your Report Intake" },
     { label: "Date", value: report.date },
     { label: "Reference", value: report.reference },
   ]);
+  callout(doc, "What this document is", "The outcome of your Business Check and Report Intake, brought into one place as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers. Read it as the start of a conversation: Section Nine lists what we still need from you.", C["highlight-ink"]);
+}
 
-  doc.y = Math.max(doc.y + 10, 520);
-  eyebrow(doc, "What is inside", C.brand);
-  const entries: [string, string][] = [["", "Executive summary"], ...report.parts.map((part) => [String(part.number), part.title] as [string, string]), ["A", "Appendix: your answers"]];
-  for (const [number, title] of entries) {
+const WORDS = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+
+function contents(doc: Doc, report: FullReport) {
+  doc.addPage();
+  eyebrow(doc, "Contents");
+  doc.font(DISPLAY).fontSize(22).fillColor(C.ink).text("What this document contains", M.left, doc.y, { width: W });
+  doc.moveDown(0.3);
+  doc.moveTo(M.left, doc.y).lineTo(M.left + W, doc.y).lineWidth(0.8).strokeColor(C["highlight-ink"]).stroke();
+  doc.moveDown(0.8);
+  const entries: [string, string][] = [["Background", "Where the business stands and what this plan is for"], ...report.sections.map((item) => [`Section ${WORDS[item.number]}`, item.title] as [string, string]), ["Appendix", "Your answers"]];
+  for (const [label, title] of entries) {
     const y = doc.y;
-    doc.font(SANS_700).fontSize(9).fillColor(C["highlight-ink"]).text(number, M.left, y, { width: 20, lineBreak: false });
-    doc.font(SANS).fontSize(9.5).fillColor(C.ink).text(title, M.left + 24, y, { width: W - 24 });
-    doc.y = y + 15;
+    doc.font(SANS_700).fontSize(10).fillColor(C["highlight-ink"]).text(label, M.left, y, { lineBreak: false });
+    const offset = doc.widthOfString(label) + 10;
+    doc.font(SANS).fontSize(10).fillColor(C.ink).text(title, M.left + offset, y, { width: W - offset });
+    doc.y = y + 19;
   }
 }
 
-function onePage(doc: Doc, report: FullReport) {
-  const summary = report.onePage;
-  doc.addPage();
-  partHeading(doc, "Executive summary", "Where you stand", summary.position);
-  takeaways(doc, "Key takeaways", summary.takeaways);
-  soWhat(doc, "What this means for you", summary.implications);
-  metrics(doc, summary.keyNumbers);
+/** Section opening: eyebrow, title, accent rule, the finding as a standfirst, then Overview and Scope. */
+function sectionHeading(doc: Doc, eyebrowText: string, title: string, standfirst: string, health?: ReportHealth) {
+  eyebrow(doc, eyebrowText);
+  doc.font(DISPLAY).fontSize(24).fillColor(C.ink).text(title, M.left, doc.y, { width: W });
+  doc.moveDown(0.25);
+  doc.moveTo(M.left, doc.y).lineTo(M.left + W, doc.y).lineWidth(0.8).strokeColor(C["highlight-ink"]).stroke();
+  doc.moveDown(0.6);
+  doc.font(SANS_600).fontSize(12).fillColor(C["ink-soft"]).text(standfirst, M.left, doc.y, { width: W, lineGap: 3 });
+  doc.moveDown(0.5);
+  if (health) {
+    chip(doc, health, M.left, doc.y);
+    doc.y += 22;
+  }
+}
 
+function overviewAndScope(doc: Doc, item: { overview: string; scope: string[] }) {
+  doc.font(SANS_700).fontSize(7.5).fillColor(C["highlight-ink"]).text("OVERVIEW", M.left, doc.y, { width: W, characterSpacing: 1.1 });
+  doc.moveDown(0.3);
+  paragraph(doc, item.overview, { color: C.ink });
+  numbered(doc, item.scope, "Scope");
+}
+
+function background(doc: Doc, report: FullReport) {
+  const item = report.background;
   doc.addPage();
-  partHeading(doc, "Executive summary", "Scorecard and first moves", `Fix this first: ${summary.fixFirst.area.toLowerCase()}.`);
-  scorecard(doc, summary.scorecard, true);
-  if (summary.benchmarks.length) benchmarks(doc, summary.benchmarks, "Your numbers against what good looks like");
-  timeline(doc, summary.moves, "Your 90-day plan");
-  callout(doc, "The one number to watch", summary.watch, C.highlight);
+  sectionHeading(doc, "Background", "Where we have come from", "Where the business stands today, and the question this plan answers.");
+  doc.font(SANS_700).fontSize(7.5).fillColor(C["highlight-ink"]).text("OVERVIEW", M.left, doc.y, { width: W, characterSpacing: 1.1 });
+  doc.moveDown(0.3);
+  paragraph(doc, item.overview, { color: C.ink });
+  numbered(doc, item.engagement, "What this plan is built from");
+  doc.font(SANS_700).fontSize(7.5).fillColor(C["highlight-ink"]).text("WHERE THE BUSINESS STANDS TODAY", M.left, doc.y, { width: W, characterSpacing: 1.1 });
+  doc.moveDown(0.4);
+  table(doc, { kind: "table", columns: ["The position today", "Figure", "What it means"], widths: [0.3, 0.25, 0.45], rows: item.position.map((row) => [row.label, row.figure, row.meaning]) });
+  ensure(doc, 240);
+  subhead(doc, "Area by area");
+  scorecard(doc, report.onePage.scorecard, true);
+  takeaways(doc, item.facts.length === 1 ? "The fact that frames this plan" : "The two facts that frame this plan", item.facts);
+  if (item.question) {
+    numbered(doc, item.question.text, "The question this plan answers");
+    if (item.question.levers.length) numbered(doc, item.question.levers.map((lever) => `${lever.factor} on ${lever.lever.toLowerCase()}. ${lever.fromTo}.`));
+  }
+  soWhat(doc, "The headline decision", item.headline);
+}
+
+function sectionPages(doc: Doc, item: ReportSection) {
+  doc.addPage();
+  sectionHeading(doc, `Section ${WORDS[item.number]}`, item.title, item.standfirst, item.health);
+  overviewAndScope(doc, item);
+  blocks(doc, item.blocks);
 }
 
 function appendix(doc: Doc, report: FullReport) {
@@ -563,7 +721,7 @@ function footers(doc: Doc, report: FullReport) {
     const y = PAGE.height - 40;
     doc.moveTo(M.left, y - 8).lineTo(M.left + W, y - 8).lineWidth(0.5).strokeColor(C.line).stroke();
     doc.font(SANS).fontSize(7.5).fillColor(C["ink-muted"])
-      .text(`${BRAND.productEndorsement} · Full business check report · ${report.businessName} · ${report.reference}`, M.left, y, { width: W - 60, lineBreak: false });
+      .text(`${report.businessName} · Strategic plan · ${BRAND.productEndorsement} · Private and confidential`, M.left, y, { width: W - 60, lineBreak: false });
     doc.text(`${index + 1} / ${range.count}`, M.left + W - 60, y, { width: 60, align: "right", lineBreak: false });
     doc.page.margins.bottom = bottom;
   }
@@ -577,7 +735,7 @@ export function renderFullReportPdf(report: FullReport, generatedAt: Date): Prom
       margins: M,
       bufferPages: true,
       info: {
-        Title: `${report.businessName}: full business check report`,
+        Title: `${report.businessName}: strategic plan`,
         Author: BRAND.organisationName,
         Subject: BRAND.productEndorsement,
         Creator: BRAND.productEndorsement,
@@ -595,12 +753,9 @@ export function renderFullReportPdf(report: FullReport, generatedAt: Date): Prom
     doc.on("error", reject);
 
     cover(doc, report);
-    onePage(doc, report);
-    for (const part of report.parts) {
-      doc.addPage();
-      partHeading(doc, `Part ${part.number} · ${part.method}`, part.title, part.finding, part.health);
-      blocks(doc, part.blocks);
-    }
+    contents(doc, report);
+    background(doc, report);
+    for (const item of report.sections) sectionPages(doc, item);
     appendix(doc, report);
     footers(doc, report);
     doc.end();

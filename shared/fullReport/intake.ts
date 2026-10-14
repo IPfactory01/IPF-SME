@@ -193,6 +193,8 @@ export const intakeSchema = z.object({
   owed: z.enum(values(OWED)),
   loans: z.enum(values(LOANS)),
   goal: text(300).min(2, "Tell us what would make the next 12 months a success."),
+  /** The monthly sales the owner wants in 12 months, in naira; null when they would rather not say. Added in report v4. */
+  revenueTarget: naira.default(null),
 }).superRefine((intake, context) => {
   if (intake.topEarner !== null && intake.topEarner >= intake.products.length) {
     context.addIssue({ code: "custom", path: ["topEarner"], message: "Choose one of the products you listed." });
@@ -235,7 +237,7 @@ export const INTAKE_QUESTIONS = [
     dealHint: "Count only your commission and fees, not the deal money you pass on to others. Costs include salaries, rent, travel and everything else.",
   },
   { id: "cash", group: "The numbers", prompt: "Cash in the bank today, money customers owe you, and any loans." },
-  { id: "goal", group: "Your goal", prompt: "What would make the next 12 months a success?", hint: "In your words. A number helps: a sales level, a new shop, a hire." },
+  { id: "goal", group: "Your goal", prompt: "What would make the next 12 months a success, and what monthly sales do you want by then?", hint: "In your words: a sales level, a new shop, a hire. Then, if you can, the monthly sales you are aiming for." },
 ] as const;
 
 export type IntakeQuestion = (typeof INTAKE_QUESTIONS)[number];

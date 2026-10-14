@@ -11,7 +11,8 @@ const build = (profile: keyof typeof businessCheckProfiles, intake: Partial<Repo
   return buildFullReport({ reference: "TS-R-000012", date: DATE, contact: { fullName: "Adunni Example", businessName: "Adunni Fabrics" }, answers: merged, result: evaluate(merged), intake: { ...sampleIntake, ...intake } });
 };
 const text = (report: FullReport) => JSON.stringify(report);
-const part = (report: FullReport, number: number) => report.parts.find((item) => item.number === number)!;
+const sec = (report: FullReport, number: number) => report.sections.find((item) => item.number === number)!;
+const blocksOf = (report: FullReport, number: number) => sec(report, number).blocks;
 
 describe("the full report", () => {
   it("is deterministic: the same answers give the same report, word for word", () => {
@@ -19,14 +20,20 @@ describe("the full report", () => {
     expect(build("smallOperatingTrader")).toMatchSnapshot();
   });
 
-  it("has the agreed structure for every kind of business, with a finding on every part", () => {
+  it("has the strategic plan's structure for every kind of business: a Background and nine sections, each opened with a finding", () => {
     for (const profile of Object.keys(businessCheckProfiles) as (keyof typeof businessCheckProfiles)[]) {
       const report = build(profile);
-      expect(report.parts.map((item) => item.title), profile).toEqual([
-        "Your business today", "Where it is going", "Your market", "What you sell and how it makes money", "How customers find you and buy",
-        "How the business runs", "What could go wrong", "The numbers", "The diagnosis", "What to fix first: your 90-day plan", "How we can help",
+      expect(report.sections.map((item) => item.title), profile).toEqual([
+        "Founder readiness", "Strategic intent", "Market and industry", "Offer and proposition", "Operational plan",
+        "The financial case", "Risk", "The work plan", "Outstanding items",
       ]);
-      for (const item of report.parts) expect(item.finding, `${profile} part ${item.number}`).toMatch(/\S.*[.]$/);
+      for (const item of report.sections) {
+        expect(item.standfirst, `${profile} section ${item.number}`).toMatch(/\S.*[.]$/);
+        expect(item.overview.length, `${profile} section ${item.number}`).toBeGreaterThan(40);
+        expect(item.scope.length, `${profile} section ${item.number}`).toBeGreaterThan(1);
+      }
+      expect(report.background.position.length, profile).toBeGreaterThan(3);
+      expect(report.background.engagement, profile).toHaveLength(3);
       expect(report.onePage.moves.length, profile).toBeGreaterThan(0);
       expect(text(report), profile).not.toMatch(/undefined|NaN|\bnull\b|JUMP/);
       expect(report.appendix[1].rows).toHaveLength(17);
@@ -37,7 +44,7 @@ describe("the full report", () => {
     const report = build("smallOperatingTrader", {}, { p_sector: "professional services" });
     expect(report.descriptor).toMatch(/^A business that /);
     expect(text(report)).not.toMatch(/undefined|NaN|\bnull\b/);
-    expect(part(report, 1).blocks.flatMap((block) => (block.kind === "facts" ? block.rows.map((row) => row.label) : []))).not.toContain("Sector");
+    expect(report.background.position.map((row) => row.label)).not.toContain("Sector");
   });
 
   it("shows a commission as a percentage of the deal, and reads the margin as a share of each fee", () => {
@@ -49,7 +56,7 @@ describe("the full report", () => {
       ],
       topEarner: 0,
     });
-    const table = part(report, 1).blocks.find((block) => block.kind === "table");
+    const table = blocksOf(report, 4).find((block) => block.kind === "table");
     expect(table).toMatchObject({ columns: ["What you sell", "Price or fee", ""], rows: [
       ["Deal advisory", "2.5% of the deal, about ₦1,250,000 on a ₦50,000,000 deal", "Top earner"],
       ["Market studies", "₦1,500,000", ""],
@@ -93,7 +100,8 @@ describe("the full report", () => {
     const report = build("smallOperatingTrader");
     expect(report.onePage.fixFirst.area).toBe("Financials");
     expect(report.onePage.moves[0]).toMatchObject({ month: "Month 1", area: "Financials" });
-    expect(part(report, 10).blocks[0]).toEqual({ kind: "timeline", moves: report.onePage.moves });
+    expect(blocksOf(report, 8)).toContainEqual({ kind: "timeline", moves: report.onePage.moves });
+    expect(sec(report, 2).blocks).toContainEqual(expect.objectContaining({ kind: "table", columns: ["Months", "The single goal"] }));
   });
 
   it("reads the owner's goal back in their words", () => {
@@ -102,14 +110,15 @@ describe("the full report", () => {
 
   it("uses the idea reading for an owner who has not started", () => {
     const report = build("ideaStageFounder");
-    expect(part(report, 1).finding).toContain("has not started trading");
-    expect(part(report, 2).blocks[0]).toMatchObject({ kind: "reading", area: "Your idea" });
+    expect(report.descriptor).toContain("not yet trading");
+    expect(blocksOf(report, 2)).toContainEqual(expect.objectContaining({ kind: "reading", area: "Your idea" }));
+    expect(report.background.question).toBeUndefined();
   });
 
   it("still describes a large business that the check sent to an adviser, from the intake", () => {
     const report = build("advisoryRouteBusiness");
-    expect(part(report, 1).health).toBe("not_assessed");
-    expect(part(report, 3).finding).toBe("You can describe your best customer and the competitors they compare you with.");
+    expect(sec(report, 1).health).toBe("not_assessed");
+    expect(sec(report, 3).standfirst).toBe("You can describe your best customer and the competitors they compare you with.");
   });
 });
 
@@ -127,19 +136,20 @@ describe("what the rules work out from the numbers", () => {
 
   it("marks a loss-making month as stuck and names the gap in naira", () => {
     const report = build("growingMaker", { lastMonthRevenue: 2_000_000, monthlyCosts: 2_750_000, cash: "2m_10m" });
-    expect(part(report, 8).health).toBe("stuck");
-    expect(part(report, 8).finding).toBe("Last month the business spent ₦750,000 more than it brought in.");
+    expect(sec(report, 6).health).toBe("stuck");
+    expect(sec(report, 6).standfirst).toBe("Last month the business spent ₦750,000 more than it brought in.");
   });
 
   it("says so when the owner's own reading and their numbers disagree", () => {
     const report = build("growingMaker", { costShare: "over_75" }, { s4_status: "clear" });
     expect(text(report)).toContain("Your check answer says margins are healthy, but more than ₦75 of every ₦100 goes on direct costs.");
-    expect(part(report, 4).health).toBe("stuck");
+    expect(sec(report, 4).health).toBe("stuck");
+    expect(blocksOf(report, 9)).toContainEqual({ kind: "numbered", items: expect.arrayContaining(["Your check answer says margins are healthy, but more than ₦75 of every ₦100 goes on direct costs. That leaves under 25% for rent, salaries and profit."]) });
   });
 
   it("puts the worst risks first, each with a first control", () => {
     const report = build("smallOperatingTrader", { registration: "not_registered", topCustomerShare: "over_50" });
-    const register = part(report, 7).blocks[1];
+    const register = blocksOf(report, 7).find((block) => block.kind === "table")!;
     expect(register).toMatchObject({ kind: "table", columns: ["#", "Risk", "Likelihood", "Impact", "First control"] });
     const rows = (register as { rows: string[][] }).rows;
     expect(rows[0]).toEqual(["1", "Cash runs out in a bad month", "High", "High", "A 13-week cash forecast, updated every Monday."]);
@@ -156,7 +166,9 @@ describe("what the rules work out from the numbers", () => {
 describe("the consulting layout", () => {
   it("opens with the root cause first in the key takeaways, and says what it means", () => {
     const report = build("smallOperatingTrader");
-    expect(report.onePage.takeaways[0]).toEqual({ headline: "Financials", detail: part(report, 9).finding.replace(/^The place to start is financials: /, "").replace(/^./, (c) => c.toUpperCase()), health: "stuck" });
+    expect(report.onePage.takeaways[0]).toEqual({ headline: "Financials", detail: report.onePage.fixFirst.finding, health: "stuck" });
+    expect(report.background.facts).toEqual(report.onePage.takeaways.slice(0, 2).map(({ headline, detail }) => ({ headline, detail })));
+    expect(report.background.headline).toEqual(report.onePage.implications);
     expect(report.onePage.takeaways.length).toBeLessThanOrEqual(3);
     expect(report.onePage.implications[0]).toMatch(/^Start with financials: the first job is to/);
     expect(report.onePage.implications.some((item) => /13-week cash forecast/.test(item))).toBe(true);
@@ -165,7 +177,6 @@ describe("the consulting layout", () => {
 
   it("scores every area once, the same on the summary and in the diagnosis", () => {
     const report = build("smallOperatingTrader");
-    expect(part(report, 9).blocks[0]).toEqual({ kind: "scorecard", rows: report.onePage.scorecard });
     const areas = report.onePage.scorecard.map((row) => row.area);
     expect(new Set(areas).size).toBe(areas.length);
     const counts = { clear: 0, watch: 0, stuck: 0 } as Record<string, number>;
@@ -189,20 +200,73 @@ describe("the consulting layout", () => {
 
   it("draws last month as money in, costs and what is left, and leaves out numbers the owner did not give", () => {
     const report = build("growingMaker", { lastMonthRevenue: 2_000_000, monthlyCosts: 2_750_000, cash: "2m_10m" });
-    expect(part(report, 8).blocks.find((block) => block.kind === "waterfall")).toEqual({ kind: "waterfall", steps: [
+    expect(blocksOf(report, 6).find((block) => block.kind === "waterfall")).toEqual({ kind: "waterfall", steps: [
       { label: "Money in", amount: 2_000_000, display: "₦2,000,000" },
       { label: "Costs", amount: -2_750_000, display: "−₦2,750,000" },
       { label: "Shortfall", amount: -750_000, display: "−₦750,000" },
     ] });
     const unknown = build("smallOperatingTrader", { lastMonthRevenue: null, monthlyCosts: null, cash: "not_sure", costShare: "not_sure", conversion: null, owed: "not_sure" });
-    expect(unknown.parts.flatMap((item) => item.blocks).some((block) => block.kind === "waterfall")).toBe(false);
+    expect(unknown.sections.flatMap((item) => item.blocks).some((block) => block.kind === "waterfall")).toBe(false);
     expect(unknown.onePage.benchmarks).toEqual([]);
   });
 
   it("numbers each risk the same on the matrix and in the register", () => {
     const report = build("smallOperatingTrader", { registration: "not_registered", topCustomerShare: "over_50" });
-    const [matrix, register] = part(report, 7).blocks as [Extract<FullReport["parts"][number]["blocks"][number], { kind: "riskMatrix" }>, { rows: string[][] }];
+    const matrix = blocksOf(report, 7).find((block) => block.kind === "riskMatrix") as Extract<FullReport["sections"][number]["blocks"][number], { kind: "riskMatrix" }>;
+    const register = blocksOf(report, 7).find((block) => block.kind === "table") as { rows: string[][] };
     expect(matrix.kind).toBe("riskMatrix");
     expect(matrix.risks.map((risk) => [String(risk.number), risk.risk])).toEqual(register.rows.map((row) => [row[0], row[1]]));
+  });
+});
+
+describe("the strategic plan", () => {
+  type Block = FullReport["sections"][number]["blocks"][number];
+  const codes = (report: FullReport) => report.sections.flatMap((item) => item.blocks.flatMap((block: Block) => (block.kind === "recommendation" || (block.kind === "reading" && block.code) ? [String((block as { code: string }).code)] : [])));
+
+  it("breaks the gap to the owner's 12-month target into price, conversion and reach, and draws it from today to the target", () => {
+    const report = build("smallOperatingTrader", { revenueTarget: 6_000_000 });
+    const question = report.background.question!;
+    expect(question.text[0]).toBe("The gap from ₦2.4 million a month to the ₦6 million you want is a factor of about 2.5. It is less frightening broken into three ordinary parts.");
+    expect(question.levers.map((lever) => [lever.lever, lever.factor])).toEqual([["Price", "×1.15"], ["Conversion", "×1.67"], ["Reach and capacity", "×1.3"]]);
+    const bridge = question.bridge!;
+    expect(bridge.steps.map((step) => step.label)).toEqual(["Today", "Price", "Conversion", "Reach", "Target"]);
+    const [today, ...rest] = bridge.steps;
+    const target = rest.pop()!;
+    expect(today.amount + rest.reduce((sum, step) => sum + step.amount, 0)).toBe(target.amount);
+    expect(blocksOf(report, 6)).toContainEqual(bridge);
+  });
+
+  it("says the target is already within reach when it is at or below last month, and asks for it when it is missing", () => {
+    expect(build("smallOperatingTrader", { revenueTarget: 2_000_000 }).background.question).toEqual({ text: ["Your target of ₦2 million a month is at or below last month's ₦2.4 million. The work is to hold that level while fixing the areas this plan names, not to chase growth."], levers: [] });
+    const missing = build("smallOperatingTrader");
+    expect(missing.background.question).toBeUndefined();
+    const needs = blocksOf(missing, 9).find((block) => block.kind === "table") as { rows: string[][] };
+    expect(needs.rows.map((row) => row[1])).toContain("The monthly sales you want in 12 months");
+  });
+
+  it("numbers every Recommendation by its section, once each, and the work plan points at them", () => {
+    const report = build("smallOperatingTrader", { registration: "not_registered" });
+    const all = codes(report);
+    expect(new Set(all).size).toBe(all.length);
+    for (const code of all) expect(code).toMatch(/^[1-9]\.[1-9]\d*$/);
+    for (const item of report.sections) {
+      const own = all.filter((code) => code.startsWith(`${item.number}.`)).map((code) => Number(code.split(".")[1]));
+      expect(own, `section ${item.number}`).toEqual(own.map((_, index) => index + 1));
+    }
+    const actions = blocksOf(report, 8).filter((block) => block.kind === "table" && block.columns[0] === "#").flatMap((block) => (block as { rows: string[][] }).rows);
+    expect(actions.map((row) => row[0])).toEqual(actions.map((_, index) => String(index + 1)));
+    const referenced = actions.flatMap((row) => Array.from(row[1].matchAll(/Recommendation (\d+\.\d+)/g), (match) => match[1]));
+    expect(referenced.length).toBeGreaterThan(0);
+    for (const code of referenced) expect(all).toContain(code);
+    expect(actions.map((row) => row[1])).toContain("Register with CAC, get a tax identification number and diarise the filing dates");
+    expect(blocksOf(report, 8)).toContainEqual(expect.objectContaining({ kind: "callout", title: "The gate at the end of Phase One" }));
+  });
+
+  it("lists every answer the owner was not sure of as something we still need, in order of importance", () => {
+    const report = build("smallOperatingTrader", { lastMonthRevenue: null, cash: "not_sure", conversion: null, competitors: [] });
+    const needs = (blocksOf(report, 9).find((block) => block.kind === "table") as { rows: string[][] }).rows;
+    expect(needs.map((row) => row[1]).slice(0, 3)).toEqual(["Last month's money in", "Cash in the bank today", "The monthly sales you want in 12 months"]);
+    expect(needs.map((row) => row[1])).toEqual(expect.arrayContaining(["How many of every 10 people who ask go on to buy", "Up to three competitors, by name"]));
+    expect(sec(report, 9).standfirst).toMatch(/^[A-Z][a-z]+ things we still need from you before this plan is complete\.$/);
   });
 });

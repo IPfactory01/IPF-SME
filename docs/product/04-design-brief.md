@@ -156,17 +156,25 @@ from the plain-text body so both versions say the same thing:
 
 `server/fullReport/pdf.ts`, A4:
 
-- **Cover:** the three-colour rule, the print logo, "THE SHIFT", the crimson eyebrow "FULL BUSINESS CHECK REPORT", the
-  business name in Playfair 34 pt, a facts table (prepared for, date, reference) and the contents.
-- **Parts:** crimson eyebrow, title in brand blue, the finding in Playfair 19 pt, a health chip, then blocks (facts,
-  metrics tiles with a brand top bar, tables with tinted headers, readings, call-outs with an accent bar).
-- **Executive summary** (two or three pages): the position in Playfair; **Key takeaways** as numbered brand circles
-  with a health chip; **What this means for you** in a crimson-accent box with triangle markers; the key number tiles;
-  then the scorecard (a heat-map row per area: a 3 pt health bar, the health cell in its tint, the finding), the
-  benchmark bars and the 90-day plan as arrow-headed month columns (brand, slate, plum).
+Since version 4 (14 October 2026) the report is laid out as IP Factory's partner-written strategic plans are:
+- **Cover:** the three-colour rule, the print logo, "THE SHIFT", the crimson eyebrow "THE SHIFT · FULL REPORT ·
+  STRATEGIC PLAN", the business name in Playfair 34 pt, "A twelve-month strategic plan" in crimson, a crimson rule, a
+  facts table (prepared for, prepared by, built from, date, reference) and a "What this document is" call-out.
+- **Contents:** "Background" and "Section One" to "Section Nine" in crimson, each with its title.
+- **Background:** where the business stands today as a three-column table (position, figure, what it means), the
+  scorecard (a heat-map row per area), the two facts that frame the plan (numbered brand circles with a health chip),
+  the question the plan answers (the gap to the 12-month target as three multipliers) and the headline decision.
+- **Sections:** crimson "SECTION ONE" eyebrow, the title in Playfair 24 pt over a crimson rule, the finding as a
+  standfirst, a health chip, OVERVIEW and SCOPE, then numbered subsections ("1.2 The four money basics", Playfair
+  13.5 pt) and blocks: facts, metrics tiles, tables with tinted headers, readings, numbered lists in crimson, and
+  **Recommendations** ("RECOMMENDATION 4.1" in a tinted box with a crimson bar). A subsection heading is kept with
+  the block that follows it.
+- **Section Eight** carries the phases table, the month columns, a numbered action table per phase (#, action, owner,
+  month) and "The gate at the end of Phase One" call-out.
 - **Charts,** drawn in PDFKit from `BRAND.palette` only: benchmark bars (zones in the health tints, a marker in the
   health colour, "Good: …" underneath); the cash waterfall (money in brand, costs slate, what is left green or red,
-  dashed connectors); the risk matrix (3 × 3, cells tinted by likelihood × impact, numbered brand dots). A chart's
+  dashed connectors); the target bridge (today and the target in slate and brand, each lever a green step between
+  them); the risk matrix (3 × 3, cells tinted by likelihood × impact, numbered brand dots). A chart's
   title moves with it so it is never left alone at the foot of a page. No glyph outside the brand fonts: arrows are
   drawn as shapes.
 - **Footer** on every page after the cover: "The Shift, by IP Factory · Full business check report · {business} ·

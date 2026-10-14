@@ -121,14 +121,20 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
   (*branch*).
 - **Fully deterministic:** no AI and no analyst. The report is built by fixed rules and emailed as a branded PDF the moment
   the form is submitted; the owner can also download it on the page. Same answers, same report, word for word.
-- Structure: an executive summary (key takeaways, what they mean for you, key numbers, the scorecard of every area,
-  the numbers against what good looks like, and the 90-day plan as a timeline), then eleven parts (business today, where
-  it is going, market, offer and model, customers and sales, how it runs, risks, numbers, diagnosis, 90-day plan, how we
-  can help) and an appendix of every answer.
-- Layout of a consulting document: an action title on every part, short bullets, numbers in tiles, and charts drawn from
-  the answers: benchmark bars coloured by the same thresholds the readings use, last month as a cash waterfall, a
-  likelihood-and-impact risk matrix numbered like the register, and the scorecard heat map. A chart is left out when
-  the owner did not give its numbers.
+- Structure (version 4, 14 October 2026): the layout of IP Factory's partner-written strategic plans. Cover and
+  contents; a **Background** (where the business stands today, the scorecard, the two facts that frame the plan, the
+  question it answers: the gap to the owner's 12-month revenue target split into price, conversion and reach, and the
+  headline decision); then **Section One** Founder readiness, **Two** Strategic intent, **Three** Market and industry,
+  **Four** Offer and proposition, **Five** Operational plan (the six weekly numbers and the rhythm of reviews), **Six**
+  The financial case (the target bridge), **Seven** Risk, **Eight** The work plan (twelve months in three phases,
+  numbered actions with an owner and a month, a gate after Phase One) and **Nine** Outstanding items (every "I'm not
+  sure" as something we still need, open contradictions, how to use the document, the Current State Assessment), and
+  an appendix of every answer. Each section has an overview, a scope, numbered subsections and numbered
+  Recommendations that the work plan refers to.
+- Charts drawn from the answers, left out when the owner did not give the numbers: benchmark bars, last month as a
+  cash waterfall, the target bridge, the risk matrix and the scorecard.
+- The Report Intake asks for the monthly sales the owner wants in 12 months (optional); without it, Section Nine asks
+  for it.
 - The team can see the report status, resend the form link (the old link stops working) and download the report.
 - **Status: Built** (`shared/fullReport/*`, `server/fullReport/*`, `client/src/pages/FullReportPage.tsx`).
 

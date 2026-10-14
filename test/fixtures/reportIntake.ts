@@ -29,4 +29,5 @@ export const sampleIntake: ReportIntake = {
   owed: "under_1m",
   loans: "none",
   goal: "Open a second shop in Yaba and reach ₦4 million a month",
+  revenueTarget: null,
 };

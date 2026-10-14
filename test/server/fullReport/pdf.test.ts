@@ -14,15 +14,15 @@ const fontkit = createRequire(createRequire(import.meta.url).resolve("pdfkit"))(
 const DATE = new Date("2026-10-09T10:00:00Z");
 
 describe("the full report PDF", () => {
-  it("is an A4 PDF with a cover, the executive summary, eleven parts and the appendix, in the brand fonts and logo", async () => {
+  it("is an A4 PDF in the strategic plan layout: cover, contents, Background, nine sections and the appendix, in the brand fonts and logo", async () => {
     const answers = { ...businessCheckProfiles.smallOperatingTrader, p_name: "Adunni Fabrics" };
     const report = buildFullReport({ reference: "TS-R-000012", date: DATE, contact: { fullName: "Adunni Example" }, answers, result: evaluate(answers), intake: sampleIntake });
     const pdf = await renderFullReportPdf(report, DATE);
     const raw = pdf.toString("latin1");
     expect(raw.startsWith("%PDF-")).toBe(true);
     const pages = (raw.match(/\/Type \/Page\b/g) ?? []).length;
-    expect(pages).toBeGreaterThanOrEqual(15);
-    expect(pages).toBeLessThanOrEqual(24);
+    expect(pages).toBeGreaterThanOrEqual(20);
+    expect(pages).toBeLessThanOrEqual(36);
     expect(raw).toContain("/MediaBox [0 0 595.28 841.89]");
     expect(raw).toMatch(/PlusJakartaSans/);
     expect(raw).toMatch(/PlayfairDisplay/);

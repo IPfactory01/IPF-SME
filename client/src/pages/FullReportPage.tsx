@@ -50,13 +50,14 @@ type Draft = {
   owed: string;
   loans: string;
   goal: string;
+  revenueTarget: string;
 };
 
 const EMPTY_PRODUCT: DraftProduct = { name: "", basis: "price", price: "", percent: "", dealSize: "" };
 const EMPTY: Draft = {
   location: "", registration: "", products: [EMPTY_PRODUCT, EMPTY_PRODUCT, EMPTY_PRODUCT], bestCustomer: "", competitors: ["", "", ""], competitorsUnknown: false,
   pricePosition: "", topEarner: "", costShare: "", marginPercent: "", topCustomerShare: "", channels: [], enquiries: "", conversion: "", repeat: "", roles: "", tools: [],
-  lastMonthRevenue: "", revenueUnknown: false, monthlyCosts: "", costsUnknown: false, biggestCost: "", cash: "", owed: "", loans: "", goal: "",
+  lastMonthRevenue: "", revenueUnknown: false, monthlyCosts: "", costsUnknown: false, biggestCost: "", cash: "", owed: "", loans: "", goal: "", revenueTarget: "",
 };
 
 const digits = (value: string) => value.replace(/[^\d]/g, "");
@@ -101,6 +102,7 @@ function toIntake(draft: Draft): unknown {
     owed: draft.owed || undefined,
     loans: draft.loans || undefined,
     goal: draft.goal,
+    revenueTarget: draft.revenueTarget === "" ? null : amount(draft.revenueTarget),
   };
 }
 
@@ -379,7 +381,15 @@ export default function FullReportPage() {
                     ))}
                   </div>
                 ));
-                case "goal": return question(item.id, <Textarea aria-label="Your goal for the next 12 months" rows={3} maxLength={300} value={draft.goal} onChange={(event) => set("goal", event.target.value)} className="rounded-none" />);
+                case "goal": return question(item.id, (
+                  <div className="space-y-3">
+                    <Textarea aria-label="Your goal for the next 12 months" rows={3} maxLength={300} value={draft.goal} onChange={(event) => set("goal", event.target.value)} className="rounded-none" />
+                    <div className="space-y-1.5">
+                      <p className="text-sm text-ink-soft">Monthly sales you want in 12 months (optional)</p>
+                      <Naira id="revenueTarget" label="Monthly sales you want in 12 months" value={draft.revenueTarget} onChange={(value) => set("revenueTarget", value)} />
+                    </div>
+                  </div>
+                ));
                 default: return null;
               }
             })}

@@ -140,6 +140,14 @@ describe("the report form", () => {
     expect(api.saved).toEqual([["Adunni-Fabrics-full-report.pdf", "JVBERi0="]]);
   });
 
+  it("sends the monthly sales the owner wants in 12 months when given, and leaves it out when not", () => {
+    renderPage();
+    fill();
+    type("Monthly sales you want in 12 months", "6,000,000");
+    fireEvent.click(screen.getByRole("button", { name: /send me my full report/i }));
+    expect(api.submitCalls).toEqual([{ token: "TOKEN123", intake: { ...sampleIntake, revenueTarget: 6_000_000 } }]);
+  });
+
   it("asks how each product is charged, and names the one whose price is missing", () => {
     renderPage();
     fill();

@@ -81,9 +81,20 @@ export const ONBOARDING_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const PASSWORD_RESET_TTL_MS = 20 * 60 * 1000;
 
 export const PASSWORD_RESET_ERRORS = {
-  unavailable: "This reset link is unavailable. It may have expired or already been used. Ask the IP Factory team for a new one.",
+  unavailable: "This reset link is unavailable. It may have expired or already been used. Ask for a new one from the sign-in page.",
   notSetUp: "Password reset links are not set up in the database yet (migration 0010).",
 } as const;
+
+/**
+ * What "Forgot your password?" always answers, whether or not an account uses the address: the page never reveals who
+ * has an account.
+ */
+export const PASSWORD_RESET_REQUESTED = "If an account uses that email, we have sent it a link to reset the password. The link works once, for 20 minutes. Check your inbox and spam folder.";
+
+/** Asking for a reset link from the sign-in page: the address is the only input. */
+export const requestPasswordResetInputSchema = z.object({
+  email: z.string().trim().email("Enter the email address you sign in with.").max(ACCOUNT_EMAIL_MAX_LENGTH).transform(normaliseAccountEmail),
+});
 
 /** Choosing a new password from a reset link. The link is the only key; the policy is the account password policy. */
 export const resetPasswordInputSchema = z

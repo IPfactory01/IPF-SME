@@ -30,7 +30,7 @@ const STAFF: AccountSessionView = {
 };
 
 const api = vi.hoisted(() => {
-  const state = { room: null as unknown, switchCalls: [] as unknown[], updateBusinessCalls: [] as unknown[], updateProfileCalls: [] as unknown[], changePasswordCalls: [] as unknown[], businessProfile: undefined as unknown, me: null as unknown, loading: false, preview: undefined as unknown, previewLoading: false, acceptCalls: [] as unknown[], signInCalls: [] as unknown[], signOutCalls: 0, setData: [] as unknown[] };
+  const state = { room: null as unknown, switchCalls: [] as unknown[], updateBusinessCalls: [] as unknown[], updateProfileCalls: [] as unknown[], changePasswordCalls: [] as unknown[], businessProfile: undefined as unknown, me: null as unknown, loading: false, preview: undefined as unknown, previewLoading: false, acceptCalls: [] as unknown[], signInCalls: [] as unknown[], resetCalls: [] as unknown[], signOutCalls: 0, setData: [] as unknown[] };
   const replies: { switchTo?: unknown; businessError?: string; passwordError?: string; accept?: unknown; signIn?: unknown; acceptError?: string; signInError?: string } = {};
   return { state, replies };
 });
@@ -57,6 +57,9 @@ vi.mock("@/lib/trpc", () => ({
     engagement: { client: { room: { useQuery: () => ({ data: api.state.room ?? null, isLoading: false }) } } },
     account: {
       me: { useQuery: () => ({ data: api.state.me, isLoading: api.state.loading, refetch: () => undefined }) },
+      requestReset: {
+        useMutation: (options: { onSuccess?: () => void }) => ({ isPending: false, mutate: (input: unknown) => { api.state.resetCalls.push(input); options.onSuccess?.(); } }),
+      },
       signIn: {
         useMutation: (options: { onSuccess?: (v: unknown) => void; onError?: (e: Error) => void }) => ({
           isPending: false,
@@ -135,6 +138,7 @@ const fill = (label: string, value: string) => fireEvent.change(screen.getByLabe
 
 beforeEach(() => {
   api.state.room = null;
+  api.state.resetCalls = [];
   api.state.me = null;
   api.state.loading = false;
   api.state.preview = undefined;
@@ -278,6 +282,16 @@ describe("no public registration", () => {
     expect(screen.getByText("Client access is created during onboarding.")).toBeTruthy();
     expect(screen.queryByText(/create your account/i)).toBeNull();
     expect(document.querySelector('a[href="/signup"]')).toBeNull();
+  });
+
+  it("lets a client ask for a reset link themselves, with the same answer whoever asks", () => {
+    renderAt("/login", <LoginPage />);
+    expect(screen.queryByText(/Ask the IP Factory team for a reset link/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Forgot your password?" }));
+    fill("Email", "richie@example.com");
+    fireEvent.click(screen.getByRole("button", { name: "Send the reset link" }));
+    expect(api.state.resetCalls).toEqual([{ email: "richie@example.com" }]);
+    expect(screen.getByRole("status").textContent).toMatch(/^If an account uses that email/);
   });
 
   it("points JUMP participants to their own portal", () => {

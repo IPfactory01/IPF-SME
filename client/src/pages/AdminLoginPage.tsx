@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import ForgotPassword from "@/components/ForgotPassword";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,6 +23,7 @@ export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [forgot, setForgot] = useState(false);
 
   useEffect(() => {
     if (access.data?.passwordVerified) setLocation("/admin");
@@ -56,7 +58,7 @@ export default function AdminLoginPage() {
             <CardDescription className="text-sm text-ink-muted">Sign in with your IPF administrator account.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {loading ? <p className="text-sm text-ink-muted">Checking your secure sign-in…</p> : (
+            {loading ? <p className="text-sm text-ink-muted">Checking your secure sign-in…</p> : forgot ? <ForgotPassword id="admin" initialEmail={email} onBack={() => setForgot(false)} /> : (
               <form className="space-y-4" noValidate onSubmit={submit}>
                 {error && <div role="alert" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{error}</div>}
                 <div className="space-y-2"><Label htmlFor="admin-email">Email</Label><Input id="admin-email" type="email" autoComplete="email" value={email} onChange={event => { setEmail(event.target.value); setError(null); }} /></div>
@@ -64,6 +66,7 @@ export default function AdminLoginPage() {
                 <Button disabled={signIn.isPending} type="submit" size="lg" className="h-12 w-full rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">
                   {signIn.isPending ? "Signing in…" : "Sign in"}
                 </Button>
+                <button type="button" onClick={() => setForgot(true)} className="text-sm font-semibold text-brand underline underline-offset-2">Forgot your password?</button>
               </form>
             )}
             {isOAuthLoginConfigured() && (

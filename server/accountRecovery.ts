@@ -1,26 +1,29 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import type { Request } from "express";
 import { TRPCError } from "@trpc/server";
 import { businessMemberships, userCredentials, userPasswordResetTokens, userPlatformRoles, users, userSessions } from "../drizzle/schema";
-import { ACCOUNT_AUTH_ERRORS, PASSWORD_RESET_ERRORS, PASSWORD_RESET_TTL_MS, resetPasswordInputSchema, type PlatformRole } from "../shared/auth";
+import { ACCOUNT_AUTH_ERRORS, PASSWORD_RESET_ERRORS, PASSWORD_RESET_TTL_MS, requestPasswordResetInputSchema, resetPasswordInputSchema, type PlatformRole } from "../shared/auth";
 import { BRAND } from "../shared/brand";
 import type { Authority } from "../shared/platformPermissions";
 import { assertSameOrigin, type Database } from "./accountAuth";
 import { hashAdminPassword, isOwnerAdmin, sha256 } from "./adminSecurity";
 import { recordAudit } from "./audit";
-import { databaseNow, isUndefinedTable } from "./dbHelpers";
+import { databaseNow, emailEquals, isUndefinedTable } from "./dbHelpers";
 import { deliverEmail } from "./email";
 import { listSuperAdminIds } from "./platformAccess";
 import { consumeLimit, LIMITS } from "./rateLimit";
 import { getTrustedApplicationOrigin } from "./security";
 
 /**
- * Account recovery for universal accounts (clients and staff), without a public "forgot password" form: a member of
- * the team with `manage_users` issues a reset link for a person, which is emailed and shown once to the issuer while
- * email is deferred (as invitations are). The link is a 256-bit token stored as its SHA-256, works once, within
- * PASSWORD_RESET_TTL_MS, and signs the person out everywhere when used. The same responsibility suspends and
- * reinstates accounts; suspension revokes every session at once.
+ * Account recovery for universal accounts (clients and staff). A reset link reaches a person two ways: a member of the
+ * team with `manage_users` issues one (emailed, and shown once to the issuer while email is deferred, as invitations
+ * are), or the person asks for one with "Forgot your password?" on a sign-in page, which only ever emails it and
+ * answers the same whether or not an account exists. The link is a 256-bit token stored as its SHA-256, works once,
+ * within PASSWORD_RESET_TTL_MS, and signs the person out everywhere when used. For the permanent Super Admin
+ * (OWNER_ADMIN_EMAIL) the same link also sets the first password, so the owner never needs database access to get in:
+ * control of the owner's mailbox is the proof. The same responsibility suspends and reinstates accounts; suspension
+ * revokes every session at once.
  */
 
 export const RESET_PATH = "/reset";
@@ -51,19 +54,26 @@ export async function listPeople(db: Pick<Database, "select">) {
   }));
 }
 
-/** The email that carries the reset link. The "Reset your password: <link>" line becomes the button in the layout. */
-export function buildResetEmail(input: { name: string; url: string }) {
+/**
+ * The email that carries the reset link. The "Reset your password: <link>" line becomes the button in the layout.
+ * `requested` when the person asked for it themselves; `firstPassword` when the owner has no password yet.
+ */
+export function buildResetEmail(input: { name: string; url: string; requested?: boolean; firstPassword?: boolean }) {
   const first = input.name.trim().split(/\s+/)[0] || "there";
+  const verb = input.firstPassword ? "set" : "reset";
+  const why = input.requested
+    ? `Someone asked to ${verb} the password for this email address on ${BRAND.productName}.`
+    : `A member of the ${BRAND.organisationName} team issued a link to reset your password on ${BRAND.productName}.`;
   return {
-    subject: `Reset your password on ${BRAND.productName}`,
+    subject: `${input.firstPassword ? "Set" : "Reset"} your password on ${BRAND.productName}`,
     body: [
       `Dear ${first},`,
       "",
-      `A member of the ${BRAND.organisationName} team issued a link to reset your password on ${BRAND.productName}. It works once and expires in 20 minutes.`,
+      `${why} The link works once and expires in 20 minutes.`,
       "",
-      `Reset your password: ${input.url}`,
+      `${input.firstPassword ? "Set" : "Reset"} your password: ${input.url}`,
       "",
-      "If you did not ask for this, you can ignore this email: your password stays as it is.",
+      `If you did not ask for this, you can ignore this email: ${input.firstPassword ? "nothing changes until the link is used" : "your password stays as it is"}.`,
       "",
       BRAND.organisationName,
     ].join("\n"),
@@ -89,6 +99,15 @@ export async function issuePasswordReset(db: Database, input: { actor: Actor; ta
   if ((await protectedPerson(db, target)) && !isSuperAdmin(input.actor.authority)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Only a Super Admin can issue a reset link for a Super Admin." });
   }
+  return sendResetLink(db, { target: { id: target.id, name: target.name, email: target.email }, actorUserId: input.actor.id });
+}
+
+/**
+ * Stores a new link for a person (revoking the one still out), audits it and emails it. `actorUserId` is null when the
+ * person asked for it themselves. The raw link is returned to the caller, which decides whether anyone may see it.
+ */
+async function sendResetLink(db: Database, input: { target: { id: number; name: string | null; email: string }; actorUserId: number | null; firstPassword?: boolean }) {
+  const { target } = input;
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
   let resetId: number;
@@ -97,9 +116,14 @@ export async function issuePasswordReset(db: Database, input: { actor: Actor; ta
       await tx.update(userPasswordResetTokens).set({ revokedAt: databaseNow() })
         .where(and(eq(userPasswordResetTokens.userId, target.id), isNull(userPasswordResetTokens.consumedAt), isNull(userPasswordResetTokens.revokedAt)));
       const [row] = await tx.insert(userPasswordResetTokens)
-        .values({ userId: target.id, tokenHash: sha256(token), expiresAt, issuedByUserId: input.actor.id })
+        .values({ userId: target.id, tokenHash: sha256(token), expiresAt, issuedByUserId: input.actorUserId })
         .returning({ id: userPasswordResetTokens.id });
-      await recordAudit(tx, { action: "account_password_reset_issued", actorUserId: input.actor.id, targetEmail: target.email, details: { targetUserId: target.id, resetId: row.id, expiresAt: expiresAt.toISOString() } });
+      await recordAudit(tx, {
+        action: input.actorUserId === null ? "account_password_reset_requested" : "account_password_reset_issued",
+        actorUserId: input.actorUserId ?? target.id,
+        targetEmail: target.email,
+        details: { targetUserId: target.id, resetId: row.id, expiresAt: expiresAt.toISOString(), ...(input.firstPassword ? { firstPassword: true } : {}) },
+      });
       return row.id;
     });
   } catch (error) {
@@ -107,10 +131,36 @@ export async function issuePasswordReset(db: Database, input: { actor: Actor; ta
     throw error;
   }
   const resetUrl = `${getTrustedApplicationOrigin()}${RESET_PATH}/${encodeURIComponent(token)}`;
-  const message = buildResetEmail({ name: target.name ?? "", url: resetUrl });
+  const message = buildResetEmail({ name: target.name ?? "", url: resetUrl, requested: input.actorUserId === null, firstPassword: input.firstPassword });
   const delivery = await deliverEmail({ to: target.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `user_password_reset_tokens:${resetId}` });
   await db.update(userPasswordResetTokens).set({ deliveryStatus: delivery.status }).where(eq(userPasswordResetTokens.id, resetId));
   return { resetId, resetUrl, expiresAt, deliveryStatus: delivery.status };
+}
+
+/**
+ * "Forgot your password?": emails a reset link to an active account with a password, or a first-password link to the
+ * permanent Super Admin (creating the owner's account if the database has none yet, as `pnpm owner:bootstrap` does).
+ * Every outcome answers the same, the link is never returned, and requests are limited per address and per email, so
+ * the form neither reveals who has an account nor floods an inbox.
+ */
+export async function requestPasswordReset(db: Database, req: Request, rawInput: unknown) {
+  assertSameOrigin(req);
+  const parsed = requestPasswordResetInputSchema.safeParse(rawInput);
+  if (!parsed.success) throw new TRPCError({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Enter the email address you sign in with." });
+  const email = parsed.data.email;
+  if (!(await consumeLimit(LIMITS.resetRequest, `ip:${requestIp(req)}`)) || !(await consumeLimit(LIMITS.resetRequest, `email:${email}`))) throw tooMany();
+  const owner = isOwnerAdmin({ email });
+  let person = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, credentialId: userCredentials.id })
+    .from(users).leftJoin(userCredentials, eq(userCredentials.userId, users.id)).where(emailEquals(users.email, email)).limit(1))[0];
+  if (!person && owner) {
+    const [created] = await db.insert(users).values({ openId: `local:${randomUUID()}`, name: "Super Admin", email, loginMethod: "password", role: "admin", status: "active" })
+      .returning({ id: users.id, name: users.name, email: users.email, status: users.status });
+    person = { ...created, credentialId: null };
+  }
+  if (!person || person.status !== "active" || !person.email) return { success: true as const };
+  if (person.credentialId === null && !owner) return { success: true as const };
+  await sendResetLink(db, { target: { id: person.id, name: person.name, email: person.email }, actorUserId: null, firstPassword: person.credentialId === null });
+  return { success: true as const };
 }
 
 async function openReset(db: Pick<Database, "select">, token: string) {
@@ -162,9 +212,16 @@ export async function confirmPasswordReset(db: Database, req: Request, rawInput:
       if (!person || person.status !== "active") throw unavailable();
       const [credential] = await tx.update(userCredentials).set({ passwordHash, failedAttempts: 0, lockedUntil: null })
         .where(eq(userCredentials.userId, person.id)).returning({ id: userCredentials.id });
-      if (!credential) throw unavailable();
+      const owner = isOwnerAdmin({ email: person.email });
+      // Only the permanent Super Admin gets a first password from a link; anyone else without one is refused.
+      if (!credential && !owner) throw unavailable();
+      if (!credential) await tx.insert(userCredentials).values({ userId: person.id, passwordHash });
+      if (owner) {
+        await tx.update(users).set({ role: "admin" }).where(eq(users.id, person.id));
+        await tx.insert(userPlatformRoles).values({ userId: person.id, role: "super_admin", grantedByUserId: person.id }).onConflictDoNothing();
+      }
       await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and(eq(userSessions.userId, person.id), isNull(userSessions.revokedAt)));
-      await recordAudit(tx, { action: "account_password_reset_completed", actorUserId: person.id, targetEmail: person.email });
+      await recordAudit(tx, { action: "account_password_reset_completed", actorUserId: person.id, targetEmail: person.email, ...(credential ? {} : { details: { firstPassword: true } }) });
       return { success: true as const, email: person.email ?? "" };
     });
   } catch (error) {

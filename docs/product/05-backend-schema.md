@@ -57,7 +57,7 @@ erDiagram
 | `user_platform_roles` | Internal IP Factory roles (super_admin, admin, desk_lead, analyst, partner, subject_matter_expert, finance) | Unique (person, role); who granted it | Who holds which role |
 | `admin_permission_profiles` | Extra capabilities chosen by the Super Admin for a person | One per user | — |
 | `admin_access_audit_events` | Append-only audit trail for staff, payments, reports, roles and onboarding | Written through `recordAudit` (`server/audit.ts`); details never contain secrets; indexed by action and time (0010). A system actor (Paystack confirming a payment) is a null `actorUserId` with `via` in the details, never an account | Actor id, target email |
-| `user_password_reset_tokens` | Password reset links for client and staff accounts, issued by staff with `manage_users` (migration 0010) | Only the token's SHA-256; 20 minutes; single use; a new link revokes the one still out; who issued it; delivery status | Token hash |
+| `user_password_reset_tokens` | Password reset links for client and staff accounts, issued by staff with `manage_users` or asked for by the person on a sign-in page (migration 0010) | Only the token's SHA-256; 20 minutes; single use; a new link revokes the one still out; who issued it (empty when the person asked); delivery status | Token hash |
 | `rate_limit_counters` | Fixed-window counters behind the rate limits, shared by every function instance (migration 0010) | One row per key (`check_start:ip:…`, `check_submit:token:…`); window and count advance in one statement; expired rows are purged | Hashed keys only, no addresses in clear |
 
 ### Clients

@@ -10,8 +10,9 @@ export type OwnerBootstrapResult = { action: "created-account" | "set-password" 
 
 /**
  * Gives the recognised owner (OWNER_ADMIN_EMAIL) a universal email-and-password credential, so the Super Admin can sign
- * in at /admin/login. There is deliberately no web endpoint for this: it is run once by a person with database access
- * (`pnpm owner:bootstrap`), which prompts for the password without echoing it.
+ * in at /admin/login. It is run once by a person with database access (`pnpm owner:bootstrap`), which prompts for the
+ * password without echoing it, and needs no email. The owner can also set the first password from their own inbox with
+ * "Forgot your password?" (server/accountRecovery.ts).
  *
  *  - only the recognised owner address is accepted;
  *  - the password must satisfy the administrator policy and is stored only as a scrypt hash, never logged or returned;

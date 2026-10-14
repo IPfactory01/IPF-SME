@@ -224,8 +224,14 @@ session system.
 one deliberately). It reads `OWNER_ADMIN_EMAIL` and `DATABASE_URL`, asks for the password at a hidden terminal prompt (it
 refuses piped input; the password is never an argument, an environment variable, a log line or a fixed value), stores only a
 scrypt hash, uses the administrator password policy, signs the owner out everywhere on a reset, and is audited. It accepts only
-the recognised owner address and adds a credential to the existing owner row rather than creating a second identity. There
-is no web endpoint for it.
+the recognised owner address and adds a credential to the existing owner row rather than creating a second identity.
+
+**Forgot your password?** (14 October) Anyone can ask for a reset link from `/login` or `/admin/login`
+(`account.requestReset`). The answer is the same whether or not an account uses the address, the link is only ever
+emailed (never returned), requests are limited to 5 an hour per email and per address, and the link is the same single-use,
+20-minute, hash-only link staff issue. For the recognised owner address the link also sets the first password when there
+is none, creating the owner's account if needed and storing the `super_admin` role: control of the owner's mailbox replaces
+database access, so `pnpm owner:bootstrap` is no longer the only way in.
 
 **Legacy OAuth.** The Manus Google sign-in and the administrator-password flow are not removed: they remain at
 `/admin/login/legacy` (offered as a small link only where `VITE_OAUTH_PORTAL_URL` and `VITE_APP_ID` are set). `startLogin` no

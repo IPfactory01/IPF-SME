@@ -171,6 +171,15 @@ given; the reason is recorded in the audit log with the invitation.
   continue"; it never sends them to their own area or creates the account under their session. Signed in as the invited
   person: straight to `/dashboard`.
 - **Invitation unavailable** (expired, used or revoked): "Invitation unavailable" with a link to `/login`.
+- **Forgot your password?** (built 14 October) on both `/login` and `/admin/login`: the person types their email and
+  "Send the reset link" emails a single-use link to `/reset/<link>`, valid for 20 minutes. The page always answers "If
+  an account uses that email, we have sent it a link…", whether or not one does, and never shows the link. At most 5
+  requests an hour per email and per address. A new link revokes the one still out. Suspended accounts and accounts
+  without a password get nothing.
+- **First password for the Super Admin:** for the address in `OWNER_ADMIN_EMAIL` the same form works even when the
+  database has no account or password for the owner yet: it creates the owner's account and the email says "Set your
+  password". Using the link sets the first password and stores the Super Admin role, so the owner can sign in at
+  `/admin/login` without anyone running `pnpm owner:bootstrap`. Control of the owner's mailbox is the proof.
 
 ## 7. The admin console
 
@@ -184,7 +193,7 @@ action again.
 | **Client Onboarding** | `manage_client_onboarding` | Metrics (checks, portal users, businesses, memberships, pending links); every check; invitations | "Invite to onboard" (a recorded reason is required before payment); copy the link once; revoke a pending invitation |
 | **Engagements** | `view_all_businesses`, or `view_assigned_businesses` for the engagements a person is on | a file storage line (uploads on, or exactly which Vercel setting or the private bucket is still missing); "Paid, but no engagement yet" (desk lead: a paid assessment with no engagement, with "Start engagement"); every engagement in scope: business, stage, team, what the client still owes (overdue in red), next call or calls not booked | Row → drawer: stage; team (add, remove: `assign_engagements`); the one problem; calls (time, link, agenda, client and internal notes, share with the owner or the owner and their team); the Work Plan (whose side, person, week, order, factor, due date, status, note); deliverables (save, approve: `review_engagements`, share, comment); files on requests and deliverables (open any; attach one as owner-only or for the owner and their team, when storage is set up); the fix (the one number with where it starts and should get to; one check-in a week, in order, with the five questions, the reading, hours by role and AI used). Changes need `manage_engagements` |
 | **Clients** | `view_all_businesses` | Onboarded businesses and their members | Read only |
-| **Admin Team** | Super Admin (`manage_roles`) | **Staff**: everyone with a role, and invitations that create a staff account with one role; then the legacy administrators | Invite with a role (never Super Admin), copy the link once, revoke; legacy: invite, revoke, edit powers People (`manage_users`): everyone with a password, a reset link emailed and shown once, suspend with a recorded reason, reinstate |
+| **Admin Team** | Super Admin (`manage_roles`) | **Staff**: everyone with a role, and invitations that create a staff account with one role; then the legacy administrators | Invite with a role (never Super Admin), copy the link once, revoke; legacy: invite, revoke, edit powers People (`manage_users`): everyone with a password, a reset link emailed and shown once (people can also ask for their own from the sign-in page, §6), suspend with a recorded reason, reinstate |
 | **JUMP Programme (Legacy)** | `view_participants` | JUMP registrations, referrals, scheduling, replies | JUMP-era actions |
 
 ## 8. Status models

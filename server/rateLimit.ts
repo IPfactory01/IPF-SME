@@ -34,6 +34,8 @@ export const LIMITS = {
   reportForm: { scope: "report_form", max: 30, windowMs: HOUR },
   /** Report downloads per link: each renders the PDF again. */
   reportDownload: { scope: "report_download", max: 5, windowMs: DAY },
+  /** "Forgot your password?" requests, counted per address and per email: each can send an email. */
+  resetRequest: { scope: "reset_request", max: 5, windowMs: HOUR },
   /** Public token lookups per address: legacy reset confirmation and invitation status. */
   publicLookup: { scope: "public_lookup", max: 30, windowMs: HOUR },
   /** Pay page reads per Business Check token. */

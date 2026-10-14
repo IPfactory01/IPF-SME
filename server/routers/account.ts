@@ -11,7 +11,7 @@ import {
   updateAccountProfile,
   updateBusinessProfile,
 } from "../accountAuth";
-import { confirmPasswordReset, previewPasswordReset } from "../accountRecovery";
+import { confirmPasswordReset, previewPasswordReset, requestPasswordReset } from "../accountRecovery";
 import { getDb } from "../db";
 import { accountProcedure, publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
@@ -61,6 +61,8 @@ export const accountRouter = router({
 
   changePassword: accountProcedure.input(z.unknown()).mutation(({ ctx, input }) => changeAccountPassword(ctx.req, ctx.account, input)),
 
+  /** "Forgot your password?": emails a reset link if an account uses the address. Public; always the same answer. */
+  requestReset: publicProcedure.input(z.unknown()).mutation(async ({ ctx, input }) => requestPasswordReset(await database(), ctx.req, input)),
   /** The reset page: whether a reset link is usable, and for which address. Public, keyed by the link alone. */
   resetPreview: publicProcedure.input(z.object({ token: z.string().min(1).max(200) })).query(async ({ ctx, input }) => previewPasswordReset(await database(), ctx.req, input.token)),
   /** Sets a new password from a reset link and signs the person out everywhere. Validated inside, with one readable message. */

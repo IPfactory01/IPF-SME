@@ -1,3 +1,4 @@
+import ForgotPassword from "@/components/ForgotPassword";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [forgot, setForgot] = useState(false);
 
   useEffect(() => {
     if (account) setLocation(account.landingPath);
@@ -44,6 +46,7 @@ export default function LoginPage() {
             <CardDescription className="text-sm text-ink-muted">Use the email and password you created your account with.</CardDescription>
           </CardHeader>
           <CardContent>
+            {forgot ? <ForgotPassword id="login" initialEmail={email} onBack={() => setForgot(false)} /> : (
             <form className="space-y-4" noValidate onSubmit={submit}>
               {error && <div role="alert" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{error}</div>}
               <div className="space-y-2">
@@ -57,11 +60,12 @@ export default function LoginPage() {
               <Button disabled={signIn.isPending} type="submit" size="lg" className="w-full rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">
                 {signIn.isPending ? "Signing in…" : "Sign in"}
               </Button>
+              <button type="button" onClick={() => setForgot(true)} className="text-sm font-semibold text-brand underline underline-offset-2">Forgot your password?</button>
             </form>
+            )}
           </CardContent>
         </Card>
         <p className="text-center text-sm text-ink-muted">Client access is created during onboarding.</p>
-        <p className="text-center text-xs text-ink-muted">Forgotten your password? Ask the IP Factory team for a reset link. It comes by email and works once, for 20 minutes.</p>
         <p className="text-center text-xs text-ink-muted">On the {BRAND.programmeName} programme? <a href="/portal" className="font-semibold text-brand underline underline-offset-2">Go to the participant portal</a>.</p>
       </div>
     </main>

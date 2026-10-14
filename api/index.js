@@ -3082,9 +3082,12 @@ var onboardingAcceptInputSchema = z.object({
 var ONBOARDING_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
 var PASSWORD_RESET_TTL_MS = 20 * 60 * 1e3;
 var PASSWORD_RESET_ERRORS = {
-  unavailable: "This reset link is unavailable. It may have expired or already been used. Ask the IP Factory team for a new one.",
+  unavailable: "This reset link is unavailable. It may have expired or already been used. Ask for a new one from the sign-in page.",
   notSetUp: "Password reset links are not set up in the database yet (migration 0010)."
 };
+var requestPasswordResetInputSchema = z.object({
+  email: z.string().trim().email("Enter the email address you sign in with.").max(ACCOUNT_EMAIL_MAX_LENGTH).transform(normaliseAccountEmail)
+});
 var resetPasswordInputSchema = z.object({
   token: z.string().min(20).max(200),
   password: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
@@ -3420,6 +3423,8 @@ var LIMITS = {
   reportForm: { scope: "report_form", max: 30, windowMs: HOUR2 },
   /** Report downloads per link: each renders the PDF again. */
   reportDownload: { scope: "report_download", max: 5, windowMs: DAY },
+  /** "Forgot your password?" requests, counted per address and per email: each can send an email. */
+  resetRequest: { scope: "reset_request", max: 5, windowMs: HOUR2 },
   /** Public token lookups per address: legacy reset confirmation and invitation status. */
   publicLookup: { scope: "public_lookup", max: 30, windowMs: HOUR2 },
   /** Pay page reads per Business Check token. */
@@ -12697,7 +12702,7 @@ var businessCheckRouter = router({
 import { z as z17 } from "zod";
 
 // server/accountRecovery.ts
-import { randomBytes as randomBytes9 } from "node:crypto";
+import { randomBytes as randomBytes9, randomUUID as randomUUID3 } from "node:crypto";
 import { and as and16, eq as eq22, gt as gt6, isNull as isNull8 } from "drizzle-orm";
 import { TRPCError as TRPCError20 } from "@trpc/server";
 init_brand();
@@ -12724,16 +12729,18 @@ async function listPeople(db) {
 }
 function buildResetEmail(input) {
   const first = input.name.trim().split(/\s+/)[0] || "there";
+  const verb = input.firstPassword ? "set" : "reset";
+  const why = input.requested ? `Someone asked to ${verb} the password for this email address on ${BRAND.productName}.` : `A member of the ${BRAND.organisationName} team issued a link to reset your password on ${BRAND.productName}.`;
   return {
-    subject: `Reset your password on ${BRAND.productName}`,
+    subject: `${input.firstPassword ? "Set" : "Reset"} your password on ${BRAND.productName}`,
     body: [
       `Dear ${first},`,
       "",
-      `A member of the ${BRAND.organisationName} team issued a link to reset your password on ${BRAND.productName}. It works once and expires in 20 minutes.`,
+      `${why} The link works once and expires in 20 minutes.`,
       "",
-      `Reset your password: ${input.url}`,
+      `${input.firstPassword ? "Set" : "Reset"} your password: ${input.url}`,
       "",
-      "If you did not ask for this, you can ignore this email: your password stays as it is.",
+      `If you did not ask for this, you can ignore this email: ${input.firstPassword ? "nothing changes until the link is used" : "your password stays as it is"}.`,
       "",
       BRAND.organisationName
     ].join("\n")
@@ -12754,14 +12761,23 @@ async function issuePasswordReset(db, input) {
   if (await protectedPerson(db, target) && !isSuperAdmin(input.actor.authority)) {
     throw new TRPCError20({ code: "FORBIDDEN", message: "Only a Super Admin can issue a reset link for a Super Admin." });
   }
+  return sendResetLink(db, { target: { id: target.id, name: target.name, email: target.email }, actorUserId: input.actor.id });
+}
+async function sendResetLink(db, input) {
+  const { target } = input;
   const token3 = randomBytes9(32).toString("base64url");
   const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
   let resetId;
   try {
     resetId = await db.transaction(async (tx) => {
       await tx.update(userPasswordResetTokens).set({ revokedAt: databaseNow() }).where(and16(eq22(userPasswordResetTokens.userId, target.id), isNull8(userPasswordResetTokens.consumedAt), isNull8(userPasswordResetTokens.revokedAt)));
-      const [row] = await tx.insert(userPasswordResetTokens).values({ userId: target.id, tokenHash: sha256(token3), expiresAt, issuedByUserId: input.actor.id }).returning({ id: userPasswordResetTokens.id });
-      await recordAudit(tx, { action: "account_password_reset_issued", actorUserId: input.actor.id, targetEmail: target.email, details: { targetUserId: target.id, resetId: row.id, expiresAt: expiresAt.toISOString() } });
+      const [row] = await tx.insert(userPasswordResetTokens).values({ userId: target.id, tokenHash: sha256(token3), expiresAt, issuedByUserId: input.actorUserId }).returning({ id: userPasswordResetTokens.id });
+      await recordAudit(tx, {
+        action: input.actorUserId === null ? "account_password_reset_requested" : "account_password_reset_issued",
+        actorUserId: input.actorUserId ?? target.id,
+        targetEmail: target.email,
+        details: { targetUserId: target.id, resetId: row.id, expiresAt: expiresAt.toISOString(), ...input.firstPassword ? { firstPassword: true } : {} }
+      });
       return row.id;
     });
   } catch (error) {
@@ -12769,10 +12785,27 @@ async function issuePasswordReset(db, input) {
     throw error;
   }
   const resetUrl = `${getTrustedApplicationOrigin()}${RESET_PATH}/${encodeURIComponent(token3)}`;
-  const message = buildResetEmail({ name: target.name ?? "", url: resetUrl });
+  const message = buildResetEmail({ name: target.name ?? "", url: resetUrl, requested: input.actorUserId === null, firstPassword: input.firstPassword });
   const delivery = await deliverEmail({ to: target.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `user_password_reset_tokens:${resetId}` });
   await db.update(userPasswordResetTokens).set({ deliveryStatus: delivery.status }).where(eq22(userPasswordResetTokens.id, resetId));
   return { resetId, resetUrl, expiresAt, deliveryStatus: delivery.status };
+}
+async function requestPasswordReset(db, req, rawInput) {
+  assertSameOrigin(req);
+  const parsed = requestPasswordResetInputSchema.safeParse(rawInput);
+  if (!parsed.success) throw new TRPCError20({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Enter the email address you sign in with." });
+  const email = parsed.data.email;
+  if (!await consumeLimit(LIMITS.resetRequest, `ip:${requestIp2(req)}`) || !await consumeLimit(LIMITS.resetRequest, `email:${email}`)) throw tooMany2();
+  const owner = isOwnerAdmin({ email });
+  let person = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, credentialId: userCredentials.id }).from(users).leftJoin(userCredentials, eq22(userCredentials.userId, users.id)).where(emailEquals(users.email, email)).limit(1))[0];
+  if (!person && owner) {
+    const [created] = await db.insert(users).values({ openId: `local:${randomUUID3()}`, name: "Super Admin", email, loginMethod: "password", role: "admin", status: "active" }).returning({ id: users.id, name: users.name, email: users.email, status: users.status });
+    person = { ...created, credentialId: null };
+  }
+  if (!person || person.status !== "active" || !person.email) return { success: true };
+  if (person.credentialId === null && !owner) return { success: true };
+  await sendResetLink(db, { target: { id: person.id, name: person.name, email: person.email }, actorUserId: null, firstPassword: person.credentialId === null });
+  return { success: true };
 }
 async function openReset(db, token3) {
   if (!token3 || token3.length > 200) return null;
@@ -12811,9 +12844,15 @@ async function confirmPasswordReset(db, req, rawInput) {
       const person = (await tx.select({ id: users.id, email: users.email, status: users.status }).from(users).where(eq22(users.id, claimed.userId)).limit(1))[0];
       if (!person || person.status !== "active") throw unavailable3();
       const [credential] = await tx.update(userCredentials).set({ passwordHash, failedAttempts: 0, lockedUntil: null }).where(eq22(userCredentials.userId, person.id)).returning({ id: userCredentials.id });
-      if (!credential) throw unavailable3();
+      const owner = isOwnerAdmin({ email: person.email });
+      if (!credential && !owner) throw unavailable3();
+      if (!credential) await tx.insert(userCredentials).values({ userId: person.id, passwordHash });
+      if (owner) {
+        await tx.update(users).set({ role: "admin" }).where(eq22(users.id, person.id));
+        await tx.insert(userPlatformRoles).values({ userId: person.id, role: "super_admin", grantedByUserId: person.id }).onConflictDoNothing();
+      }
       await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and16(eq22(userSessions.userId, person.id), isNull8(userSessions.revokedAt)));
-      await recordAudit(tx, { action: "account_password_reset_completed", actorUserId: person.id, targetEmail: person.email });
+      await recordAudit(tx, { action: "account_password_reset_completed", actorUserId: person.id, targetEmail: person.email, ...credential ? {} : { details: { firstPassword: true } } });
       return { success: true, email: person.email ?? "" };
     });
   } catch (error) {
@@ -12878,6 +12917,8 @@ var accountRouter = router({
   /** The signed-in person's own name. Never another person, never the email. */
   updateProfile: accountProcedure.input(z17.unknown()).mutation(({ ctx, input }) => updateAccountProfile(ctx.req, ctx.account, input)),
   changePassword: accountProcedure.input(z17.unknown()).mutation(({ ctx, input }) => changeAccountPassword(ctx.req, ctx.account, input)),
+  /** "Forgot your password?": emails a reset link if an account uses the address. Public; always the same answer. */
+  requestReset: publicProcedure.input(z17.unknown()).mutation(async ({ ctx, input }) => requestPasswordReset(await database2(), ctx.req, input)),
   /** The reset page: whether a reset link is usable, and for which address. Public, keyed by the link alone. */
   resetPreview: publicProcedure.input(z17.object({ token: z17.string().min(1).max(200) })).query(async ({ ctx, input }) => previewPasswordReset(await database2(), ctx.req, input.token)),
   /** Sets a new password from a reset link and signs the person out everywhere. Validated inside, with one readable message. */
@@ -13316,7 +13357,7 @@ import { TRPCError as TRPCError27 } from "@trpc/server";
 import { z as z24 } from "zod";
 
 // server/accountInvitations.ts
-import { randomBytes as randomBytes10, randomUUID as randomUUID3 } from "crypto";
+import { randomBytes as randomBytes10, randomUUID as randomUUID4 } from "crypto";
 import { and as and18, desc as desc12, eq as eq24, gt as gt7, inArray as inArray7, isNull as isNull10, ne as ne3 } from "drizzle-orm";
 import { TRPCError as TRPCError26 } from "@trpc/server";
 import { z as z23 } from "zod";
@@ -13493,7 +13534,7 @@ async function acceptAccountInvitation(db, req, res, rawInput) {
       if (!invitation || invitationState(invitation) !== "pending") throw unavailable4();
       if (input.email !== normaliseAccountEmail(invitation.email)) throw new TRPCError26({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
       if (await identityTaken(tx, invitation.email)) throw new TRPCError26({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
-      const [user] = await tx.insert(users).values({ openId: `local:${randomUUID3()}`, name: input.fullName, email: invitation.email, loginMethod: "password", role: "user", status: "active" }).returning({ id: users.id });
+      const [user] = await tx.insert(users).values({ openId: `local:${randomUUID4()}`, name: input.fullName, email: invitation.email, loginMethod: "password", role: "user", status: "active" }).returning({ id: users.id });
       await tx.insert(userCredentials).values({ userId: user.id, passwordHash });
       let businessId = null;
       if (invitation.kind === "staff") {

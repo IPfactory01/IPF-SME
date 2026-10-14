@@ -8,7 +8,7 @@ import React, { useState, type FormEvent } from "react";
 import { Link, useParams } from "wouter";
 
 /**
- * Choosing a new password from a reset link the IP Factory team issued. The server checks the link before the form
+ * Choosing a new password from a reset link (asked for on a sign-in page, or issued by the team). The server checks the link before the form
  * shows and again on submit; using it signs the person out everywhere, and they sign in afresh.
  */
 export default function ResetPasswordPage() {

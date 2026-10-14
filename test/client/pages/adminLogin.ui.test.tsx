@@ -16,6 +16,7 @@ const api = vi.hoisted(() => ({
   calls: [] as unknown[],
   error: undefined as string | undefined,
   invalidated: [] as string[],
+  resets: [] as unknown[],
 }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: api.user, loading: api.loading }) }));
@@ -29,6 +30,9 @@ vi.mock("@/lib/trpc", () => ({
     }),
     adminAccess: { status: { useQuery: () => ({ data: api.status, isLoading: false }) } },
     account: {
+      requestReset: {
+        useMutation: (options: { onSuccess?: () => void }) => ({ isPending: false, mutate: (input: unknown) => { api.resets.push(input); options.onSuccess?.(); } }),
+      },
       signInInternal: {
         useMutation: (options: { onSuccess?: () => Promise<void> | void; onError?: (error: Error) => void }) => ({
           isPending: false,
@@ -44,6 +48,7 @@ vi.mock("@/lib/trpc", () => ({
 }));
 
 import AdminLoginPage from "@/pages/AdminLoginPage";
+import { PASSWORD_RESET_REQUESTED } from "@shared/auth";
 
 function renderPage() {
   const location = memoryLocation({ path: "/admin/login", record: true });
@@ -60,6 +65,7 @@ beforeEach(() => {
   api.calls = [];
   api.error = undefined;
   api.invalidated = [];
+  api.resets = [];
 });
 afterEach(cleanup);
 
@@ -155,5 +161,29 @@ describe("the owner bootstrap script", () => {
     const routers = readFileSync(resolve(process.cwd(), "server/routers.ts"), "utf8");
     expect(routers).not.toMatch(/ownerBootstrap|bootstrapOwner/);
     expect(JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8")).scripts["owner:bootstrap"]).toMatch(/scripts\/bootstrapOwner\.ts/);
+  });
+});
+
+describe("forgot your password on the admin sign-in page", () => {
+  it("asks for the email, sends the link request, and answers the same whoever asks", () => {
+    renderPage();
+    fill("Email", "info@example.test");
+    fireEvent.click(screen.getByRole("button", { name: "Forgot your password?" }));
+    // The address typed for sign-in carries over, and the password field is gone.
+    expect((screen.getByLabelText("Email") as HTMLInputElement).value).toBe("info@example.test");
+    expect(screen.queryByLabelText("Password")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Send the reset link" }));
+    expect(api.resets).toEqual([{ email: "info@example.test" }]);
+    expect(screen.getByRole("status").textContent).toBe(PASSWORD_RESET_REQUESTED);
+    fireEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
+    expect(screen.getByLabelText("Password")).toBeTruthy();
+  });
+
+  it("asks for an address before sending anything", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Forgot your password?" }));
+    fireEvent.click(screen.getByRole("button", { name: "Send the reset link" }));
+    expect(screen.getByRole("alert").textContent).toBe("Enter the email address you sign in with.");
+    expect(api.resets).toEqual([]);
   });
 });

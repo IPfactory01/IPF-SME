@@ -102,15 +102,15 @@ export default function DiscoveryCallDetail({ row, onOpenSection, onClose }: { r
           <div className="flex flex-wrap gap-2">
             <Button type="button" disabled={busy || decided === "fit"} className="rounded-none bg-brand text-xs uppercase tracking-wider text-white" onClick={() => decide.mutate({ businessCheckId: row.id, outcome: "fit" })}>Opportunity</Button>
             <Button type="button" variant="outline" disabled={busy || decided === "refer"} className="rounded-none text-xs uppercase tracking-wider" onClick={() => decide.mutate({ businessCheckId: row.id, outcome: "refer" })}>Refer</Button>
-            <Button type="button" variant="outline" disabled={busy || decided === "decline"} className="rounded-none border-rose-200 text-xs uppercase tracking-wider text-rose-800 hover:bg-rose-50" onClick={() => decide.mutate({ businessCheckId: row.id, outcome: "decline" })}>Lost</Button>
+            <Button type="button" variant="outline" disabled={busy || decided === "decline"} className="rounded-none border-danger-line text-xs uppercase tracking-wider text-danger hover:bg-danger-tint" onClick={() => decide.mutate({ businessCheckId: row.id, outcome: "decline" })}>Lost</Button>
           </div>
         </DetailSection>
       )}
 
       {status === "fit" && (
-        <section aria-label="Suitable to proceed" className="space-y-3 border border-emerald-200 bg-emerald-50 p-4">
-          <h3 className="text-sm font-semibold text-emerald-950">Suitable to proceed</h3>
-          <p className="text-sm text-emerald-950">Confirm commercial approval/payment before sending the onboarding invitation.</p>
+        <section aria-label="Suitable to proceed" className="space-y-3 border border-health-clear/40 bg-health-clear-tint p-4">
+          <h3 className="text-sm font-semibold text-ink">Suitable to proceed</h3>
+          <p className="text-sm text-ink">Confirm commercial approval/payment before sending the onboarding invitation.</p>
           <Button type="button" className="rounded-none bg-brand text-xs uppercase tracking-wider text-white" onClick={() => go("onboarding")}>Continue to Client Onboarding</Button>
         </section>
       )}

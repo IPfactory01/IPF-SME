@@ -57,7 +57,7 @@ export default function PeoplePanel() {
         </div>
       )}
       {suspending && (
-        <form aria-label="Suspend account" onSubmit={suspend} className="space-y-2 border border-amber-200 bg-amber-50 p-4 text-sm">
+        <form aria-label="Suspend account" onSubmit={suspend} className="space-y-2 border border-health-watch/40 bg-health-watch-tint p-4 text-sm">
           <p className="font-semibold">Suspend {suspending.name}?</p>
           <p className="text-ink-muted">They are signed out everywhere at once and cannot sign in until reinstated. Give the reason; it is recorded.</p>
           <div className="space-y-1">

@@ -17,9 +17,9 @@ import { PaymentsPanel } from "./Payments";
 import { PAYMENT_ITEM_DETAILS } from "@shared/payments";
 
 const HEALTH: Record<Health, { label: string; className: string }> = {
-  clear: { label: "Clear", className: "border-emerald-200 bg-emerald-50 text-emerald-900" },
-  watch: { label: "Watch", className: "border-amber-200 bg-amber-50 text-amber-900" },
-  stuck: { label: "Stuck", className: "border-rose-200 bg-rose-50 text-rose-900" },
+  clear: { label: "Clear", className: "border-health-clear/40 bg-health-clear-tint text-ink" },
+  watch: { label: "Watch", className: "border-health-watch/40 bg-health-watch-tint text-ink" },
+  stuck: { label: "Stuck", className: "border-danger-line bg-danger-tint text-danger-strong" },
 };
 
 /** Email and WhatsApp as plain, copyable contact lines. WhatsApp opens a chat only when the number is usable. */
@@ -111,7 +111,7 @@ function MoveStage({ businessCheckId, current }: { businessCheckId: number; curr
       <div className="flex flex-wrap gap-2">
         {MOVABLE_STAGES.filter(stage => stage !== current).map(stage => (
           <Button key={stage} type="button" variant="outline" size="sm" title={PIPELINE_LABELS[stage].meaning} disabled={move.isPending}
-            className={`rounded-none text-xs ${stage === "lost" ? "border-rose-200 text-rose-800 hover:bg-rose-50" : ""}`}
+            className={`rounded-none text-xs ${stage === "lost" ? "border-danger-line text-danger hover:bg-danger-tint" : ""}`}
             onClick={() => move.mutate({ businessCheckId, stage, note: note.trim() || undefined })}>
             {stageDisplayName(stage)}
           </Button>
@@ -129,7 +129,7 @@ function MoveStage({ businessCheckId, current }: { businessCheckId: number; curr
 export default function BusinessCheckDetail({ businessCheckId, onOpenSection, onClose }: { businessCheckId: number; onOpenSection: (section: AdminSectionId) => void; onClose: () => void }) {
   const detail = trpc.businessSupport.checkDetail.useQuery({ businessCheckId }, { retry: false, refetchOnWindowFocus: false });
   if (detail.isLoading) return <p className="text-sm text-ink-muted">Loading the record…</p>;
-  if (detail.error || !detail.data) return <p role="alert" className="text-sm text-rose-900">{detail.error?.message ?? "This record is not available."}</p>;
+  if (detail.error || !detail.data) return <p role="alert" className="text-sm text-danger-strong">{detail.error?.message ?? "This record is not available."}</p>;
 
   const check = detail.data;
   const status = funnelStatus(check);

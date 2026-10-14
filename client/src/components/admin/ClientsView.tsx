@@ -6,7 +6,7 @@ import { formatDate } from "./format";
 /** Onboarded clients only: businesses and the people who belong to them. A business check is never listed here. */
 export default function ClientsView() {
   const clients = trpc.businessSupport.clients.useQuery(undefined, { retry: false });
-  if (clients.error) return <p role="alert" className="p-6 text-sm text-rose-900">{clients.error.message}</p>;
+  if (clients.error) return <p role="alert" className="p-6 text-sm text-danger-strong">{clients.error.message}</p>;
   const businessCount = new Set(clients.data?.map(row => row.businessId)).size;
   return (
     <div className="space-y-4 p-6">

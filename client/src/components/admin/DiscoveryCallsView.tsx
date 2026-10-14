@@ -30,7 +30,7 @@ export default function DiscoveryCallsView({ onOpenSection }: { onOpenSection: (
   }, [rows, search, status]);
   const opened = rows.find(row => row.id === openId) ?? null;
 
-  if (calls.error) return <p role="alert" className="p-6 text-sm text-rose-900">{calls.error.message}</p>;
+  if (calls.error) return <p role="alert" className="p-6 text-sm text-danger-strong">{calls.error.message}</p>;
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Summary">

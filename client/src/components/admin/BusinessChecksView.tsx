@@ -37,7 +37,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
     return counts;
   }, [rows]);
 
-  if (checks.error) return <p role="alert" className="p-6 text-sm text-rose-900">{checks.error.message}</p>;
+  if (checks.error) return <p role="alert" className="p-6 text-sm text-danger-strong">{checks.error.message}</p>;
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Summary">
@@ -94,7 +94,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
                   </td>
                   <td className={`${TD} hidden truncate sm:table-cell`}>{row.businessName ?? <span className="text-ink-muted">-</span>}</td>
                   <td className={`${TD} hidden md:table-cell`}>
-                    <span className={`inline-block border px-1.5 py-0.5 text-[11px] font-medium ${row.completedAt ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-line bg-paper-sunken text-ink-muted"}`}>{row.completedAt ? "Completed" : "Not finished"}</span>
+                    <span className={`inline-block border px-1.5 py-0.5 text-[11px] font-medium ${row.completedAt ? "border-health-clear/40 bg-health-clear-tint text-ink" : "border-line bg-paper-sunken text-ink-muted"}`}>{row.completedAt ? "Completed" : "Not finished"}</span>
                     <span className="mt-1 block text-xs text-ink-muted">{row.completedAt ? formatDate(row.completedAt) : `Started ${formatDate(row.createdAt)}`}</span>
                   </td>
                   <td className={`${TD} hidden md:table-cell`}>

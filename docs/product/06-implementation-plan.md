@@ -39,9 +39,10 @@ you, what we have found). Tests: `test/db/engagements.db.test.ts`, `test/server/
 | "Forgot your password?" on both sign-in pages; the owner's first password by email | `test/db/forgotPassword.db.test.ts`, `test/client/pages/adminLogin.ui.test.tsx`, `test/client/pages/accountPages.ui.test.tsx` |
 | "Send sign-in link" on the client's record in Engagements: a reset link or a fresh invitation, whichever fits | `test/db/onboarding.db.test.ts`, `test/client/components/engagementsView.ui.test.tsx` |
 | Booking the two Current State Assessment Sessions from the room on Calendly, recorded on the engagement automatically (live once `CALENDLY_SESSION_URL` and `CALENDLY_API_TOKEN` are set) | `test/server/calendly.test.ts`, `test/db/sessionBooking.db.test.ts`, `test/client/components/engagementRoom.ui.test.tsx` |
+| The admin console reviewed against Apple's fluid-interface principles: theme colours only, drawers that slide in and out along the same edge, press feedback on buttons and rows, reduced-motion fades | `test/client/components/admin/adminCraft.test.ts`, `test/client/pages/adminConsole.ui.test.tsx` |
 
 **Next, proposed 14 October:** the room as a dashboard (prototype approved for review: charts, takeaways, a what-if on
-the 12-month target); an Apple-style review of the admin console.
+the 12-month target).
 
 Also on `main` since 9 October: the original twelve sectors; "Not assessed" areas on the result; the report form asking
 how each product is charged; the invitation page asking someone else signed in to sign out first; the 48-hour payment

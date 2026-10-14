@@ -157,3 +157,22 @@
     border-bottom-color: var(--color-ink-muted);
   }
 }
+
+/*
+ * The console's record drawer and the scrim behind it. The drawer slides in from the right on an ease-out curve that
+ * settles without overshoot, and leaves the way it came on the mirrored curve, a little faster. Radix waits for the
+ * exit animation before removing it. With reduced motion both only fade.
+ */
+@keyframes record-drawer-in { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes record-drawer-out { from { transform: none; } to { transform: translateX(100%); } }
+@keyframes scrim-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scrim-out { from { opacity: 1; } to { opacity: 0; } }
+[data-record-drawer][data-state="open"] { animation: record-drawer-in 320ms cubic-bezier(0.22, 1, 0.36, 1); }
+[data-record-drawer][data-state="closed"] { animation: record-drawer-out 220ms cubic-bezier(0.64, 0, 0.78, 0); }
+[data-slot="sheet-overlay"][data-state="open"] { animation: scrim-in 240ms ease-out; }
+[data-slot="sheet-overlay"][data-state="closed"] { animation: scrim-out 200ms ease-in; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-record-drawer][data-state="open"] { animation: scrim-in 150ms ease-out; }
+  [data-record-drawer][data-state="closed"] { animation: scrim-out 150ms ease-in; }
+}

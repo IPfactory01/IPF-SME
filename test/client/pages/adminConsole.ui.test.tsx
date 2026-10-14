@@ -508,7 +508,7 @@ describe("Discovery Call record drawer", () => {
     const decline = drawer().getByRole("button", { name: "Lost" });
     expect(fit.className).toMatch(/bg-brand/);
     expect(refer.className).not.toMatch(/bg-brand/);
-    expect(decline.className).toMatch(/rose/);
+    expect(decline.className).toMatch(/text-danger/);
     fireEvent.click(fit);
     fireEvent.click(refer);
     fireEvent.click(decline);

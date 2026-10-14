@@ -110,6 +110,11 @@ screenshots before it ships, because every page's line lengths change.
   "reduce transparency" and gain a firm edge under "increase contrast" (`client/src/index.css`).
 - Touch screens: hover is mouse-only (Tailwind 4 `hover:` and Framer `whileHover` ignore touch), so anything shown on
   hover is shown outright where there is no hover, such as "That's me" on the owner quotes.
+- The admin console (reviewed against the same principles, 14 October 2026): buttons press in on pointer-down
+  (`active:scale-[0.98]`, still under reduced motion) and list rows tint on press; record drawers slide in from the
+  right and leave to the right on mirrored easing (320 ms in, 220 ms out), over an ink scrim that fades with them;
+  with "reduce motion" on they fade instead (`[data-record-drawer]` in `client/src/index.css`). Status colours use the
+  health and danger tokens, never Tailwind's palette; Waitlisted uses the brand tint.
 - React effects return nothing or a cleanup function only (the claude.ai preview frame breaks otherwise).
 - UI tests set `MotionGlobalConfig.skipAnimations = true`.
 
@@ -237,3 +242,4 @@ The room follows document 07, in the site's dress (`client/src/components/Accoun
 | `test/server/payments.test.ts` | The "TEST MODE - NO REAL MONEY MOVES" label uses the crimson token; "Pay online" is the email's button |
 | `test/client/pages/payPage.ui.test.tsx` | The pay page names the amount in full ("Pay ₦100,000 securely with Paystack") and shows "TEST MODE: NO REAL MONEY MOVES" in test mode |
 | `test/server/interactiveAffordances.test.ts` | Pointer and not-allowed cursor rules are present |
+| `test/client/components/admin/adminCraft.test.ts` | The admin console uses theme colours only; drawers slide in and out along the same edge, with a fade for reduced motion; the ink scrim; buttons and rows answer on press |

@@ -8,10 +8,10 @@ import { toast } from "sonner";
 const TONES: Record<FunnelTone, string> = {
   muted: "border-line bg-paper-sunken text-ink-muted",
   neutral: "border-line bg-white text-ink",
-  attention: "border-amber-200 bg-amber-50 text-amber-900",
+  attention: "border-health-watch/40 bg-health-watch-tint text-ink",
   info: "border-brand-line bg-brand-tint text-brand",
-  positive: "border-emerald-200 bg-emerald-50 text-emerald-900",
-  negative: "border-rose-200 bg-rose-50 text-rose-900",
+  positive: "border-health-clear/40 bg-health-clear-tint text-ink",
+  negative: "border-danger-line bg-danger-tint text-danger-strong",
 };
 
 /** A small coloured label for where a prospect is in the funnel. Colour never carries the meaning alone: the words do. */
@@ -50,7 +50,7 @@ export function ClickableRow({ onOpen, children, selected }: { onOpen: () => voi
   return (
     <tr
       onClick={onOpen}
-      className={`cursor-pointer border-b border-line-soft transition-colors hover:bg-brand-tint/50 focus-within:bg-brand-tint/70 ${selected ? "bg-brand-tint/40" : ""}`}
+      className={`cursor-pointer border-b border-line-soft transition-colors hover:bg-brand-tint/50 focus-within:bg-brand-tint/70 active:bg-brand-tint active:duration-0 ${selected ? "bg-brand-tint/40" : ""}`}
     >
       {children}
     </tr>
@@ -112,11 +112,15 @@ export function CopyButton({ value, label }: { value: string; label: string }) {
   );
 }
 
-/** The right-hand record panel: about 576px on a laptop, the full width on a phone. Closing it leaves the table as it was. */
+/**
+ * The right-hand record panel: about 576px on a laptop, the full width on a phone. Closing it leaves the table as it was.
+ * It slides in from the right and back out the same way (motion in index.css, `[data-record-drawer]`), quickly and without
+ * overshoot; with reduced motion it fades instead.
+ */
 export function RecordDrawer({ open, onOpenChange, title, description, children }: { open: boolean; onOpenChange: (open: boolean) => void; title: string; description: string; children: React.ReactNode }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full gap-0 overflow-y-auto bg-white p-0 sm:max-w-xl">
+      <SheetContent side="right" data-record-drawer="" className="w-full gap-0 overflow-y-auto bg-white p-0 sm:max-w-xl">
         <SheetHeader className="border-b border-line-soft p-6 pr-12">
           <SheetTitle className="font-serif text-2xl text-ink">{title}</SheetTitle>
           <SheetDescription className="text-sm text-ink-muted">{description}</SheetDescription>

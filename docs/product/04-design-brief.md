@@ -105,6 +105,11 @@ screenshots before it ships, because every page's line lengths change.
   slide on a critically damped spring (`SCREEN_SPRING`, no bounce, 0.35 s) and the outgoing screen leaves at the same
   time (`AnimatePresence mode="popLayout"`), so taps and Back are never locked out; options arrive together, not one
   by one; the page jumps to the top instead of gliding; ticks and markers settle without overshoot.
+- With "reduce motion" on, nothing moves by itself: the hero sentence stops rotating, the colour blobs and the scroll
+  arrow stay still and the pulsing dot stops (`useReducedMotion`, `motion-safe:`). Glass headers turn solid under
+  "reduce transparency" and gain a firm edge under "increase contrast" (`client/src/index.css`).
+- Touch screens: hover is mouse-only (Tailwind 4 `hover:` and Framer `whileHover` ignore touch), so anything shown on
+  hover is shown outright where there is no hover, such as "That's me" on the owner quotes.
 - React effects return nothing or a cleanup function only (the claude.ai preview frame breaks otherwise).
 - UI tests set `MotionGlobalConfig.skipAnimations = true`.
 

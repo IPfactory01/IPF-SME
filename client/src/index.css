@@ -134,3 +134,24 @@
   padding-left: 1.5rem;
   max-width: 1280px;
 }
+
+/*
+ * Glass headers become solid for people who ask for less transparency, and gain a firm edge for people who ask for
+ * more contrast. Only the site's own sticky headers are glass, so the rule targets them.
+ */
+@media (prefers-reduced-transparency: reduce) {
+  header[class*="backdrop-blur"] {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: var(--color-paper);
+  }
+}
+
+@media (prefers-contrast: more) {
+  header[class*="backdrop-blur"] {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: var(--color-paper-raised);
+    border-bottom-color: var(--color-ink-muted);
+  }
+}

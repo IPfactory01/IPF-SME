@@ -6,7 +6,7 @@ import { EASE, Reveal } from "@/components/motion";
 import { onSectionLinkClick } from "@/lib/scrollToSection";
 import { BRAND } from "@shared/brand";
 import { JOURNEY, PROBLEM_AREAS, PROMISE } from "@shared/businessSupport";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowDown, ArrowRight, Plus } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
 
@@ -74,20 +74,23 @@ export function Hero({ onStart }: { onStart: () => void }) {
   const [lead1, lead2, close] = PROMISE;
   const sentences = PROBLEM_AREAS.filter((area) => area.siteSentence).map((area) => area.siteSentence!);
   const [index, setIndex] = useState(0);
+  // With "reduce motion" on, nothing on the page moves by itself: the sentence stays put and the colour stays still.
+  const calm = useReducedMotion();
   useEffect(() => {
+    if (calm) return;
     const timer = window.setInterval(() => setIndex((current) => (current + 1) % sentences.length), 3200);
     return () => window.clearInterval(timer);
-  }, [sentences.length]);
+  }, [sentences.length, calm]);
 
   return (
     <section id="top" className="relative overflow-hidden border-b border-line pt-20 pb-20 md:pt-28 md:pb-24">
       {/* Slow-moving colour from the logo, behind the headline. */}
-      <motion.div aria-hidden className="pointer-events-none absolute -top-32 -left-24 h-[28rem] w-[28rem] rounded-full bg-brand-plum/15 blur-3xl" animate={{ x: [0, 60, 0], y: [0, 40, 0] }} transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }} />
-      <motion.div aria-hidden className="pointer-events-none absolute -right-24 top-10 h-[26rem] w-[26rem] rounded-full bg-highlight/20 blur-3xl" animate={{ x: [0, -50, 0], y: [0, 50, 0] }} transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }} />
+      <motion.div aria-hidden className="pointer-events-none absolute -top-32 -left-24 h-[28rem] w-[28rem] rounded-full bg-brand-plum/15 blur-3xl" animate={calm ? undefined : { x: [0, 60, 0], y: [0, 40, 0] }} transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }} />
+      <motion.div aria-hidden className="pointer-events-none absolute -right-24 top-10 h-[26rem] w-[26rem] rounded-full bg-highlight/20 blur-3xl" animate={calm ? undefined : { x: [0, -50, 0], y: [0, 50, 0] }} transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }} />
 
       <div className="relative container mx-auto max-w-5xl px-4 text-center">
         <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }} className="mx-auto mb-8 inline-flex items-center gap-2 border border-brand-line bg-paper-raised/70 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brand backdrop-blur">
-          <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-highlight opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-highlight" /></span>
+          <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full motion-safe:animate-ping rounded-full bg-highlight opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-highlight" /></span>
           {BRAND.productEndorsement}
         </motion.p>
 
@@ -139,7 +142,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
           </span>
         </motion.button>
 
-        <motion.a href="#problem" onClick={onSectionLinkClick} aria-label="Scroll down" className="mx-auto mt-6 flex h-10 w-10 items-center justify-center rounded-full border border-line text-ink-faint hover:border-brand hover:text-brand" animate={{ y: [0, 6, 0] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}>
+        <motion.a href="#problem" onClick={onSectionLinkClick} aria-label="Scroll down" className="mx-auto mt-6 flex h-10 w-10 items-center justify-center rounded-full border border-line text-ink-faint hover:border-brand hover:text-brand" animate={calm ? undefined : { y: [0, 6, 0] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}>
           <ArrowDown className="h-4 w-4" />
         </motion.a>
       </div>

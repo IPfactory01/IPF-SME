@@ -96,3 +96,12 @@ describe("home page track record", () => {
     expect(added).not.toMatch(/\b(framework|strategic|solutions?|leverage|holistic|playbook|sprint|retainer|door)\b/i);
   });
 });
+
+describe("home page on touch screens", () => {
+  it("shows the \"That's me\" prompt on every owner quote where there is no hover, not only on mouse hover", () => {
+    const { container } = renderHome();
+    const prompts = Array.from(container.querySelectorAll("#problem button span")).filter((span) => span.textContent?.includes("That's me"));
+    expect(prompts.length).toBe(4);
+    for (const prompt of prompts) expect(prompt.className).toContain("[@media(hover:none)]:opacity-100");
+  });
+});

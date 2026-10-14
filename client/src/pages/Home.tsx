@@ -6,7 +6,7 @@ import { onSectionLinkClick } from "@/lib/scrollToSection";
 import { CtaButton, Faq, Hero, Journey, NAV, StuckPicker, useActiveSection, useScrolled } from "@/components/home/HomeSections";
 import { ExperienceBehind, TrackRecord, WhyStuck } from "@/components/home/Experience";
 import { Reveal, ScrollProgress, Stagger, staggerChild } from "@/components/motion";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, CheckCircle2, KeyRound, MailCheck, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
@@ -16,6 +16,7 @@ export default function Home() {
   const [, setLocation] = useLocation();
   const scrolled = useScrolled();
   const active = useActiveSection(NAV.map((item) => item.id));
+  const calm = useReducedMotion();
   const [isParticipantSignInOpen, setIsParticipantSignInOpen] = useState(false);
   const [signInEmail, setSignInEmail] = useState("");
   const [signInPassword, setSignInPassword] = useState("");
@@ -135,7 +136,7 @@ export default function Home() {
               >
                 <span aria-hidden className="absolute inset-y-0 left-0 w-1 origin-bottom scale-y-0 bg-highlight-ink transition-transform duration-300 group-hover:scale-y-100" />
                 <p className="font-serif italic text-xl text-ink-750 leading-snug">&ldquo;{quote}&rdquo;</p>
-                <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-brand opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">
+                <span className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-brand opacity-0 -translate-x-2 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0 [@media(hover:none)]:opacity-100 [@media(hover:none)]:translate-x-0">
                   That&apos;s me <ArrowRight className="h-3.5 w-3.5" />
                 </span>
               </motion.button>
@@ -201,7 +202,7 @@ export default function Home() {
 
       {/* The ask */}
       <section className="relative overflow-hidden py-20 bg-linear-to-t from-brand to-brand-plum text-paper">
-        <motion.div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 h-96 w-[48rem] -translate-x-1/2 rounded-full bg-highlight/20 blur-3xl" animate={{ x: ["-55%", "-45%", "-55%"], opacity: [0.5, 0.9, 0.5] }} transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }} />
+        <motion.div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 h-96 w-[48rem] -translate-x-1/2 rounded-full bg-highlight/20 blur-3xl" animate={calm ? undefined : { x: ["-55%", "-45%", "-55%"], opacity: [0.5, 0.9, 0.5] }} transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }} />
         <Reveal className="relative container max-w-3xl mx-auto text-center">
           <img src={BRAND.logoOnDarkUrl} alt={BRAND.organisationName} className="mx-auto mb-8 h-28 w-auto" />
           <h2 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight mb-4">Start with the free Business Check.</h2>

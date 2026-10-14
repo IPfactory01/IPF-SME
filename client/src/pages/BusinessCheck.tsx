@@ -37,7 +37,7 @@ import PhoneField from "@/components/PhoneField";
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, Clock3, FileText, Lightbulb, LockKeyhole, Mail, PencilLine, RotateCcw, type LucideIcon } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { EASE } from "@/components/motion";
-import { AnimatePresence, animate, motion, useMotionValue, useTransform, type Variants } from "framer-motion";
+import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform, type Variants } from "framer-motion";
 import { Link } from "wouter";
 import type { BusinessCheckResponse } from "../../../server/routers/businessCheck";
 
@@ -761,6 +761,7 @@ function CountUp({ value }: { value: number }) {
 
 function Result({ response, contact, answers, businessName, onRestart }: { response: BusinessCheckResponse; contact: Contact; answers: Answers; businessName: string; onRestart: () => void }) {
   const { result, summary } = response;
+  const calm = useReducedMotion();
   const founder = result.founder;
   const narrative = founder.instinct ? describeFounder(answers, founder) : undefined;
   const [requested, setRequested] = useState<{ call?: boolean; report?: boolean }>({});
@@ -941,7 +942,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
         <div className="grid gap-4 lg:grid-cols-2">
           {/* The free call */}
           <div className="relative flex flex-col overflow-hidden bg-gradient-to-br from-brand-plum via-brand-deep to-brand-deep p-6 text-paper sm:p-8">
-            <motion.div aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-highlight/25 blur-3xl" animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.9, 0.5] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }} />
+            <motion.div aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-highlight/25 blur-3xl" animate={calm ? undefined : { scale: [1, 1.2, 1], opacity: [0.5, 0.9, 0.5] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }} />
             <div className="relative flex flex-1 flex-col">
               <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight">Free · 20 minutes</p>
               <p className="mt-3 font-serif text-2xl font-bold leading-snug">{summary.next}</p>

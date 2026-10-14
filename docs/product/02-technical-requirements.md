@@ -98,6 +98,12 @@ example, exists only in Resend (shown once at creation) and in Vercel.
   SameSite=Lax, Secure in production, 14 days; only a hash of the token is stored.
 - **Client accounts** are created only from an onboarding invitation (single use, expiring, hashed token, one
   transaction).
+- **Password reset** (`server/accountRecovery.ts`): single-use links, 20 minutes, only the SHA-256 stored, a new link
+  revokes the one still out, using one signs the person out everywhere. Staff with `manage_users` can issue one; since
+  14 October anyone can ask for one from `/login` or `/admin/login` (`account.requestReset`), which answers the same
+  whether or not the account exists, only ever emails the link, and is limited to 5 an hour per email and per address.
+  For the address in `OWNER_ADMIN_EMAIL` the link also sets a first password and stores `super_admin`, so the owner
+  needs no database access to get in (`pnpm owner:bootstrap` remains for a database with no email).
 - **Staff** have platform roles and permissions (`shared/platformPermissions.ts`); a client's session never becomes a
   staff identity.
 - **Legacy:** Manus OAuth plus an administrator password (`jump_admin_access`, 8 hours) and the JUMP participant session

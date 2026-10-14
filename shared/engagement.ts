@@ -254,3 +254,20 @@ export function formatMeasure(value: number | string | null | undefined, unit?: 
   if (unit === "%") return `${text}%`;
   return `${text} ${unit}`;
 }
+
+/**
+ * A task's detail written as one line with numbered questions ("A few words each. 1. What… 2. Which…") split into its
+ * opening sentence and the items, so screens can show a real list. Null when the text holds no run of 1, 2, 3…
+ */
+export function splitNumberedList(text: string): { intro: string; items: string[] } | null {
+  const parts = text.trim().split(/\s+(?=\d{1,2}\.\s)/);
+  const intro = /^\d{1,2}\.\s/.test(parts[0]) ? "" : parts.shift() ?? "";
+  if (parts.length < 2) return null;
+  const items: string[] = [];
+  for (let index = 0; index < parts.length; index++) {
+    const match = parts[index].match(/^(\d{1,2})\.\s+([\s\S]+)$/);
+    if (!match || Number(match[1]) !== index + 1) return null;
+    items.push(match[2].trim());
+  }
+  return { intro, items };
+}

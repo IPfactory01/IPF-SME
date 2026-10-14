@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { useWide } from "@/hooks/useWide";
 import { BusinessPanel, FounderPanel } from "./room/RoomInsight";
 import RoomTabs from "./room/RoomTabs";
+import TaskDetail from "./TaskDetail";
 import type { AppRouter } from "../../../server/routers";
 
 type Room = NonNullable<inferRouterOutputs<AppRouter>["engagement"]["client"]["room"]>;
@@ -147,7 +148,7 @@ export default function EngagementRoom({ room, greeting, aside, now = Date.now()
             {action.kind === "task" && (
               <>
                 <p className="mt-1 font-serif text-xl font-bold tracking-tight">{action.task.title}</p>
-                {action.task.detail && <p className="mt-1 text-sm text-ink-600">{action.task.detail}</p>}
+                {action.task.detail && <TaskDetail text={action.task.detail} className="mt-1 text-sm text-ink-600" />}
                 {action.task.status === "needs_more" && action.task.statusNote && <p className="mt-1 text-sm text-danger">We need a bit more: {action.task.statusNote}</p>}
                 <TaskControls task={action.task} uploadsEnabled={room.uploadsEnabled} due />
               </>
@@ -436,7 +437,7 @@ function PlanRowView({ row, room, isOwner }: { row: PlanRow; room: Room; isOwner
         <p className="text-xs text-ink-muted">{row.when}</p>
         {row.task && (
           <>
-            {row.task.detail && !finished && <p className="mt-1 text-sm text-ink-muted">{row.task.detail}</p>}
+            {row.task.detail && !finished && <TaskDetail text={row.task.detail} className="mt-1 text-sm text-ink-muted" />}
             {row.status === "needs_more" && row.task.statusNote && <p className="mt-1 text-sm text-danger">We need a bit more: {row.task.statusNote}</p>}
             <FileList files={row.task.files} />
             {row.task.side === "client" && isOpen(row.task) && <TaskControls task={row.task} uploadsEnabled={room.uploadsEnabled} />}

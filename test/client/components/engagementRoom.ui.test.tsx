@@ -417,3 +417,15 @@ describe("the room on a laptop or desktop", () => {
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });
+
+describe("a Data Request's detail", () => {
+  it("shows numbered questions as a list, one per line, in the next action and in the Work Plan", () => {
+    const six = "A few words each is enough. 1. What do you sell, and who buys it? 2. Which decisions wait for you? 3. What would you fix first?";
+    const base = room();
+    render(<EngagementRoom room={room({ tasks: [{ ...base.tasks[0], detail: six }], deliverables: [] })} />);
+    const lists = screen.getAllByRole("list").filter(list => list.tagName === "OL" && list.textContent?.includes("Which decisions wait for you?"));
+    expect(lists.length).toBeGreaterThan(0);
+    expect(within(lists[0]).getAllByRole("listitem").map(item => item.textContent)).toEqual(["What do you sell, and who buys it?", "Which decisions wait for you?", "What would you fix first?"]);
+    expect(screen.getAllByText("A few words each is enough.").length).toBeGreaterThan(0);
+  });
+});

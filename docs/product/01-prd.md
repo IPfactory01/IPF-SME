@@ -2,7 +2,7 @@
 
 **Product:** The Shift, by IP Factory (`BRAND.productEndorsement` in `shared/brand.ts`)
 **Promise:** Find it. Fix it. See the results.
-**Status:** v0.1 live at https://ipf-sme.vercel.app, built up to the start of the Current State Assessment. Last reviewed 9 October 2026.
+**Status:** v0.1 live at https://ipfactory.co, built up to the start of the Current State Assessment. Last reviewed 9 October 2026.
 **Source:** *Business Support Concept Note and Launch Blueprint v0.8.1* (6 October 2026), referred to below as "the concept note" with its section numbers, plus the decisions taken while building (section 9).
 
 This document says what the product does, feature by feature, and the status of each feature. How it is built is in

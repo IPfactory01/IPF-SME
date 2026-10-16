@@ -1,7 +1,7 @@
 # IP Factory (IPF) — Business Support Platform
 
 The platform behind **The Shift, by IP Factory**: support for business owners. Find it. Fix it. See the results.
-Live at https://ipf-sme.vercel.app (Vercel, deploying `main`).
+Live at https://ipfactory.co (Vercel, deploying `main`).
 
 ## What it does
 

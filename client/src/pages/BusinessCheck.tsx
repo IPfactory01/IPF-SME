@@ -664,7 +664,11 @@ function Reading() {
 
 function DetailsScreen({ contact, pending, error, onChange, onBack, onSubmit }: { contact: Contact; pending: boolean; error: string; onChange: (contact: Contact) => void; onBack: () => void; onSubmit: () => void }) {
   const set = (key: keyof Contact) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => onChange({ ...contact, [key]: event.target.value });
-  const valid = contact.fullName.trim().length >= 2 && /^\S+@\S+\.\S+$/.test(contact.email.trim()) && !phoneProblem(contact.whatsappCountry, contact.whatsapp);
+  const emailOk = /^\S+@\S+\.\S+$/.test(contact.email.trim());
+  const valid = contact.fullName.trim().length >= 2 && emailOk && !phoneProblem(contact.whatsappCountry, contact.whatsapp);
+  // Say why Start is unavailable instead of leaving a grey button: shown once the owner leaves the email field.
+  const [emailLeft, setEmailLeft] = useState(false);
+  const emailHint = emailLeft && contact.email.trim() && !emailOk ? "Enter your full email address, like ada@example.com." : "";
 
   return (
     <motion.form className="space-y-7" variants={listMotion} initial="hidden" animate="show" onSubmit={(event) => { event.preventDefault(); if (valid && !pending) onSubmit(); }}>
@@ -675,7 +679,10 @@ function DetailsScreen({ contact, pending, error, onChange, onBack, onSubmit }: 
       </motion.div>
       <motion.div variants={itemMotion} className="grid gap-5 sm:grid-cols-2">
         <Field label="Full name" required><Input value={contact.fullName} onChange={set("fullName")} autoComplete="name" className="h-12 rounded-none transition-shadow focus-visible:shadow-[0_0_0_4px_rgba(28,78,126,0.12)]" /></Field>
-        <Field label="Email" required><Input type="email" value={contact.email} onChange={set("email")} autoComplete="email" className="h-12 rounded-none transition-shadow focus-visible:shadow-[0_0_0_4px_rgba(28,78,126,0.12)]" /></Field>
+        <Field label="Email" required>
+          <Input type="email" value={contact.email} onChange={set("email")} onBlur={() => setEmailLeft(true)} autoComplete="email" aria-invalid={emailHint ? true : undefined} aria-describedby={emailHint ? "check-email-hint" : undefined} className="h-12 rounded-none transition-shadow focus-visible:shadow-[0_0_0_4px_rgba(28,78,126,0.12)]" />
+          {emailHint && <p id="check-email-hint" role="alert" className="mt-2 text-xs text-danger">{emailHint}</p>}
+        </Field>
         <Field label="WhatsApp number (optional, for a quicker reply)">
           <PhoneField label="WhatsApp number" iso={contact.whatsappCountry} national={contact.whatsapp} onChange={({ iso, national }) => onChange({ ...contact, whatsappCountry: iso, whatsapp: national })} />
         </Field>

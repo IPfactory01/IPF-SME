@@ -111,6 +111,25 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY)!).token).toBe(TOKEN);
   });
 
+  it("says why Start is unavailable when the email is not a full address, and clears the message once it is", async () => {
+    render(React.createElement(BusinessCheck));
+    await pick(/take the business check/i);
+    await screen.findByText("First, who are we talking to?");
+    const boxes = screen.getAllByRole("textbox");
+    fireEvent.change(boxes[0], { target: { value: "Ada Example" } });
+    fireEvent.change(boxes[1], { target: { value: "Test" } });
+    // No message while the owner is still typing; it appears when they leave the field.
+    expect(screen.queryByText(/Enter your full email address/)).toBeNull();
+    fireEvent.blur(boxes[1]);
+    expect(screen.getByRole("alert").textContent).toBe("Enter your full email address, like ada@example.com.");
+    expect(boxes[1].getAttribute("aria-invalid")).toBe("true");
+    expect((screen.getByRole("button", { name: /start the business check/i }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(boxes[1], { target: { value: "ada@example.com" } });
+    expect(screen.queryByText(/Enter your full email address/)).toBeNull();
+    expect((screen.getByRole("button", { name: /start the business check/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   describe("the WhatsApp number", () => {
     const fillRequired = () => {
       const boxes = screen.getAllByRole("textbox");

@@ -43,15 +43,6 @@ export const BRAND = {
     partnerYears: "50+",
     since: 2011,
     /**
-     * Clients named on the site, each with their agreement (confirmed by ET, 14 October 2026). Describe the work, never
-     * the client's problems, and never a client's figures without separate written permission.
-     */
-    namedClients: [
-      { name: "Ruff 'n' Tumble", sector: "Children's fashion retail", work: "An 18-month transformation: a cost review, a new organisation design and goals tracked every month." },
-      { name: "SKLD (formerly School Kits)", sector: "School supplies", work: "A transformation plan, and written procedures for how each part of the business runs." },
-      { name: "MAX", sector: "Mobility and logistics", work: "A business transformation." },
-    ],
-    /**
      * Logos in the strip under the track record figures, files in client/public/clients: clients Enzo Krypton has
      * worked with, confirmed by ET (16 October 2026) and shown in the firm's own company profile (October 2026), the
      * source of the files. The wording is "has worked with", never "trusted by" or "partners", so nothing suggests an

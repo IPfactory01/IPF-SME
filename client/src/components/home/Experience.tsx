@@ -117,19 +117,6 @@ export function ExperienceBehind() {
             The same method we use with larger clients. Run at the size and the price that fits your business.
           </blockquote>
         </Reveal>
-        <Reveal className="mb-12">
-          <h3 className="mb-5 text-xs font-semibold uppercase tracking-widest text-ink-muted">Some of the businesses we have worked with</h3>
-          <ul aria-label="Clients we have worked with" className="grid grid-cols-1 gap-px border border-line bg-line md:grid-cols-3">
-            {RECORD.namedClients.map((client) => (
-              <li key={client.name} className="bg-paper-raised p-6">
-                <p className="font-serif text-2xl font-bold text-ink">{client.name}</p>
-                <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-highlight-ink">{client.sector}</p>
-                <p className="mt-3 text-ink-600 leading-relaxed">{client.work}</p>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-4 text-sm text-ink-muted">And more than {RECORD_TOTAL} businesses since {RECORD.since}. Named with their agreement.</p>
-        </Reveal>
         <Stagger className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {POINTS.map(({ icon: Icon, title, text }) => (
             <motion.div key={title} variants={staggerChild} className="border border-line bg-paper-raised p-6">

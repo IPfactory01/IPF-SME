@@ -146,6 +146,10 @@ describe("business support email layout", () => {
     expect(html).not.toMatch(/JUMP|Genius Track|Emmanuel Tarfa/);
   });
 
+  it("tells the owner how to reach a person: reply, or write to info@ipfactory.co", () => {
+    expect(html).toContain("Questions? Reply to this email or write to info@ipfactory.co.");
+  });
+
   it("uses only the brand palette: crimson labels, the cyan button with navy text and the logo's colour line", () => {
     const used = new Set(html.match(/#[0-9A-Fa-f]{6}/g)!.map((hex) => hex.toUpperCase()));
     const palette = new Set(Object.values(BRAND.palette).map((hex) => hex.toUpperCase()));

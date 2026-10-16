@@ -55,16 +55,18 @@ export const BRAND = {
      * Logos in the strip under the track record figures, files in client/public/clients: clients Enzo Krypton has
      * worked with, confirmed by ET (16 October 2026) and shown in the firm's own company profile (October 2026), the
      * source of the files. The wording is "has worked with", never "trusted by" or "partners", so nothing suggests an
-     * endorsement. Government crests and multilateral marks stay out.
+     * endorsement. Government crests and multilateral marks stay out. `mono` is the same file as an ink silhouette
+     * (dark becomes solid, white becomes clear); width and height are the files' pixel sizes, used for optical sizing;
+     * `boxed` marks a logo printed on a filled box.
      */
     clientLogos: [
-      { name: "LSETF", src: "/clients/lsetf.png" },
-      { name: "Bank of Industry", src: "/clients/bank-of-industry.png" },
-      { name: "FSDH", src: "/clients/fsdh.png" },
-      { name: "Helium Health", src: "/clients/helium-health.png" },
-      { name: "MAX", src: "/clients/max.png" },
-      { name: "Ruff 'n' Tumble", src: "/clients/ruff-n-tumble.png" },
-      { name: "SKLD", src: "/clients/skld.png" },
+      { name: "LSETF", src: "/clients/lsetf.png", mono: "/clients/mono/lsetf.png", width: 320, height: 101 },
+      { name: "Bank of Industry", src: "/clients/bank-of-industry.png", mono: "/clients/mono/bank-of-industry.png", width: 465, height: 100 },
+      { name: "FSDH", src: "/clients/fsdh.png", mono: "/clients/mono/fsdh.png", width: 166, height: 123 },
+      { name: "Helium Health", src: "/clients/helium-health.png", mono: "/clients/mono/helium-health.png", width: 316, height: 97, boxed: true },
+      { name: "MAX", src: "/clients/max.png", mono: "/clients/mono/max.png", width: 248, height: 186 },
+      { name: "Ruff 'n' Tumble", src: "/clients/ruff-n-tumble.png", mono: "/clients/mono/ruff-n-tumble.png", width: 189, height: 56, boxed: true },
+      { name: "SKLD", src: "/clients/skld.png", mono: "/clients/mono/skld.png", width: 250, height: 87 },
     ],
     sectors: ["Hospitality", "Food and restaurants", "Retail and fashion", "Education", "Agriculture", "Health", "Financial services", "Technology and media", "Public sector and development"],
   },

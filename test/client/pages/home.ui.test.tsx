@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -92,12 +92,22 @@ describe("home page track record", () => {
   it("shows the client logos, each file on the site and named for screen readers, as work done rather than an endorsement", () => {
     renderHome();
     const logos = within(screen.getByRole("list", { name: "Client logos" })).getAllByRole("img");
-    expect(logos.map((logo) => logo.getAttribute("alt"))).toEqual(BRAND.trackRecord.clientLogos.map((client) => client.name));
+    expect(logos.map((logo) => logo.getAttribute("aria-label"))).toEqual(BRAND.trackRecord.clientLogos.map((client) => client.name));
+    // The colour version only cross-fades in under a mouse; screen readers hear each name once.
+    for (const tile of within(screen.getByRole("list", { name: "Client logos" })).getAllByRole("listitem")) {
+      expect(tile.querySelector("img")!.getAttribute("aria-hidden")).toBe("true");
+    }
     expect(screen.getByText(`The team behind ${BRAND.productName} has worked with`)).toBeTruthy();
     expect(screen.getByRole("list", { name: "Client logos" }).parentElement!.textContent).not.toMatch(/trusted|partner|endorse/i);
     expect(new Set(BRAND.trackRecord.clientLogos.map((client) => client.name)).size).toBe(BRAND.trackRecord.clientLogos.length);
     for (const client of BRAND.trackRecord.clientLogos) {
-      expect(existsSync(resolve(process.cwd(), "client/public", client.src.slice(1)))).toBe(true);
+      for (const file of [client.src, client.mono]) {
+        const path = resolve(process.cwd(), "client/public", file.slice(1));
+        expect(existsSync(path)).toBe(true);
+        // width and height must be the file's real pixel size, or the optical sizing is wrong (PNG header, IHDR).
+        const header = readFileSync(path);
+        expect([header.readUInt32BE(16), header.readUInt32BE(20)]).toEqual([client.width, client.height]);
+      }
     }
   });
 

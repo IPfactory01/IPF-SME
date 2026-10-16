@@ -3,6 +3,7 @@
  * The Shift. Figures come from BRAND.trackRecord; the research figures from concept note v0.8.1, sections 2 and 3.
  */
 import { Reveal, Stagger, staggerChild } from "@/components/motion";
+import { logoWidth } from "@/lib/logoSize";
 import { BRAND } from "@shared/brand";
 import { motion } from "framer-motion";
 import { BookOpenCheck, Scale, UserCheck } from "lucide-react";
@@ -41,12 +42,19 @@ export function TrackRecord() {
       {RECORD.clientLogos.length > 0 && (
         <Reveal className="container mx-auto max-w-5xl pb-10">
           <p className="text-center text-xs font-semibold uppercase tracking-wider text-ink-muted">The team behind {BRAND.productName} has worked with</p>
-          <ul aria-label="Client logos" className="mt-5 flex flex-wrap items-center justify-center gap-x-8 gap-y-6 sm:gap-x-12">
-            {RECORD.clientLogos.map((client) => (
-              <li key={client.name}>
-                <img src={client.src} alt={client.name} loading="lazy" className="h-8 w-auto max-w-[9rem] object-contain mix-blend-multiply grayscale opacity-70 transition duration-200 hover:grayscale-0 hover:opacity-100 sm:h-10" />
-              </li>
-            ))}
+          {/* One tile per client, all the same size; each logo sized by area, in ink until a mouse points at it. */}
+          <ul aria-label="Client logos" className="mt-5 flex flex-wrap justify-center gap-2 sm:gap-3">
+            {RECORD.clientLogos.map((client) => {
+              const box = { width: logoWidth(client), aspectRatio: `${client.width} / ${client.height}` };
+              return (
+                <li key={client.name} className="group flex h-[4.5rem] w-[6.25rem] items-center justify-center border border-line bg-paper-raised p-2 sm:h-20 sm:w-32 sm:p-2.5">
+                  <span className="relative block max-w-full" style={box}>
+                    <span role="img" aria-label={client.name} className="absolute inset-0 bg-ink opacity-80 transition-opacity duration-200 [mask-position:center] [mask-repeat:no-repeat] [mask-size:contain] group-hover:opacity-0" style={{ maskImage: `url(${client.mono})`, WebkitMaskImage: `url(${client.mono})` }} />
+                    <img src={client.src} alt="" aria-hidden="true" loading="lazy" className="absolute inset-0 h-full w-full object-contain opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         </Reveal>
       )}

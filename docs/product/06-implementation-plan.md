@@ -33,7 +33,7 @@ you, what we have found). Tests: `test/db/engagements.db.test.ts`, `test/server/
 | Done | Tests |
 |---|---|
 | Full Report v4, the strategic plan: cover, contents, Background with the 12-month target and how the gap closes, nine numbered sections with Recommendations, the work plan in three phases (`REPORT_VERSION` 4) | `test/shared/fullReport/build.test.ts`, `test/server/fullReport/pdf.test.ts` |
-| Trust on the home page: track record, Enzo Krypton & Co., named clients with consent, sectors | `test/client/pages/home.ui.test.tsx` |
+| Trust on the home page: track record, Enzo Krypton & Co., named clients with consent and their logos, sectors | `test/client/pages/home.ui.test.tsx` |
 | Business Check: Back follows the question order, fluid screens, the phone's back gesture, reduced motion | `test/server/businessCheck.ui.test.tsx`, `test/client/components/home/reducedMotion.ui.test.tsx` |
 | Client room: Founder · Business · Plan tabs from the owner's Full Report or Business Check; the desktop layout (side column with Waiting on you and Deliverables); numbered questions shown as a list | `test/shared/fullReport/insight.test.ts`, `test/client/components/engagementRoom.ui.test.tsx`, `test/db/engagements.db.test.ts`, `test/shared/engagement.test.ts` |
 | "Forgot your password?" on both sign-in pages; the owner's first password by email | `test/db/forgotPassword.db.test.ts`, `test/client/pages/adminLogin.ui.test.tsx`, `test/client/pages/accountPages.ui.test.tsx` |

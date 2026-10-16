@@ -38,6 +38,18 @@ export function TrackRecord() {
           </motion.div>
         ))}
       </Stagger>
+      {RECORD.clientLogos.length > 0 && (
+        <Reveal className="container mx-auto max-w-5xl pb-10">
+          <p className="text-center text-xs font-semibold uppercase tracking-wider text-ink-muted">The team behind {BRAND.productName} has worked with</p>
+          <ul aria-label="Client logos" className="mt-5 flex flex-wrap items-center justify-center gap-x-8 gap-y-6 sm:gap-x-12">
+            {RECORD.clientLogos.map((client) => (
+              <li key={client.name}>
+                <img src={client.src} alt={client.name} loading="lazy" className="h-8 w-auto max-w-[9rem] object-contain mix-blend-multiply grayscale opacity-70 transition duration-200 hover:grayscale-0 hover:opacity-100 sm:h-10" />
+              </li>
+            ))}
+          </ul>
+        </Reveal>
+      )}
     </section>
   );
 }

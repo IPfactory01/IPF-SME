@@ -51,6 +51,17 @@ var init_brand = __esm({
           { name: "SKLD (formerly School Kits)", sector: "School supplies", work: "A transformation plan, and written procedures for how each part of the business runs." },
           { name: "MAX", sector: "Mobility and logistics", work: "A business transformation." }
         ],
+        /**
+         * Logos in the strip under the track record figures, files in client/public/clients. Only clients who agreed to be
+         * named (above): add another only once its permission is recorded. The source files are the logo page of the Enzo
+         * Krypton company profile (October 2026). Government crests and multilateral marks stay out: they may not be used to
+         * suggest an endorsement.
+         */
+        clientLogos: [
+          { name: "MAX", src: "/clients/max.png" },
+          { name: "Ruff 'n' Tumble", src: "/clients/ruff-n-tumble.png" },
+          { name: "SKLD", src: "/clients/skld.png" }
+        ],
         sectors: ["Hospitality", "Food and restaurants", "Retail and fashion", "Education", "Agriculture", "Health", "Financial services", "Technology and media", "Public sector and development"]
       },
       /** External page for the free business check, if it runs elsewhere. Empty: the on-site form opens. */

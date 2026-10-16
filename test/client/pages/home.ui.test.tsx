@@ -1,6 +1,8 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MotionGlobalConfig } from "framer-motion";
@@ -85,6 +87,18 @@ describe("home page track record", () => {
     expect(items.map((item) => item.textContent)).toEqual(BRAND.trackRecord.namedClients.map((client) => `${client.name}${client.sector}${client.work}`));
     for (const item of items) expect(item.textContent).not.toMatch(/₦|\$|\d+%/);
     expect(screen.getByText(/Named with their agreement\./).textContent).toBe(`And more than 250 businesses since ${BRAND.trackRecord.since}. Named with their agreement.`);
+  });
+
+  it("shows client logos only for clients named with their agreement, each file on the site and named for screen readers", () => {
+    renderHome();
+    const logos = within(screen.getByRole("list", { name: "Client logos" })).getAllByRole("img");
+    expect(logos.map((logo) => logo.getAttribute("alt"))).toEqual(BRAND.trackRecord.clientLogos.map((client) => client.name));
+    expect(screen.getByText(`The team behind ${BRAND.productName} has worked with`)).toBeTruthy();
+    const named = BRAND.trackRecord.namedClients.map((client) => client.name);
+    for (const client of BRAND.trackRecord.clientLogos) {
+      expect(named.some((name) => name.startsWith(client.name))).toBe(true);
+      expect(existsSync(resolve(process.cwd(), "client/public", client.src.slice(1)))).toBe(true);
+    }
   });
 
   it("backs the problem with sourced figures, in the site's words", () => {

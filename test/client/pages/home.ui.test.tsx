@@ -89,14 +89,14 @@ describe("home page track record", () => {
     expect(screen.getByText(/Named with their agreement\./).textContent).toBe(`And more than 250 businesses since ${BRAND.trackRecord.since}. Named with their agreement.`);
   });
 
-  it("shows client logos only for clients named with their agreement, each file on the site and named for screen readers", () => {
+  it("shows the client logos, each file on the site and named for screen readers, as work done rather than an endorsement", () => {
     renderHome();
     const logos = within(screen.getByRole("list", { name: "Client logos" })).getAllByRole("img");
     expect(logos.map((logo) => logo.getAttribute("alt"))).toEqual(BRAND.trackRecord.clientLogos.map((client) => client.name));
     expect(screen.getByText(`The team behind ${BRAND.productName} has worked with`)).toBeTruthy();
-    const named = BRAND.trackRecord.namedClients.map((client) => client.name);
+    expect(screen.getByRole("list", { name: "Client logos" }).parentElement!.textContent).not.toMatch(/trusted|partner|endorse/i);
+    expect(new Set(BRAND.trackRecord.clientLogos.map((client) => client.name)).size).toBe(BRAND.trackRecord.clientLogos.length);
     for (const client of BRAND.trackRecord.clientLogos) {
-      expect(named.some((name) => name.startsWith(client.name))).toBe(true);
       expect(existsSync(resolve(process.cwd(), "client/public", client.src.slice(1)))).toBe(true);
     }
   });

@@ -52,12 +52,16 @@ export const BRAND = {
       { name: "MAX", sector: "Mobility and logistics", work: "A business transformation." },
     ],
     /**
-     * Logos in the strip under the track record figures, files in client/public/clients. Only clients who agreed to be
-     * named (above): add another only once its permission is recorded. The source files are the logo page of the Enzo
-     * Krypton company profile (October 2026). Government crests and multilateral marks stay out: they may not be used to
-     * suggest an endorsement.
+     * Logos in the strip under the track record figures, files in client/public/clients: clients Enzo Krypton has
+     * worked with, confirmed by ET (16 October 2026) and shown in the firm's own company profile (October 2026), the
+     * source of the files. The wording is "has worked with", never "trusted by" or "partners", so nothing suggests an
+     * endorsement. Government crests and multilateral marks stay out.
      */
     clientLogos: [
+      { name: "LSETF", src: "/clients/lsetf.png" },
+      { name: "Bank of Industry", src: "/clients/bank-of-industry.png" },
+      { name: "FSDH", src: "/clients/fsdh.png" },
+      { name: "Helium Health", src: "/clients/helium-health.png" },
       { name: "MAX", src: "/clients/max.png" },
       { name: "Ruff 'n' Tumble", src: "/clients/ruff-n-tumble.png" },
       { name: "SKLD", src: "/clients/skld.png" },

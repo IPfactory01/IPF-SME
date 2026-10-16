@@ -72,7 +72,7 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
   and method arm of Enzo Krypton & Co. (named from 14 October; linked when `trackRecord.groupUrl` is set), the sectors
   as a list, "The same method we use with larger clients. Run at the size and the price that fits your business.", and
   **Some of the businesses we have worked with**: Ruff 'n' Tumble, SKLD (formerly School Kits) and MAX, each named with
-  its agreement, with the sector and the work and no client figures (`trackRecord.namedClients`). Their logos sit in a strip under the track record figures, "The team behind The Shift has worked with", in grey until pointed at (`trackRecord.clientLogos`, files in `client/public/clients`); only clients named with their agreement, never a government crest or a multilateral's mark. Partners are not
+  its agreement, with the sector and the work and no client figures (`trackRecord.namedClients`). Their logos sit in a strip under the track record figures, "The team behind The Shift has worked with", in grey until pointed at (`trackRecord.clientLogos`, files in `client/public/clients`): LSETF, Bank of Industry, FSDH, Helium Health, MAX, Ruff 'n' Tumble and SKLD, confirmed by ET on 16 October from the Enzo Krypton company profile; worded as work done, never an endorsement, and never a government crest or a multilateral's mark. Partners are not
   named; every figure must stay defensible.
 - Copy rules: second person, short sentences, naira in full, no consulting words, never "door", "sprint", "playbook"
   or "retainer" (§3 front matter; `AGENTS.md`).

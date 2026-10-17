@@ -42,7 +42,7 @@ Walked through by ET on 10 October:
 
 **One correction to make it work.** Today the Discovery Call leaves no record in the platform: it is a Calendly booking and
 the analyst's memory. For the room to start warm on day 1, the analyst captures a **Discovery Call summary** within the hour,
-in the admin, following the guide's summary template cut to The Shift: what we heard, the problem as the owner sees it,
+in the admin, following the guide's summary template cut to Advisory as a Service: what we heard, the problem as the owner sees it,
 what success looks like, what they have tried, next steps. It is shared to the owner. That is the follow-up email the
 guide already requires, kept as a record. Without it the room cannot answer "where are we today" on day 1.
 

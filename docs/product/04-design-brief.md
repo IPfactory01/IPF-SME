@@ -12,7 +12,7 @@ is what ships; fix whichever is wrong in the same change.
 
 | | |
 |---|---|
-| **Name** | The Shift (`BRAND.productName`); written in full with its maker as "The Shift, by IP Factory" (`BRAND.productEndorsement`). Never "your The Shift" or "a The Shift" |
+| **Name** | Advisory as a Service (`BRAND.productName`); written in full with its maker as "Advisory as a Service, by IP Factory" (`BRAND.productEndorsement`). A proper name: never "your Advisory as a Service", "an Advisory as a Service" or "AaaS". Chosen by ET on 17 October 2026; it replaced "The Shift" |
 | **Maker** | IP Factory (Intellectual Property Factory) |
 | **Tagline** | Support for business owners |
 | **Promise** | Find it. Fix it. See the results. |
@@ -108,6 +108,8 @@ screenshots before it ships, because every page's line lengths change.
 - With "reduce motion" on, nothing moves by itself: the hero sentence stops rotating, the colour blobs and the scroll
   arrow stay still and the pulsing dot stops (`useReducedMotion`, `motion-safe:`). Glass headers turn solid under
   "reduce transparency" and gain a firm edge under "increase contrast" (`client/src/index.css`).
+- Home header: the section menu shows from 1024 px and the name beside the logo from 1280 px, so nothing wraps or
+  overlaps; below that the hero badge carries the name, which breaks only after the comma on the narrowest phones.
 - Touch screens: hover is mouse-only (Tailwind 4 `hover:` and Framer `whileHover` ignore touch), so anything shown on
   hover is shown outright where there is no hover, such as "That's me" on the owner quotes.
 - The admin console (reviewed against the same principles, 14 October 2026): buttons press in on pointer-down
@@ -133,7 +135,7 @@ The Fix, Weekly Check-in, Measure of Success, Day-30 Review, Sign-off, Deliverab
   (`METHOD_MEANING`). Never a plain phrase in place of the name: "Findings", not "What we found"; "Data Requests · 2
   outstanding", not "2 things to send"; "Mark as submitted", not "I have sent this".
 - **Nouns, not nudges.** Headings name the artefact, buttons name the act.
-- **Brand lines are exempt.** "Find it. Fix it. See the results." and "The Shift" do not change; "fix" as a verb stays
+- **Brand lines are exempt.** "Find it. Fix it. See the results." and "Advisory as a Service" do not change; "fix" as a verb stays
   lower case.
 - Capitalised as names, including inside a sentence ("your Business Check results", "both Sessions").
 
@@ -153,12 +155,12 @@ The site speaks the business owner's language (concept note, front matter):
 Every email to a business owner uses `buildBusinessSupportEmailHtml` (`server/emailTemplates.ts`), which builds the HTML
 from the plain-text body so both versions say the same thing:
 
-- 600 px card on `paper`; the IP Factory logo (inline image `cid:ipf-logo`, 96 × 90) beside "THE SHIFT"; the
+- 600 px card on `paper`; the IP Factory logo (inline image `cid:ipf-logo`, 96 × 90) beside "ADVISORY AS A SERVICE"; the
   plum → crimson → cyan rule.
 - "Dear …" becomes the greeting in Playfair; CAPITALS or "Heading:" lines become crimson labels; "•" lines become
   bullets with a cyan dot; two or more "Label: value" lines become a details table; a lone "Label: https://…" line
   becomes one cyan button with navy text.
-- Footer: "The Shift, by IP Factory | info@ipfactory.co".
+- Footer: "Advisory as a Service, by IP Factory | info@ipfactory.co".
 - Only `BRAND.palette` colours. The older JUMP layout (`buildBrandedEmailHtml`) is for JUMP email only.
 
 ## 8. The full report PDF
@@ -166,7 +168,7 @@ from the plain-text body so both versions say the same thing:
 `server/fullReport/pdf.ts`, A4:
 
 Since version 4 (14 October 2026) the report is laid out as IP Factory's partner-written strategic plans are:
-- **Cover:** the three-colour rule, the print logo, "THE SHIFT", the crimson eyebrow "THE SHIFT · FULL REPORT ·
+- **Cover:** the three-colour rule, the print logo, "ADVISORY AS A SERVICE", the crimson eyebrow "ADVISORY AS A SERVICE · FULL REPORT ·
   STRATEGIC PLAN", the business name in Playfair 34 pt, "A twelve-month strategic plan" in crimson, a crimson rule, a
   facts table (prepared for, prepared by, built from, date, reference) and a "What this document is" call-out.
 - **Contents:** "Background" and "Section One" to "Section Nine" in crimson, each with its title.
@@ -186,7 +188,7 @@ Since version 4 (14 October 2026) the report is laid out as IP Factory's partner
   them); the risk matrix (3 × 3, cells tinted by likelihood × impact, numbered brand dots). A chart's
   title moves with it so it is never left alone at the foot of a page. No glyph outside the brand fonts: arrows are
   drawn as shapes.
-- **Footer** on every page after the cover: "The Shift, by IP Factory · Full business check report · {business} ·
+- **Footer** on every page after the cover: "Advisory as a Service, by IP Factory · Full business check report · {business} ·
   {reference}" and "n / N".
 - Short tables never split across pages; values shrink to fit their tile.
 
@@ -240,7 +242,7 @@ The room follows document 07, in the site's dress (`client/src/components/Accoun
 | Test | Checks |
 |---|---|
 | `test/shared/brand.test.ts` | Every `BRAND.palette` colour matches its `--color-*` token; the product name, endorsement, page title and booking link; the product name is never preceded by "your", "a", "an" or "the" |
-| `test/server/emailTemplates.test.ts` | Business email uses only palette colours; logo beside "The Shift"; crimson headings; cyan button with navy text; the three-colour rule; no JUMP wording |
+| `test/server/emailTemplates.test.ts` | Business email uses only palette colours; logo beside "Advisory as a Service"; crimson headings; cyan button with navy text; the three-colour rule; no JUMP wording |
 | `test/server/emailLogo.test.ts` | The embedded logo is the brand file at twice its display size |
 | `test/server/fullReport/pdf.test.ts` | A4; the brand fonts are embedded and cover ₦; the logo is the print file |
 | `test/server/payments.test.ts` | The "TEST MODE - NO REAL MONEY MOVES" label uses the crimson token; "Pay online" is the email's button |

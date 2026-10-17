@@ -89,7 +89,7 @@ export const ENV = {
   /**
    * Keeps the JUMP programme's public procedures open (registration, portal sign-in links, pricing requests, Paystack
    * callbacks, emailing a diagnostic to any address). Off unless LEGACY_JUMP_ENABLED is 1, true or yes: each of them
-   * sends email or calls a provider without a limit, and The Shift does not use them.
+   * sends email or calls a provider without a limit, and Advisory as a Service does not use them.
    */
   legacyJumpEnabled: /^(1|true|yes)$/i.test(process.env.LEGACY_JUMP_ENABLED?.trim() ?? ""),
   /** Required production settings that are not set (empty outside production). */

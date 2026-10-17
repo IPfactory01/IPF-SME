@@ -1,6 +1,6 @@
 /**
  * Trust without names: the track record strip under the hero, the evidence for the problem, and the experience behind
- * The Shift. Figures come from BRAND.trackRecord; the research figures from concept note v0.8.1, sections 2 and 3.
+ * Advisory as a Service. Figures come from BRAND.trackRecord; the research figures from concept note v0.8.1, sections 2 and 3.
  */
 import { Reveal, Stagger, staggerChild } from "@/components/motion";
 import { logoWidth } from "@/lib/logoSize";

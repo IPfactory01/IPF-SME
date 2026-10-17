@@ -101,7 +101,7 @@ function linkify(text: string) {
  * a "Dear …," opening becomes the greeting, CAPITALS or "Heading:" lines become section headings, runs of
  * "Label: value" lines a details table, "• " lines a list, and a lone "Label: https://…" line a button.
  *
- * It follows the site: the IP Factory logo beside "The Shift" as in the site header, the plum, crimson and cyan line
+ * It follows the site: the IP Factory logo beside "Advisory as a Service" as in the site header, the plum, crimson and cyan line
  * from the logo, crimson section labels, the cyan button with navy text, and only BRAND.palette colours. The logo is
  * embedded in the email (cid:ipf-logo); resendRequestBody attaches it. JUMP email keeps buildPlainTextEmailHtml.
  */

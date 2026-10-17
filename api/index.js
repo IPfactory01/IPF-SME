@@ -25,11 +25,12 @@ var init_brand = __esm({
       organisationName: "IP Factory",
       organisationLegalName: "Intellectual Property Factory",
       /**
-       * The business-support offer's public name ([NAME] in the concept note's site copy), chosen
-       * 7 October 2026. Written out in full with its maker as productEndorsement.
+       * The business-support offer's public name ([NAME] in the concept note's site copy): Advisory as a Service, chosen by
+       * ET on 17 October 2026 (it replaced the 7 October name; see the PRD). A proper name: no article or "your" before it,
+       * never shortened to "AaaS" in copy. Written out in full with its maker as productEndorsement.
        */
-      productName: "The Shift",
-      productEndorsement: "The Shift, by IP Factory",
+      productName: "Advisory as a Service",
+      productEndorsement: "Advisory as a Service, by IP Factory",
       productTagline: "Support for business owners",
       /**
        * The track record the site states, confirmed by ET on 13 October 2026. Every figure must stay defensible. The parent
@@ -215,7 +216,7 @@ var init_env = __esm({
       /**
        * Keeps the JUMP programme's public procedures open (registration, portal sign-in links, pricing requests, Paystack
        * callbacks, emailing a diagnostic to any address). Off unless LEGACY_JUMP_ENABLED is 1, true or yes: each of them
-       * sends email or calls a provider without a limit, and The Shift does not use them.
+       * sends email or calls a provider without a limit, and Advisory as a Service does not use them.
        */
       legacyJumpEnabled: /^(1|true|yes)$/i.test(process.env.LEGACY_JUMP_ENABLED?.trim() ?? ""),
       /** Required production settings that are not set (empty outside production). */
@@ -2165,7 +2166,7 @@ function resendRequestBody(input) {
 var EMAIL_TIMEOUT_MS = 8e3;
 var RETRY_DELAY_MS = 600;
 var RETRY_DELAY_MAX_MS = 2e3;
-var USER_AGENT = "the-shift-platform/1.0";
+var USER_AGENT = "advisory-as-a-service-platform/1.0";
 function retryDelay(retryAfter) {
   const seconds = Number(retryAfter);
   return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds * 1e3, RETRY_DELAY_MAX_MS) : RETRY_DELAY_MS;
@@ -9024,6 +9025,9 @@ import { and as and11, eq as eq17 } from "drizzle-orm";
 import { TRPCError as TRPCError14 } from "@trpc/server";
 init_brand();
 
+// shared/fullReport/build.ts
+init_brand();
+
 // shared/fullReport/content.ts
 var AREA_CONTENT = {
   1: {
@@ -10255,7 +10259,7 @@ function buildFullReport(input) {
     background: background2,
     sections,
     appendix: appendix(answers, intake),
-    method: `Built by The Shift's fixed rules from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on ${reportDate(input.date)}. It is not an audit, a valuation, or financial, legal or tax advice.`
+    method: `Built by the fixed rules of ${BRAND.productName} from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on ${reportDate(input.date)}. It is not an audit, a valuation, or financial, legal or tax advice.`
   };
   function takeaways2() {
     const ranked = [...mainArea !== void 0 ? [mainArea] : [], ...order.filter((area) => area !== mainArea && areaHealth.get(area).health === "stuck"), ...order.filter((area) => area !== mainArea && areaHealth.get(area).health === "watch")];

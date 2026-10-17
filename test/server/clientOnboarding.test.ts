@@ -7,10 +7,10 @@ describe("the client account invitation email", () => {
   const url = "https://ipf-sme.example.com/onboarding/abc123";
   const email = buildOnboardingEmail({ fullName: "Ada Example", businessName: "Example Stores", url });
 
-  it("invites the owner to The Shift, not to JUMP", () => {
-    expect(email.subject).toBe("Set up your client account on The Shift");
+  it("invites the owner to Advisory as a Service, not to JUMP", () => {
+    expect(email.subject).toBe("Set up your client account on Advisory as a Service");
     expect(email.body).toContain("Dear Ada,");
-    expect(email.body).toContain("Welcome to The Shift, by IP Factory.");
+    expect(email.body).toContain("Welcome to Advisory as a Service, by IP Factory.");
     expect(email.body).toContain("client account for Example Stores");
     expect(`${email.subject}\n${email.body}`).not.toMatch(/JUMP|Emmanuel Tarfa/);
   });

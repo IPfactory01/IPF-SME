@@ -116,7 +116,7 @@ export const EMAIL_TIMEOUT_MS = 8_000;
 /** The pause before the one retry, unless Resend asks for a (short) longer one. */
 const RETRY_DELAY_MS = 600;
 const RETRY_DELAY_MAX_MS = 2_000;
-const USER_AGENT = "the-shift-platform/1.0";
+const USER_AGENT = "advisory-as-a-service-platform/1.0";
 
 /** Resend's Retry-After in seconds, capped so a retry still fits in the request. */
 function retryDelay(retryAfter: string | null) {

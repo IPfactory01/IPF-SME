@@ -28,7 +28,7 @@ describe("one email through Resend", () => {
     expect(fake.calls).toHaveLength(1);
     const { init } = fake.calls[0];
     expect(fake.calls[0].url).toBe("https://api.resend.com/emails");
-    expect(init.headers).toMatchObject({ authorization: "Bearer re_test", "idempotency-key": "payment_requests:12:confirmed", "user-agent": "the-shift-platform/1.0" });
+    expect(init.headers).toMatchObject({ authorization: "Bearer re_test", "idempotency-key": "payment_requests:12:confirmed", "user-agent": "advisory-as-a-service-platform/1.0" });
     expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(JSON.parse(init.body as string)).toEqual(payload);
     expect(EMAIL_TIMEOUT_MS).toBe(8_000);

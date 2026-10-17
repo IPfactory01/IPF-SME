@@ -44,7 +44,7 @@ Every name, sender and mailbox the platform shows comes from this file.
 
 | Field | Now | Needed |
 |---|---|---|
-| `productName` | "The Shift" ("The Shift, by IP Factory" in full), chosen 7 Oct | Done |
+| `productName` | "Advisory as a Service" ("Advisory as a Service, by IP Factory" in full), chosen 17 Oct (first "The Shift", 7 Oct) | Done |
 | `programmeMailbox` | `jump@emmanueltarfa.com` | **The IPF mailbox participants receive email from and reply to (info@ question, Open 3)** |
 | `administrationMailbox` | `admin@emmanueltarfa.com` | The desk mailbox for monitoring copies and new-registration notices |
 | `senderDisplayName` | "Emmanuel Tarfa \| JUMP 2026" | e.g. "IP Factory" |

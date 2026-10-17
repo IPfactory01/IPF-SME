@@ -142,7 +142,7 @@ revoke. Details hold identifiers and field names only, never secrets or values.
 memberships and platform role assignments are separate numbers, never derived from one another.
 
 **Password reset and suspension** (`server/accountRecovery.ts`, 11 October): a member of the team with `manage_users` issues a
-reset link for a person from Admin Team → People; it is emailed (`Reset your password on The Shift`) and shown once to the
+reset link for a person from Admin Team → People; it is emailed (`Reset your password on Advisory as a Service`) and shown once to the
 issuer while email is deferred. Only the token's SHA-256 is stored (`user_password_reset_tokens`); the link works once, within
 20 minutes, and using it replaces the password, clears the lockout and signs the person out everywhere. The same responsibility
 suspends an account (every session revoked at once, sign-in refused with the generic message) and reinstates it; nobody changes

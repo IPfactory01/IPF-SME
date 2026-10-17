@@ -13,7 +13,7 @@
 
 | # | Decision |
 |---|---|
-| D1 | The organisation is **IP Factory (IPF), Intellectual Property Factory**. "IPF Factory" in the original handover documents is a misnomer. The product name ("Operating Partner", "Growth Desk" or "Next Monday") is set separately per the concept note, by 7 October. **Decided 7 October: "The Shift", written in full as "The Shift, by IP Factory".** |
+| D1 | The organisation is **IP Factory (IPF), Intellectual Property Factory**. "IPF Factory" in the original handover documents is a misnomer. The product name ("Operating Partner", "Growth Desk" or "Next Monday") is set separately per the concept note, by 7 October. **Decided 7 October: "Advisory as a Service", written in full as "Advisory as a Service, by IP Factory".** |
 | D3 | Brand variant **ipf-gradient** (Option 1 stacked logo), per concept note v0.8.1. *Changed from ipf-teal-navy on 6 Oct.* |
 | D7 | **Start clean.** No JUMP participant data is migrated. JUMP contacts are reached through the warm list instead. |
 | D9 | **One code base: v0.1 launches on Manus on Friday 9 Oct, then hosting moves off Manus.** Code stays Manus-compatible until then. See `LAUNCH_ON_MANUS.md`. *Revised on 6 Oct, from "leave Manus completely".* |

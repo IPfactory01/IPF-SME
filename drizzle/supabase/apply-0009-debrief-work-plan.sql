@@ -1,4 +1,4 @@
--- The Shift: apply migration 0009 (the Debrief record and the Work Plan fields).
+-- Advisory as a Service: apply migration 0009 (the Debrief record and the Work Plan fields).
 -- Does exactly what `pnpm db:migrate` would: creates the debriefs table, adds weekNumber and sortOrder to
 -- engagement_sessions and engagement_tasks, adds factor to engagement_tasks, and records the migration in
 -- drizzle.__drizzle_migrations, so `pnpm db:verify` and later migrations stay in step. Additive only: no existing

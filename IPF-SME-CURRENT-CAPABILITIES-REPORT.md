@@ -42,7 +42,7 @@ A branch `origin/claude/ipf-factory-sme-takeover-fugq1o` also exists; its tip is
 2. The paid Full Report: intake form, deterministic PDF, instant email.
 3. The engagement room for clients and staff, with the Work Plan, files, deliverables with approval, and the fix measure and weekly check-in.
 4. Calendly embedded on the result page, with booking times read back into the admin console.
-5. Resend email with branding as "The Shift, by IP Factory", with a retry and duplicate-send protection.
+5. Resend email with branding as "Advisory as a Service, by IP Factory", with a retry and duplicate-send protection.
 6. Hardening: shared rate limits, password-reset links issued by staff, account suspension, JUMP public forms closed, security headers, DB pool and timeouts.
 7. A full set of product documents in `docs/product/`, with tests that fail if code and docs drift.
 
@@ -58,7 +58,7 @@ Legend: ✅ Fully implemented · 🟡 Partial · ❌ Not implemented · 🕰 Leg
 
 | # | Step | Status | What happens |
 |---|---|---|---|
-| 1 | **Visitor on `/`** | ✅ | Public home page ("Find it. Fix it. See the results.", journey with prices, "Client sign in" link). **(new 14 Oct)** Now also a track-record strip (250+ clients, 50+ years of partner experience, since 2011), sourced evidence for the problem, "The experience behind The Shift" (IP Factory as the delivery arm of Enzo Krypton & Co., with a link), sectors, and three named clients (Ruff 'n' Tumble, SKLD, MAX) described by the work only. A JUMP participant sign-in dialog still exists in the page code (🕰, closed on the server unless `LEGACY_JUMP_ENABLED`). |
+| 1 | **Visitor on `/`** | ✅ | Public home page ("Find it. Fix it. See the results.", journey with prices, "Client sign in" link). **(new 14 Oct)** Now also a track-record strip (250+ clients, 50+ years of partner experience, since 2011), sourced evidence for the problem, "The experience behind Advisory as a Service" (IP Factory as the delivery arm of Enzo Krypton & Co., with a link), sectors, and three named clients (Ruff 'n' Tumble, SKLD, MAX) described by the work only. A JUMP participant sign-in dialog still exists in the page code (🕰, closed on the server unless `LEGACY_JUMP_ENABLED`). |
 | 2 | **Start Business Check (`/check`)** | ✅ | First screen collects name, email, WhatsApp (international format picker, Nigeria default), "heard from". Saved as a **Lead** immediately (`business_checks`, stage `lead`, public token). No email at this point. Rate limited: 20 starts/15 min per IP, 5 per IP+email. |
 | 3 | **Answer the check** | ✅ | Business name and description are required. A decision tree asks only the relevant areas. Progress is saved to the server after each answer, so an abandoned check still shows where the owner stopped. Back/Next reach every earlier answer. |
 | 4 | **Submit and result** | ✅ | Server evaluates by fixed rules, writes a summary (AI, or rules fallback), stores result JSON, moves stage to **Qualified lead**, and emails the owner and the office (`info@ipfactory.co`). The page states whether the email was really sent (`Sent / Failed / Simulated`). |
@@ -149,7 +149,7 @@ The PDF changed from the earlier consulting layout to the layout of IP Factory's
 - **Domain assumptions:** `ipfactory.co` must be verified in Resend, otherwise Resend's test sender `onboarding@resend.dev` only delivers to the Resend account owner. **I cannot tell from code whether the domain is verified or whether `RESEND_API_KEY` is set in production.** The code does require `RESEND_API_KEY` in production (`/api/health` returns 503 without it).
 - **Failure handling:** `deliverEmail` never throws. 8-second timeout, **one retry** on 429/5xx/timeout (respecting a short Retry-After), no retry on refusals. Results are `Sent / Simulated / Failed`; the UI and office notices report failures with the reason.
 - **Duplicate protection:** Resend `Idempotency-Key` on each record+message (kept 24 hours by Resend), plus application-level claims (check completion, payment confirmation are one conditional statement).
-- **Logging:** There is **no general outbound email log** for The Shift. Delivery state lives in a few columns and the audit log (above). The `email_logs` table serves JUMP only.
+- **Logging:** There is **no general outbound email log** for Advisory as a Service. Delivery state lives in a few columns and the audit log (above). The `email_logs` table serves JUMP only.
 - **Resend/retry from admin:** payment details, payment confirmation (Assessment), Report Intake link and invitations can be re-sent from the console. There is no inbound Resend webhook, so **bounces and complaints are not tracked**.
 - Tests never send; the live Resend tests are opt-in (`VALIDATE_RESEND_*`).
 
@@ -327,7 +327,7 @@ Largely implemented as a **service-delivery workspace**, not a self-serve assess
 | Client notifications | ✅ Payment, report, invitation, engagement-update emails |
 | Calendly reminders | Handled by Calendly itself, not by us |
 
-Note `docs/vercel-env-inventory.md` describes `CRON_SECRET` as "required for scheduled reminders"; in practice nothing in The Shift uses it.
+Note `docs/vercel-env-inventory.md` describes `CRON_SECRET` as "required for scheduled reminders"; in practice nothing in Advisory as a Service uses it.
 
 ---
 
@@ -390,7 +390,7 @@ Files for the room go to a **private Supabase Storage bucket**; the metadata is 
 - **Payments (largest change):** bank transfer + proof of payment + manual confirmation (`912e056`) → replaced by Paystack hosted checkout, signed webhook, return page and one confirmation path (`1246105`, `f145324`, `b5091dd`, `41fa25e`). Payments hold for 48 hours (`78466e1`). Confirm once, with its report link in the same transaction.
 - **Full Report:** intake, deterministic rules, branded PDF, instant delivery, admin status/download (`cfd88a9`, `f1f9e4d`); consulting layout with executive summary and charts (`316422a`); a per-product charging question so commission/margin businesses get a true report (`7f8ec1d`).
 - **Scheduling (Calendly):** default event (`d86565a`), new-tab fallback (`54ca837`), "Call booked" with time in admin (`faaf05f`), fill-in by email (`98482bf`), pick up bookings made from the email link (`f40e7ab`).
-- **Email:** IP Factory sender and branding, "The Shift" layout, logo, office copy to `info@ipfactory.co` (`e2aad00`, `98ae169`, `8f212b9`, `40eafd7`, `c9935d4`); bound provider calls and Resend retry/keys (`527bfac`).
+- **Email:** IP Factory sender and branding, "Advisory as a Service" layout, logo, office copy to `info@ipfactory.co` (`e2aad00`, `98ae169`, `8f212b9`, `40eafd7`, `c9935d4`); bound provider calls and Resend retry/keys (`527bfac`).
 - **Engagement room / Current State / Fix:** v1 team desk + client room (`7f17e2b`), assessment template (`22758df`), file uploads on a private Supabase bucket (`952d2d8`), "the fix in the room" (`bce7957`), Discovery Call record and Work Plan (`1061c47`), rebuilt client room (`2ff25e4`).
 - **Accounts and onboarding:** staff and seat invitations (`405b5cd`), client sign in at `/login` (`194a08e`), invitation requires a recorded reason before payment (`c3da1a4`), "Won" only by confirming payment, sign-out prompt for already-signed-in people (`ef88124`).
 - **Security and platform hardening:** shared rate limits (migration 0010), password-reset links and suspension (`35f2c8f`), JUMP public forms closed (`3ef9d48`), DB pool/timeouts/identity from environment (`216abc2`), HSTS, claim-before-email (`41fa25e`), no Vercel `engines` field (`24b07c7`), `db:verify` improvements (`f3320cc`).
@@ -440,7 +440,7 @@ Files for the room go to a **private Supabase Storage bucket**; the metadata is 
 
 - Automated reminders (calls, payment links, data requests, check-ins).
 - Calendly webhooks and cancellation/no-show handling.
-- Email delivery/bounce tracking and an email log for The Shift.
+- Email delivery/bounce tracking and an email log for Advisory as a Service.
 - Refunds, receipts and a payments ledger/finance dashboard.
 - Close-out, day-30 review and sign-off (migration 0011).
 - Payment for The Fix, the plan or ongoing support; referral discount mechanics (the 10%-off rule is copy only).
@@ -483,7 +483,7 @@ Files for the room go to a **private Supabase Storage bucket**; the metadata is 
 | Files | `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_STORAGE_BUCKET` | Required for uploads (optional otherwise) |
 | Google | `GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN`, `JUMP_GMAIL_REFRESH_TOKEN`, `GOOGLE_CALENDAR_ID` | Legacy |
 | Cron | `CRON_SECRET` | Legacy (only the disabled JUMP reminder uses it) |
-| AI | `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY` | Optional for The Shift (rules fallback); legacy for storage/maps |
+| AI | `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY` | Optional for Advisory as a Service (rules fallback); legacy for storage/maps |
 | Other | `LEGACY_JUMP_ENABLED` | Optional (legacy switch, leave off) |
 | | `VITE_ANALYTICS_ENDPOINT`, `VITE_ANALYTICS_WEBSITE_ID`, `VITE_FRONTEND_FORGE_API_*` | Optional |
 | Tests only | `TEST_DATABASE_URL`, `VALIDATE_*` | Never in production |

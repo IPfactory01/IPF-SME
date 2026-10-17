@@ -136,10 +136,10 @@ describe("business support email layout", () => {
   ].join("\n");
   const html = buildBusinessSupportEmailHtml(body);
 
-  it("shows the IP Factory logo beside The Shift, with the greeting and a preview line", () => {
+  it("shows the IP Factory logo beside Advisory as a Service, with the greeting and a preview line", () => {
     expect(html).toMatch(/<img src="cid:ipf-logo" width="96" height="90" alt="IP Factory"/);
-    expect(html).toContain(">The Shift<");
-    expect(html).toContain("The Shift, by IP Factory");
+    expect(html).toContain(">Advisory as a Service<");
+    expect(html).toContain("Advisory as a Service, by IP Factory");
     expect(html).toContain("mailto:info@ipfactory.co");
     expect(html).toContain("<title>Thank you for taking the IP Factory Business Check. Here is your summary.</title>");
     expect(html).toMatch(/Georgia[^>]*>Dear Ada,<\/p>/);

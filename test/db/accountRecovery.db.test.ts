@@ -109,7 +109,7 @@ for (const target of targets) {
         expect(issued.resetUrl).toMatch(/\/reset\/[A-Za-z0-9_-]{43}$/);
         expect(issued.deliveryStatus).toBe("Simulated");
         const sent = emails().find(item => item.to === client.email)!;
-        expect(sent.subject).toBe("Reset your password on The Shift");
+        expect(sent.subject).toBe("Reset your password on Advisory as a Service");
         expect(sent.sender).toBe("business_support");
         expect(sent.body).toContain(issued.resetUrl);
         expect(sent.idempotencyKey).toBe(`user_password_reset_tokens:${issued.resetId}`);

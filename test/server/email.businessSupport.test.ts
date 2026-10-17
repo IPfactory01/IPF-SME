@@ -38,9 +38,9 @@ describe("the Resend request", () => {
     expect(body.html).toContain("Hello");
   });
 
-  it("lays out business check email as The Shift, by IP Factory, not as JUMP", () => {
+  it("lays out business check email as Advisory as a Service, by IP Factory, not as JUMP", () => {
     const body = resendRequestBody({ to: "info@ipfactory.co", subject: "Business check", body: "Ada Example asked for the full business check report.\n\nEmail: ada@example.com\nBusiness: Example Stores", sender: "business_support" });
-    expect(body.html).toContain("The Shift");
+    expect(body.html).toContain("Advisory as a Service");
     expect(body.html).toContain("by IP Factory");
     expect(body.html).toContain("info@ipfactory.co");
     expect(body.html).not.toMatch(/JUMP|Genius Track|Emmanuel Tarfa/);

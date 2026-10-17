@@ -63,7 +63,7 @@ describe("the return page after Paystack", () => {
     expect(screen.getByText(/Your Current State Assessment is paid, and it starts now./)).toBeTruthy();
     const next = screen.getByRole("list", { name: "What happens next" }).textContent;
     expect(next).toContain("Three working days to get set up, then we start.");
-    expect(next).toContain("We email you a link to set up your client account on The Shift.");
+    expect(next).toContain("We email you a link to set up your client account on Advisory as a Service.");
     expect(screen.getByRole("note", { name: "Test mode" }).textContent).toContain("TEST MODE: NO REAL MONEY MOVES");
   });
 

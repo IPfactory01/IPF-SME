@@ -1,6 +1,6 @@
 # Product documents
 
-The seven documents that describe The Shift, by IP Factory. They are the shared source for the founders, the desk, the
+The seven documents that describe Advisory as a Service, by IP Factory. They are the shared source for the founders, the desk, the
 developers and every coding agent. Read the one you need before changing the product; update it in the same change when
 the product changes.
 

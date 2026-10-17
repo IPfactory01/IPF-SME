@@ -10,11 +10,11 @@ added without being documented here.
 
 ## 1. Page map
 
-### The Shift (current platform)
+### Advisory as a Service (current platform)
 
 | Route | Page | Who can reach it | What it does | Next |
 |---|---|---|---|---|
-| `/` | `Home.tsx` | Anyone | The site in the owner's words: track record, problem with its evidence, the experience behind The Shift, ten problem areas, how it works and prices, questions | "Free business check" → `/check` |
+| `/` | `Home.tsx` | Anyone | The site in the owner's words: track record, problem with its evidence, the experience behind Advisory as a Service, ten problem areas, how it works and prices, questions | "Free business check" → `/check` |
 | `/check` | `BusinessCheck.tsx` | Anyone | The free business check, from contact details to the result | Book a call (Calendly) or ask for the full report |
 | `/terms` | `LegalPage.tsx` | Anyone | The approved Terms & Conditions (`docs/legal/terms.md`, from the approved Word document), a plain reading page with no sign-in | Back to the site |
 | `/privacy` | `LegalPage.tsx` | Anyone | The approved Privacy Policy (`docs/legal/privacy.md`, from the approved Word document), a plain reading page with no sign-in | Back to the site |
@@ -37,7 +37,7 @@ added without being documented here.
 
 ### JUMP-era pages still in the code
 
-Kept for history and for JUMP participants. Nothing in The Shift's flow links to them, except the gap noted in section 10.
+Kept for history and for JUMP participants. Nothing in the Advisory as a Service flow links to them, except the gap noted in section 10.
 
 | Route | Page | What it is |
 |---|---|---|
@@ -146,8 +146,8 @@ history shows "Paystack (paid online)". The same applies to the Current State As
 | "Record call outcome" | Desk lead | **Opportunity** (fit), **Refer** or **Lost** | — | **Opportunity**, **Referred** or **Lost** |
 | "Move to" | Desk lead | Any other stage except **Won**, with a note (for example **Nurture**); Won comes only from a confirmed payment | — | As chosen |
 | "Send the payment link" (Current State Assessment) | Finance or Super Admin | Payment request for ₦500,000 | Owner: *Payment details for your Current State Assessment* (the amount, the reference, the pay-by time and "Pay online") | Moves to **Opportunity** if earlier |
-| "Pay ₦500,000 securely with Paystack" | Owner | As for the Full Report (section 4): `/pay/:token/current_state`, Paystack, then the webhook or `/pay/return` confirms through the shared path. The invitation is recorded against the person who sent the payment link, and audited with Paystack as the actor | Owner: *Payment received: your Current State Assessment starts* and *Set up your client account on The Shift*; office: *Paid online: …* (says whether the engagement started and the invitation went) | **Won** |
-| "Confirm by hand" (fallback only) | Finance or Super Admin | For a payment Paystack shows as paid that has not confirmed itself: confirmed; an invitation is created unless one is pending or accepted; what happened to the confirmation email is recorded in the stage history | Owner: *Payment received: your Current State Assessment starts* and *Set up your client account on The Shift* | **Won** |
+| "Pay ₦500,000 securely with Paystack" | Owner | As for the Full Report (section 4): `/pay/:token/current_state`, Paystack, then the webhook or `/pay/return` confirms through the shared path. The invitation is recorded against the person who sent the payment link, and audited with Paystack as the actor | Owner: *Payment received: your Current State Assessment starts* and *Set up your client account on Advisory as a Service*; office: *Paid online: …* (says whether the engagement started and the invitation went) | **Won** |
+| "Confirm by hand" (fallback only) | Finance or Super Admin | For a payment Paystack shows as paid that has not confirmed itself: confirmed; an invitation is created unless one is pending or accepted; what happened to the confirmation email is recorded in the stage history | Owner: *Payment received: your Current State Assessment starts* and *Set up your client account on Advisory as a Service* | **Won** |
 | "Send the confirmation again" | Finance or Super Admin | `businessSupport.resendPaymentConfirmation`: the "payment received" email again, for an owner who lost it (a paid Full Report gets its Report Intake link again instead) | Owner: *Payment received: your Current State Assessment starts* | — |
 | "Create account" | Owner | `onboarding.accept`: person, credential, business, owner membership and session in one transaction | — | Invitation: **accepted** |
 

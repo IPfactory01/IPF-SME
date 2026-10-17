@@ -1,6 +1,6 @@
 /**
  * The JUMP programme's public forms stay in the code for the record but are closed unless LEGACY_JUMP_ENABLED is on:
- * each one sends email or calls a provider without a limit, and The Shift does not use them.
+ * each one sends email or calls a provider without a limit, and Advisory as a Service does not use them.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";

@@ -68,7 +68,7 @@ async function identityConflict(db: Pick<Database, "select">, email: string) {
   return existing.length > 0 || (await emailIsReserved(db, email));
 }
 
-/** Sent as IP Factory in The Shift layout; the "Create your account: <link>" line becomes the button. */
+/** Sent as IP Factory in Advisory as a Service layout; the "Create your account: <link>" line becomes the button. */
 export function buildOnboardingEmail(input: { fullName: string; businessName: string; url: string }) {
   const name = input.fullName.split(" ")[0] || "there";
   return {

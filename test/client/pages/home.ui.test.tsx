@@ -57,6 +57,17 @@ describe("home page sign-in", () => {
   });
 });
 
+describe("home page hero", () => {
+  it("names the product with its maker, and never breaks a line inside the name or inside \"by IP Factory\"", () => {
+    renderHome();
+    const badge = screen.getByText(`${BRAND.productName},`).closest("p")!;
+    expect(badge.textContent).toBe(BRAND.productEndorsement);
+    expect(within(badge).getByText(`${BRAND.productName},`).className).toContain("whitespace-nowrap");
+    expect(within(badge).getByText(`by ${BRAND.organisationName}`).className).toContain("whitespace-nowrap");
+    expect(screen.getByText(new RegExp(`^With ${BRAND.productName}, we get in with you`))).toBeTruthy();
+  });
+});
+
 describe("home page track record", () => {
   it("states the track record from the brand settings, under the hero", () => {
     renderHome();

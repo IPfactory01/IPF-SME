@@ -2,7 +2,7 @@ import { CURRENT_STATE, FULL_REPORT, formatNaira, PRICES } from "./businessSuppo
 import { METHOD } from "./method";
 
 /**
- * Paying for The Shift: online with Paystack only. The payment email carries a "Pay online" link; Paystack's checkout
+ * Paying for Advisory as a Service: online with Paystack only. The payment email carries a "Pay online" link; Paystack's checkout
  * takes card, bank transfer or USSD, and the payment confirms itself. There are no bank details and no proof of payment.
  * Confirming the Current State Assessment payment is what starts the Current State Assessment.
  */

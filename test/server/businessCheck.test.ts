@@ -149,7 +149,7 @@ describe("business check summary", () => {
     const result = evaluate(answers);
     const summary = { ...result.summary, offerings: [] };
     const owner = buildBusinessSupportEmailHtml(ownerEmail({ contact, result, summary }).body);
-    expect(owner).toContain("The Shift");
+    expect(owner).toContain("Advisory as a Service");
     expect(owner).toContain("by IP Factory");
     expect(owner).toContain("Dear Ada,");
     expect(owner).toMatch(/text-transform:uppercase;[^>]*>FINDINGS</);

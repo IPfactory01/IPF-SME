@@ -4,7 +4,7 @@ import { ONLINE_TEST_NOTICE } from "@shared/payments";
 import { AlertTriangle } from "lucide-react";
 import React from "react";
 
-/** The frame of the pay pages: the logo beside "The Shift", the logo's colour line, a narrow reading column. */
+/** The frame of the pay pages: the logo beside "Advisory as a Service", the logo's colour line, a narrow reading column. */
 export function PaymentShell({ children }: { children: React.ReactNode }) {
   return (
     <main className="min-h-screen bg-paper text-ink">

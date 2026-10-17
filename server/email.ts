@@ -2,6 +2,7 @@ import { ENV } from "./_core/env";
 import { EMAIL_LOGO_CID, EMAIL_LOGO_PNG_BASE64 } from "./emailLogo";
 import { buildBusinessSupportEmailHtml, buildPlainTextEmailHtml } from "./emailTemplates";
 import { BRAND } from "../shared/brand";
+import { logBusinessSupportEmail } from "./emailDeliveryLog";
 
 export const JUMP_PROGRAMME_MAILBOX = BRAND.programmeMailbox;
 export const JUMP_PROGRAMME_SENDER = `${BRAND.senderDisplayName} <${JUMP_PROGRAMME_MAILBOX}>`;
@@ -54,17 +55,17 @@ export function getJumpProgrammeReplyTo(_configuredReplyTo = ENV.emailReplyTo): 
   return JUMP_PROGRAMME_MAILBOX;
 }
 
-/** Default sender for IP Factory Business Support (business check) email. */
-export const BUSINESS_SUPPORT_SENDER = `${BRAND.organisationName} <${BUSINESS_SUPPORT_MAILBOX}>`;
+/** Verified production identity for IP Factory Business Support email. */
+export const BUSINESS_SUPPORT_SENDER = `${BRAND.organisationName} <notifications@contact.ipfactory.co>`;
 
 /**
- * Business check email is sent as IP Factory, not as the JUMP programme. EMAIL_FROM names the sending address Resend
- * has verified (Resend's test address, onboarding@resend.dev, until ipfactory.co is verified). A leftover JUMP or
- * personal address is ignored in favour of info@ipfactory.co.
+ * Business Support mail uses the verified IP Factory domain in production. A misconfigured production EMAIL_FROM
+ * cannot silently select an unverified sender. Development can still override it for provider testing.
  */
-export function getBusinessSupportSender(configuredFrom = ENV.emailFrom): string {
+export function getBusinessSupportSender(configuredFrom = ENV.emailFrom, production = ENV.isProduction): string {
   const normalised = normalizeEmailHeaderValue(configuredFrom || "").trim();
   if (!normalised || /emmanueltarfa\.com/i.test(normalised)) return BUSINESS_SUPPORT_SENDER;
+  if (production && !/@contact\.ipfactory\.co\s*>?$/i.test(normalised)) return BUSINESS_SUPPORT_SENDER;
   return normalised;
 }
 
@@ -193,16 +194,31 @@ export async function deliverEmail(input: {
    * send the same email twice (Resend keeps the key for 24 hours). Omit for a message that is new every time.
    */
   idempotencyKey?: string;
+  businessCheckId?: number;
+  paymentRequestId?: number;
+  invitationId?: number;
 }): Promise<EmailDeliveryResult> {
   if (process.env.NODE_ENV === "test" || process.env.VITEST || process.env.VITEST_WORKER_ID) {
     return { status: "Simulated", reason: "test_sender" };
   }
 
+  const attemptedAt = new Date();
   const apiKey = ENV.resendApiKey;
+  let result: EmailDeliveryResult;
   if (!apiKey) {
     console.warn("[Email] RESEND_API_KEY is not set, so no email was sent.");
-    return { status: "Failed", reason: "Email delivery is not configured (RESEND_API_KEY)" };
+    result = { status: "Failed", reason: "Email delivery is not configured (RESEND_API_KEY)" };
+  } else {
+    result = await postToResend({ payload: resendRequestBody(input), apiKey, idempotencyKey: input.idempotencyKey });
   }
-
-  return postToResend({ payload: resendRequestBody(input), apiKey, idempotencyKey: input.idempotencyKey });
+  if (input.sender === "business_support") await logBusinessSupportEmail({
+    to: input.to,
+    subject: input.subject,
+    attemptedAt,
+    result,
+    businessCheckId: input.businessCheckId,
+    paymentRequestId: input.paymentRequestId,
+    invitationId: input.invitationId,
+  });
+  return result;
 }

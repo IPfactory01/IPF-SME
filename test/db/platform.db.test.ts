@@ -268,6 +268,8 @@ for (const target of targets) {
           expect(profile).toMatchObject({ businessId: owner.business.id, name: "Roles Co", role, canEdit });
         }
         await expect(outsider.session.call().account.business({ businessId: owner.business.id })).rejects.toMatchObject({ code: "FORBIDDEN", message: ACCOUNT_AUTH_ERRORS.noBusinessAccess });
+        await expect((await signIn(member)).call().invitations.seats.invite({ email: uniqueEmail("promote"), fullName: "Self Promotion", access: "full", role: "owner" } as never)).rejects.toMatchObject({ code: "FORBIDDEN" });
+        expect((await db.select().from(schema.businessMemberships).where(eq(schema.businessMemberships.userId, member.id)))[0].role).toBe("member");
       });
 
       it("never turns a business role into platform authority, or platform authority into a business membership", async () => {

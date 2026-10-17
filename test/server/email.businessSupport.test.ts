@@ -4,14 +4,16 @@ import { EMAIL_LOGO_CID, EMAIL_LOGO_PNG_BASE64 } from "@server/emailLogo";
 import { BUSINESS_SUPPORT_SENDER, getBusinessSupportSender, JUMP_PROGRAMME_MAILBOX, JUMP_PROGRAMME_SENDER, resendRequestBody } from "@server/email";
 
 describe("Business Support (business check) email sender", () => {
-  it("sends as IP Factory from info@ipfactory.co by default", () => {
-    expect(BUSINESS_SUPPORT_SENDER).toBe("IP Factory <info@ipfactory.co>");
+  it("uses the verified Resend identity as the production fallback", () => {
+    expect(BUSINESS_SUPPORT_SENDER).toBe("IP Factory <notifications@contact.ipfactory.co>");
     expect(getBusinessSupportSender("")).toBe(BUSINESS_SUPPORT_SENDER);
   });
 
-  it("uses EMAIL_FROM, such as Resend's test address before ipfactory.co is verified", () => {
-    expect(getBusinessSupportSender("IP Factory <onboarding@resend.dev>")).toBe("IP Factory <onboarding@resend.dev>");
-    expect(getBusinessSupportSender(" IP Factory \\u003cinfo@ipfactory.co\\u003e ")).toBe("IP Factory <info@ipfactory.co>");
+  it("allows configured senders in development, but production cannot use an unverified domain", () => {
+    expect(getBusinessSupportSender("IP Factory <onboarding@resend.dev>", false)).toBe("IP Factory <onboarding@resend.dev>");
+    expect(getBusinessSupportSender("IP Factory <onboarding@resend.dev>", true)).toBe(BUSINESS_SUPPORT_SENDER);
+    expect(getBusinessSupportSender(" IP Factory \\u003cinfo@ipfactory.co\\u003e ", true)).toBe(BUSINESS_SUPPORT_SENDER);
+    expect(getBusinessSupportSender("IP Factory <custom@contact.ipfactory.co>", true)).toBe("IP Factory <custom@contact.ipfactory.co>");
   });
 
   it("ignores a leftover JUMP or personal sender", () => {
@@ -22,14 +24,17 @@ describe("Business Support (business check) email sender", () => {
 
 describe("the Resend request", () => {
   const original = ENV.emailFrom;
+  const originalProduction = ENV.isProduction;
   afterEach(() => {
     ENV.emailFrom = original;
+    ENV.isProduction = originalProduction;
   });
 
-  it("sends business check email from EMAIL_FROM with replies to info@ipfactory.co", () => {
+  it("sends business support mail with the verified production sender and info reply address", () => {
     ENV.emailFrom = "IP Factory <onboarding@resend.dev>";
+    ENV.isProduction = true;
     const body = resendRequestBody({ to: "ada@example.com", subject: "Your business check", body: "Hello", sender: "business_support" });
-    expect(body).toMatchObject({ from: "IP Factory <onboarding@resend.dev>", to: ["ada@example.com"], reply_to: "info@ipfactory.co", subject: "Your business check", text: "Hello" });
+    expect(body).toMatchObject({ from: BUSINESS_SUPPORT_SENDER, to: ["ada@example.com"], reply_to: "info@ipfactory.co", subject: "Your business check", text: "Hello" });
     expect(body.html).toContain("Hello");
   });
 

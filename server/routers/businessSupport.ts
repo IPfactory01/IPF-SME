@@ -17,6 +17,8 @@ import { getDebrief, isMissingDebriefTable, saveDebrief, shareDebrief } from "..
 import { adminDownloadReport, resendReportLink } from "../fullReport/service";
 import { PAYMENT_ITEMS } from "../../shared/payments";
 import { adminPermissionProcedure, router } from "../_core/trpc";
+import { businessSupportEmailDeliveries } from "../../drizzle/schema";
+import { desc } from "drizzle-orm";
 
 // Prospects (business checks, calls) and the invitation step belong to client onboarding; the client list is a view of
 // businesses, so it has its own permission and is not granted by onboarding alone.
@@ -30,6 +32,12 @@ const payments = adminPermissionProcedure("manage_payments");
  * creates a user or a business: that happens only when a client accepts an onboarding invitation.
  */
 export const businessSupportRouter = router({
+  /** Metadata-only recent Business Support mail state for authorised internal support. */
+  emailDeliveryStatus: prospects.query(async () => {
+    const db = await businessSupportDb();
+    return db.select({ recipientEmail: businessSupportEmailDeliveries.recipientEmail, providerMessageId: businessSupportEmailDeliveries.providerMessageId, purpose: businessSupportEmailDeliveries.purpose, latestState: businessSupportEmailDeliveries.latestState, attemptedAt: businessSupportEmailDeliveries.attemptedAt, acceptedAt: businessSupportEmailDeliveries.acceptedAt, lastEventAt: businessSupportEmailDeliveries.lastEventAt, businessCheckId: businessSupportEmailDeliveries.businessCheckId, paymentRequestId: businessSupportEmailDeliveries.paymentRequestId, invitationId: businessSupportEmailDeliveries.invitationId })
+      .from(businessSupportEmailDeliveries).orderBy(desc(businessSupportEmailDeliveries.attemptedAt)).limit(100);
+  }),
   checks: prospects.query(async () => listBusinessChecks(await businessSupportDb())),
   checkDetail: prospects
     .input(z.object({ businessCheckId: z.number().int().positive() }))

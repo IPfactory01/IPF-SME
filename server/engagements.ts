@@ -829,6 +829,12 @@ function validateUpload(input: UploadInput) {
 
 const keyPrefix = (engagementId: number, target: UploadTarget) => `engagements/${engagementId}/${target.kind}s/${target.id}/`;
 const newStorageKey = (engagementId: number, target: UploadTarget, fileName: string) => `${keyPrefix(engagementId, target)}${randomUUID()}-${safeFileName(fileName)}`;
+/** Confirm only a key minted by requestUpload: one UUID-prefixed, path-safe leaf under this exact target. */
+const isTargetStorageKey = (key: string, prefix: string) => {
+  if (!key.startsWith(prefix)) return false;
+  const leaf = key.slice(prefix.length);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-[A-Za-z0-9._-]{1,100}$/i.test(leaf);
+};
 
 /**
  * Every file on an engagement, with who uploaded it. "From the team" means the uploader is not a member of the
@@ -878,7 +884,7 @@ export async function clientConfirmUpload(db: Database, session: AccountSession,
   requireUploads();
   validateUpload(input);
   const task = await requireClientTaskForUpload(db, session, input.taskId);
-  if (!input.storageKey.startsWith(keyPrefix(task.engagementId, { kind: "task", id: task.id }))) throw notFound();
+  if (!isTargetStorageKey(input.storageKey, keyPrefix(task.engagementId, { kind: "task", id: task.id }))) throw notFound();
   if (!(await objectExists(input.storageKey))) throw new TRPCError({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
   const open = task.status === "open" || task.status === "needs_more";
   return db.transaction(async tx => {
@@ -933,7 +939,7 @@ export async function staffConfirmUpload(db: Database, actor: StaffActor, input:
   requireManage(actor);
   validateUpload(input);
   await requireStaffTarget(db, actor, input.engagementId, input.target);
-  if (!input.storageKey.startsWith(keyPrefix(input.engagementId, input.target))) throw notFound();
+  if (!isTargetStorageKey(input.storageKey, keyPrefix(input.engagementId, input.target))) throw notFound();
   if (!(await objectExists(input.storageKey))) throw new TRPCError({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
   return db.transaction(async tx => {
     const [file] = await tx.insert(engagementFiles).values({

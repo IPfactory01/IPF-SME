@@ -115,7 +115,7 @@ describe("PostgreSQL schema and migration history", () => {
   const baseline = readFileSync(resolve(root, "drizzle/migrations/0000_postgres_baseline.sql"), "utf8");
 
   // The 30 inherited tables are kept; later migrations may add tables, and each addition is listed here on purpose.
-  const ADDED_AFTER_MYSQL = ["account_invitations", "business_member_access", "business_memberships", "businesses", "client_onboarding_invitations", "debriefs", "engagement_checkins", "engagement_comments", "engagement_deliverables", "engagement_files", "engagement_measures", "engagement_sessions", "engagement_tasks", "engagement_team", "engagements", "full_reports", "payment_requests", "rate_limit_counters", "user_credentials", "user_password_reset_tokens", "user_platform_roles", "user_sessions"];
+  const ADDED_AFTER_MYSQL = ["account_invitations", "business_member_access", "business_memberships", "business_support_email_deliveries", "businesses", "client_onboarding_invitations", "debriefs", "engagement_checkins", "engagement_comments", "engagement_deliverables", "engagement_files", "engagement_measures", "engagement_sessions", "engagement_tasks", "engagement_team", "engagements", "full_reports", "payment_requests", "rate_limit_counters", "resend_email_events", "user_credentials", "user_password_reset_tokens", "user_platform_roles", "user_sessions"];
 
   it("keeps all 30 table names from the MySQL schema and adds only the listed new tables", () => {
     expect(mysqlTables).toHaveLength(30);

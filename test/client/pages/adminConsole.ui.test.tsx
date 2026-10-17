@@ -42,6 +42,7 @@ vi.mock("@/lib/trpc", () => ({
     }),
     businessSupport: {
       checks: { useQuery: hoisted.query("checks") },
+      emailDeliveryStatus: { useQuery: () => ({ data: [], isLoading: false, error: undefined }) },
       checkDetail: { useQuery: (input: { businessCheckId: number }) => ({ data: hoisted.api.details[input.businessCheckId], isLoading: false, error: hoisted.api.error }) },
       discoveryCalls: { useQuery: hoisted.query("calls") },
       clients: { useQuery: hoisted.query("clients") },

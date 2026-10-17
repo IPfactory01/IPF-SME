@@ -296,6 +296,24 @@ for (const target of targets) {
         await expect((await browser().call()).onlinePayment.start({ token: unfinished, item: "full_report" })).rejects.toMatchObject({ code: "NOT_FOUND" });
         expect(paystack.initialized).toHaveLength(0);
       });
+
+      it("binds each pay link to its exact Business Check token and cannot pay another check's Current State Assessment", async () => {
+        const a = await finishedCheck("token-a");
+        const b = await finishedCheck("token-b");
+        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: a.id, item: "current_state" });
+        const initializedBefore = paystack.initialized.length;
+        const tamperedToken = `${a.token.slice(0, -1)}${a.token.endsWith("a") ? "b" : "a"}`;
+        await expect((await browser().call()).onlinePayment.start({ token: tamperedToken, item: "current_state" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect((await browser().call()).onlinePayment.start({ token: b.token, item: "current_state" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        expect(paystack.initialized).toHaveLength(initializedBefore);
+        const ownStart = await (await browser().call()).onlinePayment.start({ token: a.token, item: "current_state" });
+        expect(ownStart.alreadyPaid).toBe(false);
+        const reference = paystack.initialized.at(-1)!.reference as string;
+        pay(reference);
+        expect(await webhook(charged(reference))).toBe(200);
+        expect(await paymentOf(a.id, "current_state")).toMatchObject({ id: paymentRequestId, status: "confirmed" });
+        expect(await paymentOf(b.id, "current_state")).toBeUndefined();
+      });
     });
 
     describe("starting a payment", () => {
@@ -377,6 +395,8 @@ for (const target of targets) {
         expect(receipt.body).toMatch(/Complete your Report Intake: https?:\/\/\S+\/report\/\S+/);
         expect(receipt.body).toContain(EMAIL_TEST_NOTICE);
         expect(await db.select().from(schema.fullReports).where(eq(schema.fullReports.businessCheckId, id))).toHaveLength(1);
+        expect(await db.select().from(schema.engagements).where(eq(schema.engagements.businessCheckId, id))).toHaveLength(0);
+        expect(await db.select().from(schema.clientOnboardingInvitations).where(eq(schema.clientOnboardingInvitations.businessCheckId, id))).toHaveLength(0);
         // Audited as the system actor, with how the money arrived.
         const [audit] = await auditsFor("payment_confirmed", id);
         expect(audit.actorUserId).toBeNull();
@@ -515,6 +535,14 @@ for (const target of targets) {
         expect(await webhook(charged(reference))).toBe(200);
         await unconfirmed(id);
         expect(details(await auditsFor("payment_online_refused", id))).toEqual([expect.objectContaining({ problem: "currency" })]);
+      });
+
+      it("refuses an overpayment just as it refuses an underpayment", async () => {
+        const { reference, id } = await attempt("overpayment");
+        pay(reference, { amount: 10_000_100 });
+        expect(await webhook(charged(reference))).toBe(200);
+        await unconfirmed(id);
+        expect(details(await auditsFor("payment_online_refused", id))).toEqual([expect.objectContaining({ problem: "amount", amountKobo: 10_000_100 })]);
       });
 
       it("refuses a reference that is not the request's own: a lookalike, or one Paystack reports differently", async () => {

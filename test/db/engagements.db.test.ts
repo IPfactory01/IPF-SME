@@ -233,10 +233,14 @@ for (const target of targets) {
         const analystUser = await person(["analyst"], "Ola Analyst");
         const analyst = await signIn(analystUser, true);
         const finance = await signIn(await person(["finance"]), true);
+        const partner = await signIn(await person(["partner"]), true);
+        const expert = await signIn(await person(["subject_matter_expert"]), true);
 
         expect((await (await deskLead.call()).engagement.staff.list()).items.map(item => item.id)).toContain(engagementId);
         expect((await (await analyst.call()).engagement.staff.list()).items).toEqual([]);
         await expect((await analyst.call()).engagement.staff.detail({ engagementId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect((await partner.call()).engagement.staff.detail({ engagementId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect((await expert.call()).engagement.staff.detail({ engagementId })).rejects.toMatchObject({ code: "NOT_FOUND" });
         await expect((await finance.call()).engagement.staff.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
 
         await (await deskLead.call()).engagement.staff.assign({ engagementId, userId: analystUser.id, role: "analyst" });
@@ -445,6 +449,7 @@ for (const target of targets) {
 
         // A key that belongs to another engagement or task is refused, however it was obtained.
         await expect((await a.owner.call()).engagement.client.confirmUpload({ taskId: task.id, storageKey: `engagements/${b.engagementId}/tasks/1/x-sales.pdf`, note: null, ...pdf("sales.pdf") })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect((await a.owner.call()).engagement.client.confirmUpload({ taskId: task.id, storageKey: `engagements/${a.engagementId}/tasks/${task.id}/../../engagements/${b.engagementId}/tasks/1/x-sales.pdf`, note: null, ...pdf("sales.pdf") })).rejects.toMatchObject({ code: "NOT_FOUND" });
         const confirmed = await (await a.owner.call()).engagement.client.confirmUpload({ taskId: task.id, storageKey: ticket.storageKey, note: null, ...pdf("sales.pdf") });
         expect(confirmed).toMatchObject({ status: "received" });
 

@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type RequestHandler } from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { TRPCError } from "@trpc/server";
 import { registerOAuthRoutes } from "./oauth";
@@ -15,7 +15,9 @@ import { ENV } from "./env";
 import { healthReport } from "./health";
 import { handlePaystackWebhook } from "../onlinePayment";
 import { PAYSTACK_WEBHOOK_PATH } from "../paystack";
+import { handleResendWebhook } from "../resendWebhook";
 import multer from "multer";
+import { consumeLimit, LIMITS } from "../rateLimit";
 
 /**
  * The reusable Express application. It owns no HTTP server, port, Vite middleware or static
@@ -34,6 +36,8 @@ export function createApp() {
   // Paystack's signed webhook: before the JSON parser, so the signature is checked on the exact bytes Paystack sent,
   // and before the browser-origin guard, which exempts it (a server-to-server call has no Origin; the signature is the check).
   app.post(PAYSTACK_WEBHOOK_PATH, express.raw({ type: () => true, limit: "256kb" }), handlePaystackWebhook);
+  // Resend/Svix signs the exact raw request bytes; do not pass this route through express.json first.
+  app.post("/api/resend/webhook", express.raw({ type: () => true, limit: "256kb" }), handleResendWebhook);
   app.use(express.json({ limit: "1mb" }));
   app.use(express.urlencoded({ limit: "32kb", extended: true }));
   app.use("/api", requireTrustedBrowserOrigin);
@@ -46,8 +50,17 @@ export function createApp() {
     storage: multer.memoryStorage(),
     limits: { fileSize: participantUploadPolicy.maxBytes, files: 1 },
   });
+  const limitParticipantUpload: RequestHandler = async (req, res, next) => {
+    try {
+      if (!(await consumeLimit(LIMITS.fileUpload, `ip:${req.ip || "unknown"}`))) {
+        res.status(429).json({ message: "Too many uploads. Kindly try again later." });
+        return;
+      }
+      next();
+    } catch (error) { next(error); }
+  };
 
-  app.post("/api/participant-upload", participantUpload.single("file"), async (req, res) => {
+  app.post("/api/participant-upload", limitParticipantUpload, participantUpload.single("file"), async (req, res) => {
     try {
       const participant = await getAuthenticatedParticipant({ req, res, user: null } as TrpcContext);
       const file = req.file;
@@ -68,7 +81,7 @@ export function createApp() {
     }
   });
 
-  app.post("/api/payment-receipt-upload", participantUpload.single("file"), async (req, res) => {
+  app.post("/api/payment-receipt-upload", limitParticipantUpload, participantUpload.single("file"), async (req, res) => {
     try {
       const participant = await getAuthenticatedParticipant({ req, res, user: null } as TrpcContext);
       const file = req.file;

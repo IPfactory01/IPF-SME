@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const KEYS = ["NODE_ENV", "APP_ORIGIN", "APP_ALTERNATE_ORIGINS", "OWNER_ADMIN_EMAIL", "DISCOVERY_CALL_URL", "VERCEL_GIT_COMMIT_SHA", "VERCEL_URL", "DATABASE_URL", "JWT_SECRET", "RESEND_API_KEY", "PAYSTACK_SECRET_KEY"] as const;
+const KEYS = ["NODE_ENV", "APP_ORIGIN", "APP_ALTERNATE_ORIGINS", "OWNER_ADMIN_EMAIL", "DISCOVERY_CALL_URL", "VERCEL_GIT_COMMIT_SHA", "VERCEL_URL", "DATABASE_URL", "JWT_SECRET", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "PAYSTACK_SECRET_KEY"] as const;
 const saved = Object.fromEntries(KEYS.map((key) => [key, process.env[key]]));
 
 async function loadWith(env: Partial<Record<(typeof KEYS)[number], string>>) {
@@ -83,15 +83,15 @@ describe("deployment identity configuration", () => {
 
   it("names the settings production cannot run without, Paystack included now it is the only way to pay, and health answers 503 until they are set", async () => {
     const bare = await loadWith({ NODE_ENV: "production", VERCEL_URL: "ipf-sme-abc123.vercel.app" });
-    expect(bare.REQUIRED_IN_PRODUCTION).toEqual(["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY", "PAYSTACK_SECRET_KEY"]);
-    expect(bare.ENV.missingSettings).toEqual(["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY", "PAYSTACK_SECRET_KEY"]);
-    expect(bare.healthReport()).toEqual({ status: 503, body: { ok: false, service: "ipfactory-sme", build: null, missing: ["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY", "PAYSTACK_SECRET_KEY"] } });
+    expect(bare.REQUIRED_IN_PRODUCTION).toEqual(["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "PAYSTACK_SECRET_KEY"]);
+    expect(bare.ENV.missingSettings).toEqual(["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "PAYSTACK_SECRET_KEY"]);
+    expect(bare.healthReport()).toEqual({ status: 503, body: { ok: false, service: "ipfactory-sme", build: null, missing: ["DATABASE_URL", "JWT_SECRET", "APP_ORIGIN", "OWNER_ADMIN_EMAIL", "RESEND_API_KEY", "RESEND_WEBHOOK_SECRET", "PAYSTACK_SECRET_KEY"] } });
 
-    const partial = await loadWith({ NODE_ENV: "production", DATABASE_URL: "postgresql://x", JWT_SECRET: "s", APP_ORIGIN: "https://ipfactory.co", OWNER_ADMIN_EMAIL: " ", RESEND_API_KEY: "re_x", PAYSTACK_SECRET_KEY: "sk_test_x", VERCEL_GIT_COMMIT_SHA: "abcdef0123" });
+    const partial = await loadWith({ NODE_ENV: "production", DATABASE_URL: "postgresql://x", JWT_SECRET: "s", APP_ORIGIN: "https://www.ipfactory.co", OWNER_ADMIN_EMAIL: " ", RESEND_API_KEY: "re_x", RESEND_WEBHOOK_SECRET: "whsec_fixture", PAYSTACK_SECRET_KEY: "sk_test_x", VERCEL_GIT_COMMIT_SHA: "abcdef0123" });
     expect(partial.ENV.missingSettings).toEqual(["OWNER_ADMIN_EMAIL"]);
     expect(partial.healthReport()).toEqual({ status: 503, body: { ok: false, service: "ipfactory-sme", build: "abcdef0", missing: ["OWNER_ADMIN_EMAIL"] } });
 
-    const complete = await loadWith({ NODE_ENV: "production", DATABASE_URL: "postgresql://x", JWT_SECRET: "s", APP_ORIGIN: "https://ipfactory.co", OWNER_ADMIN_EMAIL: "owner@programme.example.org", RESEND_API_KEY: "re_x", PAYSTACK_SECRET_KEY: "sk_test_x" });
+    const complete = await loadWith({ NODE_ENV: "production", DATABASE_URL: "postgresql://x", JWT_SECRET: "s", APP_ORIGIN: "https://www.ipfactory.co", OWNER_ADMIN_EMAIL: "owner@programme.example.org", RESEND_API_KEY: "re_x", RESEND_WEBHOOK_SECRET: "whsec_fixture", PAYSTACK_SECRET_KEY: "sk_test_x" });
     expect(complete.ENV.missingSettings).toEqual([]);
     expect(complete.healthReport()).toEqual({ status: 200, body: { ok: true, service: "ipfactory-sme", build: null } });
   });

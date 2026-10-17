@@ -543,6 +543,7 @@ for (const target of targets) {
         const finance = await signInStaff(await person({}, ["finance"]));
         const { paymentRequestId } = await (await finance.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
         expect(paymentRequestId).toBeGreaterThan(0);
+        await expect((await finance.call()).businessSupport.setStage({ businessCheckId: id, stage: "lost" })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
         const client = await person();
         const business = (await db.insert(schema.businesses).values({ name: "Client Co", slug: unique("slug"), createdByUserId: client.id }).returning())[0];

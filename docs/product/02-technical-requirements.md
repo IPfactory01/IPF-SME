@@ -34,7 +34,7 @@ docs/product/     These six documents
 
 ## 3. Hosting and deployment
 
-- **Vercel**, project `ipf-sme`, deploying `main` of `IPfactory01/ipf-sme` automatically to https://ipfactory.co (and www.ipfactory.co), in the IP Factory Vercel account since 14 October 2026.
+- **Vercel**, project `ipf-sme`, deploying `main` of `IPfactory01/ipf-sme` automatically to https://www.ipfactory.co (with the root host as an alternate), in the IP Factory Vercel account since 14 October 2026.
 - The client is a static Vite build (`dist/public`). Every server route goes through one function, `api/index.js`, via
   the rewrites in `vercel.json` (`/api/*`, `/portal/authenticate`, `/portal/access`, `/manus-storage/*`); everything
   else falls back to `index.html`. Paystack's webhook (`/api/paystack/webhook`) takes the same path: the gateway

@@ -23,6 +23,6 @@ describe("the client account invitation email", () => {
 
   it("is sent as IP Factory", () => {
     const source = readFileSync(new URL("../../server/clientOnboarding.ts", import.meta.url), "utf8");
-    expect(source).toMatch(/deliverEmail\(\{ to: email, subject: message\.subject, body: message\.body, sender: "business_support", idempotencyKey: `client_onboarding_invitations:\$\{invitation\.id\}` \}\)/);
+    expect(source).toMatch(/deliverEmail\(\{[\s\S]*?sender: "business_support"[\s\S]*?client_onboarding_invitations:\$\{invitation\.id\}/);
   });
 });

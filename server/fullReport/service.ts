@@ -147,6 +147,7 @@ export async function submitReportIntake(db: Database, token: string, rawIntake:
   const message = reportEmail(report, reportUrl(token));
   const delivery = await deliverEmail({
     sender: "business_support",
+    businessCheckId: claimed.businessCheckId,
     idempotencyKey: `full_reports:${claimed.id}:report`,
     to: email,
     subject: message.subject,
@@ -157,6 +158,7 @@ export async function submitReportIntake(db: Database, token: string, rawIntake:
   await recordAudit(db, { action: "full_report_delivered", targetEmail: email, details: { businessCheckId: claimed.businessCheckId, reference: report.reference, delivery: delivery.status } });
   await deliverEmail({
     sender: "business_support",
+    businessCheckId: claimed.businessCheckId,
     idempotencyKey: `full_reports:${claimed.id}:office`,
     to: BUSINESS_SUPPORT_MAILBOX,
     subject: `Full Report sent: ${report.businessName}`,
@@ -227,6 +229,7 @@ export async function resendReportLink(db: Database, input: { businessCheckId: n
   const firstName = check.fullName.trim().split(/\s+/)[0] || "there";
   const delivery = await deliverEmail({
     sender: "business_support",
+    businessCheckId: check.id,
     // A new link each time, so each resend is its own message.
     idempotencyKey: `full_reports:${check.id}:link:${Date.now()}`,
     to: check.email,

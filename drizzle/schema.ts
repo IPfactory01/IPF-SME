@@ -262,6 +262,32 @@ export const emailLogs = pgTable("email_logs", {
 export type EmailLog = typeof emailLogs.$inferSelect;
 export type InsertEmailLog = typeof emailLogs.$inferInsert;
 
+/** Metadata-only delivery state for Business Support messages; message bodies are never copied here. */
+export const businessSupportEmailDeliveries = pgTable("business_support_email_deliveries", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  providerMessageId: varchar("providerMessageId", { length: 128 }).unique(),
+  recipientEmail: varchar("recipientEmail", { length: 320 }).notNull(),
+  purpose: varchar("purpose", { length: 255 }).notNull(),
+  businessCheckId: integer("businessCheckId"),
+  paymentRequestId: integer("paymentRequestId"),
+  invitationId: integer("invitationId"),
+  latestState: varchar("latestState", { length: 32 }).default("attempted").notNull(),
+  attemptedAt: timestamp("attemptedAt", { withTimezone: true }).defaultNow().notNull(),
+  acceptedAt: timestamp("acceptedAt", { withTimezone: true }),
+  lastEventAt: timestamp("lastEventAt", { withTimezone: true }),
+}, table => [index("business_support_email_deliveries_recipient_idx").on(table.recipientEmail, table.attemptedAt), index("business_support_email_deliveries_check_idx").on(table.businessCheckId, table.attemptedAt)]);
+
+/** Deduplication ledger for verified Resend webhook event IDs. */
+export const resendEmailEvents = pgTable("resend_email_events", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  eventId: varchar("eventId", { length: 128 }).notNull().unique(),
+  providerMessageId: varchar("providerMessageId", { length: 128 }),
+  eventType: varchar("eventType", { length: 32 }).notNull(),
+  recipientEmail: varchar("recipientEmail", { length: 320 }),
+  happenedAt: timestamp("happenedAt", { withTimezone: true }).notNull(),
+  receivedAt: timestamp("receivedAt", { withTimezone: true }).defaultNow().notNull(),
+}, table => [index("resend_email_events_provider_idx").on(table.providerMessageId, table.happenedAt)]);
+
 /** Participant replies retrieved from the dedicated JUMP mailbox; never exposed outside authorised administration. */
 export const inboundEmailRepliesStatusEnum = pgEnum("inbound_email_replies_status", ["New", "Reviewed", "Follow-up", "Closed"]);
 

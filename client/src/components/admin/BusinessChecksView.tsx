@@ -16,6 +16,7 @@ import { formatDate, readinessShort } from "./format";
  */
 export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (section: AdminSectionId) => void }) {
   const checks = trpc.businessSupport.checks.useQuery(undefined, { retry: false });
+  const emailStatus = trpc.businessSupport.emailDeliveryStatus.useQuery(undefined, { retry: false });
   const [search, setSearch] = useState("");
   const [stage, setStage] = useState<PipelineStage | "all">("all");
   const [openId, setOpenId] = useState<number | null>(null);
@@ -117,6 +118,21 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
           </table>
         </div>
       )}
+
+      <section aria-labelledby="business-support-email-status" className="border border-line bg-white">
+        <div className="border-b border-line px-4 py-3">
+          <h2 id="business-support-email-status" className="font-serif text-lg font-semibold">Business Support email status</h2>
+          <p className="mt-1 text-xs text-ink-muted">Recent attempts and Resend delivery events. Message contents are not stored here.</p>
+        </div>
+        {emailStatus.isLoading ? <p className="p-4 text-sm text-ink-muted">Loading email status…</p> : emailStatus.error ? <p role="alert" className="p-4 text-sm text-danger-strong">Email status is unavailable.</p> : emailStatus.data?.length ? (
+          <div className="max-h-80 overflow-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="sticky top-0 bg-paper text-ink-muted"><tr><th className="p-2">Recipient</th><th className="p-2">Email</th><th className="p-2">Status</th><th className="p-2">Related record</th><th className="p-2">Provider ID</th><th className="p-2">Last update</th></tr></thead>
+              <tbody>{emailStatus.data.map((row, index) => <tr key={`${row.recipientEmail}-${row.attemptedAt}-${index}`} className="border-t border-line"><td className="p-2">{row.recipientEmail}</td><td className="p-2">{row.purpose}</td><td className="p-2">{row.latestState}</td><td className="p-2">{row.businessCheckId ? `Business Check #${row.businessCheckId}` : row.paymentRequestId ? `Payment #${row.paymentRequestId}` : row.invitationId ? `Invitation #${row.invitationId}` : "—"}</td><td className="max-w-48 truncate p-2" title={row.providerMessageId ?? undefined}>{row.providerMessageId ?? "—"}</td><td className="p-2">{new Date(row.lastEventAt ?? row.acceptedAt ?? row.attemptedAt).toLocaleString()}</td></tr>)}</tbody>
+            </table>
+          </div>
+        ) : <p className="p-4 text-sm text-ink-muted">No Business Support email attempts have been recorded.</p>}
+      </section>
 
       <RecordDrawer
         open={opened !== null}

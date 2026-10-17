@@ -113,7 +113,7 @@ async function issue(db: Database, input: { kind: "staff" | "business_member"; e
   }
   const invitationUrl = `${getTrustedApplicationOrigin()}${JOIN_PATH}/${encodeURIComponent(token)}`;
   const message = buildInvitationEmail({ kind: input.kind, fullName: input.fullName, url: invitationUrl, inviterName: input.inviterName, businessName: input.businessName, access: input.access });
-  const delivery = await deliverEmail({ to: input.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `account_invitations:${invitation.id}` });
+  const delivery = await deliverEmail({ to: input.email, subject: message.subject, body: message.body, sender: "business_support", invitationId: invitation.id, idempotencyKey: `account_invitations:${invitation.id}` });
   await db.update(accountInvitations).set({ deliveryStatus: delivery.status }).where(eq(accountInvitations.id, invitation.id));
   // The link is shown once to whoever invited, because outbound email may not be set up yet.
   return { invitationId: invitation.id, invitationUrl, deliveryStatus: delivery.status };

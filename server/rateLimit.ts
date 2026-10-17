@@ -46,6 +46,12 @@ export const LIMITS = {
   paymentStatus: { scope: "payment_status", max: 20, windowMs: HOUR },
   /** Return-page checks per address, across references: an invented reference must not buy unlimited calls to Paystack. */
   paymentStatusAddress: { scope: "payment_status_ip", max: 60, windowMs: HOUR },
+  /** New private upload tickets from one authenticated actor or upload address. */
+  fileUpload: { scope: "file_upload", max: 30, windowMs: DAY },
+  /** Engagement-room comments from one actor. */
+  engagementComment: { scope: "engagement_comment", max: 60, windowMs: HOUR },
+  /** Invitation and sign-in-link sends initiated by one internal actor. */
+  onboardingEmail: { scope: "onboarding_email", max: 10, windowMs: HOUR },
 } as const satisfies Record<string, RateLimitRule>;
 
 const memory = new Map<string, { count: number; resetAt: number }>();

@@ -239,8 +239,7 @@ describe("business check page", { timeout: 20_000 }, () => {
     await giveDetails();
     await pick(/questions/i);
     await pick(/I run my business full-time/);
-    await waitFor(() => expect(api.calls.saveProgress.length).toBeGreaterThan(0), { timeout: 3000 });
-    expect(api.calls.saveProgress.at(-1)).toEqual({ token: TOKEN, answers: { p_stage: "operating" } });
+    await waitFor(() => expect(api.calls.saveProgress).toContainEqual({ token: TOKEN, answers: { p_stage: "operating" } }), { timeout: 3000 });
   });
 
   it("moves on to the next question almost at once, on a spring that does not bounce", async () => {

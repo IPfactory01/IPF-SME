@@ -78,6 +78,13 @@
       "when": 1791725383803,
       "tag": "0010_rate_limits_reset_tokens_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792142400000,
+      "tag": "0011_bitter_squadron_sinister",
+      "breakpoints": true
     }
   ]
 }

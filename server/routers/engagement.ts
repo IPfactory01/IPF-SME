@@ -52,6 +52,11 @@ import {
 import { checkFileStorage } from "../fileStorage";
 import { loadAuthority } from "../platformAccess";
 import { accountProcedure, adminProcedure, router } from "../_core/trpc";
+import { consumeLimit, LIMITS } from "../rateLimit";
+
+async function enforceLimit(rule: typeof LIMITS.fileUpload | typeof LIMITS.engagementComment, subject: string) {
+  if (!(await consumeLimit(rule, subject))) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Kindly try again later." });
+}
 
 const id = z.number().int().positive();
 const text = (max: number) => z.string().trim().max(max);
@@ -150,8 +155,8 @@ const staffRouter = router({
     .mutation(async ({ ctx, input }) => guarded(async () => saveDeliverable(await engagementDb(), ctx.actor, input))),
   approveDeliverable: staff.input(z.object({ deliverableId: id })).mutation(async ({ ctx, input }) => guarded(async () => approveDeliverable(await engagementDb(), ctx.actor, input))),
   shareDeliverable: staff.input(z.object({ deliverableId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareDeliverable(await engagementDb(), ctx.actor, input))),
-  comment: staff.input(z.object({ deliverableId: id, body: text(4000).min(1) })).mutation(async ({ ctx, input }) => guarded(async () => staffComment(await engagementDb(), ctx.actor, input))),
-  requestUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input))),
+  comment: staff.input(z.object({ deliverableId: id, body: text(4000).min(1) })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.engagementComment, `staff:${ctx.actor.id}`); return guarded(async () => staffComment(await engagementDb(), ctx.actor, input)); }),
+  requestUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, ...upload })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileUpload, `staff:${ctx.actor.id}`); return guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input)); }),
   confirmUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
   saveMeasure: staff.input(z.object({ engagementId: id, name: text(160).min(1, "Name the number."), definition: optionalText(2000), unit: optionalText(32), baselineValue: reading, targetValue: reading }))
@@ -177,10 +182,10 @@ const clientRouter = router({
     }
   }),
   respondToTask: accountProcedure.input(z.object({ taskId: id, note: optionalText(500) })).mutation(async ({ ctx, input }) => guarded(async () => respondToTask(await engagementDb(), ctx.account, input))),
-  comment: accountProcedure.input(z.object({ deliverableId: id, body: text(4000).min(1, "Write your comment first.") })).mutation(async ({ ctx, input }) => guarded(async () => clientComment(await engagementDb(), ctx.account, input))),
+  comment: accountProcedure.input(z.object({ deliverableId: id, body: text(4000).min(1, "Write your comment first.") })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.engagementComment, `account:${ctx.account.user.id}`); return guarded(async () => clientComment(await engagementDb(), ctx.account, input)); }),
   accept: accountProcedure.input(z.object({ deliverableId: id })).mutation(async ({ ctx, input }) => guarded(async () => acceptDeliverable(await engagementDb(), ctx.account, input))),
   setAudience: accountProcedure.input(z.object({ item: z.enum(["notes", "deliverable"]), id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => setClientAudience(await engagementDb(), ctx.account, input))),
-  requestUpload: accountProcedure.input(z.object({ taskId: id, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientRequestUpload(await engagementDb(), ctx.account, input))),
+  requestUpload: accountProcedure.input(z.object({ taskId: id, ...upload })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileUpload, `account:${ctx.account.user.id}`); return guarded(async () => clientRequestUpload(await engagementDb(), ctx.account, input)); }),
   confirmUpload: accountProcedure.input(z.object({ taskId: id, storageKey, note: optionalText(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmUpload(await engagementDb(), ctx.account, input))),
   fileLink: accountProcedure.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => clientFileLink(await engagementDb(), ctx.account, input))),
 });

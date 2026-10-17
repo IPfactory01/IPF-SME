@@ -14,7 +14,7 @@ describe("booking the free discovery call", () => {
   });
 
   it("also gives a plain link to the same Calendly page with the details filled in, for when the embed is blocked", () => {
-    const target = bookingTarget("https://calendly.com/ipfactory-info/ipf-free-20-minute-discovery-call", { name: "Ada Example", email: "ada@example.com", host: "ipf-sme.vercel.app" });
+    const target = bookingTarget("https://calendly.com/ipfactory-info/ipf-free-20-minute-discovery-call", { name: "Ada Example", email: "ada@example.com", host: "www.ipfactory.co" });
     if (target.kind !== "calendly") throw new Error("expected a Calendly target");
     const open = new URL(target.openUrl);
     expect(open.origin + open.pathname).toBe("https://calendly.com/ipfactory-info/ipf-free-20-minute-discovery-call");

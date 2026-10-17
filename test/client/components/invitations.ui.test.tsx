@@ -67,7 +67,7 @@ describe("joining by invitation", () => {
     api.preview = { available: true, kind: "staff", email: "ola@example.com", fullName: "Ola Analyst", businessName: null, access: null };
     api.acceptReply = { landingPath: "/admin", user: { email: "ola@example.com" } };
     const location = renderJoin();
-    expect(screen.getByText(/invited to the IP Factory team on Advisory as a Service/)).toBeTruthy();
+    expect(screen.getByText(/invited to the IP Factory team on The Shift/)).toBeTruthy();
     expect((screen.getByLabelText("Email") as HTMLInputElement).readOnly).toBe(true);
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "correct horse 42" } });
     fireEvent.change(screen.getByLabelText("Confirm password"), { target: { value: "correct horse 42" } });

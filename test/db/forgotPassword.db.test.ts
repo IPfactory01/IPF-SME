@@ -93,7 +93,7 @@ for (const target of targets) {
       expect(answer).toEqual({ success: true });
 
       const sent = emails().find(item => item.to === client.email)!;
-      expect(sent.subject).toBe("Reset your password on Advisory as a Service");
+      expect(sent.subject).toBe("Reset your password on The Shift");
       expect(sent.body).toContain("Someone asked to reset the password for this email address");
       expect(sent.sender).toBe("business_support");
       const [row] = await resetRows(client.id);
@@ -138,7 +138,7 @@ for (const target of targets) {
       expect(await db.select().from(schema.userCredentials).where(eq(schema.userCredentials.userId, owner.id))).toEqual([]);
 
       const sent = emails().find(item => item.to === OWNER_ADMIN_EMAIL)!;
-      expect(sent.subject).toBe("Set your password on Advisory as a Service");
+      expect(sent.subject).toBe("Set your password on The Shift");
       expect(sent.body).toContain("Set your password: ");
       expect((await (await browser().call()).account.resetPreview({ token: linkIn(sent.body) }))).toEqual({ available: true, email: OWNER_ADMIN_EMAIL });
       await (await browser().call()).account.resetPassword({ token: linkIn(sent.body), password: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
@@ -152,7 +152,7 @@ for (const target of targets) {
       // Asked again later, it is an ordinary reset of the password that now exists.
       mocked.deliverEmail.mockClear();
       await (await browser().call()).account.requestReset({ email: OWNER_ADMIN_EMAIL });
-      expect(emails()[0].subject).toBe("Reset your password on Advisory as a Service");
+      expect(emails()[0].subject).toBe("Reset your password on The Shift");
     });
   });
 }

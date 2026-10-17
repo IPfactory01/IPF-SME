@@ -1,6 +1,6 @@
 # IP Factory (IPF) — Business Support Platform
 
-The platform behind **Advisory as a Service, by IP Factory**: support for business owners. Find it. Fix it. See the results.
+The platform behind **The Shift, by IP Factory**: support for business owners. Find it. Fix it. See the results.
 Live at https://www.ipfactory.co (Vercel, deploying `main`).
 
 ## What it does

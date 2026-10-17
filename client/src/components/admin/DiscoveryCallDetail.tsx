@@ -134,7 +134,7 @@ const DEBRIEF_FIELDS = [
 type DebriefKey = (typeof DEBRIEF_FIELDS)[number]["key"];
 
 /**
- * The Discovery Call written up within the hour, following the Client Debrief Meeting guide cut to Advisory as a Service. It informs the
+ * The Discovery Call written up within the hour, following the Client Debrief Meeting guide cut to The Shift. It informs the
  * Work Plan and, once shared, opens the owner's room warm. Saving and sharing are separate, deliberate steps.
  */
 function DebriefSummary({ businessCheckId, heldAt }: { businessCheckId: number; heldAt: Date | string | null }) {

@@ -106,7 +106,7 @@ for (const target of targets) {
       return (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId });
     }
     async function acceptInvitation(email: string, businessName: string) {
-      const invitation = emails().filter(sent => sent.to === email && sent.subject === "Set up your client account on Advisory as a Service").at(-1)!;
+      const invitation = emails().filter(sent => sent.to === email && sent.subject === "Set up your client account on The Shift").at(-1)!;
       const inviteToken = decodeURIComponent(invitation.body.match(/Create your account: (\S+)/)![1].split("/onboarding/")[1]);
       const owner = browser();
       await (await owner.call()).onboarding.accept({ token: inviteToken, email, fullName: `Owner of ${businessName}`, password: PASSWORD, confirmPassword: PASSWORD, businessName });

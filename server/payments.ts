@@ -16,7 +16,7 @@ import { paystackMode } from "./paystack";
 import { getTrustedApplicationOrigin } from "./security";
 
 /**
- * Paying for Advisory as a Service: online with Paystack only (server/onlinePayment.ts). The owner is emailed the amount, a reference
+ * Paying for The Shift: online with Paystack only (server/onlinePayment.ts). The owner is emailed the amount, a reference
  * and a "Pay online" link; Paystack's checkout takes card, bank transfer or USSD, and the payment confirms itself through
  * `confirmPayment`. There is no bank account to pay into and no proof of payment to send. Confirming the Current State
  * Assessment payment wins the business and sends the client account invitation, which is where the assessment starts.

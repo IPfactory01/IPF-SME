@@ -362,10 +362,10 @@ describe("account dashboard", () => {
   it("wears the site's brand: the mark and the product name lead back to the room", () => {
     api.state.me = SESSION;
     renderAt("/dashboard", <AccountDashboard />);
-    const home = screen.getByRole("link", { name: "Advisory as a Service, by IP Factory" });
+    const home = screen.getByRole("link", { name: "The Shift, by IP Factory" });
     expect(home.getAttribute("href")).toBe("/dashboard");
     expect(home.querySelector("img")!.getAttribute("alt")).toBe("IP Factory");
-    expect(home.textContent).toBe("Advisory as a Service");
+    expect(home.textContent).toBe("The Shift");
     expect(screen.getByRole("link", { name: "Your room" }).getAttribute("href")).toBe("/dashboard");
   });
 

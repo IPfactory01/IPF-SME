@@ -429,7 +429,7 @@ for (const target of targets) {
         const invitations = await db.select().from(schema.clientOnboardingInvitations).where(eq(schema.clientOnboardingInvitations.businessCheckId, id));
         // The invitation row needs a person: it is recorded against whoever sent the payment details.
         expect(invitations).toEqual([expect.objectContaining({ status: "pending", createdByUserId: ownerId })]);
-        expect(emails().filter(sent => sent.to === email).map(sent => sent.subject)).toEqual(["Payment received: your Current State Assessment starts", "Set up your client account on Advisory as a Service"]);
+        expect(emails().filter(sent => sent.to === email).map(sent => sent.subject)).toEqual(["Payment received: your Current State Assessment starts", "Set up your client account on The Shift"]);
         expect(emails().find(sent => sent.to === email)!.body).not.toContain("TEST MODE");
         const invited = await db.select().from(schema.adminAccessAuditEvents).where(and(eq(schema.adminAccessAuditEvents.action, "client_onboarding_invitation_created"), sql`${schema.adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(id)}`));
         expect(invited).toEqual([expect.objectContaining({ actorUserId: null })]);

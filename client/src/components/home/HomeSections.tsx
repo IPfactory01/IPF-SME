@@ -89,10 +89,9 @@ export function Hero({ onStart }: { onStart: () => void }) {
       <motion.div aria-hidden className="pointer-events-none absolute -right-24 top-10 h-[26rem] w-[26rem] rounded-full bg-highlight/20 blur-3xl" animate={calm ? undefined : { x: [0, -50, 0], y: [0, 50, 0] }} transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }} />
 
       <div className="relative container mx-auto max-w-5xl px-4 text-center">
-        <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }} className="mx-auto mb-8 inline-flex items-center gap-2 border border-brand-line bg-paper-raised/70 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-brand backdrop-blur sm:px-4 sm:text-[11px] sm:tracking-[0.2em]">
+        <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }} className="mx-auto mb-8 inline-flex items-center gap-2 border border-brand-line bg-paper-raised/70 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brand backdrop-blur">
           <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full motion-safe:animate-ping rounded-full bg-highlight opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-highlight" /></span>
-          {/* One line on a phone; on the narrowest screens it breaks after the comma, never inside the name. */}
-          <span><span className="whitespace-nowrap">{BRAND.productName},</span> <span className="whitespace-nowrap">by {BRAND.organisationName}</span></span>
+          {BRAND.productEndorsement}
         </motion.p>
 
         <motion.h1 initial="hidden" animate="show" transition={{ staggerChildren: 0.18 }} className="mb-8 font-serif text-5xl font-black leading-[1.05] tracking-tight text-ink sm:text-7xl md:text-8xl">
@@ -109,7 +108,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
             &ldquo;Some owners know exactly what their business needs. Most can only feel the problem. Either way, we start there.&rdquo;
           </p>
           <p className="mx-auto mb-12 max-w-2xl text-lg leading-relaxed text-ink-600">
-            With {BRAND.productName}, we get in with you, name the real problem, show you exactly what to do, give you the tools, and check your work every week until the number moves.
+            On {BRAND.productName}, we get in with you, name the real problem, show you exactly what to do, give you the tools, and check your work every week until the number moves.
           </p>
           <div className="flex flex-col items-center gap-4">
             <CtaButton onClick={onStart} className="w-full max-w-sm">Start with a free Business Check</CtaButton>

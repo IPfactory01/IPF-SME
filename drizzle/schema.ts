@@ -739,7 +739,7 @@ export const businessChecks = pgTable("business_checks", {
 
 /**
  * The Discovery Call: the free call after the Business Check, written up by the analyst within the hour following the firm's
- * Client Debrief Meeting guide, cut to Advisory as a Service. One per business check. It informs the Work Plan and, once shared,
+ * Client Debrief Meeting guide, cut to The Shift. One per business check. It informs the Work Plan and, once shared,
  * opens the owner's room warm: what we heard, the problem in their words, what success looks like, what they tried.
  */
 export const debriefs = pgTable("debriefs", {

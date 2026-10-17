@@ -1,4 +1,4 @@
--- Advisory as a Service: apply migration 0010 (rate-limit counters, password reset links and the first index set).
+-- The Shift: apply migration 0010 (rate-limit counters, password reset links and the first index set).
 -- Does exactly what `pnpm db:migrate` would: creates rate_limit_counters and user_password_reset_tokens, adds the
 -- indexes the console's queries need (business_checks, the audit log, user_sessions, engagement comments, files and
 -- tasks), and records the migration in drizzle.__drizzle_migrations, so `pnpm db:verify` and later migrations stay in

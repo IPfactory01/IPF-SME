@@ -97,7 +97,7 @@ describe("the payment confirmed email", () => {
     const email = paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012" });
     expect(email.subject).toBe("Payment received: your Current State Assessment starts");
     expect(email.body).toContain("WHAT HAPPENS NEXT");
-    expect(email.body).toContain("• We email you a link to set up your client account on Advisory as a Service.");
+    expect(email.body).toContain("• We email you a link to set up your client account on The Shift.");
     expect(`${email.subject}\n${email.body}`).not.toMatch(/JUMP|Emmanuel Tarfa/);
   });
 });

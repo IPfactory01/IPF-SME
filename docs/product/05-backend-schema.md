@@ -45,7 +45,7 @@ erDiagram
 - Schema changes go through `drizzle/schema.ts` then `pnpm db:generate`; never by hand. Migrations `0000` to `0007` are
   applied to Supabase; `0008` (the engagement room) was applied on 10 October (`docs/database-migrations.md`).
 
-## 2. Tables of Advisory as a Service (current platform)
+## 2. Tables of The Shift (current platform)
 
 ### Identity and access
 
@@ -114,7 +114,7 @@ and the room says it is not set up. Vocabulary and the who-sees-what rules: `sha
 
 ## 3. JUMP-era tables (legacy)
 
-Kept so JUMP participants and history still work. The Advisory as a Service flow does not read or write them. Retire them only once
+Kept so JUMP participants and history still work. The Shift's flow does not read or write them. Retire them only once
 nothing reads them (implementation plan, phase 5).
 
 | Area | Tables |
@@ -127,7 +127,7 @@ nothing reads them (implementation plan, phase 5).
 | JUMP sessions | `schedule_slots`, `schedule_bookings`, `scheduled_reminder_deliveries` |
 | JUMP email | `email_logs` (every row needs a registration), `inbound_email_replies` |
 
-Note: Advisory as a Service records email delivery on its own rows (`deliveryStatus` on payments, invitations and reports), not in
+Note: The Shift records email delivery on its own rows (`deliveryStatus` on payments, invitations and reports), not in
 `email_logs`.
 
 ## 4. Who can see what
@@ -150,7 +150,7 @@ authority is the union of their roles, any profile the Super Admin set, and the 
 Business membership roles (`shared/businessCapabilities.ts`): an **owner** can view, edit the profile, manage members,
 invite and manage billing; a **business_admin** can view, edit and manage members; a **member** can view.
 
-### Access matrix for the Advisory as a Service data
+### Access matrix for The Shift's data
 
 ✅ allowed · ⚪ own records only · — no access. "Assigned" scope needs engagement assignments (section 5); until then no
 procedure grants assigned-only access.
@@ -213,7 +213,7 @@ Found while writing this document.
 |---|---|---|
 | `business_checks.publicToken` is stored in plain text and works as a bearer token for that check | Someone with database read access could resume or submit another person's check | Store a hash, as every other token does; migrate existing rows |
 | Full report links (`full_reports.tokenHash`) never expire and the report procedures have no rate limit | A forwarded link opens the report indefinitely | Add an expiry after delivery (or limit downloads) and a rate limit like onboarding's |
-| ~~The 30 tables from the baseline migration have no foreign keys or indexes beyond primary and unique keys~~ | Migration 0010 (11 October) indexes `business_checks` (created, call requested, stage, `lower(email)`), the audit log (action, created), `user_sessions` (user, expiry), engagement comments, files and tasks. The JUMP-era tables keep no indexes | Done for Advisory as a Service's tables (0010 applied 12 October) |
+| ~~The 30 tables from the baseline migration have no foreign keys or indexes beyond primary and unique keys~~ | Migration 0010 (11 October) indexes `business_checks` (created, call requested, stage, `lower(email)`), the audit log (action, created), `user_sessions` (user, expiry), engagement comments, files and tasks. The JUMP-era tables keep no indexes | Done for The Shift's tables (0010 applied 12 October) |
 | ~~No engagement assignment table~~ | Fixed by 0008: `engagement_team`; `view_assigned_businesses` now opens the engagements a person is on | Done (once 0008 is applied) |
 | ~~`adminAccess.listTeam` lists only legacy admins~~ | Fixed 9 October: Admin Team now shows a Staff list from `user_platform_roles` above the legacy list | Done |
 | `businessSupport.downloadReport` needs `manage_client_onboarding` while `resendReportLink` needs `manage_payments` | Finance can resend but not download | Decide which permission owns the report |

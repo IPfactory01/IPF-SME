@@ -6,7 +6,7 @@ import { recordAudit } from "./audit";
 
 /**
  * The Discovery Call: the free call after the Business Check, written up by the analyst within the hour, following the
- * firm's Client Debrief Meeting guide cut to Advisory as a Service. One record per business check. It informs the Work Plan,
+ * firm's Client Debrief Meeting guide cut to The Shift. One record per business check. It informs the Work Plan,
  * and once shared it opens the owner's room warm. Nothing here decides who may call it: the routers do.
  */
 

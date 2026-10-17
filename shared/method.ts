@@ -1,8 +1,8 @@
 /**
- * The method's names (ET, 10 October 2026): every stage, artefact and ritual of Advisory as a Service has a proper name, used
+ * The method's names (ET, 10 October 2026): every stage, artefact and ritual of The Shift has a proper name, used
  * the same way on the site, in the admin, in the room and in email. Term first, meaning second: the name is the
  * heading, the sentence under it says what it means in plain English. Brand lines ("Find it. Fix it. See the
- * results.", "Advisory as a Service") are not method names and do not change.
+ * results.", "The Shift") are not method names and do not change.
  *
  * The free 20-minute call is the Discovery Call (ET, 12 October 2026), not the Debrief: "Debrief" is kept free for one
  * of the Current State Assessment's sessions. The code and the database still say debrief for it (the `debriefs`

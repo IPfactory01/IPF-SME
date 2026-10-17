@@ -17,7 +17,7 @@ describe("Resend secret configuration", () => {
       headers: {
         accept: "application/json",
         authorization: `Bearer ${apiKey}`,
-        "user-agent": "advisory-as-a-service-platform/1.0",
+        "user-agent": "the-shift-platform/1.0",
       },
     });
 
@@ -43,7 +43,7 @@ describe("Resend secret configuration", () => {
       headers: {
         accept: "application/json",
         authorization: `Bearer ${apiKey}`,
-        "user-agent": "advisory-as-a-service-platform/1.0",
+        "user-agent": "the-shift-platform/1.0",
       },
     });
     const payload = (await response.json()) as { data?: ResendDomain[] };

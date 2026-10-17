@@ -1,6 +1,6 @@
 # 1. Product requirements (PRD)
 
-**Product:** Advisory as a Service, by IP Factory (`BRAND.productEndorsement` in `shared/brand.ts`)
+**Product:** The Shift, by IP Factory (`BRAND.productEndorsement` in `shared/brand.ts`)
 **Promise:** Find it. Fix it. See the results.
 **Status:** v0.1 live at https://www.ipfactory.co, built up to the start of the Current State Assessment. Last reviewed 9 October 2026.
 **Source:** *Business Support Concept Note and Launch Blueprint v0.8.1* (6 October 2026), referred to below as "the concept note" with its section numbers, plus the decisions taken while building (section 9).
@@ -12,7 +12,7 @@ This document says what the product does, feature by feature, and the status of 
 
 ## 1. The product in one page
 
-Business owners at this size know roughly what to do and cannot get it done (concept note §2). Advisory as a Service gets into the
+Business owners at this size know roughly what to do and cannot get it done (concept note §2). The Shift gets into the
 business with the owner, names the problem, tells them what to do, hands over the tools and checks the work every week
 until one agreed number moves. **The business owner does the work; IP Factory prescribes, equips, reviews and tracks.**
 Analysts and AI do most of the analysis under a named IP Factory consultant, and we say so.
@@ -68,10 +68,10 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
   works with prices, the ten places a business gets stuck, who it is for, who you work with, questions, the ask.
 - Trust without names (ET, 13 October 2026): a track record strip under the hero (250+ clients, 50+ years of partner
   experience, since 2011, the number of sectors; `BRAND.trackRecord`), sourced figures under the problem ("They fail
-  between knowing and doing", concept note §2–3), and **The experience behind Advisory as a Service**: IP Factory as the delivery
+  between knowing and doing", concept note §2–3), and **The experience behind The Shift**: IP Factory as the delivery
   and method arm of Enzo Krypton & Co. (named from 14 October; linked when `trackRecord.groupUrl` is set), the sectors
   as a list, "The same method we use with larger clients. Run at the size and the price that fits your business.", and
-  **Clients**, named once, as logos in a strip under the track record figures, "The team behind Advisory as a Service has worked with", in equal tiles, in ink until a mouse points at one (`trackRecord.clientLogos`, files in `client/public/clients`): LSETF, Bank of Industry, FSDH, Helium Health, MAX, Ruff 'n' Tumble and SKLD, confirmed by ET on 16 October from the Enzo Krypton company profile; worded as work done, never an endorsement, and never a government crest or a multilateral's mark. Partners are not
+  **Clients**, named once, as logos in a strip under the track record figures, "The team behind The Shift has worked with", in equal tiles, in ink until a mouse points at one (`trackRecord.clientLogos`, files in `client/public/clients`): LSETF, Bank of Industry, FSDH, Helium Health, MAX, Ruff 'n' Tumble and SKLD, confirmed by ET on 16 October from the Enzo Krypton company profile; worded as work done, never an endorsement, and never a government crest or a multilateral's mark. Partners are not
   named; every figure must stay defensible.
 - Copy rules: second person, short sentences, naira in full, no consulting words, never "door", "sprint", "playbook"
   or "retainer" (§3 front matter; `AGENTS.md`).
@@ -366,10 +366,10 @@ actions are recorded in the room, and the team's internal tasks stay in ClickUp.
 The concept note v0.8.1 stays the strategy. Where the built product differs from it, this is the record, with who
 decided. "Confirmed" means a change made while building and confirmed by ET on 9 October 2026.
 
-| Concept note v0.8.1 | What Advisory as a Service does | Status |
+| Concept note v0.8.1 | What The Shift does | Status |
 |---|---|---|
 | Built on IP Factory's copy of Jump, on Manus (D5, D7, D8) | Vercel, Supabase and GitHub; Manus remains only for the AI summary and old file storage | Decided |
-| Product name "Operating Partner [working name]" | "Advisory as a Service, by IP Factory" | Decided (ET, 17 October; it replaced "The Shift", chosen by Lewis on 7 October) |
+| Product name "Operating Partner [working name]" | "The Shift, by IP Factory" | Decided (Lewis, 7 October) |
 | Hero: "You know what your business needs…" | Headline "Find it. Fix it. See the results." | Decided |
 | A Paystack link after the call | A "Pay online" button in the payment details email opens Paystack; Paystack is the only way to pay (12 October) | Built (12 October) |
 | Full report "by email", from the check | Paid, then a 17-question form; a deterministic PDF sent the moment it is finished | Decided (ET, 8 October) |

@@ -287,7 +287,7 @@ exports[`the full report > is deterministic: the same answers give the same repo
   "businessName": "Adunni Fabrics",
   "date": "9 October 2026",
   "descriptor": "A retail business that buys and sells goods, trading for two to five years",
-  "method": "Built by the fixed rules of Advisory as a Service from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on 9 October 2026. It is not an audit, a valuation, or financial, legal or tax advice.",
+  "method": "Built by The Shift's fixed rules from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on 9 October 2026. It is not an audit, a valuation, or financial, legal or tax advice.",
   "onePage": {
     "benchmarks": [
       {

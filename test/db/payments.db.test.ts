@@ -1,5 +1,5 @@
 /**
- * Paying for Advisory as a Service by bank transfer until online payment is ready: the full report's payment details go out when
+ * Paying for The Shift by bank transfer until online payment is ready: the full report's payment details go out when
  * the owner asks for it; the team sends Current State Assessment payment details after the call, notes proof and confirms the
  * money; confirming Current State Assessment wins the business and sends the client account invitation. Real application code on
  * PostgreSQL (PGlite on every run, plus TEST_DATABASE_URL via `pnpm test:db`). Email and the language model are stubbed.
@@ -277,7 +277,7 @@ for (const target of targets) {
         expect(invitations).toHaveLength(1);
         expect(invitations[0].status).toBe("pending");
         const subjects = emails().filter(sent => sent.to === email).map(sent => sent.subject);
-        expect(subjects).toEqual(["Payment received: your Current State Assessment starts", "Set up your client account on Advisory as a Service"]);
+        expect(subjects).toEqual(["Payment received: your Current State Assessment starts", "Set up your client account on The Shift"]);
         const confirmation = emails().find(sent => sent.subject === "Payment received: your Current State Assessment starts")!;
         expect(confirmation.body).toContain("Three working days to get set up, then we start.");
         const audit = (await auditsFor("payment_confirmed", id)).map((event: { details: string }) => JSON.parse(event.details));
@@ -343,7 +343,7 @@ for (const target of targets) {
         expect(results.filter(result => result.changed)).toEqual([expect.objectContaining({ invitation: "sent" })]);
         const invitations = await db.select().from(schema.clientOnboardingInvitations).where(eq(schema.clientOnboardingInvitations.businessCheckId, id));
         expect(invitations.map((invitation: { status: string }) => invitation.status)).toEqual(["pending"]);
-        expect(emails().filter(sent => sent.to === email).map(sent => sent.subject)).toEqual(["Payment received: your Current State Assessment starts", "Set up your client account on Advisory as a Service"]);
+        expect(emails().filter(sent => sent.to === email).map(sent => sent.subject)).toEqual(["Payment received: your Current State Assessment starts", "Set up your client account on The Shift"]);
       });
 
       it("does not send a second invitation when one is already out", async () => {
@@ -381,7 +381,7 @@ for (const target of targets) {
         expect((await rowFor(token)).pipelineStage).toBe("won");
 
         // 4. The owner follows the link in the invitation email and creates their client account.
-        const invitation = emails().find(sent => sent.to === email && sent.subject === "Set up your client account on Advisory as a Service")!;
+        const invitation = emails().find(sent => sent.to === email && sent.subject === "Set up your client account on The Shift")!;
         const link = invitation.body.match(/Create your account: (\S+)/)![1];
         const inviteToken = decodeURIComponent(link.split("/onboarding/")[1]);
         const owner = browser();

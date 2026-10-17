@@ -1,7 +1,6 @@
 import { DISC_STYLES, READINESS_LABELS, sectorOf, type AreaRead, type CheckResult } from "../businessCheck/engine";
 import { SECTOR_NOUNS } from "../businessCheck/sectorExamples";
 import { AREA_NAMES, GAP_LABELS, SECTIONS, type Answers, type Health } from "../businessCheck/questions";
-import { BRAND } from "../brand";
 import { CURRENT_STATE, formatNaira, PRICES } from "../businessSupport";
 import { AREA_CONTENT, AREA_DEFAULT_MOVE, IDEA_CONTENT, IDEA_READINGS, type DetailReading } from "./content";
 import {
@@ -997,7 +996,7 @@ export function buildFullReport(input: ReportInput): FullReport {
     background,
     sections,
     appendix: appendix(answers, intake),
-    method: `Built by the fixed rules of ${BRAND.productName} from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on ${reportDate(input.date)}. It is not an audit, a valuation, or financial, legal or tax advice.`,
+    method: `Built by The Shift's fixed rules from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on ${reportDate(input.date)}. It is not an audit, a valuation, or financial, legal or tax advice.`,
   };
 
   /** The three findings that matter most, root cause first. */

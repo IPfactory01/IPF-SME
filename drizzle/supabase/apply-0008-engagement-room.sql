@@ -1,4 +1,4 @@
--- Advisory as a Service: apply migration 0008 (the engagement room).
+-- The Shift: apply migration 0008 (the engagement room).
 -- Does exactly what `pnpm db:migrate` would: creates the 11 engagement room tables and records the migration in
 -- drizzle.__drizzle_migrations, so `pnpm db:verify` and later migrations stay in step. Additive only: no existing
 -- table changes. Safe to run once: it stops, changing nothing, unless the database is exactly at migration 0007.

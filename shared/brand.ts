@@ -25,12 +25,11 @@ export const BRAND = {
   organisationName: "IP Factory",
   organisationLegalName: "Intellectual Property Factory",
   /**
-   * The business-support offer's public name ([NAME] in the concept note's site copy): Advisory as a Service, chosen by
-   * ET on 17 October 2026 (it replaced the 7 October name; see the PRD). A proper name: no article or "your" before it,
-   * never shortened to "AaaS" in copy. Written out in full with its maker as productEndorsement.
+   * The business-support offer's public name ([NAME] in the concept note's site copy), chosen
+   * 7 October 2026. Written out in full with its maker as productEndorsement.
    */
-  productName: "Advisory as a Service",
-  productEndorsement: "Advisory as a Service, by IP Factory",
+  productName: "The Shift",
+  productEndorsement: "The Shift, by IP Factory",
   productTagline: "Support for business owners",
   /**
    * The track record the site states, confirmed by ET on 13 October 2026. Every figure must stay defensible. The parent

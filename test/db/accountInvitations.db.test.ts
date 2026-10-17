@@ -128,7 +128,7 @@ for (const target of targets) {
         const issued = await (await superAdmin.call()).invitations.staff.invite({ email, fullName: "Ola Analyst", role: "analyst" });
         expect(issued.invitationUrl).toContain("/join/");
         const sent = emails().find(item => item.to === email)!;
-        expect(sent.subject).toBe("Join the IP Factory team on Advisory as a Service");
+        expect(sent.subject).toBe("Join the IP Factory team on The Shift");
         const stored = (await db.select().from(schema.accountInvitations).where(eq(schema.accountInvitations.id, issued.invitationId)))[0];
         expect(stored.tokenHash).not.toContain(tokenFrom(email));
 
@@ -172,7 +172,7 @@ for (const target of targets) {
         const { owner, businessCheckId } = await client("seat");
         const email = uniqueEmail("coordinator");
         await (await owner.call()).invitations.seats.invite({ email, fullName: "Chidi Coordinator", access: "contributor" });
-        expect(emails().find(item => item.to === email)!.subject).toBe("Owner seat invited you to Business seat on Advisory as a Service");
+        expect(emails().find(item => item.to === email)!.subject).toBe("Owner seat invited you to Business seat on The Shift");
         await expect((await owner.call()).invitations.seats.invite({ email: uniqueEmail("second"), fullName: "Second Person", access: "full" })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
         const preview = await (await browser().call()).invitations.preview({ token: tokenFrom(email) });

@@ -85,13 +85,13 @@ export default function Home() {
       <ScrollProgress />
       <header className={`border-b bg-paper/85 backdrop-blur-md sticky top-0 z-50 transition-[box-shadow,border-color] duration-300 ${scrolled ? "border-line shadow-[0_8px_30px_-12px_rgba(18,50,79,0.25)]" : "border-transparent"}`}>
         <div className={`container flex items-center justify-between transition-[height] duration-300 ${scrolled ? "h-16" : "h-20"}`}>
-          <a href="#top" onClick={onSectionLinkClick} className="flex shrink-0 items-center gap-3" aria-label={BRAND.productEndorsement}>
+          <a href="#top" onClick={onSectionLinkClick} className="flex items-center gap-3" aria-label={BRAND.productEndorsement}>
             <img src={BRAND.markUrl} alt={BRAND.organisationName} className="h-10 w-auto shrink-0" />
-            <span className="hidden whitespace-nowrap border-l border-line pl-3 text-xs font-semibold uppercase tracking-widest text-ink-muted xl:inline-block">{BRAND.productName}</span>
+            <span className="hidden sm:inline-block border-l border-line pl-3 text-xs font-semibold uppercase tracking-widest text-ink-muted">{BRAND.productName}</span>
           </a>
-          <nav className="hidden lg:flex items-center gap-4 text-sm font-medium text-ink-600 xl:gap-7">
+          <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-ink-600">
             {NAV.map((item) => (
-              <a key={item.id} href={`#${item.id}`} onClick={onSectionLinkClick} className={`relative whitespace-nowrap py-1 transition-colors hover:text-brand ${active === item.id ? "text-brand" : ""}`}>
+              <a key={item.id} href={`#${item.id}`} onClick={onSectionLinkClick} className={`relative py-1 transition-colors hover:text-brand ${active === item.id ? "text-brand" : ""}`}>
                 {item.label}
                 {active === item.id && <motion.span layoutId="nav-underline" className="absolute inset-x-0 -bottom-0.5 h-0.5 bg-highlight-ink" transition={{ type: "spring", stiffness: 400, damping: 34 }} />}
               </a>

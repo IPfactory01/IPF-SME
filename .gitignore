@@ -115,3 +115,5 @@ client/public/__manus__/version.json
 .vercel
 .env*
 IPF PLATFORM ROLES.docx
+.gitignore
+env.md

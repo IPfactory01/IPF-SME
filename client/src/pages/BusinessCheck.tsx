@@ -30,7 +30,8 @@ import {
   type Step,
 } from "@shared/businessCheck/engine";
 import { AREA_NAMES, GAP_LABELS, SECTIONS, stageOf, type Answers, type Health, type Question, type SectionId } from "@shared/businessCheck/questions";
-import { FULL_REPORT, formatNaira, PRICES, PROMISE } from "@shared/businessSupport";
+import { useServicePrices } from "@/lib/servicePrices";
+import { FULL_REPORT, formatNaira, PROMISE } from "@shared/businessSupport";
 import { bookingTarget, calendlyEventUri, isCalendlyBooking } from "@shared/booking";
 import { describeFounder, STRENGTH_LABELS, type Strength } from "@shared/businessCheck/founderNarrative";
 import { cleanNationalNumber, DEFAULT_COUNTRY, phoneProblem, toInternational } from "@shared/phone";
@@ -774,6 +775,7 @@ function CountUp({ value }: { value: number }) {
 }
 
 function Result({ response, contact, answers, businessName, onRestart }: { response: BusinessCheckResponse; contact: Contact; answers: Answers; businessName: string; onRestart: () => void }) {
+  const prices = useServicePrices();
   const { result, summary } = response;
   const calm = useReducedMotion();
   const founder = result.founder;
@@ -868,7 +870,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
           <span className="mt-1 block font-serif text-xl font-bold text-ink">{FULL_REPORT.pitch}</span>
         </span>
         <span className="inline-flex shrink-0 items-center gap-2 font-semibold text-highlight-ink">
-          Get the Full Report · {formatNaira(PRICES.fullReport)} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+          Get the Full Report{prices ? ` · ${formatNaira(prices.fullReport)}` : ""} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
         </span>
       </motion.button>
 
@@ -984,7 +986,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
           <div className="flex flex-col border-2 border-highlight-ink bg-paper-raised p-6 sm:p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">The Full Report</p>
             <p className="mt-3 font-serif text-2xl font-bold leading-snug text-ink">{FULL_REPORT.name}</p>
-            <p className="mt-3 font-serif text-5xl font-black tracking-tight text-ink">{formatNaira(PRICES.fullReport)}</p>
+            <p className="mt-3 font-serif text-5xl font-black tracking-tight text-ink">{prices ? formatNaira(prices.fullReport) : "\u00a0"}</p>
             <ul className="mt-5 flex-1 space-y-2.5">
               {FULL_REPORT.includes.map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-sm leading-relaxed text-ink-700"><Check className="mt-0.5 h-4 w-4 shrink-0 text-highlight-ink" />{item}</li>

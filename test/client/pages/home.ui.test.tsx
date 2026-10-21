@@ -22,6 +22,7 @@ window.matchMedia ??= ((query: string) => ({ matches: false, media: query, oncha
 const mutation = () => ({ isPending: false, mutate: () => undefined });
 vi.mock("@/lib/trpc", () => ({
   trpc: {
+    businessCheck: { prices: { useQuery: () => ({ data: { fullReport: 100_000, currentState: 500_000 } }) } },
     registration: { requestPortalLink: { useMutation: mutation } },
     participant: { signIn: { useMutation: mutation } },
   },

@@ -14,7 +14,7 @@ afterEach(() => {
 const DEADLINE = new Date("2026-10-11T14:05:00Z");
 const PAY_URL = "https://app.example.test/pay/CHECKTOKEN1234567890/full_report";
 const email = (item: "full_report" | "current_state", mode: "test" | "live" | null = "live") =>
-  paymentDetailsEmail({ fullName: "Ada Example", item, reference: item === "full_report" ? "TS-R-000012" : "TS-CS-000012", deadline: DEADLINE, online: mode ? { url: PAY_URL, mode } : null });
+  paymentDetailsEmail({ fullName: "Ada Example", item, reference: item === "full_report" ? "TS-R-000012" : "TS-CS-000012", deadline: DEADLINE, amountNaira: item === "full_report" ? 100_000 : 500_000, online: mode ? { url: PAY_URL, mode } : null });
 
 describe("the payment email: Paystack only", () => {
   it("gives the amount, the reference and a Pay online button, and no bank details or proof of payment", () => {
@@ -75,16 +75,16 @@ describe("a payment confirmed online", () => {
   });
 
   it("tells the owner in capitals when it was a test payment", () => {
-    const email = paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012", testMode: true });
+    const email = paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", amountNaira: 500_000, reference: "TS-CS-000012", testMode: true });
     expect(email.body).toContain(EMAIL_TEST_NOTICE);
     expect(email.body).toContain("This payment was made in Paystack's test mode, so no real money moved.");
-    expect(paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012" }).body).not.toContain("TEST MODE");
+    expect(paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", amountNaira: 500_000, reference: "TS-CS-000012" }).body).not.toContain("TEST MODE");
   });
 });
 
 describe("the payment confirmed email", () => {
   it("sends the Report Intake link, with the report promised the moment the form is finished", () => {
-    const email = paymentConfirmedEmail({ fullName: "Ada Example", item: "full_report", reference: "TS-R-000012", reportLink: "https://app.example.test/report/TOKEN" });
+    const email = paymentConfirmedEmail({ fullName: "Ada Example", item: "full_report", amountNaira: 100_000, reference: "TS-R-000012", reportLink: "https://app.example.test/report/TOKEN" });
     expect(email.subject).toBe("Payment received: your Full Report");
     expect(email.body).toContain("We have received your payment of ₦100,000 (reference TS-R-000012).");
     expect(email.body).toContain("Your Full Report is built from your answers and emailed to you the moment you finish.");
@@ -94,7 +94,7 @@ describe("the payment confirmed email", () => {
   });
 
   it("starts Current State Assessment and says what happens next", () => {
-    const email = paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012" });
+    const email = paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", amountNaira: 500_000, reference: "TS-CS-000012" });
     expect(email.subject).toBe("Payment received: your Current State Assessment starts");
     expect(email.body).toContain("WHAT HAPPENS NEXT");
     expect(email.body).toContain("• We email you a link to set up your client account on The Shift.");
@@ -105,8 +105,8 @@ describe("the payment confirmed email", () => {
 describe("the name of the paid assessment", () => {
   it("is always Current State Assessment in payment emails, never the short Current State (decided 9 October)", () => {
     const emails = [
-      paymentDetailsEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012", deadline: DEADLINE }),
-      paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012" }),
+      paymentDetailsEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012", deadline: DEADLINE, amountNaira: 500_000 }),
+      paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", amountNaira: 500_000, reference: "TS-CS-000012" }),
     ];
     for (const email of emails) {
       const text = `${email.subject}\n${email.body}`;

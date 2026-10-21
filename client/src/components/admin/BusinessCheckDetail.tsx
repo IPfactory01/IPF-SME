@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import type { AdminSectionId } from "@/lib/adminSections";
 import { READINESS_LABELS } from "@shared/businessCheck/engine";
-import { CURRENT_STATE, formatNaira, PRICES } from "@shared/businessSupport";
+import { CURRENT_STATE, formatNaira } from "@shared/businessSupport";
 import { funnelStatus, isReadyToOnboard, stageDisplayName } from "@shared/businessCheck/funnelStatus";
 import { PIPELINE_LABELS, PIPELINE_STAGES, type PipelineStage } from "@shared/businessCheck/pipeline";
 import { AREA_NAMES, type Health } from "@shared/businessCheck/questions";
@@ -15,6 +15,7 @@ import { CopyButton, DetailField, DetailSection, StatusBadge } from "./AdminPrim
 import { combineDateAndTime, formatDate, formatDateTime, ROUTE_LABELS, whatsappLink } from "./format";
 import { PaymentsPanel } from "./Payments";
 import { PAYMENT_ITEM_DETAILS } from "@shared/payments";
+import { useServicePrices } from "@/lib/servicePrices";
 
 const HEALTH: Record<Health, { label: string; className: string }> = {
   clear: { label: "Clear", className: "border-health-clear/40 bg-health-clear-tint text-ink" },
@@ -128,6 +129,7 @@ function MoveStage({ businessCheckId, current }: { businessCheckId: number; curr
 
 export default function BusinessCheckDetail({ businessCheckId, onOpenSection, onClose }: { businessCheckId: number; onOpenSection: (section: AdminSectionId) => void; onClose: () => void }) {
   const detail = trpc.businessSupport.checkDetail.useQuery({ businessCheckId }, { retry: false, refetchOnWindowFocus: false });
+  const prices = useServicePrices();
   if (detail.isLoading) return <p className="text-sm text-ink-muted">Loading the record…</p>;
   if (detail.error || !detail.data) return <p role="alert" className="text-sm text-danger-strong">{detail.error?.message ?? "This record is not available."}</p>;
 
@@ -166,7 +168,7 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
           <DetailField label="Main area">{mainArea ?? "-"}</DetailField>
           <DetailField label="Readiness">{check.readiness ? READINESS_LABELS[check.readiness] : "-"}</DetailField>
           <DetailField label="Route">{check.route ? ROUTE_LABELS[check.route] ?? check.route : "-"}</DetailField>
-          <DetailField label={`Full Report (${formatNaira(PRICES.fullReport)})`}>{check.reportRequestedAt ? `Requested ${formatDate(check.reportRequestedAt)}` : "Not requested"}</DetailField>
+          <DetailField label={prices ? `Full Report (${formatNaira(prices.fullReport)})` : "Full Report"}>{check.reportRequestedAt ? `Requested ${formatDate(check.reportRequestedAt)}` : "Not requested"}</DetailField>
         </dl>
       </DetailSection>
 

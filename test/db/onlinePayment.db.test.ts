@@ -5,7 +5,7 @@
  * `fetch`: nothing leaves the process. Email and the language model are stubbed.
  */
 import { createHmac } from "node:crypto";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import * as schema from "../../drizzle/schema";
 import { createPgliteHarness, createRemoteHarness, type DbHarness } from "./harness";
@@ -598,6 +598,97 @@ for (const target of targets) {
         paystack.down = false;
         expect(await webhook(charged(reference))).toBe(200);
         expect((await paymentOf(id, "full_report")).status).toBe("confirmed");
+      });
+    });
+
+    describe("service prices set by the server", () => {
+      afterEach(() => {
+        vi.unstubAllEnvs();
+      });
+      const showing = async (token: string) => (await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).amountNaira;
+
+      it("charges, shows, emails and confirms the configured Full Report price, end to end", async () => {
+        vi.stubEnv("FULL_REPORT_PRICE_NGN", "100");
+        expect(await (await browser().call()).businessCheck.prices()).toEqual({ fullReport: 100, currentState: 500_000 });
+        const { token, email, id } = await reportAskedFor("env-price");
+        expect(emails().find(sent => sent.to === email && sent.subject === "Payment details for your Full Report")!.body).toContain("Amount: ₦100\n");
+        expect(await showing(token)).toBe(100);
+        const reference = await start(token, "full_report");
+        // ₦100 is 10,000 kobo; the browser said nothing about an amount.
+        expect(paystack.initialized.at(-1)).toMatchObject({ amount: 10_000, currency: "NGN" });
+        expect(await paymentOf(id, "full_report")).toMatchObject({ amountNaira: 100, status: "requested" });
+        // Paystack charging the old price instead is refused: the amount is compared exactly.
+        pay(reference, { amount: 10_000_000 });
+        expect(await webhook(charged(reference))).toBe(200);
+        expect(await paymentOf(id, "full_report")).toMatchObject({ status: "requested" });
+        pay(reference, { amount: 10_000 });
+        mocked.deliverEmail.mockClear();
+        expect(await webhook(charged(reference))).toBe(200);
+        expect(await webhook(charged(reference))).toBe(200);
+        expect(await paymentOf(id, "full_report")).toMatchObject({ status: "confirmed", amountNaira: 100 });
+        expect(emails().filter(sent => sent.to === email)).toHaveLength(1);
+        expect(emails().find(sent => sent.to === email)!.body).toContain("payment of ₦100 (reference");
+        expect(await auditsFor("payment_confirmed", id)).toHaveLength(1);
+        // No other service is unlocked by it.
+        expect(await db.select().from(schema.engagements).where(eq(schema.engagements.businessCheckId, id))).toHaveLength(0);
+        expect(await db.select().from(schema.paymentRequests).where(eq(schema.paymentRequests.businessCheckId, id))).toHaveLength(1);
+      });
+
+      it("ignores any amount the browser sends: the input names only a token and an item", async () => {
+        const { token, id } = await reportAskedFor("browser-amount");
+        const forged = { token, item: "full_report", amountNaira: 1, amount: 100, amountKobo: 100 } as unknown as { token: string; item: "full_report" };
+        await (await browser().call()).onlinePayment.start(forged);
+        expect(paystack.initialized.at(-1)).toMatchObject({ amount: 10_000_000 });
+        expect(await paymentOf(id, "full_report")).toMatchObject({ amountNaira: 100_000 });
+        expect(await (await browser().call()).onlinePayment.page(forged)).toMatchObject({ amountNaira: 100_000 });
+      });
+
+      it("keeps the stored amount for an existing request when the setting changes later", async () => {
+        vi.stubEnv("FULL_REPORT_PRICE_NGN", "100");
+        const { token, id } = await reportAskedFor("price-later");
+        vi.stubEnv("FULL_REPORT_PRICE_NGN", "100000");
+        expect(await showing(token)).toBe(100);
+        await start(token, "full_report");
+        expect(paystack.initialized.at(-1)).toMatchObject({ amount: 10_000 });
+        expect(await paymentOf(id, "full_report")).toMatchObject({ amountNaira: 100 });
+        vi.stubEnv("FULL_REPORT_PRICE_NGN", "250000");
+        await (await browser().call()).onlinePayment.start({ token, item: "full_report" });
+        expect(paystack.initialized.at(-1)).toMatchObject({ amount: 10_000 });
+      });
+
+      it("never changes a confirmed payment, and the team cannot re-price it", async () => {
+        const { token, id } = await reportAskedFor("confirmed-stays");
+        const reference = await start(token, "full_report");
+        pay(reference, { amount: 10_000_000 });
+        await webhook(charged(reference));
+        vi.stubEnv("FULL_REPORT_PRICE_NGN", "100");
+        await expect((await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "full_report" })).rejects.toMatchObject({ code: "CONFLICT" });
+        expect(await paymentOf(id, "full_report")).toMatchObject({ status: "confirmed", amountNaira: 100_000 });
+      });
+
+      it("in production refuses a low price without the switch, and permits and audits it with the switch", async () => {
+        vi.stubEnv("NODE_ENV", "production");
+        vi.stubEnv("FULL_REPORT_PRICE_NGN", "100");
+        // Asking for the report still works (no payment request is filed with an unsafe price) and nothing can be paid.
+        const { token, id } = await reportAskedFor("low-refused");
+        expect(await db.select().from(schema.paymentRequests).where(eq(schema.paymentRequests.businessCheckId, id))).toHaveLength(0);
+        await expect((await browser().call()).onlinePayment.page({ token, item: "full_report" })).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+        await expect((await browser().call()).onlinePayment.start({ token, item: "full_report" })).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
+        expect(paystack.initialized).toHaveLength(0);
+        // The site still shows the real price, which is all that can be charged.
+        expect(await (await browser().call()).businessCheck.prices()).toEqual({ fullReport: 100_000, currentState: 500_000 });
+
+        vi.stubEnv("ALLOW_LOW_PRICE_TESTING", "true");
+        const reference = await start(token, "full_report");
+        expect(reference).toBeTruthy();
+        expect(paystack.initialized.at(-1)).toMatchObject({ amount: 10_000 });
+        expect(details(await auditsFor("payment_details_sent", id))).toEqual([expect.objectContaining({ amountNaira: 100, lowPriceTesting: true })]);
+        expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("ALLOW_LOW_PRICE_TESTING is on"));
+
+        // Switch off again: the leftover ₦100 request cannot be paid either.
+        vi.stubEnv("ALLOW_LOW_PRICE_TESTING", "false");
+        vi.stubEnv("FULL_REPORT_PRICE_NGN", "100000");
+        await expect((await browser().call()).onlinePayment.start({ token, item: "full_report" })).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
       });
     });
 

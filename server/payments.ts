@@ -3,6 +3,7 @@ import { TRPCError } from "@trpc/server";
 import { businessChecks, clientOnboardingInvitations, paymentRequests, type PaymentRequest } from "../drizzle/schema";
 import { BRAND } from "../shared/brand";
 import { CURRENT_STATE, FULL_REPORT, formatNaira } from "../shared/businessSupport";
+import { resolveBusinessSupportPrice } from "./businessSupportPrices";
 import { effectivePaymentStatus, ONLINE_TEST_NOTICE, PAYMENT_ITEM_DETAILS, PAYMENT_WINDOW_HOURS, paymentDeadline, paymentReference, payPath, type PaymentDisplayStatus, type PaymentItem } from "../shared/payments";
 import type { PipelineStage } from "../shared/businessCheck/pipeline";
 import type { Database } from "./accountAuth";
@@ -42,8 +43,7 @@ export function onlinePaymentOffer(publicToken: string, item: PaymentItem): Onli
  * here and nothing to send back. With online payment off (no Paystack key, which /api/health reports) it says the link
  * is coming, and the team sends it again once Paystack is on.
  */
-export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem; reference: string; deadline: Date; online?: OnlinePaymentOffer | null }) {
-  const { amount } = PAYMENT_ITEM_DETAILS[input.item];
+export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem; reference: string; deadline: Date; amountNaira: number; online?: OnlinePaymentOffer | null }) {
   const report = input.item === "full_report";
   const afterwards = report
     ? `Then we send you the Report Intake, a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your Full Report is emailed to you the moment you finish it.`
@@ -59,7 +59,7 @@ export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem
       "",
       ...(input.online?.mode === "test" ? [EMAIL_TEST_NOTICE, "Online payment is in Paystack's test mode while we test it, so paying online moves no real money.", ""] : []),
       "HOW TO PAY",
-      `Amount: ${formatNaira(amount)}`,
+      `Amount: ${formatNaira(input.amountNaira)}`,
       `Reference: ${input.reference}`,
       // The owner's own Full Report link reopens by itself; the assessment's holds for the 48 hours after the call.
       ...(report ? [] : [`Pay by: ${lagosTime(input.deadline)} (Lagos time)`]),
@@ -85,10 +85,9 @@ export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem
  * The email that tells the owner their payment arrived, and what happens next. The report's comes with its form link.
  * A payment made on Paystack's test keys says so in capitals.
  */
-export function paymentConfirmedEmail(input: { fullName: string; item: PaymentItem; reference: string; reportLink?: string | null; testMode?: boolean }) {
-  const { amount } = PAYMENT_ITEM_DETAILS[input.item];
+export function paymentConfirmedEmail(input: { fullName: string; item: PaymentItem; reference: string; reportLink?: string | null; testMode?: boolean; amountNaira: number }) {
   const received = [
-    `Thank you. We have received your payment of ${formatNaira(amount)} (reference ${input.reference}).`,
+    `Thank you. We have received your payment of ${formatNaira(input.amountNaira)} (reference ${input.reference}).`,
     ...(input.testMode ? ["", EMAIL_TEST_NOTICE, "This payment was made in Paystack's test mode, so no real money moved."] : []),
   ].join("\n");
   if (input.item === "full_report") {
@@ -184,7 +183,8 @@ export async function requestPayment(db: Database, input: { businessCheckId: num
   if (existing?.status === "confirmed") throw new TRPCError({ code: "CONFLICT", message: "This has already been paid." });
 
   const reference = paymentReference(input.item, check.id);
-  const amountNaira = PAYMENT_ITEM_DETAILS[input.item].amount;
+  // The server's price, never the browser's. Sending the details again of an unpaid request prices it afresh.
+  const { amountNaira, lowPriceTesting } = resolveBusinessSupportPrice(input.item);
   const stageTo = input.item === "current_state" && BEFORE_OPPORTUNITY.includes(check.pipelineStage) ? "opportunity" : check.pipelineStage;
   // Recorded before the email goes, so a payment can always be matched to its reference.
   const request = await db.transaction(async tx => {
@@ -197,13 +197,13 @@ export async function requestPayment(db: Database, input: { businessCheckId: num
       action: "payment_details_sent",
       actorUserId: input.actorUserId,
       targetEmail: check.email,
-      details: { businessCheckId: check.id, item: input.item, reference, amountNaira, again: Boolean(existing), ...(stageTo !== check.pipelineStage ? { from: check.pipelineStage, to: stageTo } : {}) },
+      details: { businessCheckId: check.id, item: input.item, reference, amountNaira, again: Boolean(existing), ...(lowPriceTesting ? { lowPriceTesting: true } : {}), ...(stageTo !== check.pipelineStage ? { from: check.pipelineStage, to: stageTo } : {}) },
     });
     return row;
   });
 
   // The window starts when the details go out; sending them again starts a new one. The pay page is offered while Paystack is on.
-  const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference, deadline: paymentDeadline(request.requestedAt), online: onlinePaymentOffer(check.publicToken, input.item) });
+  const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference, deadline: paymentDeadline(request.requestedAt), amountNaira: request.amountNaira, online: onlinePaymentOffer(check.publicToken, input.item) });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check.id, idempotencyKey: `payment_requests:${request.id}:details:${request.requestedAt.getTime()}` })
     .catch((error: unknown) => ({ status: "Failed" as const, reason: error instanceof Error ? error.message : "Unknown error" }));
   await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq(paymentRequests.id, request.id));
@@ -286,7 +286,7 @@ export async function confirmPayment(db: Database, input: { paymentRequestId: nu
 
   // Email after the commit: a delivery problem never undoes a confirmation. What happened to the email is recorded, so
   // the console can show it and send it again.
-  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink, testMode: input.online?.mode === "test" });
+  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink, amountNaira: request.amountNaira, testMode: input.online?.mode === "test" });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check.id, idempotencyKey: `payment_requests:${request.id}:confirmed` })
     .catch((error: unknown) => ({ status: "Failed" as const, reason: error instanceof Error ? error.message : "Unknown error" }));
   await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference, delivery: delivery.status, again: false, ...via } });
@@ -316,7 +316,7 @@ export async function resendPaymentConfirmation(db: Database, input: { paymentRe
   const check = await loadCheck(db, request.businessCheckId);
   // A payment Paystack confirmed on its test keys says so again.
   const testMode = request.confirmedByUserId === null && Boolean(request.note?.startsWith(`${TEST_NOTE}${ONLINE_NOTE}`));
-  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: null, testMode });
+  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: null, amountNaira: request.amountNaira, testMode });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check.id, idempotencyKey: `payment_requests:${request.id}:confirmed:${Date.now()}` })
     .catch((error: unknown) => ({ status: "Failed" as const, reason: error instanceof Error ? error.message : "Unknown error" }));
   await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference, delivery: delivery.status, again: true } });

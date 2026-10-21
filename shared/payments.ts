@@ -1,4 +1,4 @@
-import { CURRENT_STATE, FULL_REPORT, formatNaira, PRICES } from "./businessSupport";
+import { CURRENT_STATE, FULL_REPORT, formatNaira } from "./businessSupport";
 import { METHOD } from "./method";
 
 /**
@@ -10,9 +10,9 @@ import { METHOD } from "./method";
 export const PAYMENT_ITEMS = ["full_report", "current_state"] as const;
 export type PaymentItem = (typeof PAYMENT_ITEMS)[number];
 
-export const PAYMENT_ITEM_DETAILS: Record<PaymentItem, { name: string; amount: number; code: string }> = {
-  full_report: { name: FULL_REPORT.name, amount: PRICES.fullReport, code: "R" },
-  current_state: { name: CURRENT_STATE.name, amount: PRICES.currentState, code: "CS" },
+export const PAYMENT_ITEM_DETAILS: Record<PaymentItem, { name: string; code: string }> = {
+  full_report: { name: FULL_REPORT.name, code: "R" },
+  current_state: { name: CURRENT_STATE.name, code: "CS" },
 };
 
 /** requested: the payment link emailed · confirmed: paid. proof_received is from bank transfers before Paystack only, kept for old records. */
@@ -48,10 +48,10 @@ export function paymentReference(item: PaymentItem, businessCheckId: number) {
   return `TS-${PAYMENT_ITEM_DETAILS[item].code}-${String(businessCheckId).padStart(6, "0")}`;
 }
 
-/** "₦100,000 for your full business check report" or "₦500,000 for your Current State Assessment". */
-export function describePayment(item: PaymentItem) {
-  const { name, amount } = PAYMENT_ITEM_DETAILS[item];
-  return `${formatNaira(amount)} for ${item === "full_report" ? name.charAt(0).toLowerCase() + name.slice(1) : `your ${name}`}`;
+/** "₦100,000 for your full business check report" or "₦500,000 for your Current State Assessment" (the amount is the payment's own). */
+export function describePayment(item: PaymentItem, amountNaira: number) {
+  const { name } = PAYMENT_ITEM_DETAILS[item];
+  return `${formatNaira(amountNaira)} for ${item === "full_report" ? name.charAt(0).toLowerCase() + name.slice(1) : `your ${name}`}`;
 }
 
 /**

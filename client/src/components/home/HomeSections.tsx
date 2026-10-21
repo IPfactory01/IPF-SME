@@ -5,10 +5,11 @@
 import { EASE, Reveal } from "@/components/motion";
 import { onSectionLinkClick } from "@/lib/scrollToSection";
 import { BRAND } from "@shared/brand";
-import { JOURNEY, PROBLEM_AREAS, PROMISE } from "@shared/businessSupport";
+import { buildJourney, PROBLEM_AREAS, PROMISE } from "@shared/businessSupport";
+import { useServicePricesOrDefault } from "@/lib/servicePrices";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowDown, ArrowRight, Plus } from "lucide-react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 export const NAV = [
   { id: "experience", label: "Our experience" },
@@ -152,10 +153,12 @@ export function Hero({ onStart }: { onStart: () => void }) {
 
 /** How it works: the journey as a stepper that plays through on its own until the visitor picks a step. */
 export function Journey() {
+  const prices = useServicePricesOrDefault();
   const [active, setActive] = useState(0);
   const [auto, setAuto] = useState(true);
   const [inView, setInView] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const journey = useMemo(() => buildJourney(prices), [prices]);
 
   useEffect(() => {
     if (typeof IntersectionObserver === "undefined" || !ref.current) return;
@@ -166,7 +169,7 @@ export function Journey() {
 
   useEffect(() => {
     if (!auto || !inView) return;
-    const timer = window.setTimeout(() => setActive((current) => (current + 1) % JOURNEY.length), 4500);
+    const timer = window.setTimeout(() => setActive((current) => (current + 1) % journey.length), 4500);
     return () => window.clearTimeout(timer);
   }, [active, auto, inView]);
 
@@ -183,12 +186,12 @@ export function Journey() {
           <p className="mt-3 text-ink-muted">Every step and every price, up front. Tap a step.</p>
         </Reveal>
         <ol className="relative">
-          {JOURNEY.map((step, index) => {
+          {journey.map((step, index) => {
             const open = index === active;
             const done = index < active;
             return (
               <li key={step.id} className="relative pb-3 last:pb-0">
-                {index < JOURNEY.length - 1 && (
+                {index < journey.length - 1 && (
                   <span aria-hidden className="absolute left-[36px] top-[56px] -bottom-4 w-px bg-line sm:left-[40px] sm:top-[60px] sm:-bottom-5">
                     <motion.span className="absolute inset-0 origin-top bg-brand" initial={false} animate={{ scaleY: done ? 1 : 0 }} transition={{ duration: 0.5, ease: EASE }} />
                   </span>

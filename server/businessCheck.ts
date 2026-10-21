@@ -179,8 +179,9 @@ export async function summariseCheck(input: { answers: Answers; result: CheckRes
   }
 }
 
-export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary; result: CheckResult; answers?: Answers; fullReportPay?: OnlinePaymentOffer | null }) {
+export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary; result: CheckResult; answers?: Answers; fullReportPay?: OnlinePaymentOffer | null; fullReportPrice?: number }) {
   const { contact, summary, result } = input;
+  const fullReportPrice = input.fullReportPrice ?? PRICES.fullReport;
   // Areas the check left out for this business are listed too, so the owner sees the whole method.
   const notAssessed = input.answers ? areasNotAssessed(input.answers) : [];
   const assessed = result.outline.map((row) => ({ area: row.area, line: `• ${row.name}: ${row.health}` }));
@@ -212,11 +213,11 @@ export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary
     // The Full Report is paid on Paystack only. With Paystack off (/api/health reports it), the owner replies for a link.
     ...(input.fullReportPay
       ? [
-        `Want the Full Report? It costs ${formatNaira(PRICES.fullReport)} and comes by email. Pay securely online with Paystack, by card or bank.`,
+        `Want the Full Report? It costs ${formatNaira(fullReportPrice)} and comes by email. Pay securely online with Paystack, by card or bank.`,
         ...(input.fullReportPay.mode === "test" ? ["Online payment is in Paystack's test mode while we test it, so paying online moves no real money."] : []),
         `Pay for your Full Report: ${input.fullReportPay.url}`,
       ]
-      : [`Want the Full Report? It costs ${formatNaira(PRICES.fullReport)} and comes by email. Online payment opens soon: reply "report" and we will email you a link to pay when it does.`]),
+      : [`Want the Full Report? It costs ${formatNaira(fullReportPrice)} and comes by email. Online payment opens soon: reply "report" and we will email you a link to pay when it does.`]),
     "",
     `${BRAND.organisationName}`,
   ].join("\n");

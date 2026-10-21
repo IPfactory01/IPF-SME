@@ -3,6 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { savePdf } from "@/lib/savePdf";
 import { trpc } from "@/lib/trpc";
+import { useServicePrices } from "@/lib/servicePrices";
 import { CURRENT_STATE, formatNaira } from "@shared/businessSupport";
 import { PAYMENT_DISPLAY_LABELS, PAYMENT_ITEM_DETAILS, PAYMENT_ITEMS, PAYMENT_WINDOW_HOURS, type PaymentDisplayStatus, type PaymentItem, type PaymentStatus } from "@shared/payments";
 import React, { useState } from "react";
@@ -131,14 +132,16 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
     onError: error => toast.error(error.message),
   });
   const busy = send.isPending || confirm.isPending || resendConfirmation.isPending;
-  const { name, amount } = PAYMENT_ITEM_DETAILS[item];
+  const { name } = PAYMENT_ITEM_DETAILS[item];
+  const prices = useServicePrices();
+  const standard = item === "full_report" ? prices?.fullReport : prices?.currentState;
   const open = payment && payment.status !== "confirmed";
 
   return (
     <li className="border border-line-soft p-3" aria-label={name}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-sm font-medium text-ink">{name}</p>
-        <p className="text-sm tabular-nums text-ink">{formatNaira(payment?.amountNaira ?? amount)}</p>
+        <p className="text-sm tabular-nums text-ink">{payment ? formatNaira(payment.amountNaira) : standard !== undefined ? formatNaira(standard) : ""}</p>
       </div>
       {payment ? (
         <div className="mt-1.5 space-y-0.5 text-[13px]">

@@ -3,11 +3,11 @@ import { PRICES } from "@shared/businessSupport";
 import { describePayment, effectivePaymentStatus, PAYMENT_DISPLAY_LABELS, PAYMENT_ITEM_DETAILS, PAYMENT_STATUS_LABELS, PAYMENT_WINDOW_HOURS, paymentDeadline, paymentReference } from "@shared/payments";
 
 describe("what an owner can pay for before Current State Assessment", () => {
-  it("takes its prices from the one price list", () => {
-    expect(PAYMENT_ITEM_DETAILS.full_report.amount).toBe(PRICES.fullReport);
-    expect(PAYMENT_ITEM_DETAILS.current_state.amount).toBe(PRICES.currentState);
-    expect(describePayment("full_report")).toBe("₦100,000 for your Full Report");
-    expect(describePayment("current_state")).toBe("₦500,000 for your Current State Assessment");
+  it("describes a payment with the amount it is given (the payment's own), and holds no price of its own", () => {
+    expect(PAYMENT_ITEM_DETAILS.full_report).not.toHaveProperty("amount");
+    expect(describePayment("full_report", PRICES.fullReport)).toBe("₦100,000 for your Full Report");
+    expect(describePayment("current_state", PRICES.currentState)).toBe("₦500,000 for your Current State Assessment");
+    expect(describePayment("full_report", 100)).toBe("₦100 for your Full Report");
   });
 
   it("gives each business check one short, distinct transfer reference per item", () => {

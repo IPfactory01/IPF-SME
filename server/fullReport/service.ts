@@ -5,6 +5,7 @@ import { businessChecks, fullReports, paymentRequests, type FullReportRecord } f
 import { BRAND } from "../../shared/brand";
 import { evaluate, type CheckResult } from "../../shared/businessCheck/engine";
 import type { Answers } from "../../shared/businessCheck/questions";
+import { displayedPrices } from "../businessSupportPrices";
 import { buildFullReport, REPORT_VERSION, type FullReport } from "../../shared/fullReport/build";
 import { intakeSchema, readIntake, type ReportIntake } from "../../shared/fullReport/intake";
 import { ENV } from "../_core/env";
@@ -88,6 +89,7 @@ async function assemble(db: Pick<Database, "select">, record: FullReportRecord):
     answers,
     result,
     intake,
+    currentStatePrice: displayedPrices().currentState,
   });
   return { report, generatedAt: record.intakeSubmittedAt, email: check.email, fullName: check.fullName };
 }

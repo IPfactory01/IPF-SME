@@ -12,6 +12,7 @@ import { getDb } from "../db";
 import { databaseNow } from "../dbHelpers";
 import { BUSINESS_SUPPORT_MAILBOX, deliverEmail } from "../email";
 import { onlinePaymentOffer } from "../payments";
+import { displayedPrices } from "../businessSupportPrices";
 import { askForFullReport } from "../fullReportRequest";
 import { ENV } from "../_core/env";
 import { bookedCallTime, CALENDLY_EVENT_URI, findBookedCall } from "../calendly";
@@ -82,6 +83,9 @@ function contactOf(check: BusinessCheck, answers: Answers): CheckContact {
 /** A date and time as the team reads it in the office email, e.g. "Wed, 14 Oct 2026, 10:00 am". */
 
 export const businessCheckRouter = router({
+  /** The prices the site shows: the same server-side figures the payment requests are created with. Read only; nothing here sets a price. */
+  prices: publicProcedure.query(() => displayedPrices()),
+
   /** The details screen: records the owner as a lead before the first question. */
   start: publicProcedure.input(businessCheckStartInput).mutation(async ({ input, ctx }) => {
     const ip = (ctx.req.ip || "unknown").toLowerCase();
@@ -154,7 +158,7 @@ export const businessCheckRouter = router({
     }
 
     const office = officeEmail({ contact, answers, summary, source, result });
-    const owner = ownerEmail({ contact, summary, result, answers, fullReportPay: onlinePaymentOffer(check.publicToken, "full_report") });
+    const owner = ownerEmail({ contact, summary, result, answers, fullReportPay: onlinePaymentOffer(check.publicToken, "full_report"), fullReportPrice: displayedPrices().fullReport });
     // A delivery problem never undoes the check: the result is already saved and the page says whether email went out.
     const failed = { status: "Failed" as const };
     const [officeDelivery, ownerDelivery] = await Promise.all([

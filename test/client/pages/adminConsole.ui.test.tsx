@@ -40,6 +40,7 @@ vi.mock("@/lib/trpc", () => ({
       businessSupport: { discoveryCalls: hoisted.invalidate, checks: hoisted.invalidate, checkDetail: hoisted.invalidate, debrief: hoisted.invalidate },
       onboarding: { candidates: hoisted.invalidate, invitations: hoisted.invalidate, metrics: hoisted.invalidate },
     }),
+    businessCheck: { prices: { useQuery: () => ({ data: { fullReport: 100_000, currentState: 500_000 } }) } },
     businessSupport: {
       checks: { useQuery: hoisted.query("checks") },
       emailDeliveryStatus: { useQuery: () => ({ data: [], isLoading: false, error: undefined }) },

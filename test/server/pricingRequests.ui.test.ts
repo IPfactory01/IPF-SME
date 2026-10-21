@@ -8,7 +8,7 @@ const dialogSource = readFileSync(resolve(process.cwd(), "client/src/components/
 
 describe("Request Programme Pricing entry points", () => {
   it("publishes the journey with its prices on the public page instead of a pricing request", () => {
-    expect(homeSource).toContain("JOURNEY.map");
+    expect(homeSource).toContain("journey.map");
     expect(homeSource).not.toContain("PricingRequestDialog");
   });
 

@@ -44,7 +44,11 @@ export const PROBLEM_AREAS: readonly ProblemArea[] = [
  */
 export const PROMISE = ["Find it.", "Fix it.", "See the results."] as const;
 
-/** Prices in naira (section 11). Ongoing support is deliberately unpriced: copy must not quote a figure. */
+/**
+ * Prices in naira (section 11). Ongoing support is deliberately unpriced: copy must not quote a figure. The Full Report
+ * and Current State Assessment figures here are the DEFAULTS: what is charged and shown comes from the server
+ * (server/businessSupportPrices.ts, which the FULL_REPORT_PRICE_NGN and CURRENT_STATE_PRICE_NGN settings override).
+ */
 export const PRICES = {
   fullReport: 100_000,
   currentState: 500_000,
@@ -88,11 +92,16 @@ export function formatNaira(amount: number) {
   return `₦${String(Math.round(amount)).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
 
-/** The whole journey, shown up front with prices (D1). */
-export const JOURNEY: readonly JourneyStep[] = [
-  { id: "business-check", name: "Free Business Check", body: `Ten minutes. A first read on where you are stuck. Want the Full Report? ${formatNaira(PRICES.fullReport)}, by email.` },
+/** The two prices the server can configure, as the site displays them. */
+export type ServicePrices = { fullReport: number; currentState: number };
+
+/** The whole journey, shown up front with prices (D1). `prices` are the server's; the default is the standard price list. */
+export const buildJourney = (prices: ServicePrices = PRICES): readonly JourneyStep[] => [
+  { id: "business-check", name: "Free Business Check", body: `Ten minutes. A first read on where you are stuck. Want the Full Report? ${formatNaira(prices.fullReport)}, by email.` },
   { id: "discovery-call", name: "Discovery Call: a free 20-minute call", body: "We walk through your Business Check results, hear the problem in your words and tell you honestly whether we can help." },
-  { id: "current-state", name: CURRENT_STATE.name, body: `${CURRENT_STATE.what} ${formatNaira(PRICES.currentState)}, paid after the Discovery Call. ${CURRENT_STATE.start}` },
+  { id: "current-state", name: CURRENT_STATE.name, body: `${CURRENT_STATE.what} ${formatNaira(prices.currentState)}, paid after the Discovery Call. ${CURRENT_STATE.start}` },
   { id: "fix", name: "The Fix: six weeks", body: `One problem, one Measure of Success. You do the work; we give you the Prescription and the tools, and check it at a Weekly Check-in. ${formatNaira(PRICES.fix)}.` },
   { id: "plan", name: "Your Plan", body: `We stop at about ${formatNaira(PRICES.standardEngagementCap)} with a plan in your hands. Want us to stay? We agree what that looks like.` },
 ];
+
+export const JOURNEY = buildJourney();

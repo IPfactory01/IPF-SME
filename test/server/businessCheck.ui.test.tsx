@@ -33,12 +33,14 @@ const api = vi.hoisted(() => {
       if (reply !== undefined) options?.onSuccess?.(reply);
     },
   });
-  return { calls, replies, mutation };
+  const prices = { current: { fullReport: 100_000, currentState: 500_000 } as { fullReport: number; currentState: number } | undefined };
+  return { calls, replies, mutation, prices };
 });
 
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     businessCheck: {
+      prices: { useQuery: () => ({ data: api.prices.current }) },
       start: { useMutation: api.mutation("start") },
       saveProgress: { useMutation: api.mutation("saveProgress") },
       submit: { useMutation: api.mutation("submit") },
@@ -79,6 +81,7 @@ async function giveDetails() {
 describe("business check page", { timeout: 20_000 }, () => {
   beforeEach(() => {
     window.localStorage.clear();
+    api.prices.current = { fullReport: 100_000, currentState: 500_000 };
     window.scrollTo = vi.fn();
     for (const name of Object.keys(api.calls)) api.calls[name] = [];
     api.replies.start = () => ({ token: TOKEN });
@@ -398,6 +401,21 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(payOnline.openCheckout).toHaveBeenCalledWith("https://checkout.paystack.com/TS-R-000001-1a2b3c4d");
     expect(await screen.findByRole("button", { name: /opening paystack/i })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/bank details|proof of payment|payment details are on their way/i);
+  });
+
+  it("shows the price the server is configured to charge, in the offer and on the summary banner", () => {
+    api.prices.current = { fullReport: 100, currentState: 500_000 };
+    resultFor();
+    expect(screen.getByText("₦100", { selector: "p" })).toBeTruthy();
+    expect(screen.getByText(/Get the Full Report · ₦100\b/)).toBeTruthy();
+    expect(document.body.textContent).not.toContain("₦100,000");
+  });
+
+  it("shows no price at all, rather than a guess, until the server's price is known", () => {
+    api.prices.current = undefined;
+    resultFor();
+    expect(document.body.textContent).not.toMatch(/₦\d/);
+    expect(screen.getByRole("button", { name: /get my full report/i })).toBeTruthy();
   });
 
   it("says the Full Report is already paid instead of opening Paystack again", async () => {

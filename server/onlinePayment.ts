@@ -13,6 +13,7 @@ import { recordAudit } from "./audit";
 import { getDb } from "./db";
 import { BUSINESS_SUPPORT_MAILBOX, deliverEmail } from "./email";
 import { lagosTime } from "./lagosTime";
+import { assertAmountAllowed, getBusinessSupportPrice } from "./businessSupportPrices";
 import { askForFullReport } from "./fullReportRequest";
 import { confirmPayment, requestPayment, type OnlineConfirmation } from "./payments";
 import { initializeTransaction, isValidPaystackSignature, onlineReference, paymentReferenceOf, paystackMode, verifyTransaction, type VerifiedTransaction } from "./paystack";
@@ -65,7 +66,7 @@ export async function onlinePaymentPage(db: Pick<Database, "select">, input: { t
   if (!request) {
     // Not asked for yet: the Full Report at today's price, filed when the owner presses pay.
     if (!ownerMayStart(check, input.item)) throw notFound();
-    return { item: input.item, name: PAYMENT_ITEM_TITLES[input.item], amountNaira: PAYMENT_ITEM_DETAILS[input.item].amount, mode: paystackMode(), state: "open" as PayPageState };
+    return { item: input.item, name: PAYMENT_ITEM_TITLES[input.item], amountNaira: getBusinessSupportPrice(input.item), mode: paystackMode(), state: "open" as PayPageState };
   }
   const display = effectivePaymentStatus(request);
   return {
@@ -105,6 +106,8 @@ export async function startOnlinePayment(db: Database, input: { token: string; i
     await requestPayment(db, { businessCheckId: check.id, item: request.item, actorUserId: null });
     request = (await lookup(db, input.token, input.item)).request ?? request;
   }
+  // A stored amount is the authority, but a leftover test price cannot be paid in production once the switch is off.
+  assertAmountAllowed(request.amountNaira);
   const email = check.email;
   const reference = onlineReference(request.reference);
   try {

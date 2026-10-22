@@ -93,11 +93,10 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-line bg-paper py-10">
       <div className="container flex flex-col items-center gap-3 text-center text-xs text-ink-muted">
-        <nav aria-label="Footer" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
-          <Link href="/" className="hover:text-ink hover:underline">Home</Link>
-          {SITE_PAGES.map((page) => <Link key={page.href} href={page.href} className="hover:text-ink hover:underline">{page.label}</Link>)}
-          <Link href="/check" className="hover:text-ink hover:underline">Free Business Health Check</Link>
-          <Link href="/login" className="hover:text-ink hover:underline">Client sign in</Link>
+        <nav aria-label="Footer" className="flex flex-wrap items-center justify-center gap-x-5 text-sm">
+          {[{ href: "/", label: "Home" }, ...SITE_PAGES, { href: "/check", label: "Free Business Health Check" }, { href: "/login", label: "Client sign in" }].map((page) => (
+            <Link key={page.href} href={page.href} className="inline-flex min-h-11 items-center hover:text-ink hover:underline">{page.label}</Link>
+          ))}
         </nav>
         <LegalFooterLinks />
         <address className="not-italic">{BRAND.organisationName} · {BRAND.officeAddress.oneLine}</address>
@@ -111,8 +110,9 @@ export function SiteFooter() {
 export function SiteShell({ children, cta = true }: { children: React.ReactNode; cta?: boolean }) {
   return (
     <div className="flex min-h-screen flex-col bg-paper text-ink">
+      <a href="#main" className="sr-only z-50 bg-ink px-4 py-3 font-semibold text-paper focus:not-sr-only focus:fixed focus:left-3 focus:top-3">Skip to content</a>
       <SiteHeader cta={cta} />
-      <main className="flex-1">{children}</main>
+      <main id="main" tabIndex={-1} className="flex-1 focus:outline-none">{children}</main>
       <SiteFooter />
     </div>
   );

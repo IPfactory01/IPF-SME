@@ -65,6 +65,7 @@
   /* Business outline (business check): clear, watch, stuck */
   --color-health-clear: #2E7D4F; /* Clear: text, dots and borders */
   --color-health-clear-tint: #E7F3EC; /* Clear: background */
+  --color-health-clear-strong: #236A40; /* Clear: small text on its tint */
   --color-health-watch: #B26A00; /* Watch: text, dots and borders */
   --color-health-watch-tint: #FBF0DD; /* Watch: background */
   --color-health-stuck: #B42318; /* Stuck: text, dots and borders */

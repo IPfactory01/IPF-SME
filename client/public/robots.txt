@@ -1,0 +1,16 @@
+# The public pages are open to search engines; signed-in, payment and staff pages are not.
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /settings
+Disallow: /pay
+Disallow: /report
+Disallow: /onboarding
+Disallow: /join
+Disallow: /reset
+Disallow: /portal
+Disallow: /schedule
+Disallow: /api
+
+Sitemap: https://www.ipfactory.co/sitemap.xml

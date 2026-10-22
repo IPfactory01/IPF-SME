@@ -23,8 +23,8 @@ export const PrivacyLink = ({ newTab }: { newTab?: boolean }) => <LegalLink to={
 export function LegalFooterLinks({ className = "" }: { className?: string }) {
   return (
     <nav aria-label="Legal" className={`flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-ink-muted ${className}`}>
-      <Link href={TERMS_PATH} className="hover:text-ink hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand">Terms &amp; Conditions</Link>
-      <Link href={PRIVACY_PATH} className="hover:text-ink hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand">Privacy Policy</Link>
+      <Link href={TERMS_PATH} className="inline-flex min-h-6 items-center hover:text-ink hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand">Terms &amp; Conditions</Link>
+      <Link href={PRIVACY_PATH} className="inline-flex min-h-6 items-center hover:text-ink hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand">Privacy Policy</Link>
     </nav>
   );
 }

@@ -39,7 +39,7 @@ export function StartButton({ product, size = "lg", label, className = "" }: { p
 
 /** The quiet second action, Apple-style: blue text with a chevron. */
 export function QuietLink({ href, children, external }: { href: string; children: React.ReactNode; external?: boolean }) {
-  const classes = "group inline-flex items-center gap-1 text-[15px] font-semibold text-brand hover:underline underline-offset-4";
+  const classes = "group inline-flex min-h-11 items-center gap-1 text-[15px] font-semibold text-brand hover:underline underline-offset-4";
   const body = <>{children}<ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden /></>;
   return external ? <a href={href} target="_blank" rel="noopener noreferrer" className={classes}>{body}</a> : <Link href={href} className={classes}>{body}</Link>;
 }

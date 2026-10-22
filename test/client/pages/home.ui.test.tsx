@@ -145,6 +145,16 @@ describe("home page track record", () => {
 
 });
 
+describe("home page for keyboard users", () => {
+  it("offers a skip link to the page's content first", () => {
+    const { container } = renderHome();
+    const skip = container.querySelector("a")!;
+    expect(skip.textContent).toBe("Skip to content");
+    expect(skip.getAttribute("href")).toBe("#main");
+    expect(container.querySelector("main#main")).toBeTruthy();
+  });
+});
+
 describe("home page footer", () => {
   it("links the Terms & Conditions and Privacy Policy in the footer", () => {
     const { container } = render(<Router hook={memoryLocation({ path: "/" }).hook}><Home /></Router>);

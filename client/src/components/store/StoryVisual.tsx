@@ -15,11 +15,16 @@ function Frame({ title, children, sample = true }: { title: string; children: Re
     <figure className="m-0 min-w-0">
       <figcaption className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-sm font-bold text-ink">{title.replace(/^Sample:?\s*/i, "")}</span>
-        {sample && <span className="border border-line px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-ink-muted">Sample</span>}
+        {sample && <span className="border border-line px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-muted">Sample</span>}
       </figcaption>
       {children}
     </figure>
   );
+}
+
+/** A drawing wider than a phone scrolls sideways; it takes keyboard focus so the scroll is reachable without a mouse. */
+function Scroll({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="overflow-x-auto" tabIndex={0} role="region" aria-label={`${label} (scrolls sideways)`}>{children}</div>;
 }
 
 function LineChart({ visual }: { visual: Extract<Visual, { kind: "line" }> }) {
@@ -34,7 +39,7 @@ function LineChart({ visual }: { visual: Extract<Visual, { kind: "line" }> }) {
   const shortRun = visual.values.map((v, i) => (v < 0 ? i : -1)).filter(i => i >= 0);
   const fmt = (v: number) => `${v < 0 ? "−" : ""}₦${Math.abs(v)}${visual.unit.replace("₦", "")}`;
   return (
-    <div className="overflow-x-auto">
+    <Scroll label={visual.title}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${visual.title}. ${visual.callout}.`} className="block h-auto w-full min-w-[540px]">
         <defs><linearGradient id="story-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="var(--color-brand)" stopOpacity={0.2} /><stop offset="1" stopColor="var(--color-brand)" stopOpacity={0} /></linearGradient></defs>
         {ticks.map(t => (
@@ -54,7 +59,7 @@ function LineChart({ visual }: { visual: Extract<Visual, { kind: "line" }> }) {
         ))}
         <text x={x(worst) + 12} y={y(visual.values[worst]) + 5} fontSize={14} fontWeight={800} fill="var(--color-highlight-ink)" fontFamily={FONT}>{visual.callout}</text>
       </svg>
-    </div>
+    </Scroll>
   );
 }
 
@@ -66,7 +71,8 @@ function Bars({ visual }: { visual: Extract<Visual, { kind: "bars" }> }) {
   const h = (v: number) => (v / max) * (H - T - B);
   const money = (v: number) => `₦${v.toLocaleString("en-GB")}`;
   return (
-    <div className="overflow-x-auto">
+    <div>
+      <Scroll label={visual.title}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${visual.title}. ${visual.note ?? ""}`} className="block h-auto w-full min-w-[540px]">
         <line x1={L} y1={H - B} x2={W - R} y2={H - B} stroke="var(--color-line)" strokeWidth={1.5} />
         {visual.groups.map((group, i) => {
@@ -83,6 +89,7 @@ function Bars({ visual }: { visual: Extract<Visual, { kind: "bars" }> }) {
           );
         })}
       </svg>
+      </Scroll>
       <div className="mt-2 flex flex-wrap gap-5 text-[13px] text-ink-soft">
         <span><i className="mr-1.5 inline-block h-2.5 w-2.5 bg-ink-muted align-[-1px]" />{visual.legend[0]}</span>
         <span><i className="mr-1.5 inline-block h-2.5 w-2.5 bg-brand align-[-1px]" />{visual.legend[1]}</span>
@@ -99,7 +106,7 @@ function Measure({ visual }: { visual: Extract<Visual, { kind: "measure" }> }) {
   const y = (v: number) => T + (1 - v / top) * (H - T - B);
   const fmt = (v: number) => (visual.unit === "%" ? `${v}%` : `₦${v}${visual.unit}`);
   return (
-    <div className="overflow-x-auto">
+    <Scroll label={visual.title}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`${visual.title}: from ${fmt(visual.baseline)} to ${fmt(visual.readings[visual.readings.length - 1])}, target ${fmt(visual.target)}.`} className="block h-auto w-full min-w-[480px]">
         <line x1={L} y1={H - B} x2={W - R} y2={H - B} stroke="var(--color-line)" strokeWidth={1.5} />
         <line x1={L} y1={y(visual.target)} x2={W - R} y2={y(visual.target)} stroke="var(--color-health-clear)" strokeWidth={2} strokeDasharray="6 6" />
@@ -117,12 +124,12 @@ function Measure({ visual }: { visual: Extract<Visual, { kind: "measure" }> }) {
         })}
         <text x={L - 8} y={y(visual.baseline) + 4} textAnchor="end" {...AXIS}>{fmt(visual.baseline)}</text>
       </svg>
-    </div>
+    </Scroll>
   );
 }
 
 const STATE = {
-  ready: { icon: Check, label: "Ready", tone: "text-health-clear bg-health-clear-tint" },
+  ready: { icon: Check, label: "Ready", tone: "text-health-clear-strong bg-health-clear-tint" },
   nearly: { icon: Minus, label: "Nearly", tone: "text-health-watch bg-health-watch-tint" },
   missing: { icon: X, label: "Missing", tone: "text-health-stuck bg-health-stuck-tint" },
 } as const;
@@ -138,7 +145,7 @@ export function StoryVisual({ visual }: { visual: Visual }) {
     case "table":
       return (
         <Frame title={visual.title}>
-          <div className="overflow-x-auto">
+          <Scroll label={visual.title}>
             <table className="w-full border-collapse text-sm tabular-nums">
               <thead>
                 <tr>{visual.columns.map((column, i) => <th key={i} scope="col" className={`border-b border-line px-2 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted ${i === 0 ? "text-left" : "text-right"}`}>{column}</th>)}</tr>
@@ -154,7 +161,7 @@ export function StoryVisual({ visual }: { visual: Visual }) {
                 })}
               </tbody>
             </table>
-          </div>
+          </Scroll>
         </Frame>
       );
     case "checklist":
@@ -185,7 +192,7 @@ export function StoryVisual({ visual }: { visual: Visual }) {
         <Frame title={visual.title}>
           <ul className="grid gap-2.5">
             {visual.rows.map((row) => (
-              <li key={row.text} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 bg-paper-sunken p-3.5 sm:grid-cols-[6.5rem_1fr_auto]">
+              <li key={row.text} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 border border-line bg-paper-raised p-3.5 sm:grid-cols-[6.5rem_1fr_auto]">
                 <b className="col-span-2 text-[11px] font-bold uppercase tracking-[0.14em] text-highlight-ink sm:col-span-1">{row.tag}</b>
                 <span className="text-[15px] text-ink">{row.text}</span>
                 <em className="whitespace-nowrap font-sans text-sm font-extrabold not-italic text-health-clear tabular-nums">{row.value}</em>

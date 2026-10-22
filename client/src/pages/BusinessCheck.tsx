@@ -5,6 +5,7 @@
  * example for the kind of business the owner described. The result is written on the server.
  */
 import { LegalFooterLinks, PrivacyLink, TermsLink } from "@/components/LegalLinks";
+import { usePageMeta } from "@/components/SiteShell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { openCheckout, rememberPayPage } from "@/lib/payOnline";
@@ -130,6 +131,7 @@ const HEALTH_STYLE: Record<Health | "pending", { dot: string; row: string; label
 };
 
 export default function BusinessCheck() {
+  usePageMeta("Free Business Health Check", "Ten minutes on your phone. See where your business is stuck, area by area, and the first step that fits. Free, no card needed.");
   const [state, setState] = useState<Saved>(load);
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState("");

@@ -95,7 +95,8 @@ export default function ProductPage() {
       </div>
 
       <section className="container mx-auto max-w-6xl pt-14 text-center sm:pt-16">
-        <p className={EYEBROW}>{WAY_DETAILS[product.way].name} · {NEED_DETAILS[product.needs[0]].name}</p>
+        {/* A product that answers several needs (the Six-Week Fix) is not labelled with just one of them. */}
+        <p className={EYEBROW}>{WAY_DETAILS[product.way].name}{product.needs.length === 1 && ` · ${NEED_DETAILS[product.needs[0]].name}`}</p>
         <h1 className="font-display mx-auto mt-4 max-w-4xl text-[clamp(2.6rem,7.2vw,5.25rem)] font-extrabold leading-[1.0] tracking-[-0.04em] text-ink">
           {story.headline[0]}<br />
           <span className="bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight bg-clip-text text-transparent">{story.headline[1]}</span>

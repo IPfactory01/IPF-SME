@@ -88,6 +88,17 @@ describe("a service page (/services/:slug), told as a story", () => {
     expect(screen.getAllByText(/₦750,000 at the start, ₦375,000 at the mid-point, ₦375,000 at the result\. Or ₦1,425,000 in full/).length).toBeGreaterThan(0);
   });
 
+  it("labels a service that answers several needs by its way to buy only, and lets keyboards reach wide sample charts", () => {
+    at("/services/six-week-fix");
+    expect(screen.getByRole("heading", { level: 1 }).previousElementSibling!.textContent).toBe("Six-Week Fix");
+    cleanup();
+    at("/services/13-week-cash-flow-forecast");
+    expect(screen.getByRole("heading", { level: 1 }).previousElementSibling!.textContent).toBe("Done for You · Finance and accounts");
+    const charts = screen.getAllByRole("region", { name: /scrolls sideways/ });
+    expect(charts.length).toBeGreaterThan(0);
+    for (const chart of charts) expect(chart.getAttribute("tabindex")).toBe("0");
+  });
+
   it("sends the Full Report to the free check, at the server's price", () => {
     at("/services/full-report");
     const starts = screen.getAllByRole("link", { name: /take the free check/i });

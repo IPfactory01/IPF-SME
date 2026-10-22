@@ -104,7 +104,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
           className="group mx-auto mt-14 flex w-full max-w-xl flex-col items-center gap-2"
           aria-label="Start the Business Health Check"
         >
-          <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-faint">Sound familiar?</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">Sound familiar?</span>
           <span className="relative block h-24 w-full overflow-hidden sm:h-10">
             <AnimatePresence mode="wait" initial={false}>
               <motion.span

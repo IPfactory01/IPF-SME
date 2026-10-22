@@ -2,25 +2,11 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/NotFound";
 import { MotionConfig } from "framer-motion";
+import { lazy, Suspense } from "react";
 import { Redirect, Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
-import Admin from "./pages/Admin";
-import AdminLoginPage from "./pages/AdminLoginPage";
-import AdminLegacyLoginPage from "./pages/AdminLegacyLoginPage";
-import AdminPasswordResetPage from "./pages/AdminPasswordResetPage";
-import AdminInvitationPage from "./pages/AdminInvitationPage";
 import BusinessCheck from "./pages/BusinessCheck";
-import OnboardingPage from "./pages/OnboardingPage";
-import JoinPage from "./pages/JoinPage";
-import ResetPasswordPage from "./pages/ResetPasswordPage";
-import FullReportPage from "./pages/FullReportPage";
-import PayPage from "./pages/PayPage";
-import PayReturnPage from "./pages/PayReturnPage";
-import LoginPage from "./pages/LoginPage";
-import AccountDashboard from "./pages/AccountDashboard";
-import AccountSettingsPage from "./pages/AccountSettingsPage";
-import BusinessSettingsPage from "./pages/BusinessSettingsPage";
 import { PrivacyPage, TermsPage } from "./pages/LegalPage";
 import ServicesPage from "./pages/ServicesPage";
 import ProductPage from "./pages/ProductPage";
@@ -29,12 +15,38 @@ import AboutPage from "./pages/AboutPage";
 import QuestionsPage from "./pages/QuestionsPage";
 import ContactPage from "./pages/ContactPage";
 import Home from "./pages/Home";
-import Schedule from "./pages/Schedule";
-import ParticipantDashboard from "./pages/ParticipantDashboard";
-import ParticipantPasswordPage from "./pages/ParticipantPasswordPage";
+
+/*
+ * The public pages load with the site. Signed-in, payment, staff and JUMP pages load only when someone opens them, so
+ * a visitor on mobile data does not download the admin console and the client room to read the home page.
+ */
+const Admin = lazy(() => import("./pages/Admin"));
+const AdminLoginPage = lazy(() => import("./pages/AdminLoginPage"));
+const AdminLegacyLoginPage = lazy(() => import("./pages/AdminLegacyLoginPage"));
+const AdminPasswordResetPage = lazy(() => import("./pages/AdminPasswordResetPage"));
+const AdminInvitationPage = lazy(() => import("./pages/AdminInvitationPage"));
+const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
+const JoinPage = lazy(() => import("./pages/JoinPage"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
+const FullReportPage = lazy(() => import("./pages/FullReportPage"));
+const PayPage = lazy(() => import("./pages/PayPage"));
+const PayReturnPage = lazy(() => import("./pages/PayReturnPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const AccountDashboard = lazy(() => import("./pages/AccountDashboard"));
+const AccountSettingsPage = lazy(() => import("./pages/AccountSettingsPage"));
+const BusinessSettingsPage = lazy(() => import("./pages/BusinessSettingsPage"));
+const Schedule = lazy(() => import("./pages/Schedule"));
+const ParticipantDashboard = lazy(() => import("./pages/ParticipantDashboard"));
+const ParticipantPasswordPage = lazy(() => import("./pages/ParticipantPasswordPage"));
+
+/** What shows for the moment a page's code is loading: the page background, nothing that jumps. */
+function PageLoading() {
+  return <div className="min-h-screen bg-paper" aria-busy="true" />;
+}
 
 function Router() {
   return (
+    <Suspense fallback={<PageLoading />}>
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/check" component={BusinessCheck} />
@@ -70,6 +82,7 @@ function Router() {
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
+    </Suspense>
   );
 }
 

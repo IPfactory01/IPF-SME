@@ -78,7 +78,7 @@ export function WhyStuck() {
             
             <p className="font-serif text-3xl font-bold text-ink">{item.value}</p>
             <p className="mt-1 text-sm text-ink-600">{item.label}</p>
-            <p className="mt-2 text-xs text-ink-faint">{item.source}</p>
+            <p className="mt-2 text-xs text-ink-muted">{item.source}</p>
           </motion.div>
         ))}
       </Stagger>

@@ -93,6 +93,11 @@ describe("business check page", { timeout: 20_000 }, () => {
   });
   afterEach(cleanup);
 
+  it("names the browser tab after the check, for bookmarks, history and shared links", () => {
+    render(React.createElement(BusinessCheck));
+    expect(document.title).toBe("Free Business Health Check | The Shift, by IP Factory");
+  });
+
   it("asks who the owner is first, records them as a lead, then starts the questions", async () => {
     render(React.createElement(BusinessCheck));
     await pick(/take the business health check/i);

@@ -64,7 +64,8 @@ for structure, not as new accents. Errors use the `danger` family, never the hea
 | Role | Font | Where |
 |---|---|---|
 | Headings and display | **Playfair Display** (700, 900) | Page titles, result headlines, report findings |
-| Body, labels, tables, buttons | **Plus Jakarta Sans** (400, 600, 700) | Everything else |
+| Display headings on the public pages (since 22 October) | **Plus Jakarta Sans** 800, tight tracking | Page and section headlines, tiles, prices |
+| Body, labels, tables, buttons | **Plus Jakarta Sans** (400 to 800) | Everything else |
 
 - The site loads both from Google Fonts (`client/index.html`). Emails ask for them with Arial and Georgia fallbacks. The
   PDF embeds both (`server/fullReport/fonts.ts`; latin and latin-ext merged so ₦ prints).
@@ -72,6 +73,8 @@ for structure, not as new accents. Errors use the `danger` family, never the hea
   (the PDF does this automatically).
 - Eyebrows and section labels: Plus Jakarta Sans, uppercase, 11 to 12 px, letter-spacing about 0.2em, `highlight-ink`.
 - Numbers in tables and tallies: tabular figures.
+- Load every weight a page uses (`client/index.html`): a weight that is not loaded is faked by the browser and looks
+  smudged. Plus Jakarta Sans loads 400 to 800; `test/client/sitemap.test.ts` checks 800 is loaded.
 
 **Finding (9 October 2026): the site is not showing the brand fonts.** The `<body>` carries Tailwind's `font-sans` and
 headings carry `font-serif`. Neither utility is mapped to the brand fonts, and both outrank the base rules in
@@ -88,8 +91,12 @@ screenshots before it ships, because every page's line lengths change.
 - **Selected option:** `brand` border on `brand-tint`.
 - **Containers:** max width 1,280 px with 1.5 rem side padding; reading pages (report form, onboarding) narrower,
   max-width about 42 rem.
-- **Phone first:** every owner-facing screen is designed at 390 px wide first; no horizontal scrolling; targets at least
-  44 px tall.
+- **Phone first:** every owner-facing screen is designed at 390 px wide first, and checked at 360, 768 and 1,024 px; no
+  horizontal scrolling; targets at least 44 px tall (24 px for links inside a sentence). Pinch-zoom is never disabled.
+- **Keyboard:** every public page opens with a "Skip to content" link; a chart or table wider than a phone scrolls
+  sideways in a focusable, named region.
+- **Contrast:** text meets 4.5:1 on its background. Small green text on the Clear tint uses `health-clear-strong`.
+- **Shared links:** `client/public/brand/share-card.png` (1,200 × 630) is the picture WhatsApp, LinkedIn and X show.
 - **Component library:** shadcn/ui ("new-york") in `client/src/components/ui`. Its colour roles (`bg-primary`,
   `bg-destructive`, `text-muted-foreground`, `border-input` and others) are **not mapped** to the theme, so they produce no
   colour. Always pass brand classes (`bg-brand`, `text-ink-muted`, `border-line`) when using a shadcn component, or map

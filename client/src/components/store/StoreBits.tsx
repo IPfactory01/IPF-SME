@@ -23,15 +23,21 @@ export function tilePrice(price: PriceModel): { main: string; note?: string } {
   return { main: priceLabel(price) };
 }
 
+/** Brand fill on light backgrounds; light fill on the dark and gradient bands. */
+const TONES = {
+  brand: "bg-brand text-paper hover:bg-brand-deep",
+  light: "bg-paper-raised text-brand-deep hover:bg-paper",
+} as const;
+
 const SIZES = {
   lg: "h-12 px-7 text-base",
   sm: "h-9 px-4 text-sm",
 } as const;
 
 /** The one action that starts a product: Buy, Book a free call, or the free check. */
-export function StartButton({ product, size = "lg", label, className = "" }: { product: Product; size?: keyof typeof SIZES; label?: string; className?: string }) {
+export function StartButton({ product, size = "lg", tone = "brand", label, className = "" }: { product: Product; size?: keyof typeof SIZES; tone?: keyof typeof TONES; label?: string; className?: string }) {
   const mode = startMode(product);
-  const classes = `group inline-flex items-center justify-center gap-2 bg-brand font-bold text-paper transition-[transform,background-color] duration-150 hover:bg-brand-deep active:scale-[0.97] ${SIZES[size]} ${className}`;
+  const classes = `group inline-flex items-center justify-center gap-2 font-bold transition-[transform,background-color] duration-150 active:scale-[0.97] ${TONES[tone]} ${SIZES[size]} ${className}`;
   if (mode === "self") return <Link href={orderPath(product)} className={classes}>{label ?? "Buy"}</Link>;
   if (mode === "after_call") return <a href={BRAND.discoveryCallUrl} target="_blank" rel="noopener noreferrer" className={classes}>{label ?? "Book a free call"}</a>;
   return <Link href="/check" className={classes}>{label ?? "Take the free check"}</Link>;

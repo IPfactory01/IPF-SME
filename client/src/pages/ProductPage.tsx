@@ -214,7 +214,7 @@ export default function ProductPage() {
               <h2 className="font-display max-w-xl text-[clamp(1.6rem,3.6vw,2.4rem)] font-extrabold leading-[1.1] tracking-[-0.025em]">Delivered on the date we give you. Or your money back.</h2>
               <p className="mt-2.5 max-w-2xl text-on-dark-muted">{DELIVERY_PROMISE}</p>
             </div>
-            <StartButton product={product} className="bg-paper-raised text-brand-deep hover:bg-paper" />
+            <StartButton product={product} tone="light" />
           </div>
         </section>
       )}

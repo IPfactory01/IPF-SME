@@ -122,3 +122,9 @@ describe("what comes next", () => {
     for (const product of PRODUCTS) if (product.nextVariant) expect(nextProduct(product)!.variants!.map((variant) => variant.id)).toContain(product.nextVariant);
   });
 });
+
+describe("what each product asks the owner for", () => {
+  it("never says \"if you have it\" in a record's name: the page adds it for optional records", () => {
+    for (const product of PRODUCTS) for (const record of product.intake.records) expect(record.label, `${product.id}: ${record.label}`).not.toMatch(/if you have/i);
+  });
+});

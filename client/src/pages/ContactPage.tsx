@@ -40,7 +40,7 @@ export default function ContactPage() {
             <address className="mt-2 text-lg font-semibold not-italic leading-snug text-ink">
               {BRAND.officeAddress.lines.map((line) => <span key={line} className="block">{line}</span>)}
             </address>
-            <p className="mt-3 flex-1 leading-relaxed text-ink-soft">We work with businesses in Lagos and Abuja. Most of the work happens online, so where you are matters less than you think.</p>
+            <p className="mt-3 flex-1 leading-relaxed text-ink-soft">We work with businesses across Nigeria. Most of the work happens online, so where you are matters less than you think.</p>
             <a href={BRAND.officeAddress.mapUrl} target="_blank" rel="noopener noreferrer" className="group mt-6 inline-flex w-fit items-center gap-1.5 font-semibold text-brand">Open in Maps <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></a>
           </li>
         </ul>

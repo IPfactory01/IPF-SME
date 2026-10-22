@@ -53,7 +53,7 @@ export default function AboutPage() {
           <Reveal>
             <SectionHeading id="for-heading" eyebrow="Who it is for" title="Owners who already trade." />
             <p className="mt-6 text-lg leading-relaxed text-ink-600">
-              Business owners in Nigeria who want a straight answer about their numbers, prices, cash, funding, people or sales. We start with businesses in Lagos and Abuja; most of the work happens online.
+              Business owners in Nigeria who want a straight answer about their numbers, prices, cash, funding, people or sales. We work with businesses across Nigeria; most of the work happens online.
             </p>
             <p className="mt-4 leading-relaxed text-ink-soft">
               Smaller business? Start with the free Business Health Check and a Done for You product, from {formatNaira(startingPriceOf("done_for_you"))}. Several problems across a larger business? Start with a Business Review; work that needs a project team goes to {BRAND.trackRecord.groupName}.

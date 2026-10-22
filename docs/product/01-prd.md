@@ -21,7 +21,7 @@ Analysts and AI do most of the analysis under a named IP Factory consultant, and
 
 | | |
 |---|---|
-| **Who it is for** | Nigerian business owners who already trade, starting in Lagos and Abuja: growth-stuck operators first, funding-ready founders second (operational plan, page 14). Smaller owners start with a Done for You product; larger ones with several connected problems start with a Business Review |
+| **Who it is for** | Nigerian business owners who already trade, anywhere in Nigeria (ET, 22 October 2026; the plan started in Lagos and Abuja, and most of the work is online): growth-stuck operators first, funding-ready founders second (operational plan, page 14). Smaller owners start with a Done for You product; larger ones with several connected problems start with a Business Review |
 | **Not for** | Work that needs a project team across several functions of a larger business: referred to Enzo Krypton & Co. and quoted per project. Training is not a core product (ET, 5 October) |
 | **The pilot** | 20 paying clients between 9 October and 10 December 2026; about ₦34,000,000 at list by 31 December (§9, §11) |
 | **Second job of the pilot** | Build the working parts (problem taxonomy, business check, method per problem area, check-in template, engagement record) that become the "Strategy in a Box" portal in January 2027 (§8) |

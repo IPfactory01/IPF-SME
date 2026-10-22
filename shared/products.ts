@@ -166,7 +166,7 @@ export const PRODUCTS: readonly Product[] = [
     workingDays: 3,
     buy: "self",
     intake: {
-      records: [STATEMENTS("the last six months"), { id: "registration", label: "Business registration documents", detail: "CAC certificate and status report, and your TIN.", required: true }, { id: "lender_form", label: "The lender's application form or checklist, if you have it", detail: "So we check you against what this lender asks for.", required: false }],
+      records: [STATEMENTS("the last six months"), { id: "registration", label: "Business registration documents", detail: "CAC certificate and status report, and your TIN.", required: true }, { id: "lender_form", label: "The lender's application form or checklist", detail: "So we check you against what this lender asks for.", required: false }],
       questions: [{ id: "lender", label: "Which lender or programme are you applying to?", kind: "text", required: true }, { id: "amount", label: "How much do you want to borrow, and for what?", kind: "textarea", required: true }],
     },
     next: "funding_application_pack",

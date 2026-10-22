@@ -75,11 +75,22 @@ describe("a service page (/services/:slug), told as a story", () => {
     expect(screen.getByText("Business bank statements for the last three months")).toBeTruthy();
     expect(screen.getAllByText("₦300,000").length).toBeGreaterThan(0);
     expect(screen.getByText(DELIVERY_PROMISE)).toBeTruthy();
+    // The button on the coloured refund band is light with dark text, never white on white.
+    const band = within(screen.getByText(DELIVERY_PROMISE).parentElement!.parentElement!).getByRole("link", { name: /book a free call/i });
+    expect(band.className).toContain("bg-paper-raised");
+    expect(band.className).toContain("text-brand-deep");
+    expect(band.className).not.toMatch(/\btext-paper\b|\bbg-brand\b/);
     const call = screen.getAllByRole("link", { name: /book a free call/i });
     expect(call.length).toBeGreaterThan(0);
     for (const link of call) expect(link.getAttribute("href")).toBe(BRAND.discoveryCallUrl);
     expect(screen.queryByRole("link", { name: /^buy/i })).toBeNull();
     expect(screen.getByRole("link", { name: /Six-Week Fix: Cash and Pricing/ }).getAttribute("href")).toBe("/services/six-week-fix");
+  });
+
+  it("names an optional record once, with \"(if you have it)\" added by the page", () => {
+    at("/services/funding-readiness-assessment");
+    const label = screen.getByText((_, element) => element?.tagName === "P" && element.textContent?.startsWith("The lender's application form or checklist") === true);
+    expect(label.textContent).toBe("The lender's application form or checklist (if you have it)");
   });
 
   it("shows the Six-Week Fix's four problems and its three payments", () => {

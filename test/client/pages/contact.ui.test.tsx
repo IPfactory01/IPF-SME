@@ -20,7 +20,7 @@ describe("Contact (/contact)", () => {
     expect(call.getAttribute("href")).toBe(BRAND.discoveryCallUrl);
     expect(call.getAttribute("rel")).toContain("noopener");
     expect(ways.getByRole("link", { name: BRAND.businessSupportMailbox }).getAttribute("href")).toBe(`mailto:${BRAND.businessSupportMailbox}`);
-    expect(ways.getByText(/Lagos and Abuja/)).toBeTruthy();
+    expect(ways.getByText(/businesses across Nigeria/)).toBeTruthy();
     const office = ways.getByRole("heading", { name: "Our office" }).parentElement!;
     expect(office.querySelector("address")!.textContent).toBe(BRAND.officeAddress.lines.join(""));
     expect(within(office).getByRole("link", { name: /Open in Maps/ }).getAttribute("href")).toBe(BRAND.officeAddress.mapUrl);

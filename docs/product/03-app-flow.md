@@ -1,9 +1,11 @@
 # 3. App flow
 
-**What happens when someone clicks, and which page comes next.** Last reviewed 12 October 2026, against the code on the
+**What happens when someone clicks, and which page comes next.** Last reviewed 22 October 2026, against the code on the
 working branch. Diagrams use Mermaid, which GitHub renders.
 
-Every route listed in `client/src/App.tsx` appears in section 1. `test/docs/productDocs.test.ts` fails if a route is
+Every route listed in `client/src/App.tsx` appears in section 1. Every public page carries the same header (Services,
+How we work, About, Questions, Contact, Client sign in and the free check; a menu button on phones) and footer
+(`SITE_PAGES`, `client/src/components/SiteShell.tsx`). `test/docs/productDocs.test.ts` fails if a route is
 added without being documented here.
 
 ---
@@ -14,9 +16,13 @@ added without being documented here.
 
 | Route | Page | Who can reach it | What it does | Next |
 |---|---|---|---|---|
-| `/` | `Home.tsx` | Anyone | The site in the owner's words: track record, problem with its evidence, the experience behind The Shift, what we sell (the four ways to buy, each product with its price), how it works in six steps, ten problem areas, who it is for, questions | "Free Business Health Check" → `/check`; a product → `/services/:slug`; "See every service" → `/services` |
-| `/services` | `ServicesPage.tsx` | Anyone | The menu: the four ways to buy, then every product grouped by need, each with its price and delivery, from `shared/products.ts`; work for a project team goes to Enzo Krypton & Co. | A product → `/services/:slug`; "Take the free Business Health Check" → `/check` |
+| `/` | `Home.tsx` | Anyone | The home page (a multi-page site since 22 October 2026): the hero, the track record and client logos, owners' problems each linking to the service that answers it first (`NEED_LEAD`), three services most owners start with, how we work in three steps, the evidence, the free check | A problem or a service → `/services/:slug`; "See all services" → `/services`; "How we work" → `/how-we-work`; "About" → `/about`; "Free Business Health Check" → `/check` |
+| `/services` | `ServicesPage.tsx` | Anyone | The services, laid out as a store: one tile per product with a drawing of what it hands over, its promise and price (`shared/productStories.ts`), filtered by way to buy; the free check for owners who are not sure; the three promises; work for a project team goes to Enzo Krypton & Co. | "Learn more" → `/services/:slug`; "Book a call" (Calendly) or "Start" → `/check` |
 | `/services/:slug` | `ProductPage.tsx` | Anyone | One product: what it is, who it is for, what you get, what we need from you, the price and how it is paid, delivery and the refund promise, what usually comes next. A slug that is not on the menu says so and links the menu | "Book a free 20-minute call" (Calendly) for products that start with a call, and for every product until online ordering opens; "Take the free Business Health Check" for the check and the Full Report |
+| `/how-we-work` | `HowWeWorkPage.tsx` | Anyone | The steps from the free check to finished work; the four ways to work with us, each product with its price and how that way is paid; the three promises; the ten places businesses get stuck | A product → `/services/:slug`; "See every service" → `/services`; questions → `/questions`; the free check → `/check` |
+| `/about` | `AboutPage.tsx` | Anyone | IP Factory and Enzo Krypton & Co., the track record and client logos, the experience behind The Shift, what we are and are not, who it is for, who you work with, the research | The firm's site (new tab); the free check → `/check` |
+| `/questions` | `QuestionsPage.tsx` | Anyone | Every question in one place: before you buy, then each service's own questions in menu order, with a topic list | "More about …" → `/services/:slug`; "Talk to us" → `/contact`; the mailbox |
+| `/contact` | `ContactPage.tsx` | Anyone | Book a free 20-minute call, write to the mailbox, where we work (Lagos and Abuja, mostly online) | Calendly (new tab); `mailto:`; "Client sign in" → `/login`; the free check → `/check` |
 | `/check` | `BusinessCheck.tsx` | Anyone | The free Business Health Check, from contact details to the result, which names the first product to buy and the one after it (`shared/businessCheck/routing.ts`) | Book a call (Calendly), ask for the Full Report, or open the first product's page |
 | `/terms` | `LegalPage.tsx` | Anyone | The approved Terms & Conditions (`docs/legal/terms.md`, from the approved Word document), a plain reading page with no sign-in | Back to the site |
 | `/privacy` | `LegalPage.tsx` | Anyone | The approved Privacy Policy (`docs/legal/privacy.md`, from the approved Word document), a plain reading page with no sign-in | Back to the site |

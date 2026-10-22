@@ -1,55 +1,30 @@
 /**
- * The interactive parts of the home page: the hero, the journey stepper, the problem-area picker
- * and the questions. Copy comes from shared/businessSupport.ts (concept note v0.8.1, section 16).
+ * The interactive parts of the public pages: the home page's hero and blocks, the journey stepper and problem-area
+ * picker (How we work), the questions (Questions) and the closing band. Copy comes from shared/businessSupport.ts
+ * (concept note v0.8.1, section 16) and shared/products.ts.
  */
 import { EASE, Reveal } from "@/components/motion";
 import { onSectionLinkClick } from "@/lib/scrollToSection";
 import { BRAND } from "@shared/brand";
 import { buildJourney, PROBLEM_AREAS, PROMISE } from "@shared/businessSupport";
-import { DELIVERY_PROMISE, MENU_PRODUCTS, priceLabel, servicePath, WAY_DETAILS, WAYS_TO_BUY } from "@shared/products";
-import { displayPrice } from "@/lib/productPrice";
-import { Link } from "wouter";
+import { DELIVERY_PROMISE, MENU_PRODUCTS, NEED_DETAILS, NEED_LEAD, NEEDS, productById, servicePath } from "@shared/products";
+import { ServiceTile } from "@/components/store/ServiceTile";
 import { useServicePricesOrDefault } from "@/lib/servicePrices";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowDown, ArrowRight, Plus } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation } from "wouter";
 
-export const NAV = [
-  { id: "services", label: "What we sell" },
-  { id: "how", label: "How it works" },
-  { id: "stuck", label: "Where you're stuck" },
-  { id: "for", label: "Who it's for" },
-  { id: "questions", label: "Questions" },
-] as const;
-
-export function useScrolled(threshold = 12) {
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const update = () => setScrolled(window.scrollY > threshold);
-    update();
-    window.addEventListener("scroll", update, { passive: true });
-    return () => window.removeEventListener("scroll", update);
-  }, [threshold]);
-  return scrolled;
-}
-
-/** The section currently in the middle of the screen, for the header underline. */
-export function useActiveSection(ids: readonly string[]) {
-  const [active, setActive] = useState<string | null>(null);
-  const key = ids.join(",");
-  useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) if (entry.isIntersecting) setActive(entry.target.id);
-      },
-      { rootMargin: "-45% 0px -50% 0px" },
-    );
-    const elements = key.split(",").map((id) => document.getElementById(id)).filter((element): element is HTMLElement => Boolean(element));
-    elements.forEach((element) => observer.observe(element));
-    return () => observer.disconnect();
-  }, [key]);
-  return active;
+/** The free check: the external form when one is configured, otherwise the on-site check. */
+export function useStartCheck() {
+  const [, setLocation] = useLocation();
+  return () => {
+    if (BRAND.applyUrl) {
+      window.open(BRAND.applyUrl, "_blank", "noopener,noreferrer");
+      return;
+    }
+    setLocation("/check");
+  };
 }
 
 export function CtaButton({ onClick, tone = "dark", children, className = "" }: { onClick: () => void; tone?: "dark" | "light"; children: React.ReactNode; className?: string }) {
@@ -116,7 +91,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
           </p>
           <div className="flex flex-col items-center gap-4">
             <CtaButton onClick={onStart} className="w-full max-w-sm">Start with a free Business Health Check</CtaButton>
-            <p className="text-sm text-ink-muted">Ten minutes, on your phone.</p>
+            <p className="text-sm text-ink-muted">Ten minutes, on your phone. Or <Link href="/services" className="font-semibold text-brand underline underline-offset-4">see our services</Link>.</p>
           </div>
         </motion.div>
 
@@ -146,7 +121,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
           </span>
         </motion.button>
 
-        <motion.a href="#problem" onClick={onSectionLinkClick} aria-label="Scroll down" className="mx-auto mt-6 flex h-10 w-10 items-center justify-center rounded-full border border-line text-ink-faint hover:border-brand hover:text-brand" animate={calm ? undefined : { y: [0, 6, 0] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}>
+        <motion.a href="#problems" onClick={onSectionLinkClick} aria-label="Scroll down" className="mx-auto mt-6 flex h-10 w-10 items-center justify-center rounded-full border border-line text-ink-faint hover:border-brand hover:text-brand" animate={calm ? undefined : { y: [0, 6, 0] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}>
           <ArrowDown className="h-4 w-4" />
         </motion.a>
       </div>
@@ -154,56 +129,96 @@ export function Hero({ onStart }: { onStart: () => void }) {
   );
 }
 
-/** What we sell: the four ways to buy, each with the products in it and their prices, and the way to the full menu. */
-export function WhatWeSell() {
+/**
+ * The home page's middle: owners' problems, each leading to the service that answers it; three services to start with;
+ * and how we work, in three steps. Each links on to its own page, so the home page stays short.
+ */
+export function ProblemsToServices() {
+  return (
+    <section id="problems" aria-labelledby="problems-heading" className="scroll-mt-16 border-b border-line py-20 sm:py-24">
+      <div className="container mx-auto max-w-6xl">
+        <Reveal className="max-w-3xl">
+          <p className="text-xs font-bold uppercase tracking-[0.16em] text-highlight-ink">Start with what's wrong</p>
+          <h2 id="problems-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink">Tell us what it feels like. We'll show you where to start.</h2>
+        </Reveal>
+        <ul className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {NEEDS.map((need) => {
+            const product = productById(NEED_LEAD[need])!;
+            return (
+              <li key={need}>
+                <Link href={servicePath(product)} className="group flex h-full flex-col justify-between gap-6 bg-paper-raised p-6 transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_24px_50px_-32px_rgba(18,50,79,0.55)]">
+                  <span className="font-serif text-xl italic leading-snug text-ink-750">&ldquo;{NEED_DETAILS[need].ownerWords}&rdquo;</span>
+                  <span>
+                    <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-ink-muted">{NEED_DETAILS[need].name}</span>
+                    <span className="mt-1 inline-flex items-center gap-1.5 font-semibold text-brand">{product.name} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></span>
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+        <p className="mt-8 text-ink-soft">Not sure which it is? <Link href="/check" className="font-semibold text-brand underline underline-offset-4">Take the free Business Health Check</Link>. It names your first step in ten minutes.</p>
+      </div>
+    </section>
+  );
+}
+
+/** The services most owners start with, and the way to all of them. */
+export const FEATURED_SERVICES = ["cash_flow_forecast", "business_review", "six_week_fix"] as const;
+
+export function FeaturedServices() {
   const prices = useServicePricesOrDefault();
   return (
-    <section id="services" className="border-b border-line py-24">
-      <div className="container mx-auto max-w-5xl">
-        <Reveal className="mb-12 max-w-3xl">
-          <span className="mb-3 block text-xs font-semibold uppercase tracking-widest text-ink-muted">What we sell</span>
-          <h2 className="font-serif text-4xl font-bold tracking-tight sm:text-5xl">Four ways to buy. Every price up front.</h2>
-          <p className="mt-4 text-lg leading-relaxed text-ink-soft">Start free. Buy finished work by link. Or work with us for six weeks, or every month.</p>
-        </Reveal>
-        <ul aria-label="Ways to buy" className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {WAYS_TO_BUY.map((way) => (
-            <li key={way} className="flex flex-col border border-line bg-paper-raised p-6">
-              <h3 className="font-serif text-2xl font-bold">{WAY_DETAILS[way].name}</h3>
-              <p className="mt-2 leading-relaxed text-ink-soft">{WAY_DETAILS[way].summary}</p>
-              <ul className="mt-4 flex-1 divide-y divide-line border-t border-line">
-                {way === "assessment" && (
-                  <li>
-                    <Link href="/check" className="group flex items-baseline justify-between gap-4 py-2.5 text-sm">
-                      <span className="font-medium text-ink group-hover:text-brand">Free Business Health Check</span>
-                      <span className="shrink-0 font-semibold text-ink-soft">Free</span>
-                    </Link>
-                  </li>
-                )}
-                {MENU_PRODUCTS.filter((product) => product.way === way).map((product) => (
-                  <li key={product.id}>
-                    <Link href={servicePath(product)} className="group flex items-baseline justify-between gap-4 py-2.5 text-sm">
-                      <span className="font-medium text-ink group-hover:text-brand">{product.name}</span>
-                      <span className="shrink-0 font-semibold text-ink-soft">{priceLabel(displayPrice(product, prices))}</span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
+    <section aria-labelledby="featured-heading" className="border-b border-line bg-paper-sunken/60 py-20 sm:py-24">
+      <div className="container mx-auto max-w-6xl">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <Reveal>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-highlight-ink">Services</p>
+            <h2 id="featured-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink">Where most owners start.</h2>
+          </Reveal>
+          <Link href="/services" className="group inline-flex items-center gap-1.5 font-semibold text-brand">See all {MENU_PRODUCTS.length} services <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></Link>
+        </div>
+        <ul className="mt-10 grid grid-cols-1 gap-4 md:grid-cols-3">
+          {FEATURED_SERVICES.map((id) => <ServiceTile key={id} product={productById(id)!} prices={prices} />)}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+export function HowWeWorkTeaser() {
+  const steps = [
+    { title: "Find it", body: "The free Business Health Check, or a two-week Business Review, names the one problem to fix first." },
+    { title: "Fix it", body: "We deliver finished work in days, or work with your team on one problem for six weeks." },
+    { title: "See the results", body: "Every piece of work is checked before you see it, and we track the number that tells you it worked." },
+  ];
+  return (
+    <section aria-labelledby="how-heading" className="border-b border-line py-20 sm:py-24">
+      <div className="container mx-auto max-w-6xl">
+        <div className="flex flex-wrap items-end justify-between gap-6">
+          <Reveal>
+            <p className="text-xs font-bold uppercase tracking-[0.16em] text-highlight-ink">How we work</p>
+            <h2 id="how-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink">Find it. Fix it. See the results.</h2>
+          </Reveal>
+          <Link href="/how-we-work" className="group inline-flex items-center gap-1.5 font-semibold text-brand">How we work <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></Link>
+        </div>
+        <ol className="mt-10 grid gap-4 md:grid-cols-3">
+          {steps.map((step, index) => (
+            <li key={step.title} className="bg-paper-raised p-6">
+              <span className="font-display text-5xl font-extrabold leading-none tracking-[-0.04em] text-brand">{index + 1}</span>
+              <h3 className="mt-4 font-sans text-xl font-extrabold text-ink">{step.title}</h3>
+              <p className="mt-2 leading-relaxed text-ink-soft">{step.body}</p>
             </li>
           ))}
-        </ul>
-        <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-3">
-          <Link href="/services" className="group inline-flex h-12 items-center bg-ink px-6 text-sm font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-charcoal">
-            See every service <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-          </Link>
-          <p className="text-sm text-ink-muted">{DELIVERY_PROMISE}</p>
-        </div>
+        </ol>
+        <p className="mt-8 text-sm text-ink-muted">{DELIVERY_PROMISE}</p>
       </div>
     </section>
   );
 }
 
 /** How it works: the journey as a stepper that plays through on its own until the visitor picks a step. */
-export function Journey() {
+export function Journey({ heading = "How it works", sub = "From the free check to finished work. Tap a step." }: { heading?: string; sub?: string }) {
   const prices = useServicePricesOrDefault();
   const [active, setActive] = useState(0);
   const [auto, setAuto] = useState(true);
@@ -233,8 +248,8 @@ export function Journey() {
     <section id="how" className="border-b border-line py-24">
       <div ref={ref} className="container mx-auto max-w-4xl">
         <Reveal className="mb-14 text-center">
-          <h2 className="font-serif text-4xl font-bold tracking-tight sm:text-5xl">How it works</h2>
-          <p className="mt-3 text-ink-muted">From the free check to finished work. Tap a step.</p>
+          <h2 className="font-display text-[clamp(2.1rem,5vw,3.5rem)] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink">{heading}</h2>
+          <p className="mt-3 text-ink-muted">{sub}</p>
         </Reveal>
         <ol className="relative">
           {journey.map((step, index) => {
@@ -255,7 +270,7 @@ export function Journey() {
                     {index + 1}
                   </motion.span>
                   <span className="min-w-0 flex-1">
-                    <span className={`block font-serif text-xl font-bold transition-colors ${open ? "text-ink" : "text-ink-600"}`}>{step.name}</span>
+                    <span className={`block font-sans text-lg font-extrabold tracking-[-0.01em] transition-colors ${open ? "text-ink" : "text-ink-600"}`}>{step.name}</span>
                     <AnimatePresence initial={false}>
                       {open && (
                         <motion.span key="body" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.4, ease: EASE }} className="block overflow-hidden">
@@ -286,7 +301,7 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
       <div className="container mx-auto max-w-5xl">
         <Reveal className="mb-12 text-center">
           <span className="mb-3 block text-xs font-semibold uppercase tracking-widest text-ink-muted">Where businesses get stuck</span>
-          <h2 className="font-serif text-4xl font-bold tracking-tight sm:text-5xl">Pick yours.</h2>
+          <h2 className="font-display text-[clamp(2.1rem,5vw,3.5rem)] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink">Pick yours.</h2>
           <p className="mt-3 text-ink-muted">Not sure which one it is? That is what the free Business Health Check finds out.</p>
         </Reveal>
         <motion.div layout className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
@@ -336,7 +351,8 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
   );
 }
 
-const QUESTIONS = [
+/** The questions owners ask before they buy. The Questions page adds each service's own. */
+export const SITE_QUESTIONS = [
   { q: "Do you do the work for me?", a: "Sometimes. Done for You products are finished work we deliver: accounts, a forecast, a plan or a funding pack. In a Six-Week Fix your team does the work; we prescribe, equip and review it with you every week." },
   { q: "What if you miss the delivery date?", a: DELIVERY_PROMISE },
   { q: "How do I pay?", a: "By transfer or card, through Paystack, before we start. A Six-Week Fix can be paid in three parts. Monthly Services are paid a quarter at a time." },
@@ -345,16 +361,14 @@ const QUESTIONS = [
   { q: "What happens after?", a: "Thirty days on, we check in. If it helps, we suggest the next step, or a Monthly Service that keeps it going." },
 ];
 
-export function Faq() {
+/** One group of questions, each opening to its answer. */
+export function Faq({ id, heading, items }: { id: string; heading: string; items: readonly { q: string; a: string }[] }) {
   const [open, setOpen] = useState<number | null>(null);
   return (
-    <section id="questions" className="border-b border-line bg-paper-sunken/50 py-24">
-      <div className="container mx-auto max-w-3xl">
-        <Reveal className="mb-12 text-center">
-          <h2 className="font-serif text-4xl font-bold tracking-tight">Questions business owners ask</h2>
-        </Reveal>
-        <Reveal className="divide-y divide-line border-y border-line">
-          {QUESTIONS.map((item, index) => {
+    <section id={id} aria-labelledby={`${id}-heading`} className="scroll-mt-24">
+      <h2 id={`${id}-heading`} className="font-sans text-xl font-extrabold tracking-[-0.01em] text-ink sm:text-2xl">{heading}</h2>
+      <div className="mt-4 divide-y divide-line border-y border-line">
+          {items.map((item, index) => {
             const isOpen = open === index;
             return (
               <div key={item.q}>
@@ -372,8 +386,23 @@ export function Faq() {
               </div>
             );
           })}
-        </Reveal>
       </div>
+    </section>
+  );
+}
+
+/** The closing band of every public page: the free check. */
+export function CheckCta({ onStart }: { onStart: () => void }) {
+  const calm = useReducedMotion();
+  return (
+    <section className="relative overflow-hidden bg-linear-to-t from-brand to-brand-plum py-20 text-paper">
+      <motion.div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 h-96 w-[48rem] -translate-x-1/2 rounded-full bg-highlight/20 blur-3xl" animate={calm ? undefined : { x: ["-55%", "-45%", "-55%"], opacity: [0.5, 0.9, 0.5] }} transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }} />
+      <Reveal className="relative container mx-auto max-w-3xl text-center">
+        <img src={BRAND.logoOnDarkUrl} alt={BRAND.organisationName} className="mx-auto mb-8 h-28 w-auto" />
+        <h2 className="font-display mb-4 text-[clamp(2.1rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-[-0.03em]">Start with the free Business Health Check.</h2>
+        <p className="mx-auto mb-8 max-w-xl text-on-dark-muted">Ten minutes. No card. You&apos;ll know where you stand before you decide anything.</p>
+        <CtaButton onClick={onStart} tone="light">Start with a free Business Health Check</CtaButton>
+      </Reveal>
     </section>
   );
 }

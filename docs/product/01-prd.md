@@ -93,8 +93,12 @@ Each feature lists what it must do, the rules it follows and its status. "Built"
 
 ### F1. Public site
 
-- Home page in the owner's words (concept note §16): hero, the problem in their words, what we are and are not, how it
-  works with prices, the ten places a business gets stuck, who it is for, who you work with, questions, the ask.
+- A website of several pages, not one long landing page (ET, 22 October 2026): Home, Services, a page per service, How
+  we work, About, Questions and Contact, with one menu on every page. The home page is short and in the owner's words
+  (concept note §16): the hero, the track record, owners' problems each leading to the service that answers it, where
+  most owners start, how we work in three steps, the evidence and the free check. Each block links on to its page: the
+  journey, ways to buy and the ten problem areas live on How we work; the firm, who it is for and who you work with on
+  About; every question on Questions.
 - Trust without names (ET, 13 October 2026): a track record strip under the hero (250+ clients, 50+ years of partner
   experience, since 2011, the number of sectors; `BRAND.trackRecord`), sourced figures under the problem ("They fail
   between knowing and doing", concept note §2–3), and **The experience behind The Shift**: IP Factory as the delivery

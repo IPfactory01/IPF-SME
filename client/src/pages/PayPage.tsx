@@ -96,7 +96,7 @@ export default function PayPage() {
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">Payment</p>
       <h1 className="mt-2 font-serif text-3xl font-bold sm:text-4xl">{name}</h1>
       <p className="mt-3 text-ink-soft">{MEANING[item]}</p>
-      <p className="mt-6 font-serif text-5xl font-black tracking-tight text-ink">{amount}</p>
+      <p className="mt-6 font-sans text-5xl font-extrabold tracking-tight tabular-nums text-ink">{amount}</p>
 
       {state === "expired" && (
         <p role="alert" className="mt-6 border border-danger-line bg-danger-tint p-4 text-sm text-danger-strong">

@@ -971,7 +971,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
           <div className="flex flex-col border-2 border-highlight-ink bg-paper-raised p-6 sm:p-8">
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">The Full Report</p>
             <p className="mt-3 font-serif text-2xl font-bold leading-snug text-ink">{FULL_REPORT.name}</p>
-            <p className="mt-3 font-serif text-5xl font-black tracking-tight text-ink">{prices ? formatNaira(prices.fullReport) : "\u00a0"}</p>
+            <p className="mt-3 font-sans text-5xl font-extrabold tracking-tight tabular-nums text-ink">{prices ? formatNaira(prices.fullReport) : "\u00a0"}</p>
             <ul className="mt-5 flex-1 space-y-2.5">
               {FULL_REPORT.includes.map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-sm leading-relaxed text-ink-700"><Check className="mt-0.5 h-4 w-4 shrink-0 text-highlight-ink" />{item}</li>

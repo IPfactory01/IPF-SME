@@ -30,7 +30,8 @@ vi.mock("@/lib/trpc", () => ({
 
 const { default: Home } = await import("@/pages/Home");
 const { BRAND } = await import("@shared/brand");
-const { MENU_PRODUCTS } = await import("@shared/products");
+const { NEED_DETAILS, NEED_LEAD, NEEDS, productById } = await import("@shared/products");
+const { SITE_PAGES } = await import("@/components/SiteShell");
 
 const renderHome = (path = "/") => {
   window.history.replaceState({}, "", path);
@@ -46,8 +47,9 @@ afterEach(() => {
 describe("home page sign-in", () => {
   it("sends clients to the client sign-in page, not the JUMP participant sign-in", () => {
     renderHome();
-    const link = screen.getByRole("link", { name: "Client sign in" });
-    expect(link.getAttribute("href")).toBe("/login");
+    const links = screen.getAllByRole("link", { name: "Client sign in" });
+    expect(links.length).toBeGreaterThan(0);
+    for (const link of links) expect(link.getAttribute("href")).toBe("/login");
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
@@ -59,34 +61,49 @@ describe("home page sign-in", () => {
   });
 });
 
-describe("home page: what we sell (Operational Business Plan, 22 October 2026)", () => {
-  it("shows the four ways to buy, each product with its price linking to its page, and the way to the full menu", () => {
+describe("home page: a standard home page that leads to the site's other pages", () => {
+  it("carries the site menu (Services, How we work, About, Questions, Contact), not anchors on one long page", () => {
     renderHome();
-    const ways = within(screen.getByRole("list", { name: "Ways to buy" }));
-    expect(ways.getAllByRole("heading").map((heading) => heading.textContent)).toEqual(["Assessment", "Done for You", "Six-Week Fix", "Monthly Service"]);
-    for (const product of MENU_PRODUCTS) {
-      const link = ways.getByRole("link", { name: new RegExp(`^${product.name.replace(/[()]/g, "\\$&")}`) });
+    const menu = within(screen.getByRole("navigation", { name: "Site" }));
+    expect(menu.getAllByRole("link").map((link) => [link.textContent, link.getAttribute("href")])).toEqual(SITE_PAGES.map((page) => [page.label, page.href]));
+    expect(screen.queryByRole("link", { name: "What we sell" })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/what we sell/i);
+  });
+
+  it("turns each owner's problem into a link to the service that answers it first", () => {
+    renderHome();
+    const problems = within(screen.getByRole("region", { name: /Tell us what it feels like/ }));
+    for (const need of NEEDS) {
+      const product = productById(NEED_LEAD[need])!;
+      const link = problems.getByRole("link", { name: new RegExp(NEED_DETAILS[need].ownerWords.replace(/[?.()]/g, "\\$&")) });
       expect(link.getAttribute("href")).toBe(`/services/${product.slug}`);
+      expect(link.textContent).toContain(product.name);
     }
-    expect(ways.getByRole("link", { name: /Free Business Health Check/ }).getAttribute("href")).toBe("/check");
-    expect(ways.getByRole("link", { name: /Six-Week Fix₦1,500,000/ })).toBeTruthy();
-    expect(screen.getByRole("link", { name: /See every service/ }).getAttribute("href")).toBe("/services");
+    expect(problems.getByRole("link", { name: "Take the free Business Health Check" }).getAttribute("href")).toBe("/check");
   });
 
-  it("answers the questions owners ask about the new menu, without promising consent it does not record", () => {
-    const { container } = renderHome();
-    const questions = container.querySelector("#questions")!.textContent!;
-    expect(questions).toContain("What if you miss the delivery date?");
-    expect(questions).toContain("How do I pay?");
-    expect(questions).not.toMatch(/only with your consent|stays between you and your/);
+  it("features three services to start with, with their prices, and links to all of them", () => {
+    renderHome();
+    const featured = within(screen.getByRole("region", { name: "Where most owners start." }));
+    expect(featured.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["13-Week Cash Flow Forecast", "Business Review", "Six-Week Fix"]);
+    expect(featured.getByText("₦600,000")).toBeTruthy();
+    expect(featured.getByRole("link", { name: /See all \d+ services/ }).getAttribute("href")).toBe("/services");
   });
 
-  it("tells smaller and larger owners where to start with products that exist", () => {
+  it("explains how we work in three steps and links to the full page", () => {
+    renderHome();
+    const how = within(screen.getByRole("region", { name: "Find it. Fix it. See the results." }));
+    expect(how.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["Find it", "Fix it", "See the results"]);
+    expect(how.getByRole("link", { name: /How we work/ }).getAttribute("href")).toBe("/how-we-work");
+  });
+
+  it("backs the promise with sourced figures, in the site's words, and links to About", () => {
     const { container } = renderHome();
-    const forWhom = container.querySelector("#for")!.textContent!;
-    expect(forWhom).toContain("a Done for You product, from ₦300,000");
-    expect(forWhom).toContain("Start with a Business Review");
-    expect(forWhom).not.toMatch(/training timetable|Advisory\./);
+    const evidence = container.querySelector("#evidence")!;
+    expect(evidence.textContent).toContain("They fail between knowing and doing.");
+    for (const source of ["PwC MSME Survey, 2024", "World Bank, Nigeria, 2022", "Field trial of 852 owners, 2018"]) expect(evidence.textContent).toContain(source);
+    expect(within(evidence as HTMLElement).getByRole("link", { name: /About/ }).getAttribute("href")).toBe("/about");
+    expect(container.textContent).not.toMatch(/\b(framework|strategic|solutions?|leverage|holistic|playbook|sprint|retainer|door)\b/i);
   });
 });
 
@@ -95,22 +112,7 @@ describe("home page track record", () => {
     renderHome();
     const record = screen.getByRole("region", { name: "Our track record" });
     for (const text of ["250+", "clients advised", "50+", "years of partner experience", "Since 2011", `${BRAND.trackRecord.sectors.length}`, "sectors of the economy"]) expect(record.textContent).toContain(text);
-  });
-
-  it("names the parent firm and the sectors, links the firm when its address is set, and never names a partner", () => {
-    const { container } = renderHome();
-    expect(screen.getByRole("link", { name: "What we sell" }).getAttribute("href")).toBe("#services");
-    const section = container.querySelector("#experience")!;
-    expect(section.textContent).toContain(`the delivery and method arm of ${BRAND.trackRecord.groupName}, an established Nigerian management consulting firm`);
-    expect(section.textContent).toContain("The same method we use with larger clients. Run at the size and the price that fits your business.");
-    const sectors = within(screen.getByRole("list", { name: "Sectors we have worked in" })).getAllByRole("listitem").map((item) => item.textContent);
-    expect(sectors).toEqual(BRAND.trackRecord.sectors);
-    const link = screen.queryByRole("link", { name: BRAND.trackRecord.groupName });
-    if (BRAND.trackRecord.groupUrl) {
-      expect(link?.getAttribute("href")).toBe(BRAND.trackRecord.groupUrl);
-      expect(link?.getAttribute("rel")).toContain("noopener");
-    } else expect(link).toBeNull();
-    expect(container.textContent).not.toMatch(/Tarfa|Anago|Kurumi/i);
+    expect(document.body.textContent).not.toMatch(/Tarfa|Anago|Kurumi/i);
   });
 
   it("names clients once, in the logo strip, not again as cards further down the page", () => {
@@ -141,24 +143,9 @@ describe("home page track record", () => {
     }
   });
 
-  it("backs the problem with sourced figures, in the site's words", () => {
-    const { container } = renderHome();
-    const problem = container.querySelector("#problem")!;
-    expect(problem.textContent).toContain("They fail between knowing and doing.");
-    for (const source of ["PwC MSME Survey, 2024", "World Bank, Nigeria, 2022", "Field trial of 852 owners, 2018"]) expect(problem.textContent).toContain(source);
-    const added = `${problem.textContent} ${container.querySelector("#experience")!.textContent}`;
-    expect(added).not.toMatch(/\b(framework|strategic|solutions?|leverage|holistic|playbook|sprint|retainer|door)\b/i);
-  });
 });
 
-describe("home page on touch screens", () => {
-  it("shows the \"That's me\" prompt on every owner quote where there is no hover, not only on mouse hover", () => {
-    const { container } = renderHome();
-    const prompts = Array.from(container.querySelectorAll("#problem button span")).filter((span) => span.textContent?.includes("That's me"));
-    expect(prompts.length).toBe(4);
-    for (const prompt of prompts) expect(prompt.className).toContain("[@media(hover:none)]:opacity-100");
-  });
-
+describe("home page footer", () => {
   it("links the Terms & Conditions and Privacy Policy in the footer", () => {
     const { container } = render(<Router hook={memoryLocation({ path: "/" }).hook}><Home /></Router>);
     const footer = container.querySelector("footer")!;

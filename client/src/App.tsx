@@ -24,6 +24,10 @@ import BusinessSettingsPage from "./pages/BusinessSettingsPage";
 import { PrivacyPage, TermsPage } from "./pages/LegalPage";
 import ServicesPage from "./pages/ServicesPage";
 import ProductPage from "./pages/ProductPage";
+import HowWeWorkPage from "./pages/HowWeWorkPage";
+import AboutPage from "./pages/AboutPage";
+import QuestionsPage from "./pages/QuestionsPage";
+import ContactPage from "./pages/ContactPage";
 import Home from "./pages/Home";
 import Schedule from "./pages/Schedule";
 import ParticipantDashboard from "./pages/ParticipantDashboard";
@@ -36,6 +40,10 @@ function Router() {
       <Route path="/check" component={BusinessCheck} />
       <Route path="/services" component={ServicesPage} />
       <Route path="/services/:slug" component={ProductPage} />
+      <Route path="/how-we-work" component={HowWeWorkPage} />
+      <Route path="/about" component={AboutPage} />
+      <Route path="/questions" component={QuestionsPage} />
+      <Route path="/contact" component={ContactPage} />
       <Route path="/terms" component={TermsPage} />
       <Route path="/privacy" component={PrivacyPage} />
       {/* Accounts are created only from an onboarding invitation; the old public sign-up address goes to sign-in. */}

@@ -109,13 +109,14 @@ screenshots before it ships, because every page's line lengths change.
   arrow stay still and the pulsing dot stops (`useReducedMotion`, `motion-safe:`). Glass headers turn solid under
   "reduce transparency" and gain a firm edge under "increase contrast" (`client/src/index.css`).
 - Touch screens: hover is mouse-only (Tailwind 4 `hover:` and Framer `whileHover` ignore touch), so anything shown on
-  hover is shown outright where there is no hover, such as "That's me" on the owner quotes.
+  hover is shown outright where there is no hover; the owner quotes on the home page are plain links that always show
+  the service they lead to.
 - The admin console (reviewed against the same principles, 14 October 2026): buttons press in on pointer-down
   (`active:scale-[0.98]`, still under reduced motion) and list rows tint on press; record drawers slide in from the
   right and leave to the right on mirrored easing (320 ms in, 220 ms out), over an ink scrim that fades with them;
   with "reduce motion" on they fade instead (`[data-record-drawer]` in `client/src/index.css`). Status colours use the
   health and danger tokens, never Tailwind's palette; Waitlisted uses the brand tint.
-- Client logos (home page, under the track record figures): identical square tiles with a hairline border; each logo
+- Client logos (home page and About, under the track record figures): identical square tiles with a hairline border; each logo
   sized by area, not height (`client/src/lib/logoSize.ts`), with a smaller share for logos printed on a filled box; drawn
   as an ink silhouette with the theme colour (`bg-ink` through the logo's `mono` mask) so seven palettes never fight the
   brand, cross-fading to full colour only where a mouse can hover. No press effect: the tiles are not links.

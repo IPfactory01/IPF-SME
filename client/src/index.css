@@ -6,6 +6,12 @@
  * Names deliberately avoid shadcn roles (primary, muted, accent, border, ...) used by components/ui.
  */
 @theme {
+  /* Type: the brand faces (design brief §3). Without these, Tailwind's font-sans and font-serif fall back to the system
+     font and Georgia, and the site loses its typeface. Display is the heavy sans used for store headlines. */
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  --font-serif: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+
   /* Brand */
   --color-brand: #1C4E7E; /* Primary brand colour: buttons, links, key text, rules */
   --color-brand-ink: #1C4E7E; /* Brand-coloured body text */

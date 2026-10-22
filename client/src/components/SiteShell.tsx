@@ -4,9 +4,9 @@
  */
 import { LegalFooterLinks } from "@/components/LegalLinks";
 import { BRAND } from "@shared/brand";
-import { ArrowRight } from "lucide-react";
-import React, { useEffect } from "react";
-import { Link } from "wouter";
+import { ArrowRight, Menu, X } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Link, useLocation } from "wouter";
 
 /** Sets the browser tab title and search description while the page is open. */
 export function usePageMeta(title: string, description: string) {
@@ -31,25 +31,60 @@ export function useScrollToTop(key?: string) {
   }, [key]);
 }
 
+/** The site's pages, in menu order. Every public page carries the same menu. */
+export const SITE_PAGES = [
+  { href: "/services", label: "Services" },
+  { href: "/how-we-work", label: "How we work" },
+  { href: "/about", label: "About" },
+  { href: "/questions", label: "Questions" },
+  { href: "/contact", label: "Contact" },
+] as const;
+
 export function SiteHeader({ cta = true }: { cta?: boolean }) {
+  const [location] = useLocation();
+  const [open, setOpen] = useState(false);
+  const current = (href: string) => location === href || location.startsWith(`${href}/`);
+  useEffect(() => { setOpen(false); }, [location]);
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur-md">
       <div aria-hidden className="h-[3px] bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight" />
-      <div className="container flex items-center justify-between gap-4 py-3">
+      <div className="container flex h-[60px] items-center justify-between gap-4">
         <Link href="/" className="flex shrink-0 items-center gap-3" aria-label={`${BRAND.productEndorsement}: home`}>
           <img src={BRAND.markUrl} alt="" className="h-9 w-auto" />
           <span className="hidden whitespace-nowrap border-l border-line pl-3 text-xs font-semibold uppercase tracking-widest text-ink-muted sm:inline">{BRAND.productName}</span>
         </Link>
-        <nav aria-label="Site" className="flex items-center gap-4 text-sm font-medium text-ink-600 sm:gap-6">
-          <Link href="/services" className="whitespace-nowrap hover:text-brand">Services</Link>
-          <Link href="/login" className="hidden whitespace-nowrap hover:text-brand sm:inline">Client sign in</Link>
+        <nav aria-label="Site" className="hidden items-center gap-6 text-sm font-medium text-ink-600 lg:flex">
+          {SITE_PAGES.map((page) => (
+            <Link key={page.href} href={page.href} aria-current={current(page.href) ? "page" : undefined} className={`relative whitespace-nowrap py-1 transition-colors hover:text-brand ${current(page.href) ? "text-brand" : ""}`}>
+              {page.label}
+              {current(page.href) && <span aria-hidden className="absolute inset-x-0 -bottom-0.5 h-0.5 bg-highlight-ink" />}
+            </Link>
+          ))}
+        </nav>
+        <div className="flex items-center gap-3">
+          <Link href="/login" className="hidden whitespace-nowrap border border-brand-line px-3 py-2 text-xs font-semibold uppercase tracking-wider text-brand transition-colors hover:bg-brand-tint sm:inline-flex">Client sign in</Link>
           {cta && (
             <Link href="/check" className="group hidden items-center whitespace-nowrap bg-ink px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-charcoal md:inline-flex">
               Free Business Health Check <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
             </Link>
           )}
-        </nav>
+          <button type="button" aria-expanded={open} aria-controls="site-menu" onClick={() => setOpen((value) => !value)} className="inline-flex h-10 w-10 items-center justify-center text-ink lg:hidden">
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            <span className="sr-only">{open ? "Close menu" : "Menu"}</span>
+          </button>
+        </div>
       </div>
+      {open && (
+        <nav id="site-menu" aria-label="Site menu" className="border-t border-line bg-paper lg:hidden">
+          <ul className="container grid py-2">
+            {SITE_PAGES.map((page) => (
+              <li key={page.href}><Link href={page.href} aria-current={current(page.href) ? "page" : undefined} className={`block border-b border-line-soft py-3.5 text-lg font-semibold ${current(page.href) ? "text-brand" : "text-ink"}`}>{page.label}</Link></li>
+            ))}
+            <li><Link href="/login" className="block py-3.5 text-lg font-semibold text-ink">Client sign in</Link></li>
+            <li className="pb-3"><Link href="/check" className="flex h-12 items-center justify-center bg-ink font-bold text-paper">Free Business Health Check</Link></li>
+          </ul>
+        </nav>
+      )}
     </header>
   );
 }
@@ -60,7 +95,7 @@ export function SiteFooter() {
       <div className="container flex flex-col items-center gap-3 text-center text-xs text-ink-muted">
         <nav aria-label="Footer" className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1">
           <Link href="/" className="hover:text-ink hover:underline">Home</Link>
-          <Link href="/services" className="hover:text-ink hover:underline">Services</Link>
+          {SITE_PAGES.map((page) => <Link key={page.href} href={page.href} className="hover:text-ink hover:underline">{page.label}</Link>)}
           <Link href="/check" className="hover:text-ink hover:underline">Free Business Health Check</Link>
           <Link href="/login" className="hover:text-ink hover:underline">Client sign in</Link>
         </nav>

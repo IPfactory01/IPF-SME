@@ -1,94 +1,78 @@
 /**
- * The menu (/services): the four ways to buy, then every product grouped by the need it answers, each with its price
- * and delivery time. Everything comes from shared/products.ts. Operational Business Plan, pages 10, 11 and 19.
+ * The menu (/services), laid out as a store (ET approved the design on 22 October 2026): one tile per product with a
+ * drawing of what it hands over, its promise, its price, and Learn more and Buy. A filter by way to buy; the free check
+ * for owners who are not sure; the three promises behind every product. Products come from shared/products.ts and
+ * their stories from shared/productStories.ts.
  */
-import { Reveal } from "@/components/motion";
+import { ServiceTile } from "@/components/store/ServiceTile";
+import { PROMISES } from "@/components/store/StoreBits";
 import { SiteShell, usePageMeta, useScrollToTop } from "@/components/SiteShell";
-import { displayPrice } from "@/lib/productPrice";
 import { useServicePricesOrDefault } from "@/lib/servicePrices";
 import { BRAND } from "@shared/brand";
-import { menuEntry, NEED_DETAILS, NEEDS, priceLabel, productsForNeed, servicePath, WAY_DETAILS, WAYS_TO_BUY } from "@shared/products";
+import { MENU_PRODUCTS, NEED_DETAILS, WAY_DETAILS, WAYS_TO_BUY, type WayToBuy } from "@shared/products";
 import { ArrowRight } from "lucide-react";
-import React from "react";
+import React, { useState } from "react";
 import { Link } from "wouter";
 
-export const EYEBROW = "text-[11px] font-semibold uppercase tracking-[0.2em] text-highlight-ink";
+/** The eyebrow over a page or section heading: small crimson capitals. */
+export const EYEBROW = "text-xs font-bold uppercase tracking-[0.16em] text-highlight-ink";
 
 export default function ServicesPage() {
   useScrollToTop();
   usePageMeta("Services", "Every product of The Shift, by IP Factory, with its price and delivery time: assessments, Done for You work, the Six-Week Fix and Monthly Services.");
   const prices = useServicePricesOrDefault();
+  const [way, setWay] = useState<WayToBuy | "all">("all");
+  const shown = MENU_PRODUCTS.filter((product) => way === "all" || product.way === way);
+
   return (
     <SiteShell>
-      <section className="border-b border-line py-14 sm:py-20">
-        <div className="container mx-auto max-w-5xl">
-          <Reveal>
-            <p className={EYEBROW}>Services</p>
-            <h1 className="mt-3 max-w-3xl font-serif text-4xl font-bold tracking-tight sm:text-5xl">Pick the help your business needs.</h1>
-            <p className="mt-5 max-w-2xl text-lg leading-relaxed text-ink-soft">Every product, its price and its delivery time, up front. Not sure where to start? The free Business Health Check names your first step.</p>
-            <Link href="/check" className="group mt-8 inline-flex h-12 items-center bg-ink px-6 text-sm font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-charcoal">
-              Take the free Business Health Check <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </Link>
-          </Reveal>
+      <section className="container mx-auto max-w-6xl pt-16 pb-8 text-center sm:pt-20">
+        <h1 className="font-display mx-auto max-w-3xl text-[clamp(2.6rem,7vw,4.75rem)] font-extrabold leading-[1.02] tracking-[-0.035em] text-ink">Help that does the work.</h1>
+        <p className="mx-auto mt-5 max-w-xl text-[clamp(1.15rem,2.4vw,1.45rem)] leading-snug text-ink-soft">Finished work in days. A fix in six weeks. Every price on the page.</p>
+        <div role="group" aria-label="Filter by way to buy" className="mt-8 flex flex-wrap justify-center gap-2">
+          {(["all", ...WAYS_TO_BUY] as const).map((option) => (
+            <button key={option} type="button" aria-pressed={way === option} onClick={() => setWay(option)} className={`border px-4 py-2 text-sm font-semibold transition-colors ${way === option ? "border-ink bg-ink text-paper" : "border-line bg-paper-raised text-ink-soft hover:border-ink-muted"}`}>
+              {option === "all" ? "All" : WAY_DETAILS[option].name}
+            </button>
+          ))}
         </div>
+        {way !== "all" && <p className="mx-auto mt-4 max-w-xl text-sm text-ink-muted">{WAY_DETAILS[way].charge}</p>}
       </section>
 
-      <section aria-labelledby="ways" className="border-b border-line bg-paper-sunken/50 py-14 sm:py-20">
-        <div className="container mx-auto max-w-5xl">
-          <h2 id="ways" className="font-serif text-3xl font-bold tracking-tight">Four ways to buy</h2>
-          <ul aria-label="Ways to buy" className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {WAYS_TO_BUY.map((way) => (
-              <li key={way} className="border border-line bg-paper-raised p-6">
-                <h3 className="font-serif text-xl font-bold">{WAY_DETAILS[way].name}</h3>
-                <p className="mt-2 leading-relaxed text-ink-soft">{WAY_DETAILS[way].summary}</p>
-                <p className="mt-3 text-sm font-semibold text-brand">{WAY_DETAILS[way].charge}</p>
-              </li>
-            ))}
+      <section aria-label="Products" className="container mx-auto max-w-6xl pb-16">
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {shown.map((product) => <ServiceTile key={product.id} product={product} prices={prices} />)}
+        </ul>
+      </section>
+
+      <section className="bg-ink text-paper">
+        <div className="container mx-auto grid max-w-6xl items-center gap-10 py-16 md:grid-cols-[1.2fr_1fr]">
+          <div>
+            <h2 className="font-display text-[clamp(2rem,4.6vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.03em]">Not sure which one you need?</h2>
+            <p className="mt-4 max-w-lg text-lg text-on-dark-muted">The free Business Health Check takes ten minutes on your phone. It names your first step, and the one after it.</p>
+            <Link href="/check" className="group mt-7 inline-flex h-12 items-center gap-2 bg-highlight px-7 font-bold text-brand-deep transition-[transform,background-color] hover:bg-highlight-hover active:scale-[0.97]">
+              Take the free check <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </Link>
+          </div>
+          <ul aria-label="What owners tell us" className="grid gap-2.5">
+            {(["finance", "people", "funding"] as const).map((need) => <li key={need} className="border border-paper/20 px-4 py-3.5 font-serif text-lg italic">&ldquo;{NEED_DETAILS[need].ownerWords}&rdquo;</li>)}
           </ul>
         </div>
       </section>
 
-      <section aria-labelledby="by-need" className="py-14 sm:py-20">
-        <div className="container mx-auto max-w-5xl">
-          <h2 id="by-need" className="font-serif text-3xl font-bold tracking-tight">By what you need</h2>
-          <div className="mt-10 space-y-12">
-            {NEEDS.map((need) => {
-              const products = productsForNeed(need);
-              if (!products.length) return null;
-              return (
-                <section key={need} aria-labelledby={`need-${need}`}>
-                  <h3 id={`need-${need}`} className="font-serif text-2xl font-bold">{NEED_DETAILS[need].name}</h3>
-                  <p className="mt-1 font-serif italic text-ink-soft">&ldquo;{NEED_DETAILS[need].ownerWords}&rdquo;</p>
-                  <ul className="mt-5 divide-y divide-line border-y border-line">
-                    {products.map((product) => {
-                      const entry = menuEntry(product, need);
-                      return (
-                      <li key={product.id}>
-                        <Link href={servicePath(product)} className="group flex flex-col gap-2 py-5 transition-colors hover:bg-paper-raised sm:flex-row sm:items-start sm:justify-between sm:gap-8 sm:px-3">
-                          <span className="min-w-0">
-                            <span className="block text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">{WAY_DETAILS[product.way].name}</span>
-                            <span className="mt-1 block font-serif text-xl font-bold text-ink group-hover:text-brand">{entry.name}</span>
-                            <span className="mt-1 block leading-relaxed text-ink-soft">{entry.short}</span>
-                          </span>
-                          <span className="shrink-0 sm:w-56 sm:text-right">
-                            <span className="block font-sans text-lg font-bold text-ink">{priceLabel(displayPrice(product, prices))}</span>
-                            <span className="block text-sm text-ink-muted">{product.delivery}</span>
-                            <span className="mt-2 inline-flex items-center text-xs font-semibold uppercase tracking-wider text-brand">See details <ArrowRight className="ml-1 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></span>
-                          </span>
-                        </Link>
-                      </li>
-                      );
-                    })}
-                  </ul>
-                </section>
-              );
-            })}
+      <section aria-label="Why buy from The Shift" className="container mx-auto grid max-w-6xl gap-9 py-16 md:grid-cols-3">
+        {PROMISES.map(({ icon: Icon, title, body }) => (
+          <div key={title}>
+            <Icon className="h-9 w-9 text-highlight-ink" strokeWidth={1.6} aria-hidden />
+            <h2 className="font-display mt-3.5 text-xl font-extrabold tracking-[-0.015em] text-ink">{title}</h2>
+            <p className="mt-2 text-ink-soft">{body}</p>
           </div>
-          <p className="mt-14 border border-brand-line bg-brand-tint p-5 text-brand-deep">
-            Work that needs a project team, across several parts of a larger business, goes to {BRAND.trackRecord.groupUrl ? <a href={BRAND.trackRecord.groupUrl} target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-4">{BRAND.trackRecord.groupName}</a> : BRAND.trackRecord.groupName}, our parent firm, and is quoted per project.
-          </p>
-        </div>
+        ))}
       </section>
+
+      <p className="container mx-auto max-w-6xl pb-16 text-sm text-ink-muted">
+        Work that needs a project team, across several parts of a larger business, goes to {BRAND.trackRecord.groupUrl ? <a href={BRAND.trackRecord.groupUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand underline underline-offset-4">{BRAND.trackRecord.groupName}</a> : BRAND.trackRecord.groupName}, our parent firm, and is quoted per project.
+      </p>
     </SiteShell>
   );
 }

@@ -377,6 +377,9 @@ export const ONLINE_ORDERS_OPEN = false;
 export const startMode = (product: Pick<Product, "buy">, ordersOpen: boolean = ONLINE_ORDERS_OPEN): BuyMode =>
   product.buy === "self" && !ordersOpen ? "after_call" : product.buy;
 
+/** True when the owner can buy the product online now. */
+export const orderable = (product: Pick<Product, "buy">, ordersOpen: boolean = ONLINE_ORDERS_OPEN) => startMode(product, ordersOpen) === "self";
+
 export const productById = (id: string) => PRODUCTS.find(product => product.id === id);
 export const productBySlug = (slug: string) => PRODUCTS.find(product => product.slug === slug);
 
@@ -414,6 +417,17 @@ export const stageAmount = (price: Extract<PriceModel, { kind: "milestones" }>, 
 export const payInFullAmount = (price: Extract<PriceModel, { kind: "milestones" }>) => Math.round((price.total * (100 - price.payInFullDiscountPercent)) / 100);
 export const quarterAmount = (price: Extract<PriceModel, { kind: "quarterly" }>) => price.perMonth * 3;
 export const perMonthAmount = (price: Extract<PriceModel, { kind: "per_month" }>, months: number) => price.perMonth * months;
+
+/** The service a home-page visitor is sent to first for each need (operational plan, page 18). */
+export const NEED_LEAD: Record<Need, string> = {
+  finance: "cash_flow_forecast",
+  pricing: "pricing_unit_cost_review",
+  funding: "funding_readiness_assessment",
+  strategy: "strategy_90_day_plan",
+  people: "hiring_toolkit",
+  sales: "six_week_fix",
+  whole_business: "business_review",
+};
 
 /** The products of one need, in menu order. */
 export const productsForNeed = (need: Need) => MENU_PRODUCTS.filter(product => product.needs.includes(need));

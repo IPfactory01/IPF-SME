@@ -1,6 +1,6 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`Free Business Check golden profiles > advisoryRouteBusiness keeps its pinned question flow, route, readiness and recommendations > advisoryRouteBusiness 1`] = `
+exports[`Free Business Health Check golden profiles > advisoryRouteBusiness keeps its pinned question flow, route, readiness and recommendations > advisoryRouteBusiness 1`] = `
 {
   "candidateOfferings": [],
   "cleanedAnswers": {
@@ -30,6 +30,13 @@ exports[`Free Business Check golden profiles > advisoryRouteBusiness keeps its p
   ],
   "readiness": "nascent",
   "result": {
+    "firstStep": {
+      "because": "At your size, the right start is a Business Review of the whole business.",
+      "nextProductId": "six_week_fix",
+      "nextVariantId": undefined,
+      "productId": "business_review",
+      "variantId": undefined,
+    },
     "founder": {
       "capacity": 0,
       "competence": 0,
@@ -64,7 +71,7 @@ exports[`Free Business Check golden profiles > advisoryRouteBusiness keeps its p
 }
 `;
 
-exports[`Free Business Check golden profiles > growingMaker keeps its pinned question flow, route, readiness and recommendations > growingMaker 1`] = `
+exports[`Free Business Health Check golden profiles > growingMaker keeps its pinned question flow, route, readiness and recommendations > growingMaker 1`] = `
 {
   "candidateOfferings": [],
   "cleanedAnswers": {
@@ -196,6 +203,13 @@ exports[`Free Business Check golden profiles > growingMaker keeps its pinned que
   ],
   "readiness": "nascent",
   "result": {
+    "firstStep": {
+      "because": "Your answers say the direction or the priorities are not clear yet.",
+      "nextProductId": "monthly_adviser_review",
+      "nextVariantId": undefined,
+      "productId": "strategy_90_day_plan",
+      "variantId": undefined,
+    },
     "founder": {
       "capacity": 0,
       "competence": 1,
@@ -284,7 +298,7 @@ exports[`Free Business Check golden profiles > growingMaker keeps its pinned que
     "summary": {
       "found": "Founder readiness reads as nascent. Under pressure you lead as a driver: you decide quickly and push for results. No area came out as stuck.",
       "next": "Book the free 20-minute Discovery Call. We will tell you honestly whether we can help, and what to fix first.",
-      "think": "The place to start is founder readiness, and the gap looks like resources: you know what to do and how, but lack the people, time or money to get it done.",
+      "think": "The place to start is founder readiness, and the gap looks like resources: you know what to do and how, but lack the people, time or money to get it done. The first step that fits is the Strategy and 90-Day Plan.",
     },
   },
   "route": "programme",
@@ -294,13 +308,13 @@ exports[`Free Business Check golden profiles > growingMaker keeps its pinned que
       "found": "Founder readiness reads as nascent. Under pressure you lead as a driver: you decide quickly and push for results. No area came out as stuck.",
       "next": "Book the free 20-minute Discovery Call. We will tell you honestly whether we can help, and what to fix first.",
       "offerings": [],
-      "think": "The place to start is founder readiness, and the gap looks like resources: you know what to do and how, but lack the people, time or money to get it done.",
+      "think": "The place to start is founder readiness, and the gap looks like resources: you know what to do and how, but lack the people, time or money to get it done. The first step that fits is the Strategy and 90-Day Plan.",
     },
   },
 }
 `;
 
-exports[`Free Business Check golden profiles > ideaStageFounder keeps its pinned question flow, route, readiness and recommendations > ideaStageFounder 1`] = `
+exports[`Free Business Health Check golden profiles > ideaStageFounder keeps its pinned question flow, route, readiness and recommendations > ideaStageFounder 1`] = `
 {
   "candidateOfferings": [],
   "cleanedAnswers": {
@@ -359,6 +373,13 @@ exports[`Free Business Check golden profiles > ideaStageFounder keeps its pinned
   ],
   "readiness": "advanced",
   "result": {
+    "firstStep": {
+      "because": "Before you commit money, set what the business is for and a first 90 days.",
+      "nextProductId": "monthly_adviser_review",
+      "nextVariantId": undefined,
+      "productId": "strategy_90_day_plan",
+      "variantId": undefined,
+    },
     "founder": {
       "capacity": 2,
       "competence": 1,
@@ -414,7 +435,7 @@ exports[`Free Business Check golden profiles > ideaStageFounder keeps its pinned
 }
 `;
 
-exports[`Free Business Check golden profiles > smallOperatingTrader keeps its pinned question flow, route, readiness and recommendations > smallOperatingTrader 1`] = `
+exports[`Free Business Health Check golden profiles > smallOperatingTrader keeps its pinned question flow, route, readiness and recommendations > smallOperatingTrader 1`] = `
 {
   "candidateOfferings": [
     "embedded-support",
@@ -564,6 +585,13 @@ exports[`Free Business Check golden profiles > smallOperatingTrader keeps its pi
   ],
   "readiness": "intermediate",
   "result": {
+    "firstStep": {
+      "because": "Several areas are stuck at once, and they are usually one connected problem.",
+      "nextProductId": "six_week_fix",
+      "nextVariantId": undefined,
+      "productId": "business_review",
+      "variantId": undefined,
+    },
     "founder": {
       "capacity": 2,
       "competence": 1,
@@ -690,7 +718,7 @@ exports[`Free Business Check golden profiles > smallOperatingTrader keeps its pi
     "summary": {
       "found": "Founder readiness reads as intermediate. Under pressure you lead as an influencer: you sell, persuade and rally people. You described 7 areas as stuck: Strategic intent, Service and offering, Business model, Market entry and sales, Operations and people, Financials, Risk and compliance. Market and industry needs watching.",
       "next": "Book the free 20-minute Discovery Call. We will tell you honestly whether we can help, and what to fix first.",
-      "think": "The place to start is financials, and the gap looks like clarity: it isn't yet clear what is really wrong, or what good would look like. That points to Embedded Performance Support, Business Model & Commercial Strategy, Financial Performance & Decision Support.",
+      "think": "The place to start is financials, and the gap looks like clarity: it isn't yet clear what is really wrong, or what good would look like. The first step that fits is the Business Review.",
     },
   },
   "route": "programme",
@@ -716,13 +744,13 @@ exports[`Free Business Check golden profiles > smallOperatingTrader keeps its pi
           "why": "Know your margins, unit costs and cash, and use them to decide.",
         },
       ],
-      "think": "The place to start is financials, and the gap looks like clarity: it isn't yet clear what is really wrong, or what good would look like. That points to Embedded Performance Support, Business Model & Commercial Strategy, Financial Performance & Decision Support.",
+      "think": "The place to start is financials, and the gap looks like clarity: it isn't yet clear what is really wrong, or what good would look like. The first step that fits is the Business Review.",
     },
   },
 }
 `;
 
-exports[`Free Business Check golden profiles > weakFounderReadiness keeps its pinned question flow, route, readiness and recommendations > weakFounderReadiness 1`] = `
+exports[`Free Business Health Check golden profiles > weakFounderReadiness keeps its pinned question flow, route, readiness and recommendations > weakFounderReadiness 1`] = `
 {
   "candidateOfferings": [],
   "cleanedAnswers": {
@@ -854,6 +882,13 @@ exports[`Free Business Check golden profiles > weakFounderReadiness keeps its pi
   ],
   "readiness": "nascent",
   "result": {
+    "firstStep": {
+      "because": "Your answers say the direction or the priorities are not clear yet.",
+      "nextProductId": "monthly_adviser_review",
+      "nextVariantId": undefined,
+      "productId": "strategy_90_day_plan",
+      "variantId": undefined,
+    },
     "founder": {
       "capacity": 0,
       "competence": 0,
@@ -942,7 +977,7 @@ exports[`Free Business Check golden profiles > weakFounderReadiness keeps its pi
     "summary": {
       "found": "Founder readiness reads as nascent. Under pressure you lead as a steady hand: you keep things calm and people rely on you. Nobody in the business reliably makes the hard call yet; that role needs an owner. No area came out as stuck.",
       "next": "Book the free 20-minute Discovery Call. We will tell you honestly whether we can help, and what to fix first.",
-      "think": "The place to start is founder readiness, and the gap looks like know-how: you know what needs to happen, but not yet how to do it well.",
+      "think": "The place to start is founder readiness, and the gap looks like know-how: you know what needs to happen, but not yet how to do it well. The first step that fits is the Strategy and 90-Day Plan.",
     },
   },
   "route": "programme",
@@ -952,7 +987,7 @@ exports[`Free Business Check golden profiles > weakFounderReadiness keeps its pi
       "found": "Founder readiness reads as nascent. Under pressure you lead as a steady hand: you keep things calm and people rely on you. Nobody in the business reliably makes the hard call yet; that role needs an owner. No area came out as stuck.",
       "next": "Book the free 20-minute Discovery Call. We will tell you honestly whether we can help, and what to fix first.",
       "offerings": [],
-      "think": "The place to start is founder readiness, and the gap looks like know-how: you know what needs to happen, but not yet how to do it well.",
+      "think": "The place to start is founder readiness, and the gap looks like know-how: you know what needs to happen, but not yet how to do it well. The first step that fits is the Strategy and 90-Day Plan.",
     },
   },
 }

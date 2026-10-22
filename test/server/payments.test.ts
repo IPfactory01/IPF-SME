@@ -29,14 +29,14 @@ describe("the payment email: Paystack only", () => {
     expect(html).toMatch(/>Pay online<\/a>/);
   });
 
-  it("gives the Current State Assessment a pay-by time in Lagos time, and a new link on request after 48 hours", () => {
+  it("gives the Business Review a pay-by time in Lagos time, and a new link on request after 48 hours", () => {
     const message = email("current_state");
-    expect(message.subject).toBe("Payment details for your Current State Assessment");
+    expect(message.subject).toBe("Payment details for your Business Review");
     expect(message.body).toContain("Amount: ₦500,000");
     expect(lagosTime(DEADLINE)).toMatch(/^Sun, 11 Oct 2026, 3:05\s?pm$/);
     expect(message.body).toContain(`Pay by: ${lagosTime(DEADLINE)} (Lagos time)`);
     expect(message.body).toContain("If you need more than 48 hours, reply to this email and we will send you a new link.");
-    expect(message.body).toContain("Then your Current State Assessment starts. Three working days to get set up, then we start.");
+    expect(message.body).toContain("Then your Business Review is booked. We take three working days to get set up; the review starts at your first Session.");
     expect(buildBusinessSupportEmailHtml(message.body)).toMatch(/>Pay by<\/td><td[^>]*>Sun, 11 Oct 2026/);
   });
 
@@ -58,7 +58,7 @@ describe("the payment email: Paystack only", () => {
     expect(message.body).not.toMatch(/Pay online:|Bank:|proof of payment/);
   });
 
-  it("offers the pay page only while Paystack is on, keyed by the Business Check's token", () => {
+  it("offers the pay page only while Paystack is on, keyed by the Business Health Check's token", () => {
     ENV.paystackSecretKey = "";
     expect(onlinePaymentOffer("CHECKTOKEN1234567890", "full_report")).toBeNull();
     ENV.paystackSecretKey = "sk_test_fixture_not_a_real_key";
@@ -93,9 +93,9 @@ describe("the payment confirmed email", () => {
     expect(email.body).not.toMatch(/working days/);
   });
 
-  it("starts Current State Assessment and says what happens next", () => {
+  it("starts Business Review and says what happens next", () => {
     const email = paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", amountNaira: 500_000, reference: "TS-CS-000012" });
-    expect(email.subject).toBe("Payment received: your Current State Assessment starts");
+    expect(email.subject).toBe("Payment received: your Business Review is booked");
     expect(email.body).toContain("WHAT HAPPENS NEXT");
     expect(email.body).toContain("• We email you a link to set up your client account on The Shift.");
     expect(`${email.subject}\n${email.body}`).not.toMatch(/JUMP|Emmanuel Tarfa/);
@@ -103,14 +103,14 @@ describe("the payment confirmed email", () => {
 });
 
 describe("the name of the paid assessment", () => {
-  it("is always Current State Assessment in payment emails, never the short Current State (decided 9 October)", () => {
+  it("is always Business Review in payment emails, never the short Current State (decided 9 October)", () => {
     const emails = [
       paymentDetailsEmail({ fullName: "Ada Example", item: "current_state", reference: "TS-CS-000012", deadline: DEADLINE, amountNaira: 500_000 }),
       paymentConfirmedEmail({ fullName: "Ada Example", item: "current_state", amountNaira: 500_000, reference: "TS-CS-000012" }),
     ];
     for (const email of emails) {
       const text = `${email.subject}\n${email.body}`;
-      expect(text).toContain("Current State Assessment");
+      expect(text).toContain("Business Review");
       expect(text).not.toMatch(/Current State(?! Assessment)/);
     }
   });

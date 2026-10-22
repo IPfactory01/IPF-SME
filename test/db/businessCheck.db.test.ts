@@ -1,5 +1,5 @@
 /**
- * Free Business Check persistence on PostgreSQL: PGlite on every run, plus TEST_DATABASE_URL when set.
+ * Free Business Health Check persistence on PostgreSQL: PGlite on every run, plus TEST_DATABASE_URL when set.
  * The language model and email delivery are stubbed; everything else is the production router and schema.
  */
 import { readFileSync } from "node:fs";
@@ -48,7 +48,7 @@ const caller = () =>
   businessCheckRouter.createCaller({ req: { ip: "203.0.113.9", protocol: "https", headers: {} }, res: {}, user: null } as unknown as TrpcContext);
 
 for (const target of targets) {
-  describe.skipIf(!target.enabled)(`Free Business Check persistence on ${target.name}`, target.timeout ? { timeout: target.timeout } : {}, () => {
+  describe.skipIf(!target.enabled)(`Free Business Health Check persistence on ${target.name}`, target.timeout ? { timeout: target.timeout } : {}, () => {
     let harness: DbHarness;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let db: any;

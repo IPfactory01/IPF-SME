@@ -97,7 +97,7 @@ export default function EngagementRoom({ room, greeting, aside, now = Date.now()
           ) : <h2 id="team-title" className="mt-1 font-serif text-xl font-bold tracking-tight">We are naming your team now.</h2>}
         </section>
   );
-  // The Plan: the Engagement timeline and the team. With a Business Check or Full Report behind it, it sits beside
+  // The Plan: the Engagement timeline and the team. With a Business Health Check or Full Report behind it, it sits beside
   // the Founder and Business tabs; a limited-access member sees it alone. On a wide screen the team, what is waiting
   // on the client and the Deliverables sit in a column beside the timeline that stays in view while it scrolls (short
   // enough to fit a laptop screen); the two team cards sit side by side under it.
@@ -390,7 +390,7 @@ function stepsOf(room: Room, now: number): Step[] {
       ),
     },
     {
-      n: 7, title: METHOD.day30, state: day30State, when: room.closedAt ? lagos(new Date(new Date(room.closedAt).getTime() + 30 * DAY), false) : `30 days after ${METHOD.fix} ends`, summary: METHOD_MEANING.day30,
+      n: 7, title: METHOD.day30, state: day30State, when: room.closedAt ? lagos(new Date(new Date(room.closedAt).getTime() + 30 * DAY), false) : `30 days after the ${METHOD.fix} ends`, summary: METHOD_MEANING.day30,
       body: planItems.length ? <ul className="space-y-4">{planItems.map(item => <DeliverableItem key={item.id} item={item} isOwner={isOwner} />)}</ul> : null,
     },
   ];
@@ -468,7 +468,7 @@ function PlanRowView({ row, room, isOwner }: { row: PlanRow; room: Room; isOwner
   );
 }
 
-/** The Weekly Check-ins of The Fix, with their notes, outside the two-week Work Plan. */
+/** The Weekly Check-ins of the Six-Week Fix, with their notes, outside the two-week Work Plan. */
 function CheckinSessions({ room, isOwner }: { room: Room; isOwner: boolean }) {
   const rows = room.sessions.filter(item => item.status !== "cancelled" && (item.weekNumber === null || item.weekNumber > ASSESSMENT_WEEKS));
   if (!rows.length) return null;

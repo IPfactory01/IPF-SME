@@ -47,7 +47,7 @@ export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem
   const report = input.item === "full_report";
   const afterwards = report
     ? `Then we send you the Report Intake, a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your Full Report is emailed to you the moment you finish it.`
-    : `Then your ${CURRENT_STATE.name} starts. ${CURRENT_STATE.start}`;
+    : `Then your ${CURRENT_STATE.name} is booked. ${CURRENT_STATE.start}`;
   return {
     subject: report ? "Payment details for your Full Report" : `Payment details for your ${CURRENT_STATE.name}`,
     body: [
@@ -113,13 +113,13 @@ export function paymentConfirmedEmail(input: { fullName: string; item: PaymentIt
     };
   }
   return {
-    subject: `Payment received: your ${CURRENT_STATE.name} starts`,
+    subject: `Payment received: your ${CURRENT_STATE.name} is booked`,
     body: [
       `Dear ${firstName(input.fullName)},`,
       "",
       received,
       "",
-      `Your ${CURRENT_STATE.name} starts now. ${CURRENT_STATE.start}`,
+      `Your ${CURRENT_STATE.name} is booked. ${CURRENT_STATE.start}`,
       "",
       "WHAT HAPPENS NEXT",
       `• We email you a link to set up your client account on ${BRAND.productName}. Your ${CURRENT_STATE.name} lives there.`,
@@ -165,11 +165,11 @@ export async function paymentStatusesByCheck(db: Pick<Database, "select">, busin
 async function loadCheck(db: Pick<Database, "select">, businessCheckId: number) {
   const check = (await db.select({ id: businessChecks.id, publicToken: businessChecks.publicToken, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage })
     .from(businessChecks).where(eq(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   return check;
 }
 
-/** Stages before the team's own decisions: sending Current State Assessment payment details makes the business an Opportunity. */
+/** Stages before the team's own decisions: sending Business Review payment details makes the business an Opportunity. */
 const BEFORE_OPPORTUNITY: readonly PipelineStage[] = ["lead", "qualified_lead", "call_booked"];
 
 /**
@@ -218,7 +218,7 @@ async function loadRequest(db: Pick<Database, "select">, paymentRequestId: numbe
   return request;
 }
 
-/** What happened to the client account invitation when a Current State Assessment payment was confirmed. */
+/** What happened to the client account invitation when a Business Review payment was confirmed. */
 export type CurrentStateInvitation = "sent" | "already_invited" | "has_account" | "failed";
 
 const NOT_CONFIRMED = { success: true, changed: false, invitation: null, engagement: null } as const;
@@ -245,7 +245,7 @@ const viaDetails = (online: OnlineConfirmation | undefined) => (online ? { via: 
 
 /**
  * Confirms the money arrived (the team checked the account, or Paystack confirmed it), emails the owner, and for the
- * Current State Assessment wins the business, starts the engagement and sends the client account invitation unless one
+ * Business Review wins the business, starts the engagement and sends the client account invitation unless one
  * is already out or accepted. A confirmed payment is final. The team and Paystack go through this same path.
  *
  * The confirmation is claimed in one conditional statement inside one transaction, together with the stage, the audit
@@ -306,7 +306,7 @@ export async function confirmPayment(db: Database, input: { paymentRequestId: nu
 }
 
 /**
- * Sends the "payment received" email again for a confirmed Current State Assessment payment (an owner who lost it). The
+ * Sends the "payment received" email again for a confirmed Business Review payment (an owner who lost it). The
  * report's confirmation carries a one-time link, so for it the console sends the Report Intake link again instead.
  */
 export async function resendPaymentConfirmation(db: Database, input: { paymentRequestId: number; actorUserId: number }) {
@@ -323,7 +323,7 @@ export async function resendPaymentConfirmation(db: Database, input: { paymentRe
   return { success: true, deliveryStatus: delivery.status } as const;
 }
 
-/** The Current State Assessment starts in the client account: invite the owner unless an invitation is already out or accepted. */
+/** The Business Review starts in the client account: invite the owner unless an invitation is already out or accepted. */
 async function inviteToClientAccount(db: Pick<Database, "select">, businessCheckId: number, actor: { actorUserId: number | null; createdByUserId?: number | null; via?: "paystack" }): Promise<CurrentStateInvitation> {
   const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt })
     .from(clientOnboardingInvitations).where(eq(clientOnboardingInvitations.businessCheckId, businessCheckId))

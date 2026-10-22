@@ -10,10 +10,10 @@ import { requestPayment } from "./payments";
 /** Where the owner asked for the Full Report: "Get my Full Report" on the result page, or pay on the link in their summary email. */
 export type FullReportAsk = "result_page" | "pay_link";
 
-const PAY_LINK_NOTE = "Started paying online from the link in their Business Check summary email.";
+const PAY_LINK_NOTE = "Started paying online from the link in their Business Health Check summary email.";
 
 /**
- * The owner asks for the Full Report of a finished Business Check. The first time, it records when they asked, emails
+ * The owner asks for the Full Report of a finished Business Health Check. The first time, it records when they asked, emails
  * them the payment link (the amount, the reference and the "Pay online" button) and tells Business Support
  * once. From the pay link it also files the payment request when an earlier attempt to send the details failed, so the
  * owner can always pay. Asking again from the result page does nothing.
@@ -42,7 +42,7 @@ export async function askForFullReport(db: Database, check: BusinessCheck, input
     sender: "business_support",
     idempotencyKey: `business_checks:${check.id}:report:office`,
     to: BUSINESS_SUPPORT_MAILBOX,
-    subject: `Business Check: ${check.businessName || check.fullName} asked for the Full Report`,
+    subject: `Business Health Check: ${check.businessName || check.fullName} asked for the Full Report`,
     body: [
       `${check.fullName} asked for the Full Report.`,
       "",
@@ -52,7 +52,7 @@ export async function askForFullReport(db: Database, check: BusinessCheck, input
       `Note: ${note}`,
       payment,
       "",
-      `Business Check #${check.id}${check.completedAt ? `, completed ${lagosTime(check.completedAt)} (Lagos time)` : ""}.`,
+      `Business Health Check #${check.id}${check.completedAt ? `, completed ${lagosTime(check.completedAt)} (Lagos time)` : ""}.`,
     ].join("\n"),
   });
 }

@@ -17,7 +17,7 @@ async function allow(rule: RateLimitRule, subject: string) {
   if (!(await consumeLimit(rule, subject))) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many requests for this payment. Kindly try again later." });
 }
 
-/** The Business Check's unguessable token (as its result page uses), never the sequential payment reference. */
+/** The Business Health Check's unguessable token (as its result page uses), never the sequential payment reference. */
 const token = z.string().trim().min(16).max(64);
 const item = z.enum(PAYMENT_ITEMS);
 /** A Paystack attempt's reference, e.g. TS-R-000123-1a2b3c4d. */
@@ -26,7 +26,7 @@ const reference = z.string().trim().min(1).max(64);
 /**
  * Paying online with Paystack (server/onlinePayment.ts). Every procedure here is public on purpose: the owner pays
  * before they have an account, from the link in their payment details email. Each is keyed by something only that
- * owner holds (the Business Check token, or the reference Paystack returns them with), is rate-limited through the
+ * owner holds (the Business Health Check token, or the reference Paystack returns them with), is rate-limited through the
  * shared counters, and answers only what its page needs. Amounts always come from the payment request in the database.
  */
 export const onlinePaymentRouter = router({

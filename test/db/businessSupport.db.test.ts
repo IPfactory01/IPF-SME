@@ -1,5 +1,5 @@
 /**
- * The IPF Business Support funnel as the admin console sees it: Free Business Check -> discovery call -> onboarding.
+ * The IPF Business Support funnel as the admin console sees it: Free Business Health Check -> discovery call -> onboarding.
  * Real application code and the real request context on PostgreSQL (PGlite on every run, plus TEST_DATABASE_URL via
  * `pnpm test:db`). Email and the language model are stubbed.
  */
@@ -127,7 +127,7 @@ for (const target of targets) {
     });
 
     describe("the Super Admin sees the onboarding area", () => {
-      it("resolves every funnel permission centrally and shows Client Onboarding, opening on Business Checks, not the JUMP desk", async () => {
+      it("resolves every funnel permission centrally and shows Client Onboarding, opening on Business Health Checks, not the JUMP desk", async () => {
         const status = await (await superAdmin.call()).adminAccess.status();
         expect(status).toMatchObject({ isSuperAdmin: true, isOwner: true, passwordVerified: true, signedInVia: "account" });
         expect(status.permissions).toContain("manage_client_onboarding");
@@ -187,8 +187,8 @@ for (const target of targets) {
       });
     });
 
-    describe("a finished Business Check reaches the admin view", () => {
-      it("appears in Business Checks with everything the team needs, and creates no user and no business", async () => {
+    describe("a finished Business Health Check reaches the admin view", () => {
+      it("appears in Business Health Checks with everything the team needs, and creates no user and no business", async () => {
         const usersBefore = await total(schema.users);
         const businessesBefore = await total(schema.businesses);
         const membershipsBefore = await total(schema.businessMemberships);
@@ -246,7 +246,7 @@ for (const target of targets) {
         expect(mocked.deliverEmail).not.toHaveBeenCalled();
       });
 
-      it("keeps the filter honest: Business Checks lists everyone, Discovery Calls only those who asked", async () => {
+      it("keeps the filter honest: Business Health Checks lists everyone, Discovery Calls only those who asked", async () => {
         const asked = await finishedCheck("asked");
         const silent = await finishedCheck("silent");
         await requestCall(asked.visitor, asked.token);
@@ -296,7 +296,7 @@ for (const target of targets) {
         void visitor;
       });
 
-      it("refuses to schedule a Discovery Call for a Business Check that is not finished", async () => {
+      it("refuses to schedule a Discovery Call for a Business Health Check that is not finished", async () => {
         const visitor = browser();
         const { token } = await (await visitor.call()).businessCheck.start({ fullName: "Ada Unfinished", email: uniqueEmail("unfinished"), whatsapp: "+2348000000001" });
         const id = (await rowFor(token)).id as number;
@@ -346,7 +346,7 @@ for (const target of targets) {
         await requestCall(check.visitor, check.token);
         await (await superAdmin.call()).businessSupport.recordOutcome({ businessCheckId: id, outcome: "fit" });
         expect(await (await superAdmin.call()).businessSupport.setStage({ businessCheckId: id, stage: "nurture", note: " Not ready to pay until January " })).toEqual({ success: true, pipelineStage: "nurture", changed: true });
-        // Won means paid: only confirming the Current State Assessment payment sets it.
+        // Won means paid: only confirming the Business Review payment sets it.
         await expect((await superAdmin.call()).businessSupport.setStage({ businessCheckId: id, stage: "won" as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
         expect((await rowFor(check.token)).pipelineStage).toBe("nurture");
 
@@ -628,7 +628,7 @@ for (const target of targets) {
       });
     });
 
-    describe("an email problem never blocks the Business Check", () => {
+    describe("an email problem never blocks the Business Health Check", () => {
       const submitWith = async (label: string, deliver: () => Promise<unknown>) => {
         mocked.deliverEmail.mockReset();
         mocked.deliverEmail.mockImplementation(deliver);

@@ -113,7 +113,7 @@ describe("business support email layout", () => {
   const body = [
     "Dear Ada,",
     "",
-    "Thank you for taking the IP Factory Business Check. Here is your summary.",
+    "Thank you for taking the IP Factory Business Health Check. Here is your summary.",
     "",
     "FINDINGS",
     "Sales are steady but cash is tight.",
@@ -141,7 +141,7 @@ describe("business support email layout", () => {
     expect(html).toContain(">The Shift<");
     expect(html).toContain("The Shift, by IP Factory");
     expect(html).toContain("mailto:info@ipfactory.co");
-    expect(html).toContain("<title>Thank you for taking the IP Factory Business Check. Here is your summary.</title>");
+    expect(html).toContain("<title>Thank you for taking the IP Factory Business Health Check. Here is your summary.</title>");
     expect(html).toMatch(/Georgia[^>]*>Dear Ada,<\/p>/);
     expect(html).not.toMatch(/JUMP|Genius Track|Emmanuel Tarfa/);
   });

@@ -139,7 +139,7 @@ for (const target of targets) {
       await (await check.visitor.call()).businessCheck.requestNext({ token: check.token, choice: "report" });
       return check;
     }
-    /** A finished check the team sent the Current State Assessment payment details to. */
+    /** A finished check the team sent the Business Review payment details to. */
     async function assessmentAskedFor(label: string) {
       const check = await finishedCheck(label);
       await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: check.id, item: "current_state" });
@@ -239,7 +239,7 @@ for (const target of targets) {
     });
 
     describe("paying from the summary email", () => {
-      const summaryOf = (email: string) => emails().find(sent => sent.to === email && sent.subject === "Your Business Check: Findings")!;
+      const summaryOf = (email: string) => emails().find(sent => sent.to === email && sent.subject === "Your Business Health Check: Findings")!;
 
       it("links the Full Report in the summary email straight to the pay page while Paystack is on", async () => {
         const { token, email } = await finishedCheck("summary-link");
@@ -276,7 +276,7 @@ for (const target of targets) {
         const office = emails().filter(sent => sent.to === OFFICE);
         expect(office).toHaveLength(1);
         expect(office[0].subject).toMatch(/asked for the Full Report$/);
-        expect(office[0].body).toContain("Note: Started paying online from the link in their Business Check summary email.");
+        expect(office[0].body).toContain("Note: Started paying online from the link in their Business Health Check summary email.");
         expect(office[0].body).toContain(`Payment details sent: ${request.reference}`);
 
         // A second try opens Paystack again without filing or emailing anything new.
@@ -286,7 +286,7 @@ for (const target of targets) {
         expect(await auditsFor("payment_details_sent", id)).toHaveLength(1);
       });
 
-      it("never starts the Current State Assessment from the owner's side, nor a report for an unfinished check", async () => {
+      it("never starts the Business Review from the owner's side, nor a report for an unfinished check", async () => {
         const { token } = await finishedCheck("no-self-assessment");
         await expect((await browser().call()).onlinePayment.page({ token, item: "current_state" })).rejects.toMatchObject({ code: "NOT_FOUND" });
         await expect((await browser().call()).onlinePayment.start({ token, item: "current_state" })).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -297,7 +297,7 @@ for (const target of targets) {
         expect(paystack.initialized).toHaveLength(0);
       });
 
-      it("binds each pay link to its exact Business Check token and cannot pay another check's Current State Assessment", async () => {
+      it("binds each pay link to its exact Business Health Check token and cannot pay another check's Business Review", async () => {
         const a = await finishedCheck("token-a");
         const b = await finishedCheck("token-b");
         const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: a.id, item: "current_state" });
@@ -354,7 +354,7 @@ for (const target of targets) {
         expect((await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).state).toBe("paid");
       });
 
-      it("holds the Current State Assessment link for the same 48 hours as the bank details, and opens again when the team sends them again", async () => {
+      it("holds the Business Review link for the same 48 hours as the bank details, and opens again when the team sends them again", async () => {
         const { token, id } = await assessmentAskedFor("expired");
         await db.update(schema.paymentRequests).set({ requestedAt: new Date(Date.now() - 49 * 3_600_000) }).where(eq(schema.paymentRequests.id, (await paymentOf(id, "current_state")).id));
         expect((await (await browser().call()).onlinePayment.page({ token, item: "current_state" })).state).toBe("expired");
@@ -414,11 +414,11 @@ for (const target of targets) {
         expect((await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).state).toBe("paid");
       });
 
-      it("confirms the Current State Assessment from the return page in live mode: Won, the engagement and the invitation", async () => {
+      it("confirms the Business Review from the return page in live mode: Won, the engagement and the invitation", async () => {
         ENV.paystackSecretKey = LIVE_KEY;
         const { token, email, id } = await assessmentAskedFor("return-assessment");
         const reference = await start(token, "current_state");
-        expect(paystack.initialized[0].amount).toBe(50_000_000);
+        expect(paystack.initialized[0].amount).toBe(60_000_000);
         pay(reference);
         mocked.deliverEmail.mockClear();
 
@@ -429,7 +429,7 @@ for (const target of targets) {
         const invitations = await db.select().from(schema.clientOnboardingInvitations).where(eq(schema.clientOnboardingInvitations.businessCheckId, id));
         // The invitation row needs a person: it is recorded against whoever sent the payment details.
         expect(invitations).toEqual([expect.objectContaining({ status: "pending", createdByUserId: ownerId })]);
-        expect(emails().filter(sent => sent.to === email).map(sent => sent.subject)).toEqual(["Payment received: your Current State Assessment starts", "Set up your client account on The Shift"]);
+        expect(emails().filter(sent => sent.to === email).map(sent => sent.subject)).toEqual(["Payment received: your Business Review is booked", "Set up your client account on The Shift"]);
         expect(emails().find(sent => sent.to === email)!.body).not.toContain("TEST MODE");
         const invited = await db.select().from(schema.adminAccessAuditEvents).where(and(eq(schema.adminAccessAuditEvents.action, "client_onboarding_invitation_created"), sql`${schema.adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(id)}`));
         expect(invited).toEqual([expect.objectContaining({ actorUserId: null })]);
@@ -448,7 +448,7 @@ for (const target of targets) {
         mocked.deliverEmail.mockClear();
         await (await superAdmin.call()).businessSupport.resendPaymentConfirmation({ paymentRequestId: (await paymentOf(id, "current_state")).id });
         const again = emails().find(sent => sent.to === email)!;
-        expect(again.subject).toBe("Payment received: your Current State Assessment starts");
+        expect(again.subject).toBe("Payment received: your Business Review is booked");
         expect(again.body).toContain(EMAIL_TEST_NOTICE);
       });
 
@@ -609,7 +609,7 @@ for (const target of targets) {
 
       it("charges, shows, emails and confirms the configured Full Report price, end to end", async () => {
         vi.stubEnv("FULL_REPORT_PRICE_NGN", "100");
-        expect(await (await browser().call()).businessCheck.prices()).toEqual({ fullReport: 100, currentState: 500_000 });
+        expect(await (await browser().call()).businessCheck.prices()).toEqual({ fullReport: 100, currentState: 600_000 });
         const { token, email, id } = await reportAskedFor("env-price");
         expect(emails().find(sent => sent.to === email && sent.subject === "Payment details for your Full Report")!.body).toContain("Amount: ₦100\n");
         expect(await showing(token)).toBe(100);
@@ -676,7 +676,7 @@ for (const target of targets) {
         await expect((await browser().call()).onlinePayment.start({ token, item: "full_report" })).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
         expect(paystack.initialized).toHaveLength(0);
         // The site still shows the real price, which is all that can be charged.
-        expect(await (await browser().call()).businessCheck.prices()).toEqual({ fullReport: 100_000, currentState: 500_000 });
+        expect(await (await browser().call()).businessCheck.prices()).toEqual({ fullReport: 100_000, currentState: 600_000 });
 
         vi.stubEnv("ALLOW_LOW_PRICE_TESTING", "true");
         const reference = await start(token, "full_report");

@@ -74,7 +74,7 @@ describe("Resend webhook endpoint", () => {
   it("stores provider events once and never lets an older event replace a newer delivery state", async () => {
     ENV.resendWebhookSecret = secret;
     vi.mocked(getDb).mockResolvedValue(harness.db as never);
-    const [delivery] = await harness.db.insert(businessSupportEmailDeliveries).values({ providerMessageId: "re_fixture_1", recipientEmail: "ada@example.com", purpose: "Business Check result" }).returning();
+    const [delivery] = await harness.db.insert(businessSupportEmailDeliveries).values({ providerMessageId: "re_fixture_1", recipientEmail: "ada@example.com", purpose: "Business Health Check result" }).returning();
     const timestamp = String(Math.floor(Date.now() / 1000));
     const id = "msg_fixture_idempotent";
     const headers = { "svix-id": id, "svix-timestamp": timestamp, "svix-signature": signature(id, timestamp, body) };

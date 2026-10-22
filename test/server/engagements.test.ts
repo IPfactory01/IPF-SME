@@ -30,7 +30,7 @@ describe("the client's journey", () => {
   it("marks the steps before the current one done and the rest next", () => {
     expect(journeyOf("fix").map(step => step.state)).toEqual(["done", "done", "current", "next"]);
     expect(journeyOf("closed").every(step => step.state === "done")).toBe(true);
-    expect(ENGAGEMENT_STAGE_LABELS.assessment).toBe("Current State Assessment");
+    expect(ENGAGEMENT_STAGE_LABELS.assessment).toBe("Business Review");
   });
 });
 
@@ -52,7 +52,7 @@ describe("before migration 0008 is applied", () => {
   });
 });
 
-describe("the Current State Assessment template (from IP Factory's assessment proposals, 10 October)", () => {
+describe("the Business Review template (from IP Factory's assessment proposals, 10 October)", () => {
   it("asks for the six pre-call questions, the numbers, the people, the bank statements and what is owed", () => {
     const titles = ASSESSMENT_TEMPLATE.dataRequests.map(item => item.title);
     expect(titles[0]).toBe("Six quick questions before your first Session");

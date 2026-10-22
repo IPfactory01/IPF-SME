@@ -27,9 +27,9 @@ describe("the home page with reduce motion on", () => {
   it("keeps the hero's sentence still instead of changing it every few seconds, and stops the pulsing dot", () => {
     vi.useFakeTimers();
     const { container } = render(<Hero onStart={() => undefined} />);
-    const sentence = screen.getByRole("button", { name: "Start the Business Check" }).textContent;
+    const sentence = screen.getByRole("button", { name: "Start the Business Health Check" }).textContent;
     act(() => { vi.advanceTimersByTime(10_000); });
-    expect(screen.getByRole("button", { name: "Start the Business Check" }).textContent).toBe(sentence);
+    expect(screen.getByRole("button", { name: "Start the Business Health Check" }).textContent).toBe(sentence);
     expect(container.querySelector(".animate-ping")).toBeNull();
     expect(container.querySelector('[class*="motion-safe:animate-ping"]')).toBeTruthy();
   });

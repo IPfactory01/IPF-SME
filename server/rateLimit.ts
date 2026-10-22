@@ -20,9 +20,9 @@ const DAY = 24 * HOUR;
 
 /** The limits, in one place. */
 export const LIMITS = {
-  /** New Business Checks from one address, whatever email is typed. */
+  /** New Business Health Checks from one address, whatever email is typed. */
   checkStartIp: { scope: "check_start_ip", max: 20, windowMs: 15 * MINUTE },
-  /** New Business Checks from one address and email. */
+  /** New Business Health Checks from one address and email. */
   checkStartEmail: { scope: "check_start_email", max: 5, windowMs: 15 * MINUTE },
   /** Progress saves per check (one per answer). */
   checkSave: { scope: "check_save", max: 300, windowMs: 15 * MINUTE },
@@ -38,9 +38,9 @@ export const LIMITS = {
   resetRequest: { scope: "reset_request", max: 5, windowMs: HOUR },
   /** Public token lookups per address: legacy reset confirmation and invitation status. */
   publicLookup: { scope: "public_lookup", max: 30, windowMs: HOUR },
-  /** Pay page reads per Business Check token. */
+  /** Pay page reads per Business Health Check token. */
   paymentPage: { scope: "payment_page", max: 60, windowMs: HOUR },
-  /** Online payment starts per Business Check token: each opens a transaction on Paystack. */
+  /** Online payment starts per Business Health Check token: each opens a transaction on Paystack. */
   paymentStart: { scope: "payment_start", max: 10, windowMs: HOUR },
   /** Return-page checks per Paystack reference: each asks Paystack how the payment stands. */
   paymentStatus: { scope: "payment_status", max: 20, windowMs: HOUR },

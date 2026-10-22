@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MotionGlobalConfig } from "framer-motion";
 import { evaluate } from "@shared/businessCheck/engine";
@@ -33,7 +33,7 @@ const api = vi.hoisted(() => {
       if (reply !== undefined) options?.onSuccess?.(reply);
     },
   });
-  const prices = { current: { fullReport: 100_000, currentState: 500_000 } as { fullReport: number; currentState: number } | undefined };
+  const prices = { current: { fullReport: 100_000, currentState: 600_000 } as { fullReport: number; currentState: number } | undefined };
   return { calls, replies, mutation, prices };
 });
 
@@ -68,12 +68,12 @@ const preload = (state: Record<string, unknown>) =>
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ started: true, seen: [], history: [], contact: { fullName: "Ada Example", email: "ada@example.com", whatsapp: "", heardFrom: "" }, ...state }));
 
 async function giveDetails() {
-  await pick(/take the business check/i);
+  await pick(/take the business health check/i);
   expect(await screen.findByText("First, who are we talking to?")).toBeTruthy();
   const boxes = screen.getAllByRole("textbox");
   fireEvent.change(boxes[0], { target: { value: "Ada Example" } });
   fireEvent.change(boxes[1], { target: { value: "ada@example.com" } });
-  await pick(/start the business check/i);
+  await pick(/start the business health check/i);
 }
 
 // The idea-stage test walks a whole question path in jsdom and takes about 4.5 s even on a quiet machine, so the default
@@ -81,7 +81,7 @@ async function giveDetails() {
 describe("business check page", { timeout: 20_000 }, () => {
   beforeEach(() => {
     window.localStorage.clear();
-    api.prices.current = { fullReport: 100_000, currentState: 500_000 };
+    api.prices.current = { fullReport: 100_000, currentState: 600_000 };
     window.scrollTo = vi.fn();
     for (const name of Object.keys(api.calls)) api.calls[name] = [];
     api.replies.start = () => ({ token: TOKEN });
@@ -95,10 +95,10 @@ describe("business check page", { timeout: 20_000 }, () => {
 
   it("asks who the owner is first, records them as a lead, then starts the questions", async () => {
     render(React.createElement(BusinessCheck));
-    await pick(/take the business check/i);
+    await pick(/take the business health check/i);
     expect(await screen.findByText("First, who are we talking to?")).toBeTruthy();
     expect(screen.getByText(/so our team can follow up if you don't finish/)).toBeTruthy();
-    const start = screen.getByRole("button", { name: /start the business check/i }) as HTMLButtonElement;
+    const start = screen.getByRole("button", { name: /start the business health check/i }) as HTMLButtonElement;
     expect(start.disabled).toBe(true);
 
     const boxes = screen.getAllByRole("textbox");
@@ -116,7 +116,7 @@ describe("business check page", { timeout: 20_000 }, () => {
 
   it("says why Start is unavailable when the email is not a full address, and clears the message once it is", async () => {
     render(React.createElement(BusinessCheck));
-    await pick(/take the business check/i);
+    await pick(/take the business health check/i);
     await screen.findByText("First, who are we talking to?");
     const boxes = screen.getAllByRole("textbox");
     fireEvent.change(boxes[0], { target: { value: "Ada Example" } });
@@ -126,11 +126,11 @@ describe("business check page", { timeout: 20_000 }, () => {
     fireEvent.blur(boxes[1]);
     expect(screen.getByRole("alert").textContent).toBe("Enter your full email address, like ada@example.com.");
     expect(boxes[1].getAttribute("aria-invalid")).toBe("true");
-    expect((screen.getByRole("button", { name: /start the business check/i }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: /start the business health check/i }) as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.change(boxes[1], { target: { value: "ada@example.com" } });
     expect(screen.queryByText(/Enter your full email address/)).toBeNull();
-    expect((screen.getByRole("button", { name: /start the business check/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: /start the business health check/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   describe("the WhatsApp number", () => {
@@ -141,11 +141,11 @@ describe("business check page", { timeout: 20_000 }, () => {
     };
     const number = () => screen.getByLabelText("WhatsApp number") as HTMLInputElement;
     const country = () => screen.getByLabelText("Country code") as HTMLSelectElement;
-    const startButton = () => screen.getByRole("button", { name: /start the business check/i }) as HTMLButtonElement;
+    const startButton = () => screen.getByRole("button", { name: /start the business health check/i }) as HTMLButtonElement;
 
     it("shows Nigeria's flag and +234 in the same box by default, with Nigeria first in the list", async () => {
       render(React.createElement(BusinessCheck));
-      await pick(/take the business check/i);
+      await pick(/take the business health check/i);
       await screen.findByText("First, who are we talking to?");
       expect(country().value).toBe("NG");
       expect(number().closest("div")!.textContent).toContain("🇳🇬+234");
@@ -155,7 +155,7 @@ describe("business check page", { timeout: 20_000 }, () => {
 
     it("drops a leading 0 as it is typed and says why", async () => {
       render(React.createElement(BusinessCheck));
-      await pick(/take the business check/i);
+      await pick(/take the business health check/i);
       await screen.findByText("First, who are we talking to?");
       fireEvent.change(number(), { target: { value: "08031234567" } });
       expect(number().value).toBe("8031234567");
@@ -164,7 +164,7 @@ describe("business check page", { timeout: 20_000 }, () => {
 
     it("sends the number with the chosen country's code", async () => {
       render(React.createElement(BusinessCheck));
-      await pick(/take the business check/i);
+      await pick(/take the business health check/i);
       await screen.findByText("First, who are we talking to?");
       fillRequired();
       fireEvent.change(country(), { target: { value: "GB" } });
@@ -176,7 +176,7 @@ describe("business check page", { timeout: 20_000 }, () => {
 
     it("blocks a Nigerian number of the wrong length, and still lets the owner skip the number", async () => {
       render(React.createElement(BusinessCheck));
-      await pick(/take the business check/i);
+      await pick(/take the business health check/i);
       await screen.findByText("First, who are we talking to?");
       fillRequired();
       fireEvent.change(number(), { target: { value: "803123" } });
@@ -345,13 +345,21 @@ describe("business check page", { timeout: 20_000 }, () => {
     render(React.createElement(BusinessCheck));
   };
 
-  it("shows the summary, the outline, founder readiness in words and the services that fit", () => {
+  it("shows the summary, the outline, founder readiness in words and the first product that fits, not the group's capability list", () => {
     resultFor();
     expect(screen.getByText("Findings")).toBeTruthy();
-    expect(screen.getByText(/Your Business Check · Ada Foods/)).toBeTruthy();
+    expect(screen.getByText(/Your Business Health Check · Ada Foods/)).toBeTruthy();
     expect(screen.getByText("Think text for the test.")).toBeTruthy();
     expect(screen.getByText("7. Financials")).toBeTruthy();
-    expect(screen.getByText("Finance & Capital")).toBeTruthy();
+    // The first step from the launch menu (shared/businessCheck/routing.ts): tight cash goes to the cash forecast.
+    const first = screen.getByRole("region", { name: "Your first step" });
+    expect(within(first).getByText("13-Week Cash Flow Forecast")).toBeTruthy();
+    expect(within(first).getByText("₦300,000")).toBeTruthy();
+    // Until online ordering opens (ONLINE_ORDERS_OPEN), finished work also starts with the free call.
+    expect(within(first).getByRole("link", { name: /book the free call/i }).getAttribute("href")).toBe("#next-steps");
+    expect(within(first).getByRole("link", { name: "What it includes" }).getAttribute("href")).toBe("/services/13-week-cash-flow-forecast");
+    expect(screen.queryByText("Finance & Capital")).toBeNull();
+    expect(screen.queryByText("Where we could help")).toBeNull();
     // Founder readiness reads as sentences built from the answers, not abstract bars.
     expect(screen.getByText(/^Intermediate \(\d of 6\)$/)).toBeTruthy();
     expect(screen.getByText("You are confident with 2 of the 4 money basics. Cost per unit and margin are the ones to strengthen.")).toBeTruthy();
@@ -366,14 +374,14 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(screen.getByText("Asked once the business has traded for five years.")).toBeTruthy();
     expect(screen.getByText("10. Owner transition")).toBeTruthy();
     expect(screen.getAllByText("Not assessed")).toHaveLength(2);
-    expect(screen.getByText("Areas marked not assessed weren't part of this Business Check for your business. The Current State Assessment looks at all ten.")).toBeTruthy();
+    expect(screen.getByText("Areas marked not assessed weren't part of this Business Health Check for your business. The Business Review looks at all ten.")).toBeTruthy();
     const rows = Array.from(document.querySelectorAll("li")).map((item) => item.textContent ?? "").filter((text) => /^\d+\. /.test(text));
     expect(rows.map((text) => Number(text.split(".")[0]))).toEqual([...rows.map((text) => Number(text.split(".")[0]))].sort((a, b) => a - b));
   });
 
   it("links the Terms & Conditions and Privacy Policy before the owner gives their details, and before paying for the Full Report", async () => {
     render(React.createElement(BusinessCheck));
-    await pick(/take the business check/i);
+    await pick(/take the business health check/i);
     expect(await screen.findByText("First, who are we talking to?")).toBeTruthy();
     const privacy = screen.getAllByRole("link", { name: "Privacy Policy" })[0];
     expect(privacy.getAttribute("href")).toBe("/privacy");
@@ -388,7 +396,7 @@ describe("business check page", { timeout: 20_000 }, () => {
 
   it("gives the ₦100,000 full report its own offer, with what is inside, and opens Paystack straight away", async () => {
     resultFor();
-    expect(screen.getByText("The Business Check summary tells you where you stand. The Full Report tells you what to do about it.")).toBeTruthy();
+    expect(screen.getByText("The Business Health Check summary tells you where you stand. The Full Report tells you what to do about it.")).toBeTruthy();
     expect(screen.getByText("Your Full Report")).toBeTruthy();
     expect(screen.getByText("₦100,000", { selector: "p" })).toBeTruthy();
     expect(screen.getByText(/The root cause behind each red and amber/)).toBeTruthy();
@@ -404,7 +412,7 @@ describe("business check page", { timeout: 20_000 }, () => {
   });
 
   it("shows the price the server is configured to charge, in the offer and on the summary banner", () => {
-    api.prices.current = { fullReport: 100, currentState: 500_000 };
+    api.prices.current = { fullReport: 100, currentState: 600_000 };
     resultFor();
     expect(screen.getByText("₦100", { selector: "p" })).toBeTruthy();
     expect(screen.getByText(/Get the Full Report · ₦100\b/)).toBeTruthy();

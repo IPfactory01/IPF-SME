@@ -87,7 +87,7 @@ export function WhyStuck() {
 }
 
 const POINTS = [
-  { icon: BookOpenCheck, title: "Built from what we have seen", text: "Every question in the Business Check and every finding in the Full Report comes from patterns our partners have met again and again in Nigerian businesses." },
+  { icon: BookOpenCheck, title: "Built from what we have seen", text: "Every question in the Business Health Check and every finding in the Full Report comes from patterns our partners have met again and again in Nigerian businesses." },
   { icon: UserCheck, title: "Not another AI tool", text: `AI helps with the analysis. The method, written from ${RECORD.partnerYears} years of partner experience, makes the call, and a named ${BRAND.organisationName} consultant stands behind it.` },
   { icon: Scale, title: "Your numbers, not theory", text: "We work on your own sales, costs and cash, every week, until the number we agreed on moves." },
 ] as const;

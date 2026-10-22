@@ -31,7 +31,7 @@ const SAMPLE_OWNER = {
   activeBusiness: { businessId: 1, businessName: "Ada Foods", role: "owner", status: "active", profileComplete: false, profilePercent: 60 },
   landingPath: "/dashboard",
 };
-/** Ada Foods' Business Check: the fixed answers below, every other question answered with its second option. */
+/** Ada Foods' Business Health Check: the fixed answers below, every other question answered with its second option. */
 function sampleAnswers(): Answers {
   const answers: Answers = { p_stage: "operating", p_type: "maker", p_sector: "food and drink", p_age: "2to5", p_staff: "6to10", p_revenue: "3to5m", p_trend: "flat", f_instinct: "I", f_seen: "D", f_finance: ["cash"], p_name: "Ada Foods" };
   for (let guard = 0; guard < 100; guard++) {
@@ -87,14 +87,14 @@ function previewInsight() {
   return sampleInsight;
 }
 
-/** A client on day four of the Current State Assessment: what an owner sees in their room. Sample data only. */
+/** A client on day four of the Business Review: what an owner sees in their room. Sample data only. */
 const SAMPLE_ROOM = {
   engagementId: 1,
   uploadsEnabled: false,
   businessName: "Ada Foods",
   viewer: { kind: "owner" },
   stage: "assessment",
-  stageLabel: "Current State Assessment",
+  stageLabel: "Business Review",
   journey: journeyOf("assessment"),
   createdAt: day(-7),
   assessmentStartedAt: day(-4, 8),
@@ -102,15 +102,15 @@ const SAMPLE_ROOM = {
   closedAt: null,
   check: { primaryArea: 2, readiness: "intermediate", completedAt: day(-14), reportRequestedAt: day(-13), callRequestedAt: day(-14), callScheduledFor: day(-10, 14) },
   report: { requestedAt: day(-13), deliveredAt: day(-12) },
-  debrief: { heldAt: day(-10, 14), heard: "Two outlets, a kitchen and a van. Sales of about ₦4,000,000 a month, steady for a year.\nMoney runs out in week three; the second outlet's takings pay salaries.\nPrices were last set in 2024. Delivery is charged by guess.", problemInOwnerWords: "I want to pay salaries on the 25th without moving money around, and know which outlet actually makes money.", successLooksLike: "Salaries paid on the 25th from the business account, three months running.", tried: "A bookkeeper for three months in 2025. Stopped when the reports came late.", nextSteps: "The Full Report, then the Current State Assessment from Monday 19 October.", sharedAt: day(-10, 16) },
+  debrief: { heldAt: day(-10, 14), heard: "Two outlets, a kitchen and a van. Sales of about ₦4,000,000 a month, steady for a year.\nMoney runs out in week three; the second outlet's takings pay salaries.\nPrices were last set in 2024. Delivery is charged by guess.", problemInOwnerWords: "I want to pay salaries on the 25th without moving money around, and know which outlet actually makes money.", successLooksLike: "Salaries paid on the 25th from the business account, three months running.", tried: "A bookkeeper for three months in 2025. Stopped when the reports came late.", nextSteps: "The Full Report, then the Business Review from Monday 19 October.", sharedAt: day(-10, 16) },
   problemStatement: null,
   booking: null,
   measure: null,
   team: [{ name: "Femi Adebayo", roleLabel: "Engagement lead" }, { name: "Ngozi Eze", roleLabel: "Analyst" }],
-  nextSession: { id: 1, title: "Current State Assessment Session 1", scheduledFor: day(0), durationMinutes: 90, meetingLink: "https://zoom.us/" },
+  nextSession: { id: 1, title: "Business Review Session 1", scheduledFor: day(0), durationMinutes: 90, meetingLink: "https://zoom.us/" },
   sessions: [
-    { id: 1, title: "Current State Assessment Session 1", scheduledFor: day(0), durationMinutes: 90, meetingLink: "https://zoom.us/", status: "planned", weekNumber: 1, sortOrder: 7, agenda: "Your business today: your six answers, the numbers, and how a normal week runs.", notes: null, notesSharedAt: null, notesAudience: null },
-    { id: 2, title: "Current State Assessment Session 2", scheduledFor: day(7), durationMinutes: 90, meetingLink: null, status: "planned", weekNumber: 2, sortOrder: 6, agenda: "What we found, and the one problem to fix first.", notes: null, notesSharedAt: null, notesAudience: null },
+    { id: 1, title: "Business Review Session 1", scheduledFor: day(0), durationMinutes: 90, meetingLink: "https://zoom.us/", status: "planned", weekNumber: 1, sortOrder: 7, agenda: "Your business today: your six answers, the numbers, and how a normal week runs.", notes: null, notesSharedAt: null, notesAudience: null },
+    { id: 2, title: "Business Review Session 2", scheduledFor: day(7), durationMinutes: 90, meetingLink: null, status: "planned", weekNumber: 2, sortOrder: 6, agenda: "What we found, and the one problem to fix first.", notes: null, notesSharedAt: null, notesAudience: null },
   ],
   tasks: [
     { id: 1, kind: "data_request", side: "client", title: "Six quick questions before your first Session", detail: null, dueOn: "2026-10-21", status: "accepted", statusLabel: "Received", statusNote: null, mine: false, weekNumber: 1, sortOrder: 1, factor: "internal", files: [] },

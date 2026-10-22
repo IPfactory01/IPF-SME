@@ -12,7 +12,7 @@ import { roleDisplay } from "./format";
 type Access = AdminAccessView & { email?: string | null; name?: string | null; platformRoles?: readonly string[] };
 
 const TITLES: Record<AdminSectionId, string> = {
-  checks: "Business Checks",
+  checks: "Business Health Checks",
   calls: "Discovery Calls",
   onboarding: "Client Onboarding",
   engagements: "Engagements",
@@ -22,7 +22,7 @@ const TITLES: Record<AdminSectionId, string> = {
 };
 
 /**
- * The IPF Business Support admin console: the funnel in order (Free Business Check, discovery call, onboarding, clients),
+ * The IPF Business Support admin console: the funnel in order (Free Business Health Check, discovery call, onboarding, clients),
  * then the admin team, with the earlier JUMP programme desk kept in its own legacy section. Sections come from the
  * permissions the server resolved; the server still decides every action.
  */

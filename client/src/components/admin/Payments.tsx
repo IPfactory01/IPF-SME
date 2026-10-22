@@ -14,7 +14,7 @@ import { formatDate, formatDateTime } from "./format";
  * Payment is online with Paystack only: send the payment link (the owner is emailed the amount, the reference and a
  * "Pay online" button) and the payment confirms itself when Paystack confirms it. "Confirm by hand" is a fallback for a
  * payment Paystack shows as paid that has not confirmed itself here. The server checks the permission (manage_payments)
- * and records every step; confirming the Current State Assessment wins the business and sends the client account
+ * and records every step; confirming the Business Review wins the business and sends the client account
  * invitation.
  */
 
@@ -78,7 +78,7 @@ const CHIP: Record<PaymentDisplayStatus, string> = {
   expired: "border-danger-line bg-danger-tint text-danger",
 };
 
-/** The payment state beside a business check in the lists: "Report paid", "Current State Assessment: proof received"… */
+/** The payment state beside a business check in the lists: "Report paid", "Business Review: proof received"… */
 export function PaymentChips({ payments, reportRequestedAt }: { payments: Partial<Record<PaymentItem, PaymentDisplayStatus>>; reportRequestedAt: Date | string | null }) {
   const chips = PAYMENT_ITEMS.flatMap(item => {
     const status = payments[item];
@@ -178,7 +178,7 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
         <div className="mt-3 space-y-2 border-t border-line-soft pt-3">
           <p className="text-[13px] text-ink">
             Payments confirm themselves when Paystack confirms them. Only confirm by hand if Paystack shows {formatNaira(payment.amountNaira)} paid with a reference starting {payment.reference} and it has not confirmed itself here. The owner is emailed
-            {item === "current_state" ? ", the business moves to Won and they get a link to set up their client account, where the Current State Assessment starts." : " with the Report Intake link; their Full Report is emailed the moment they finish it."}
+            {item === "current_state" ? ", the business moves to Won and they get a link to set up their client account, where the Business Review starts." : " with the Report Intake link; their Full Report is emailed the moment they finish it."}
           </p>
           <div className="space-y-1">
             <Label htmlFor={`payment-note-${payment.id}`} className="text-xs text-ink-muted">Note (optional)</Label>
@@ -194,7 +194,7 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
   );
 }
 
-/** Both things an owner can pay for before the Current State Assessment, in journey order. */
+/** Both things an owner can pay for before the Business Review, in journey order. */
 export function PaymentsPanel({ businessCheckId, payments, report = null }: { businessCheckId: number; payments: Payment[] | null | undefined; report?: ReportState }) {
   if (payments === null) return <p className="text-sm text-ink-muted">Payments are not set up in the database yet (migration 0006).</p>;
   return (

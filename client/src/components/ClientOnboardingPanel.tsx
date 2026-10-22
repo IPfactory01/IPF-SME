@@ -37,7 +37,7 @@ export default function ClientOnboardingPanel() {
     },
     onError: error => toast.error(error.message),
   });
-  /** Won means the Current State Assessment is paid; the server refuses anyone earlier unless a reason is recorded. */
+  /** Won means the Business Review is paid; the server refuses anyone earlier unless a reason is recorded. */
   const inviteCandidate = (item: { id: number; fullName: string; pipelineStage: string }) => {
     if (item.pipelineStage === "won") {
       invite.mutate({ businessCheckId: item.id });
@@ -66,7 +66,7 @@ export default function ClientOnboardingPanel() {
       </p>
       {stats && (
         <dl className="grid grid-cols-2 gap-3 text-sm md:grid-cols-5">
-          {[["Business Checks", stats.businessChecks], ["Portal users", stats.portalUsers], ["Businesses", stats.businesses], ["Memberships", stats.memberships], ["Pending links", stats.pendingInvitations]].map(([label, value]) => (
+          {[["Business Health Checks", stats.businessChecks], ["Portal users", stats.portalUsers], ["Businesses", stats.businesses], ["Memberships", stats.memberships], ["Pending links", stats.pendingInvitations]].map(([label, value]) => (
             <div key={label as string} className="border border-line bg-white p-3"><dt className="text-xs uppercase tracking-wider text-ink-muted">{label}</dt><dd className="font-serif text-2xl">{value}</dd></div>
           ))}
         </dl>
@@ -99,7 +99,7 @@ export default function ClientOnboardingPanel() {
       )}
 
       <section>
-        <h3 className="mb-2 font-serif text-lg">Business Checks</h3>
+        <h3 className="mb-2 font-serif text-lg">Business Health Checks</h3>
         {candidates.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
           <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-line text-xs uppercase tracking-wider text-ink-muted"><th className="py-2 pr-3">Name</th><th className="pr-3">Business</th><th className="pr-3">Email</th><th className="pr-3">Discovery Call</th><th className="pr-3">Stage</th><th className="pr-3">Onboarding link</th><th /></tr></thead><tbody>
             {candidates.data?.map(item => (
@@ -108,7 +108,7 @@ export default function ClientOnboardingPanel() {
                 <td className="text-right"><Button type="button" size="sm" disabled={invite.isPending} className="rounded-none bg-brand text-xs text-white" onClick={() => inviteCandidate(item)}>Invite to onboard</Button></td>
               </tr>
             ))}
-            {candidates.data?.length === 0 && <tr><td colSpan={7} className="py-4 text-ink-muted">No Business Checks yet.</td></tr>}
+            {candidates.data?.length === 0 && <tr><td colSpan={7} className="py-4 text-ink-muted">No Business Health Checks yet.</td></tr>}
           </tbody></table></div>
         )}
       </section>

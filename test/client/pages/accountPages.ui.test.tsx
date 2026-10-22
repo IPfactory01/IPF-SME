@@ -351,7 +351,7 @@ describe("account dashboard", () => {
     renderAt("/dashboard", <AccountDashboard />);
     expect(screen.getByText("Welcome back, Richie")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Richie Tech" })).toBeTruthy();
-    expect(screen.getByText(/Your room opens here when your Current State Assessment starts/)).toBeTruthy();
+    expect(screen.getByText(/Your room opens here when your Business Review starts/)).toBeTruthy();
     expect(screen.getByText(/60% complete/)).toBeTruthy();
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("60");
     expect(screen.getByRole("link", { name: "Complete profile" }).getAttribute("href")).toBe("/settings/business");
@@ -371,10 +371,10 @@ describe("account dashboard", () => {
 
   it("is the room itself once the engagement exists: no profile card, no account card", () => {
     api.state.me = SESSION;
-    api.state.room = { engagementId: 4, uploadsEnabled: false, businessName: "Richie Tech", viewer: { kind: "member", access: "full" }, stage: "assessment", stageLabel: "Current State Assessment", journey: journeyOf("assessment"), problemStatement: null, measure: null, team: [], nextSession: null, sessions: [], tasks: [], deliverables: [] };
+    api.state.room = { engagementId: 4, uploadsEnabled: false, businessName: "Richie Tech", viewer: { kind: "member", access: "full" }, stage: "assessment", stageLabel: "Business Review", journey: journeyOf("assessment"), problemStatement: null, measure: null, team: [], nextSession: null, sessions: [], tasks: [], deliverables: [] };
     renderAt("/dashboard", <AccountDashboard />);
     expect(screen.getByText("Welcome back, Richie · Richie Tech")).toBeTruthy();
-    expect(screen.getByRole("region", { name: "Current State Assessment · Week 1 of 2" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Business Review · Week 1 of 2" })).toBeTruthy();
     expect(screen.getByRole("list", { name: "Engagement timeline" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Complete profile" })).toBeNull();
     expect(screen.queryByText(/Your room opens here/)).toBeNull();

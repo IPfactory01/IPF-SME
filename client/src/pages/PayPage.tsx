@@ -22,12 +22,12 @@ const MEANING: Record<PaymentItem, string> = { full_report: METHOD_MEANING.fullR
 /** What happens once the item is paid, in the owner's words. */
 const AFTER_PAYING: Record<PaymentItem, string> = {
   full_report: `We email you the ${METHOD.reportIntake}, a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your ${METHOD.fullReport} is emailed to you the moment you finish it.`,
-  current_state: `Your ${METHOD.currentState} starts. ${CURRENT_STATE.start} We email you a link to set up your client account on ${BRAND.productName}.`,
+  current_state: `Your ${METHOD.currentState} is booked. ${CURRENT_STATE.start} We email you a link to set up your client account on ${BRAND.productName}.`,
 };
 
 const ALREADY_PAID: Record<PaymentItem, string> = {
   full_report: `Your ${METHOD.reportIntake} link is in your email. If you cannot find it, reply to your payment email.`,
-  current_state: `Your ${METHOD.currentState} has started. Look for the email with the link to set up your client account on ${BRAND.productName}.`,
+  current_state: `Your ${METHOD.currentState} is paid. Look for the email with the link to set up your client account on ${BRAND.productName}.`,
 };
 
 export default function PayPage() {

@@ -2,8 +2,8 @@
 
 **Product:** The Shift, by IP Factory (`BRAND.productEndorsement` in `shared/brand.ts`)
 **Promise:** Find it. Fix it. See the results.
-**Status:** v0.1 live at https://www.ipfactory.co, built up to the start of the Current State Assessment. Last reviewed 9 October 2026.
-**Source:** *Business Support Concept Note and Launch Blueprint v0.8.1* (6 October 2026), referred to below as "the concept note" with its section numbers, plus the decisions taken while building (section 9).
+**Status:** v0.1 live at https://www.ipfactory.co. The launch menu of 22 October 2026 is on the site (section 3); online ordering of Done for You products follows. Last reviewed 22 October 2026.
+**Source:** *Business Support Concept Note and Launch Blueprint v0.8.1* (6 October 2026), referred to below as "the concept note" with its section numbers; the *IPF The Shift Operational Business Plan* (22 October 2026), "the operational plan", for the launch menu, prices and ways to buy; and the decisions taken while building (section 9).
 
 This document says what the product does, feature by feature, and the status of each feature. How it is built is in
 [2. Technical requirements](02-technical-requirements.md); what happens on each click is in [3. App flow](03-app-flow.md).
@@ -14,13 +14,15 @@ This document says what the product does, feature by feature, and the status of 
 
 Business owners at this size know roughly what to do and cannot get it done (concept note §2). The Shift gets into the
 business with the owner, names the problem, tells them what to do, hands over the tools and checks the work every week
-until one agreed number moves. **The business owner does the work; IP Factory prescribes, equips, reviews and tracks.**
+until one agreed number moves, or delivers finished work itself. **Done for You: we deliver finished work, AI-assisted and
+checked by a consultant. Six-Week Fix: the owner's team does the work; IP Factory prescribes, equips, reviews and tracks**
+(rule D1 retired by ET on 21 October 2026).
 Analysts and AI do most of the analysis under a named IP Factory consultant, and we say so.
 
 | | |
 |---|---|
-| **Who it is for** | Owner-run businesses trading at about ₦5,000,000 a month or more, two years or older, typically 5 to 50 staff, who can give two to four hours a week (§4) |
-| **Not for** | Pre-start founders (founder readiness only), businesses under ₦1,000,000 a month with no staff (training), businesses over ₦25,000,000 a month or 50+ staff (IP Factory Advisory) |
+| **Who it is for** | Nigerian business owners who already trade, starting in Lagos and Abuja: growth-stuck operators first, funding-ready founders second (operational plan, page 14). Smaller owners start with a Done for You product; larger ones with several connected problems start with a Business Review |
+| **Not for** | Work that needs a project team across several functions of a larger business: referred to Enzo Krypton & Co. and quoted per project. Training is not a core product (ET, 5 October) |
 | **The pilot** | 20 paying clients between 9 October and 10 December 2026; about ₦34,000,000 at list by 31 December (§9, §11) |
 | **Second job of the pilot** | Build the working parts (problem taxonomy, business check, method per problem area, check-in template, engagement record) that become the "Strategy in a Box" portal in January 2027 (§8) |
 
@@ -40,22 +42,49 @@ One person has one identity; roles and assignments are added to it (see `AGENTS.
 | **Admin / Super Admin** | Lewis (Super Admin), Richard (admin) per D5 | Staff, roles, permissions and platform settings |
 | **System actors** | The AI summary, the report builder, scheduled reminders, Paystack (confirming online payments) | Server-controlled and audited; never an interactive account |
 
-## 3. The journey and the prices
+## 3. The launch menu and the prices
 
-The whole journey is shown up front with prices (concept note D1). Prices live in `shared/businessSupport.ts` (`PRICES`, `JOURNEY`).
+The menu went on sale on 22 October 2026 at the prices ET set on 21 October, each at the top of its range (operational
+plan, pages 11 and 15). Every product, its price, delivery, payment terms, intake and next product live in one file,
+`shared/products.ts`; the site's menu (`/services`), product pages (`/services/:slug`), the Business Health Check's routing
+and the order flow read from it. The three prices the existing payment code charges are in `shared/businessSupport.ts`
+(`PRICES`), and a test keeps the two in step. The Full Report and Business Review prices can be overridden on the server
+(`FULL_REPORT_PRICE_NGN`, `CURRENT_STATE_PRICE_NGN`).
 
-| # | Step | Price | What the owner gets | Status |
-|---|---|---|---|---|
-| 1 | Free business check | Free | Ten minutes on a phone; a colour-coded outline of the ten problem areas; one of four gaps; a summary | **Built** |
-| 1a | Full report (optional) | ₦100,000 | A business-plan-depth report, built from the check and a 17-question form, emailed as a PDF the moment the form is finished | **Built** |
-| 2 | Discovery call | Free, 20 minutes at most | An honest answer: can we help, and with what | **Built** (booking and outcome) |
-| 3 | Payment for Current State Assessment | ₦500,000 (fixed) | Paid after the call, within 48 hours: on Paystack, which confirms itself | **Built** (Paystack live once its keys are in Vercel) |
-| 4 | Getting set up (onboarding) | Included | Three working days: client account, welcome note, data request, analyst assigned, both Current State Assessment calls booked | **Partly built** (account only) |
-| 5 | Current State Assessment | Included in step 3 | Two weeks, one 90-minute call a week; ends with proceed, fix the basics first, or refer to Advisory | **Not built** in the platform |
-| 6 | The six-week fix | ₦1,200,000 | One problem; what to do and the tools; a weekly 45-minute check-in; one measure tracked | **Not built** |
-| 7 | The plan | Standard engagement stops at about ₦2,500,000 | A plan in the owner's hands; ongoing support agreed per client | **Not built** |
-| — | Day-30 follow-up | Included | Check that the output is still in use and the measure held | **Not built** |
-| — | Referral | 10% off the next invoice per paying referral, up to 30%, never on a first payment | Rewards staying as well as referring | **Not built** in the new flow (a JUMP module exists) |
+**Four ways to buy** (ET, 21 October): Assessment (free, or paid before work); Done for You (a fixed price, paid before
+work); Six-Week Fix (50% at the start, 25% at the mid-point, 25% at the result, or in full at 5% off); Monthly Service
+(paid a quarter at a time, price held for twelve months, stop at any quarter end).
+
+| Product | Way to buy | Price | Delivery | How it starts | Status |
+|---|---|---|---|---|---|
+| Free Business Health Check | Assessment | Free | At once | `/check` | **Built** |
+| Full Report | Assessment | ₦100,000 | Emailed when the Report Intake is finished | Offered at the end of the check | **Built** |
+| Funding Readiness Assessment | Assessment | ₦150,000 | 3 working days from complete records | Buy online | Page live; online order **to build** |
+| Business Review (two weeks; was the Current State Assessment) | Assessment | ₦600,000 | Two weeks, two Sessions | After the Discovery Call | **Built** (Paystack) |
+| Strategy and 90-Day Plan | Done for You | ₦450,000 | 7 working days | Buy online | Page live; online order **to build** |
+| Pricing and Unit Cost Review | Done for You | ₦750,000 | 7 working days | After a 20-minute call | Page live; payment link **to build** |
+| Bookkeeping Catch-Up | Done for You | ₦100,000 a month of records (at least three months, ₦300,000) | 5 working days for three months | Buy online | Page live; online order **to build** |
+| 13-Week Cash Flow Forecast | Done for You | ₦300,000 | 5 working days | Buy online | Page live; online order **to build** |
+| Funding Application Pack | Done for You | ₦600,000 | 10 working days of complete records | After a 20-minute call | Page live; payment link **to build** |
+| Hiring Toolkit | Done for You | ₦300,000 | 5 working days | Buy online | Page live; online order **to build** |
+| Six-Week Fix (Margin, Sales, Cash and Pricing, Delegation and Structure) | Six-Week Fix | ₦1,500,000 | Six weeks | After the Discovery Call | Engagement **built**; instalments **to build** |
+| Monthly Accounts and Cash Report | Monthly Service | ₦200,000 a month (₦600,000 a quarter) | By the 10th of each month | After a call | Page live; quarterly billing **to build** |
+| Monthly Adviser Review | Monthly Service | ₦150,000 a month (₦450,000 a quarter) | One Session a month | After a call | Page live; quarterly billing **to build** |
+
+Fallback prices are kept in the catalogue (`fallbackPrice`) for the 15 December test: a product below 5% of routed checks,
+or the Business Review below 20% of calls, steps down in January (operational plan, page 15).
+
+**Delivery promise** (ET, 22 October): we confirm the delivery date once the records are complete; if we miss it, the
+owner may ask for a full refund. **Boundaries** until counsel answers: management accounts only, and the monthly tax note
+states record readiness only, not tax advice.
+
+**How a sale runs** (operational plan, page 18; `JOURNEY` in `shared/businessSupport.ts`): free check → the check names
+the first product and the next one → pay by link (the review, the fixes, the monthly services and the two products above
+₦500,000 start with a call) → send records through a secure form → finished work checked by a consultant who did not
+prepare it, with a 30-minute handover → at day 30, the next product or a Monthly Service.
+
+**Until online ordering opens** (`ONLINE_ORDERS_OPEN` in `shared/products.ts`), every product starts with the free call
+or the check, so no page offers a dead link.
 
 ## 4. Features
 

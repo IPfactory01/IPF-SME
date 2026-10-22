@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { formatNaira, PRICES } from "@shared/businessSupport";
+import { priceLabel, PRODUCTS } from "@shared/products";
 import { PLATFORM_PERMISSIONS, PLATFORM_ROLE_PERMISSIONS } from "@shared/platformPermissions";
 
 /**
@@ -34,9 +35,13 @@ describe("product documents", () => {
     for (const table of tables) expect(schema, table).toContain(`\`${table}\``);
   });
 
-  it("states the prices the code charges", () => {
+  it("states the prices the code charges, and every product on the menu with its price", () => {
     const prd = read(`${DOCS}/01-prd.md`);
-    for (const amount of [PRICES.fullReport, PRICES.currentState, PRICES.fix, PRICES.standardEngagementCap]) expect(prd).toContain(formatNaira(amount));
+    for (const amount of Object.values(PRICES)) expect(prd).toContain(formatNaira(amount));
+    for (const product of PRODUCTS) {
+      expect(prd, product.id).toContain(product.name);
+      expect(prd, product.id).toContain(priceLabel(product.price));
+    }
   });
 
   it("lists each role's permissions as the code grants them", () => {

@@ -142,7 +142,7 @@ exports[`the full report > is deterministic: the same answers give the same repo
           "question": "Who decides on spending to fix it?",
         },
       ],
-      "title": "Your Business Check",
+      "title": "Your Business Health Check",
     },
     {
       "rows": [
@@ -220,7 +220,7 @@ exports[`the full report > is deterministic: the same answers give the same repo
   ],
   "background": {
     "engagement": [
-      "Your Business Check: the ten places a business gets stuck, and you as a founder, in your words.",
+      "Your Business Health Check: the ten places a business gets stuck, and you as a founder, in your words.",
       "Your Report Intake, completed 9 October 2026: what you sell, who buys, how the business runs, and the numbers.",
       "This plan: built by fixed rules from both, so every finding traces back to an answer you gave.",
     ],
@@ -239,7 +239,7 @@ exports[`the full report > is deterministic: the same answers give the same repo
       "Cash would cover 1 to 5 weeks of costs. Until it covers 8 weeks, plan every spend against a 13-week cash forecast.",
       "Seven areas are stuck, but they are rarely separate problems. Fixing the root first should ease the rest.",
     ],
-    "overview": "You took the Business Check and completed the Report Intake. This plan brings what you told us into one place, as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers.",
+    "overview": "You took the Business Health Check and completed the Report Intake. This plan brings what you told us into one place, as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers.",
     "position": [
       {
         "figure": "2 to 5 years",
@@ -287,7 +287,7 @@ exports[`the full report > is deterministic: the same answers give the same repo
   "businessName": "Adunni Fabrics",
   "date": "9 October 2026",
   "descriptor": "A retail business that buys and sells goods, trading for two to five years",
-  "method": "Built by The Shift's fixed rules from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on 9 October 2026. It is not an audit, a valuation, or financial, legal or tax advice.",
+  "method": "Built by The Shift's fixed rules from the Business Health Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on 9 October 2026. It is not an audit, a valuation, or financial, legal or tax advice.",
   "onePage": {
     "benchmarks": [
       {
@@ -638,7 +638,7 @@ exports[`the full report > is deterministic: the same answers give the same repo
       ],
       "health": "watch",
       "number": 1,
-      "overview": "This section asks whether you are equipped for the business this plan describes, and names the gaps to close first. It is built from your answers about yourself in the Business Check.",
+      "overview": "This section asks whether you are equipped for the business this plan describes, and names the gaps to close first. It is built from your answers about yourself in the Business Health Check.",
       "scope": [
         "Your behavioural profile.",
         "The four money basics.",
@@ -1814,8 +1814,8 @@ exports[`the full report > is deterministic: the same answers give the same repo
         },
         {
           "kind": "callout",
-          "text": "Two weeks and two sessions that test the internal and external factors of your business, to locate the one problem to fix first and what to do about it. Three working days to get set up, then we start. It starts with a free Discovery Call, where we tell you honestly whether we can help.",
-          "title": "Current State Assessment · ₦500,000",
+          "text": "Two weeks and two Sessions that test your whole business, to find the one problem to fix first and what to do about it. We take three working days to get set up; the review starts at your first Session. It starts with a free Discovery Call, where we tell you honestly whether we can help.",
+          "title": "Business Review · ₦600,000",
         },
       ],
       "number": 9,

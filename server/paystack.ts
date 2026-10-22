@@ -85,15 +85,19 @@ export async function initializeTransaction(input: { email: string; amountKobo: 
   return { authorizationUrl: url, reference: body.data?.reference ?? input.reference };
 }
 
-/** What Paystack says about a transaction: only the fields the confirmation checks. */
-export type VerifiedTransaction = { reference: string; status: string; amount: number; currency: string };
+/**
+ * What Paystack says about a transaction: only the fields the confirmation checks. `amount` is what the customer was
+ * charged, in kobo; when the business passes Paystack's fee to the customer it includes the fee, and `requestedAmount`
+ * (Paystack's `requested_amount`) is the amount we asked for. NaN when Paystack does not say.
+ */
+export type VerifiedTransaction = { reference: string; status: string; amount: number; currency: string; requestedAmount?: number };
 
 /**
  * Asks Paystack how a transaction stands. Null when Paystack does not know the reference; throws when Paystack cannot
  * be asked, so the caller can try again later rather than conclude anything.
  */
 export async function verifyTransaction(reference: string): Promise<VerifiedTransaction | null> {
-  const { httpStatus, body } = await call<{ reference?: unknown; status?: unknown; amount?: unknown; currency?: unknown }>(`/transaction/verify/${encodeURIComponent(reference)}`, { method: "GET" });
+  const { httpStatus, body } = await call<{ reference?: unknown; status?: unknown; amount?: unknown; currency?: unknown; requested_amount?: unknown }>(`/transaction/verify/${encodeURIComponent(reference)}`, { method: "GET" });
   if ((httpStatus === 400 || httpStatus === 404) && !body.status) return null;
   if (httpStatus >= 400 || !body.status || !body.data) throw new PaystackError(`Paystack could not check the payment (${httpStatus}).`, httpStatus);
   const { data } = body;
@@ -102,6 +106,7 @@ export async function verifyTransaction(reference: string): Promise<VerifiedTran
     status: typeof data.status === "string" ? data.status : "",
     amount: typeof data.amount === "number" ? data.amount : Number.NaN,
     currency: typeof data.currency === "string" ? data.currency : "",
+    requestedAmount: typeof data.requested_amount === "number" ? data.requested_amount : undefined,
   };
 }
 

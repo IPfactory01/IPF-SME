@@ -1,23 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { CURRENT_STATE, formatNaira, JOURNEY, PRICES, PROBLEM_AREAS } from "@shared/businessSupport";
+import { buildJourney, CURRENT_STATE, formatNaira, JOURNEY, PRICES, PROBLEM_AREAS } from "@shared/businessSupport";
 import { PAYMENT_ITEM_DETAILS } from "@shared/payments";
 
-describe("Current State Assessment price", () => {
-  it("is a flat ₦500,000 on the site, not a starting price (decided 7 October)", async () => {
-    const { JOURNEY } = await import("@shared/businessSupport");
-    const step = JOURNEY.find((item) => item.id === "current-state")!;
-    expect(step.body).toContain("₦500,000, paid after the Discovery Call");
-    expect(step.body).not.toMatch(/from ₦500,000/i);
+describe("prices (ET, 21 October 2026)", () => {
+  it("are the top of each range: Full Report ₦100,000, Business Review ₦600,000, Six-Week Fix ₦1,500,000", () => {
+    expect(PRICES).toEqual({ fullReport: 100_000, currentState: 600_000, fix: 1_500_000 });
+  });
+
+  it("shows the server's Full Report and Business Review prices in the journey, never a starting price", () => {
+    const copy = buildJourney({ fullReport: 100_000, currentState: 600_000 }).map((step) => step.body).join(" ");
+    expect(copy).toContain("₦100,000");
+    expect(copy).toContain("Business Review (₦600,000)");
+    expect(copy).not.toMatch(/from ₦600,000/i);
+    expect(buildJourney({ fullReport: 100, currentState: 200 }).map((step) => step.body).join(" ")).toContain("₦200");
   });
 });
 
-describe("Current State Assessment name", () => {
-  it("is one name, from one place, on the site and in payments (decided 9 October)", () => {
-    expect(CURRENT_STATE.name).toBe("Current State Assessment");
-    expect(JOURNEY.find((step) => step.id === "current-state")!.name).toBe(CURRENT_STATE.name);
+describe("Business Review name", () => {
+  it("is one name, from one place, on the site and in payments (renamed from Current State Assessment, 21 October)", () => {
+    expect(CURRENT_STATE.name).toBe("Business Review");
     expect(PAYMENT_ITEM_DETAILS.current_state.name).toBe(CURRENT_STATE.name);
     const copy = JOURNEY.map((step) => `${step.name} ${step.body}`).join(" ");
-    expect(copy).not.toMatch(/Current State(?! Assessment)/);
+    expect(copy).not.toMatch(/Current State/);
+  });
+});
+
+describe("How it works (plan page 18)", () => {
+  it("runs from the free check to what comes next, in six steps", () => {
+    expect(JOURNEY.map((step) => step.id)).toEqual(["check", "first-step", "pay", "records", "deliver", "next"]);
+    expect(JOURNEY[0].name).toBe("Free Business Health Check");
+  });
+
+  it("states the refund promise and the independent check before delivery", () => {
+    const deliver = JOURNEY.find((step) => step.id === "deliver")!.body;
+    expect(deliver).toMatch(/full refund/);
+    expect(deliver).toMatch(/consultant who did not prepare it/);
   });
 });
 
@@ -27,19 +44,12 @@ describe("business-support catalogue (concept note v0.8.1)", () => {
     for (const area of PROBLEM_AREAS) expect(area.measure.length).toBeGreaterThan(0);
   });
 
-  it("carries the frozen v0.1 prices, and shows them in full in the journey", () => {
-    expect(PRICES).toEqual({ fullReport: 100_000, currentState: 500_000, fix: 1_200_000, standardEngagementCap: 2_500_000 });
-    const copy = JOURNEY.map((step) => step.body).join(" ");
-    for (const price of ["₦100,000", "₦500,000", "₦1,200,000", "₦2,500,000"]) expect(copy).toContain(price);
-  });
-
-  it("follows the site copy rules: no internal terms and no price for ongoing support", () => {
+  it("follows the site copy rules", () => {
     const copy = JOURNEY.map((step) => `${step.name} ${step.body}`).join(" ") + PROBLEM_AREAS.map((area) => area.siteSentence ?? "").join(" ");
     expect(copy).not.toMatch(/\b(door|sprint|playbook|retainer|leverage|holistic|framework|solutions)\b/i);
-    expect(copy).not.toContain("₦400,000");
   });
 
   it("formats naira in full with thousands separators", () => {
-    expect(formatNaira(1_200_000)).toBe("₦1,200,000");
+    expect(formatNaira(1_500_000)).toBe("₦1,500,000");
   });
 });

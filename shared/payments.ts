@@ -4,7 +4,7 @@ import { METHOD } from "./method";
 /**
  * Paying for The Shift: online with Paystack only. The payment email carries a "Pay online" link; Paystack's checkout
  * takes card, bank transfer or USSD, and the payment confirms itself. There are no bank details and no proof of payment.
- * Confirming the Current State Assessment payment is what starts the Current State Assessment.
+ * Confirming the Business Review payment is what starts the Business Review.
  */
 
 export const PAYMENT_ITEMS = ["full_report", "current_state"] as const;
@@ -43,12 +43,12 @@ export function effectivePaymentStatus(request: { status: PaymentStatus; request
 
 export const PAYMENT_DISPLAY_LABELS: Record<PaymentDisplayStatus, string> = { ...PAYMENT_STATUS_LABELS, expired: "48 hours passed" };
 
-/** The reference the owner puts on the transfer, e.g. TS-R-000123 (report) or TS-CS-000123 (Current State Assessment). */
+/** The reference the owner puts on the transfer, e.g. TS-R-000123 (report) or TS-CS-000123 (Business Review). */
 export function paymentReference(item: PaymentItem, businessCheckId: number) {
   return `TS-${PAYMENT_ITEM_DETAILS[item].code}-${String(businessCheckId).padStart(6, "0")}`;
 }
 
-/** "₦100,000 for your full business check report" or "₦500,000 for your Current State Assessment" (the amount is the payment's own). */
+/** "₦100,000 for your full business check report" or "₦500,000 for your Business Review" (the amount is the payment's own). */
 export function describePayment(item: PaymentItem, amountNaira: number) {
   const { name } = PAYMENT_ITEM_DETAILS[item];
   return `${formatNaira(amountNaira)} for ${item === "full_report" ? name.charAt(0).toLowerCase() + name.slice(1) : `your ${name}`}`;
@@ -70,7 +70,7 @@ export const PAYMENT_ITEM_TITLES: Record<PaymentItem, string> = { full_report: M
 export const isPaymentItem = (value: unknown): value is PaymentItem => (PAYMENT_ITEMS as readonly unknown[]).includes(value);
 
 /**
- * The pay page for one item. It is keyed by the Business Check's unguessable token (the one its result page uses),
+ * The pay page for one item. It is keyed by the Business Health Check's unguessable token (the one its result page uses),
  * never by the sequential payment reference, so nobody can reach another owner's payment by changing a number.
  */
 export const payPath = (token: string, item: PaymentItem) => `/pay/${encodeURIComponent(token)}/${item}`;

@@ -1,6 +1,6 @@
 /**
  * The engagement room on PostgreSQL (PGlite on every run, plus TEST_DATABASE_URL via `pnpm test:db`): the engagement
- * starts when the Current State Assessment is paid, joins the owner's business when they create their account, and
+ * starts when the Business Review is paid, joins the owner's business when they create their account, and
  * every read and change is checked on the server: the team by permission and assignment, the client by membership
  * and by what was shared with them. Email and the language model are stubbed.
  */
@@ -147,7 +147,7 @@ for (const target of targets) {
     });
 
     describe("starting an engagement", () => {
-      it("starts one engagement when the Current State Assessment is paid, with the data requests and both calls from the template", async () => {
+      it("starts one engagement when the Business Review is paid, with the data requests and both calls from the template", async () => {
         const { id } = await finishedCheck("start");
         const confirmed = await payAssessment(id);
         expect(confirmed).toMatchObject({ engagement: "started", invitation: "sent" });
@@ -159,7 +159,7 @@ for (const target of targets) {
         // The Work Plan: week 1 due in three working days, week 2 in eight; the team's actions sit beside the client's requests.
         expect(new Set(tasks.map((task: { kind: string; side: string; status: string; dueOn: string }) => `${task.kind}/${task.side}/${task.status}/${task.dueOn}`))).toEqual(new Set([`data_request/client/open/${addWorkingDays(new Date(), 3)}`, `data_request/client/open/${addWorkingDays(new Date(), 8)}`, `action/ipf/open/${addWorkingDays(new Date(), 3)}`, `action/ipf/open/${addWorkingDays(new Date(), 8)}`]));
         const sessions = await db.select().from(schema.engagementSessions).where(eq(schema.engagementSessions.engagementId, engagement.id));
-        expect(sessions.map((item: { title: string; scheduledFor: Date | null }) => [item.title, item.scheduledFor])).toEqual([["Current State Assessment Session 1", null], ["Current State Assessment Session 2", null]]);
+        expect(sessions.map((item: { title: string; scheduledFor: Date | null }) => [item.title, item.scheduledFor])).toEqual([["Business Review Session 1", null], ["Business Review Session 2", null]]);
         // Each call carries its agenda from the template, so the client sees what the call is for before it is booked.
         expect(sessions.map((item: { agenda: string | null }) => item.agenda)).toEqual(ASSESSMENT_TEMPLATE.sessions.map(item => item.agenda));
       });
@@ -307,7 +307,7 @@ for (const target of targets) {
 
         const room = (await (await owner.call()).engagement.client.room())!;
         expect(room).toMatchObject({ engagementId, stage: "setting_up", stageLabel: "Getting set up", viewer: { kind: "owner" }, team: [{ name: "Lewis Lead", roleLabel: "Engagement lead" }] });
-        expect(room.journey.map(step => [step.label, step.state])).toEqual([["Getting set up", "current"], ["Current State Assessment", "next"], ["The Fix", "next"], ["Your Plan", "next"]]);
+        expect(room.journey.map(step => [step.label, step.state])).toEqual([["Getting set up", "current"], ["Business Review", "next"], ["Six-Week Fix", "next"], ["Your Plan", "next"]]);
         expect(room.tasks).toHaveLength(ASSESSMENT_TEMPLATE.dataRequests.length + ASSESSMENT_TEMPLATE.teamActions.length);
 
         const first = room.tasks[0];
@@ -340,19 +340,19 @@ for (const target of targets) {
         const room = (await (await owner.call()).engagement.client.room())!;
         expect(room.sessions[0]).toMatchObject({ notes: "We agreed to look at pricing first.", notesAudience: "owner" });
         // The owner is told by email: the title and a link, never the notes themselves.
-        const notice = emails().find(sent => sent.subject === "Engagement update: Current State Assessment Session 1")!;
+        const notice = emails().find(sent => sent.subject === "Engagement update: Business Review Session 1")!;
         expect(notice.body).toContain("/dashboard");
         expect(notice.body).not.toContain("pricing");
         expect(JSON.stringify(room)).not.toContain("under-reporting");
       });
 
-      it("gives the owner and full-access staff the Founder and Business tabs, from the Business Check and then the Full Report; contributors get neither", async () => {
+      it("gives the owner and full-access staff the Founder and Business tabs, from the Business Health Check and then the Full Report; contributors get neither", async () => {
         const { owner, businessCheckId, businessId } = await client("insight");
         const full = await member(businessId, null);
         const contributor = await member(businessId, "contributor");
 
         const fromCheck = (await (await owner.call()).engagement.client.room())!.insight!;
-        expect(fromCheck.source).toBe("Business Check");
+        expect(fromCheck.source).toBe("Business Health Check");
         expect(fromCheck.founder.sections).toEqual([]);
         expect(fromCheck.areas.length).toBeGreaterThan(0);
         expect(fromCheck.areas.map(area => area.area)).not.toContain("Founder readiness");
@@ -371,7 +371,7 @@ for (const target of targets) {
 
         // A stored intake that no longer reads falls back to the check rather than closing the room.
         await db.update(schema.fullReports).set({ intakeJson: "{not json" }).where(eq(schema.fullReports.businessCheckId, businessCheckId));
-        expect((await (await owner.call()).engagement.client.room())!.insight!.source).toBe("Business Check");
+        expect((await (await owner.call()).engagement.client.room())!.insight!.source).toBe("Business Health Check");
       });
 
       it("shows the owner's staff only what the owner shares with them, and contributors only their own requests", async () => {

@@ -41,7 +41,7 @@ const { default: EngagementsView } = await import("@/components/admin/Engagement
 
 const row = { id: 4, stage: "setting_up", stageLabel: "Getting set up", businessName: "Ada Foods", ownerName: "Ada Okafor", ownerEmail: "ada@example.test", hasAccount: true, createdAt: new Date(), team: [], openClientRequests: 5, overdueClientRequests: 2, unscheduledSessions: 2, nextSession: null };
 const task = (over: Record<string, unknown>) => ({ id: 51, engagementId: 4, kind: "data_request", side: "client", title: "Your price list", detail: null, assigneeUserId: null, dueOn: "2026-10-21", status: "open", statusLabel: "To do", statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 4, factor: "internal", createdByUserId: 1, completedAt: null, createdAt: new Date(), updatedAt: new Date(), files: [], ...over });
-const session = { id: 31, engagementId: 4, kind: "assessment_call", title: "Current State Assessment call 1", scheduledFor: null, durationMinutes: 90, meetingLink: null, agenda: null, status: "planned", weekNumber: 1, sortOrder: 7, clientNotes: "Pricing first.", internalNotes: "Watch cash sales.", notesAudience: "owner", notesSharedAt: null, notesSharedByUserId: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() };
+const session = { id: 31, engagementId: 4, kind: "assessment_call", title: "Business Review call 1", scheduledFor: null, durationMinutes: 90, meetingLink: null, agenda: null, status: "planned", weekNumber: 1, sortOrder: 7, clientNotes: "Pricing first.", internalNotes: "Watch cash sales.", notesAudience: "owner", notesSharedAt: null, notesSharedByUserId: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() };
 const deliverable = (over: Record<string, unknown>) => ({ id: 41, engagementId: 4, kind: "prescription", kindLabel: "Prescription", title: "Daily cash count", summary: "Count every evening.", status: "draft", audience: "owner", approvedByUserId: null, approvedAt: null, sharedByUserId: null, sharedAt: null, clientAcceptedByUserId: null, clientAcceptedAt: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date(), needsApproval: true, comments: [], files: [], ...over });
 const detail = (can: { manage: boolean; assign: boolean; review: boolean; sendSignIn?: boolean }, deliverables = [deliverable({})], tasks: unknown[] = []) => ({
   uploadsEnabled: true,
@@ -198,7 +198,7 @@ describe("the team's engagements", () => {
     api.detail = detail({ manage: true, assign: false, review: false });
     render(<EngagementsView />);
     fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
-    const card = within(within(screen.getByRole("dialog")).getByLabelText("Current State Assessment call 1"));
+    const card = within(within(screen.getByRole("dialog")).getByLabelText("Business Review call 1"));
     expect(card.getByText("Not shared yet.")).toBeTruthy();
     fireEvent.click(card.getByRole("button", { name: "Share with the owner" }));
     expect(api.calls.shareNotes).toEqual([{ sessionId: 31, audience: "owner" }]);

@@ -27,7 +27,7 @@ const NEXT_STEPS: Record<PaymentItem, { thanks: string; steps: string[] }> = {
     ],
   },
   current_state: {
-    thanks: `Thank you. Your ${METHOD.currentState} is paid, and it starts now.`,
+    thanks: `Thank you. Your ${METHOD.currentState} is paid and booked.`,
     steps: [
       CURRENT_STATE.start,
       `We email you a link to set up your client account on ${BRAND.productName}. Your ${METHOD.currentState} lives there.`,

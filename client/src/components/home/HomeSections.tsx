@@ -6,13 +6,16 @@ import { EASE, Reveal } from "@/components/motion";
 import { onSectionLinkClick } from "@/lib/scrollToSection";
 import { BRAND } from "@shared/brand";
 import { buildJourney, PROBLEM_AREAS, PROMISE } from "@shared/businessSupport";
+import { DELIVERY_PROMISE, MENU_PRODUCTS, priceLabel, servicePath, WAY_DETAILS, WAYS_TO_BUY } from "@shared/products";
+import { displayPrice } from "@/lib/productPrice";
+import { Link } from "wouter";
 import { useServicePricesOrDefault } from "@/lib/servicePrices";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowDown, ArrowRight, Plus } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 export const NAV = [
-  { id: "experience", label: "Our experience" },
+  { id: "services", label: "What we sell" },
   { id: "how", label: "How it works" },
   { id: "stuck", label: "Where you're stuck" },
   { id: "for", label: "Who it's for" },
@@ -112,7 +115,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
             On {BRAND.productName}, we get in with you, name the real problem, show you exactly what to do, give you the tools, and check your work every week until the number moves.
           </p>
           <div className="flex flex-col items-center gap-4">
-            <CtaButton onClick={onStart} className="w-full max-w-sm">Start with a free Business Check</CtaButton>
+            <CtaButton onClick={onStart} className="w-full max-w-sm">Start with a free Business Health Check</CtaButton>
             <p className="text-sm text-ink-muted">Ten minutes, on your phone.</p>
           </div>
         </motion.div>
@@ -124,7 +127,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
           animate={{ opacity: 1 }}
           transition={{ delay: 1.4, duration: 0.8 }}
           className="group mx-auto mt-14 flex w-full max-w-xl flex-col items-center gap-2"
-          aria-label="Start the Business Check"
+          aria-label="Start the Business Health Check"
         >
           <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-faint">Sound familiar?</span>
           <span className="relative block h-24 w-full overflow-hidden sm:h-10">
@@ -146,6 +149,54 @@ export function Hero({ onStart }: { onStart: () => void }) {
         <motion.a href="#problem" onClick={onSectionLinkClick} aria-label="Scroll down" className="mx-auto mt-6 flex h-10 w-10 items-center justify-center rounded-full border border-line text-ink-faint hover:border-brand hover:text-brand" animate={calm ? undefined : { y: [0, 6, 0] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}>
           <ArrowDown className="h-4 w-4" />
         </motion.a>
+      </div>
+    </section>
+  );
+}
+
+/** What we sell: the four ways to buy, each with the products in it and their prices, and the way to the full menu. */
+export function WhatWeSell() {
+  const prices = useServicePricesOrDefault();
+  return (
+    <section id="services" className="border-b border-line py-24">
+      <div className="container mx-auto max-w-5xl">
+        <Reveal className="mb-12 max-w-3xl">
+          <span className="mb-3 block text-xs font-semibold uppercase tracking-widest text-ink-muted">What we sell</span>
+          <h2 className="font-serif text-4xl font-bold tracking-tight sm:text-5xl">Four ways to buy. Every price up front.</h2>
+          <p className="mt-4 text-lg leading-relaxed text-ink-soft">Start free. Buy finished work by link. Or work with us for six weeks, or every month.</p>
+        </Reveal>
+        <ul aria-label="Ways to buy" className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {WAYS_TO_BUY.map((way) => (
+            <li key={way} className="flex flex-col border border-line bg-paper-raised p-6">
+              <h3 className="font-serif text-2xl font-bold">{WAY_DETAILS[way].name}</h3>
+              <p className="mt-2 leading-relaxed text-ink-soft">{WAY_DETAILS[way].summary}</p>
+              <ul className="mt-4 flex-1 divide-y divide-line border-t border-line">
+                {way === "assessment" && (
+                  <li>
+                    <Link href="/check" className="group flex items-baseline justify-between gap-4 py-2.5 text-sm">
+                      <span className="font-medium text-ink group-hover:text-brand">Free Business Health Check</span>
+                      <span className="shrink-0 font-semibold text-ink-soft">Free</span>
+                    </Link>
+                  </li>
+                )}
+                {MENU_PRODUCTS.filter((product) => product.way === way).map((product) => (
+                  <li key={product.id}>
+                    <Link href={servicePath(product)} className="group flex items-baseline justify-between gap-4 py-2.5 text-sm">
+                      <span className="font-medium text-ink group-hover:text-brand">{product.name}</span>
+                      <span className="shrink-0 font-semibold text-ink-soft">{priceLabel(displayPrice(product, prices))}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          ))}
+        </ul>
+        <div className="mt-10 flex flex-wrap items-center gap-x-8 gap-y-3">
+          <Link href="/services" className="group inline-flex h-12 items-center bg-ink px-6 text-sm font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-charcoal">
+            See every service <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+          </Link>
+          <p className="text-sm text-ink-muted">{DELIVERY_PROMISE}</p>
+        </div>
       </div>
     </section>
   );
@@ -183,7 +234,7 @@ export function Journey() {
       <div ref={ref} className="container mx-auto max-w-4xl">
         <Reveal className="mb-14 text-center">
           <h2 className="font-serif text-4xl font-bold tracking-tight sm:text-5xl">How it works</h2>
-          <p className="mt-3 text-ink-muted">Every step and every price, up front. Tap a step.</p>
+          <p className="mt-3 text-ink-muted">From the free check to finished work. Tap a step.</p>
         </Reveal>
         <ol className="relative">
           {journey.map((step, index) => {
@@ -236,7 +287,7 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
         <Reveal className="mb-12 text-center">
           <span className="mb-3 block text-xs font-semibold uppercase tracking-widest text-ink-muted">Where businesses get stuck</span>
           <h2 className="font-serif text-4xl font-bold tracking-tight sm:text-5xl">Pick yours.</h2>
-          <p className="mt-3 text-ink-muted">Not sure which one it is? That is what the free Business Check finds out.</p>
+          <p className="mt-3 text-ink-muted">Not sure which one it is? That is what the free Business Health Check finds out.</p>
         </Reveal>
         <motion.div layout className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
           {areas.map((area, index) => {
@@ -286,10 +337,12 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
 }
 
 const QUESTIONS = [
-  { q: "Do you do the work for me?", a: "No. You do; we make sure you know what to do and that it gets done." },
-  { q: "What if the Measure of Success doesn't move in six weeks?", a: "We extend, at no charge, for up to two weeks before anything else is paid." },
-  { q: "What do you do with my information?", a: `It stays between you and your ${BRAND.organisationName} team. We only use anonymised cases, and only with your consent.` },
-  { q: "What happens after The Fix?", a: "You have a plan. If you want us to stay, we agree what that looks like and what it costs." },
+  { q: "Do you do the work for me?", a: "Sometimes. Done for You products are finished work we deliver: accounts, a forecast, a plan or a funding pack. In a Six-Week Fix your team does the work; we prescribe, equip and review it with you every week." },
+  { q: "What if you miss the delivery date?", a: DELIVERY_PROMISE },
+  { q: "How do I pay?", a: "By transfer or card, through Paystack, before we start. A Six-Week Fix can be paid in three parts. Monthly Services are paid a quarter at a time." },
+  { q: "What do you do with my information?", a: "We use it only to do the work you asked for. Records you upload go into private storage that only the people on your order can open. Some analysis uses AI tools, and a consultant checks everything before you get it. Our Privacy Policy lists who helps us run the service and your rights." },
+  { q: "What if the Measure of Success doesn't move in six weeks?", a: "We extend your Six-Week Fix, at no charge, for up to two weeks." },
+  { q: "What happens after?", a: "Thirty days on, we check in. If it helps, we suggest the next step, or a Monthly Service that keeps it going." },
 ];
 
 export function Faq() {

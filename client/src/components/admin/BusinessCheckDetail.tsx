@@ -85,7 +85,7 @@ function RecordDebriefTime({ businessCheckId }: { businessCheckId: number }) {
   );
 }
 
-/** Won is not offered: only confirming the Current State Assessment payment sets it. */
+/** Won is not offered: only confirming the Business Review payment sets it. */
 const MOVABLE_STAGES = PIPELINE_STAGES.filter((stage): stage is Exclude<PipelineStage, "lead" | "won"> => stage !== "lead" && stage !== "won");
 
 /**
@@ -147,7 +147,7 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
   };
 
   const history = [
-    { label: check.completedAt ? "Business Check completed" : "Business Check started", at: check.completedAt ?? check.createdAt },
+    { label: check.completedAt ? "Business Health Check completed" : "Business Health Check started", at: check.completedAt ?? check.createdAt },
     ...(check.callRequestedAt ? [{ label: "Discovery Call requested", at: check.callRequestedAt }] : []),
     ...(check.reportRequestedAt ? [{ label: "Full Report requested", at: check.reportRequestedAt }] : []),
     ...(check.callScheduledFor ? [{ label: "Discovery Call booked for", at: check.callScheduledFor, withTime: true }] : []),
@@ -157,12 +157,12 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
     <>
       <div className="flex flex-wrap items-center gap-2">
         <StatusBadge status={status} />
-        {!check.completedAt && <span className="text-xs text-ink-muted">The owner has not finished the Business Check.</span>}
+        {!check.completedAt && <span className="text-xs text-ink-muted">The owner has not finished the Business Health Check.</span>}
       </div>
 
       <DetailSection title="Contact"><ContactLines email={check.email} whatsapp={check.whatsapp} /></DetailSection>
 
-      <DetailSection title="Business Check">
+      <DetailSection title="Business Health Check">
         <dl className="grid grid-cols-2 gap-x-6 gap-y-3">
           <DetailField label={check.completedAt ? "Completed" : "Started"}>{formatDate(check.completedAt ?? check.createdAt)}</DetailField>
           <DetailField label="Main area">{mainArea ?? "-"}</DetailField>
@@ -257,7 +257,7 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
               </li>
             ))}
           </ol>
-        ) : <p className="text-sm text-ink-muted">No changes by the team yet. The first stages move by themselves as the owner goes through the Business Check.</p>}
+        ) : <p className="text-sm text-ink-muted">No changes by the team yet. The first stages move by themselves as the owner goes through the Business Health Check.</p>}
       </DetailSection>
 
       {/* Only the action that fits where this prospect is. A check with nothing to do next shows no actions. */}

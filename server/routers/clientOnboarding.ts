@@ -29,7 +29,7 @@ export const clientOnboardingRouter = router({
   candidates: manage.query(() => listOnboardingCandidates()),
   invitations: manage.query(() => listOnboardingInvitations()),
   metrics: manage.query(() => onboardingMetrics()),
-  /** Before the Current State Assessment payment is confirmed, a reason is required and recorded with the invitation. */
+  /** Before the Business Review payment is confirmed, a reason is required and recorded with the invitation. */
   invite: manage
     .input(z.object({ businessCheckId: z.number().int().positive(), overrideReason: z.string().trim().min(5, "Give the reason for inviting before payment.").max(500).optional() }))
     .mutation(async ({ ctx, input }) => {

@@ -65,7 +65,7 @@ async function database(what: string) {
 
 async function findCheck(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, token: string) {
   const [check] = await db.select().from(businessChecks).where(eq(businessChecks.publicToken, token)).limit(1);
-  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "We could not find that Business Check. Kindly start again." });
+  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "We could not find that Business Health Check. Kindly start again." });
   return check;
 }
 
@@ -91,9 +91,9 @@ export const businessCheckRouter = router({
     const ip = (ctx.req.ip || "unknown").toLowerCase();
     // The address cap first, so flooding with new emails cannot get past it; both count the attempt.
     if (!(await consumeLimit(LIMITS.checkStartIp, ip)) || !(await consumeLimit(LIMITS.checkStartEmail, `${ip}:${input.email}`))) {
-      throw tooMany("Kindly wait a few minutes before starting another Business Check.");
+      throw tooMany("Kindly wait a few minutes before starting another Business Health Check.");
     }
-    const db = await database("start your Business Check");
+    const db = await database("start your Business Health Check");
     const token = randomBytes(24).toString("base64url");
     await db.insert(businessChecks).values({
       publicToken: token,
@@ -122,8 +122,8 @@ export const businessCheckRouter = router({
   /** Finishes the check: works out the result on the server, writes the summary and emails both sides once. */
   submit: publicProcedure.input(z.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }): Promise<BusinessCheckResponse> => {
     // Each submission can run the AI summary and send two emails, so one check gets a few an hour (a retry included).
-    if (!(await consumeLimit(LIMITS.checkSubmit, input.token))) throw tooMany("Your Business Check has been sent. Kindly wait a while before sending it again.");
-    const db = await database("record your Business Check");
+    if (!(await consumeLimit(LIMITS.checkSubmit, input.token))) throw tooMany("Your Business Health Check has been sent. Kindly wait a while before sending it again.");
+    const db = await database("record your Business Health Check");
     const check = await findCheck(db, input.token);
     if (check.completedAt && check.resultJson && check.summaryJson && check.summarySource) {
       // Already submitted (a double click or a retry): return what was recorded, without emailing again.
@@ -186,7 +186,7 @@ export const businessCheckRouter = router({
       if (!(await consumeLimit(LIMITS.checkNext, input.token))) throw tooMany("Your request has been recorded. Kindly wait before sending another.");
       const db = await database("record your request");
       const check = await findCheck(db, input.token);
-      if (!check.completedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "Kindly finish the Business Check first." });
+      if (!check.completedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "Kindly finish the Business Health Check first." });
       // The Full Report: the same step as paying from the link in the summary email.
       if (input.choice === "report") {
         await askForFullReport(db, check, { source: "result_page", note: input.note });
@@ -216,7 +216,7 @@ export const businessCheckRouter = router({
           sender: "business_support",
           idempotencyKey: `business_checks:${check.id}:${input.choice}:office`,
           to: BUSINESS_SUPPORT_MAILBOX,
-          subject: `Business Check: ${check.businessName || check.fullName} asked for ${what}`,
+          subject: `Business Health Check: ${check.businessName || check.fullName} asked for ${what}`,
           body: [
             `${check.fullName} asked for ${what}.`,
             "",
@@ -226,7 +226,7 @@ export const businessCheckRouter = router({
             `Note: ${input.note || "None"}`,
             ...(bookedFor ? [`Booked on Calendly for: ${lagosTime(bookedFor)} (Lagos time)`] : []),
             "",
-            `Business Check #${check.id}, completed ${lagosTime(check.completedAt)} (Lagos time).`,
+            `Business Health Check #${check.id}, completed ${lagosTime(check.completedAt)} (Lagos time).`,
           ].join("\n"),
         });
       }

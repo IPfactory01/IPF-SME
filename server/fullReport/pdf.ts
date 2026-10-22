@@ -623,11 +623,11 @@ function cover(doc: Doc, report: FullReport) {
   facts(doc, [
     { label: "Prepared for", value: report.ownerName },
     { label: "Prepared by", value: `${BRAND.organisationName}, ${BRAND.productEndorsement.replace(/, by .*/, "")}` },
-    { label: "Built from", value: "Your Business Check and your Report Intake" },
+    { label: "Built from", value: "Your Business Health Check and your Report Intake" },
     { label: "Date", value: report.date },
     { label: "Reference", value: report.reference },
   ]);
-  callout(doc, "What this document is", "The outcome of your Business Check and Report Intake, brought into one place as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers. Read it as the start of a conversation: Section Nine lists what we still need from you.", C["highlight-ink"]);
+  callout(doc, "What this document is", "The outcome of your Business Health Check and Report Intake, brought into one place as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers. Read it as the start of a conversation: Section Nine lists what we still need from you.", C["highlight-ink"]);
 }
 
 const WORDS = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];

@@ -45,21 +45,22 @@ export const PROBLEM_AREAS: readonly ProblemArea[] = [
 export const PROMISE = ["Find it.", "Fix it.", "See the results."] as const;
 
 /**
- * Prices in naira (section 11). Ongoing support is deliberately unpriced: copy must not quote a figure. The Full Report
- * and Current State Assessment figures here are the DEFAULTS: what is charged and shown comes from the server
- * (server/businessSupportPrices.ts, which the FULL_REPORT_PRICE_NGN and CURRENT_STATE_PRICE_NGN settings override).
+ * Prices in naira, as ET set them on 21 October 2026 (Operational Business Plan, page 11): the Business Review at
+ * ₦600,000 and the Six-Week Fix at ₦1,500,000, each at the top of its range. The whole menu, with every other price,
+ * is shared/products.ts; these are the three the existing payment and report code reads. The Full Report and Business
+ * Review figures are the DEFAULTS: what is charged and shown comes from the server (server/businessSupportPrices.ts,
+ * which the FULL_REPORT_PRICE_NGN and CURRENT_STATE_PRICE_NGN settings override).
  */
 export const PRICES = {
   fullReport: 100_000,
-  currentState: 500_000,
-  fix: 1_200_000,
-  standardEngagementCap: 2_500_000,
+  currentState: 600_000,
+  fix: 1_500_000,
 } as const;
 
 /** The paid full report offered on the business check result. Independent of the discovery call. */
 export const FULL_REPORT = {
   name: "Your Full Report",
-  pitch: "The Business Check summary tells you where you stand. The Full Report tells you what to do about it.",
+  pitch: "The Business Health Check summary tells you where you stand. The Full Report tells you what to do about it.",
   includes: [
     "Every area of your outline in depth: what your answers show and what it means for your business",
     "The root cause behind each red and amber, and how they connect",
@@ -71,18 +72,21 @@ export const FULL_REPORT = {
   formMinutes: 12,
 } as const;
 
-/** What happens once the Current State Assessment is paid for (the journey copy and the payment confirmation email). */
+/**
+ * The Business Review (the code's `current_state`, its stored identifier): what happens once it is paid for, for the
+ * journey copy and the payment confirmation email.
+ */
 export const CURRENT_STATE = {
   /** The name everywhere: site, emails, admin, report. */
-  name: "Current State Assessment",
-  what: "Two weeks and two sessions that test the internal and external factors of your business, to locate the one problem to fix first and what to do about it.",
-  start: "Three working days to get set up, then we start.",
+  name: "Business Review",
+  what: "Two weeks and two Sessions that test your whole business, to find the one problem to fix first and what to do about it.",
+  start: "We take three working days to get set up; the review starts at your first Session.",
 } as const;
 
+/** One step of "How it works" on the home page (Operational Business Plan, page 18). */
 export type JourneyStep = {
-  id: "business-check" | "discovery-call" | "current-state" | "fix" | "plan";
+  id: "check" | "first-step" | "pay" | "records" | "deliver" | "next";
   name: string;
-  /** Site copy for the step (section 16, "How it works"). */
   body: string;
 };
 
@@ -95,13 +99,17 @@ export function formatNaira(amount: number) {
 /** The two prices the server can configure, as the site displays them. */
 export type ServicePrices = { fullReport: number; currentState: number };
 
-/** The whole journey, shown up front with prices (D1). `prices` are the server's; the default is the standard price list. */
+/**
+ * How every sale runs, from the free check to finished work (plan page 18). `prices` are the server's for the two items
+ * it can configure; every other price is on the menu (shared/products.ts).
+ */
 export const buildJourney = (prices: ServicePrices = PRICES): readonly JourneyStep[] => [
-  { id: "business-check", name: "Free Business Check", body: `Ten minutes. A first read on where you are stuck. Want the Full Report? ${formatNaira(prices.fullReport)}, by email.` },
-  { id: "discovery-call", name: "Discovery Call: a free 20-minute call", body: "We walk through your Business Check results, hear the problem in your words and tell you honestly whether we can help." },
-  { id: "current-state", name: CURRENT_STATE.name, body: `${CURRENT_STATE.what} ${formatNaira(prices.currentState)}, paid after the Discovery Call. ${CURRENT_STATE.start}` },
-  { id: "fix", name: "The Fix: six weeks", body: `One problem, one Measure of Success. You do the work; we give you the Prescription and the tools, and check it at a Weekly Check-in. ${formatNaira(PRICES.fix)}.` },
-  { id: "plan", name: "Your Plan", body: `We stop at about ${formatNaira(PRICES.standardEngagementCap)} with a plan in your hands. Want us to stay? We agree what that looks like.` },
+  { id: "check", name: "Free Business Health Check", body: "Ten minutes on your phone. A first read on where your business is stuck, in your own words." },
+  { id: "first-step", name: "Your first step", body: `The check names the product that fits first, and the one after it. Want the detail behind it? The Full Report, ${formatNaira(prices.fullReport)}, by email.` },
+  { id: "pay", name: "Pay by link", body: `The price and the delivery time are on the page. You pay by transfer or card before we start. For a Business Review (${formatNaira(prices.currentState)}) or a Six-Week Fix, we talk first on a free 20-minute Discovery Call.` },
+  { id: "records", name: "Send your records", body: "Your statements and answers, through a secure form. We check they are complete and confirm your delivery date within one working day." },
+  { id: "deliver", name: "We deliver", body: "Finished work, checked by a consultant who did not prepare it, with a 30-minute handover call. If we miss the date we gave you, ask for a full refund." },
+  { id: "next", name: "What comes next", body: "Thirty days on, we check in. If it helps, we suggest the next step, or a Monthly Service that keeps it going." },
 ];
 
 export const JOURNEY = buildJourney();

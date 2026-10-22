@@ -19,15 +19,15 @@ const quiet = () => {
 describe("the server-side Business Support price resolver", () => {
   it("keeps the real prices when nothing is configured, or the setting is blank", () => {
     expect(getBusinessSupportPrice("full_report", {})).toBe(100_000);
-    expect(getBusinessSupportPrice("current_state", {})).toBe(500_000);
+    expect(getBusinessSupportPrice("current_state", {})).toBe(600_000);
     expect(getBusinessSupportPrice("full_report", { FULL_REPORT_PRICE_NGN: "  " })).toBe(PRICES.fullReport);
-    expect(displayedPrices({})).toEqual({ fullReport: 100_000, currentState: 500_000 });
+    expect(displayedPrices({})).toEqual({ fullReport: 100_000, currentState: 600_000 });
   });
 
   it("takes a valid override for its own item only", () => {
     const env = { FULL_REPORT_PRICE_NGN: " 150000 " };
     expect(getBusinessSupportPrice("full_report", env)).toBe(150_000);
-    expect(getBusinessSupportPrice("current_state", env)).toBe(500_000);
+    expect(getBusinessSupportPrice("current_state", env)).toBe(600_000);
     expect(getBusinessSupportPrice("current_state", { CURRENT_STATE_PRICE_NGN: "450000" })).toBe(450_000);
     expect(displayedPrices({ CURRENT_STATE_PRICE_NGN: "450000" })).toEqual({ fullReport: 100_000, currentState: 450_000 });
   });
@@ -50,7 +50,7 @@ describe("the server-side Business Support price resolver", () => {
 
   it("falls back to the real price for display when a setting is unusable (nothing is chargeable then)", () => {
     quiet();
-    expect(displayedPrices({ FULL_REPORT_PRICE_NGN: "-5", CURRENT_STATE_PRICE_NGN: "abc" })).toEqual({ fullReport: 100_000, currentState: 500_000 });
+    expect(displayedPrices({ FULL_REPORT_PRICE_NGN: "-5", CURRENT_STATE_PRICE_NGN: "abc" })).toEqual({ fullReport: 100_000, currentState: 600_000 });
     expect(displayedPrices({ ...production, FULL_REPORT_PRICE_NGN: "100" }).fullReport).toBe(100_000);
   });
 

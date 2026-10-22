@@ -4,7 +4,7 @@ import type { Benchmark, FullReport, ReportBlock, ReportHealth, ReportSection } 
 
 /**
  * What the client room's Founder and Business tabs show, taken from the owner's Full Report when there is one (the
- * same deterministic report they were sent), otherwise from their Business Check. Nothing here is written afresh, so
+ * same deterministic report they were sent), otherwise from their Business Health Check. Nothing here is written afresh, so
  * the room never says something the report does not.
  */
 
@@ -20,7 +20,7 @@ export type InsightArea = {
 };
 
 export type RoomInsight = {
-  source: "Full Report" | "Business Check";
+  source: "Full Report" | "Business Health Check";
   founder: {
     readiness: { label: string; health: ReportHealth };
     /** Sections One and Two of the report, as the report lays them out. Empty without a report. */
@@ -77,7 +77,7 @@ export function roomInsight(input: { report: FullReport | null; result: CheckRes
   const seen = result.founder.seen ? DISC_STYLES[result.founder.seen] : undefined;
   const founderHealth: Health | undefined = result.outline.find((row) => row.area === 0)?.health;
   return {
-    source: "Business Check",
+    source: "Business Health Check",
     founder: {
       readiness: { label: READINESS_LABELS[result.founder.level], health: founderHealth ?? "not_assessed" },
       sections: [],
@@ -90,7 +90,7 @@ export function roomInsight(input: { report: FullReport | null; result: CheckRes
     areas: result.outline.filter((row) => !FOUNDER_AREAS.has(row.name) && row.area > 1).map((row) => ({
       area: row.name,
       health: row.health,
-      finding: row.answer ? `“${row.answer}”` : "From your Business Check answers.",
+      finding: row.answer ? `“${row.answer}”` : "From your Business Health Check answers.",
       reading: null,
       benchmarks: [],
     })),

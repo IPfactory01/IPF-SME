@@ -142,7 +142,7 @@ export type ReportInput = {
   answers: Answers;
   result: CheckResult;
   intake: ReportIntake;
-  /** What the Current State Assessment costs today (the server's price). Defaults to the standard price list. */
+  /** What the Business Review costs today (the server's price). Defaults to the standard price list. */
   currentStatePrice?: number;
 };
 
@@ -726,7 +726,7 @@ export function buildFullReport(input: ReportInput): FullReport {
     ...(intake.loans === "not_sure" ? [["Loans and what they cost each month", "Repayments come before growth."] as [string, string]] : []),
     ...(intake.registration === "not_sure" ? [["How the business is registered", "It decides which contracts, loans and tax rules apply."] as [string, string]] : []),
     ...(intake.repeat === "not_sure" ? [["Whether customers come back", "Repeat business is the cheapest growth there is."] as [string, string]] : []),
-    ...(!founder.instinct ? [["The behaviour questions in the Business Check", "Section One is left open without them."] as [string, string]] : []),
+    ...(!founder.instinct ? [["The behaviour questions in the Business Health Check", "Section One is left open without them."] as [string, string]] : []),
   ];
   const openRecord = [market, offer, model, sales, operations, finance, risk, ...extraReadings].flatMap((item) => item.notes);
 
@@ -737,14 +737,14 @@ export function buildFullReport(input: ReportInput): FullReport {
     number: 1, title: "Founder readiness",
     standfirst: `${READINESS_LABELS[founder.level]}. No business outgrows the person running it.`,
     health: outlineRow(result, 0)?.health ?? "not_assessed",
-    overview: "This section asks whether you are equipped for the business this plan describes, and names the gaps to close first. It is built from your answers about yourself in the Business Check.",
+    overview: "This section asks whether you are equipped for the business this plan describes, and names the gaps to close first. It is built from your answers about yourself in the Business Health Check.",
     scope: ["Your behavioural profile.", "The four money basics.", "Time, the hard calls and who carries the business with you."],
     blocks: [
       s1.sub("Your behavioural profile"),
       ...(style ? [
         { kind: "facts" as const, rows: [{ label: "Under pressure", value: `${style.name}. ${style.strength}` }, ...(seen ? [{ label: "Others see you as", value: `${seen.name}. ${seen.strength}` }] : []), { label: "Watch for", value: style.watch }] },
         { kind: "numbered" as const, title: "Why it matters now", items: ["On your own, behaviour is a matter of style. With a team, it becomes how the business runs.", ...(seen && seen.name !== style.name ? [`You see yourself as a ${style.name.toLowerCase()} and others see a ${seen.name.toLowerCase()}. Ask two people who work with you which is right: the gap is where misunderstandings start.`] : []), `Your watch-out is a pattern, not a flaw: ${lower(style.watch)} Name it, then design around it.`] },
-      ] : [{ kind: "paragraph" as const, text: "You did not complete the behaviour questions in the Business Check, so this part is left open rather than guessed at. Section Nine lists it." }]),
+      ] : [{ kind: "paragraph" as const, text: "You did not complete the behaviour questions in the Business Health Check, so this part is left open rather than guessed at. Section Nine lists it." }]),
       ...(Array.isArray(answers.f_finance) ? [
         s1.sub("The four money basics"),
         { kind: "table" as const, columns: ["The basic", "Today", "Weight in this plan"], widths: [0.5, 0.2, 0.3], rows: Object.entries(FINANCE_SKILLS).map(([key, skill]) => [upperFirst(skill), (answers.f_finance as string[]).includes(key) ? "Yes" : "Not yet", key === "pl" ? "High" : "Critical"]) },
@@ -955,9 +955,9 @@ export function buildFullReport(input: ReportInput): FullReport {
     { label: "Top three customers", figure: labelOf(TOP_CUSTOMER_SHARE, intake.topCustomerShare), meaning: intake.topCustomerShare === "over_50" ? "Losing one would change the business overnight" : "Share of your sales" },
   ];
   const background: ReportBackground = {
-    overview: `You took the Business Check and completed the Report Intake. This plan brings what you told us into one place, as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers.`,
+    overview: `You took the Business Health Check and completed the Report Intake. This plan brings what you told us into one place, as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers.`,
     engagement: [
-      "Your Business Check: the ten places a business gets stuck, and you as a founder, in your words.",
+      "Your Business Health Check: the ten places a business gets stuck, and you as a founder, in your words.",
       `Your Report Intake, completed ${reportDate(input.date)}: what you sell, who buys, how the business runs, and the numbers.`,
       "This plan: built by fixed rules from both, so every finding traces back to an answer you gave.",
     ],
@@ -998,7 +998,7 @@ export function buildFullReport(input: ReportInput): FullReport {
     background,
     sections,
     appendix: appendix(answers, intake),
-    method: `Built by The Shift's fixed rules from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on ${reportDate(input.date)}. It is not an audit, a valuation, or financial, legal or tax advice.`,
+    method: `Built by The Shift's fixed rules from the Business Health Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on ${reportDate(input.date)}. It is not an audit, a valuation, or financial, legal or tax advice.`,
   };
 
   /** The three findings that matter most, root cause first. */
@@ -1164,7 +1164,7 @@ function appendix(answers: Answers, intake: ReportIntake): FullReport["appendix"
     goal: intake.revenueTarget ? `${sentence(intake.goal)} Monthly sales wanted in 12 months: ${formatNaira(intake.revenueTarget)}.` : intake.goal,
   };
   return [
-    { title: "Your Business Check", rows: check },
+    { title: "Your Business Health Check", rows: check },
     { title: "Your Report Intake", rows: INTAKE_QUESTIONS.map((question) => ({ question: intakeWording(question, earnsByDeal(intake.products)).prompt, answer: intakeAnswers[question.id] })) },
   ];
 }

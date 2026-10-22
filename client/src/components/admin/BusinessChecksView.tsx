@@ -11,7 +11,7 @@ import BusinessCheckDetail from "./BusinessCheckDetail";
 import { formatDate, readinessShort } from "./format";
 
 /**
- * Every Free Business Check, as a compact list: who they are, where they are in the funnel, and whether they need
+ * Every Free Business Health Check, as a compact list: who they are, where they are in the funnel, and whether they need
  * attention. The full record opens in a drawer. These are prospects: nothing here creates a user or a business.
  */
 export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (section: AdminSectionId) => void }) {
@@ -42,7 +42,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
   return (
     <div className="space-y-5 p-4 sm:p-6">
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Summary">
-        <AdminMetricCard label="Business Checks" value={rows.length} />
+        <AdminMetricCard label="Business Health Checks" value={rows.length} />
         <AdminMetricCard label="Completed" value={rows.filter(row => row.completedAt).length} />
         <AdminMetricCard label="Discovery Calls requested" value={rows.filter(row => row.callRequestedAt).length} />
         <AdminMetricCard label="Ready to onboard" value={rows.filter(row => isReadyToOnboard(row.status)).length} />
@@ -69,7 +69,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
       </div>
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-        <Input aria-label="Search Business Checks" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search name, business, email or WhatsApp" className="h-9 rounded-none sm:max-w-xs" />
+        <Input aria-label="Search Business Health Checks" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search name, business, email or WhatsApp" className="h-9 rounded-none sm:max-w-xs" />
         <span className="text-xs text-ink-muted sm:ml-auto">{visible.length} of {rows.length}</span>
       </div>
 
@@ -80,7 +80,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
               <tr>
                 <th scope="col" className={`${TH} w-[44%] sm:w-[34%] md:w-[28%]`}>Prospect</th>
                 <th scope="col" className={`${TH} hidden w-[22%] sm:table-cell`}>Business</th>
-                <th scope="col" className={`${TH} hidden w-[18%] md:table-cell`}>Business Check</th>
+                <th scope="col" className={`${TH} hidden w-[18%] md:table-cell`}>Business Health Check</th>
                 <th scope="col" className={`${TH} hidden w-[18%] md:table-cell`}>Main Finding</th>
                 <th scope="col" className={`${TH} w-[56%] sm:w-[44%] md:w-[14%]`}>Status</th>
               </tr>
@@ -113,7 +113,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
                   </td>
                 </ClickableRow>
               ))}
-              {visible.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-sm text-ink-muted">No Business Checks match.</td></tr>}
+              {visible.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-sm text-ink-muted">No Business Health Checks match.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -128,7 +128,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
           <div className="max-h-80 overflow-auto">
             <table className="w-full text-left text-xs">
               <thead className="sticky top-0 bg-paper text-ink-muted"><tr><th className="p-2">Recipient</th><th className="p-2">Email</th><th className="p-2">Status</th><th className="p-2">Related record</th><th className="p-2">Provider ID</th><th className="p-2">Last update</th></tr></thead>
-              <tbody>{emailStatus.data.map((row, index) => <tr key={`${row.recipientEmail}-${row.attemptedAt}-${index}`} className="border-t border-line"><td className="p-2">{row.recipientEmail}</td><td className="p-2">{row.purpose}</td><td className="p-2">{row.latestState}</td><td className="p-2">{row.businessCheckId ? `Business Check #${row.businessCheckId}` : row.paymentRequestId ? `Payment #${row.paymentRequestId}` : row.invitationId ? `Invitation #${row.invitationId}` : "—"}</td><td className="max-w-48 truncate p-2" title={row.providerMessageId ?? undefined}>{row.providerMessageId ?? "—"}</td><td className="p-2">{new Date(row.lastEventAt ?? row.acceptedAt ?? row.attemptedAt).toLocaleString()}</td></tr>)}</tbody>
+              <tbody>{emailStatus.data.map((row, index) => <tr key={`${row.recipientEmail}-${row.attemptedAt}-${index}`} className="border-t border-line"><td className="p-2">{row.recipientEmail}</td><td className="p-2">{row.purpose}</td><td className="p-2">{row.latestState}</td><td className="p-2">{row.businessCheckId ? `Business Health Check #${row.businessCheckId}` : row.paymentRequestId ? `Payment #${row.paymentRequestId}` : row.invitationId ? `Invitation #${row.invitationId}` : "—"}</td><td className="max-w-48 truncate p-2" title={row.providerMessageId ?? undefined}>{row.providerMessageId ?? "—"}</td><td className="p-2">{new Date(row.lastEventAt ?? row.acceptedAt ?? row.attemptedAt).toLocaleString()}</td></tr>)}</tbody>
             </table>
           </div>
         ) : <p className="p-4 text-sm text-ink-muted">No Business Support email attempts have been recorded.</p>}
@@ -137,7 +137,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
       <RecordDrawer
         open={opened !== null}
         onOpenChange={open => !open && setOpenId(null)}
-        title={opened?.fullName ?? "Business Check"}
+        title={opened?.fullName ?? "Business Health Check"}
         description={opened?.businessName ?? "No business name given"}
       >
         {opened && <BusinessCheckDetail businessCheckId={opened.id} onOpenSection={onOpenSection} onClose={() => setOpenId(null)} />}

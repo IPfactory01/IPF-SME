@@ -126,12 +126,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("which sections each person sees (decided from what the server resolved)", () => {
-  it("shows the Super Admin every section, in funnel order, opening on Business Checks", () => {
+  it("shows the Super Admin every section, in funnel order, opening on Business Health Checks", () => {
     expect(visibleAdminSections(SUPER).map(section => section.id)).toEqual(["checks", "calls", "onboarding", "engagements", "clients", "team", "jump"]);
     renderConsole();
-    expect(tabs()).toEqual(["Business Checks", "Discovery Calls", "Client Onboarding", "Engagements", "Clients", "Admin Team", "JUMP Programme (Legacy)"]);
-    expect(screen.getByRole("button", { name: "Business Checks" }).getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("heading", { name: "Business Checks" })).toBeTruthy();
+    expect(tabs()).toEqual(["Business Health Checks", "Discovery Calls", "Client Onboarding", "Engagements", "Clients", "Admin Team", "JUMP Programme (Legacy)"]);
+    expect(screen.getByRole("button", { name: "Business Health Checks" }).getAttribute("aria-current")).toBe("page");
+    expect(screen.getByRole("heading", { name: "Business Health Checks" })).toBeTruthy();
     expect(screen.queryByText("JUMP REGISTRATION DESK")).toBeNull();
   });
 
@@ -188,10 +188,10 @@ describe("which sections each person sees (decided from what the server resolved
   });
 });
 
-describe("Business Checks table", () => {
+describe("Business Health Checks table", () => {
   it("shows five compact columns and nothing else", () => {
     renderConsole();
-    expect(headers()).toEqual(["Prospect", "Business", "Business Check", "Main Finding", "Status"]);
+    expect(headers()).toEqual(["Prospect", "Business", "Business Health Check", "Main Finding", "Status"]);
   });
 
   it("does not spread database fields across the table", () => {
@@ -247,15 +247,15 @@ describe("Business Checks table", () => {
     api.checks = [check(), check({ id: 2, fullName: "B", callRequestedAt: null, pipelineStage: "qualified_lead", reportRequestedAt: new Date("2026-10-06T10:00:00Z") }), check({ id: 3, fullName: "C", pipelineStage: "opportunity" }), check({ id: 4, fullName: "D", completedAt: null, callRequestedAt: null, pipelineStage: "lead" })];
     renderConsole();
     const counts = Object.fromEntries(Array.from(screen.getByLabelText("Summary").children).map(item => [item.querySelector("dt")!.textContent, item.querySelector("dd")!.textContent]));
-    expect(counts).toEqual({ "Business Checks": "4", Completed: "3", "Discovery Calls requested": "2", "Ready to onboard": "1", "Full Reports requested": "1" });
+    expect(counts).toEqual({ "Business Health Checks": "4", Completed: "3", "Discovery Calls requested": "2", "Ready to onboard": "1", "Full Reports requested": "1" });
   });
 
   it("searches and filters, and keeps them when a record is opened and closed", () => {
     renderConsole();
-    fireEvent.change(screen.getByLabelText("Search Business Checks"), { target: { value: "bola" } });
+    fireEvent.change(screen.getByLabelText("Search Business Health Checks"), { target: { value: "bola" } });
     expect(screen.queryByText("Ada Okafor")).toBeNull();
     expect(screen.getByText("Bola Quiet")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Search Business Checks"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("Search Business Health Checks"), { target: { value: "" } });
     // The stage tabs replace the old "Discovery Call requested only" checkbox.
     expect(screen.queryByLabelText("Discovery Call requested only")).toBeNull();
     fireEvent.click(screen.getByRole("tab", { name: "Discovery Call booked 1" }));
@@ -280,7 +280,7 @@ describe("Business Checks table", () => {
   });
 });
 
-describe("Business Check record drawer", () => {
+describe("Business Health Check record drawer", () => {
   it("opens from anywhere on the row, with the right prospect", () => {
     renderConsole();
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -334,7 +334,7 @@ describe("Business Check record drawer", () => {
     renderConsole();
     openRow("Ada Okafor");
     const funnel = drawer().getByRole("heading", { name: "Funnel" }).closest("section")!;
-    for (const text of ["Business Check completed", "Discovery Call requested", "Discovery Call booked for", "5 Oct 2026", "Current stage", "Discovery Call booked"]) expect(funnel.textContent).toContain(text);
+    for (const text of ["Business Health Check completed", "Discovery Call requested", "Discovery Call booked for", "5 Oct 2026", "Current stage", "Discovery Call booked"]) expect(funnel.textContent).toContain(text);
   });
 
   it("offers only the action that fits: a requested call leads to Discovery Calls", () => {
@@ -364,7 +364,7 @@ describe("Business Check record drawer", () => {
     api.details[1] = detailFor({ completedAt: null, readiness: null, route: null, primaryArea: null, pipelineStage: "lead", callRequestedAt: null, summary: null, outline: null, primaryAreaNumber: null });
     renderConsole();
     openRow("Ada Okafor");
-    expect(drawer().getByText("The owner has not finished the Business Check.")).toBeTruthy();
+    expect(drawer().getByText("The owner has not finished the Business Health Check.")).toBeTruthy();
     expect(drawer().getByText("No result yet.")).toBeTruthy();
     expect(drawer().queryByRole("heading", { name: "Business outline" })).toBeNull();
     expect(drawer().queryByRole("heading", { name: "Recommended support" })).toBeNull();
@@ -557,7 +557,7 @@ describe("Client Onboarding view", () => {
 
   it("says the invitation goes out by itself once the assessment is paid", () => {
     open();
-    expect(screen.getByRole("note").textContent).toBe("The invitation goes out by itself when the Current State Assessment payment is confirmed. Invite by hand only to resend or for an agreed exception.");
+    expect(screen.getByRole("note").textContent).toBe("The invitation goes out by itself when the Business Review payment is confirmed. Invite by hand only to resend or for an agreed exception.");
   });
 
   it("invites a Won business at once, without asking", () => {
@@ -575,7 +575,7 @@ describe("Client Onboarding view", () => {
     open();
     fireEvent.click(screen.getByRole("button", { name: "Invite to onboard" }));
     const form = within(screen.getByRole("form", { name: "Invite before payment" }));
-    expect(form.getByText("Ada Okafor is at Opportunity: the Current State Assessment is not paid yet.")).toBeTruthy();
+    expect(form.getByText("Ada Okafor is at Opportunity: the Business Review is not paid yet.")).toBeTruthy();
     expect((form.getByRole("button", { name: "Invite anyway" }) as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(form.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByRole("form", { name: "Invite before payment" })).toBeNull();
@@ -628,7 +628,7 @@ describe("Client Onboarding view", () => {
   it("separates the people and workspaces from the prospects in the counts", () => {
     open();
     const counts = Object.fromEntries(Array.from(document.querySelectorAll("dl > div")).map(item => [item.querySelector("dt")!.textContent, item.querySelector("dd")!.textContent]));
-    expect(counts).toMatchObject({ "Business Checks": "3", "Portal users": "1", Businesses: "1", Memberships: "1" });
+    expect(counts).toMatchObject({ "Business Health Checks": "3", "Portal users": "1", Businesses: "1", Memberships: "1" });
   });
 });
 
@@ -650,7 +650,7 @@ describe("Clients view", () => {
   });
 });
 
-describe("the commercial pipeline in Business Checks", () => {
+describe("the commercial pipeline in Business Health Checks", () => {
   it("shows every pipeline stage as a tab with its count, and filters the table by stage", () => {
     api.checks = [
       check({ id: 1, fullName: "P One", pipelineStage: "opportunity" }),
@@ -697,7 +697,7 @@ describe("the commercial pipeline in Business Checks", () => {
     expect(move.queryByRole("button", { name: "Discovery Call requested" })).toBeNull();
     expect(move.queryByRole("button", { name: "Lead" })).toBeNull();
     expect(move.queryByRole("button", { name: "Won" })).toBeNull();
-    expect(move.getByText("Won is set by confirming the Current State Assessment payment.")).toBeTruthy();
+    expect(move.getByText("Won is set by confirming the Business Review payment.")).toBeTruthy();
     for (const name of ["Qualified lead", "Opportunity", "Lost", "Nurture", "Referred"]) expect(move.getByRole("button", { name })).toBeTruthy();
     fireEvent.change(move.getByLabelText("Note (optional)"), { target: { value: "  Not ready until January  " } });
     fireEvent.click(move.getByRole("button", { name: "Nurture" }));
@@ -739,7 +739,7 @@ describe("the commercial pipeline in Business Checks", () => {
   });
 });
 
-describe("full report requests in Business Checks", () => {
+describe("full report requests in Business Health Checks", () => {
   it("marks a lead who asked for the ₦100,000 report in the list, beside their stage", () => {
     api.checks = [check({ reportRequestedAt: new Date("2026-10-06T10:00:00Z") }), check({ id: 2, fullName: "Bola Quiet", businessName: "Bola Bakes", email: "bola@example.test" })];
     renderConsole();
@@ -765,7 +765,7 @@ describe("full report requests in Business Checks", () => {
   });
 });
 
-describe("payments in Business Checks", () => {
+describe("payments in Business Health Checks", () => {
   // As the server sends it: the status the team sees (displayStatus) and the end of the 48-hour window (payBy).
   const payment = (over: Record<string, unknown> = {}) => {
     const row = {
@@ -783,41 +783,41 @@ describe("payments in Business Checks", () => {
     ];
     renderConsole();
     expect(within(rowOf("Ada Okafor")).getByText("Full Report paid")).toBeTruthy();
-    expect(within(rowOf("Ada Okafor")).getByText("Current State Assessment: proof received")).toBeTruthy();
+    expect(within(rowOf("Ada Okafor")).getByText("Business Review: proof received")).toBeTruthy();
     expect(within(rowOf("Bola Quiet")).getByText("Full Report: awaiting payment")).toBeTruthy();
     expect(within(rowOf("Bola Quiet")).queryByText("Full Report requested")).toBeNull();
   });
 
-  it("sends the Current State Assessment payment link from the record", () => {
+  it("sends the Business Review payment link from the record", () => {
     renderConsole();
     openRow("Ada Okafor");
     expect(payments().getByText("Your Full Report")).toBeTruthy();
     expect(payments().getByText("₦500,000")).toBeTruthy();
     expect(payments().getAllByText("Payment link not sent.")).toHaveLength(2);
-    const currentState = within(payments().getByRole("listitem", { name: "Current State Assessment" }));
+    const currentState = within(payments().getByRole("listitem", { name: "Business Review" }));
     fireEvent.click(currentState.getByRole("button", { name: "Send the payment link" }));
     expect(api.mutations.requestPayment).toEqual([{ businessCheckId: 1, item: "current_state" }]);
   });
 
-  it("sends the payment confirmation again for a paid Current State Assessment, and shows how the first one went", () => {
+  it("sends the payment confirmation again for a paid Business Review, and shows how the first one went", () => {
     api.details[1] = detailFor({
       payments: [payment({ status: "confirmed", confirmedAt: new Date("2026-10-09T10:00:00Z") })],
       stageHistory: [{ id: 5, action: "payment_confirmation_sent", from: null, to: null, note: null, scheduledFor: null, item: "current_state", reference: "TS-CS-000001", delivery: "Failed", by: "Emmanuel Tarfa", at: new Date("2026-10-09T10:01:00Z") }],
     });
     renderConsole();
     openRow("Ada Okafor");
-    const currentState = within(payments().getByRole("listitem", { name: "Current State Assessment" }));
+    const currentState = within(payments().getByRole("listitem", { name: "Business Review" }));
     fireEvent.click(currentState.getByRole("button", { name: "Send the confirmation again" }));
     expect(api.mutations.resendConfirmation).toEqual([{ paymentRequestId: 7 }]);
     const history = within(drawer().getByRole("list", { name: "Stage history" })).getAllByRole("listitem").map(item => item.textContent);
-    expect(history[0]).toMatch(/^Payment confirmation emailed: Current State Assessment \(TS-CS-000001\) · the email failed/);
+    expect(history[0]).toMatch(/^Payment confirmation emailed: Business Review \(TS-CS-000001\) · the email failed/);
   });
 
   it("has no proof-of-payment step: confirming by hand is a fallback for Paystack, explained before it happens", () => {
     api.details[1] = detailFor({ payments: [payment()] });
     renderConsole();
     openRow("Ada Okafor");
-    const currentState = within(payments().getByRole("listitem", { name: "Current State Assessment" }));
+    const currentState = within(payments().getByRole("listitem", { name: "Business Review" }));
     expect(currentState.getByText("Awaiting payment")).toBeTruthy();
     expect(currentState.getByText("TS-CS-000001")).toBeTruthy();
     expect(currentState.queryByRole("button", { name: "Proof received" })).toBeNull();
@@ -825,7 +825,7 @@ describe("payments in Business Checks", () => {
     fireEvent.click(currentState.getByRole("button", { name: "Confirm by hand" }));
     expect(api.mutations.confirmPayment).toEqual([]);
     expect(currentState.getByText(/Payments confirm themselves when Paystack confirms them. Only confirm by hand if Paystack shows ₦500,000 paid with a reference starting TS-CS-000001/)).toBeTruthy();
-    expect(currentState.getByText(/the business moves to Won and they get a link to set up their client account, where the Current State Assessment starts/)).toBeTruthy();
+    expect(currentState.getByText(/the business moves to Won and they get a link to set up their client account, where the Business Review starts/)).toBeTruthy();
     fireEvent.change(currentState.getByLabelText("Note (optional)"), { target: { value: " TS-CS-000001-1a2b3c4d " } });
     fireEvent.click(currentState.getByRole("button", { name: "Yes, Paystack shows it paid" }));
     expect(api.mutations.confirmPayment).toEqual([{ paymentRequestId: 7, note: "TS-CS-000001-1a2b3c4d" }]);
@@ -835,7 +835,7 @@ describe("payments in Business Checks", () => {
     api.details[1] = detailFor({ payments: [payment({ status: "confirmed", confirmedAt: new Date("2026-10-09T10:00:00Z"), note: "GTB ref 123" })] });
     renderConsole();
     openRow("Ada Okafor");
-    const currentState = within(payments().getByRole("listitem", { name: "Current State Assessment" }));
+    const currentState = within(payments().getByRole("listitem", { name: "Business Review" }));
     expect(currentState.getByText("Paid")).toBeTruthy();
     expect(currentState.getByText("Paid, confirmed 9 Oct 2026")).toBeTruthy();
     expect(currentState.getAllByRole("button").map(button => button.textContent)).toEqual(["Send the confirmation again"]);
@@ -845,15 +845,15 @@ describe("payments in Business Checks", () => {
     api.checks = [check({ payments: { current_state: "expired" } })];
     api.details[1] = detailFor({ payments: [payment()] });
     renderConsole();
-    expect(within(rowOf("Ada Okafor")).getByText("Current State Assessment: 48 hours passed")).toBeTruthy();
+    expect(within(rowOf("Ada Okafor")).getByText("Business Review: 48 hours passed")).toBeTruthy();
     openRow("Ada Okafor");
-    expect(within(payments().getByRole("listitem", { name: "Current State Assessment" })).getByText(/pay by 10 Oct 2026/)).toBeTruthy();
+    expect(within(payments().getByRole("listitem", { name: "Business Review" })).getByText(/pay by 10 Oct 2026/)).toBeTruthy();
     cleanup();
 
     api.details[1] = detailFor({ payments: [payment({ displayStatus: "expired" })] });
     renderConsole();
     openRow("Ada Okafor");
-    const currentState = within(payments().getByRole("listitem", { name: "Current State Assessment" }));
+    const currentState = within(payments().getByRole("listitem", { name: "Business Review" }));
     expect(currentState.getByText("48 hours passed")).toBeTruthy();
     expect(currentState.getByText("The 48 hours have passed with no payment. Send the link again for a new window, or move the business to Lost.")).toBeTruthy();
     expect(currentState.getAllByRole("button").map(button => button.textContent)).toEqual(["Send the link again", "Confirm by hand"]);

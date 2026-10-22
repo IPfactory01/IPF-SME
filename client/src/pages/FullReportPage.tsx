@@ -273,7 +273,7 @@ export default function FullReportPage() {
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">Your Report Intake</p>
       <h1 className="mt-2 font-serif text-3xl font-bold sm:text-4xl">{firstName ? `${firstName}, seventeen questions` : "Seventeen questions"} and your Full Report is done</h1>
       <p className="mt-3 text-ink-soft">
-        About {FULL_REPORT.formMinutes} minutes. Your Full Report{businessName ? ` for ${businessName}` : ""} is built from these answers and your Business Check, and emailed to <span className="font-medium text-ink">{email}</span> the moment you finish. Estimates are fine.
+        About {FULL_REPORT.formMinutes} minutes. Your Full Report{businessName ? ` for ${businessName}` : ""} is built from these answers and your Business Health Check, and emailed to <span className="font-medium text-ink">{email}</span> the moment you finish. Estimates are fine.
       </p>
 
       <form onSubmit={onSubmit} noValidate className="mt-8 space-y-10">

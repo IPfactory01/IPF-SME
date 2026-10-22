@@ -1,5 +1,5 @@
 /**
- * Current State Assessment Sessions booked on Calendly appear on the engagement by themselves, on PostgreSQL (PGlite on
+ * Business Review Sessions booked on Calendly appear on the engagement by themselves, on PostgreSQL (PGlite on
  * every run, plus TEST_DATABASE_URL via `pnpm test:db`). Calendly itself is stubbed; test/server/calendly.test.ts
  * covers how its answers are read.
  */
@@ -37,7 +37,7 @@ for (const target of targets) {
     async function engagement() {
       const [check] = await db.insert(schema.businessChecks).values({ publicToken: unique("check"), fullName: "Ada Example", email: `${unique("ada")}@example.test`, businessName: "Ada Foods", stage: "operating", answersJson: "{}" }).returning();
       const [row] = await db.insert(schema.engagements).values({ businessCheckId: check.id, createdAt: at("2026-10-16T08:00:00Z") }).returning();
-      for (const [order, title] of [[7, "Current State Assessment Session 1"], [6, "Current State Assessment Session 2"]] as const) {
+      for (const [order, title] of [[7, "Business Review Session 1"], [6, "Business Review Session 2"]] as const) {
         await db.insert(schema.engagementSessions).values({ engagementId: row.id, kind: "assessment_call", title, durationMinutes: 90, weekNumber: title.endsWith("1") ? 1 : 2, sortOrder: order });
       }
       return { engagement: row as { id: number; createdAt: Date }, email: check.email as string };
@@ -66,8 +66,8 @@ for (const target of targets) {
       ];
       expect(await syncSessionBookings(db, row, email)).toBe(2);
       const [one, two] = await sessionsOf(row.id);
-      expect(one).toMatchObject({ title: "Current State Assessment Session 1", scheduledFor: at("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1" });
-      expect(two).toMatchObject({ title: "Current State Assessment Session 2", scheduledFor: at("2026-10-30T09:00:00Z"), durationMinutes: 60, meetingLink: null });
+      expect(one).toMatchObject({ title: "Business Review Session 1", scheduledFor: at("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1" });
+      expect(two).toMatchObject({ title: "Business Review Session 2", scheduledFor: at("2026-10-30T09:00:00Z"), durationMinutes: 60, meetingLink: null });
       // Asked for the owner's bookings from a day before the engagement began.
       expect(calendly.asked[0]).toEqual({ email, since: at("2026-10-15T08:00:00Z") });
       const audit = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_session_booked"));

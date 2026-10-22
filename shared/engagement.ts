@@ -1,7 +1,8 @@
 import { CURRENT_STATE } from "./businessSupport";
+import { METHOD } from "./method";
 
 /**
- * The engagement room: one record per paying client, from the Current State Assessment to the plan (concept note §17,
+ * The engagement room: one record per paying client, from the Business Review to the plan (concept note §17,
  * PRD F7 and F8). One source of truth for its vocabulary, the stage templates and who sees what. The database stores
  * the identifiers below; people only ever see the labels.
  *
@@ -19,7 +20,7 @@ export type EngagementStage = (typeof ENGAGEMENT_STAGES)[number];
 export const ENGAGEMENT_STAGE_LABELS: Record<EngagementStage, string> = {
   setting_up: "Getting set up",
   assessment: CURRENT_STATE.name,
-  fix: "The Fix",
+  fix: METHOD.fix,
   plan: "Your Plan",
   closed: "Closed",
 };
@@ -28,7 +29,7 @@ export const ENGAGEMENT_STAGE_LABELS: Record<EngagementStage, string> = {
 export const ENGAGEMENT_STAGE_SUMMARIES: Record<EngagementStage, string> = {
   setting_up: "Three working days: we send your Data Requests, name your team and book both Sessions.",
   assessment: CURRENT_STATE.what,
-  fix: "One problem and one Measure of Success. You do the work; we give you the Prescription and check it at a Weekly Check-in.",
+  fix: "One problem and one Measure of Success. Your team does the work; we give you the Prescription and the tools, and review it at a Weekly Check-in.",
   plan: "The plan in your hands, and what support looks like from here.",
   closed: "This engagement is closed.",
 };
@@ -73,14 +74,14 @@ export type EngagementTaskSide = (typeof ENGAGEMENT_TASK_SIDES)[number];
 export const ENGAGEMENT_TASK_SIDE_LABELS: Record<EngagementTaskSide, string> = { client: "You", ipf: "IP Factory" };
 
 /**
- * The Current State Assessment tests both internal and external factors (ET, 10 October): internal is the business
+ * The Business Review tests both internal and external factors (ET, 10 October): internal is the business
  * itself (numbers, prices, people, how the week runs); external is around it (customers, competitors, the market).
  */
 export const ENGAGEMENT_TASK_FACTORS = ["internal", "external"] as const;
 export type EngagementTaskFactor = (typeof ENGAGEMENT_TASK_FACTORS)[number];
 export const ENGAGEMENT_TASK_FACTOR_LABELS: Record<EngagementTaskFactor, string> = { internal: "Internal", external: "External" };
 
-/** The Current State Assessment runs two weeks; the fix six. The room counts days and weeks against these. */
+/** The Business Review runs two weeks; the fix six. The room counts days and weeks against these. */
 export const ASSESSMENT_WEEKS = 2;
 export const ASSESSMENT_DAYS = 14;
 
@@ -106,7 +107,7 @@ export const ENGAGEMENT_DELIVERABLE_STATUSES = ["draft", "awaiting_approval", "a
 export type EngagementDeliverableStatus = (typeof ENGAGEMENT_DELIVERABLE_STATUSES)[number];
 
 /**
- * What a new engagement starts with (the Current State Assessment template), drawn from how IP Factory's own
+ * What a new engagement starts with (the Business Review template), drawn from how IP Factory's own
  * assessment proposals scope the work, cut down for a two-week, two-call engagement. The data requests follow the
  * concept note's onboarding list, so the first call is analysis, not collection. The team edits, adds or cancels items.
  */

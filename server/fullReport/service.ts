@@ -172,7 +172,7 @@ export async function submitReportIntake(db: Database, token: string, rawIntake:
       `Fix first: ${report.onePage.fixFirst.area}`,
       `Delivery: ${delivery.status}`,
       "",
-      `Business check #${claimed.businessCheckId}.`,
+      `Business Health Check #${claimed.businessCheckId}.`,
     ].join("\n"),
   }).catch(() => undefined);
   return { delivered: true, deliveryStatus: delivery.status, fileName: fileName(report), pdf: pdf.toString("base64") };

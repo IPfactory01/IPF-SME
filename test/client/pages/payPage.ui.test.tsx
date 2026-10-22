@@ -92,12 +92,12 @@ describe("the pay page", () => {
     expect(screen.getByRole("button", { name: /Opening Paystack/ })).toBeTruthy();
   });
 
-  it("shows no banner in live mode, and the Current State Assessment at its own price", () => {
-    api.page = { item: "current_state", name: "Current State Assessment", amountNaira: 500_000, mode: "live", state: "open" };
+  it("shows no banner in live mode, and the Business Review at its own price", () => {
+    api.page = { item: "current_state", name: "Business Review", amountNaira: 500_000, mode: "live", state: "open" };
     renderPage("current_state");
     expect(screen.queryByRole("note", { name: "Test mode" })).toBeNull();
     expect(payButton()!.textContent).toBe("Pay ₦500,000 securely with Paystack");
-    expect(screen.getByRole("region", { name: "After you pay" }).textContent).toContain("Your Current State Assessment starts.");
+    expect(screen.getByRole("region", { name: "After you pay" }).textContent).toContain("Your Business Review is booked.");
   });
 
   it("says it is already paid, with no button", () => {

@@ -145,7 +145,7 @@ export async function getBusinessCheckDetail(db: Pick<Database, "select">, busin
     resultJson: businessChecks.resultJson,
     summaryJson: businessChecks.summaryJson,
   }).from(businessChecks).where(eq(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   const { resultJson, summaryJson, ...fields } = row;
   const result = parseJson<Pick<CheckResult, "outline" | "primaryArea" | "founder">>(resultJson);
   const summary = parseJson<CheckSummary>(summaryJson);
@@ -186,7 +186,7 @@ export type SettableStage = Exclude<PipelineStage, "lead" | "won">;
 
 /**
  * Stages the team can move a check to. "lead" is where every check starts, so nothing moves back to it; "won" means
- * paid, so only confirming the Current State Assessment payment sets it (server/payments.ts).
+ * paid, so only confirming the Business Review payment sets it (server/payments.ts).
  */
 export const SETTABLE_STAGES = PIPELINE_STAGES.filter(stage => stage !== "lead" && stage !== "won") as SettableStage[];
 
@@ -196,7 +196,7 @@ export const SETTABLE_STAGES = PIPELINE_STAGES.filter(stage => stage !== "lead" 
  */
 export async function setPipelineStage(db: Database, input: { businessCheckId: number; stage: SettableStage; note?: string; actorUserId: number }) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   if (check.pipelineStage === input.stage) return { success: true, pipelineStage: check.pipelineStage, changed: false } as const;
   if (check.pipelineStage === "won") throw new TRPCError({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
   await db.transaction(async tx => {
@@ -213,8 +213,8 @@ export async function setPipelineStage(db: Database, input: { businessCheckId: n
 
 async function requestedCheck(db: Pick<Database, "select">, businessCheckId: number) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Check does not exist." });
-  if (!check.callRequestedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This Business Check has not asked for a Discovery Call." });
+  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  if (!check.callRequestedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This Business Health Check has not asked for a Discovery Call." });
   // A paid client's record is not reopened from the call list.
   if (check.pipelineStage === "won") throw new TRPCError({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call outcome can no longer be changed here." });
   return check;
@@ -228,8 +228,8 @@ async function requestedCheck(db: Pick<Database, "select">, businessCheckId: num
 export async function scheduleDiscoveryCall(db: Database, input: { businessCheckId: number; scheduledFor: Date; actorUserId: number }) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt })
     .from(businessChecks).where(eq(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Check does not exist." });
-  if (!check.completedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This Business Check is not finished yet, so there is no Discovery Call to schedule." });
+  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  if (!check.completedAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This Business Health Check is not finished yet, so there is no Discovery Call to schedule." });
   if (check.pipelineStage === "won") throw new TRPCError({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call can no longer be changed here." });
   await db.transaction(async tx => {
     await tx.update(businessChecks)

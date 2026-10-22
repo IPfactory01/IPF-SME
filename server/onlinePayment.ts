@@ -21,7 +21,7 @@ import { getTrustedApplicationOrigin } from "./security";
 
 /**
  * Paying online with Paystack's hosted checkout. The owner opens the pay page from the payment details email (keyed by
- * their Business Check's unguessable token), the server opens a Paystack transaction for the amount on the payment
+ * their Business Health Check's unguessable token), the server opens a Paystack transaction for the amount on the payment
  * request, and Paystack sends them back to /pay/return. The payment is confirmed by whichever arrives first, Paystack's
  * signed webhook or the return page, and only after Paystack itself confirms the transaction to the server. Both go
  * through `confirmPayment` (the team's "Confirm by hand" fallback uses it too), with Paystack recorded as a system actor.
@@ -38,7 +38,7 @@ export function requireOnlinePayment(): Exclude<OnlinePaymentMode, "off"> {
   return mode;
 }
 
-/** The Business Check behind a pay link (its unguessable token), and its payment request for the item if one exists. */
+/** The Business Health Check behind a pay link (its unguessable token), and its payment request for the item if one exists. */
 async function lookup(db: Pick<Database, "select">, token: string, item: PaymentItem) {
   const check = (await db.select().from(businessChecks).where(eq(businessChecks.publicToken, token)).limit(1))[0];
   if (!check) throw notFound();
@@ -49,7 +49,7 @@ async function lookup(db: Pick<Database, "select">, token: string, item: Payment
 
 /**
  * The owner may start paying for the Full Report themselves, from the link in their summary email, once their check is
- * finished: before they have asked, and after an earlier 48 hours have passed. The Current State Assessment is offered
+ * finished: before they have asked, and after an earlier 48 hours have passed. The Business Review is offered
  * only by the team, after the Discovery Call, so it always needs payment details the team sent.
  */
 const ownerMayStart = (check: Pick<BusinessCheck, "completedAt">, item: PaymentItem) => item === "full_report" && Boolean(check.completedAt);
@@ -132,8 +132,17 @@ export function transactionProblem(request: Pick<PaymentRequest, "reference" | "
   if (!transaction.reference.startsWith(`${request.reference}-`)) return "reference";
   if (transaction.status !== "success") return "status";
   if (transaction.currency !== "NGN") return "currency";
-  if (transaction.amount !== request.amountNaira * 100) return "amount";
+  if (!amountMatches(transaction, request.amountNaira * 100)) return "amount";
   return null;
+}
+
+/**
+ * The amount matches when Paystack charged exactly what we asked, or, when the customer bore Paystack's fee, when the
+ * amount Paystack says we requested is ours and the customer paid at least that. Never less than our price.
+ */
+export function amountMatches(transaction: Pick<VerifiedTransaction, "amount" | "requestedAmount">, expectedKobo: number) {
+  if (transaction.amount === expectedKobo) return true;
+  return transaction.requestedAmount === expectedKobo && Number.isFinite(transaction.amount) && transaction.amount >= expectedKobo;
 }
 
 /** Paystack's statuses for a transaction that may still succeed. */
@@ -190,7 +199,7 @@ async function needsALook(db: Database, request: PaymentRequest, transaction: Ve
       `Owner: ${check ? `${check.fullName} (${check.email})` : "Not found"}`,
       `Item: ${PAYMENT_ITEM_TITLES[request.item]}`,
       "",
-      `Business Check #${request.businessCheckId}.`,
+      `Business Health Check #${request.businessCheckId}.`,
     ].join("\n"),
   }).catch((error: unknown) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
 }
@@ -223,7 +232,7 @@ async function tellOfficePaid(db: Database, request: PaymentRequest, online: Onl
       "",
       ...next,
       "",
-      `Business Check #${request.businessCheckId}. ${BRAND.organisationName}`,
+      `Business Health Check #${request.businessCheckId}. ${BRAND.organisationName}`,
     ].join("\n"),
   }).catch((error: unknown) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
 }

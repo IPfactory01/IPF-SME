@@ -5,7 +5,7 @@ import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 
 /**
- * The Discovery Call: the free call after the Business Check, written up by the analyst within the hour, following the
+ * The Discovery Call: the free call after the Business Health Check, written up by the analyst within the hour, following the
  * firm's Client Debrief Meeting guide cut to The Shift. One record per business check. It informs the Work Plan,
  * and once shared it opens the owner's room warm. Nothing here decides who may call it: the routers do.
  */
@@ -32,7 +32,7 @@ export type SharedDebrief = { heldAt: Date | null; heard: string | null; problem
 
 async function requireCheck(db: Pick<Database, "select">, businessCheckId: number) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email }).from(businessChecks).where(eq(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "This business check does not exist." });
+  if (!check) throw new TRPCError({ code: "NOT_FOUND", message: "This Business Health Check does not exist." });
   return check;
 }
 

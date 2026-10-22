@@ -33,7 +33,7 @@ describe("discovery call booking page", () => {
 });
 
 describe("the Vercel function", () => {
-  it("may run for a minute: the Business Check waits on the AI summary and two emails in one request", () => {
+  it("may run for a minute: the Business Health Check waits on the AI summary and two emails in one request", () => {
     const config = JSON.parse(readFileSync(resolve(process.cwd(), "vercel.json"), "utf8")) as { functions?: Record<string, { maxDuration?: number }> };
     expect(config.functions?.["api/index.js"]?.maxDuration).toBe(60);
   });

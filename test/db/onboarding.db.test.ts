@@ -159,7 +159,7 @@ for (const target of targets) {
         expect([await total(schema.users), await total(schema.businesses)]).toEqual(before);
       });
 
-      it("keeps the Free Business Check public", async () => {
+      it("keeps the Free Business Health Check public", async () => {
         const error = await browser().call().businessCheck.requestNext({ token: "x".repeat(24), choice: "call" }).catch((e: unknown) => e) as { code: string };
         expect(error.code).toBe("NOT_FOUND");
       });
@@ -225,7 +225,7 @@ for (const target of targets) {
         await expect(invite(2_000_000_000)).rejects.toMatchObject({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
       });
 
-      it("refuses to invite before the Current State Assessment is paid unless a reason is given, and records the reason", async () => {
+      it("refuses to invite before the Business Review is paid unless a reason is given, and records the reason", async () => {
         const check = await businessCheck();
         await expect(superAdmin.call().onboarding.invite({ businessCheckId: check.id })).rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: ONBOARDING_ERRORS.unpaid });
         await expect(superAdmin.call().onboarding.invite({ businessCheckId: check.id, overrideReason: "ok" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
@@ -237,7 +237,7 @@ for (const target of targets) {
         expect(JSON.parse(audit.details)).toMatchObject({ paid: false, override: "Payment agreed for Friday" });
       });
 
-      it("invites without a reason once the Current State Assessment payment is confirmed", async () => {
+      it("invites without a reason once the Business Review payment is confirmed", async () => {
         const check = await businessCheck();
         await markPaid(check.id);
         const result = await superAdmin.call().onboarding.invite({ businessCheckId: check.id });

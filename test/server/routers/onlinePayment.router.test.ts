@@ -57,7 +57,7 @@ describe("online payment routes", () => {
     expect(ONLINE_PAYMENT_OFF_MESSAGE).toBe("Online payment is not open yet. Please try again later, or reply to your payment email and we will send you a link when it is.");
   });
 
-  it("allow 10 starts per Business Check an hour, then throttle; another check has its own allowance", async () => {
+  it("allow 10 starts per Business Health Check an hour, then throttle; another check has its own allowance", async () => {
     for (let attempt = 0; attempt < 10; attempt += 1) await passes(caller().start({ token: TOKEN, item: "full_report" }));
     await throttled(caller().start({ token: TOKEN, item: "current_state" }));
     await passes(caller().start({ token: `${TOKEN}-other`, item: "full_report" }));
@@ -78,7 +78,7 @@ describe("online payment routes", () => {
     await passes(elsewhere.status({ reference: "TS-R-000012-ffffffff" }));
   });
 
-  it("refuse a token that is not a Business Check token, or an item that is not for sale, before anything else", async () => {
+  it("refuse a token that is not a Business Health Check token, or an item that is not for sale, before anything else", async () => {
     await expect(caller().start({ token: "TS-R-000012", item: "full_report" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
     await expect(caller().page({ token: TOKEN, item: "fix" as never })).rejects.toMatchObject({ code: "BAD_REQUEST" });
   });

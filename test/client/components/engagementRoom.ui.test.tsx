@@ -50,7 +50,7 @@ const room = (over: Record<string, unknown> = {}) => ({
   businessName: "Ada Foods",
   viewer: { kind: "owner" as const },
   stage: "assessment" as const,
-  stageLabel: "Current State Assessment",
+  stageLabel: "Business Review",
   journey: journeyOf("assessment"),
   assessmentStartedAt: null as Date | null,
   fixStartedAt: null as Date | null,
@@ -64,9 +64,9 @@ const room = (over: Record<string, unknown> = {}) => ({
   booking: null as null | { sessionId: number; title: string; url: string },
   measure: null,
   team: [{ name: "Lewis Lead", roleLabel: "Engagement lead" }, { name: "Ola Analyst", roleLabel: "Analyst" }],
-  nextSession: { id: 1, title: "Current State Assessment Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1" },
+  nextSession: { id: 1, title: "Business Review Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1" },
   sessions: [
-    { id: 1, title: "Current State Assessment Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1", status: "planned" as const, weekNumber: 1, sortOrder: 7, agenda: null, notes: null, notesSharedAt: null, notesAudience: null },
+    { id: 1, title: "Business Review Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1", status: "planned" as const, weekNumber: 1, sortOrder: 7, agenda: null, notes: null, notesSharedAt: null, notesAudience: null },
     { id: 2, title: "Kick-off", scheduledFor: new Date("2026-10-16T09:00:00Z"), durationMinutes: 30, meetingLink: null, status: "held" as const, weekNumber: null, sortOrder: 0, agenda: null, notes: "We agreed to start with pricing.", notesSharedAt: new Date("2026-10-16T12:00:00Z"), notesAudience: "owner" as const },
   ],
   tasks: [
@@ -92,13 +92,13 @@ afterEach(() => {
 describe("the client's room", () => {
   it("opens on now: the stage with its week and day, the next action as Data Request N of M, the next Session with Join, and the team", () => {
     render(<EngagementRoom room={room({ assessmentStartedAt: new Date("2026-10-19T08:00:00Z"), deliverables: [] })} greeting="Welcome back, Ada" now={new Date("2026-10-22T10:00:00Z").getTime()} />);
-    const hero = within(screen.getByRole("region", { name: "Current State Assessment · Week 1 of 2" }));
+    const hero = within(screen.getByRole("region", { name: "Business Review · Week 1 of 2" }));
     expect(hero.getByText("Welcome back, Ada · Ada Foods")).toBeTruthy();
     expect(hero.getByRole("progressbar", { name: "Day 4 of 14" }).getAttribute("aria-valuenow")).toBe("4");
     expect(hero.getByText("Next action · Data Request 1 of 3")).toBeTruthy();
     expect(hero.getByText("Your last 12 months of sales")).toBeTruthy();
     expect(hero.getByText("By Wed 14 Oct")).toBeTruthy();
-    expect(hero.getByText("Current State Assessment Session 1")).toBeTruthy();
+    expect(hero.getByText("Business Review Session 1")).toBeTruthy();
     expect(hero.getByText(/Fri 23 Oct, 10:00 am \(Lagos time\), 90 minutes/)).toBeTruthy();
     expect(hero.getByRole("link", { name: "Join the Session" }).getAttribute("href")).toBe("https://zoom.example.test/j/1");
     expect(screen.getByRole("heading", { name: "Lewis Lead and Ola Analyst" })).toBeTruthy();
@@ -109,33 +109,33 @@ describe("the client's room", () => {
     const timeline = screen.getByRole("list", { name: "Engagement timeline" });
     const items = within(timeline).getAllByRole("listitem").filter(item => item.id.startsWith("step-"));
     expect(items.map(item => item.querySelector("button")!.textContent)).toEqual([
-      "Business CheckDone · Fri 9 Oct", "Discovery CallDone · Tue 13 Oct", "Full ReportDone · Wed 14 Oct", "Current State AssessmentDone · two weeks", "FindingsNowShared Fri 30 Oct", "The Fix6 weeks, after your Sign-off", "Day-30 Review30 days after The Fix ends",
+      "Business Health CheckDone · Fri 9 Oct", "Discovery CallDone · Tue 13 Oct", "Full ReportDone · Wed 14 Oct", "Business ReviewDone · two weeks", "FindingsNowShared Fri 30 Oct", "Six-Week Fix6 weeks, after your Sign-off", "Day-30 Review30 days after the Six-Week Fix ends",
     ]);
     expect(timeline.querySelector('[aria-current="step"]')!.id).toBe("step-5");
     expect(within(timeline).getByRole("button", { name: /^Findings/ }).getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByRole("heading", { name: "Findings" })).toBeTruthy();
     expect(within(timeline).getByRole("button", { name: /^Discovery Call/ }).getAttribute("aria-expanded")).toBe("false");
-    // Opening the Discovery Call shows what the team shared; the Business Check shows the main finding and readiness.
+    // Opening the Discovery Call shows what the team shared; the Business Health Check shows the main finding and readiness.
     fireEvent.click(within(timeline).getByRole("button", { name: /^Discovery Call/ }));
     const debrief = within(screen.getByRole("region", { name: "Step 2: Discovery Call" }));
     expect(debrief.getByText("Two outlets and a van.")).toBeTruthy();
     expect(debrief.getByText("Cash runs out in week three.")).toBeTruthy();
-    fireEvent.click(within(timeline).getByRole("button", { name: /^Business Check/ }));
-    const check = within(screen.getByRole("region", { name: "Step 1: Business Check" }));
+    fireEvent.click(within(timeline).getByRole("button", { name: /^Business Health Check/ }));
+    const check = within(screen.getByRole("region", { name: "Step 1: Business Health Check" }));
     expect(check.getByText(AREA_NAMES[2])).toBeTruthy();
     expect(check.getByText(READINESS_LABELS.intermediate)).toBeTruthy();
   });
 
   it("shows the Work Plan by week and in order, who does each item, and lets the owner mark a Data Request as submitted", () => {
     render(<EngagementRoom room={room({ deliverables: [] })} />);
-    const plan = within(screen.getByRole("region", { name: "Step 4: Current State Assessment" }));
+    const plan = within(screen.getByRole("region", { name: "Step 4: Business Review" }));
     const week1 = within(plan.getByRole("list", { name: "Week 1" })).getAllByRole("listitem").map(item => item.getAttribute("aria-label"));
-    expect(week1).toEqual(["Your last 12 months of sales", "Your price list", "Who works in the business", "Current State Assessment Session 1"]);
+    expect(week1).toEqual(["Your last 12 months of sales", "Your price list", "Who works in the business", "Business Review Session 1"]);
     expect(within(plan.getByRole("list", { name: "Week 2" })).getAllByRole("listitem").map(item => item.getAttribute("aria-label"))).toEqual(["Send the cash template"]);
     const sales = within(plan.getByRole("listitem", { name: "Your last 12 months of sales" }));
     expect(sales.getByText("You")).toBeTruthy();
     expect(within(plan.getByRole("listitem", { name: "Send the cash template" })).getByText("IP Factory")).toBeTruthy();
-    expect(within(plan.getByRole("listitem", { name: "Current State Assessment Session 1" })).getByText("Together")).toBeTruthy();
+    expect(within(plan.getByRole("listitem", { name: "Business Review Session 1" })).getByText("Together")).toBeTruthy();
     expect(within(plan.getByRole("listitem", { name: "Your price list" })).getByText("We need a bit more: the delivery prices too")).toBeTruthy();
     expect(within(plan.getByRole("listitem", { name: "Your price list" })).getByText("for you")).toBeTruthy();
     fireEvent.click(sales.getByRole("button", { name: "Mark as submitted" }));
@@ -159,7 +159,7 @@ describe("the client's room", () => {
     fireEvent.click(found.getByRole("button", { name: "Share with my team" }));
     expect(api.calls.audience).toEqual([{ item: "deliverable", id: 21, audience: "business" }]);
     // The kick-off's notes sit on its row in the plan; the assessment is done once the Findings are out.
-    fireEvent.click(within(timeline).getByRole("button", { name: /^Current State Assessment/ }));
+    fireEvent.click(within(timeline).getByRole("button", { name: /^Business Review/ }));
     const kickoff = within(screen.getByRole("listitem", { name: "Kick-off" }));
     expect(kickoff.getByText("We agreed to start with pricing.")).toBeTruthy();
     expect(kickoff.getByText(/only you can see these/)).toBeTruthy();
@@ -187,9 +187,9 @@ describe("the client's room", () => {
     expect(screen.getByText("Your Work Plan appears here once your team sets it.")).toBeTruthy();
   });
 
-  it("counts The Fix in weeks and places what the page passes it, such as the owner's seat card, at the end", () => {
-    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "The Fix", journey: journeyOf("fix"), fixStartedAt: new Date("2026-11-09T08:00:00Z") })} aside={<p>Seat card</p>} now={new Date("2026-11-25T10:00:00Z").getTime()} />);
-    expect(screen.getByRole("heading", { name: "The Fix · Week 3 of 6" })).toBeTruthy();
+  it("counts the Six-Week Fix in weeks and places what the page passes it, such as the owner's seat card, at the end", () => {
+    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "Six-Week Fix", journey: journeyOf("fix"), fixStartedAt: new Date("2026-11-09T08:00:00Z") })} aside={<p>Seat card</p>} now={new Date("2026-11-25T10:00:00Z").getTime()} />);
+    expect(screen.getByRole("heading", { name: "Six-Week Fix · Week 3 of 6" })).toBeTruthy();
     expect(screen.getByText("Seat card")).toBeTruthy();
   });
 });
@@ -244,7 +244,7 @@ describe("the Measure of Success", () => {
     const measure = { name: "Cash in the bank on Friday", definition: "The business account balance after the week's payments.", unit: "₦", baselineValue: 150000, targetValue: 400000,
       latest: { weekNumber: 2, heldOn: "2026-11-20", reading: 210000, nextStep: "Chase the two late invoices." },
       readings: [{ weekNumber: 1, heldOn: "2026-11-13", reading: 160000, nextStep: "Start the daily cash count." }, { weekNumber: 2, heldOn: "2026-11-20", reading: 210000, nextStep: "Chase the two late invoices." }] };
-    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "The Fix", journey: journeyOf("fix"), measure })} />);
+    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "Six-Week Fix", journey: journeyOf("fix"), measure })} />);
     const card = within(screen.getByRole("region", { name: "Cash in the bank on Friday" }));
     expect(card.getByText("₦150,000")).toBeTruthy();
     expect(card.getAllByText("₦210,000")).toHaveLength(2);
@@ -256,16 +256,16 @@ describe("the Measure of Success", () => {
 
   it("colours a move the wrong way as a watch, and says when there is no reading yet", () => {
     const measure = { name: "Debtors over 30 days", definition: null, unit: "₦", baselineValue: 900000, targetValue: 300000, latest: { weekNumber: 1, heldOn: "2026-11-13", reading: 950000, nextStep: null }, readings: [{ weekNumber: 1, heldOn: "2026-11-13", reading: 950000, nextStep: null }] };
-    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "The Fix", journey: journeyOf("fix"), measure })} />);
+    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "Six-Week Fix", journey: journeyOf("fix"), measure })} />);
     expect(screen.getByText("Up ₦50,000 since the start.").className).toContain("text-health-watch");
     cleanup();
-    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "The Fix", journey: journeyOf("fix"), measure: { ...measure, latest: null, readings: [] } })} />);
+    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "Six-Week Fix", journey: journeyOf("fix"), measure: { ...measure, latest: null, readings: [] } })} />);
     expect(screen.getByText("The first reading comes with the first Weekly Check-in.")).toBeTruthy();
     expect(screen.getByText("Where it starts")).toBeTruthy();
   });
 
-  it("shows no Measure of Success before The Fix has one", () => {
-    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "The Fix", journey: journeyOf("fix") })} />);
+  it("shows no Measure of Success before the Six-Week Fix has one", () => {
+    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "Six-Week Fix", journey: journeyOf("fix") })} />);
     expect(screen.queryByText("Measure of Success")).toBeNull();
   });
 });
@@ -281,7 +281,7 @@ describe("the room's Founder, Business and Plan tabs", () => {
     window.history.replaceState(null, "", "/dashboard");
   });
 
-  it("shows no tabs without a Business Check or Full Report behind the room (and to limited-access staff, who get none from the server)", () => {
+  it("shows no tabs without a Business Health Check or Full Report behind the room (and to limited-access staff, who get none from the server)", () => {
     render(<EngagementRoom room={room()} />);
     expect(screen.queryByRole("tablist")).toBeNull();
     expect(screen.getByRole("list", { name: "Engagement timeline" })).toBeTruthy();
@@ -342,11 +342,11 @@ describe("the room's Founder, Business and Plan tabs", () => {
     expect(document.activeElement).toBe(row);
   });
 
-  it("without a Full Report, shows what the Business Check found and says what the report adds", () => {
+  it("without a Full Report, shows what the Business Health Check found and says what the report adds", () => {
     render(<EngagementRoom room={room({ insight: fromCheck })} />);
     fireEvent.click(screen.getByRole("tab", { name: "Founder" }));
     const founder = within(screen.getByRole("tabpanel", { name: "Founder" }));
-    expect(founder.getByText("From your Business Check")).toBeTruthy();
+    expect(founder.getByText("From your Business Health Check")).toBeTruthy();
     expect(founder.getByText(fromCheck.founder.readiness.label)).toBeTruthy();
     expect(founder.getByText(/Your Full Report adds the four money basics/)).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: /Business/ }));
@@ -431,11 +431,11 @@ describe("a Data Request's detail", () => {
   });
 });
 
-describe("booking the Current State Assessment Sessions", () => {
+describe("booking the Business Review Sessions", () => {
   it("offers the owner the next Session to book on Calendly, with their details filled in, until it is booked", () => {
     const url = "https://calendly.com/ipfactory-example/session?name=Ada&email=ada%40example.test";
-    render(<EngagementRoom room={room({ nextSession: null, booking: { sessionId: 1, title: "Current State Assessment Session 1", url } })} />);
-    const book = screen.getByRole("link", { name: "Book Current State Assessment Session 1" });
+    render(<EngagementRoom room={room({ nextSession: null, booking: { sessionId: 1, title: "Business Review Session 1", url } })} />);
+    const book = screen.getByRole("link", { name: "Book Business Review Session 1" });
     expect(book.getAttribute("href")).toBe(url);
     expect(book.getAttribute("target")).toBe("_blank");
     expect(screen.getByText(/It shows here, with the Join link, once you have booked/)).toBeTruthy();

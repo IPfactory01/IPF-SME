@@ -108,7 +108,7 @@ describe("finding a booking by the owner's email", () => {
   });
 });
 
-describe("Current State Assessment Session bookings", () => {
+describe("Business Review Session bookings", () => {
   const ORG = "https://api.calendly.com/organizations/ORG12345";
   const SESSION_TYPE = "https://api.calendly.com/event_types/SESSION123";
   const CALL_TYPE = "https://api.calendly.com/event_types/DISCOVERY1";

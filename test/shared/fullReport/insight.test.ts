@@ -29,9 +29,9 @@ describe("what the client room's Founder and Business tabs show", () => {
     expect(insight.areas.find(area => area.area === AREA_NAMES[7])?.benchmarks.map(item => item.label)).toEqual(expect.arrayContaining(["Cash cover"]));
   });
 
-  it("falls back to the Business Check without a report: readiness, the behaviour profile and the outline in the owner's words", () => {
+  it("falls back to the Business Health Check without a report: readiness, the behaviour profile and the outline in the owner's words", () => {
     const insight = roomInsight({ report: null, result })!;
-    expect(insight.source).toBe("Business Check");
+    expect(insight.source).toBe("Business Health Check");
     expect(insight.founder.sections).toEqual([]);
     expect(insight.founder.readiness.label).toBe(READINESS_LABELS[result.founder.level]);
     expect(insight.areas.map(area => area.area)).toEqual(result.outline.filter(row => row.area > 1).map(row => row.name));

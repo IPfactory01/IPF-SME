@@ -19,7 +19,7 @@ export function adminCan(access: AdminAccessView | undefined, permission: string
 }
 
 export const ADMIN_SECTIONS = [
-  { id: "checks", label: "Business Checks" },
+  { id: "checks", label: "Business Health Checks" },
   { id: "calls", label: "Discovery Calls" },
   { id: "onboarding", label: "Client Onboarding" },
   { id: "engagements", label: "Engagements" },

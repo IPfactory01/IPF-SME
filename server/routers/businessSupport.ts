@@ -28,7 +28,7 @@ const clients = adminPermissionProcedure("view_all_businesses");
 const payments = adminPermissionProcedure("manage_payments");
 
 /**
- * The IPF Business Support admin view of the funnel: Free Business Check -> discovery call -> onboarding. Nothing here
+ * The IPF Business Support admin view of the funnel: Free Business Health Check -> discovery call -> onboarding. Nothing here
  * creates a user or a business: that happens only when a client accepts an onboarding invitation.
  */
 export const businessSupportRouter = router({
@@ -79,7 +79,7 @@ export const businessSupportRouter = router({
     .input(z.object({ businessCheckId: z.number().int().positive(), stage: z.enum(SETTABLE_STAGES as [SettableStage, ...SettableStage[]]), note: z.string().trim().max(500).optional() }))
     .mutation(async ({ ctx, input }) => setPipelineStage(await businessSupportDb(), { ...input, note: input.note || undefined, actorUserId: ctx.user.id })),
   clients: clients.query(async () => listClients(await businessSupportDb())),
-  /** Emails the owner the Paystack payment link for the Full Report or the Current State Assessment (again, if already sent). */
+  /** Emails the owner the Paystack payment link for the Full Report or the Business Review (again, if already sent). */
   requestPayment: payments
     .input(z.object({ businessCheckId: z.number().int().positive(), item: z.enum(PAYMENT_ITEMS) }))
     .mutation(async ({ ctx, input }) => requestPayment(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
@@ -91,13 +91,13 @@ export const businessSupportRouter = router({
   resendReportLink: payments
     .input(z.object({ businessCheckId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => resendReportLink(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
-  /** Sends the "payment received" email again for a confirmed Current State Assessment payment. */
+  /** Sends the "payment received" email again for a confirmed Business Review payment. */
   resendPaymentConfirmation: payments
     .input(z.object({ paymentRequestId: z.number().int().positive() }))
     .mutation(async ({ ctx, input }) => resendPaymentConfirmation(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
   /**
    * A fallback only: payments confirm themselves when Paystack confirms them. For a payment Paystack shows as paid that
-   * has not confirmed itself here. For the Current State Assessment this wins the business and sends the invitation.
+   * has not confirmed itself here. For the Business Review this wins the business and sends the invitation.
    */
   confirmPayment: payments
     .input(z.object({ paymentRequestId: z.number().int().positive(), note: z.string().trim().max(500).optional() }))

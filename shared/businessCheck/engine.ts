@@ -18,6 +18,7 @@
  * - Follow-up questions open only when the owner says an area is not clear.
  */
 import { OFFERINGS, offeringById, type Offering } from "./catalogue";
+import { firstStep, stepName, type FirstStep } from "./routing";
 import { hasSectorExamples, SECTOR_EXAMPLES, SECTOR_IDS, SECTOR_NOUNS, type SectorId } from "./sectorExamples";
 import {
   AREA_NAMES,
@@ -319,7 +320,7 @@ export function businessOutline(answers: Answers): AreaRead[] {
 export type AreaNotAssessed = { area: number; name: string; reason: string };
 
 /** Under the outline when some areas were left out, so the owner sees the whole method. */
-export const NOT_ASSESSED_NOTE = "Areas marked not assessed weren't part of this Business Check for your business. The Current State Assessment looks at all ten.";
+export const NOT_ASSESSED_NOTE = "Areas marked not assessed weren't part of this Business Health Check for your business. The Business Review looks at all ten.";
 
 /**
  * The problem areas (1 to 10) the check left out for a trading business on the programme route,
@@ -423,6 +424,8 @@ export type CheckResult = {
   primaryArea?: AreaRead;
   primaryGap?: Gap;
   offerings: Offering[];
+  /** The first product to buy and the one after it (shared/businessCheck/routing.ts). */
+  firstStep: FirstStep;
   /** Plain summary written from the rules; used when the AI write-up is unavailable. */
   summary: { found: string; think: string; next: string };
 };
@@ -435,7 +438,9 @@ export function evaluate(rawAnswers: Answers): CheckResult {
   const main = primaryArea(outline, answers);
   const gap = primaryGap(outline, main);
   const offerings = route === "advisory" ? [] : matchedOfferings(answers, outline);
-  return { route, founder, outline, primaryArea: main, primaryGap: gap, offerings, summary: writeSummary({ answers, route, founder, outline, main, gap, offerings }) };
+  const stuckAreas = outline.filter((row) => row.health === "stuck" && row.area !== 0).map((row) => row.area);
+  const first = firstStep({ answers, route, stuckAreas, mainArea: main?.area });
+  return { route, founder, outline, primaryArea: main, primaryGap: gap, offerings, firstStep: first, summary: writeSummary({ answers, route, founder, outline, main, gap, first }) };
 }
 
 const lower = (text: string) => text.charAt(0).toLowerCase() + text.slice(1);
@@ -447,9 +452,9 @@ function writeSummary(input: {
   outline: AreaRead[];
   main?: AreaRead;
   gap?: Gap;
-  offerings: Offering[];
+  first: FirstStep;
 }): CheckResult["summary"] {
-  const { route, founder, outline, main, gap, offerings } = input;
+  const { route, founder, outline, main, gap, first } = input;
   const style = founder.instinct ? DISC_STYLES[founder.instinct] : undefined;
   const stuck = outline.filter((row) => row.health === "stuck" && row.area !== 0).map((row) => row.name);
   const watch = outline.filter((row) => row.health === "watch" && row.area !== 0).map((row) => row.name);
@@ -490,8 +495,8 @@ function writeSummary(input: {
   ].filter(Boolean).join(" ");
 
   const think = main
-    ? `The place to start is ${main.name.toLowerCase()}${gap ? `, and the gap looks like ${GAP_LABELS[gap].name.toLowerCase()}: ${lower(GAP_LABELS[gap].meaning)}` : "."}${offerings.length ? ` That points to ${offerings.map((offering) => offering.name).join(", ")}.` : ""}`
-    : "The business looks in good shape on what we asked. The next gains are likely in sharper priorities and stronger numbers.";
+    ? `The place to start is ${main.name.toLowerCase()}${gap ? `, and the gap looks like ${GAP_LABELS[gap].name.toLowerCase()}: ${lower(GAP_LABELS[gap].meaning)}` : "."}${first ? ` The first step that fits is the ${stepName(first.productId, first.variantId)}.` : ""}`
+    : `The business looks in good shape on what we asked. The next gains are likely in sharper priorities and stronger numbers.${first ? ` The first step that fits is the ${stepName(first.productId, first.variantId)}.` : ""}`;
   const matureNote = isMatureAndStruggling(input.answers) && main?.area === 4
     ? ` After more than ten years with revenue ${input.answers.p_trend === "declining" ? "falling" : "flat"}, that usually means the way the business makes money has stopped working, not that the effort has dropped.`
     : "";

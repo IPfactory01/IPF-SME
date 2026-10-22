@@ -11,7 +11,9 @@ import { openCheckout, rememberPayPage } from "@/lib/payOnline";
 import { trpc } from "@/lib/trpc";
 import { payPath } from "@shared/payments";
 import { BRAND } from "@shared/brand";
-import { CAPABILITIES, offeringById } from "@shared/businessCheck/catalogue";
+import { stepName, type FirstStep } from "@shared/businessCheck/routing";
+import { priceLabel, productById, servicePath, startMode, WAY_DETAILS } from "@shared/products";
+import { displayPrice } from "@/lib/productPrice";
 import {
   areasNotAssessed,
   businessDetails,
@@ -153,7 +155,7 @@ export default function BusinessCheck() {
       setDirection(1);
       update({ token });
     },
-    onError: (err) => setError(err.message || "We could not start your Business Check. Kindly try again."),
+    onError: (err) => setError(err.message || "We could not start your Business Health Check. Kindly try again."),
   });
   const saveProgress = trpc.businessCheck.saveProgress.useMutation();
   const submit = trpc.businessCheck.submit.useMutation({
@@ -292,7 +294,7 @@ export default function BusinessCheck() {
         <div className="container flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-3" aria-label={`${BRAND.organisationName} home`}>
             <img src={BRAND.markUrl} alt={BRAND.organisationName} className="h-9 w-auto" />
-            <span className="border-l border-line pl-3 text-xs font-semibold uppercase tracking-widest text-ink-muted">Business Check</span>
+            <span className="border-l border-line pl-3 text-xs font-semibold uppercase tracking-widest text-ink-muted">Business Health Check</span>
           </Link>
           <Link href="/" className="text-xs font-semibold uppercase tracking-wider text-brand hover:text-brand-deep">Back to site</Link>
         </div>
@@ -392,7 +394,7 @@ function Intro({ hasProgress, onStart, onRestart }: { hasProgress: boolean; onSt
         <h1 className="font-serif text-4xl font-black leading-[1.08] sm:text-6xl">
           {PROMISE[0]} {PROMISE[1]} <span className="font-normal italic">{PROMISE[2]}</span>
         </h1>
-        <p className="mt-4 text-xs font-semibold uppercase tracking-[0.25em] text-highlight-ink">The free Business Check</p>
+        <p className="mt-4 text-xs font-semibold uppercase tracking-[0.25em] text-highlight-ink">The free Business Health Check</p>
         <p className="mt-6 text-lg leading-relaxed text-ink-600">
           Some owners know exactly what is wrong. Many can only feel it: busy every day, money in and out, and no clear picture of why it isn't working. This check is for both.
         </p>
@@ -416,7 +418,7 @@ function Intro({ hasProgress, onStart, onRestart }: { hasProgress: boolean; onSt
       </ol>
 
       <motion.div variants={itemMotion} className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <PrimaryButton onClick={onStart} large>{hasProgress ? "Continue where you left off" : "Take the Business Check"}</PrimaryButton>
+        <PrimaryButton onClick={onStart} large>{hasProgress ? "Continue where you left off" : "Take the Business Health Check"}</PrimaryButton>
         {hasProgress && (
           <button type="button" onClick={onRestart} className="text-sm font-semibold text-brand underline underline-offset-4">Start again</button>
         )}
@@ -706,7 +708,7 @@ function DetailsScreen({ contact, pending, error, onChange, onBack, onSubmit }: 
       </motion.p>
       <motion.div variants={itemMotion} className="flex items-center justify-between gap-4">
         <BackButton onClick={onBack} />
-        <PrimaryButton type="submit" disabled={!valid || pending}>{pending ? "Starting…" : "Start the Business Check"}</PrimaryButton>
+        <PrimaryButton type="submit" disabled={!valid || pending}>{pending ? "Starting…" : "Start the Business Health Check"}</PrimaryButton>
       </motion.div>
     </motion.form>
   );
@@ -837,7 +839,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
   return (
     <motion.div className="space-y-10" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.12 } } }} initial="hidden" animate="show">
       <motion.div variants={itemMotion}>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">Your Business Check{businessName ? ` · ${businessName}` : ""}</p>
+        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">Your Business Health Check{businessName ? ` · ${businessName}` : ""}</p>
         <h1 className="font-serif text-4xl font-black leading-tight sm:text-5xl">Here is what we see.</h1>
         <p className="mt-3 flex items-center gap-2 text-sm text-ink-muted"><Mail className="h-4 w-4" />{response.emailStatus === "Sent" ? `A copy has been sent to ${contact.email}.` : "Your result has been saved. Email delivery is not active yet."}</p>
       </motion.div>
@@ -934,24 +936,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
         </motion.section>
       )}
 
-      {summary.offerings.length > 0 && (
-        <motion.section variants={itemMotion}>
-          <SectionHeading>Where we could help</SectionHeading>
-          <ul className="grid gap-3">
-            {summary.offerings.map((item, index) => {
-              const offering = offeringById(item.id);
-              return (
-                <motion.li key={item.id} initial={{ opacity: 0, y: 16 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ duration: 0.45, ease: EASE, delay: index * 0.08 }} whileHover={{ y: -3 }} className="group relative border border-line bg-paper-raised p-5 transition-shadow hover:shadow-lg">
-                  <span aria-hidden className="absolute inset-y-0 left-0 w-1 origin-top scale-y-0 bg-highlight-ink transition-transform duration-300 group-hover:scale-y-100" />
-                  <p className="text-[11px] font-semibold uppercase tracking-wider text-highlight-ink">{offering ? CAPABILITIES[offering.capability] : ""}</p>
-                  <p className="mt-1 font-semibold">{item.name}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-ink-soft">{item.why}</p>
-                </motion.li>
-              );
-            })}
-          </ul>
-        </motion.section>
-      )}
+      {result.firstStep && <FirstStepCard step={result.firstStep} token={response.token} />}
 
       <motion.section variants={itemMotion} id="next-steps" className="scroll-mt-24">
         <SectionHeading>Your next steps</SectionHeading>
@@ -1030,9 +1015,49 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
 
       <motion.p variants={itemMotion} className="text-xs leading-relaxed text-ink-faint">
         {response.summarySource === "AI" ? "This summary was written by AI from your answers and checked against the services we offer. The outline itself comes from fixed rules, so the same answers always give the same outline." : "This summary was written from your answers using fixed rules, so the same answers always give the same result."}{" "}
-        <button type="button" onClick={onRestart} className="inline-flex items-center gap-1 font-semibold text-brand underline underline-offset-2"><RotateCcw className="h-3 w-3" />Take the Business Check again</button>
+        <button type="button" onClick={onRestart} className="inline-flex items-center gap-1 font-semibold text-brand underline underline-offset-2"><RotateCcw className="h-3 w-3" />Take the Business Health Check again</button>
       </motion.p>
     </motion.div>
+  );
+}
+
+/**
+ * The first product the check chose (shared/businessCheck/routing.ts), why, its price and how to start: buy now for a
+ * Done for You product, or talk first on the free Discovery Call for the rest. Older results have no first step.
+ */
+function FirstStepCard({ step, token }: { step: FirstStep; token: string }) {
+  // As everywhere a payment is asked for on this page, no price shows until the server's prices are known.
+  const prices = useServicePrices();
+  const product = productById(step.productId);
+  if (!product) return null;
+  const next = step.nextProductId ? stepName(step.nextProductId, step.nextVariantId) : "";
+  const nextProduct = step.nextProductId ? productById(step.nextProductId) : undefined;
+  return (
+    <motion.section variants={itemMotion} aria-labelledby="first-step">
+      <SectionHeading><span id="first-step">Your first step</span></SectionHeading>
+      <div className="border-2 border-brand bg-paper-raised p-6 sm:p-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">{WAY_DETAILS[product.way].name}</p>
+        <p className="mt-2 font-serif text-3xl font-bold leading-tight text-ink">{stepName(step.productId, step.variantId)}</p>
+        <p className="mt-3 leading-relaxed text-ink-soft">{step.because} {product.short}</p>
+        <div className="mt-5 flex flex-wrap items-baseline gap-x-6 gap-y-1 border-t border-line pt-5">
+          <p className="font-sans text-2xl font-bold text-ink">{prices ? priceLabel(displayPrice(product, prices)) : "\u00a0"}</p>
+          <p className="text-sm text-ink-muted">{product.delivery}</p>
+        </div>
+        <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
+          {startMode(product) === "self" ? (
+            <Link href={`/order/${product.slug}?check=${encodeURIComponent(token)}`} className="group inline-flex h-12 items-center bg-highlight-ink px-6 text-sm font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-brand-plum">
+              Buy now <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </Link>
+          ) : (
+            <a href="#next-steps" className="group inline-flex h-12 items-center bg-highlight-ink px-6 text-sm font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-brand-plum">
+              Talk to us first: book the free call <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </a>
+          )}
+          <Link href={servicePath(product)} className="text-sm font-semibold text-brand underline underline-offset-4">What it includes</Link>
+        </div>
+        {next && nextProduct && <p className="mt-5 text-sm text-ink-muted">Usually next: <Link href={servicePath(nextProduct)} className="font-medium text-brand underline underline-offset-2">{next}</Link>.</p>}
+      </div>
+    </motion.section>
   );
 }
 

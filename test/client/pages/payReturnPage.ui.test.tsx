@@ -57,12 +57,12 @@ describe("the return page after Paystack", () => {
     expect(screen.queryByRole("note", { name: "Test mode" })).toBeNull();
   });
 
-  it("shows the Current State Assessment starting and the account invitation, with the test-mode banner", () => {
+  it("shows the Business Review starting and the account invitation, with the test-mode banner", () => {
     api.results = [{ status: "paid", item: "current_state", mode: "test" }];
     renderPage();
-    expect(screen.getByText(/Your Current State Assessment is paid, and it starts now./)).toBeTruthy();
+    expect(screen.getByText(/Your Business Review is paid and booked./)).toBeTruthy();
     const next = screen.getByRole("list", { name: "What happens next" }).textContent;
-    expect(next).toContain("Three working days to get set up, then we start.");
+    expect(next).toContain("We take three working days to get set up; the review starts at your first Session.");
     expect(next).toContain("We email you a link to set up your client account on The Shift.");
     expect(screen.getByRole("note", { name: "Test mode" }).textContent).toContain("TEST MODE: NO REAL MONEY MOVES");
   });

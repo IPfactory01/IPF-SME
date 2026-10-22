@@ -22,7 +22,7 @@ window.matchMedia ??= ((query: string) => ({ matches: false, media: query, oncha
 const mutation = () => ({ isPending: false, mutate: () => undefined });
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    businessCheck: { prices: { useQuery: () => ({ data: { fullReport: 100_000, currentState: 500_000 } }) } },
+    businessCheck: { prices: { useQuery: () => ({ data: { fullReport: 100_000, currentState: 600_000 } }) } },
     registration: { requestPortalLink: { useMutation: mutation } },
     participant: { signIn: { useMutation: mutation } },
   },
@@ -30,6 +30,7 @@ vi.mock("@/lib/trpc", () => ({
 
 const { default: Home } = await import("@/pages/Home");
 const { BRAND } = await import("@shared/brand");
+const { MENU_PRODUCTS } = await import("@shared/products");
 
 const renderHome = (path = "/") => {
   window.history.replaceState({}, "", path);
@@ -58,6 +59,37 @@ describe("home page sign-in", () => {
   });
 });
 
+describe("home page: what we sell (Operational Business Plan, 22 October 2026)", () => {
+  it("shows the four ways to buy, each product with its price linking to its page, and the way to the full menu", () => {
+    renderHome();
+    const ways = within(screen.getByRole("list", { name: "Ways to buy" }));
+    expect(ways.getAllByRole("heading").map((heading) => heading.textContent)).toEqual(["Assessment", "Done for You", "Six-Week Fix", "Monthly Service"]);
+    for (const product of MENU_PRODUCTS) {
+      const link = ways.getByRole("link", { name: new RegExp(`^${product.name.replace(/[()]/g, "\\$&")}`) });
+      expect(link.getAttribute("href")).toBe(`/services/${product.slug}`);
+    }
+    expect(ways.getByRole("link", { name: /Free Business Health Check/ }).getAttribute("href")).toBe("/check");
+    expect(ways.getByRole("link", { name: /Six-Week Fix₦1,500,000/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /See every service/ }).getAttribute("href")).toBe("/services");
+  });
+
+  it("answers the questions owners ask about the new menu, without promising consent it does not record", () => {
+    const { container } = renderHome();
+    const questions = container.querySelector("#questions")!.textContent!;
+    expect(questions).toContain("What if you miss the delivery date?");
+    expect(questions).toContain("How do I pay?");
+    expect(questions).not.toMatch(/only with your consent|stays between you and your/);
+  });
+
+  it("tells smaller and larger owners where to start with products that exist", () => {
+    const { container } = renderHome();
+    const forWhom = container.querySelector("#for")!.textContent!;
+    expect(forWhom).toContain("a Done for You product, from ₦300,000");
+    expect(forWhom).toContain("Start with a Business Review");
+    expect(forWhom).not.toMatch(/training timetable|Advisory\./);
+  });
+});
+
 describe("home page track record", () => {
   it("states the track record from the brand settings, under the hero", () => {
     renderHome();
@@ -67,7 +99,7 @@ describe("home page track record", () => {
 
   it("names the parent firm and the sectors, links the firm when its address is set, and never names a partner", () => {
     const { container } = renderHome();
-    expect(screen.getByRole("link", { name: "Our experience" }).getAttribute("href")).toBe("#experience");
+    expect(screen.getByRole("link", { name: "What we sell" }).getAttribute("href")).toBe("#services");
     const section = container.querySelector("#experience")!;
     expect(section.textContent).toContain(`the delivery and method arm of ${BRAND.trackRecord.groupName}, an established Nigerian management consulting firm`);
     expect(section.textContent).toContain("The same method we use with larger clients. Run at the size and the price that fits your business.");

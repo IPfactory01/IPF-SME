@@ -129,7 +129,7 @@ describe("business check summary", () => {
     expect(test).toContain("Online payment is in Paystack's test mode while we test it, so paying online moves no real money.");
   });
 
-  it("lists the areas the check left out as not assessed, in area order, and says the Current State Assessment covers all ten", () => {
+  it("lists the areas the check left out as not assessed, in area order, and says the Business Review covers all ten", () => {
     const side = complete({ p_stage: "side", p_type: "expert", p_staff: "3to5", p_revenue: "1to3m" });
     const result = evaluate(side);
     const body = ownerEmail({ contact, result, summary: { ...result.summary, offerings: [] }, answers: side }).body;
@@ -139,7 +139,7 @@ describe("business check summary", () => {
       "• Operations and people", "• Financials", "• Risk and compliance", "• Exit and value", "• Owner transition",
     ]);
     expect(outline).toContain("• Business model: not assessed");
-    expect(outline.at(-1)).toBe("Areas marked not assessed weren't part of this Business Check for your business. The Current State Assessment looks at all ten.");
+    expect(outline.at(-1)).toBe("Areas marked not assessed weren't part of this Business Health Check for your business. The Business Review looks at all ten.");
     const mature = complete({ p_stage: "operating", p_type: "trader", p_age: "over10", p_staff: "3to5", p_revenue: "3to5m" });
     const matureResult = evaluate(mature);
     expect(ownerEmail({ contact, result: matureResult, summary: { ...matureResult.summary, offerings: [] }, answers: mature }).body).not.toMatch(/not assessed/);

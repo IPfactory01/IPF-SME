@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { trpc } from "@/lib/trpc";
 import { onSectionLinkClick } from "@/lib/scrollToSection";
-import { CtaButton, Faq, Hero, Journey, NAV, StuckPicker, useActiveSection, useScrolled } from "@/components/home/HomeSections";
+import { CtaButton, Faq, Hero, Journey, NAV, StuckPicker, useActiveSection, useScrolled, WhatWeSell } from "@/components/home/HomeSections";
 import { ExperienceBehind, TrackRecord, WhyStuck } from "@/components/home/Experience";
 import { Reveal, ScrollProgress, Stagger, staggerChild } from "@/components/motion";
 import { motion, useReducedMotion } from "framer-motion";
@@ -11,6 +11,8 @@ import { ArrowRight, CheckCircle2, KeyRound, MailCheck, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
+import { formatNaira } from "@shared/businessSupport";
+import { startingPriceOf } from "@shared/products";
 
 export default function Home() {
   const [, setLocation] = useLocation();
@@ -107,7 +109,7 @@ export default function Home() {
               <a href="/login">Client sign in</a>
             </Button>
             <Button onClick={handleStartCheck} className="group hidden sm:inline-flex bg-ink text-paper hover:bg-charcoal font-medium text-xs uppercase tracking-widest px-5 py-2.5 rounded-none transition-transform active:scale-95">
-              Free Business Check <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              Free Business Health Check <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
             </Button>
           </div>
         </div>
@@ -159,17 +161,19 @@ export default function Home() {
             <h2 className="font-serif text-4xl font-bold tracking-tight mb-6">We don&apos;t run your business; you do.</h2>
             <ul className="space-y-2 text-ink-600">
               <li className="flex items-center gap-3"><X className="h-4 w-4 text-highlight-ink" />We are not a course.</li>
-              <li className="flex items-center gap-3"><X className="h-4 w-4 text-highlight-ink" />We are not a consultant who writes a report and leaves.</li>
+              <li className="flex items-start gap-3"><X className="mt-1 h-4 w-4 shrink-0 text-highlight-ink" />We do not hand you a report and disappear. Every piece of work ends with a handover call, and we check in thirty days later.</li>
             </ul>
           </Reveal>
           <Reveal delay={0.12} className="space-y-5 text-lg text-ink-600 leading-relaxed">
-            <p>We work out what is really wrong, tell you what to do about it, hand you the tools, and meet you every week until it is done.</p>
+            <p>We work out what is really wrong. Then we either do the work for you, or tell you what to do, hand you the tools and review it with you every week until it is done.</p>
             <p className="p-5 border border-brand-line bg-brand-tint text-base text-brand-deep">Our analysts and AI do the heavy lifting, under a named {BRAND.organisationName} consultant. We say so up front.</p>
           </Reveal>
         </div>
       </section>
 
       <ExperienceBehind />
+
+      <WhatWeSell />
 
       <Journey />
 
@@ -181,16 +185,16 @@ export default function Home() {
           <Reveal>
             <span className="text-xs uppercase tracking-widest text-ink-muted font-semibold block mb-3">Who it is for</span>
             <p className="text-lg text-ink-600 leading-relaxed mb-4">
-              Business owners who already trade, at about ₦5 million a month or more, and who can give two to four hours a week for six weeks.
+              Business owners in Nigeria who already trade and want a straight answer about their numbers, prices, cash, funding, people or sales. We start with businesses in Lagos and Abuja; most of the work happens online.
             </p>
             <p className="text-ink-soft leading-relaxed">
-              If you are smaller, start with the free Business Check and our training timetable. If you are much larger, we will point you to {BRAND.organisationName} Advisory.
+              Smaller business? Start with the free Business Health Check and a Done for You product, from {formatNaira(startingPriceOf("done_for_you"))}. Several problems across a larger business? Start with a Business Review; work that needs a project team goes to {BRAND.trackRecord.groupName}.
             </p>
           </Reveal>
           <div>
             <Reveal><span className="text-xs uppercase tracking-widest text-ink-muted font-semibold block mb-3">Who you work with</span></Reveal>
             <Stagger as="ul" className="space-y-3 text-lg text-ink-600">
-              {[`A named ${BRAND.organisationName} consultant leads your work.`, "Analysts prepare every Session.", "A partner joins for larger businesses.", "We use AI for analysis and say so."].map((line) => (
+              {[`A named ${BRAND.organisationName} consultant checks every piece of work before you get it.`, "Analysts prepare the work and every Session.", "A partner reviews plans and funding packs.", "We use AI for analysis and say so."].map((line) => (
                 <motion.li key={line} variants={staggerChild} className="flex items-start gap-3"><CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-highlight-ink" />{line}</motion.li>
               ))}
             </Stagger>
@@ -205,9 +209,9 @@ export default function Home() {
         <motion.div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 h-96 w-[48rem] -translate-x-1/2 rounded-full bg-highlight/20 blur-3xl" animate={calm ? undefined : { x: ["-55%", "-45%", "-55%"], opacity: [0.5, 0.9, 0.5] }} transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }} />
         <Reveal className="relative container max-w-3xl mx-auto text-center">
           <img src={BRAND.logoOnDarkUrl} alt={BRAND.organisationName} className="mx-auto mb-8 h-28 w-auto" />
-          <h2 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight mb-4">Start with the free Business Check.</h2>
+          <h2 className="font-serif text-4xl sm:text-5xl font-bold tracking-tight mb-4">Start with the free Business Health Check.</h2>
           <p className="text-on-dark-muted max-w-xl mx-auto mb-8">Ten minutes. No card. You&apos;ll know where you stand before you decide anything.</p>
-          <CtaButton onClick={handleStartCheck} tone="light">Start with a free Business Check</CtaButton>
+          <CtaButton onClick={handleStartCheck} tone="light">Start with a free Business Health Check</CtaButton>
         </Reveal>
       </section>
 
@@ -270,7 +274,7 @@ export default function Home() {
                 <button type="button" onClick={() => { setIsPasswordHelpMode(true); setSignInError(""); }} className="w-full text-center text-xs font-semibold text-brand underline underline-offset-2">First time here or forgot your password?</button>
               </>
             )}
-            {!passwordLinkSent && <p className="text-center text-xs leading-5 text-ink-muted">Not a client yet? <button type="button" onClick={() => { setIsParticipantSignInOpen(false); handleStartCheck(); }} className="font-semibold text-brand underline underline-offset-2">Start with the free Business Check</button>.</p>}
+            {!passwordLinkSent && <p className="text-center text-xs leading-5 text-ink-muted">Not a client yet? <button type="button" onClick={() => { setIsParticipantSignInOpen(false); handleStartCheck(); }} className="font-semibold text-brand underline underline-offset-2">Start with the free Business Health Check</button>.</p>}
           </div>
         </DialogContent>
       </Dialog>

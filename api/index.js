@@ -172,7 +172,7 @@ var init_env = __esm({
       /** Calendly personal access token (secret): lets the server read a booking's time for the admin console. Optional. */
       calendlyApiToken: process.env.CALENDLY_API_TOKEN?.trim() ?? "",
       /**
-       * Calendly booking page for the Current State Assessment Sessions: one event type, booked twice (Session 1, then
+       * Calendly booking page for the Business Review Sessions: one event type, booked twice (Session 1, then
        * Session 2). Whoever hosts is set in Calendly (one person or round robin). Empty: the room shows no Book button.
        */
       calendlySessionUrl: process.env.CALENDLY_SESSION_URL?.trim() ?? "",
@@ -326,13 +326,12 @@ function advancePipeline(current, event) {
 // shared/businessSupport.ts
 var PRICES = {
   fullReport: 1e5,
-  currentState: 5e5,
-  fix: 12e5,
-  standardEngagementCap: 25e5
+  currentState: 6e5,
+  fix: 15e5
 };
 var FULL_REPORT = {
   name: "Your Full Report",
-  pitch: "The Business Check summary tells you where you stand. The Full Report tells you what to do about it.",
+  pitch: "The Business Health Check summary tells you where you stand. The Full Report tells you what to do about it.",
   includes: [
     "Every area of your outline in depth: what your answers show and what it means for your business",
     "The root cause behind each red and amber, and how they connect",
@@ -345,29 +344,30 @@ var FULL_REPORT = {
 };
 var CURRENT_STATE = {
   /** The name everywhere: site, emails, admin, report. */
-  name: "Current State Assessment",
-  what: "Two weeks and two sessions that test the internal and external factors of your business, to locate the one problem to fix first and what to do about it.",
-  start: "Three working days to get set up, then we start."
+  name: "Business Review",
+  what: "Two weeks and two Sessions that test your whole business, to find the one problem to fix first and what to do about it.",
+  start: "We take three working days to get set up; the review starts at your first Session."
 };
 function formatNaira(amount) {
   return `\u20A6${String(Math.round(amount)).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
 var buildJourney = (prices = PRICES) => [
-  { id: "business-check", name: "Free Business Check", body: `Ten minutes. A first read on where you are stuck. Want the Full Report? ${formatNaira(prices.fullReport)}, by email.` },
-  { id: "discovery-call", name: "Discovery Call: a free 20-minute call", body: "We walk through your Business Check results, hear the problem in your words and tell you honestly whether we can help." },
-  { id: "current-state", name: CURRENT_STATE.name, body: `${CURRENT_STATE.what} ${formatNaira(prices.currentState)}, paid after the Discovery Call. ${CURRENT_STATE.start}` },
-  { id: "fix", name: "The Fix: six weeks", body: `One problem, one Measure of Success. You do the work; we give you the Prescription and the tools, and check it at a Weekly Check-in. ${formatNaira(PRICES.fix)}.` },
-  { id: "plan", name: "Your Plan", body: `We stop at about ${formatNaira(PRICES.standardEngagementCap)} with a plan in your hands. Want us to stay? We agree what that looks like.` }
+  { id: "check", name: "Free Business Health Check", body: "Ten minutes on your phone. A first read on where your business is stuck, in your own words." },
+  { id: "first-step", name: "Your first step", body: `The check names the product that fits first, and the one after it. Want the detail behind it? The Full Report, ${formatNaira(prices.fullReport)}, by email.` },
+  { id: "pay", name: "Pay by link", body: `The price and the delivery time are on the page. You pay by transfer or card before we start. For a Business Review (${formatNaira(prices.currentState)}) or a Six-Week Fix, we talk first on a free 20-minute Discovery Call.` },
+  { id: "records", name: "Send your records", body: "Your statements and answers, through a secure form. We check they are complete and confirm your delivery date within one working day." },
+  { id: "deliver", name: "We deliver", body: "Finished work, checked by a consultant who did not prepare it, with a 30-minute handover call. If we miss the date we gave you, ask for a full refund." },
+  { id: "next", name: "What comes next", body: "Thirty days on, we check in. If it helps, we suggest the next step, or a Monthly Service that keeps it going." }
 ];
 var JOURNEY = buildJourney();
 
 // shared/method.ts
 var METHOD = {
-  businessCheck: "Business Check",
+  businessCheck: "Business Health Check",
   discoveryCall: "Discovery Call",
   fullReport: "Full Report",
   reportIntake: "Report Intake",
-  currentState: "Current State Assessment",
+  currentState: "Business Review",
   workPlan: "Work Plan",
   dataRequest: "Data Request",
   dataRequests: "Data Requests",
@@ -375,7 +375,7 @@ var METHOD = {
   findings: "Findings",
   problemStatement: "Problem Statement",
   prescription: "Prescription",
-  fix: "The Fix",
+  fix: "Six-Week Fix",
   checkin: "Weekly Check-in",
   measure: "Measure of Success",
   day30: "Day-30 Review",
@@ -416,14 +416,14 @@ var ENGAGEMENT_STAGES = ["setting_up", "assessment", "fix", "plan", "closed"];
 var ENGAGEMENT_STAGE_LABELS = {
   setting_up: "Getting set up",
   assessment: CURRENT_STATE.name,
-  fix: "The Fix",
+  fix: METHOD.fix,
   plan: "Your Plan",
   closed: "Closed"
 };
 var ENGAGEMENT_STAGE_SUMMARIES = {
   setting_up: "Three working days: we send your Data Requests, name your team and book both Sessions.",
   assessment: CURRENT_STATE.what,
-  fix: "One problem and one Measure of Success. You do the work; we give you the Prescription and check it at a Weekly Check-in.",
+  fix: "One problem and one Measure of Success. Your team does the work; we give you the Prescription and the tools, and review it at a Weekly Check-in.",
   plan: "The plan in your hands, and what support looks like from here.",
   closed: "This engagement is closed."
 };
@@ -1982,7 +1982,7 @@ Your Engagement Brief is the first thing you will see. It opens with my understa
 
 ${packageCopy.distinction}
 
-Your private payment guidance is available alongside this brief. Kindly review your pathway-specific fee, instalment schedule, full-upfront option, and approved payment routes whenever you are ready. Once you acknowledge the brief, your Current State Assessment and programme tracker open immediately. You can begin the assessment before payment; it adds the detail I need to shape the advisory work around your business. It is an initial get-to-know-you diagnostic, not the full set of questions for the engagement. Before each class, I will ask further focused questions so the discussion, recommendations and materials can respond to the decisions then in front of you.
+Your private payment guidance is available alongside this brief. Kindly review your pathway-specific fee, instalment schedule, full-upfront option, and approved payment routes whenever you are ready. Once you acknowledge the brief, your Business Review and programme tracker open immediately. You can begin the assessment before payment; it adds the detail I need to shape the advisory work around your business. It is an initial get-to-know-you diagnostic, not the full set of questions for the engagement. Before each class, I will ask further focused questions so the discussion, recommendations and materials can respond to the decisions then in front of you.
 
 The programme is currently scheduled to begin on Friday, 4 September 2026. Every class will be recorded. Where an unforeseen adjustment is necessary, I will communicate at least 72 hours ahead and advise a replacement date.
 
@@ -2009,7 +2009,7 @@ I trust this meets you well and in good health.`,
         "We have digitised this engagement so your brief, diagnostic, working materials and, as they become available, meeting recordings can live in one private place over the course of the programme. The portal works on mobile, but kindly use a laptop whenever possible for the most complete experience\u2014especially when working through the diagnostic and programme materials.",
         "Your Engagement Brief is the first thing you will see. It opens with my understanding of what you shared, the potential challenge it may point to and the areas we will explore together. This is a starting hypothesis\u2014not a final diagnosis. The programme sessions appear once, with one clear explanation of how the engagement works.",
         packageCopy.distinction,
-        "Your private payment guidance is available alongside this brief. Kindly review your pathway-specific fee, instalment schedule, full-upfront option, and approved payment routes whenever you are ready. Once you acknowledge the brief, your Current State Assessment and programme tracker open immediately. You can begin the assessment before payment; it adds the detail I need to shape the advisory work around your business. It is an initial get-to-know-you diagnostic, not the full set of questions for the engagement. Before each class, I will ask further focused questions so the discussion, recommendations and materials can respond to the decisions then in front of you.",
+        "Your private payment guidance is available alongside this brief. Kindly review your pathway-specific fee, instalment schedule, full-upfront option, and approved payment routes whenever you are ready. Once you acknowledge the brief, your Business Review and programme tracker open immediately. You can begin the assessment before payment; it adds the detail I need to shape the advisory work around your business. It is an initial get-to-know-you diagnostic, not the full set of questions for the engagement. Before each class, I will ask further focused questions so the discussion, recommendations and materials can respond to the decisions then in front of you.",
         "The programme is currently scheduled to begin on Friday, 4 September 2026. Every class will be recorded. Where an unforeseen adjustment is necessary, I will communicate at least 72 hours ahead and advise a replacement date."
       ],
       details: [{ label: "Selected pathway", value: input.packageName }],
@@ -2565,7 +2565,8 @@ async function verifyTransaction(reference2) {
     reference: typeof data.reference === "string" ? data.reference : "",
     status: typeof data.status === "string" ? data.status : "",
     amount: typeof data.amount === "number" ? data.amount : Number.NaN,
-    currency: typeof data.currency === "string" ? data.currency : ""
+    currency: typeof data.currency === "string" ? data.currency : "",
+    requestedAmount: typeof data.requested_amount === "number" ? data.requested_amount : void 0
   };
 }
 function isValidPaystackSignature(rawBody, signatureHeader, secretKey = ENV.paystackSecretKey) {
@@ -3187,9 +3188,9 @@ var ONBOARDING_ERRORS = {
   emailMismatch: "The email does not match this invitation.",
   existingAccount: "An account already exists for this email address. The IPF team will help you sign in.",
   existingAccountAdmin: "This email already belongs to an account. Linking an existing account to a new business is not available yet.",
-  noCheck: "That Business Check does not exist.",
-  invalidCheckEmail: "The Business Check does not have a valid email address to invite.",
-  unpaid: "The Current State Assessment is not paid yet. Confirm the payment first, or give the reason for inviting anyway."
+  noCheck: "That Business Health Check does not exist.",
+  invalidCheckEmail: "The Business Health Check does not have a valid email address to invite.",
+  unpaid: "The Business Review is not paid yet. Confirm the payment first, or give the reason for inviting anyway."
 };
 var signInInputSchema = z.object({
   email: z.string().trim().max(ACCOUNT_EMAIL_MAX_LENGTH).transform(normaliseAccountEmail),
@@ -3285,7 +3286,7 @@ var ADMIN_PERMISSION_DEFINITIONS = [
   },
   {
     id: "view_assessments",
-    label: "Review Current State Assessments",
+    label: "Review Business Reviews",
     description: "View saved diagnostic progress, answers, and available working-report context."
   },
   {
@@ -3492,9 +3493,9 @@ var MINUTE = 6e4;
 var HOUR2 = 60 * MINUTE;
 var DAY = 24 * HOUR2;
 var LIMITS = {
-  /** New Business Checks from one address, whatever email is typed. */
+  /** New Business Health Checks from one address, whatever email is typed. */
   checkStartIp: { scope: "check_start_ip", max: 20, windowMs: 15 * MINUTE },
-  /** New Business Checks from one address and email. */
+  /** New Business Health Checks from one address and email. */
   checkStartEmail: { scope: "check_start_email", max: 5, windowMs: 15 * MINUTE },
   /** Progress saves per check (one per answer). */
   checkSave: { scope: "check_save", max: 300, windowMs: 15 * MINUTE },
@@ -3510,9 +3511,9 @@ var LIMITS = {
   resetRequest: { scope: "reset_request", max: 5, windowMs: HOUR2 },
   /** Public token lookups per address: legacy reset confirmation and invitation status. */
   publicLookup: { scope: "public_lookup", max: 30, windowMs: HOUR2 },
-  /** Pay page reads per Business Check token. */
+  /** Pay page reads per Business Health Check token. */
   paymentPage: { scope: "payment_page", max: 60, windowMs: HOUR2 },
-  /** Online payment starts per Business Check token: each opens a transaction on Paystack. */
+  /** Online payment starts per Business Health Check token: each opens a transaction on Paystack. */
   paymentStart: { scope: "payment_start", max: 10, windowMs: HOUR2 },
   /** Return-page checks per Paystack reference: each asks Paystack how the payment stands. */
   paymentStatus: { scope: "payment_status", max: 20, windowMs: HOUR2 },
@@ -7458,6 +7459,351 @@ function offeringById(id3) {
   return OFFERINGS.find((offering) => offering.id === id3);
 }
 
+// shared/products.ts
+var STATEMENTS = (months) => ({ id: "bank_statements", label: `Business bank statements for ${months}`, detail: "Every business account, as PDF or spreadsheet exports from your bank.", required: true });
+var SALES_RECORDS = { id: "sales_records", label: "Sales records", detail: "Invoices, POS reports or your sales book for the same months.", required: true };
+var COSTS = { id: "costs", label: "Your main costs", detail: "Rent, salaries, suppliers and any loans, with what each costs a month.", required: true };
+var GOAL = { id: "goal", label: "What do you want this work to help you decide or do?", kind: "textarea", required: true };
+var PRODUCTS = [
+  {
+    id: "business_health_check",
+    slug: "business-health-check",
+    name: "Free Business Health Check",
+    way: "assessment",
+    needs: ["whole_business"],
+    short: "Ten minutes on your phone. A first read on where your business is stuck, and the first thing to buy, if anything.",
+    forWhom: "Any business owner who wants to know where to start.",
+    youGet: ["A summary of where your business stands, area by area", "The first product that fits, and the one after it", "The option of a free 20-minute Discovery Call"],
+    price: { kind: "free" },
+    delivery: "At once, on screen and by email.",
+    buy: "check",
+    intake: { records: [], questions: [] }
+  },
+  {
+    id: "full_report",
+    slug: "full-report",
+    name: "Full Report",
+    way: "assessment",
+    needs: ["whole_business"],
+    short: "Your Business Health Check in depth: what your answers show, the root causes, and what to fix first.",
+    forWhom: "Owners who have taken the Business Health Check and want the detail.",
+    youGet: ["Every area of your outline in depth", "The root cause behind each red and amber", "What to fix first, in order, with the Measure of Success for each"],
+    price: { kind: "fixed", amount: 1e5 },
+    delivery: "Emailed the moment you finish the short Report Intake after paying.",
+    buy: "check",
+    intake: { records: [], questions: [] }
+  },
+  {
+    id: "funding_readiness_assessment",
+    slug: "funding-readiness-assessment",
+    name: "Funding Readiness Assessment",
+    way: "assessment",
+    needs: ["funding"],
+    short: "Before you apply: are you ready for the loan you want, and what is missing?",
+    forWhom: "Owners with a lender window open, or about to apply for a loan or grant.",
+    youGet: ["A readiness score against what lenders such as LSETF and BOI ask for", "The gaps in your records, plan and documents, in order", "What to fix before you apply, and how long it will take"],
+    price: { kind: "fixed", amount: 15e4 },
+    fallbackPrice: 1e5,
+    delivery: "Three working days from complete records.",
+    workingDays: 3,
+    buy: "self",
+    intake: {
+      records: [STATEMENTS("the last six months"), { id: "registration", label: "Business registration documents", detail: "CAC certificate and status report, and your TIN.", required: true }, { id: "lender_form", label: "The lender's application form or checklist, if you have it", detail: "So we check you against what this lender asks for.", required: false }],
+      questions: [{ id: "lender", label: "Which lender or programme are you applying to?", kind: "text", required: true }, { id: "amount", label: "How much do you want to borrow, and for what?", kind: "textarea", required: true }]
+    },
+    next: "funding_application_pack"
+  },
+  {
+    id: "business_review",
+    slug: "business-review",
+    name: "Business Review",
+    way: "assessment",
+    needs: ["whole_business"],
+    short: "Two weeks and two Sessions that test your whole business, to find the one problem to fix first and what to do about it.",
+    forWhom: "Owners with several connected problems who are not sure which to fix first.",
+    youGet: ["Your numbers, how the business runs and your market, tested together", "The one problem to fix first, in your words", "The Prescription: the first steps, the tools and who owns each"],
+    price: { kind: "fixed", amount: 6e5 },
+    fallbackPrice: 5e5,
+    delivery: "Two weeks, with two Sessions.",
+    buy: "after_call",
+    intake: { records: [], questions: [] },
+    next: "six_week_fix"
+  },
+  {
+    id: "strategy_90_day_plan",
+    slug: "strategy-and-90-day-plan",
+    name: "Strategy and 90-Day Plan",
+    way: "done_for_you",
+    needs: ["strategy"],
+    short: "Three priorities for your business and a 90-day plan to deliver them.",
+    forWhom: "Owners with no clear direction, or too many priorities at once.",
+    youGet: ["Where the business is going and what to stop", "Three priorities, each with a number to watch", "A 90-day plan: who does what, by when", "A 30-minute handover call"],
+    price: { kind: "fixed", amount: 45e4 },
+    fallbackPrice: 35e4,
+    delivery: "Seven working days from complete records.",
+    workingDays: 7,
+    buy: "self",
+    intake: {
+      records: [STATEMENTS("the last six months"), { id: "existing_plans", label: "Any plan, budget or targets you already have", detail: "Even a page of notes helps.", required: false }],
+      questions: [GOAL, { id: "priorities", label: "What are you trying to do over the next year?", kind: "textarea", required: true }, { id: "blockers", label: "What keeps getting in the way?", kind: "textarea", required: true }]
+    },
+    next: "monthly_adviser_review"
+  },
+  {
+    id: "pricing_unit_cost_review",
+    slug: "pricing-and-unit-cost-review",
+    name: "Pricing and Unit Cost Review",
+    way: "done_for_you",
+    needs: ["pricing"],
+    short: "What each product really costs you, what it earns, and what to charge.",
+    forWhom: "Owners whose prices are guesses, or whose margins are unclear.",
+    youGet: ["The true cost of each product or service", "Margin by line: what makes money and what loses it", "New prices to test, with what each change is worth", "A 30-minute handover call"],
+    price: { kind: "fixed", amount: 75e4 },
+    fallbackPrice: 45e4,
+    delivery: "Seven working days from complete records.",
+    workingDays: 7,
+    buy: "after_call",
+    intake: {
+      records: [STATEMENTS("the last six months"), SALES_RECORDS, COSTS, { id: "price_list", label: "Your current price list", detail: "With what competitors charge, if you know.", required: true }],
+      questions: [GOAL, { id: "lines", label: "Which products or services sell most?", kind: "textarea", required: true }]
+    },
+    next: "six_week_fix",
+    nextVariant: "margin"
+  },
+  {
+    id: "bookkeeping_catch_up",
+    slug: "bookkeeping-catch-up",
+    name: "Bookkeeping Catch-Up",
+    way: "done_for_you",
+    needs: ["finance"],
+    short: "Your books brought up to date: every transaction sorted, and management accounts you can use.",
+    forWhom: "Owners with no records, or numbers they cannot trust.",
+    youGet: ["Every transaction categorised and reconciled to your bank statements", "Management accounts for each month: income, costs and profit", "Business and personal money separated", "A 30-minute handover call"],
+    price: { kind: "per_month", perMonth: 1e5, minMonths: 3, maxMonths: 12 },
+    fallbackPrice: 75e3,
+    delivery: "Five working days for three months of complete records.",
+    workingDays: 5,
+    buy: "self",
+    intake: {
+      records: [STATEMENTS("the months you are buying"), SALES_RECORDS, { id: "receipts", label: "Receipts and supplier invoices", detail: "Photos are fine.", required: false }],
+      questions: [{ id: "accounts", label: "Which bank accounts does the business use?", kind: "textarea", required: true }]
+    },
+    next: "monthly_accounts",
+    boundary: "Management accounts only. We do not prepare statutory accounts or file tax returns."
+  },
+  {
+    id: "cash_flow_forecast",
+    slug: "13-week-cash-flow-forecast",
+    name: "13-Week Cash Flow Forecast",
+    way: "done_for_you",
+    needs: ["finance"],
+    short: "Week by week for the next 13 weeks: what comes in, what goes out, and when cash runs short.",
+    forWhom: "Owners whose cash is always tight.",
+    youGet: ["A 13-week forecast built from your own records", "The weeks when cash runs short, and by how much", "What to do about each: collect, delay, cut or fund", "A 30-minute handover call"],
+    price: { kind: "fixed", amount: 3e5 },
+    fallbackPrice: 2e5,
+    delivery: "Five working days from complete records.",
+    workingDays: 5,
+    buy: "self",
+    intake: {
+      records: [STATEMENTS("the last three months"), COSTS, { id: "debtors", label: "Who owes you money, and who you owe", detail: "A list with amounts and due dates.", required: true }],
+      questions: [GOAL]
+    },
+    next: "six_week_fix",
+    nextVariant: "cash_pricing"
+  },
+  {
+    id: "funding_application_pack",
+    slug: "funding-application-pack",
+    name: "Funding Application Pack",
+    way: "done_for_you",
+    needs: ["funding"],
+    short: "The plan, forecasts and documents your lender asks for, checked against their list.",
+    forWhom: "Owners applying for a loan or grant, ideally after a Funding Readiness Assessment.",
+    youGet: ["The business plan in the format the lender asks for", "Financial forecasts built from your records", "The lender's checklist ticked item by item", "A 30-minute handover call"],
+    price: { kind: "fixed", amount: 6e5 },
+    fallbackPrice: 4e5,
+    delivery: "Ten working days from complete records.",
+    workingDays: 10,
+    buy: "after_call",
+    intake: {
+      records: [STATEMENTS("the last twelve months"), { id: "registration", label: "Business registration documents", detail: "CAC certificate and status report, and your TIN.", required: true }, { id: "lender_form", label: "The lender's application form and checklist", detail: "We build the pack to it.", required: true }, COSTS],
+      questions: [{ id: "lender", label: "Which lender or programme, and when does the window close?", kind: "text", required: true }, { id: "amount", label: "How much do you want, and what will you spend it on?", kind: "textarea", required: true }]
+    },
+    next: "monthly_accounts"
+  },
+  {
+    id: "hiring_toolkit",
+    slug: "hiring-toolkit",
+    name: "Hiring Toolkit",
+    way: "done_for_you",
+    needs: ["people"],
+    short: "Everything you need to hire right the first time: the role, the interview, the offer and the first 90 days.",
+    forWhom: "Owners about to hire.",
+    youGet: ["A job description and what good looks like in the role", "An interview guide and scorecard", "Offer terms and a first-90-days plan for the new hire", "A 30-minute handover call"],
+    price: { kind: "fixed", amount: 3e5 },
+    fallbackPrice: 2e5,
+    delivery: "Five working days from complete answers.",
+    workingDays: 5,
+    buy: "self",
+    intake: {
+      records: [{ id: "current_roles", label: "Your current team: roles and what each person does", detail: "A short list is enough.", required: false }],
+      questions: [{ id: "role", label: "Which role are you hiring for, and why now?", kind: "textarea", required: true }, { id: "budget", label: "What can you pay for the role each month?", kind: "text", required: true }]
+    },
+    next: "six_week_fix",
+    nextVariant: "delegation_structure"
+  },
+  {
+    id: "six_week_fix",
+    slug: "six-week-fix",
+    name: "Six-Week Fix",
+    way: "six_week_fix",
+    needs: ["pricing", "sales", "finance", "people"],
+    short: "Six weeks on one problem: we prescribe and equip, your team does the work, and we review it with you every week.",
+    forWhom: "Owners who know the problem and want it fixed, with someone checking every week.",
+    youGet: ["The Prescription: what to do, the tools and who owns each step", "A Weekly Check-in for six weeks", "One Measure of Success, tracked every week", "A Day-30 Review after the six weeks"],
+    price: { kind: "milestones", total: 15e5, stages: [{ name: "At the start", percent: 50 }, { name: "At the mid-point", percent: 25 }, { name: "At the result", percent: 25 }], payInFullDiscountPercent: 5 },
+    fallbackPrice: 12e5,
+    delivery: "Six weeks from your first Session.",
+    buy: "after_call",
+    variants: [
+      { id: "margin", name: "Margin", problem: "Money comes in, but the business does not make money." },
+      { id: "sales", name: "Sales", problem: "Sales are flat and customers do not come consistently." },
+      { id: "cash_pricing", name: "Cash and Pricing", problem: "Cash is always tight and prices are guesses." },
+      { id: "delegation_structure", name: "Delegation and Structure", problem: "Nothing moves unless you are there." }
+    ],
+    variantForNeed: { pricing: "margin", sales: "sales", finance: "cash_pricing", people: "delegation_structure" },
+    intake: { records: [], questions: [] },
+    next: "monthly_adviser_review"
+  },
+  {
+    id: "monthly_accounts",
+    slug: "monthly-accounts-and-cash-report",
+    name: "Monthly Accounts and Cash Report",
+    way: "monthly_service",
+    needs: ["finance"],
+    short: "Know your profit and cash by the 10th of every month.",
+    forWhom: "Owners who want their numbers every month without keeping the books themselves.",
+    youGet: ["Monthly management accounts by the 10th", "Your cash position and the month ahead", "A note on whether your records are ready for tax", "A short call to walk you through it"],
+    price: { kind: "quarterly", perMonth: 2e5 },
+    fallbackPrice: 15e4,
+    delivery: "By the 10th of each month.",
+    buy: "after_call",
+    intake: { records: [], questions: [] },
+    boundary: "Management accounts only. The tax note says whether your records are ready; it is not tax advice."
+  },
+  {
+    id: "monthly_adviser_review",
+    slug: "monthly-adviser-review",
+    name: "Monthly Adviser Review",
+    way: "monthly_service",
+    needs: ["strategy"],
+    short: "One Session a month with an adviser: your numbers, your priorities and the decisions in front of you.",
+    forWhom: "Owners who want someone experienced to check their thinking every month.",
+    youGet: ["One Session a month with an IP Factory adviser", "Your numbers and priorities reviewed before each Session", "Agreed actions in writing after each Session"],
+    price: { kind: "quarterly", perMonth: 15e4 },
+    fallbackPrice: 1e5,
+    delivery: "One Session a month.",
+    buy: "after_call",
+    intake: { records: [], questions: [] }
+  }
+];
+var productById = (id3) => PRODUCTS.find((product2) => product2.id === id3);
+var MENU_PRODUCTS = PRODUCTS.filter((product2) => product2.buy !== "check");
+var servicePath = (product2) => `/services/${product2.slug}`;
+function priceLabel(price) {
+  switch (price.kind) {
+    case "free":
+      return "Free";
+    case "fixed":
+      return formatNaira(price.amount);
+    case "per_month":
+      return `${formatNaira(price.perMonth)} a month of records`;
+    case "milestones":
+      return formatNaira(price.total);
+    case "quarterly":
+      return `${formatNaira(price.perMonth)} a month`;
+  }
+}
+var quarterAmount = (price) => price.perMonth * 3;
+var perMonthAmount = (price, months) => price.perMonth * months;
+function startingAmount(price) {
+  switch (price.kind) {
+    case "free":
+      return 0;
+    case "fixed":
+      return price.amount;
+    case "per_month":
+      return perMonthAmount(price, price.minMonths);
+    case "milestones":
+      return price.total;
+    case "quarterly":
+      return quarterAmount(price);
+  }
+}
+
+// shared/businessCheck/routing.ts
+var has = (answers, id3, ...values2) => {
+  const value = answers[id3];
+  return Array.isArray(value) ? value.some((item2) => values2.includes(item2)) : typeof value === "string" && values2.includes(value);
+};
+function step(productId, because, variantId) {
+  const product2 = productById(productId);
+  const nextProductId = product2?.next;
+  return { productId, variantId, because, nextProductId, nextVariantId: product2?.nextVariant };
+}
+function byArea(input) {
+  const { answers, mainArea } = input;
+  switch (mainArea) {
+    case 7:
+      if (has(answers, "s7_detail", "mixed_money") || has(answers, "s7_status", "records_unused")) return step("bookkeeping_catch_up", "Your answers say your records are behind or not used to decide.");
+      if (has(answers, "s7_detail", "unit_cost")) return step("pricing_unit_cost_review", "Your answers say you don't know what each product really costs you.");
+      return step("cash_flow_forecast", "Your answers say cash is tight.");
+    case 4:
+    case 3:
+      if (mainArea === 4 || has(answers, "s3_detail", "price_value")) return step("pricing_unit_cost_review", "Your answers say your prices or margins are unclear.");
+      return step("six_week_fix", "Your answers say people like what you sell but don't buy enough of it.", "sales");
+    case 5:
+      return step("six_week_fix", "Your answers say customers don't come consistently.", "sales");
+    case 6:
+      if (has(answers, "s6_status", "staff") || has(answers, "s6_detail", "hiring")) return step("hiring_toolkit", "Your answers say you need to hire, or keep, the right people.");
+      return step("six_week_fix", "Your answers say nothing moves unless you are there.", "delegation_structure");
+    case 8:
+    case 9:
+    case 10:
+      return step("business_review", "Your answers point to questions that touch the whole business.");
+    case 0:
+    case 1:
+    case 2:
+      return step("strategy_90_day_plan", "Your answers say the direction or the priorities are not clear yet.");
+    default:
+      return step("monthly_adviser_review", "Your business looks in good shape on what we asked: the next gains come from regular, sharper decisions.");
+  }
+}
+var FOUNDATION_CEILING = 6e5;
+function firstStep(input) {
+  const { answers, route, stuckAreas } = input;
+  if (route === "advisory") return step("business_review", "At your size, the right start is a Business Review of the whole business.");
+  const funding = has(answers, "s7_status", "funding") || has(answers, "s7_detail", "loan") || has(answers, "s1_status", "means") || has(answers, "i_need", "money");
+  if (route === "idea") return funding ? step("funding_readiness_assessment", "You need money to start, so the first question is whether a lender would say yes.") : step("strategy_90_day_plan", "Before you commit money, set what the business is for and a first 90 days.");
+  if (route !== "foundation" && stuckAreas.length >= 3) return step("business_review", "Several areas are stuck at once, and they are usually one connected problem.");
+  if (funding) return step("funding_readiness_assessment", "Your answers say you need funding to grow.");
+  const chosen = byArea(input);
+  if (route === "foundation") {
+    const product2 = productById(chosen.productId);
+    if (!product2 || product2.way !== "done_for_you" || startingAmount(product2.price) > FOUNDATION_CEILING) {
+      return input.mainArea === 7 ? step("cash_flow_forecast", "Your answers say money is the place to start.") : step("strategy_90_day_plan", "At this stage the biggest lever is a clear plan for the next 90 days.");
+    }
+  }
+  return chosen;
+}
+function stepName(productId, variantId) {
+  const product2 = productById(productId);
+  if (!product2) return "";
+  const variant = variantId ? product2.variants?.find((item2) => item2.id === variantId) : void 0;
+  return variant ? `${product2.name}: ${variant.name}` : product2.name;
+}
+
 // shared/businessCheck/sectorExamples.ts
 var SECTOR_IDS = ["fashion", "food and drink", "retail", "services", "technology", "real estate", "health", "education", "manufacturing", "agriculture", "logistics"];
 var SECTOR_NOUNS = {
@@ -8269,11 +8615,11 @@ function cleanAnswers(answers) {
   const clean = {};
   const visited = /* @__PURE__ */ new Set();
   for (; ; ) {
-    const step = questionPath(clean).find(({ question }) => !visited.has(question.id));
-    if (!step) return clean;
-    visited.add(step.question.id);
-    const value = validValue(step.question, answers[step.question.id], clean);
-    if (value !== void 0) clean[step.question.id] = value;
+    const step2 = questionPath(clean).find(({ question }) => !visited.has(question.id));
+    if (!step2) return clean;
+    visited.add(step2.question.id);
+    const value = validValue(step2.question, answers[step2.question.id], clean);
+    if (value !== void 0) clean[step2.question.id] = value;
   }
 }
 var DISC_STYLES = {
@@ -8341,7 +8687,7 @@ function businessOutline(answers) {
   }
   return rows;
 }
-var NOT_ASSESSED_NOTE = "Areas marked not assessed weren't part of this Business Check for your business. The Current State Assessment looks at all ten.";
+var NOT_ASSESSED_NOTE = "Areas marked not assessed weren't part of this Business Health Check for your business. The Business Review looks at all ten.";
 function areasNotAssessed(answers) {
   if (routeFor(answers) !== "programme") return [];
   const asked = new Set(sectionPath(answers).map((id3) => SECTIONS[id3].area));
@@ -8417,11 +8763,13 @@ function evaluate(rawAnswers) {
   const main = primaryArea(outline, answers);
   const gap = primaryGap(outline, main);
   const offerings = route === "advisory" ? [] : matchedOfferings(answers, outline);
-  return { route, founder, outline, primaryArea: main, primaryGap: gap, offerings, summary: writeSummary({ answers, route, founder, outline, main, gap, offerings }) };
+  const stuckAreas = outline.filter((row) => row.health === "stuck" && row.area !== 0).map((row) => row.area);
+  const first = firstStep({ answers, route, stuckAreas, mainArea: main?.area });
+  return { route, founder, outline, primaryArea: main, primaryGap: gap, offerings, firstStep: first, summary: writeSummary({ answers, route, founder, outline, main, gap, first }) };
 }
 var lower = (text4) => text4.charAt(0).toLowerCase() + text4.slice(1);
 function writeSummary(input) {
-  const { route, founder, outline, main, gap, offerings } = input;
+  const { route, founder, outline, main, gap, first } = input;
   const style = founder.instinct ? DISC_STYLES[founder.instinct] : void 0;
   const stuck = outline.filter((row) => row.health === "stuck" && row.area !== 0).map((row) => row.name);
   const watch = outline.filter((row) => row.health === "watch" && row.area !== 0).map((row) => row.name);
@@ -8453,7 +8801,7 @@ function writeSummary(input) {
     stuck.length ? `You described ${stuck.length === 1 ? "one area as stuck" : `${stuck.length} areas as stuck`}: ${stuck.join(", ")}.` : "No area came out as stuck.",
     watch.length ? `${watch.join(", ")} ${watch.length === 1 ? "needs" : "need"} watching.` : ""
   ].filter(Boolean).join(" ");
-  const think = main ? `The place to start is ${main.name.toLowerCase()}${gap ? `, and the gap looks like ${GAP_LABELS[gap].name.toLowerCase()}: ${lower(GAP_LABELS[gap].meaning)}` : "."}${offerings.length ? ` That points to ${offerings.map((offering) => offering.name).join(", ")}.` : ""}` : "The business looks in good shape on what we asked. The next gains are likely in sharper priorities and stronger numbers.";
+  const think = main ? `The place to start is ${main.name.toLowerCase()}${gap ? `, and the gap looks like ${GAP_LABELS[gap].name.toLowerCase()}: ${lower(GAP_LABELS[gap].meaning)}` : "."}${first ? ` The first step that fits is the ${stepName(first.productId, first.variantId)}.` : ""}` : `The business looks in good shape on what we asked. The next gains are likely in sharper priorities and stronger numbers.${first ? ` The first step that fits is the ${stepName(first.productId, first.variantId)}.` : ""}`;
   const matureNote = isMatureAndStruggling(input.answers) && main?.area === 4 ? ` After more than ten years with revenue ${input.answers.p_trend === "declining" ? "falling" : "flat"}, that usually means the way the business makes money has stopped working, not that the effort has dropped.` : "";
   return { found, think: think + matureNote, next: "Book the free 20-minute Discovery Call. We will tell you honestly whether we can help, and what to fix first." };
 }
@@ -8461,6 +8809,67 @@ function writeSummary(input) {
 // server/businessCheck.ts
 init_brand();
 import { z as z13 } from "zod";
+
+// server/businessSupportPrices.ts
+import { TRPCError as TRPCError13 } from "@trpc/server";
+var PRICE_ENV_NAMES = { full_report: "FULL_REPORT_PRICE_NGN", current_state: "CURRENT_STATE_PRICE_NGN" };
+var DEFAULT_PRICES = { full_report: PRICES.fullReport, current_state: PRICES.currentState };
+var LOW_PRICE_THRESHOLD_NGN = 1e4;
+var MAX_PRICE_NGN = 1e8;
+var LOW_PRICE_SWITCH = "ALLOW_LOW_PRICE_TESTING";
+var isProduction = (env) => env.NODE_ENV === "production";
+var lowPriceTestingAllowed = (env) => env[LOW_PRICE_SWITCH]?.trim().toLowerCase() === "true";
+function evaluateBusinessSupportPrice(item2, env = process.env) {
+  const name = PRICE_ENV_NAMES[item2];
+  const raw = env[name]?.trim();
+  let amountNaira = DEFAULT_PRICES[item2];
+  if (raw) {
+    if (!/^\d{1,12}$/.test(raw)) return { ok: false, problem: "invalid", reason: `${name} must be a whole number of naira, such as ${DEFAULT_PRICES[item2]}.` };
+    amountNaira = Number(raw);
+    if (!Number.isSafeInteger(amountNaira) || amountNaira <= 0 || amountNaira > MAX_PRICE_NGN) {
+      return { ok: false, problem: "invalid", reason: `${name} must be between 1 and ${MAX_PRICE_NGN} naira.` };
+    }
+  }
+  const low = amountNaira < LOW_PRICE_THRESHOLD_NGN;
+  if (low && isProduction(env) && !lowPriceTestingAllowed(env)) {
+    return { ok: false, problem: "too_low", reason: `${name} is ${formatNaira(amountNaira)}, below the production safety threshold of ${formatNaira(LOW_PRICE_THRESHOLD_NGN)}. Set ${LOW_PRICE_SWITCH}=true only for a deliberate test.` };
+  }
+  return { ok: true, amountNaira, configured: Boolean(raw), lowPriceTesting: low && isProduction(env) };
+}
+var warned = /* @__PURE__ */ new Set();
+function warnLowPriceTesting(item2, amountNaira) {
+  const key = `${item2}:${amountNaira}`;
+  if (warned.has(key)) return;
+  warned.add(key);
+  console.warn(`[Pricing] ${LOW_PRICE_SWITCH} is on: ${item2} is priced at ${formatNaira(amountNaira)}, below the ${formatNaira(LOW_PRICE_THRESHOLD_NGN)} threshold. Restore the real price and turn the switch off after the test.`);
+}
+function resolveBusinessSupportPrice(item2, env = process.env) {
+  const outcome = evaluateBusinessSupportPrice(item2, env);
+  if (!outcome.ok) {
+    console.error(`[Pricing] ${outcome.reason}`);
+    throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "This payment is paused while we check its price. Please try again shortly, or reply to your email." });
+  }
+  if (outcome.lowPriceTesting) warnLowPriceTesting(item2, outcome.amountNaira);
+  return { amountNaira: outcome.amountNaira, lowPriceTesting: outcome.lowPriceTesting };
+}
+function getBusinessSupportPrice(item2, env = process.env) {
+  return resolveBusinessSupportPrice(item2, env).amountNaira;
+}
+function assertAmountAllowed(amountNaira, env = process.env) {
+  const low = amountNaira < LOW_PRICE_THRESHOLD_NGN;
+  if (low && isProduction(env) && !lowPriceTestingAllowed(env)) {
+    console.error(`[Pricing] A payment request of ${formatNaira(amountNaira)} was refused: below the production safety threshold of ${formatNaira(LOW_PRICE_THRESHOLD_NGN)} and ${LOW_PRICE_SWITCH} is off.`);
+    throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "This payment is paused while we check its price. Reply to your payment email and we will send you a fresh link." });
+  }
+  return low && isProduction(env);
+}
+function displayedPrices(env = process.env) {
+  const priceOf = (item2) => {
+    const outcome = evaluateBusinessSupportPrice(item2, env);
+    return outcome.ok ? outcome.amountNaira : DEFAULT_PRICES[item2];
+  };
+  return { fullReport: priceOf("full_report"), currentState: priceOf("current_state") };
+}
 
 // server/_core/llm.ts
 init_env();
@@ -8766,13 +9175,14 @@ function describeResult(result) {
     ...result.outline.map((row) => `- ${row.area}. ${row.name}: ${row.health}${row.gap ? ` (gap: ${GAP_LABELS[row.gap].name})` : ""}`),
     `Main problem area: ${result.primaryArea ? result.primaryArea.name : "none"}`,
     `Main gap: ${result.primaryGap ? GAP_LABELS[result.primaryGap].name : "none"}`,
-    `Offerings the rules matched: ${result.offerings.map((offering) => offering.id).join(", ") || "none"}`
+    `Offerings the rules matched: ${result.offerings.map((offering) => offering.id).join(", ") || "none"}`,
+    result.firstStep ? `First product the rules chose from our menu: ${stepName(result.firstStep.productId, result.firstStep.variantId)}. Why: ${result.firstStep.because}` : ""
   ].filter(Boolean).join("\n");
 }
 var CATALOGUE_TEXT = OFFERINGS.map(
   (offering) => `- ${offering.id} | ${CAPABILITIES[offering.capability]} | ${offering.name}: ${offering.summary} When: ${offering.signals.join("; ")}.`
 ).join("\n");
-var SYSTEM_PROMPT = `You write the short result of the ${BRAND.organisationName} free Business Check for a Nigerian small or growing business owner.
+var SYSTEM_PROMPT = `You write the short result of the ${BRAND.organisationName} free Business Health Check for a Nigerian small or growing business owner.
 
 Voice: between consulting language and plain English. Use proper terms (strategic intent, unit cost, margin, route to market) but say what they mean in context. Second person. Short sentences. Warm, direct, honest. No hype, no jargon piles, no "door", "sprint", "playbook" or "retainer". Naira in full (\u20A6). British spelling.
 
@@ -8782,7 +9192,7 @@ The owner's one-line description is your main source for making the result speci
 
 Then check the result against our service catalogue (below) and choose up to three offerings that fit what the owner described, most relevant first, using only these ids. Prefer the ones the rules matched unless the answers clearly point elsewhere. For an idea-stage founder or a very small business, recommend at most one offering and only if it truly fits; the founder comes first. For route "advisory" recommend none.
 
-"found" says what the answers show (2 to 4 sentences, specific to this business and its sector). "think" says what we think the real problem is and why (2 to 4 sentences). "next" invites them to book the free 20-minute Discovery Call, in one sentence. Each "why" ties the offering to something the owner said, in one sentence.
+"found" says what the answers show (2 to 4 sentences, specific to this business and its sector). "think" says what we think the real problem is and why (2 to 4 sentences), and ends by naming the first product the rules chose from our menu, exactly as given; never name any other service in "think". "next" invites them to book the free 20-minute Discovery Call, in one sentence. Each "why" ties the offering to something the owner said, in one sentence.
 
 Service catalogue:
 ${CATALOGUE_TEXT}`;
@@ -8837,6 +9247,22 @@ async function summariseCheck(input) {
     return fallback;
   }
 }
+function firstStepLines(result) {
+  const first = result.firstStep;
+  const product2 = first ? productById(first.productId) : void 0;
+  if (!first || !product2) return [];
+  const prices = displayedPrices();
+  const price = product2.id === "business_review" ? { kind: "fixed", amount: prices.currentState } : product2.price;
+  const next = first.nextProductId ? stepName(first.nextProductId, first.nextVariantId) : "";
+  return [
+    "",
+    "YOUR FIRST STEP",
+    `${stepName(first.productId, first.variantId)}: ${priceLabel(price)}. ${product2.delivery}`,
+    first.because,
+    `See what it includes: ${ENV.appOrigin}${servicePath(product2)}`,
+    ...next ? [`Usually next: ${next}.`] : []
+  ];
+}
 function ownerEmail(input) {
   const { contact, summary, result } = input;
   const fullReportPrice = input.fullReportPrice ?? PRICES.fullReport;
@@ -8844,11 +9270,11 @@ function ownerEmail(input) {
   const assessed = result.outline.map((row) => ({ area: row.area, line: `\u2022 ${row.name}: ${row.health}` }));
   const outline = notAssessed.length ? [...assessed, ...notAssessed.map((row) => ({ area: row.area, line: `\u2022 ${row.name}: not assessed` }))].sort((a, b) => a.area - b.area) : assessed;
   const firstName2 = contact.fullName.split(/\s+/)[0];
-  const subject = `Your Business Check: Findings`;
+  const subject = `Your Business Health Check: Findings`;
   const body = [
     `Dear ${firstName2},`,
     "",
-    `Thank you for taking the ${BRAND.organisationName} Business Check. Here is your summary.`,
+    `Thank you for taking the ${BRAND.organisationName} Business Health Check. Here is your summary.`,
     "",
     "FINDINGS",
     summary.found,
@@ -8859,7 +9285,7 @@ function ownerEmail(input) {
     "YOUR BUSINESS OUTLINE",
     ...outline.map((row) => row.line),
     ...notAssessed.length ? [NOT_ASSESSED_NOTE] : [],
-    ...summary.offerings.length ? ["", "WHERE WE COULD HELP", ...summary.offerings.map((offering) => `\u2022 ${offering.name}: ${offering.why}`)] : [],
+    ...firstStepLines(result),
     "",
     "NEXT STEP",
     summary.next,
@@ -8878,9 +9304,9 @@ function ownerEmail(input) {
 }
 function officeEmail(input) {
   const { contact, result } = input;
-  const subject = `Business Check: ${contact.businessName || contact.fullName} (${result.route}${result.primaryArea ? `, ${result.primaryArea.name}` : ""})`;
+  const subject = `Business Health Check: ${contact.businessName || contact.fullName} (${result.route}${result.primaryArea ? `, ${result.primaryArea.name}` : ""})`;
   const body = [
-    `A Business Check was completed.`,
+    `A Business Health Check was completed.`,
     "",
     `Name: ${contact.fullName}`,
     `Email: ${contact.email}`,
@@ -8907,67 +9333,6 @@ import { and as and15, desc as desc11, eq as eq21, inArray as inArray5, ne as ne
 import { TRPCError as TRPCError19 } from "@trpc/server";
 init_brand();
 
-// server/businessSupportPrices.ts
-import { TRPCError as TRPCError13 } from "@trpc/server";
-var PRICE_ENV_NAMES = { full_report: "FULL_REPORT_PRICE_NGN", current_state: "CURRENT_STATE_PRICE_NGN" };
-var DEFAULT_PRICES = { full_report: PRICES.fullReport, current_state: PRICES.currentState };
-var LOW_PRICE_THRESHOLD_NGN = 1e4;
-var MAX_PRICE_NGN = 1e8;
-var LOW_PRICE_SWITCH = "ALLOW_LOW_PRICE_TESTING";
-var isProduction = (env) => env.NODE_ENV === "production";
-var lowPriceTestingAllowed = (env) => env[LOW_PRICE_SWITCH]?.trim().toLowerCase() === "true";
-function evaluateBusinessSupportPrice(item2, env = process.env) {
-  const name = PRICE_ENV_NAMES[item2];
-  const raw = env[name]?.trim();
-  let amountNaira = DEFAULT_PRICES[item2];
-  if (raw) {
-    if (!/^\d{1,12}$/.test(raw)) return { ok: false, problem: "invalid", reason: `${name} must be a whole number of naira, such as ${DEFAULT_PRICES[item2]}.` };
-    amountNaira = Number(raw);
-    if (!Number.isSafeInteger(amountNaira) || amountNaira <= 0 || amountNaira > MAX_PRICE_NGN) {
-      return { ok: false, problem: "invalid", reason: `${name} must be between 1 and ${MAX_PRICE_NGN} naira.` };
-    }
-  }
-  const low = amountNaira < LOW_PRICE_THRESHOLD_NGN;
-  if (low && isProduction(env) && !lowPriceTestingAllowed(env)) {
-    return { ok: false, problem: "too_low", reason: `${name} is ${formatNaira(amountNaira)}, below the production safety threshold of ${formatNaira(LOW_PRICE_THRESHOLD_NGN)}. Set ${LOW_PRICE_SWITCH}=true only for a deliberate test.` };
-  }
-  return { ok: true, amountNaira, configured: Boolean(raw), lowPriceTesting: low && isProduction(env) };
-}
-var warned = /* @__PURE__ */ new Set();
-function warnLowPriceTesting(item2, amountNaira) {
-  const key = `${item2}:${amountNaira}`;
-  if (warned.has(key)) return;
-  warned.add(key);
-  console.warn(`[Pricing] ${LOW_PRICE_SWITCH} is on: ${item2} is priced at ${formatNaira(amountNaira)}, below the ${formatNaira(LOW_PRICE_THRESHOLD_NGN)} threshold. Restore the real price and turn the switch off after the test.`);
-}
-function resolveBusinessSupportPrice(item2, env = process.env) {
-  const outcome = evaluateBusinessSupportPrice(item2, env);
-  if (!outcome.ok) {
-    console.error(`[Pricing] ${outcome.reason}`);
-    throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "This payment is paused while we check its price. Please try again shortly, or reply to your email." });
-  }
-  if (outcome.lowPriceTesting) warnLowPriceTesting(item2, outcome.amountNaira);
-  return { amountNaira: outcome.amountNaira, lowPriceTesting: outcome.lowPriceTesting };
-}
-function getBusinessSupportPrice(item2, env = process.env) {
-  return resolveBusinessSupportPrice(item2, env).amountNaira;
-}
-function assertAmountAllowed(amountNaira, env = process.env) {
-  const low = amountNaira < LOW_PRICE_THRESHOLD_NGN;
-  if (low && isProduction(env) && !lowPriceTestingAllowed(env)) {
-    console.error(`[Pricing] A payment request of ${formatNaira(amountNaira)} was refused: below the production safety threshold of ${formatNaira(LOW_PRICE_THRESHOLD_NGN)} and ${LOW_PRICE_SWITCH} is off.`);
-    throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "This payment is paused while we check its price. Reply to your payment email and we will send you a fresh link." });
-  }
-  return low && isProduction(env);
-}
-function displayedPrices(env = process.env) {
-  const priceOf = (item2) => {
-    const outcome = evaluateBusinessSupportPrice(item2, env);
-    return outcome.ok ? outcome.amountNaira : DEFAULT_PRICES[item2];
-  };
-  return { fullReport: priceOf("full_report"), currentState: priceOf("current_state") };
-}
-
 // server/engagements.ts
 import { TRPCError as TRPCError16 } from "@trpc/server";
 import { and as and12, asc, desc as desc9, eq as eq18, inArray as inArray4, isNull as isNull5 } from "drizzle-orm";
@@ -8981,7 +9346,7 @@ function isMissingDebriefTable(error) {
 }
 async function requireCheck(db, businessCheckId) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email }).from(businessChecks).where(eq16(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError14({ code: "NOT_FOUND", message: "This business check does not exist." });
+  if (!check) throw new TRPCError14({ code: "NOT_FOUND", message: "This Business Health Check does not exist." });
   return check;
 }
 async function getDebrief(db, businessCheckId) {
@@ -9061,7 +9426,7 @@ function roomInsight(input) {
   const seen = result.founder.seen ? DISC_STYLES[result.founder.seen] : void 0;
   const founderHealth = result.outline.find((row) => row.area === 0)?.health;
   return {
-    source: "Business Check",
+    source: "Business Health Check",
     founder: {
       readiness: { label: READINESS_LABELS[result.founder.level], health: founderHealth ?? "not_assessed" },
       sections: [],
@@ -9074,7 +9439,7 @@ function roomInsight(input) {
     areas: result.outline.filter((row) => !FOUNDER_AREAS.has(row.name) && row.area > 1).map((row) => ({
       area: row.name,
       health: row.health,
-      finding: row.answer ? `\u201C${row.answer}\u201D` : "From your Business Check answers.",
+      finding: row.answer ? `\u201C${row.answer}\u201D` : "From your Business Health Check answers.",
       reading: null,
       benchmarks: []
     }))
@@ -10012,7 +10377,7 @@ function buildFullReport(input) {
       ...convLift > 1 ? [{ label: "Conversion", amount: round(revenue * priceLift * (convLift - 1)) }] : [],
       ...reach > 1 ? [{ label: "Reach", amount: round(target - revenue * priceLift * convLift) }] : [],
       { label: "Target", amount: round(target), total: true }
-    ].map((step) => ({ ...step, display: `${step.total ? "" : "+"}${money(step.amount)}` }));
+    ].map((step2) => ({ ...step2, display: `${step2.total ? "" : "+"}${money(step2.amount)}` }));
     return {
       text: [
         `The gap from ${money(revenue)} a month to the ${money(target)} you want is a factor of about ${factor.toFixed(1)}. It is less frightening broken into three ordinary parts.`,
@@ -10050,7 +10415,7 @@ function buildFullReport(input) {
     ...intake.loans === "not_sure" ? [["Loans and what they cost each month", "Repayments come before growth."]] : [],
     ...intake.registration === "not_sure" ? [["How the business is registered", "It decides which contracts, loans and tax rules apply."]] : [],
     ...intake.repeat === "not_sure" ? [["Whether customers come back", "Repeat business is the cheapest growth there is."]] : [],
-    ...!founder.instinct ? [["The behaviour questions in the Business Check", "Section One is left open without them."]] : []
+    ...!founder.instinct ? [["The behaviour questions in the Business Health Check", "Section One is left open without them."]] : []
   ];
   const openRecord = [market, offer, model, sales, operations, finance, risk, ...extraReadings].flatMap((item2) => item2.notes);
   const s1 = section(1);
@@ -10060,14 +10425,14 @@ function buildFullReport(input) {
     title: "Founder readiness",
     standfirst: `${READINESS_LABELS[founder.level]}. No business outgrows the person running it.`,
     health: outlineRow(result, 0)?.health ?? "not_assessed",
-    overview: "This section asks whether you are equipped for the business this plan describes, and names the gaps to close first. It is built from your answers about yourself in the Business Check.",
+    overview: "This section asks whether you are equipped for the business this plan describes, and names the gaps to close first. It is built from your answers about yourself in the Business Health Check.",
     scope: ["Your behavioural profile.", "The four money basics.", "Time, the hard calls and who carries the business with you."],
     blocks: [
       s1.sub("Your behavioural profile"),
       ...style ? [
         { kind: "facts", rows: [{ label: "Under pressure", value: `${style.name}. ${style.strength}` }, ...seen ? [{ label: "Others see you as", value: `${seen.name}. ${seen.strength}` }] : [], { label: "Watch for", value: style.watch }] },
         { kind: "numbered", title: "Why it matters now", items: ["On your own, behaviour is a matter of style. With a team, it becomes how the business runs.", ...seen && seen.name !== style.name ? [`You see yourself as a ${style.name.toLowerCase()} and others see a ${seen.name.toLowerCase()}. Ask two people who work with you which is right: the gap is where misunderstandings start.`] : [], `Your watch-out is a pattern, not a flaw: ${lower2(style.watch)} Name it, then design around it.`] }
-      ] : [{ kind: "paragraph", text: "You did not complete the behaviour questions in the Business Check, so this part is left open rather than guessed at. Section Nine lists it." }],
+      ] : [{ kind: "paragraph", text: "You did not complete the behaviour questions in the Business Health Check, so this part is left open rather than guessed at. Section Nine lists it." }],
       ...Array.isArray(answers.f_finance) ? [
         s1.sub("The four money basics"),
         { kind: "table", columns: ["The basic", "Today", "Weight in this plan"], widths: [0.5, 0.2, 0.3], rows: Object.entries(FINANCE_SKILLS).map(([key, skill]) => [upperFirst(skill), answers.f_finance.includes(key) ? "Yes" : "Not yet", key === "pl" ? "High" : "Critical"]) },
@@ -10280,9 +10645,9 @@ function buildFullReport(input) {
     { label: "Top three customers", figure: labelOf(TOP_CUSTOMER_SHARE, intake.topCustomerShare), meaning: intake.topCustomerShare === "over_50" ? "Losing one would change the business overnight" : "Share of your sales" }
   ];
   const background2 = {
-    overview: `You took the Business Check and completed the Report Intake. This plan brings what you told us into one place, as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers.`,
+    overview: `You took the Business Health Check and completed the Report Intake. This plan brings what you told us into one place, as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers.`,
     engagement: [
-      "Your Business Check: the ten places a business gets stuck, and you as a founder, in your words.",
+      "Your Business Health Check: the ten places a business gets stuck, and you as a founder, in your words.",
       `Your Report Intake, completed ${reportDate(input.date)}: what you sell, who buys, how the business runs, and the numbers.`,
       "This plan: built by fixed rules from both, so every finding traces back to an answer you gave."
     ],
@@ -10318,7 +10683,7 @@ function buildFullReport(input) {
     background: background2,
     sections,
     appendix: appendix(answers, intake),
-    method: `Built by The Shift's fixed rules from the Business Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on ${reportDate(input.date)}. It is not an audit, a valuation, or financial, legal or tax advice.`
+    method: `Built by The Shift's fixed rules from the Business Health Check you took and the Report Intake you completed. The same answers always give the same report. It reflects what you told us on ${reportDate(input.date)}. It is not an audit, a valuation, or financial, legal or tax advice.`
   };
   function takeaways2() {
     const ranked = [...mainArea !== void 0 ? [mainArea] : [], ...order.filter((area) => area !== mainArea && areaHealth.get(area).health === "stuck"), ...order.filter((area) => area !== mainArea && areaHealth.get(area).health === "watch")];
@@ -10472,7 +10837,7 @@ function appendix(answers, intake) {
     goal: intake.revenueTarget ? `${sentence(intake.goal)} Monthly sales wanted in 12 months: ${formatNaira(intake.revenueTarget)}.` : intake.goal
   };
   return [
-    { title: "Your Business Check", rows: check },
+    { title: "Your Business Health Check", rows: check },
     { title: "Your Report Intake", rows: INTAKE_QUESTIONS.map((question) => ({ question: intakeWording(question, earnsByDeal(intake.products)).prompt, answer: intakeAnswers[question.id] })) }
   ];
 }
@@ -10822,7 +11187,7 @@ function waterfall(doc, steps) {
   const chartHeight = 130;
   ensure(doc, chartHeight + 50);
   const top = doc.y + 16;
-  const [income, costs, left] = steps.map((step) => step.amount);
+  const [income, costs, left] = steps.map((step2) => step2.amount);
   const high = Math.max(income, 0);
   const low = Math.min(0, left);
   const y = (value) => top + (high - value) / (high - low || 1) * chartHeight;
@@ -10959,22 +11324,22 @@ function bridge(doc, steps) {
   const chartHeight = 140;
   ensure(doc, chartHeight + 56);
   const top = doc.y + 18;
-  const high = Math.max(...steps.filter((step) => step.total).map((step) => step.amount), 1);
+  const high = Math.max(...steps.filter((step2) => step2.total).map((step2) => step2.amount), 1);
   const y = (value) => top + chartHeight - value / high * chartHeight;
   const columnWidth = W / steps.length;
   const barWidth = Math.min(64, columnWidth - 24);
   let running = 0;
-  steps.forEach((step, index2) => {
-    const from = step.total ? 0 : running;
-    const to = step.total ? step.amount : running + step.amount;
+  steps.forEach((step2, index2) => {
+    const from = step2.total ? 0 : running;
+    const to = step2.total ? step2.amount : running + step2.amount;
     running = to;
     const x = M.left + index2 * columnWidth + (columnWidth - barWidth) / 2;
-    const color = step.total ? index2 === 0 ? C2["brand-slate"] : C2.brand : C2["health-clear"];
+    const color = step2.total ? index2 === 0 ? C2["brand-slate"] : C2.brand : C2["health-clear"];
     const y1 = Math.min(y(from), y(to));
     doc.rect(x, y1, barWidth, Math.max(Math.abs(y(from) - y(to)), 1.5)).fill(color);
     if (index2 < steps.length - 1) doc.moveTo(x + barWidth, y(to)).lineTo(x + columnWidth, y(to)).lineWidth(0.6).dash(2, { space: 2 }).strokeColor(C2["ink-muted"]).stroke().undash();
-    doc.fillColor(color).font(SANS_700).fontSize(8.5).text(step.display, x - 30, y1 - 13, { width: barWidth + 60, align: "center", lineBreak: false });
-    doc.fillColor(C2["ink-muted"]).font(SANS_600).fontSize(8).text(step.label, x - 30, top + chartHeight + 8, { width: barWidth + 60, align: "center", lineBreak: false });
+    doc.fillColor(color).font(SANS_700).fontSize(8.5).text(step2.display, x - 30, y1 - 13, { width: barWidth + 60, align: "center", lineBreak: false });
+    doc.fillColor(C2["ink-muted"]).font(SANS_600).fontSize(8).text(step2.label, x - 30, top + chartHeight + 8, { width: barWidth + 60, align: "center", lineBreak: false });
   });
   doc.moveTo(M.left, top + chartHeight).lineTo(M.left + W, top + chartHeight).lineWidth(0.6).strokeColor(C2.line).stroke();
   doc.x = M.left;
@@ -11104,11 +11469,11 @@ function cover(doc, report) {
   facts(doc, [
     { label: "Prepared for", value: report.ownerName },
     { label: "Prepared by", value: `${BRAND.organisationName}, ${BRAND.productEndorsement.replace(/, by .*/, "")}` },
-    { label: "Built from", value: "Your Business Check and your Report Intake" },
+    { label: "Built from", value: "Your Business Health Check and your Report Intake" },
     { label: "Date", value: report.date },
     { label: "Reference", value: report.reference }
   ]);
-  callout(doc, "What this document is", "The outcome of your Business Check and Report Intake, brought into one place as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers. Read it as the start of a conversation: Section Nine lists what we still need from you.", C2["highlight-ink"]);
+  callout(doc, "What this document is", "The outcome of your Business Health Check and Report Intake, brought into one place as a plan you can work from. Where it quotes you, the words are yours; where it records a number, the number came from your answers. Read it as the start of a conversation: Section Nine lists what we still need from you.", C2["highlight-ink"]);
 }
 var WORDS = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
 function contents(doc, report) {
@@ -11352,7 +11717,7 @@ async function submitReportIntake(db, token3, rawIntake) {
       `Fix first: ${report.onePage.fixFirst.area}`,
       `Delivery: ${delivery.status}`,
       "",
-      `Business check #${claimed.businessCheckId}.`
+      `Business Health Check #${claimed.businessCheckId}.`
     ].join("\n")
   }).catch(() => void 0);
   return { delivered: true, deliveryStatus: delivery.status, fileName: fileName(report), pdf: pdf.toString("base64") };
@@ -11610,7 +11975,7 @@ async function listAwaitingStart(db, actor) {
 async function startAwaitingEngagement(db, actor, input) {
   requireStart(actor);
   const payment = (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and12(eq18(paymentRequests.businessCheckId, input.businessCheckId), eq18(paymentRequests.item, "current_state"), eq18(paymentRequests.status, "confirmed"))).limit(1))[0];
-  if (!payment) throw new TRPCError16({ code: "NOT_FOUND", message: "This Current State Assessment is not paid yet." });
+  if (!payment) throw new TRPCError16({ code: "NOT_FOUND", message: "This Business Review is not paid yet." });
   const result = await startEngagement(db, { businessCheckId: input.businessCheckId, paymentRequestId: payment.id, actorUserId: actor.id });
   const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq18(engagements.businessCheckId, input.businessCheckId)).limit(1))[0];
   return { engagementId: engagement.id, created: result.created };
@@ -12016,7 +12381,7 @@ async function getClientRoom(db, session) {
     measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,
     team: team.map((member) => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
-    // The owner books the Current State Assessment Sessions on Calendly, in order, with their details filled in.
+    // The owner books the Business Review Sessions on Calendly, in order, with their details filled in.
     booking: bookingFor(sessions, viewer, owner ?? null),
     sessions: scheduled.map((item2) => ({
       id: item2.id,
@@ -12753,7 +13118,7 @@ function onlinePaymentOffer(publicToken, item2) {
 }
 function paymentDetailsEmail(input) {
   const report = input.item === "full_report";
-  const afterwards = report ? `Then we send you the Report Intake, a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your Full Report is emailed to you the moment you finish it.` : `Then your ${CURRENT_STATE.name} starts. ${CURRENT_STATE.start}`;
+  const afterwards = report ? `Then we send you the Report Intake, a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your Full Report is emailed to you the moment you finish it.` : `Then your ${CURRENT_STATE.name} is booked. ${CURRENT_STATE.start}`;
   return {
     subject: report ? "Payment details for your Full Report" : `Payment details for your ${CURRENT_STATE.name}`,
     body: [
@@ -12808,13 +13173,13 @@ function paymentConfirmedEmail(input) {
     };
   }
   return {
-    subject: `Payment received: your ${CURRENT_STATE.name} starts`,
+    subject: `Payment received: your ${CURRENT_STATE.name} is booked`,
     body: [
       `Dear ${firstName(input.fullName)},`,
       "",
       received,
       "",
-      `Your ${CURRENT_STATE.name} starts now. ${CURRENT_STATE.start}`,
+      `Your ${CURRENT_STATE.name} is booked. ${CURRENT_STATE.start}`,
       "",
       "WHAT HAPPENS NEXT",
       `\u2022 We email you a link to set up your client account on ${BRAND.productName}. Your ${CURRENT_STATE.name} lives there.`,
@@ -12849,7 +13214,7 @@ async function paymentStatusesByCheck(db, businessCheckIds) {
 }
 async function loadCheck(db, businessCheckId) {
   const check = (await db.select({ id: businessChecks.id, publicToken: businessChecks.publicToken, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq21(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError19({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  if (!check) throw new TRPCError19({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   return check;
 }
 var BEFORE_OPPORTUNITY = ["lead", "qualified_lead", "call_booked"];
@@ -12956,7 +13321,7 @@ async function inviteToClientAccount(db, businessCheckId, actor) {
 // server/fullReportRequest.ts
 import { TRPCError as TRPCError20 } from "@trpc/server";
 import { eq as eq22 } from "drizzle-orm";
-var PAY_LINK_NOTE = "Started paying online from the link in their Business Check summary email.";
+var PAY_LINK_NOTE = "Started paying online from the link in their Business Health Check summary email.";
 async function askForFullReport(db, check, input) {
   const first = !check.reportRequestedAt;
   if (!first && input.source === "result_page") return;
@@ -12976,7 +13341,7 @@ async function askForFullReport(db, check, input) {
     sender: "business_support",
     idempotencyKey: `business_checks:${check.id}:report:office`,
     to: BUSINESS_SUPPORT_MAILBOX,
-    subject: `Business Check: ${check.businessName || check.fullName} asked for the Full Report`,
+    subject: `Business Health Check: ${check.businessName || check.fullName} asked for the Full Report`,
     body: [
       `${check.fullName} asked for the Full Report.`,
       "",
@@ -12986,7 +13351,7 @@ async function askForFullReport(db, check, input) {
       `Note: ${note}`,
       payment,
       "",
-      `Business Check #${check.id}${check.completedAt ? `, completed ${lagosTime(check.completedAt)} (Lagos time)` : ""}.`
+      `Business Health Check #${check.id}${check.completedAt ? `, completed ${lagosTime(check.completedAt)} (Lagos time)` : ""}.`
     ].join("\n")
   });
 }
@@ -13012,7 +13377,7 @@ async function database(what) {
 }
 async function findCheck(db, token3) {
   const [check] = await db.select().from(businessChecks).where(eq23(businessChecks.publicToken, token3)).limit(1);
-  if (!check) throw new TRPCError21({ code: "NOT_FOUND", message: "We could not find that Business Check. Kindly start again." });
+  if (!check) throw new TRPCError21({ code: "NOT_FOUND", message: "We could not find that Business Health Check. Kindly start again." });
   return check;
 }
 function answerColumns(answers) {
@@ -13030,9 +13395,9 @@ var businessCheckRouter = router({
   start: publicProcedure.input(businessCheckStartInput).mutation(async ({ input, ctx }) => {
     const ip = (ctx.req.ip || "unknown").toLowerCase();
     if (!await consumeLimit(LIMITS.checkStartIp, ip) || !await consumeLimit(LIMITS.checkStartEmail, `${ip}:${input.email}`)) {
-      throw tooMany2("Kindly wait a few minutes before starting another Business Check.");
+      throw tooMany2("Kindly wait a few minutes before starting another Business Health Check.");
     }
-    const db = await database("start your Business Check");
+    const db = await database("start your Business Health Check");
     const token3 = randomBytes9(24).toString("base64url");
     await db.insert(businessChecks).values({
       publicToken: token3,
@@ -13057,8 +13422,8 @@ var businessCheckRouter = router({
   }),
   /** Finishes the check: works out the result on the server, writes the summary and emails both sides once. */
   submit: publicProcedure.input(z16.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }) => {
-    if (!await consumeLimit(LIMITS.checkSubmit, input.token)) throw tooMany2("Your Business Check has been sent. Kindly wait a while before sending it again.");
-    const db = await database("record your Business Check");
+    if (!await consumeLimit(LIMITS.checkSubmit, input.token)) throw tooMany2("Your Business Health Check has been sent. Kindly wait a while before sending it again.");
+    const db = await database("record your Business Health Check");
     const check = await findCheck(db, input.token);
     if (check.completedAt && check.resultJson && check.summaryJson && check.summarySource) {
       return { token: check.publicToken, result: JSON.parse(check.resultJson), summary: JSON.parse(check.summaryJson), summarySource: check.summarySource, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: check.notificationStatus };
@@ -13106,7 +13471,7 @@ var businessCheckRouter = router({
     if (!await consumeLimit(LIMITS.checkNext, input.token)) throw tooMany2("Your request has been recorded. Kindly wait before sending another.");
     const db = await database("record your request");
     const check = await findCheck(db, input.token);
-    if (!check.completedAt) throw new TRPCError21({ code: "BAD_REQUEST", message: "Kindly finish the Business Check first." });
+    if (!check.completedAt) throw new TRPCError21({ code: "BAD_REQUEST", message: "Kindly finish the Business Health Check first." });
     if (input.choice === "report") {
       await askForFullReport(db, check, { source: "result_page", note: input.note });
       return { success: true, choice: input.choice };
@@ -13124,7 +13489,7 @@ var businessCheckRouter = router({
         sender: "business_support",
         idempotencyKey: `business_checks:${check.id}:${input.choice}:office`,
         to: BUSINESS_SUPPORT_MAILBOX,
-        subject: `Business Check: ${check.businessName || check.fullName} asked for ${what}`,
+        subject: `Business Health Check: ${check.businessName || check.fullName} asked for ${what}`,
         body: [
           `${check.fullName} asked for ${what}.`,
           "",
@@ -13134,7 +13499,7 @@ var businessCheckRouter = router({
           `Note: ${input.note || "None"}`,
           ...bookedFor ? [`Booked on Calendly for: ${lagosTime(bookedFor)} (Lagos time)`] : [],
           "",
-          `Business Check #${check.id}, completed ${lagosTime(check.completedAt)} (Lagos time).`
+          `Business Health Check #${check.id}, completed ${lagosTime(check.completedAt)} (Lagos time).`
         ].join("\n")
       });
     }
@@ -13195,7 +13560,7 @@ var clientOnboardingRouter = router({
   candidates: manage.query(() => listOnboardingCandidates()),
   invitations: manage.query(() => listOnboardingInvitations()),
   metrics: manage.query(() => onboardingMetrics()),
-  /** Before the Current State Assessment payment is confirmed, a reason is required and recorded with the invitation. */
+  /** Before the Business Review payment is confirmed, a reason is required and recorded with the invitation. */
   invite: manage.input(z18.object({ businessCheckId: z18.number().int().positive(), overrideReason: z18.string().trim().min(5, "Give the reason for inviting before payment.").max(500).optional() })).mutation(async ({ ctx, input }) => {
     if (!await consumeLimit(LIMITS.onboardingEmail, `actor:${ctx.user.id}`)) throw new TRPCError23({ code: "TOO_MANY_REQUESTS", message: "Too many invitation emails. Kindly try again later." });
     return createOnboardingInvitation({ businessCheckId: input.businessCheckId, actorUserId: ctx.user.id, overrideReason: input.overrideReason });
@@ -13326,7 +13691,7 @@ async function getBusinessCheckDetail(db, businessCheckId) {
     resultJson: businessChecks.resultJson,
     summaryJson: businessChecks.summaryJson
   }).from(businessChecks).where(eq24(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!row) throw new TRPCError25({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  if (!row) throw new TRPCError25({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   const { resultJson, summaryJson, ...fields } = row;
   const result = parseJson2(resultJson);
   const summary = parseJson2(summaryJson);
@@ -13353,7 +13718,7 @@ async function stageHistoryFor(db, businessCheckId) {
 var SETTABLE_STAGES = PIPELINE_STAGES.filter((stage) => stage !== "lead" && stage !== "won");
 async function setPipelineStage(db, input) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq24(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError25({ code: "NOT_FOUND", message: "That Business Check does not exist." });
+  if (!check) throw new TRPCError25({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   if (check.pipelineStage === input.stage) return { success: true, pipelineStage: check.pipelineStage, changed: false };
   if (check.pipelineStage === "won") throw new TRPCError25({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
   await db.transaction(async (tx) => {
@@ -13369,15 +13734,15 @@ async function setPipelineStage(db, input) {
 }
 async function requestedCheck(db, businessCheckId) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq24(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError25({ code: "NOT_FOUND", message: "That Business Check does not exist." });
-  if (!check.callRequestedAt) throw new TRPCError25({ code: "BAD_REQUEST", message: "This Business Check has not asked for a Discovery Call." });
+  if (!check) throw new TRPCError25({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  if (!check.callRequestedAt) throw new TRPCError25({ code: "BAD_REQUEST", message: "This Business Health Check has not asked for a Discovery Call." });
   if (check.pipelineStage === "won") throw new TRPCError25({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call outcome can no longer be changed here." });
   return check;
 }
 async function scheduleDiscoveryCall(db, input) {
   const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt }).from(businessChecks).where(eq24(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError25({ code: "NOT_FOUND", message: "That Business Check does not exist." });
-  if (!check.completedAt) throw new TRPCError25({ code: "BAD_REQUEST", message: "This Business Check is not finished yet, so there is no Discovery Call to schedule." });
+  if (!check) throw new TRPCError25({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  if (!check.completedAt) throw new TRPCError25({ code: "BAD_REQUEST", message: "This Business Health Check is not finished yet, so there is no Discovery Call to schedule." });
   if (check.pipelineStage === "won") throw new TRPCError25({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call can no longer be changed here." });
   await db.transaction(async (tx) => {
     await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, callRequestedAt: check.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq24(businessChecks.id, check.id));
@@ -13453,17 +13818,17 @@ var businessSupportRouter = router({
   /** Moves a business check to a later stage (Opportunity, Lost, Nurture, Referred…), with an optional note. Won comes only from a confirmed payment. */
   setStage: prospects.input(z20.object({ businessCheckId: z20.number().int().positive(), stage: z20.enum(SETTABLE_STAGES), note: z20.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => setPipelineStage(await businessSupportDb(), { ...input, note: input.note || void 0, actorUserId: ctx.user.id })),
   clients: clients.query(async () => listClients(await businessSupportDb())),
-  /** Emails the owner the Paystack payment link for the Full Report or the Current State Assessment (again, if already sent). */
+  /** Emails the owner the Paystack payment link for the Full Report or the Business Review (again, if already sent). */
   requestPayment: payments.input(z20.object({ businessCheckId: z20.number().int().positive(), item: z20.enum(PAYMENT_ITEMS) })).mutation(async ({ ctx, input }) => requestPayment(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
   /** The sent full report, rebuilt from the owner's stored answers, as a PDF. */
   downloadReport: prospects.input(z20.object({ businessCheckId: z20.number().int().positive() })).mutation(async ({ input }) => adminDownloadReport(await businessSupportDb(), input.businessCheckId)),
   /** Sends the owner a new link to the Report Intake. */
   resendReportLink: payments.input(z20.object({ businessCheckId: z20.number().int().positive() })).mutation(async ({ ctx, input }) => resendReportLink(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
-  /** Sends the "payment received" email again for a confirmed Current State Assessment payment. */
+  /** Sends the "payment received" email again for a confirmed Business Review payment. */
   resendPaymentConfirmation: payments.input(z20.object({ paymentRequestId: z20.number().int().positive() })).mutation(async ({ ctx, input }) => resendPaymentConfirmation(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
   /**
    * A fallback only: payments confirm themselves when Paystack confirms them. For a payment Paystack shows as paid that
-   * has not confirmed itself here. For the Current State Assessment this wins the business and sends the invitation.
+   * has not confirmed itself here. For the Business Review this wins the business and sends the invitation.
    */
   confirmPayment: payments.input(z20.object({ paymentRequestId: z20.number().int().positive(), note: z20.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => confirmPayment(await businessSupportDb(), { ...input, note: input.note || void 0, actorUserId: ctx.user.id }))
 });
@@ -13983,8 +14348,12 @@ function transactionProblem(request, transaction) {
   if (!transaction.reference.startsWith(`${request.reference}-`)) return "reference";
   if (transaction.status !== "success") return "status";
   if (transaction.currency !== "NGN") return "currency";
-  if (transaction.amount !== request.amountNaira * 100) return "amount";
+  if (!amountMatches(transaction, request.amountNaira * 100)) return "amount";
   return null;
+}
+function amountMatches(transaction, expectedKobo) {
+  if (transaction.amount === expectedKobo) return true;
+  return transaction.requestedAmount === expectedKobo && Number.isFinite(transaction.amount) && transaction.amount >= expectedKobo;
 }
 var STILL_OPEN = /* @__PURE__ */ new Set(["ongoing", "pending", "processing", "queued"]);
 var paidBy = (request, reference2) => Boolean(request.note?.includes(reference2));
@@ -14021,7 +14390,7 @@ async function needsALook(db, request, transaction, problem, source) {
       `Owner: ${check ? `${check.fullName} (${check.email})` : "Not found"}`,
       `Item: ${PAYMENT_ITEM_TITLES[request.item]}`,
       "",
-      `Business Check #${request.businessCheckId}.`
+      `Business Health Check #${request.businessCheckId}.`
     ].join("\n")
   }).catch((error) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
 }
@@ -14050,7 +14419,7 @@ async function tellOfficePaid(db, request, online, result) {
       "",
       ...next,
       "",
-      `Business Check #${request.businessCheckId}. ${BRAND.organisationName}`
+      `Business Health Check #${request.businessCheckId}. ${BRAND.organisationName}`
     ].join("\n")
   }).catch((error) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
 }

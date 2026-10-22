@@ -38,13 +38,13 @@ export default function EngagementsView() {
   }
   return (
     <div className="space-y-4 p-6">
-      <p className="text-sm text-ink-muted">An engagement starts when the Current State Assessment is paid. Open one to name the team, book the Sessions, send the Data Requests and share the Findings.</p>
+      <p className="text-sm text-ink-muted">An engagement starts when the Business Review is paid. Open one to name the team, book the Sessions, send the Data Requests and share the Findings.</p>
       {storage.data && <StorageLine status={storage.data} onCheck={() => void storage.refetch()} />}
       {storage.error && <p role="status" aria-label="File uploads" className="border border-health-watch bg-health-watch-tint p-3 text-sm text-health-watch">Could not check file storage: {storage.error.message}</p>}
       {awaiting.data && awaiting.data.length > 0 && (
         <section aria-labelledby="awaiting-start" className="space-y-2 border border-danger-line bg-danger-tint p-4">
           <h2 id="awaiting-start" className="text-sm font-semibold text-danger">Paid, but no engagement yet</h2>
-          <p className="text-xs text-ink">These Current State Assessments were paid before the room was set up, or the start failed. Start each one: it gets the standard Work Plan and both Sessions, and joins the client's account if they have one.</p>
+          <p className="text-xs text-ink">These Business Reviews were paid before the room was set up, or the start failed. Start each one: it gets the standard Work Plan and both Sessions, and joins the client's account if they have one.</p>
           <ul className="space-y-1">
             {awaiting.data.map(item => (
               <li key={item.businessCheckId} className="flex flex-wrap items-center justify-between gap-2 border-t border-danger-line pt-2 text-sm">
@@ -69,7 +69,7 @@ export default function EngagementsView() {
                   <td className={TD}>{row.nextSession ? <><span className="block">{row.nextSession.title}</span><span className="block text-xs text-ink-muted">{formatDateTime(row.nextSession.scheduledFor)}</span></> : row.unscheduledSessions ? <span className="text-danger">{row.unscheduledSessions} not booked</span> : "-"}</td>
                 </ClickableRow>
               ))}
-              {list.data?.items.length === 0 && <tr><td colSpan={5} className="px-3 py-4 text-sm text-ink-muted">No engagements yet. One starts when a Current State Assessment payment is confirmed.</td></tr>}
+              {list.data?.items.length === 0 && <tr><td colSpan={5} className="px-3 py-4 text-sm text-ink-muted">No engagements yet. One starts when a Business Review payment is confirmed.</td></tr>}
             </tbody>
           </table>
         </div>

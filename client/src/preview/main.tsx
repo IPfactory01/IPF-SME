@@ -35,7 +35,8 @@ const { hook } = memoryLocation({ path: "/" });
 
 const PAGES = [
   { path: "/", label: "Home" },
-  { path: "/check", label: "Business check" },
+  { path: "/services", label: "Services" },
+  { path: "/check", label: "Business Health Check" },
   { path: "/report/preview", label: "Report form" },
   { path: "/admin/login", label: "Admin sign-in" },
   { path: "/dashboard", label: "Client room" },

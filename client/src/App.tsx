@@ -22,6 +22,8 @@ import AccountDashboard from "./pages/AccountDashboard";
 import AccountSettingsPage from "./pages/AccountSettingsPage";
 import BusinessSettingsPage from "./pages/BusinessSettingsPage";
 import { PrivacyPage, TermsPage } from "./pages/LegalPage";
+import ServicesPage from "./pages/ServicesPage";
+import ProductPage from "./pages/ProductPage";
 import Home from "./pages/Home";
 import Schedule from "./pages/Schedule";
 import ParticipantDashboard from "./pages/ParticipantDashboard";
@@ -32,6 +34,8 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/check" component={BusinessCheck} />
+      <Route path="/services" component={ServicesPage} />
+      <Route path="/services/:slug" component={ProductPage} />
       <Route path="/terms" component={TermsPage} />
       <Route path="/privacy" component={PrivacyPage} />
       {/* Accounts are created only from an onboarding invitation; the old public sign-up address goes to sign-in. */}

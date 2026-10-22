@@ -8,7 +8,7 @@ vi.mock("@server/_core/env", () => ({ ENV: { forgeApiKey: "test-key" } }));
 
 const { summariseCheck } = await import("@server/businessCheck");
 
-describe("Free Business Check golden profiles", () => {
+describe("Free Business Health Check golden profiles", () => {
   it.each(Object.entries(businessCheckProfiles))("%s keeps its pinned question flow, route, readiness and recommendations", async (name, rawAnswers) => {
     const answers = cleanAnswers(rawAnswers);
     expect(isComplete(answers)).toBe(true);

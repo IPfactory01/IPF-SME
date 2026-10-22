@@ -102,7 +102,7 @@ export function addWorkingDays(from: Date, days: number) {
 // ---- Starting and linking ------------------------------------------------------------------------------------------
 
 /**
- * Starts the engagement when the Current State Assessment is paid: the record, the data requests and the two calls
+ * Starts the engagement when the Business Review is paid: the record, the data requests and the two calls
  * from the template, due in three working days. Runs once per business check; a second call changes nothing. If the
  * owner already has an account (invited by hand before paying), the engagement is linked to their business at once.
  */
@@ -160,7 +160,7 @@ function requireStart(actor: StaffActor) {
 }
 
 /**
- * Paid Current State Assessments with no engagement: a payment confirmed before migration 0008 was applied, or a start
+ * Paid Business Reviews with no engagement: a payment confirmed before migration 0008 was applied, or a start
  * that failed. The safety net, so the order of events can never cost a client their room.
  */
 export async function listAwaitingStart(db: Pick<Database, "select">, actor: StaffActor) {
@@ -185,7 +185,7 @@ export async function startAwaitingEngagement(db: Database, actor: StaffActor, i
   requireStart(actor);
   const payment = (await db.select({ id: paymentRequests.id }).from(paymentRequests)
     .where(and(eq(paymentRequests.businessCheckId, input.businessCheckId), eq(paymentRequests.item, "current_state"), eq(paymentRequests.status, "confirmed"))).limit(1))[0];
-  if (!payment) throw new TRPCError({ code: "NOT_FOUND", message: "This Current State Assessment is not paid yet." });
+  if (!payment) throw new TRPCError({ code: "NOT_FOUND", message: "This Business Review is not paid yet." });
   const result = await startEngagement(db, { businessCheckId: input.businessCheckId, paymentRequestId: payment.id, actorUserId: actor.id });
   const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq(engagements.businessCheckId, input.businessCheckId)).limit(1))[0];
   return { engagementId: engagement.id, created: result.created } as const;
@@ -588,7 +588,7 @@ export function resetSessionSyncForTests() {
 }
 
 /**
- * Copies the owner's Calendly bookings onto the Current State Assessment Sessions still waiting for a time, in order:
+ * Copies the owner's Calendly bookings onto the Business Review Sessions still waiting for a time, in order:
  * the first booking fills Session 1, the next Session 2. A booking whose time is already on a Session is skipped, and
  * a Session the team has already timed is left alone. Records the time, the length and the meeting link, and audits it
  * as the system (Calendly), not a person. Quietly does nothing without the Calendly settings.
@@ -631,7 +631,7 @@ function parseJson<T>(text: string | null): T | null {
   }
 }
 
-/** What the client room's Founder and Business tabs show: the delivered Full Report, else the Business Check result. */
+/** What the client room's Founder and Business tabs show: the delivered Full Report, else the Business Health Check result. */
 async function insightFor(db: Database, businessCheckId: number, reportDelivered: boolean) {
   const report = reportDelivered ? await reportForCheck(db, businessCheckId) : null;
   if (report) return roomInsight({ report, result: null });
@@ -644,7 +644,7 @@ async function insightFor(db: Database, businessCheckId: number, reportDelivered
   return roomInsight({ report: null, result });
 }
 
-/** "Book Session N": the first Current State Assessment Session still without a time, for the owner only. */
+/** "Book Session N": the first Business Review Session still without a time, for the owner only. */
 function bookingFor(sessions: (typeof engagementSessions.$inferSelect)[], viewer: { kind: string }, owner: { email: string; fullName: string } | null) {
   if (viewer.kind !== "owner" || !owner) return null;
   const nextToBook = sessions
@@ -680,7 +680,7 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     .from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   const report = (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq(fullReports.businessCheckId, engagement.businessCheckId)).limit(1))[0] ?? null;
   const debrief = fullView ? await sharedDebriefFor(db, engagement.businessCheckId) : null;
-  // The Founder and Business tabs: the owner's own Full Report or Business Check, never shown to limited-access staff.
+  // The Founder and Business tabs: the owner's own Full Report or Business Health Check, never shown to limited-access staff.
   const insight = fullView ? await insightFor(db, engagement.businessCheckId, Boolean(report?.deliveredAt)) : null;
   const visibleDeliverables = deliverables.filter(item => clientCanSee(item.audience, viewer));
   const clientFiles = (where: "taskId" | "deliverableId", id: number) => files
@@ -711,7 +711,7 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,
     team: team.map(member => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
-    // The owner books the Current State Assessment Sessions on Calendly, in order, with their details filled in.
+    // The owner books the Business Review Sessions on Calendly, in order, with their details filled in.
     booking: bookingFor(sessions, viewer, owner ?? null),
     sessions: scheduled.map(item => ({
       id: item.id,

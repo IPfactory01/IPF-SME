@@ -109,7 +109,7 @@ export async function findBookedCall(inviteeEmail: string, now = new Date()): Pr
     if (!org) return null;
     const query = new URLSearchParams({ organization: org, invitee_email: inviteeEmail.trim().toLowerCase(), status: "active", sort: "start_time:desc", count: "20" });
     const events = await calendly<{ collection?: { start_time?: string; status?: string; event_type?: string }[] }>(`/scheduled_events?${query}`);
-    // A Current State Assessment Session is not a Discovery Call.
+    // A Business Review Session is not a Discovery Call.
     const sessionType = isSessionBookingConfigured() ? await sessionEventTypeUri() : null;
     const times = (events?.collection ?? [])
       .filter((event) => event.status === "active" && event.start_time && !(sessionType && event.event_type === sessionType))

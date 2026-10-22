@@ -14,8 +14,10 @@ added without being documented here.
 
 | Route | Page | Who can reach it | What it does | Next |
 |---|---|---|---|---|
-| `/` | `Home.tsx` | Anyone | The site in the owner's words: track record, problem with its evidence, the experience behind The Shift, ten problem areas, how it works and prices, questions | "Free business check" → `/check` |
-| `/check` | `BusinessCheck.tsx` | Anyone | The free business check, from contact details to the result | Book a call (Calendly) or ask for the full report |
+| `/` | `Home.tsx` | Anyone | The site in the owner's words: track record, problem with its evidence, the experience behind The Shift, what we sell (the four ways to buy, each product with its price), how it works in six steps, ten problem areas, who it is for, questions | "Free Business Health Check" → `/check`; a product → `/services/:slug`; "See every service" → `/services` |
+| `/services` | `ServicesPage.tsx` | Anyone | The menu: the four ways to buy, then every product grouped by need, each with its price and delivery, from `shared/products.ts`; work for a project team goes to Enzo Krypton & Co. | A product → `/services/:slug`; "Take the free Business Health Check" → `/check` |
+| `/services/:slug` | `ProductPage.tsx` | Anyone | One product: what it is, who it is for, what you get, what we need from you, the price and how it is paid, delivery and the refund promise, what usually comes next. A slug that is not on the menu says so and links the menu | "Book a free 20-minute call" (Calendly) for products that start with a call, and for every product until online ordering opens; "Take the free Business Health Check" for the check and the Full Report |
+| `/check` | `BusinessCheck.tsx` | Anyone | The free Business Health Check, from contact details to the result, which names the first product to buy and the one after it (`shared/businessCheck/routing.ts`) | Book a call (Calendly), ask for the Full Report, or open the first product's page |
 | `/terms` | `LegalPage.tsx` | Anyone | The approved Terms & Conditions (`docs/legal/terms.md`, from the approved Word document), a plain reading page with no sign-in | Back to the site |
 | `/privacy` | `LegalPage.tsx` | Anyone | The approved Privacy Policy (`docs/legal/privacy.md`, from the approved Word document), a plain reading page with no sign-in | Back to the site |
 | `/report/:token` | `FullReportPage.tsx` | Link in the "payment received" email | The 17-question report form, then the download | Report emailed; download on the page |

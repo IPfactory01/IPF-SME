@@ -42,7 +42,7 @@ export const ENV = {
   /** Calendly personal access token (secret): lets the server read a booking's time for the admin console. Optional. */
   calendlyApiToken: process.env.CALENDLY_API_TOKEN?.trim() ?? "",
   /**
-   * Calendly booking page for the Current State Assessment Sessions: one event type, booked twice (Session 1, then
+   * Calendly booking page for the Business Review Sessions: one event type, booked twice (Session 1, then
    * Session 2). Whoever hosts is set in Calendly (one person or round robin). Empty: the room shows no Book button.
    */
   calendlySessionUrl: process.env.CALENDLY_SESSION_URL?.trim() ?? "",

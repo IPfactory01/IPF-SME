@@ -11,6 +11,9 @@ import { formatNaira, PRICES } from "../shared/businessSupport";
 import { CAPABILITIES, OFFERINGS, offeringById } from "../shared/businessCheck/catalogue";
 import { areasNotAssessed, DISC_STYLES, NOT_ASSESSED_NOTE, READINESS_LABELS, type CheckResult } from "../shared/businessCheck/engine";
 import { GAP_LABELS, SECTIONS, type Answers } from "../shared/businessCheck/questions";
+import { stepName } from "../shared/businessCheck/routing";
+import { priceLabel, productById, servicePath } from "../shared/products";
+import { displayedPrices } from "./businessSupportPrices";
 import { invokeLLM } from "./_core/llm";
 import { ENV } from "./_core/env";
 import type { OnlinePaymentOffer } from "./payments";
@@ -99,6 +102,7 @@ function describeResult(result: CheckResult) {
     `Main problem area: ${result.primaryArea ? result.primaryArea.name : "none"}`,
     `Main gap: ${result.primaryGap ? GAP_LABELS[result.primaryGap].name : "none"}`,
     `Offerings the rules matched: ${result.offerings.map((offering) => offering.id).join(", ") || "none"}`,
+    result.firstStep ? `First product the rules chose from our menu: ${stepName(result.firstStep.productId, result.firstStep.variantId)}. Why: ${result.firstStep.because}` : "",
   ].filter(Boolean).join("\n");
 }
 
@@ -106,7 +110,7 @@ const CATALOGUE_TEXT = OFFERINGS.map(
   (offering) => `- ${offering.id} | ${CAPABILITIES[offering.capability]} | ${offering.name}: ${offering.summary} When: ${offering.signals.join("; ")}.`,
 ).join("\n");
 
-const SYSTEM_PROMPT = `You write the short result of the ${BRAND.organisationName} free Business Check for a Nigerian small or growing business owner.
+const SYSTEM_PROMPT = `You write the short result of the ${BRAND.organisationName} free Business Health Check for a Nigerian small or growing business owner.
 
 Voice: between consulting language and plain English. Use proper terms (strategic intent, unit cost, margin, route to market) but say what they mean in context. Second person. Short sentences. Warm, direct, honest. No hype, no jargon piles, no "door", "sprint", "playbook" or "retainer". Naira in full (₦). British spelling.
 
@@ -116,7 +120,7 @@ The owner's one-line description is your main source for making the result speci
 
 Then check the result against our service catalogue (below) and choose up to three offerings that fit what the owner described, most relevant first, using only these ids. Prefer the ones the rules matched unless the answers clearly point elsewhere. For an idea-stage founder or a very small business, recommend at most one offering and only if it truly fits; the founder comes first. For route "advisory" recommend none.
 
-"found" says what the answers show (2 to 4 sentences, specific to this business and its sector). "think" says what we think the real problem is and why (2 to 4 sentences). "next" invites them to book the free 20-minute Discovery Call, in one sentence. Each "why" ties the offering to something the owner said, in one sentence.
+"found" says what the answers show (2 to 4 sentences, specific to this business and its sector). "think" says what we think the real problem is and why (2 to 4 sentences), and ends by naming the first product the rules chose from our menu, exactly as given; never name any other service in "think". "next" invites them to book the free 20-minute Discovery Call, in one sentence. Each "why" ties the offering to something the owner said, in one sentence.
 
 Service catalogue:
 ${CATALOGUE_TEXT}`;
@@ -179,6 +183,24 @@ export async function summariseCheck(input: { answers: Answers; result: CheckRes
   }
 }
 
+/** "YOUR FIRST STEP": the product the check chose, why, its price and its page, and what usually follows. */
+function firstStepLines(result: CheckResult): string[] {
+  const first = result.firstStep;
+  const product = first ? productById(first.productId) : undefined;
+  if (!first || !product) return [];
+  const prices = displayedPrices();
+  const price = product.id === "business_review" ? { kind: "fixed" as const, amount: prices.currentState } : product.price;
+  const next = first.nextProductId ? stepName(first.nextProductId, first.nextVariantId) : "";
+  return [
+    "",
+    "YOUR FIRST STEP",
+    `${stepName(first.productId, first.variantId)}: ${priceLabel(price)}. ${product.delivery}`,
+    first.because,
+    `See what it includes: ${ENV.appOrigin}${servicePath(product)}`,
+    ...(next ? [`Usually next: ${next}.`] : []),
+  ];
+}
+
 export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary; result: CheckResult; answers?: Answers; fullReportPay?: OnlinePaymentOffer | null; fullReportPrice?: number }) {
   const { contact, summary, result } = input;
   const fullReportPrice = input.fullReportPrice ?? PRICES.fullReport;
@@ -189,11 +211,11 @@ export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary
     ? [...assessed, ...notAssessed.map((row) => ({ area: row.area, line: `• ${row.name}: not assessed` }))].sort((a, b) => a.area - b.area)
     : assessed;
   const firstName = contact.fullName.split(/\s+/)[0];
-  const subject = `Your Business Check: Findings`;
+  const subject = `Your Business Health Check: Findings`;
   const body = [
     `Dear ${firstName},`,
     "",
-    `Thank you for taking the ${BRAND.organisationName} Business Check. Here is your summary.`,
+    `Thank you for taking the ${BRAND.organisationName} Business Health Check. Here is your summary.`,
     "",
     "FINDINGS",
     summary.found,
@@ -204,7 +226,7 @@ export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary
     "YOUR BUSINESS OUTLINE",
     ...outline.map((row) => row.line),
     ...(notAssessed.length ? [NOT_ASSESSED_NOTE] : []),
-    ...(summary.offerings.length ? ["", "WHERE WE COULD HELP", ...summary.offerings.map((offering) => `• ${offering.name}: ${offering.why}`)] : []),
+    ...firstStepLines(result),
     "",
     "NEXT STEP",
     summary.next,
@@ -226,9 +248,9 @@ export function ownerEmail(input: { contact: CheckContact; summary: CheckSummary
 
 export function officeEmail(input: { contact: CheckContact; answers: Answers; summary: CheckSummary; source: "AI" | "Rules"; result: CheckResult }) {
   const { contact, result } = input;
-  const subject = `Business Check: ${contact.businessName || contact.fullName} (${result.route}${result.primaryArea ? `, ${result.primaryArea.name}` : ""})`;
+  const subject = `Business Health Check: ${contact.businessName || contact.fullName} (${result.route}${result.primaryArea ? `, ${result.primaryArea.name}` : ""})`;
   const body = [
-    `A Business Check was completed.`,
+    `A Business Health Check was completed.`,
     "",
     `Name: ${contact.fullName}`,
     `Email: ${contact.email}`,

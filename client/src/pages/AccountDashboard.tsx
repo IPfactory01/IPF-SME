@@ -12,7 +12,7 @@ import { Link } from "wouter";
 const EYEBROW = "text-[11px] font-semibold uppercase tracking-[0.2em] text-highlight-ink";
 
 /**
- * The signed-in home. For a client it is the engagement room: the whole page, once the Current State Assessment is
+ * The signed-in home. For a client it is the engagement room: the whole page, once the Business Review is
  * paid, and a short welcome before that. Internal staff get a door to the internal area. Account details live in
  * the settings pages, not here.
  */

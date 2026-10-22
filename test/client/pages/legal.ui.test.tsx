@@ -33,7 +33,7 @@ describe("the legal pages", () => {
     expect(headings[0]).toBe("1. About IP Factory");
     expect(headings).toContain("8. Refund, Cancellation and Service Credit Policy");
     expect(headings.at(-1)).toBe("25. Contact");
-    expect(document.title).toBe("Terms & Conditions | IP Factory");
+    expect(document.title).toBe("Terms & Conditions | The Shift, by IP Factory");
   });
 
   it("shows the approved Privacy Policy publicly, with its sections and subsections", () => {
@@ -48,7 +48,7 @@ describe("the legal pages", () => {
       "3.1 Personal and contact information", "3.2 Business information", "3.3 Account and security information",
       "3.4 Payment information", "3.5 Scheduling information", "3.6 Technical information",
     ]);
-    expect(document.title).toBe("Privacy Policy | IP Factory");
+    expect(document.title).toBe("Privacy Policy | The Shift, by IP Factory");
   });
 
   it.each([["terms.md", "/terms"], ["privacy.md", "/privacy"]])("puts every sentence of %s on the page, unchanged", (file, path) => {

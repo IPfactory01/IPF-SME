@@ -7,7 +7,7 @@ export const ADMIN_PERMISSION_DEFINITIONS = [
   },
   {
     id: "view_assessments",
-    label: "Review Current State Assessments",
+    label: "Review Business Reviews",
     description: "View saved diagnostic progress, answers, and available working-report context.",
   },
   {

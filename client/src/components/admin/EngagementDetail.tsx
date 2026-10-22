@@ -232,7 +232,7 @@ function Problem({ data, engagementId }: { data: Detail; engagementId: number })
   const [statement, setStatement] = useState(data.engagement.problemStatement ?? "");
   return (
     <DetailSection title="Problem Statement">
-      <p className="text-xs text-ink-muted">Agreed at the end of the Current State Assessment. One problem per Fix.</p>
+      <p className="text-xs text-ink-muted">Agreed at the end of the Business Review. One problem per Fix.</p>
       <label className={LABEL} htmlFor="problem-area">Problem area</label>
       <select id="problem-area" className={FIELD} disabled={!data.can.manage} value={area} onChange={event => setArea(event.target.value)}>
         <option value="">Not chosen yet</option>
@@ -471,8 +471,8 @@ function TheFix({ data, engagementId }: { data: Detail; engagementId: number }) 
   const nextWeek = (data.checkins.at(-1)?.weekNumber ?? 0) + 1;
   const canManage = data.can.manage;
   return (
-    <DetailSection title="The Fix: the Measure of Success and the Weekly Check-in">
-      <p className="text-xs text-ink-muted">One problem, one Measure of Success. Set it in week 1 of The Fix with where it starts and where it should get to; the client sees it. Then one Weekly Check-in, recorded in order: week {FIX_WEEKS} is the last unless The Fix is extended.</p>
+    <DetailSection title="Six-Week Fix: the Measure of Success and the Weekly Check-in">
+      <p className="text-xs text-ink-muted">One problem, one Measure of Success. Set it in week 1 of the Six-Week Fix with where it starts and where it should get to; the client sees it. Then one Weekly Check-in, recorded in order: week {FIX_WEEKS} is the last unless The Fix is extended.</p>
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="sm:col-span-2"><label className={LABEL} htmlFor="measure-name">Measure of Success</label><input id="measure-name" className={FIELD} disabled={!canManage} value={name} maxLength={160} placeholder="e.g. Cash in the bank at the end of the week" onChange={event => setName(event.target.value)} /></div>
         <div className="sm:col-span-2"><label className={LABEL} htmlFor="measure-definition">How it is measured (the client sees this)</label><textarea id="measure-definition" className={FIELD} rows={2} disabled={!canManage} value={definition} onChange={event => setDefinition(event.target.value)} /></div>

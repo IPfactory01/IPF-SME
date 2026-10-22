@@ -440,7 +440,7 @@ for (const target of targets) {
     });
 
     describe("coexistence with existing flows", () => {
-      it("keeps the Free Business Check public: no account is needed", async () => {
+      it("keeps the Free Business Health Check public: no account is needed", async () => {
         const error = await browser().call().businessCheck.requestNext({ token: "x".repeat(24), choice: "call" }).catch((e: unknown) => e) as { code: string };
         expect(error.code).toBe("NOT_FOUND");
       });

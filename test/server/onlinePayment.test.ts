@@ -50,6 +50,19 @@ describe("a Paystack transaction confirms a payment request only when everything
     expect(transactionProblem(request, { ...good, amount: 100_000 })).toBe("amount");
     expect(transactionProblem(request, { ...good, amount: Number.NaN })).toBe("amount");
   });
+
+  // The pre-launch audit's P0: with "pass fees to the customer" on, Paystack charged ₦101,624.37 for a ₦100,000 request
+  // and the exact-amount check refused every real payment.
+  it("accepts a payment where the customer bore Paystack's fee, when Paystack says it requested our amount", () => {
+    expect(transactionProblem(request, { ...good, amount: 10_162_437, requestedAmount: 10_000_000 })).toBeNull();
+  });
+
+  it("still refuses a fee-inclusive payment for someone else's amount, or less than our price", () => {
+    expect(transactionProblem(request, { ...good, amount: 10_162_437, requestedAmount: 9_000_000 })).toBe("amount");
+    expect(transactionProblem(request, { ...good, amount: 10_162_437 })).toBe("amount");
+    expect(transactionProblem(request, { ...good, amount: 9_000_000, requestedAmount: 10_000_000 })).toBe("amount");
+    expect(transactionProblem(request, { ...good, amount: Number.NaN, requestedAmount: 10_000_000 })).toBe("amount");
+  });
 });
 
 /** Posts raw bytes to the app on an ephemeral port, as Paystack does: no Origin, no browser headers. */

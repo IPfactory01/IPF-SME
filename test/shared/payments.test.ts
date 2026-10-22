@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { PRICES } from "@shared/businessSupport";
 import { describePayment, effectivePaymentStatus, PAYMENT_DISPLAY_LABELS, PAYMENT_ITEM_DETAILS, PAYMENT_STATUS_LABELS, PAYMENT_WINDOW_HOURS, paymentDeadline, paymentReference } from "@shared/payments";
 
-describe("what an owner can pay for before Current State Assessment", () => {
+describe("what an owner can pay for before Business Review", () => {
   it("describes a payment with the amount it is given (the payment's own), and holds no price of its own", () => {
     expect(PAYMENT_ITEM_DETAILS.full_report).not.toHaveProperty("amount");
     expect(describePayment("full_report", PRICES.fullReport)).toBe("₦100,000 for your Full Report");
-    expect(describePayment("current_state", PRICES.currentState)).toBe("₦500,000 for your Current State Assessment");
+    expect(describePayment("current_state", PRICES.currentState)).toBe("₦600,000 for your Business Review");
     expect(describePayment("full_report", 100)).toBe("₦100 for your Full Report");
   });
 

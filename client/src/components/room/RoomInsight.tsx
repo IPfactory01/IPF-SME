@@ -10,7 +10,7 @@ import { project, TAB_SPRING } from "./RoomTabs";
 
 /**
  * The Founder and Business tabs of the client room. Everything here comes from the owner's Full Report (or, without
- * one, their Business Check), as the server sent it: the room never says something the report does not.
+ * one, their Business Health Check), as the server sent it: the room never says something the report does not.
  */
 
 const CARD = "border border-line-soft bg-paper-raised p-5 shadow-sm";

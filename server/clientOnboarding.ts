@@ -88,7 +88,7 @@ export function buildOnboardingEmail(input: { fullName: string; businessName: st
   };
 }
 
-/** True when the Current State Assessment payment is confirmed. A missing payment table (migration 0006) counts as unpaid. */
+/** True when the Business Review payment is confirmed. A missing payment table (migration 0006) counts as unpaid. */
 async function assessmentPaid(db: Pick<Database, "select">, businessCheckId: number) {
   try {
     const paid = await db.select({ id: paymentRequests.id }).from(paymentRequests)
@@ -104,7 +104,7 @@ async function assessmentPaid(db: Pick<Database, "select">, businessCheckId: num
  * Issues a single-use onboarding invitation for a business check (a prospect). The raw token exists only in the
  * returned URL, which goes to the authorised admin and the client's email: it is never stored or logged.
  *
- * The invitation follows the Current State Assessment payment: confirming it (server/payments.ts) calls this
+ * The invitation follows the Business Review payment: confirming it (server/payments.ts) calls this
  * automatically, and an administrator can send it again by hand. Before the payment is confirmed the server refuses
  * unless the administrator gives a reason, which is recorded in the audit log with the invitation.
  *

@@ -8,6 +8,7 @@ import { observable } from "@trpc/server/observable";
 import type { AppRouter } from "../../../server/routers";
 import { deriveDiagnostic, type DiagnosticInput } from "../../../server/diagnostic";
 import { BRAND } from "@shared/brand";
+import { PRICES } from "@shared/businessSupport";
 import { evaluate, nextStep } from "@shared/businessCheck/engine";
 import type { Answers } from "@shared/businessCheck/questions";
 import { journeyOf } from "@shared/engagement";
@@ -146,6 +147,7 @@ const responders: Record<string, Responder> = {
     };
   },
   "registration.requestPortalLink": () => ({ success: true }),
+  "businessCheck.prices": () => PRICES,
   "businessCheck.start": () => ({ token: "preview-token-0000000000" }),
   "businessCheck.saveProgress": () => ({ saved: true }),
   // The live site has the AI write the summary; the preview shows the rules-based version.

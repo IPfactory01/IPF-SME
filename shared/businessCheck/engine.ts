@@ -484,7 +484,7 @@ function writeSummary(input: {
     return {
       found: `${founderLine} The business is still mostly you, at an early revenue level.`,
       think: "At this stage the biggest lever is the founder: pricing, money basics and a simple weekly routine. A full engagement would be too much, too soon.",
-      next: "Book the free Discovery Call and we will point you to the training and tools that fit this stage.",
+      next: "Start with the first step above: finished work at a price that fits this stage. Not sure? Book the free Discovery Call and we will help you choose.",
     };
   }
 

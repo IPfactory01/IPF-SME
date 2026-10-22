@@ -7782,9 +7782,11 @@ function byArea(input) {
     case 10:
       return step("business_review", "Your answers point to questions that touch the whole business.");
     case 0:
+      return step("strategy_90_day_plan", "Your answers point to you, the founder, as the place to start: a 90-day plan turns what you know into what the business does next.");
     case 1:
-    case 2:
       return step("strategy_90_day_plan", "Your answers say the direction or the priorities are not clear yet.");
+    case 2:
+      return step("strategy_90_day_plan", "Your answers say you are not yet sure who buys, why, or who else sells to them.");
     default:
       return step("monthly_adviser_review", "Your business looks in good shape on what we asked: the next gains come from regular, sharper decisions.");
   }
@@ -8802,7 +8804,7 @@ function writeSummary(input) {
     return {
       found: `${founderLine} The business is still mostly you, at an early revenue level.`,
       think: "At this stage the biggest lever is the founder: pricing, money basics and a simple weekly routine. A full engagement would be too much, too soon.",
-      next: "Book the free Discovery Call and we will point you to the training and tools that fit this stage."
+      next: "Start with the first step above: finished work at a price that fits this stage. Not sure? Book the free Discovery Call and we will help you choose."
     };
   }
   const found = [

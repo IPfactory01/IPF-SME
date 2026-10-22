@@ -204,7 +204,7 @@ exports[`Free Business Health Check golden profiles > growingMaker keeps its pin
   "readiness": "nascent",
   "result": {
     "firstStep": {
-      "because": "Your answers say the direction or the priorities are not clear yet.",
+      "because": "Your answers point to you, the founder, as the place to start: a 90-day plan turns what you know into what the business does next.",
       "nextProductId": "monthly_adviser_review",
       "nextVariantId": undefined,
       "productId": "strategy_90_day_plan",
@@ -883,7 +883,7 @@ exports[`Free Business Health Check golden profiles > weakFounderReadiness keeps
   "readiness": "nascent",
   "result": {
     "firstStep": {
-      "because": "Your answers say the direction or the priorities are not clear yet.",
+      "because": "Your answers point to you, the founder, as the place to start: a 90-day plan turns what you know into what the business does next.",
       "nextProductId": "monthly_adviser_review",
       "nextVariantId": undefined,
       "productId": "strategy_90_day_plan",

@@ -183,3 +183,8 @@
   [data-record-drawer][data-state="open"] { animation: scrim-in 150ms ease-out; }
   [data-record-drawer][data-state="closed"] { animation: scrim-out 150ms ease-in; }
 }
+
+/* The Business Health Check moves focus to each new screen's heading (BusinessCheck.tsx); no ring on a heading. */
+[data-screen] :is(h1, h2)[tabindex="-1"]:focus {
+  outline: none;
+}

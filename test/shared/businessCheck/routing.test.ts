@@ -15,6 +15,15 @@ describe("the first product the check names (Operational Business Plan, page 18)
     expect(route({ s7_status: "tight_guess", s7_detail: "mixed_money" }, [7], 7).productId).toBe("bookkeeping_catch_up");
   });
 
+  it("gives a reason that fits the area: founder readiness, direction, or the market", () => {
+    const founder = route({}, [0], 0);
+    expect(founder.productId).toBe("strategy_90_day_plan");
+    expect(founder.because).toMatch(/you, the founder/);
+    expect(founder.because).not.toMatch(/direction or the priorities/);
+    expect(route({}, [1], 1).because).toMatch(/direction or the priorities are not clear/);
+    expect(route({}, [2], 2).because).toMatch(/who buys, why, or who else sells to them/);
+  });
+
   it("sends tight cash to the 13-Week Cash Flow Forecast, then the Six-Week Fix: Cash and Pricing", () => {
     const step = route({ s7_status: "tight_guess", s7_detail: "late_payers" }, [7], 7);
     expect(step.productId).toBe("cash_flow_forecast");

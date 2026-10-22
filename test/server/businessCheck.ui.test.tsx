@@ -98,6 +98,30 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(document.title).toBe("Free Business Health Check | The Shift, by IP Factory");
   });
 
+  it("labels the name and email fields, and says what is missing instead of leaving Start grey", async () => {
+    render(React.createElement(BusinessCheck));
+    await pick(/take the business health check/i);
+    const name = await screen.findByLabelText(/Full name/);
+    const email = screen.getByLabelText(/^Email/);
+    fireEvent.change(name, { target: { value: "A" } });
+    fireEvent.change(email, { target: { value: "ada@example.com" } });
+    const start = screen.getByRole("button", { name: /start the business health check/i });
+    expect((start as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("To start, add your full name.")).toBeTruthy();
+    expect(start.getAttribute("aria-describedby")).toBe("check-start-hint");
+    fireEvent.change(name, { target: { value: "Ada Example" } });
+    expect(screen.queryByText(/To start, add/)).toBeNull();
+    expect((start as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("moves keyboard focus to each new question", async () => {
+    render(React.createElement(BusinessCheck));
+    await giveDetails();
+    const heading = await screen.findByRole("heading", { level: 2 });
+    await waitFor(() => expect(document.activeElement?.tagName).toBe("H2"));
+    expect(document.activeElement?.textContent).toBe(heading.textContent);
+  });
+
   it("asks who the owner is first, records them as a lead, then starts the questions", async () => {
     render(React.createElement(BusinessCheck));
     await pick(/take the business health check/i);
@@ -361,7 +385,7 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(within(first).getByText("13-Week Cash Flow Forecast")).toBeTruthy();
     expect(within(first).getByText("₦300,000")).toBeTruthy();
     // Until online ordering opens (ONLINE_ORDERS_OPEN), finished work also starts with the free call.
-    expect(within(first).getByRole("link", { name: /book the free call/i }).getAttribute("href")).toBe("#next-steps");
+    expect(within(first).getByRole("button", { name: /book the free call/i })).toBeTruthy();
     expect(within(first).getByRole("link", { name: "What it includes" }).getAttribute("href")).toBe("/services/13-week-cash-flow-forecast");
     expect(screen.queryByText("Finance & Capital")).toBeNull();
     expect(screen.queryByText("Where we could help")).toBeNull();
@@ -468,6 +492,16 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(await screen.findByText("Booked. The confirmation is on its way to ada@example.com.")).toBeTruthy();
   });
 
+  it("opens the calendar straight from the first step, and brings it into view on a phone", async () => {
+    const scrolled: string[] = [];
+    Element.prototype.scrollIntoView = function (this: Element) { scrolled.push(this.id); };
+    resultFor("https://calendly.com/ip-factory/discovery-call");
+    fireEvent.click(within(screen.getByRole("region", { name: "Your first step" })).getByRole("button", { name: /book the free call/i }));
+    expect(await screen.findByTitle("Book your free Discovery Call")).toBeTruthy();
+    await waitFor(() => expect(scrolled).toContain("discovery-calendar"));
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
+
   it("offers the same calendar in a new tab when the embedded one is blocked, and records the request without claiming a booking", async () => {
     resultFor("https://calendly.com/ip-factory/discovery-call");
     fireEvent.click(screen.getByRole("button", { name: /book my free discovery call/i }));
@@ -494,13 +528,13 @@ describe("business check page", { timeout: 20_000 }, () => {
       preload({ token: TOKEN, answers, response: responseWith({ emailStatus: "Sent" }) });
       render(React.createElement(BusinessCheck));
       expect(screen.getByText(/A copy has been sent to/)).toBeTruthy();
-      expect(screen.queryByText(/Email delivery is not active yet/)).toBeNull();
+      expect(screen.queryByText(/couldn't email you a copy/)).toBeNull();
     });
 
     it.each([["Simulated"], ["Failed"], [undefined]])("does not claim an email was sent when delivery was %s", status => {
       preload({ token: TOKEN, answers, response: responseWith({ emailStatus: status }) });
       render(React.createElement(BusinessCheck));
-      expect(screen.getByText("Your result has been saved. Email delivery is not active yet.")).toBeTruthy();
+      expect(screen.getByText("Your result is saved. We couldn't email you a copy just now, so keep this page open or come back with the same email.")).toBeTruthy();
       expect(screen.queryByText(/on its way/)).toBeNull();
       expect(screen.queryByText(/A copy has been sent/)).toBeNull();
     });

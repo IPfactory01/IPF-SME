@@ -288,6 +288,25 @@ export default function BusinessCheck() {
     screen = submit.isError ? <SubmitFailed error={error} onRetry={retrySubmit} onBack={back} /> : <Reading />;
   }
 
+  // Each step is a new screen: move keyboard and screen-reader focus to its heading, not back to the top of the page or
+  // its footer. The first screen keeps the browser's own starting point; a screen that focuses its own field keeps it.
+  const firstScreen = useRef(true);
+  useEffect(() => {
+    if (firstScreen.current) {
+      firstScreen.current = false;
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      const root = document.querySelector<HTMLElement>(`[data-screen="${screenKey}"]`);
+      if (!root || root.contains(document.activeElement)) return;
+      const heading = root.querySelector<HTMLElement>("h1, h2");
+      if (!heading) return;
+      heading.tabIndex = -1;
+      heading.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [screenKey]);
+
   const showOutline = state.started && state.token && !state.response && stageOf(answers);
 
   return (
@@ -315,6 +334,7 @@ export default function BusinessCheck() {
             <AnimatePresence mode="popLayout" initial={false} custom={direction}>
               <motion.div
                 key={screenKey}
+                data-screen={screenKey}
                 custom={direction}
                 variants={screenMotion}
                 initial="enter"
@@ -532,7 +552,6 @@ function QuestionScreen({ step, answers, onAnswer, onBack }: { step: Step; answe
   const current = answers[question.id];
   const [multi, setMulti] = useState<string[]>(Array.isArray(current) ? current : []);
   const [picked, setPicked] = useState<string | null>(null);
-
   const choose = (value: string) => {
     if (picked) return;
     setPicked(value);
@@ -674,6 +693,14 @@ function DetailsScreen({ contact, pending, error, onChange, onBack, onSubmit }: 
   // Say why Start is unavailable instead of leaving a grey button: shown once the owner leaves the email field.
   const [emailLeft, setEmailLeft] = useState(false);
   const emailHint = emailLeft && contact.email.trim() && !emailOk ? "Enter your full email address, like ada@example.com." : "";
+  // Once the owner has typed anything, say what still stands between them and Start.
+  const missing = [
+    contact.fullName.trim().length < 2 && "your full name",
+    !emailOk && "your email address",
+    phoneProblem(contact.whatsappCountry, contact.whatsapp) && "a WhatsApp number that works (or leave it empty)",
+  ].filter(Boolean) as string[];
+  const startedTyping = Boolean(contact.fullName || contact.email || contact.whatsapp);
+  const startHint = !valid && startedTyping ? `To start, add ${missing.length > 1 ? `${missing.slice(0, -1).join(", ")} and ${missing.at(-1)}` : missing[0]}.` : "";
 
   return (
     <motion.form className="space-y-7" variants={listMotion} initial="hidden" animate="show" onSubmit={(event) => { event.preventDefault(); if (valid && !pending) onSubmit(); }}>
@@ -683,9 +710,9 @@ function DetailsScreen({ contact, pending, error, onChange, onBack, onSubmit }: 
         <p className="mt-3 leading-relaxed text-ink-muted">So we can save your progress and send you your summary at the end.</p>
       </motion.div>
       <motion.div variants={itemMotion} className="grid gap-5 sm:grid-cols-2">
-        <Field label="Full name" required><Input value={contact.fullName} onChange={set("fullName")} autoComplete="name" className="h-12 rounded-none transition-shadow focus-visible:shadow-[0_0_0_4px_rgba(28,78,126,0.12)]" /></Field>
-        <Field label="Email" required>
-          <Input type="email" value={contact.email} onChange={set("email")} onBlur={() => setEmailLeft(true)} autoComplete="email" aria-invalid={emailHint ? true : undefined} aria-describedby={emailHint ? "check-email-hint" : undefined} className="h-12 rounded-none transition-shadow focus-visible:shadow-[0_0_0_4px_rgba(28,78,126,0.12)]" />
+        <Field label="Full name" required htmlFor="check-full-name"><Input id="check-full-name" value={contact.fullName} onChange={set("fullName")} autoComplete="name" className="h-12 rounded-none transition-shadow focus-visible:shadow-[0_0_0_4px_rgba(28,78,126,0.12)]" /></Field>
+        <Field label="Email" required htmlFor="check-email">
+          <Input id="check-email" type="email" value={contact.email} onChange={set("email")} onBlur={() => setEmailLeft(true)} autoComplete="email" aria-invalid={emailHint ? true : undefined} aria-describedby={emailHint ? "check-email-hint" : undefined} className="h-12 rounded-none transition-shadow focus-visible:shadow-[0_0_0_4px_rgba(28,78,126,0.12)]" />
           {emailHint && <p id="check-email-hint" role="alert" className="mt-2 text-xs text-danger">{emailHint}</p>}
         </Field>
         <Field label="WhatsApp number (optional, for a quicker reply)">
@@ -710,8 +737,9 @@ function DetailsScreen({ contact, pending, error, onChange, onBack, onSubmit }: 
       </motion.p>
       <motion.div variants={itemMotion} className="flex items-center justify-between gap-4">
         <BackButton onClick={onBack} />
-        <PrimaryButton type="submit" disabled={!valid || pending}>{pending ? "Starting…" : "Start the Business Health Check"}</PrimaryButton>
+        <PrimaryButton type="submit" disabled={!valid || pending} aria-describedby={startHint ? "check-start-hint" : undefined}>{pending ? "Starting…" : "Start the Business Health Check"}</PrimaryButton>
       </motion.div>
+      {startHint && <p id="check-start-hint" aria-live="polite" className="-mt-4 text-right text-xs text-ink-muted">{startHint}</p>}
     </motion.form>
   );
 }
@@ -831,19 +859,21 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
   const bookCall = () => {
     if (booking.kind === "calendly") {
       setCalendarOpen(true);
+      // The calendar opens under the Full Report card, below the fold on a phone: bring it into view.
+      window.setTimeout(() => document.getElementById("discovery-calendar")?.scrollIntoView?.({ behavior: "smooth", block: "start" }), 120);
       return;
     }
     if (booking.kind === "link") window.open(booking.pageUrl, "_blank", "noopener,noreferrer");
     recordCall();
   };
-  const scrollToOffers = () => document.getElementById("next-steps")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const scrollToOffers = () => document.getElementById("next-steps")?.scrollIntoView?.({ behavior: "smooth", block: "start" });
 
   return (
     <motion.div className="space-y-10" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.12 } } }} initial="hidden" animate="show">
       <motion.div variants={itemMotion}>
         <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">Your Business Health Check{businessName ? ` · ${businessName}` : ""}</p>
         <h1 className="font-serif text-4xl font-black leading-tight sm:text-5xl">Here is what we see.</h1>
-        <p className="mt-3 flex items-center gap-2 text-sm text-ink-muted"><Mail className="h-4 w-4" />{response.emailStatus === "Sent" ? `A copy has been sent to ${contact.email}.` : "Your result has been saved. Email delivery is not active yet."}</p>
+        <p className="mt-3 flex items-center gap-2 text-sm text-ink-muted"><Mail className="h-4 w-4" />{response.emailStatus === "Sent" ? `A copy has been sent to ${contact.email}.` : "Your result is saved. We couldn't email you a copy just now, so keep this page open or come back with the same email."}</p>
       </motion.div>
 
       {result.outline.length > 1 && (
@@ -938,7 +968,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
         </motion.section>
       )}
 
-      {result.firstStep && <FirstStepCard step={result.firstStep} token={response.token} />}
+      {result.firstStep && <FirstStepCard step={result.firstStep} token={response.token} onBook={() => { scrollToOffers(); bookCall(); }} />}
 
       <motion.section variants={itemMotion} id="next-steps" className="scroll-mt-24">
         <SectionHeading>Your next steps</SectionHeading>
@@ -1000,7 +1030,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
 
         <AnimatePresence>
           {booking.kind === "calendly" && calendarOpen && !requested.call && (
-            <motion.div key="calendar" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.45, ease: EASE }} className="mt-4 overflow-hidden border border-line bg-paper-raised">
+            <motion.div key="calendar" id="discovery-calendar" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.45, ease: EASE }} className="mt-4 scroll-mt-20 overflow-hidden border border-line bg-paper-raised">
               <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-line px-5 py-3">
                 <p className="text-sm font-semibold text-ink">Choose a time for your free Discovery Call</p>
                 {/* Some browsers, blockers and networks stop embedded calendars; the same calendar opens in a new tab. */}
@@ -1027,7 +1057,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
  * The first product the check chose (shared/businessCheck/routing.ts), why, its price and how to start: buy now for a
  * Done for You product, or talk first on the free Discovery Call for the rest. Older results have no first step.
  */
-function FirstStepCard({ step, token }: { step: FirstStep; token: string }) {
+function FirstStepCard({ step, token, onBook }: { step: FirstStep; token: string; onBook: () => void }) {
   // As everywhere a payment is asked for on this page, no price shows until the server's prices are known.
   const prices = useServicePrices();
   const product = productById(step.productId);
@@ -1051,9 +1081,9 @@ function FirstStepCard({ step, token }: { step: FirstStep; token: string }) {
               Buy now <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
           ) : (
-            <a href="#next-steps" className="group inline-flex h-12 items-center bg-highlight-ink px-6 text-sm font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-brand-plum">
+            <button type="button" onClick={onBook} className="group inline-flex h-12 items-center bg-highlight-ink px-6 text-sm font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-brand-plum">
               Talk to us first: book the free call <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </a>
+            </button>
           )}
           <Link href={servicePath(product)} className="text-sm font-semibold text-brand underline underline-offset-4">What it includes</Link>
         </div>
@@ -1072,12 +1102,13 @@ function SummaryCard({ title, body, accent }: { title: string; body: string; acc
   );
 }
 
-function PrimaryButton({ children, onClick, disabled, type = "button", large }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; type?: "button" | "submit"; large?: boolean }) {
+function PrimaryButton({ children, onClick, disabled, type = "button", large, "aria-describedby": describedBy }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; type?: "button" | "submit"; large?: boolean; "aria-describedby"?: string }) {
   return (
     <motion.button
       type={type}
       onClick={onClick}
       disabled={disabled}
+      aria-describedby={describedBy}
       whileHover={disabled ? undefined : { y: -2 }}
       whileTap={disabled ? undefined : { scale: 0.97 }}
       className={`group inline-flex items-center justify-center bg-ink font-semibold uppercase tracking-widest text-paper shadow-[0_14px_30px_-16px_rgba(18,50,79,0.8)] transition-colors hover:bg-charcoal disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none ${large ? "h-14 px-8 text-sm" : "h-12 px-7 text-xs"}`}
@@ -1092,10 +1123,10 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   return <h2 className="mb-4 font-sans text-xs font-semibold uppercase tracking-[0.2em] text-ink-muted">{children}</h2>;
 }
 
-function Field({ label, required, wide, children }: { label: string; required?: boolean; wide?: boolean; children: React.ReactNode }) {
+function Field({ label, required, wide, htmlFor, children }: { label: string; required?: boolean; wide?: boolean; htmlFor?: string; children: React.ReactNode }) {
   return (
     <div className={wide ? "sm:col-span-2" : undefined}>
-      <Label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-ink-muted">{label}{required && <span className="text-highlight-ink"> *</span>}</Label>
+      <Label htmlFor={htmlFor} className="mb-2 block text-xs font-semibold uppercase tracking-wider text-ink-muted">{label}{required && <span className="text-highlight-ink"> *</span>}</Label>
       {children}
     </div>
   );

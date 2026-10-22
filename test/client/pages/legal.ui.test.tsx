@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 
+import { BRAND } from "@shared/brand";
+
 // No server is mocked: the legal pages need no sign-in, so they must render without any API at all.
 import { PrivacyPage, TermsPage } from "@/pages/LegalPage";
 
@@ -65,5 +67,10 @@ describe("the legal pages", () => {
     expect(within(footer).getByRole("link", { name: "Terms & Conditions" }).getAttribute("href")).toBe("/terms");
     expect(within(footer).getByRole("link", { name: "Privacy Policy" }).getAttribute("href")).toBe("/privacy");
     expect(screen.queryByRole("button", { name: /sign in/i })).toBeNull();
+  });
+
+  it.each([["terms.md", "25. Contact"], ["privacy.md", "24. Complaints and Contact"]])("ends the contact section of %s with IP Factory's office address and mailbox", (file, heading) => {
+    const contact = source(file).split(`## ${heading}`)[1];
+    expect(contact).toContain(`IP Factory\n${BRAND.officeAddress.oneLine}\n${BRAND.businessSupportMailbox}`);
   });
 });

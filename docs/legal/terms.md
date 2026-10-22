@@ -166,3 +166,5 @@ If a dispute arises, the parties should first attempt to resolve it in good fait
 Questions about these Terms, payments, refunds or platform services may be sent to:
 
 IP Factory
+5 C&I Leasing Drive, Lekki Phase 1, Lagos State, Nigeria
+info@ipfactory.co

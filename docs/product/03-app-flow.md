@@ -5,7 +5,7 @@ working branch. Diagrams use Mermaid, which GitHub renders.
 
 Every route listed in `client/src/App.tsx` appears in section 1. Every public page carries the same header (Services,
 How we work, About, Questions, Contact, Client sign in and the free check; a menu button on phones) and footer
-(`SITE_PAGES`, `client/src/components/SiteShell.tsx`). `test/docs/productDocs.test.ts` fails if a route is
+(`SITE_PAGES`, `client/src/components/SiteShell.tsx`), which also prints the office address. `test/docs/productDocs.test.ts` fails if a route is
 added without being documented here.
 
 ---
@@ -22,7 +22,7 @@ added without being documented here.
 | `/how-we-work` | `HowWeWorkPage.tsx` | Anyone | The steps from the free check to finished work; the four ways to work with us, each product with its price and how that way is paid; the three promises; the ten places businesses get stuck | A product → `/services/:slug`; "See every service" → `/services`; questions → `/questions`; the free check → `/check` |
 | `/about` | `AboutPage.tsx` | Anyone | IP Factory and Enzo Krypton & Co., the track record and client logos, the experience behind The Shift, what we are and are not, who it is for, who you work with, the research | The firm's site (new tab); the free check → `/check` |
 | `/questions` | `QuestionsPage.tsx` | Anyone | Every question in one place: before you buy, then each service's own questions in menu order, with a topic list | "More about …" → `/services/:slug`; "Talk to us" → `/contact`; the mailbox |
-| `/contact` | `ContactPage.tsx` | Anyone | Book a free 20-minute call, write to the mailbox, where we work (Lagos and Abuja, mostly online) | Calendly (new tab); `mailto:`; "Client sign in" → `/login`; the free check → `/check` |
+| `/contact` | `ContactPage.tsx` | Anyone | Book a free 20-minute call, write to the mailbox, the office (5 C&I Leasing Drive, Lekki Phase 1, shared with Enzo Krypton & Co.; `BRAND.officeAddress`), Lagos and Abuja, mostly online | Calendly (new tab); `mailto:`; Google Maps (new tab); "Client sign in" → `/login`; the free check → `/check` |
 | `/check` | `BusinessCheck.tsx` | Anyone | The free Business Health Check, from contact details to the result, which names the first product to buy and the one after it (`shared/businessCheck/routing.ts`) | Book a call (Calendly), ask for the Full Report, or open the first product's page |
 | `/terms` | `LegalPage.tsx` | Anyone | The approved Terms & Conditions (`docs/legal/terms.md`, from the approved Word document), a plain reading page with no sign-in | Back to the site |
 | `/privacy` | `LegalPage.tsx` | Anyone | The approved Privacy Policy (`docs/legal/privacy.md`, from the approved Word document), a plain reading page with no sign-in | Back to the site |

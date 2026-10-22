@@ -100,6 +100,7 @@ export function SiteFooter() {
           <Link href="/login" className="hover:text-ink hover:underline">Client sign in</Link>
         </nav>
         <LegalFooterLinks />
+        <address className="not-italic">{BRAND.organisationName} · {BRAND.officeAddress.oneLine}</address>
         <p>© 2026 {BRAND.organisationLegalName} ({BRAND.organisationName}). {BRAND.productEndorsement} · <a href={`mailto:${BRAND.businessSupportMailbox}`} className="hover:text-ink">{BRAND.businessSupportMailbox}</a></p>
       </div>
     </footer>

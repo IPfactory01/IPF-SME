@@ -151,5 +151,6 @@ describe("home page footer", () => {
     const footer = container.querySelector("footer")!;
     expect(within(footer).getByRole("link", { name: "Terms & Conditions" }).getAttribute("href")).toBe("/terms");
     expect(within(footer).getByRole("link", { name: "Privacy Policy" }).getAttribute("href")).toBe("/privacy");
+    expect(footer.querySelector("address")!.textContent).toBe(`IP Factory · ${BRAND.officeAddress.oneLine}`);
   });
 });

@@ -15,12 +15,15 @@ describe("Contact (/contact)", () => {
   it("offers the free call, the mailbox and where we work", () => {
     renderAt("/contact", ContactPage);
     const ways = within(screen.getByRole("region", { name: "Ways to reach us" }));
-    expect(ways.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual(["Book a free call", "Write to us", "Where we work"]);
+    expect(ways.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent)).toEqual(["Book a free call", "Write to us", "Our office"]);
     const call = ways.getByRole("link", { name: /Book a free call/ });
     expect(call.getAttribute("href")).toBe(BRAND.discoveryCallUrl);
     expect(call.getAttribute("rel")).toContain("noopener");
     expect(ways.getByRole("link", { name: BRAND.businessSupportMailbox }).getAttribute("href")).toBe(`mailto:${BRAND.businessSupportMailbox}`);
     expect(ways.getByText(/Lagos and Abuja/)).toBeTruthy();
+    const office = ways.getByRole("heading", { name: "Our office" }).parentElement!;
+    expect(office.querySelector("address")!.textContent).toBe(BRAND.officeAddress.lines.join(""));
+    expect(within(office).getByRole("link", { name: /Open in Maps/ }).getAttribute("href")).toBe(BRAND.officeAddress.mapUrl);
   });
 
   it("sends existing clients to sign in and the unsure to the free check", () => {

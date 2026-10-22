@@ -25,6 +25,15 @@ export const BRAND = {
   organisationName: "IP Factory",
   organisationLegalName: "Intellectual Property Factory",
   /**
+   * IP Factory's office: the same office as Enzo Krypton & Co. (ET, 22 October 2026), as printed in Enzo Krypton's
+   * Business Plan v1.0 (14 August 2026). Shown on the Contact page, in the site and email footers and in the legal pages.
+   */
+  officeAddress: {
+    lines: ["5 C&I Leasing Drive", "Lekki Phase 1", "Lagos State, Nigeria"],
+    oneLine: "5 C&I Leasing Drive, Lekki Phase 1, Lagos State, Nigeria",
+    mapUrl: "https://www.google.com/maps/search/?api=1&query=5+C%26I+Leasing+Drive%2C+Lekki+Phase+1%2C+Lagos",
+  },
+  /**
    * The business-support offer's public name ([NAME] in the concept note's site copy), chosen
    * 7 October 2026. Written out in full with its maker as productEndorsement.
    */

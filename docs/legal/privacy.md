@@ -212,5 +212,7 @@ We may update this Privacy Policy as the platform, our services or applicable re
 Questions, requests or concerns about privacy or personal information may be sent to:
 
 IP Factory
+5 C&I Leasing Drive, Lekki Phase 1, Lagos State, Nigeria
+info@ipfactory.co
 
 We will take reasonable steps to review and respond to privacy concerns. Nothing in this Policy limits any right you may have to raise a matter with an applicable data-protection or consumer-protection authority.

@@ -78,8 +78,9 @@ const DRAWINGS: Record<ArtKind, { label: string; draw: () => React.ReactNode }> 
     draw: () => (
       <>
         <line x1={20} y1={114} x2={200} y2={114} stroke={C.line} strokeWidth={2} />
-        {([["30", 28, C.plum], ["60", 54, C.crimson], ["90", 80, C.cyan]] as const).map(([day, w, fill], i) => (
-          <g key={day}><rect x={24} y={18 + i * 30} width={w * 2} height={18} fill={fill} /><text x={30 + w * 2} y={32 + i * 30} fontSize={12} fontWeight={700} fill={C.soft} fontFamily={FONT}>day {day}</text></g>
+        {/* Bars stop short of the edge so the longest label ("day 90") stays inside the 220-wide drawing. */}
+        {([["30", 44, C.plum], ["60", 88, C.crimson], ["90", 132, C.cyan]] as const).map(([day, w, fill], i) => (
+          <g key={day}><rect x={24} y={18 + i * 30} width={w} height={18} fill={fill} /><text x={32 + w} y={32 + i * 30} fontSize={12} fontWeight={700} fill={C.soft} fontFamily={FONT}>day {day}</text></g>
         ))}
       </>
     ),

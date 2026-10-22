@@ -360,12 +360,13 @@ var CURRENT_STATE = {
 function formatNaira(amount) {
   return `\u20A6${String(Math.round(amount)).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
 }
+var DELIVERY_REMEDY = "If we cannot deliver the service as agreed, contact us and we\u2019ll make it right in line with our Terms.";
 var buildJourney = (prices = PRICES) => [
   { id: "check", name: "Free Business Health Check", body: "Ten minutes on your phone. A first read on where your business is stuck, in your own words." },
   { id: "first-step", name: "Your first step", body: `The check names the product that fits first, and the one after it. Want the detail behind it? The Full Report, ${formatNaira(prices.fullReport)}, by email.` },
   { id: "pay", name: "Pay by link", body: `The price and the delivery time are on the page. You pay by transfer or card before we start. For a Business Review (${formatNaira(prices.currentState)}) or a Six-Week Fix, we talk first on a free 20-minute Discovery Call.` },
   { id: "records", name: "Send your records", body: "Your statements and answers, through a secure form. We check they are complete and confirm your delivery date within one working day." },
-  { id: "deliver", name: "We deliver", body: "Finished work, checked by a consultant who did not prepare it, with a 30-minute handover call. If we miss the date we gave you, ask for a full refund." },
+  { id: "deliver", name: "We deliver", body: `Finished work, checked by a consultant who did not prepare it, with a 30-minute handover call. ${DELIVERY_REMEDY}` },
   { id: "next", name: "What comes next", body: "Thirty days on, we check in. If it helps, we suggest the next step, or a Monthly Service that keeps it going." }
 ];
 var JOURNEY = buildJourney();
@@ -7473,6 +7474,7 @@ var STATEMENTS = (months) => ({ id: "bank_statements", label: `Business bank sta
 var SALES_RECORDS = { id: "sales_records", label: "Sales records", detail: "Invoices, POS reports or your sales book for the same months.", required: true };
 var COSTS = { id: "costs", label: "Your main costs", detail: "Rent, salaries, suppliers and any loans, with what each costs a month.", required: true };
 var GOAL = { id: "goal", label: "What do you want this work to help you decide or do?", kind: "textarea", required: true };
+var DELIVERY_PROMISE = `We confirm your delivery date once your records are complete. ${DELIVERY_REMEDY}`;
 var PRODUCTS = [
   {
     id: "business_health_check",

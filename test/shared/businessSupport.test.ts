@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildJourney, CURRENT_STATE, formatNaira, JOURNEY, PRICES, PROBLEM_AREAS } from "@shared/businessSupport";
+import { buildJourney, CURRENT_STATE, DELIVERY_REMEDY, formatNaira, JOURNEY, PRICES, PROBLEM_AREAS } from "@shared/businessSupport";
 import { PAYMENT_ITEM_DETAILS } from "@shared/payments";
 
 describe("prices (ET, 21 October 2026)", () => {
@@ -31,9 +31,10 @@ describe("How it works (plan page 18)", () => {
     expect(JOURNEY[0].name).toBe("Free Business Health Check");
   });
 
-  it("states the refund promise and the independent check before delivery", () => {
+  it("states the delivery remedy (as the Terms give it, not an automatic refund) and the independent check before delivery", () => {
     const deliver = JOURNEY.find((step) => step.id === "deliver")!.body;
-    expect(deliver).toMatch(/full refund/);
+    expect(deliver).toContain(DELIVERY_REMEDY);
+    expect(deliver).not.toMatch(/refund/i);
     expect(deliver).toMatch(/consultant who did not prepare it/);
   });
 });

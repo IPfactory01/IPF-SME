@@ -30,7 +30,7 @@ function ProfileForm({ fullName, email }: { fullName: string; email: string }) {
       <CardHeader className="space-y-1 pb-3"><CardTitle className="text-lg font-semibold">Your details</CardTitle><CardDescription>Your email is how you sign in, so it cannot be changed here.</CardDescription></CardHeader>
       <CardContent>
         <form className="space-y-4" noValidate onSubmit={submit}>
-          {error && <div role="alert" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{error}</div>}
+          {error && <div role="alert" className="border border-danger-line bg-danger-tint px-4 py-3 text-sm text-danger-strong">{error}</div>}
           <div className="space-y-2"><Label htmlFor="account-name">Full name</Label><Input id="account-name" autoComplete="name" value={name} onChange={event => { setName(event.target.value); setError(null); }} /></div>
           <div className="space-y-2"><Label htmlFor="account-email">Email</Label><Input id="account-email" value={email} readOnly aria-readonly="true" className="bg-paper" /></div>
           <Button disabled={update.isPending} type="submit" className="rounded-none bg-brand text-xs uppercase tracking-wider text-white">{update.isPending ? "Saving…" : "Save"}</Button>
@@ -68,7 +68,7 @@ function PasswordForm() {
       <CardHeader className="space-y-1 pb-3"><CardTitle className="text-lg font-semibold">Change password</CardTitle></CardHeader>
       <CardContent>
         <form className="space-y-4" noValidate onSubmit={submit}>
-          {error && <div role="alert" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{error}</div>}
+          {error && <div role="alert" className="border border-danger-line bg-danger-tint px-4 py-3 text-sm text-danger-strong">{error}</div>}
           <div className="space-y-2"><Label htmlFor="current-password">Current password</Label><Input id="current-password" type="password" autoComplete="current-password" value={form.currentPassword} onChange={set("currentPassword")} /></div>
           <div className="space-y-2"><Label htmlFor="new-password">New password</Label><Input id="new-password" type="password" autoComplete="new-password" value={form.newPassword} onChange={set("newPassword")} /></div>
           <div className="space-y-2"><Label htmlFor="confirm-new-password">Confirm new password</Label><Input id="confirm-new-password" type="password" autoComplete="new-password" value={form.confirmPassword} onChange={set("confirmPassword")} /></div>

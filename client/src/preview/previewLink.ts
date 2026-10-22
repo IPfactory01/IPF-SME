@@ -32,6 +32,8 @@ const SAMPLE_OWNER = {
   activeBusiness: { businessId: 1, businessName: "Ada Foods", role: "owner", status: "active", profileComplete: false, profilePercent: 60 },
   landingPath: "/dashboard",
 };
+/** Ada Foods' business profile, as the owner sees it in Business settings. */
+const SAMPLE_BUSINESS = { businessId: 1, name: "Ada Foods", description: "A kitchen and two outlets in Lagos, with deliveries by van.", yearFounded: 2021, sector: "Food and drink", website: "", role: "owner", canEdit: true, completion: { percent: 60, missing: ["website"] } };
 /** Ada Foods' Business Health Check: the fixed answers below, every other question answered with its second option. */
 function sampleAnswers(): Answers {
   const answers: Answers = { p_stage: "operating", p_type: "maker", p_sector: "food and drink", p_age: "2to5", p_staff: "6to10", p_revenue: "3to5m", p_trend: "flat", f_instinct: "I", f_seen: "D", f_finance: ["cash"], p_name: "Ada Foods" };
@@ -82,7 +84,7 @@ function previewInsight() {
   if (sampleInsight === undefined) {
     const answers = sampleAnswers();
     const result = evaluate(answers);
-    const report = buildFullReport({ reference: "TS-R-000001", date: day(-12), contact: { fullName: "Ada Okafor", businessName: "Ada Foods" }, answers, result, intake: SAMPLE_INTAKE });
+    const report = buildFullReport({ reference: "TS-R-000001", date: day(-8), contact: { fullName: "Ada Okafor", businessName: "Ada Foods" }, answers, result, intake: SAMPLE_INTAKE });
     sampleInsight = roomInsight({ report, result: null });
   }
   return sampleInsight;
@@ -101,8 +103,8 @@ const SAMPLE_ROOM = {
   assessmentStartedAt: day(-4, 8),
   fixStartedAt: null,
   closedAt: null,
-  check: { primaryArea: 2, readiness: "intermediate", completedAt: day(-14), reportRequestedAt: day(-13), callRequestedAt: day(-14), callScheduledFor: day(-10, 14) },
-  report: { requestedAt: day(-13), deliveredAt: day(-12) },
+  check: { primaryArea: 2, readiness: "intermediate", completedAt: day(-14), reportRequestedAt: day(-10, 16), callRequestedAt: day(-14), callScheduledFor: day(-10, 14) },
+  report: { requestedAt: day(-10, 16), deliveredAt: day(-8) },
   debrief: { heldAt: day(-10, 14), heard: "Two outlets, a kitchen and a van. Sales of about ₦4,000,000 a month, steady for a year.\nMoney runs out in week three; the second outlet's takings pay salaries.\nPrices were last set in 2024. Delivery is charged by guess.", problemInOwnerWords: "I want to pay salaries on the 25th without moving money around, and know which outlet actually makes money.", successLooksLike: "Salaries paid on the 25th from the business account, three months running.", tried: "A bookkeeper for three months in 2025. Stopped when the reports came late.", nextSteps: "The Full Report, then the Business Review from Monday 19 October.", sharedAt: day(-10, 16) },
   problemStatement: null,
   booking: null,
@@ -132,6 +134,11 @@ const SAMPLE_SEATS = { included: 1, used: 0, members: [], invitations: [] };
 const responders: Record<string, Responder> = {
   "auth.me": () => null,
   "account.me": () => (previewSession.signedIn ? SAMPLE_OWNER : null),
+  "account.signOut": () => {
+    previewSession.signedIn = false;
+    return { success: true };
+  },
+  "account.business": () => ({ ...SAMPLE_BUSINESS }),
   "engagement.client.room": () => (previewSession.signedIn ? { ...SAMPLE_ROOM, insight: previewInsight() } : null),
   "invitations.seats.list": () => SAMPLE_SEATS,
   "registration.capacity": () => ({ boardroomCount: 0 }),
@@ -173,7 +180,6 @@ const refusals: Record<string, string> = {
   "engagement.client.accept": `On the live site this signs it off. ${PREVIEW_NOTICE}`,
   "engagement.client.setAudience": `On the live site this decides whether your staff see it. ${PREVIEW_NOTICE}`,
   "invitations.seats.invite": `On the live site this emails them a link to join. ${PREVIEW_NOTICE}`,
-  "account.signOut": `Signing out works on the live site. ${PREVIEW_NOTICE}`,
   "fullReport.submit": `Your answers are complete. On the live site your report is built now and emailed to you. ${PREVIEW_NOTICE}`,
   "participant.signIn": `Client sign-in works on the live site. ${PREVIEW_NOTICE}`,
 };

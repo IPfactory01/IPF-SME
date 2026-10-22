@@ -109,6 +109,9 @@ describe("the owner's team card", () => {
     api.seats = { included: 1, used: 0, members: [], invitations: [] };
     render(<TeamSeats />);
     fireEvent.change(screen.getByLabelText("Their name"), { target: { value: "Chidi Coordinator" } });
+    fireEvent.change(screen.getByLabelText("Their email"), { target: { value: "chidi@" } });
+    expect((screen.getByRole("button", { name: "Invite" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("Enter their full email address, like bola@example.com.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Their email"), { target: { value: "chidi@example.com" } });
     fireEvent.click(screen.getByLabelText(/^Full\./));
     fireEvent.click(screen.getByRole("button", { name: "Invite" }));

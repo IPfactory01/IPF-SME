@@ -155,6 +155,8 @@ const worst = (...values: (Health | undefined)[]): Health =>
   values.reduce<Health>((current, value) => (value && HEALTH_RANK[value] > HEALTH_RANK[current] ? value : current), "clear");
 /** Lower-cases the first letter for use mid-sentence, but keeps "I", acronyms and names such as WhatsApp or CAC. */
 const lower = (text: string) => (/^(I\b|I'|[A-Z][A-Za-z]*[A-Z])/.test(text) ? text : text.charAt(0).toLowerCase() + text.slice(1));
+/** "a driver", "an influencer": the article that fits the word. */
+export const withArticle = (word: string) => `${/^[aeiou]/i.test(word) ? "an" : "a"} ${word}`;
 const sentence = (text: string) => (/[.!?]$/.test(text) ? text : `${text}.`);
 const upperFirst = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 const list = (items: string[]) => (items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`);
@@ -743,7 +745,7 @@ export function buildFullReport(input: ReportInput): FullReport {
       s1.sub("Your behavioural profile"),
       ...(style ? [
         { kind: "facts" as const, rows: [{ label: "Under pressure", value: `${style.name}. ${style.strength}` }, ...(seen ? [{ label: "Others see you as", value: `${seen.name}. ${seen.strength}` }] : []), { label: "Watch for", value: style.watch }] },
-        { kind: "numbered" as const, title: "Why it matters now", items: ["On your own, behaviour is a matter of style. With a team, it becomes how the business runs.", ...(seen && seen.name !== style.name ? [`You see yourself as a ${style.name.toLowerCase()} and others see a ${seen.name.toLowerCase()}. Ask two people who work with you which is right: the gap is where misunderstandings start.`] : []), `Your watch-out is a pattern, not a flaw: ${lower(style.watch)} Name it, then design around it.`] },
+        { kind: "numbered" as const, title: "Why it matters now", items: ["On your own, behaviour is a matter of style. With a team, it becomes how the business runs.", ...(seen && seen.name !== style.name ? [`You see yourself as ${withArticle(style.name.toLowerCase())} and others see ${withArticle(seen.name.toLowerCase())}. Ask two people who work with you which is right: the gap is where misunderstandings start.`] : []), `Your watch-out is a pattern, not a flaw: ${lower(style.watch)} Name it, then design around it.`] },
       ] : [{ kind: "paragraph" as const, text: "You did not complete the behaviour questions in the Business Health Check, so this part is left open rather than guessed at. Section Nine lists it." }]),
       ...(Array.isArray(answers.f_finance) ? [
         s1.sub("The four money basics"),

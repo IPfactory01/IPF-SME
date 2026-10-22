@@ -31,7 +31,7 @@ function BusinessSettings({ businessId }: { businessId: number }) {
   });
 
   if (profile.isLoading || (profile.data && !form)) return <p className="text-sm text-ink-muted">Loading…</p>;
-  if (!profile.data || !form) return <p role="alert" className="text-sm text-rose-900">{profile.error?.message ?? "This business is not available."}</p>;
+  if (!profile.data || !form) return <p role="alert" className="text-sm text-danger-strong">{profile.error?.message ?? "This business is not available."}</p>;
 
   const data = profile.data;
   const set = (key: keyof Form) => (event: { target: { value: string } }) => {
@@ -58,7 +58,7 @@ function BusinessSettings({ businessId }: { businessId: number }) {
       </CardHeader>
       <CardContent>
         <form className="space-y-4" noValidate onSubmit={submit}>
-          {error && <div role="alert" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{error}</div>}
+          {error && <div role="alert" className="border border-danger-line bg-danger-tint px-4 py-3 text-sm text-danger-strong">{error}</div>}
           <div className="space-y-2"><Label htmlFor="business-name">Business name</Label><Input id="business-name" value={form.name} onChange={set("name")} disabled={disabled} /></div>
           <div className="space-y-2"><Label htmlFor="business-description">Description</Label>
             <textarea id="business-description" rows={4} value={form.description} onChange={set("description")} disabled={disabled} className="w-full border border-line bg-white px-3 py-2 text-sm disabled:opacity-60" /></div>

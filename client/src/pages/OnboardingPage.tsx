@@ -110,7 +110,7 @@ export default function OnboardingPage() {
       </CardHeader>
       <CardContent>
         <form className="space-y-4" noValidate onSubmit={submit}>
-          {error && <div role="alert" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{error}</div>}
+          {error && <div role="alert" className="border border-danger-line bg-danger-tint px-4 py-3 text-sm text-danger-strong">{error}</div>}
           <div className="space-y-2">
             <Label htmlFor="onboarding-full-name">Full name</Label>
             <Input id="onboarding-full-name" autoComplete="name" value={values.fullName} onChange={set("fullName")} />

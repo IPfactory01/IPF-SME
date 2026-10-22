@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -287,7 +287,7 @@ describe("no public registration", () => {
 
   it("does not offer account creation on the sign-in page", () => {
     renderAt("/login", <LoginPage />);
-    expect(screen.getByText("Client access is created during onboarding.")).toBeTruthy();
+    expect(screen.getByText(/Your account is created when you start working with us/)).toBeTruthy();
     expect(screen.queryByText(/create your account/i)).toBeNull();
     expect(document.querySelector('a[href="/signup"]')).toBeNull();
   });
@@ -302,9 +302,42 @@ describe("no public registration", () => {
     expect(screen.getByRole("status").textContent).toMatch(/^If an account uses that email/);
   });
 
-  it("points JUMP participants to their own portal", () => {
+  it("points programme participants to their own portal, without naming another programme to clients", () => {
     renderAt("/login", <LoginPage />);
     expect(screen.getByRole("link", { name: "Go to the participant portal" }).getAttribute("href")).toBe("/portal");
+    expect(document.body.textContent).not.toMatch(/JUMP/);
+  });
+
+  it("is not a dead end: the brand and a way back to the site, the free check and the services for visitors who are not clients", () => {
+    renderAt("/login", <LoginPage />);
+    expect(screen.getByRole("heading", { level: 1, name: "Client sign in" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /home$/ }).getAttribute("href")).toBe("/");
+    expect(screen.getByRole("link", { name: "Back to the site" }).getAttribute("href")).toBe("/");
+    expect(screen.getByRole("link", { name: "free Business Health Check" }).getAttribute("href")).toBe("/check");
+    expect(screen.getByRole("link", { name: "see our services" }).getAttribute("href")).toBe("/services");
+    expect(document.title).toMatch(/^Client sign in \|/);
+  });
+
+  it("names the reset step as what it is, and lets the client see the password they typed", () => {
+    renderAt("/login", <LoginPage />);
+    const password = screen.getByLabelText("Password") as HTMLInputElement;
+    expect(password.type).toBe("password");
+    fireEvent.click(screen.getByRole("button", { name: "Show password" }));
+    expect(password.type).toBe("text");
+    fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(password.type).toBe("password");
+    fireEvent.click(screen.getByRole("button", { name: "Forgot your password?" }));
+    expect(screen.getByRole("heading", { level: 1, name: "Reset your password" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Client sign in" })).toBeNull();
+  });
+
+  it("checks the email looks like one before asking the server", () => {
+    renderAt("/login", <LoginPage />);
+    fill("Email", "not-an-email");
+    fill("Password", "whatever 12");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(screen.getByRole("alert").textContent).toBe("Enter your full email address, like ada@example.com.");
+    expect(api.state.signInCalls).toEqual([]);
   });
 });
 
@@ -452,6 +485,17 @@ describe("account dashboard", () => {
     api.state.me = STAFF;
     renderAt("/dashboard", <AccountDashboard />);
     expect(screen.queryByRole("link", { name: "Business settings" })).toBeNull();
+  });
+
+  it("keeps the menu on one line on a phone with short labels, and offers help in the footer", () => {
+    api.state.me = SESSION;
+    renderAt("/dashboard", <AccountDashboard />);
+    const business = screen.getByRole("link", { name: "Business settings" });
+    expect(business.querySelector(".sm\\:hidden")?.textContent).toBe("Business");
+    expect(business.className).toContain("whitespace-nowrap");
+    const footer = document.querySelector("footer") as HTMLElement;
+    expect(within(footer).getByRole("link", { name: "info@ipfactory.co" }).getAttribute("href")).toBe("mailto:info@ipfactory.co");
+    expect(footer.textContent).toContain("5 C&I Leasing Drive, Lekki Phase 1");
   });
 });
 

@@ -11,7 +11,7 @@ import {
   REGISTRATION, REPEAT, TOOLS, TOP_CUSTOMER_SHARE,
 } from "@shared/fullReport/intake";
 import { CheckCircle2, Download, FileText } from "lucide-react";
-import React, { useState, type FormEvent } from "react";
+import React, { useEffect, useState, type FormEvent } from "react";
 import { useParams } from "wouter";
 
 /**
@@ -111,17 +111,41 @@ function toIntake(draft: Draft): unknown {
 const FIELD_QUESTION: Record<string, string> = {
   monthlyCosts: "lastMonthRevenue", biggestCost: "lastMonthRevenue", conversion: "enquiries", owed: "cash", loans: "cash", marginPercent: "costShare",
 };
-function problemOf(draft: Draft): string | null {
+/** The first question still to answer, and what to say about it; null when the form can be sent. */
+function problemOf(draft: Draft): { message: string; question: string } | null {
   const competitors = INTAKE_QUESTIONS.findIndex((item) => item.id === "competitors") + 1;
   const parsed = intakeSchema.safeParse(toIntake(draft));
-  if (parsed.success && !draft.competitorsUnknown && !draft.competitors.some((name) => name.trim())) return `Question ${competitors}: Name at least one competitor, or tick that you don't know who they are.`;
+  if (parsed.success && !draft.competitorsUnknown && !draft.competitors.some((name) => name.trim())) return { question: "competitors", message: `Question ${competitors}: Name at least one competitor, or tick that you don't know who they are.` };
   if (parsed.success) return null;
   const issue = parsed.error.issues[0];
   const field = String(issue.path[0] ?? "");
   const question = FIELD_QUESTION[field] ?? field;
   const number = INTAKE_QUESTIONS.findIndex((item) => item.id === question) + 1;
   const message = issue.code === "invalid_value" || issue.code === "invalid_type" || /expected/i.test(issue.message) ? "Please choose or enter an answer." : issue.message;
-  return number > 0 ? `Question ${number}: ${message}` : message;
+  return { question, message: number > 0 ? `Question ${number}: ${message}` : message };
+}
+
+/**
+ * Answers are kept on this device as the owner types, so a reload, a dropped connection or an incoming call does not
+ * lose twelve minutes of answers. Kept per link; cleared once the report is sent. Storage can be refused (private
+ * windows): the form then simply works without it.
+ */
+const draftKey = (token: string) => `ipf-report-draft-${token}`;
+function loadDraft(token: string): Draft {
+  try {
+    const saved = window.localStorage.getItem(draftKey(token));
+    return saved ? { ...EMPTY, ...(JSON.parse(saved) as Partial<Draft>) } : EMPTY;
+  } catch {
+    return EMPTY;
+  }
+}
+function saveDraft(token: string, draft: Draft | null) {
+  try {
+    if (draft) window.localStorage.setItem(draftKey(token), JSON.stringify(draft));
+    else window.localStorage.removeItem(draftKey(token));
+  } catch {
+    // Storage refused: nothing to keep.
+  }
 }
 
 function Options({ name, options, value, onChange }: { name: string; options: Choice; value: string; onChange: (value: string) => void }) {
@@ -195,11 +219,17 @@ export default function FullReportPage() {
   const params = useParams<{ token: string }>();
   const token = params.token ?? "";
   const form = trpc.fullReport.form.useQuery({ token }, { retry: false, refetchOnWindowFocus: false });
-  const [draft, setDraft] = useState<Draft>(EMPTY);
+  const [draft, setDraft] = useState<Draft>(() => loadDraft(token));
   const [problem, setProblem] = useState<string | null>(null);
   const [sent, setSent] = useState<{ fileName: string; pdf: string } | null>(null);
+  useEffect(() => {
+    if (!sent && draft !== EMPTY) saveDraft(token, draft);
+  }, [draft, sent, token]);
   const submit = trpc.fullReport.submit.useMutation({
-    onSuccess: (result) => setSent({ fileName: result.fileName, pdf: result.pdf }),
+    onSuccess: (result) => {
+      saveDraft(token, null);
+      setSent({ fileName: result.fileName, pdf: result.pdf });
+    },
     onError: (error) => setProblem(error.message),
   });
   const download = trpc.fullReport.download.useMutation({ onSuccess: (result) => savePdf(result.fileName, result.pdf), onError: (error) => setProblem(error.message) });
@@ -250,7 +280,14 @@ export default function FullReportPage() {
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const found = problemOf(draft);
-    if (found) return setProblem(found);
+    if (found) {
+      setProblem(found.message);
+      // Take the owner to the question rather than leaving them to hunt for it among seventeen.
+      const target = document.getElementById(`question-${found.question}`);
+      target?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      target?.querySelector<HTMLElement>("input, textarea, button")?.focus({ preventScroll: true });
+      return;
+    }
     submit.mutate({ token, intake: toIntake(draft) });
   };
 
@@ -258,7 +295,7 @@ export default function FullReportPage() {
     const index = INTAKE_QUESTIONS.findIndex((item) => item.id === id);
     const { prompt, hint } = intakeWording(INTAKE_QUESTIONS[index], byDeal);
     return (
-      <fieldset key={id} className="space-y-3 border-t border-line pt-5">
+      <fieldset key={id} id={`question-${id}`} className="scroll-mt-24 space-y-3 border-t border-line pt-5">
         <legend className="sr-only">{prompt}</legend>
         <p className="flex gap-3 font-medium text-ink"><span className="w-6 shrink-0 font-semibold tabular-nums text-highlight-ink">{index + 1}</span><span>{prompt}</span></p>
         {hint && <p className="pl-9 text-sm text-ink-muted">{hint}</p>}

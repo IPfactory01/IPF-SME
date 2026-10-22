@@ -71,7 +71,8 @@ export default function TeamSeats() {
               </label>
             ))}
           </fieldset>
-          <Button type="submit" size="sm" className="rounded-none bg-brand text-xs uppercase tracking-wider text-white" disabled={invite.isPending || !fullName.trim() || !email.trim()}>Invite</Button>
+          {email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim()) && <p className="text-xs text-danger-strong">Enter their full email address, like bola@example.com.</p>}
+          <Button type="submit" size="sm" className="rounded-none bg-brand text-xs uppercase tracking-wider text-white" disabled={invite.isPending || !fullName.trim() || !/^\S+@\S+\.\S+$/.test(email.trim())}>Invite</Button>
         </form>
       )}
       {link && <p role="status" className="mt-3 break-all border border-brand-line bg-brand-tint p-3 text-xs">Send them this link yourself (it works once): {link}</p>}

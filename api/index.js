@@ -9866,6 +9866,7 @@ var REPORT_VERSION = 4;
 var HEALTH_RANK2 = { clear: 0, watch: 1, stuck: 2 };
 var worst2 = (...values2) => values2.reduce((current, value) => value && HEALTH_RANK2[value] > HEALTH_RANK2[current] ? value : current, "clear");
 var lower2 = (text4) => /^(I\b|I'|[A-Z][A-Za-z]*[A-Z])/.test(text4) ? text4 : text4.charAt(0).toLowerCase() + text4.slice(1);
+var withArticle = (word) => `${/^[aeiou]/i.test(word) ? "an" : "a"} ${word}`;
 var sentence = (text4) => /[.!?]$/.test(text4) ? text4 : `${text4}.`;
 var upperFirst = (text4) => text4.charAt(0).toUpperCase() + text4.slice(1);
 var list = (items) => items.length <= 1 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
@@ -10442,7 +10443,7 @@ function buildFullReport(input) {
       s1.sub("Your behavioural profile"),
       ...style ? [
         { kind: "facts", rows: [{ label: "Under pressure", value: `${style.name}. ${style.strength}` }, ...seen ? [{ label: "Others see you as", value: `${seen.name}. ${seen.strength}` }] : [], { label: "Watch for", value: style.watch }] },
-        { kind: "numbered", title: "Why it matters now", items: ["On your own, behaviour is a matter of style. With a team, it becomes how the business runs.", ...seen && seen.name !== style.name ? [`You see yourself as a ${style.name.toLowerCase()} and others see a ${seen.name.toLowerCase()}. Ask two people who work with you which is right: the gap is where misunderstandings start.`] : [], `Your watch-out is a pattern, not a flaw: ${lower2(style.watch)} Name it, then design around it.`] }
+        { kind: "numbered", title: "Why it matters now", items: ["On your own, behaviour is a matter of style. With a team, it becomes how the business runs.", ...seen && seen.name !== style.name ? [`You see yourself as ${withArticle(style.name.toLowerCase())} and others see ${withArticle(seen.name.toLowerCase())}. Ask two people who work with you which is right: the gap is where misunderstandings start.`] : [], `Your watch-out is a pattern, not a flaw: ${lower2(style.watch)} Name it, then design around it.`] }
       ] : [{ kind: "paragraph", text: "You did not complete the behaviour questions in the Business Health Check, so this part is left open rather than guessed at. Section Nine lists it." }],
       ...Array.isArray(answers.f_finance) ? [
         s1.sub("The four money basics"),

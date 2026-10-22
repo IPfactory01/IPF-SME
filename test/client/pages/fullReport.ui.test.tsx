@@ -91,6 +91,8 @@ beforeEach(() => {
   api.submitCalls = [];
   api.downloadCalls = [];
   api.saved = [];
+  // The form keeps answers on the device; each test starts from a fresh one.
+  window.localStorage.clear();
 });
 afterEach(cleanup);
 
@@ -118,6 +120,25 @@ describe("the report form", () => {
     expect(api.submitCalls).toEqual([]);
   });
 
+  it("takes the owner to the question to fix, with its first field ready to type in", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: /send me my full report/i }));
+    expect(document.activeElement).toBe(screen.getByLabelText("Where you sell from"));
+    fireEvent.change(screen.getByLabelText("Where you sell from"), { target: { value: "A shop in Yaba" } });
+    fireEvent.click(screen.getByRole("button", { name: /send me my full report/i }));
+    expect(screen.getByRole("alert").textContent).toMatch(/^Question 2:/);
+    expect(document.getElementById("question-registration")!.contains(document.activeElement)).toBe(true);
+  });
+
+  it("keeps the answers on this device if the page reloads or the owner leaves, and forgets them once sent", () => {
+    renderPage();
+    fireEvent.change(screen.getByLabelText("Where you sell from"), { target: { value: "A shop in Yaba" } });
+    cleanup();
+    renderPage();
+    expect((screen.getByLabelText("Where you sell from") as HTMLInputElement).value).toBe("A shop in Yaba");
+    expect(window.localStorage.getItem("ipf-report-draft-TOKEN123")).toContain("A shop in Yaba");
+  });
+
   it("asks for competitors, or an explicit don't know", () => {
     renderPage();
     fill();
@@ -136,6 +157,7 @@ describe("the report form", () => {
     fireEvent.click(screen.getByRole("button", { name: /send me my full report/i }));
     expect(api.submitCalls).toEqual([{ token: "TOKEN123", intake: sampleIntake }]);
     expect(screen.getByRole("heading", { name: "Your Full Report is on its way" })).toBeTruthy();
+    expect(window.localStorage.getItem("ipf-report-draft-TOKEN123")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /download your full report/i }));
     expect(api.saved).toEqual([["Adunni-Fabrics-full-report.pdf", "JVBERi0="]]);
   });

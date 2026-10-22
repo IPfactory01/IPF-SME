@@ -165,6 +165,17 @@ describe("the client's room", () => {
     expect(kickoff.getByText(/only you can see these/)).toBeTruthy();
   });
 
+  it("numbers each week's Work Plan 1, 2, 3 even when the stored order has gaps, and keeps our internal tags to ourselves", () => {
+    const base = room({ deliverables: [] });
+    const gaps = { ...base, tasks: base.tasks.map((task, index) => ({ ...task, sortOrder: [1, 2, 5, 9][index] ?? task.sortOrder })) };
+    render(<EngagementRoom room={gaps} />);
+    const plan = within(screen.getByRole("region", { name: "Step 4: Business Review" }));
+    const badges = within(plan.getByRole("list", { name: "Week 1" })).getAllByRole("listitem").map(item => item.firstElementChild!.textContent);
+    // A finished item shows a tick instead of its number; every other item shows its place in the week.
+    expect(badges).toEqual(["1", "2", "", "4"]);
+    expect(screen.getByRole("region", { name: "Step 4: Business Review" }).textContent).not.toMatch(/internal|external/i);
+  });
+
   it("asks the owner for Sign-off as the next action once nothing is outstanding", () => {
     render(<EngagementRoom room={room({ tasks: [] })} />);
     expect(screen.getByText("Read the Findings and give your Sign-off")).toBeTruthy();

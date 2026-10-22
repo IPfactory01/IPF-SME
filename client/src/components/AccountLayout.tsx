@@ -34,9 +34,10 @@ export default function AccountLayout({ children, heading, width = "reading" }: 
     return <main className="flex min-h-screen items-center justify-center bg-paper p-6 text-sm text-ink-muted">Loading…</main>;
   }
 
-  const link = (href: string, label: string) => (
-    <Link href={href} className={`relative py-1 text-sm font-medium transition-colors hover:text-brand ${location === href ? "text-brand" : "text-ink-600"}`}>
-      {label}
+  // Phones get the short label so the three links sit on one line ("Business", not "Business settings").
+  const link = (href: string, label: string, short = label) => (
+    <Link href={href} aria-label={label} aria-current={location === href ? "page" : undefined} className={`relative inline-flex min-h-11 items-center whitespace-nowrap text-sm font-medium transition-colors hover:text-brand ${location === href ? "text-brand" : "text-ink-600"}`}>
+      <span className="sm:hidden">{short}</span><span className="hidden sm:inline">{label}</span>
       {location === href && <span aria-hidden className="absolute inset-x-0 -bottom-0.5 h-0.5 bg-highlight-ink" />}
     </Link>
   );
@@ -50,11 +51,11 @@ export default function AccountLayout({ children, heading, width = "reading" }: 
             <img src={BRAND.markUrl} alt={BRAND.organisationName} className="h-9 w-auto shrink-0" />
             <span className="border-l border-line pl-3 text-xs font-semibold uppercase tracking-widest text-ink-muted">{BRAND.productName}</span>
           </Link>
-          <nav aria-label="Account" className="order-last flex w-full flex-wrap items-center gap-5 sm:order-none sm:w-auto">
+          <nav aria-label="Account" className="order-last flex w-full items-center gap-5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] sm:order-none sm:w-auto">
             {link("/dashboard", account.activeBusiness ? "Your room" : "Home")}
-            {account.activeBusiness && link("/settings/business", "Business settings")}
-            {link("/settings/account", "Account settings")}
-            {account.platformRoles.length > 0 && <a href="/admin" className="py-1 text-sm font-medium text-ink-600 transition-colors hover:text-brand">Internal area</a>}
+            {account.activeBusiness && link("/settings/business", "Business settings", "Business")}
+            {link("/settings/account", "Account settings", "Account")}
+            {account.platformRoles.length > 0 && <a href="/admin" className="inline-flex min-h-11 items-center whitespace-nowrap text-sm font-medium text-ink-600 transition-colors hover:text-brand">Internal area</a>}
           </nav>
           <div className="flex items-center gap-3">
             <WorkspaceSwitcher account={account} />
@@ -69,8 +70,9 @@ export default function AccountLayout({ children, heading, width = "reading" }: 
         {children(account)}
       </div>
       <footer className="space-y-2 border-t border-line py-6 text-center text-xs text-ink-muted">
+        <p className="text-sm">Need help? Write to <a href={`mailto:${BRAND.businessSupportMailbox}`} className="font-semibold text-brand underline underline-offset-2">{BRAND.businessSupportMailbox}</a> or message your team on WhatsApp.</p>
         <LegalFooterLinks />
-        <p>{BRAND.productEndorsement}</p>
+        <p>{BRAND.productEndorsement} · <span className="whitespace-nowrap">{BRAND.officeAddress.oneLine}</span></p>
       </footer>
     </main>
   );

@@ -421,7 +421,7 @@ function WorkPlan({ room, isOwner }: { room: Room; isOwner: boolean }) {
         <div key={week ?? "none"}>
           <p className="text-xs font-semibold uppercase tracking-widest text-ink">{week === null ? "Also" : `Week ${week}`}</p>
           <ol className="mt-1" aria-label={week === null ? "Also in the plan" : `Week ${week}`}>
-            {planRows(room, week).map(row => <PlanRowView key={row.key} row={row} room={room} isOwner={isOwner} />)}
+            {planRows(room, week).map((row, index) => <PlanRowView key={row.key} row={row} number={index + 1} room={room} isOwner={isOwner} />)}
           </ol>
         </div>
       ))}
@@ -429,16 +429,16 @@ function WorkPlan({ room, isOwner }: { room: Room; isOwner: boolean }) {
   );
 }
 
-function PlanRowView({ row, room, isOwner }: { row: PlanRow; room: Room; isOwner: boolean }) {
+/** One line of the Work Plan, numbered by its place in the week (the stored sort order can have gaps). */
+function PlanRowView({ row, number, room, isOwner }: { row: PlanRow; number: number; room: Room; isOwner: boolean }) {
   const finished = row.status === "done" || row.status === "submitted";
   return (
     <li className={`flex gap-3 border-t border-line-soft py-3 ${finished ? "text-ink-muted" : ""}`} aria-label={row.title}>
-      <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center border text-xs font-semibold ${row.status === "done" ? "border-brand bg-brand text-white" : row.status === "open" || row.status === "needs_more" ? "border-brand text-brand" : "border-line text-ink-muted"}`}>{row.status === "done" ? <Check className="h-3.5 w-3.5" aria-hidden /> : row.order}</span>
+      <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center border text-xs font-semibold ${row.status === "done" ? "border-brand bg-brand text-white" : row.status === "open" || row.status === "needs_more" ? "border-brand text-brand" : "border-line text-ink-muted"}`}>{row.status === "done" ? <Check className="h-3.5 w-3.5" aria-hidden /> : number}</span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`font-medium ${row.status === "done" ? "line-through decoration-line-strong" : "text-ink"}`}>{row.title}{row.task?.mine ? <span className="ml-2 text-xs font-normal text-brand">for you</span> : null}</span>
           <span className={`border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${WHO[row.who]}`}>{row.who}</span>
-          {row.factor && <span className="text-[10px] uppercase tracking-wider text-ink-faint">{row.factor}</span>}
         </div>
         <p className="text-xs text-ink-muted">{row.when}</p>
         {row.task && (
@@ -476,7 +476,7 @@ function CheckinSessions({ room, isOwner }: { room: Room; isOwner: boolean }) {
     <div>
       <p className={KICKER}>{METHOD.checkin}s</p>
       <ol className="mt-1" aria-label="Weekly Check-ins">
-        {rows.map(session => <PlanRowView key={session.id} row={{ key: `s${session.id}`, order: session.sortOrder, title: session.title, who: "Together", when: session.scheduledFor ? lagos(session.scheduledFor) : "To be booked", status: session.status === "held" ? "done" : "open", factor: null, session }} room={room} isOwner={isOwner} />)}
+        {rows.map((session, index) => <PlanRowView key={session.id} number={index + 1} row={{ key: `s${session.id}`, order: session.sortOrder, title: session.title, who: "Together", when: session.scheduledFor ? lagos(session.scheduledFor) : "To be booked", status: session.status === "held" ? "done" : "open", factor: null, session }} room={room} isOwner={isOwner} />)}
       </ol>
     </div>
   );

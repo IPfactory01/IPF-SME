@@ -270,3 +270,13 @@ describe("the strategic plan", () => {
     expect(sec(report, 9).standfirst).toMatch(/^[A-Z][a-z]+ things we still need from you before this plan is complete\.$/);
   });
 });
+
+describe("the founder's behavioural profile, in plain English", () => {
+  it("says \"an influencer\" and \"a driver\", never \"a influencer\"", async () => {
+    const { withArticle } = await import("@shared/fullReport/build");
+    expect(withArticle("influencer")).toBe("an influencer");
+    expect(withArticle("analyser")).toBe("an analyser");
+    expect(withArticle("driver")).toBe("a driver");
+    expect(withArticle("supporter")).toBe("a supporter");
+  });
+});

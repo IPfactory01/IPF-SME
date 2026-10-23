@@ -351,15 +351,8 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
   );
 }
 
-/** The questions owners ask before they buy. The Questions page adds each service's own. */
-export const SITE_QUESTIONS = [
-  { q: "Do you do the work for me?", a: "Sometimes. Done for You products are finished work we deliver: accounts, a forecast, a plan or a funding pack. In a Six-Week Fix your team does the work; we prescribe, equip and review it with you every week." },
-  { q: "What if you miss the delivery date?", a: DELIVERY_PROMISE },
-  { q: "How do I pay?", a: "By transfer or card, through Paystack, before we start. A Six-Week Fix can be paid in three parts. Monthly Services are paid a quarter at a time." },
-  { q: "What do you do with my information?", a: "We use it only to do the work you asked for. Records you upload go into private storage that only the people on your order can open. Some analysis uses AI tools, and a consultant checks everything before you get it. Our Privacy Policy lists who helps us run the service and your rights." },
-  { q: "What if the Measure of Success doesn't move in six weeks?", a: "We extend your Six-Week Fix, at no charge, for up to two weeks." },
-  { q: "What happens after?", a: "Thirty days on, we check in. If it helps, we suggest the next step, or a Monthly Service that keeps it going." },
-];
+/** The questions owners ask before they buy, kept in shared/siteQuestions.ts. */
+export { SITE_QUESTIONS } from "@shared/siteQuestions";
 
 /** One group of questions, each opening to its answer. */
 export function Faq({ id, heading, items }: { id: string; heading: string; items: readonly { q: string; a: string }[] }) {

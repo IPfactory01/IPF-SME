@@ -30,6 +30,11 @@ var init_brand = __esm({
        */
       officeAddress: {
         lines: ["5 C&I Leasing Drive", "Lekki Phase 1", "Lagos State, Nigeria"],
+        /** The same address in parts, for search engines (shared/seo.ts). */
+        street: "5 C&I Leasing Drive",
+        locality: "Lekki Phase 1",
+        region: "Lagos State",
+        countryCode: "NG",
         oneLine: "5 C&I Leasing Drive, Lekki Phase 1, Lagos State, Nigeria",
         mapUrl: "https://www.google.com/maps/search/?api=1&query=5+C%26I+Leasing+Drive%2C+Lekki+Phase+1%2C+Lagos"
       },

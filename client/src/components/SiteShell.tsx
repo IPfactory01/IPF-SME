@@ -4,22 +4,32 @@
  */
 import { LegalFooterLinks } from "@/components/LegalLinks";
 import { BRAND } from "@shared/brand";
+import { pageTitle, SITE_ORIGIN } from "@shared/seo";
 import { ArrowRight, Menu, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 
-/** Sets the browser tab title and search description while the page is open. */
+/**
+ * Sets the browser tab title, search description and canonical address while the page is open. Titles and descriptions
+ * come from shared/seo.ts, which the build also writes into each public page's own HTML.
+ */
 export function usePageMeta(title: string, description: string) {
   useEffect(() => {
     const previous = document.title;
-    document.title = `${title} | ${BRAND.productEndorsement}`;
+    document.title = pageTitle(title);
     const meta = document.querySelector('meta[name="description"]') ?? Object.assign(document.createElement("meta"), { name: "description" });
     const before = meta.getAttribute("content");
     meta.setAttribute("content", description);
     if (!meta.isConnected) document.head.appendChild(meta);
+    const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]') ?? Object.assign(document.createElement("link"), { rel: "canonical" });
+    const canonicalBefore = canonical.getAttribute("href");
+    // One address per page: "/services/x/" and "/services/x" are the same page to a search engine.
+    canonical.setAttribute("href", `${SITE_ORIGIN}${window.location.pathname.replace(/(.)\/+$/, "$1")}`);
+    if (!canonical.isConnected) document.head.appendChild(canonical);
     return () => {
       document.title = previous;
       if (before !== null) meta.setAttribute("content", before);
+      if (canonicalBefore !== null) canonical.setAttribute("href", canonicalBefore);
     };
   }, [title, description]);
 }

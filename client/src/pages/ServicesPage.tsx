@@ -13,13 +13,14 @@ import { MENU_PRODUCTS, NEED_DETAILS, WAY_DETAILS, WAYS_TO_BUY, type WayToBuy } 
 import { ArrowRight } from "lucide-react";
 import React, { useState } from "react";
 import { Link } from "wouter";
+import { PAGE_META } from "@shared/seo";
 
 /** The eyebrow over a page or section heading: small crimson capitals. */
 export const EYEBROW = "text-xs font-bold uppercase tracking-[0.16em] text-highlight-ink";
 
 export default function ServicesPage() {
   useScrollToTop();
-  usePageMeta("Services", "Every product of The Shift, by IP Factory, with its price and delivery time: assessments, Done for You work, the Six-Week Fix and Monthly Services.");
+  usePageMeta(PAGE_META.services.title, PAGE_META.services.description);
   const prices = useServicePricesOrDefault();
   const [way, setWay] = useState<WayToBuy | "all">("all");
   const shown = MENU_PRODUCTS.filter((product) => way === "all" || product.way === way);

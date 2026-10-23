@@ -31,4 +31,11 @@ describe("Contact (/contact)", () => {
     for (const link of screen.getAllByRole("link", { name: "Client sign in" })) expect(link.getAttribute("href")).toBe("/login");
     expect(screen.getByRole("link", { name: "Take the free Business Health Check" }).getAttribute("href")).toBe("/check");
   });
+
+  it("names the page's one canonical address for search engines, without a trailing slash", () => {
+    window.history.replaceState({}, "", "/contact/");
+    renderAt("/contact", ContactPage);
+    expect(document.querySelector('link[rel="canonical"]')!.getAttribute("href")).toBe("https://www.ipfactory.co/contact");
+    window.history.replaceState({}, "", "/");
+  });
 });

@@ -1,30 +1,24 @@
 /**
  * Questions (/questions): every question in one place. First the questions owners ask before they buy, then each
  * service's own, in menu order, each group linking to its service. Answers come from the same sources as the pages
- * they belong to (SITE_QUESTIONS, shared/productStories.ts), so the two never disagree.
+ * they belong to (shared/siteQuestions.ts, shared/productStories.ts), so the two never disagree.
  */
-import { CheckCta, Faq, SITE_QUESTIONS, useStartCheck } from "@/components/home/HomeSections";
+import { CheckCta, Faq, useStartCheck } from "@/components/home/HomeSections";
+import { QUESTION_GROUPS } from "@shared/siteQuestions";
 import { PageHero } from "@/components/PageHero";
 import { SiteShell, usePageMeta, useScrollToTop } from "@/components/SiteShell";
 import { BRAND } from "@shared/brand";
-import { storyOf } from "@shared/productStories";
-import { PRODUCTS, servicePath } from "@shared/products";
 import { ArrowRight } from "lucide-react";
 import React from "react";
 import { Link } from "wouter";
+import { PAGE_META } from "@shared/seo";
 
-/** The groups on the page, in order: before you buy, then every service that has its own questions. */
-export const QUESTION_GROUPS = [
-  { id: "before-you-buy", heading: "Before you buy", items: SITE_QUESTIONS, href: undefined as string | undefined },
-  ...PRODUCTS.flatMap((product) => {
-    const faq = storyOf(product.id)?.faq ?? [];
-    return faq.length ? [{ id: product.slug, heading: product.name, items: faq, href: product.buy === "check" ? "/check" : servicePath(product) }] : [];
-  }),
-];
+/** The groups on the page, kept in shared/siteQuestions.ts. */
+export { QUESTION_GROUPS };
 
 export default function QuestionsPage() {
   useScrollToTop();
-  usePageMeta("Questions", "Answers to the questions owners ask about The Shift: paying, delivery dates, refunds, your information, and each service.");
+  usePageMeta(PAGE_META.questions.title, PAGE_META.questions.description);
   const startCheck = useStartCheck();
 
   return (

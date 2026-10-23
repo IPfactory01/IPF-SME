@@ -13,10 +13,11 @@ import { PRODUCTS, servicePath, WAY_DETAILS, WAYS_TO_BUY } from "@shared/product
 import { ArrowRight } from "lucide-react";
 import React from "react";
 import { Link } from "wouter";
+import { PAGE_META } from "@shared/seo";
 
 export default function HowWeWorkPage() {
   useScrollToTop();
-  usePageMeta("How we work", "How The Shift works: the free Business Health Check, the four ways to work with us and how each is paid, and what every piece of work comes with.");
+  usePageMeta(PAGE_META.howWeWork.title, PAGE_META.howWeWork.description);
   const startCheck = useStartCheck();
   const prices = useServicePricesOrDefault();
 

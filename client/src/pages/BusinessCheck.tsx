@@ -45,6 +45,7 @@ import { EASE } from "@/components/motion";
 import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform, type Variants } from "framer-motion";
 import { Link } from "wouter";
 import type { BusinessCheckResponse } from "../../../server/routers/businessCheck";
+import { PAGE_META } from "@shared/seo";
 
 const STORAGE_KEY = "ipf-business-check-v1";
 
@@ -131,7 +132,7 @@ const HEALTH_STYLE: Record<Health | "pending", { dot: string; row: string; label
 };
 
 export default function BusinessCheck() {
-  usePageMeta("Free Business Health Check", "Ten minutes on your phone. See where your business is stuck, area by area, and the first step that fits. Free, no card needed.");
+  usePageMeta(PAGE_META.check.title, PAGE_META.check.description);
   const [state, setState] = useState<Saved>(load);
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState("");

@@ -18,6 +18,7 @@ import {
 import { ArrowRight, Check, Minus } from "lucide-react";
 import React from "react";
 import { Link, useParams } from "wouter";
+import { productMeta } from "@shared/seo";
 
 /** How the service runs, in three steps, from how it starts to what the owner receives. */
 export function stepsFor(product: Product, price: PriceModel): { title: string; body: string }[] {
@@ -69,7 +70,7 @@ export default function ProductPage() {
   const product = productBySlug(slug);
   const story = product ? storyOf(product.id) : undefined;
   useScrollToTop(slug);
-  usePageMeta(product?.name ?? "Service not found", story?.sub ?? "This service is not on the services page.");
+  usePageMeta(product ? productMeta(product).title : "Service not found", product ? productMeta(product).description : "This service is not on the services page.");
   const price = useProductPrice(product ?? { id: "", price: { kind: "free" } });
   if (!product || !story) return <NotFound />;
 

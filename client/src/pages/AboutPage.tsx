@@ -13,6 +13,7 @@ import { startingPriceOf } from "@shared/products";
 import { motion } from "framer-motion";
 import { CheckCircle2, X } from "lucide-react";
 import React from "react";
+import { PAGE_META } from "@shared/seo";
 
 const WHO_YOU_WORK_WITH = [
   `A named ${BRAND.organisationName} consultant checks every piece of work before you get it.`,
@@ -23,7 +24,7 @@ const WHO_YOU_WORK_WITH = [
 
 export default function AboutPage() {
   useScrollToTop();
-  usePageMeta("About", `${BRAND.productName} is run by ${BRAND.organisationName}, the delivery and method arm of ${BRAND.trackRecord.groupName}. Our track record, who we work with, and the research behind the method.`);
+  usePageMeta(PAGE_META.about.title, PAGE_META.about.description);
   const startCheck = useStartCheck();
 
   return (

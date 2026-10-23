@@ -1,5 +1,6 @@
 import { SiteShell, usePageMeta } from "@/components/SiteShell";
 import { LegalDocument } from "@/lib/legalDocument";
+import { PAGE_META } from "@shared/seo";
 import React from "react";
 import privacySource from "../../../docs/legal/privacy.md?raw";
 import termsSource from "../../../docs/legal/terms.md?raw";
@@ -17,9 +18,9 @@ function LegalPage({ title, description, source }: { title: string; description:
 }
 
 export function TermsPage() {
-  return <LegalPage title="Terms & Conditions" description="The terms that apply when you use the IP Factory SME platform, pay for a service or create an account." source={termsSource} />;
+  return <LegalPage title={PAGE_META.terms.title} description={PAGE_META.terms.description} source={termsSource} />;
 }
 
 export function PrivacyPage() {
-  return <LegalPage title="Privacy Policy" description="How IP Factory collects, uses, shares, stores and protects personal and business information on its SME platform." source={privacySource} />;
+  return <LegalPage title={PAGE_META.privacy.title} description={PAGE_META.privacy.description} source={privacySource} />;
 }

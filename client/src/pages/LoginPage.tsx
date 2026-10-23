@@ -11,13 +11,14 @@ import { usePageMeta } from "@/components/SiteShell";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import React, { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation } from "wouter";
+import { PAGE_META } from "@shared/seo";
 
 /**
  * Client sign in (/login). Linked from every public page, so a visitor who is not a client yet must find a way on: back
  * to the site, the free check, or the services. Signed-in visitors go straight to their landing page.
  */
 export default function LoginPage() {
-  usePageMeta("Client sign in", `Sign in to your ${BRAND.productName} client room.`);
+  usePageMeta(PAGE_META.login.title, PAGE_META.login.description);
   const [, setLocation] = useLocation();
   const { account } = useAccount();
   const utils = trpc.useUtils();

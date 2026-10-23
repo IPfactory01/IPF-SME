@@ -9,10 +9,11 @@ import { BRAND } from "@shared/brand";
 import { ArrowRight, CalendarCheck, Mail, MapPin } from "lucide-react";
 import React from "react";
 import { Link } from "wouter";
+import { PAGE_META } from "@shared/seo";
 
 export default function ContactPage() {
   useScrollToTop();
-  usePageMeta("Contact", `Book a free 20-minute call with ${BRAND.productName}, or write to ${BRAND.businessSupportMailbox}. Our office is at ${BRAND.officeAddress.oneLine}.`);
+  usePageMeta(PAGE_META.contact.title, PAGE_META.contact.description);
   const startCheck = useStartCheck();
   const card = "flex flex-col bg-paper-raised p-7";
 

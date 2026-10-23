@@ -60,8 +60,10 @@ export function serveStatic(app: Express) {
 
   app.use(express.static(distPath));
 
-  // fall through to index.html if the file doesn't exist
+  // Any other address gets the app shell: app.html, the build before scripts/prerender.ts wrote the public pages into it
+  // (index.html when an older build has none), so a signed-in page never starts with the home page's words.
+  const shell = fs.existsSync(path.resolve(distPath, "app.html")) ? "app.html" : "index.html";
   app.use((_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
+    res.sendFile(path.resolve(distPath, shell));
   });
 }

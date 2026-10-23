@@ -4,7 +4,7 @@
  */
 import { LegalFooterLinks } from "@/components/LegalLinks";
 import { BRAND } from "@shared/brand";
-import { pageTitle, SITE_ORIGIN } from "@shared/seo";
+import { pageTitle, SITE_ORIGIN, structuredDataFor } from "@shared/seo";
 import { ArrowRight, Menu, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -32,6 +32,26 @@ export function usePageMeta(title: string, description: string) {
       if (canonicalBefore !== null) canonical.setAttribute("href", canonicalBefore);
     };
   }, [title, description]);
+}
+
+/**
+ * The page's structured data (shared/seo.ts) in the head, added by the page itself too, so search engines that run
+ * JavaScript find it whichever file the host served. Replaces any already there, so it is never doubled.
+ */
+export function useStructuredData(path: string) {
+  useEffect(() => {
+    const data = structuredDataFor(path);
+    document.head.querySelectorAll('script[type="application/ld+json"]').forEach((script) => script.remove());
+    const added = data.map((item) => {
+      const script = Object.assign(document.createElement("script"), { type: "application/ld+json", textContent: JSON.stringify(item) });
+      script.dataset.page = path;
+      document.head.appendChild(script);
+      return script;
+    });
+    return () => {
+      for (const script of added) script.remove();
+    };
+  }, [path]);
 }
 
 /** Opens a page at the top, as a new page should, rather than where the last page was scrolled to. */
@@ -118,6 +138,8 @@ export function SiteFooter() {
 
 /** Header, page body and footer. */
 export function SiteShell({ children, cta = true }: { children: React.ReactNode; cta?: boolean }) {
+  const [location] = useLocation();
+  useStructuredData(location);
   return (
     <div className="flex min-h-screen flex-col bg-paper text-ink">
       <a href="#main" className="sr-only z-50 bg-ink px-4 py-3 font-semibold text-paper focus:not-sr-only focus:fixed focus:left-3 focus:top-3">Skip to content</a>

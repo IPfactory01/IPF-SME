@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { BRAND } from "@shared/brand";
 import { MENU_PRODUCTS, productById, servicePath } from "@shared/products";
-import { faqJsonLd, organisationJsonLd, pageHtml, PAGE_META, publicPages, serviceJsonLd, SITE_ORIGIN } from "@shared/seo";
+import { faqJsonLd, organisationJsonLd, pageHtml, PAGE_META, publicPages, serviceJsonLd, SITE_ORIGIN, structuredDataFor } from "@shared/seo";
 
 const template = readFileSync(resolve(process.cwd(), "client/index.html"), "utf8");
 const scripts = (html: string) => Array.from(html.matchAll(/<script type="application\/ld\+json">(.*?)<\/script>/g), (match) => JSON.parse(match[1]) as Record<string, unknown>);
@@ -85,5 +85,18 @@ describe("how the build and the host serve those pages", () => {
     expect(pkg.scripts.build).toMatch(/^vite build && tsx scripts\/prerender\.ts && /);
     const vercel = JSON.parse(readFileSync(resolve(process.cwd(), "vercel.json"), "utf8")) as { rewrites: { source: string; destination: string }[] };
     expect(vercel.rewrites.at(-1)).toEqual({ source: "/(.*)", destination: "/app.html" });
+    // Each public address is sent to its ready-made page by name, before the catch-all, so the host never has to guess.
+    const pages = vercel.rewrites.filter((rule) => rule.destination.endsWith("/index.html"));
+    expect(pages).toEqual(publicPages().filter((page) => page.path !== "/").map((page) => ({ source: page.path, destination: `${page.path}/index.html` })));
+    expect(vercel.rewrites.indexOf(pages.at(-1)!)).toBe(vercel.rewrites.length - 2);
+  });
+
+  it("adds breadcrumbs Google can show: Home › Services › the service, and Home › the page", () => {
+    const crumbs = (path: string) => (structuredDataFor(path).find((data) => (data as { "@type": string })["@type"] === "BreadcrumbList") as { itemListElement: { name: string; item: string }[] } | undefined)?.itemListElement.map((step) => step.name);
+    expect(crumbs("/services/six-week-fix")).toEqual(["Home", "Services", "Six-Week Fix"]);
+    expect(crumbs("/services/six-week-fix/")).toEqual(["Home", "Services", "Six-Week Fix"]);
+    expect(crumbs("/about")).toEqual(["Home", "About"]);
+    expect(crumbs("/")).toBeUndefined();
+    expect(structuredDataFor("/dashboard")).toEqual([]);
   });
 });

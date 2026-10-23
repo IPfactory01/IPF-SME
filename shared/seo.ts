@@ -88,6 +88,15 @@ export function faqJsonLd(items: readonly { q: string; a: string }[]) {
   };
 }
 
+/** Where a page sits in the site, as Google shows it under a result: Home › Services › Six-Week Fix. */
+export function breadcrumbJsonLd(trail: readonly { name: string; path: string }[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: trail.map((step, index) => ({ "@type": "ListItem", position: index + 1, name: step.name, item: `${SITE_ORIGIN}${step.path}` })),
+  };
+}
+
 export type PublicPage = {
   path: string;
   title: string;
@@ -98,11 +107,20 @@ export type PublicPage = {
   jsonLd: object[];
 };
 
+let pagesCache: PublicPage[] | undefined;
+
 /** Every public page, in the order the sitemap lists them. */
 export function publicPages(): PublicPage[] {
+  if (pagesCache) return pagesCache;
   const org = organisationJsonLd();
-  const page = (path: string, meta: Meta, heading: string, body: string[], extra: object[] = []): PublicPage => ({ path, title: meta.title, description: meta.description, heading, body, jsonLd: [org, ...extra] });
-  return [
+  const home = { name: "Home", path: "/" };
+  const services = { name: "Services", path: "/services" };
+  // Inner pages carry a breadcrumb back to the home page; service pages go through Services.
+  const page = (path: string, meta: Meta, heading: string, body: string[], extra: object[] = []): PublicPage => {
+    const trail = path === "/" ? [] : path.startsWith("/services/") ? [home, services, { name: meta.title, path }] : [home, { name: meta.title, path }];
+    return { path, title: meta.title, description: meta.description, heading, body, jsonLd: [org, ...(trail.length ? [breadcrumbJsonLd(trail)] : []), ...extra] };
+  };
+  pagesCache = [
     page("/", HOME_META, "Find it. Fix it. See the results.", [HOME_META.description]),
     page("/services", PAGE_META.services, "Help that does the work.", [PAGE_META.services.description, ...MENU_PRODUCTS.map((product) => `${product.name}: ${priceLabel(product.price)}. ${product.short}`)]),
     ...MENU_PRODUCTS.map((product) => {
@@ -117,6 +135,13 @@ export function publicPages(): PublicPage[] {
     page("/terms", PAGE_META.terms, "Terms & Conditions", [PAGE_META.terms.description]),
     page("/privacy", PAGE_META.privacy, "Privacy Policy", [PAGE_META.privacy.description]),
   ];
+  return pagesCache;
+}
+
+/** The structured data for an address ("/services/x" or "/services/x/"), or none for a page that is not public. */
+export function structuredDataFor(path: string): object[] {
+  const clean = path.replace(/(.)\/+$/, "$1");
+  return publicPages().find((page) => page.path === clean)?.jsonLd ?? [];
 }
 
 const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");

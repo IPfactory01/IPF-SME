@@ -38,4 +38,12 @@ describe("Contact (/contact)", () => {
     expect(document.querySelector('link[rel="canonical"]')!.getAttribute("href")).toBe("https://www.ipfactory.co/contact");
     window.history.replaceState({}, "", "/");
   });
+
+  it("adds its structured data to the page itself, once, whichever file the host served", () => {
+    renderAt("/contact", ContactPage);
+    const scripts = Array.from(document.head.querySelectorAll('script[type="application/ld+json"]'), (script) => JSON.parse(script.textContent!) as { "@type": string });
+    expect(scripts.map((data) => data["@type"])).toEqual(["ProfessionalService", "BreadcrumbList"]);
+    cleanup();
+    expect(document.head.querySelectorAll('script[type="application/ld+json"]')).toHaveLength(0);
+  });
 });

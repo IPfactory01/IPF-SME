@@ -58,6 +58,82 @@
       "destination": "/api/index?__prefix=manus-storage&__path=:path*"
     },
     {
+      "source": "/services",
+      "destination": "/services/index.html"
+    },
+    {
+      "source": "/services/funding-readiness-assessment",
+      "destination": "/services/funding-readiness-assessment/index.html"
+    },
+    {
+      "source": "/services/business-review",
+      "destination": "/services/business-review/index.html"
+    },
+    {
+      "source": "/services/strategy-and-90-day-plan",
+      "destination": "/services/strategy-and-90-day-plan/index.html"
+    },
+    {
+      "source": "/services/pricing-and-unit-cost-review",
+      "destination": "/services/pricing-and-unit-cost-review/index.html"
+    },
+    {
+      "source": "/services/bookkeeping-catch-up",
+      "destination": "/services/bookkeeping-catch-up/index.html"
+    },
+    {
+      "source": "/services/13-week-cash-flow-forecast",
+      "destination": "/services/13-week-cash-flow-forecast/index.html"
+    },
+    {
+      "source": "/services/funding-application-pack",
+      "destination": "/services/funding-application-pack/index.html"
+    },
+    {
+      "source": "/services/hiring-toolkit",
+      "destination": "/services/hiring-toolkit/index.html"
+    },
+    {
+      "source": "/services/six-week-fix",
+      "destination": "/services/six-week-fix/index.html"
+    },
+    {
+      "source": "/services/monthly-accounts-and-cash-report",
+      "destination": "/services/monthly-accounts-and-cash-report/index.html"
+    },
+    {
+      "source": "/services/monthly-adviser-review",
+      "destination": "/services/monthly-adviser-review/index.html"
+    },
+    {
+      "source": "/how-we-work",
+      "destination": "/how-we-work/index.html"
+    },
+    {
+      "source": "/about",
+      "destination": "/about/index.html"
+    },
+    {
+      "source": "/questions",
+      "destination": "/questions/index.html"
+    },
+    {
+      "source": "/contact",
+      "destination": "/contact/index.html"
+    },
+    {
+      "source": "/check",
+      "destination": "/check/index.html"
+    },
+    {
+      "source": "/terms",
+      "destination": "/terms/index.html"
+    },
+    {
+      "source": "/privacy",
+      "destination": "/privacy/index.html"
+    },
+    {
       "source": "/(.*)",
       "destination": "/app.html"
     }

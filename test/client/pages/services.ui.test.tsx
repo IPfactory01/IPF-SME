@@ -41,7 +41,10 @@ describe("the services page (/services), laid out as a store", () => {
   it("shows one tile per service with its promise, its price and its page, and the parent firm for larger work", () => {
     at("/services");
     const shelf = within(screen.getByRole("region", { name: "Products" }));
-    expect(shelf.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(MENU_PRODUCTS.map((product) => product.name));
+    expect(shelf.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
+      "Funding Readiness Assessment", "Bookkeeping Catch-Up", "13-Week Cash Flow Forecast", "Hiring Toolkit", "Strategy and 90-Day Plan", "Monthly Adviser Review",
+      "Business Review", "Funding Application Pack", "Monthly Accounts and Cash Report", "Pricing and Unit Cost Review", "Six-Week Fix",
+    ]);
     for (const product of MENU_PRODUCTS) {
       expect(shelf.getByRole("link", { name: `Learn more about ${product.name}` }).getAttribute("href")).toBe(`/services/${product.slug}`);
       expect(shelf.getByText(storyOf(product.id)!.promise)).toBeTruthy();
@@ -57,6 +60,9 @@ describe("the services page (/services), laid out as a store", () => {
     const shelf = within(screen.getByRole("region", { name: "Products" }));
     expect(shelf.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["Six-Week Fix"]);
     expect(screen.getByText(WAY_DETAILS.six_week_fix.charge)).toBeTruthy();
+    // One way to buy keeps the menu's own order.
+    fireEvent.click(screen.getByRole("button", { name: "Done for You" }));
+    expect(within(screen.getByRole("region", { name: "Products" })).getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(MENU_PRODUCTS.filter((product) => product.way === "done_for_you").map((product) => product.name));
     fireEvent.click(screen.getByRole("button", { name: "All" }));
     expect(within(screen.getByRole("region", { name: "Products" })).getAllByRole("heading", { level: 3 }).length).toBe(MENU_PRODUCTS.length);
   });

@@ -9,7 +9,8 @@ import { PROMISES } from "@/components/store/StoreBits";
 import { SiteShell, usePageMeta, useScrollToTop } from "@/components/SiteShell";
 import { useServicePricesOrDefault } from "@/lib/servicePrices";
 import { BRAND } from "@shared/brand";
-import { MENU_PRODUCTS, NEED_DETAILS, WAY_DETAILS, WAYS_TO_BUY, type WayToBuy } from "@shared/products";
+import { MENU_PRODUCTS, NEED_DETAILS, startingAmount, WAY_DETAILS, WAYS_TO_BUY, type WayToBuy } from "@shared/products";
+import { displayPrice } from "@/lib/productPrice";
 import { ArrowRight } from "lucide-react";
 import React, { useState } from "react";
 import { Link } from "wouter";
@@ -23,7 +24,13 @@ export default function ServicesPage() {
   usePageMeta(PAGE_META.services.title, PAGE_META.services.description);
   const prices = useServicePricesOrDefault();
   const [way, setWay] = useState<WayToBuy | "all">("all");
-  const shown = MENU_PRODUCTS.filter((product) => way === "all" || product.way === way);
+  // "All" runs cheapest first, by what the owner pays to start (a Monthly Service's first quarter), equal prices in menu
+  // order. A single way to buy keeps the menu's own order.
+  const shown = way === "all"
+    ? MENU_PRODUCTS.map((product, index) => ({ product, index, start: startingAmount(displayPrice(product, prices)) }))
+      .sort((a, b) => a.start - b.start || a.index - b.index)
+      .map(({ product }) => product)
+    : MENU_PRODUCTS.filter((product) => product.way === way);
 
   return (
     <SiteShell>

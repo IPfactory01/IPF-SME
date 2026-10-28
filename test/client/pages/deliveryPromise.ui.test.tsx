@@ -55,10 +55,11 @@ describe("the delivery promise says what the Terms say", () => {
     expect(JOURNEY.find((step) => step.id === "deliver")!.body).toContain(DELIVERY_REMEDY);
   });
 
-  it("covers the seven dated products, and no others", () => {
+  // The four services added on 28 October 2026 (Business Model, Financial Model, Business Plan, Pitch Deck) are dated too.
+  it("covers the eleven dated products, and no others", () => {
     expect(DATED.map((product) => product.id)).toEqual([
-      "funding_readiness_assessment", "strategy_90_day_plan", "pricing_unit_cost_review", "bookkeeping_catch_up",
-      "cash_flow_forecast", "funding_application_pack", "hiring_toolkit",
+      "funding_readiness_assessment", "strategy_90_day_plan", "business_model", "financial_model", "business_plan", "pitch_deck",
+      "pricing_unit_cost_review", "bookkeeping_catch_up", "cash_flow_forecast", "funding_application_pack", "hiring_toolkit",
     ]);
   });
 

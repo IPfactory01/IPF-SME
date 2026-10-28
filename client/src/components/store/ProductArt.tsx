@@ -162,6 +162,56 @@ const DRAWINGS: Record<ArtKind, { label: string; draw: () => React.ReactNode }> 
       </>
     ),
   },
+  canvas: {
+    label: "A one-page business model in nine boxes, one marked where money leaks",
+    draw: () => (
+      <>
+        {[0, 1, 2].map(r => [0, 1, 2].map(c => {
+          const leak = r === 2 && c === 2;
+          return <g key={`${r}${c}`}><rect x={42 + c * 46} y={12 + r * 37} width={42} height={33} fill={leak ? C.crimson : r === 1 && c === 1 ? C.brand : C.raised} stroke={C.line} strokeWidth={2} />{!leak && !(r === 1 && c === 1) && <line x1={49 + c * 46} y1={28 + r * 37} x2={76 + c * 46} y2={28 + r * 37} stroke={C.muted} strokeWidth={3} />}</g>;
+        }))}
+      </>
+    ),
+  },
+  projections: {
+    label: "Three lines for three years: worst, medium and best",
+    draw: () => (
+      <>
+        <line x1={20} y1={112} x2={200} y2={112} stroke={C.line} strokeWidth={2} />
+        <polyline points="24,96 84,88 144,80 196,74" fill="none" stroke={C.crimson} strokeWidth={4} strokeLinejoin="round" />
+        <polyline points="24,96 84,76 144,54 196,38" fill="none" stroke={C.brand} strokeWidth={4} strokeLinejoin="round" />
+        <polyline points="24,96 84,64 144,34 196,14" fill="none" stroke={C.cyan} strokeWidth={4} strokeLinejoin="round" />
+        {[84, 144].map(x => <line key={x} x1={x} y1={108} x2={x} y2={116} stroke={C.muted} strokeWidth={2} />)}
+      </>
+    ),
+  },
+  bizplan: {
+    label: "A bound plan with chapters and a chart",
+    draw: () => (
+      <>
+        <rect x={64} y={18} width={100} height={106} fill={C.sunken} />
+        <rect x={56} y={10} width={100} height={106} fill={C.raised} stroke={C.line} strokeWidth={2} />
+        <rect x={56} y={10} width={10} height={106} fill={C.plum} />
+        {[0, 1, 2].map(i => <line key={i} x1={76} y1={28 + i * 12} x2={140 - i * 14} y2={28 + i * 12} stroke={C.muted} strokeWidth={4} />)}
+        {[18, 28, 40, 54].map((h, i) => <rect key={i} x={80 + i * 15} y={102 - h} width={10} height={h} fill={i === 3 ? C.crimson : C.brand} />)}
+      </>
+    ),
+  },
+  deck: {
+    label: "A presentation slide with a chart, and two slides behind it",
+    draw: () => (
+      <>
+        <rect x={58} y={14} width={124} height={78} fill={C.sunken} />
+        <rect x={48} y={22} width={124} height={78} fill={C.raised} stroke={C.line} strokeWidth={2} />
+        <rect x={48} y={22} width={124} height={14} fill={C.brand} />
+        {[20, 32, 46].map((h, i) => <rect key={i} x={64 + i * 22} y={88 - h} width={14} height={h} fill={i === 2 ? C.crimson : C.plum} />)}
+        <line x1={136} y1={56} x2={160} y2={56} stroke={C.muted} strokeWidth={4} />
+        <line x1={136} y1={68} x2={154} y2={68} stroke={C.muted} strokeWidth={4} />
+        <line x1={110} y1={100} x2={110} y2={120} stroke={C.line} strokeWidth={3} />
+        <line x1={92} y1={122} x2={128} y2={122} stroke={C.line} strokeWidth={3} />
+      </>
+    ),
+  },
 };
 
 export function ProductArt({ kind, className = "h-36 w-auto" }: { kind: ArtKind; className?: string }) {

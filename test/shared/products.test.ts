@@ -20,10 +20,15 @@ const PLAN_PRICES: Record<string, string> = {
   six_week_fix: "₦1,500,000",
   monthly_accounts: "₦200,000 a month",
   monthly_adviser_review: "₦150,000 a month",
+  // Added by ET on 28 October 2026, after the plan.
+  business_model: "₦450,000",
+  financial_model: "₦450,000",
+  business_plan: "₦1,000,000",
+  pitch_deck: "₦450,000",
 };
 
 describe("the launch menu (Operational Business Plan, 22 October 2026)", () => {
-  it("has the thirteen products of page 11, each at its plan price", () => {
+  it("has the thirteen products of page 11 and the four added on 28 October, each at its price", () => {
     expect(PRODUCTS.map((product) => product.id).sort()).toEqual(Object.keys(PLAN_PRICES).sort());
     for (const product of PRODUCTS) expect(priceLabel(product.price), product.id).toBe(PLAN_PRICES[product.id]);
   });

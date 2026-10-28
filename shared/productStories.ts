@@ -18,7 +18,7 @@ export type StoryVisual =
   | { kind: "measure"; title: string; unit: string; baseline: number; target: number; readings: readonly number[] };
 
 /** The small drawing on the product's tile and order summary (client/src/components/store/ProductArt.tsx). */
-export type ArtKind = "check" | "report" | "forecast" | "ledger" | "pricing" | "plan" | "funding" | "hiring" | "readiness" | "review" | "fix" | "monthly" | "adviser";
+export type ArtKind = "check" | "report" | "forecast" | "ledger" | "pricing" | "plan" | "funding" | "hiring" | "readiness" | "review" | "fix" | "monthly" | "adviser" | "canvas" | "projections" | "bizplan" | "deck";
 
 export type ProductStory = {
   art: ArtKind;
@@ -141,7 +141,83 @@ export const PRODUCT_STORIES: Record<string, ProductStory> = {
       { q: "What if things change in the 90 days?", a: "The plan says what to watch and when to review. Thirty days on, we check in." },
     ],
     closer: "Know what the next 90 days are for.",
+  },  business_model: {
+    art: "canvas",
+    promise: "How your business makes money, on one page.",
+    headline: ["How does your business", "really make money?"],
+    sub: "Who you sell to, what they pay for, how they find you, and what each sale earns, on one page, with what to change first.",
+    stage: { kind: "table", title: "Sample business model", columns: ["Part", "Ada Foods today"], rows: [["Who buys", "Office workers and families within 3 km"], ["What they pay for", "Fresh lunch, delivered on time"], ["How they find you", "Walk-ins, WhatsApp and two corporate contracts"], ["How you earn", "Meals at ₦3,500; delivery at a flat ₦500"], ["What it costs", "Food, staff, rent, power and the van"], ["Where it leaks", "Delivery loses money on every order"]], highlight: [5] },
+    statement: ["Selling more of the wrong thing", "only makes you busier."],
+    features: [
+      { eyebrow: "What each sale earns", title: "Where the money is made, and where it leaks.", body: "Each way you earn, with what it brings in and what it costs, so you can see which sales are worth more of.", visual: { kind: "bars", title: "Sample: cost and price per order", legend: ["Cost per order", "Price per order"], groups: [{ label: "Dine-in", values: [2100, 3500] }, { label: "Corporate", values: [2400, 3200] }, { label: "Delivery", values: [4300, 4000] }], highlight: 2, note: "Delivery costs ₦300 more than it earns" } },
+      { eyebrow: "What to change", title: "Three changes, in order.", body: "What to keep, what to change and what to test, each with what it is worth.", visual: { kind: "moves", title: "Sample changes", rows: [{ tag: "Change", text: "Charge delivery by distance", value: "+₦180,000 a month" }, { tag: "Keep", text: "Corporate lunch contracts", value: "Grow to 4" }, { tag: "Test", text: "A weekly meal plan for families", value: "4 weeks" }] } },
+    ],
+    forYou: ["Your business works but does not earn enough", "You are starting out, or changing what you sell", "You want to explain the business simply to a partner or lender"],
+    notForYou: [{ text: "You need the numbers for three years. See the Financial Model.", productId: "financial_model" }, { text: "You need the whole plan. See the Business Plan, which includes this.", productId: "business_plan" }],
+    faq: [
+      { q: "Is this the business model canvas?", a: "It covers the same nine parts, written for your business in plain sentences, with what each sale earns and what to change first." },
+      { q: "Is it included in the Business Plan?", a: "Yes. The Business Plan includes the Business Model and the Financial Model." },
+    ],
+    closer: "See how your business makes money, then make more of it.",
   },
+  financial_model: {
+    art: "projections",
+    promise: "Three years of numbers, in three cases.",
+    headline: ["Know your numbers", "for the next three years."],
+    sub: "Sales, costs, profit and cash for three years, in worst, medium and best cases, with when you break even and how much funding you need.",
+    stage: { kind: "table", title: "Sample projections, medium case", columns: ["", "Year 1", "Year 2", "Year 3"], rows: [["Sales", "₦48m", "₦62m", "₦78m"], ["Profit before tax", "₦2.1m", "₦6.4m", "₦11.2m"], ["Cash at year end", "−₦1.8m", "₦3.1m", "₦9.6m"], ["Funding needed", "₦6m", "", ""]], highlight: [2] },
+    statement: ["A plan without numbers is a wish.", "The model shows what it takes."],
+    features: [
+      { eyebrow: "Three cases", title: "Worst, medium and best, and what each depends on.", body: "The medium case is your business as it runs today. The other two show what happens if sales or costs move, so you know your room for error.", visual: { kind: "moves", title: "Sample cases", rows: [{ tag: "Worst", text: "Sales 20% below plan, costs as planned", value: "Funding ₦9m" }, { tag: "Medium", text: "Sales and costs as they run today", value: "Funding ₦6m" }, { tag: "Best", text: "The third outlet opens three months early", value: "Funding ₦4m" }] } },
+      { eyebrow: "Break-even and funding", title: "When the business pays for itself.", body: "The month you break even, the lowest point of cash, and how much funding you need to get through it.", visual: { kind: "line", title: "Sample cash position, year 1", unit: "m", labels: ["M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9", "M10", "M11", "M12"], values: [1.5, 0.9, 0.2, -0.6, -1.4, -2.1, -2.4, -2.0, -1.5, -1.1, -1.4, -1.8], callout: "Lowest in month 7" } },
+    ],
+    forYou: ["You are raising a loan or an investment", "You are planning to grow and want to know what it costs", "You want to know when the business breaks even"],
+    notForYou: [{ text: "You only need the next 13 weeks of cash. See the 13-Week Cash Flow Forecast.", productId: "cash_flow_forecast" }, { text: "You need the whole plan. See the Business Plan, which includes this.", productId: "business_plan" }],
+    faq: [
+      { q: "Do I get the spreadsheet?", a: "Yes. The Excel model is yours, and we walk you through it on a 30-minute handover call so you can change the numbers yourself." },
+      { q: "Is it included in the Business Plan?", a: "Yes. The Business Plan includes the Financial Model and the Business Model." },
+    ],
+    closer: "Know what the next three years take.",
+  },
+  business_plan: {
+    art: "bizplan",
+    promise: "The whole plan, with the numbers behind it.",
+    headline: ["One plan for your business.", "With the numbers behind it."],
+    sub: "Your Business Model, the market, how you will sell, run and grow, the risks, and three years of numbers, written for the person who will read it.",
+    stage: { kind: "timeline", title: "What the plan covers", items: [{ when: "Part 1", title: "Where the business is going", detail: "The owners' goals, the targets and the choices behind them" }, { when: "Part 2", title: "The Business Model and the market", detail: "Who buys, why, from whom else, and where you win" }, { when: "Part 3", title: "How you will sell, run and staff it", detail: "The plan for sales, operations and people, and the risks to watch" }, { when: "Part 4", title: "The Financial Model", detail: "Three years in three cases, break-even and the funding you need" }] },
+    statement: ["Partners and investors read the plan.", "Then they check the numbers."],
+    features: [
+      { eyebrow: "Both included", title: "The Business Model and the Financial Model, in one plan.", body: "Everything in both, joined up, so the story and the numbers say the same thing.", visual: { kind: "checklist", title: "Sample contents", items: [{ label: "Business Model", state: "ready" }, { label: "Market and competitors", state: "ready" }, { label: "Sales, operations and people", state: "ready" }, { label: "Risks and what we watch", state: "ready" }, { label: "Financial Model, three cases", state: "ready" }] } },
+      { eyebrow: "For your reader", title: "Written for whoever will read it.", body: "An investor, a partner or your own managers: the plan leads with what they need to decide.", visual: { kind: "moves", title: "Sample readers", rows: [{ tag: "Investor", text: "Returns, risks and the funding asked for", value: "First" }, { tag: "Partner", text: "Roles, the split and the first year", value: "First" }, { tag: "Team", text: "Priorities, targets and who does what", value: "First" }] } },
+    ],
+    forYou: ["You are bringing in a partner or an investor", "You want one plan your whole team works from", "You are starting a new line or a new location"],
+    notForYou: [{ text: "You are applying to a particular lender. See the Funding Application Pack.", productId: "funding_application_pack" }, { text: "You only need the numbers. See the Financial Model.", productId: "financial_model" }],
+    faq: [
+      { q: "What does it include?", a: "The Business Model and the Financial Model, plus the market, your competitors, how you will sell, run and staff the business, and the risks to watch." },
+      { q: "I already bought the Business Model or the Financial Model. Do I pay again?", a: "No. Talk to us on the free call and we take off what you have already paid, if it was in the last 90 days." },
+    ],
+    closer: "One plan your partners, investors and team can act on.",
+  },  pitch_deck: {
+    art: "deck",
+    promise: "Your business, told in ten minutes.",
+    headline: ["Ten minutes to make the case.", "Twelve slides that make it."],
+    sub: "The problem you solve, why you, the market, the traction, the numbers and the ask, in your brand and ready to present.",
+    stage: { kind: "timeline", title: "Sample running order", items: [{ when: "Slides 1 to 3", title: "The problem, and your answer", detail: "Who has it, what it costs them, and what you do about it" }, { when: "Slides 4 to 7", title: "The market, the traction and the team", detail: "How big, how far you have come, and who makes it happen" }, { when: "Slides 8 to 10", title: "How you make money, and the numbers", detail: "Your Business Model and three years in brief" }, { when: "Slides 11 to 12", title: "The ask", detail: "How much, what it pays for, and what the investor gets" }] },
+    statement: ["Investors decide in minutes.", "The deck has to earn the next meeting."],
+    features: [
+      { eyebrow: "The story", title: "One clear line from problem to ask.", body: "Each slide answers the question the last one raised, so the listener arrives at the ask already convinced.", visual: { kind: "moves", title: "Sample slides", rows: [{ tag: "Problem", text: "Office workers in Lekki lose an hour a day to lunch", value: "Slide 1" }, { tag: "Traction", text: "1,200 meals a week, two corporate contracts", value: "Slide 6" }, { tag: "Ask", text: "₦20m for a third outlet and a second van", value: "Slide 11" }] } },
+      { eyebrow: "The numbers", title: "Numbers that hold up to questions.", body: "Every figure on a slide comes from your records or your model, so nothing falls apart when the investor asks how.", visual: { kind: "table", title: "Sample numbers slide", columns: ["", "Year 1", "Year 2", "Year 3"], rows: [["Sales", "₦48m", "₦62m", "₦78m"], ["Profit before tax", "₦2.1m", "₦6.4m", "₦11.2m"]] } },
+    ],
+    forYou: ["You are meeting investors, partners or a big buyer", "You have the business, but not the story told well", "You need to present in ten minutes, not hand over a long document"],
+    notForYou: [{ text: "You need the full plan behind the deck. See the Business Plan.", productId: "business_plan" }, { text: "You have no numbers yet. Start with the Financial Model.", productId: "financial_model" }],
+    faq: [
+      { q: "Do I get the file?", a: "Yes. The editable deck is yours, and we rehearse it with you on a 30-minute call." },
+      { q: "What if I don't have projections?", a: "We use your records for the numbers so far. For three years ahead, the Financial Model gives the deck its figures." },
+    ],
+    closer: "Walk in with a story that earns the next meeting.",
+  },
+
+
 
   pricing_unit_cost_review: {
     art: "pricing",

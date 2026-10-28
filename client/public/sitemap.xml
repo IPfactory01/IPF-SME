@@ -3,14 +3,13 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://www.ipfactory.co/</loc></url>
   <url><loc>https://www.ipfactory.co/services</loc></url>
-  <url><loc>https://www.ipfactory.co/how-we-work</loc></url>
-  <url><loc>https://www.ipfactory.co/about</loc></url>
-  <url><loc>https://www.ipfactory.co/questions</loc></url>
-  <url><loc>https://www.ipfactory.co/contact</loc></url>
-  <url><loc>https://www.ipfactory.co/check</loc></url>
   <url><loc>https://www.ipfactory.co/services/funding-readiness-assessment</loc></url>
   <url><loc>https://www.ipfactory.co/services/business-review</loc></url>
   <url><loc>https://www.ipfactory.co/services/strategy-and-90-day-plan</loc></url>
+  <url><loc>https://www.ipfactory.co/services/business-model</loc></url>
+  <url><loc>https://www.ipfactory.co/services/financial-model</loc></url>
+  <url><loc>https://www.ipfactory.co/services/business-plan</loc></url>
+  <url><loc>https://www.ipfactory.co/services/pitch-deck</loc></url>
   <url><loc>https://www.ipfactory.co/services/pricing-and-unit-cost-review</loc></url>
   <url><loc>https://www.ipfactory.co/services/bookkeeping-catch-up</loc></url>
   <url><loc>https://www.ipfactory.co/services/13-week-cash-flow-forecast</loc></url>
@@ -19,6 +18,11 @@
   <url><loc>https://www.ipfactory.co/services/six-week-fix</loc></url>
   <url><loc>https://www.ipfactory.co/services/monthly-accounts-and-cash-report</loc></url>
   <url><loc>https://www.ipfactory.co/services/monthly-adviser-review</loc></url>
+  <url><loc>https://www.ipfactory.co/how-we-work</loc></url>
+  <url><loc>https://www.ipfactory.co/about</loc></url>
+  <url><loc>https://www.ipfactory.co/questions</loc></url>
+  <url><loc>https://www.ipfactory.co/contact</loc></url>
+  <url><loc>https://www.ipfactory.co/check</loc></url>
   <url><loc>https://www.ipfactory.co/terms</loc></url>
   <url><loc>https://www.ipfactory.co/privacy</loc></url>
 </urlset>

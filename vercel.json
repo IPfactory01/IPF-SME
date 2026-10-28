@@ -74,6 +74,22 @@
       "destination": "/services/strategy-and-90-day-plan/index.html"
     },
     {
+      "source": "/services/business-model",
+      "destination": "/services/business-model/index.html"
+    },
+    {
+      "source": "/services/financial-model",
+      "destination": "/services/financial-model/index.html"
+    },
+    {
+      "source": "/services/business-plan",
+      "destination": "/services/business-plan/index.html"
+    },
+    {
+      "source": "/services/pitch-deck",
+      "destination": "/services/pitch-deck/index.html"
+    },
+    {
       "source": "/services/pricing-and-unit-cost-review",
       "destination": "/services/pricing-and-unit-cost-review/index.html"
     },

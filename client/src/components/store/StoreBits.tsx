@@ -21,11 +21,11 @@ export function DeliveryPromise({ className }: { className?: string }) {
 
 export const orderPath = (product: Pick<Product, "slug">) => `/order/${product.slug}`;
 
-/** The price as a tile says it: "From ₦300,000" for the Catch-Up, "₦200,000 a month" for a Monthly Service. */
+/** The price as a tile says it: "From ₦300,000" for the Catch-Up, "₦600,000 a quarter" for a Monthly Service, with its month beside it. */
 export function tilePrice(price: PriceModel): { main: string; note?: string } {
   if (price.kind === "per_month") return { main: `From ${formatNaira(perMonthAmount(price, price.minMonths))}`, note: `${formatNaira(price.perMonth)} a month of records` };
   if (price.kind === "milestones") return { main: formatNaira(price.total), note: "or in three payments" };
-  if (price.kind === "quarterly") return { main: priceLabel(price), note: "paid by the quarter" };
+  if (price.kind === "quarterly") return { main: priceLabel(price), note: `${formatNaira(price.perMonth)} a month` };
   return { main: priceLabel(price) };
 }
 

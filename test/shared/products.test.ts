@@ -12,15 +12,17 @@ const PLAN_PRICES: Record<string, string> = {
   funding_readiness_assessment: "₦150,000",
   business_review: "₦600,000",
   strategy_90_day_plan: "₦450,000",
-  pricing_unit_cost_review: "₦750,000",
+  // Lowered from ₦750,000 by ET on 28 October 2026.
+  pricing_unit_cost_review: "₦400,000",
   bookkeeping_catch_up: "₦100,000 a month of records",
   cash_flow_forecast: "₦300,000",
   // Raised from ₦600,000 by ET on 28 October 2026, above the Business Plan it builds on.
   funding_application_pack: "₦900,000",
   hiring_toolkit: "₦300,000",
   six_week_fix: "₦1,500,000",
-  monthly_accounts: "₦200,000 a month",
-  monthly_adviser_review: "₦150,000 a month",
+  // Shown by the quarter they are paid in (ET, 28 October 2026); the month is shown beside it.
+  monthly_accounts: "₦600,000 a quarter",
+  monthly_adviser_review: "₦450,000 a quarter",
   // Added by ET on 28 October 2026, after the plan.
   business_model: "₦300,000",
   financial_model: "₦350,000",

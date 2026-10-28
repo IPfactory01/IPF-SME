@@ -7650,7 +7650,7 @@ var PRODUCTS = [
     short: "What each product really costs you, what it earns, and what to charge.",
     forWhom: "Owners whose prices are guesses, or whose margins are unclear.",
     youGet: ["The true cost of each product or service", "Margin by line: what makes money and what loses it", "New prices to test, with what each change is worth", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 75e4 },
+    price: { kind: "fixed", amount: 4e5 },
     fallbackPrice: 45e4,
     delivery: "Seven working days from complete records.",
     workingDays: 7,
@@ -7813,8 +7813,9 @@ function priceLabel(price) {
       return `${formatNaira(price.perMonth)} a month of records`;
     case "milestones":
       return formatNaira(price.total);
+    // Paid a quarter at a time, so the quarter is the price; the month is shown beside it.
     case "quarterly":
-      return `${formatNaira(price.perMonth)} a month`;
+      return `${formatNaira(quarterAmount(price))} a quarter`;
   }
 }
 var quarterAmount = (price) => price.perMonth * 3;

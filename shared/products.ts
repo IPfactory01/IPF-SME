@@ -295,7 +295,7 @@ export const PRODUCTS: readonly Product[] = [
     short: "What each product really costs you, what it earns, and what to charge.",
     forWhom: "Owners whose prices are guesses, or whose margins are unclear.",
     youGet: ["The true cost of each product or service", "Margin by line: what makes money and what loses it", "New prices to test, with what each change is worth", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 750_000 },
+    price: { kind: "fixed", amount: 400_000 },
     fallbackPrice: 450_000,
     delivery: "Seven working days from complete records.",
     workingDays: 7,
@@ -474,7 +474,8 @@ export function priceLabel(price: PriceModel): string {
     case "fixed": return formatNaira(price.amount);
     case "per_month": return `${formatNaira(price.perMonth)} a month of records`;
     case "milestones": return formatNaira(price.total);
-    case "quarterly": return `${formatNaira(price.perMonth)} a month`;
+    // Paid a quarter at a time, so the quarter is the price; the month is shown beside it.
+    case "quarterly": return `${formatNaira(quarterAmount(price))} a quarter`;
   }
 }
 
@@ -488,7 +489,7 @@ export function priceTerms(price: PriceModel): string {
       const parts = price.stages.map(stage => `${formatNaira(stageAmount(price, stage.percent))} ${stage.name.toLowerCase()}`).join(", ");
       return `${parts}. Or ${formatNaira(payInFullAmount(price))} in full at the start, ${price.payInFullDiscountPercent}% less.`;
     }
-    case "quarterly": return `${formatNaira(quarterAmount(price))} a quarter, paid before it starts. Stop at the end of any quarter.`;
+    case "quarterly": return `${formatNaira(quarterAmount(price))} a quarter (${formatNaira(price.perMonth)} a month), paid before the quarter starts. Stop at the end of any quarter.`;
   }
 }
 

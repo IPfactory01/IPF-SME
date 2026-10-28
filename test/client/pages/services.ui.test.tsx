@@ -42,14 +42,18 @@ describe("the services page (/services), laid out as a store", () => {
     at("/services");
     const shelf = within(screen.getByRole("region", { name: "Products" }));
     expect(shelf.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
-      "Funding Readiness Assessment", "Business Model", "Pitch Deck", "Bookkeeping Catch-Up", "13-Week Cash Flow Forecast", "Hiring Toolkit", "Financial Model", "Strategy and 90-Day Plan",
-      "Monthly Adviser Review", "Business Review", "Monthly Accounts and Cash Report", "Business Plan", "Pricing and Unit Cost Review", "Funding Application Pack", "Six-Week Fix",
+      "Funding Readiness Assessment", "Business Model", "Pitch Deck", "Bookkeeping Catch-Up", "13-Week Cash Flow Forecast", "Hiring Toolkit", "Financial Model", "Pricing and Unit Cost Review",
+      "Strategy and 90-Day Plan", "Monthly Adviser Review", "Business Review", "Monthly Accounts and Cash Report", "Business Plan", "Funding Application Pack", "Six-Week Fix",
     ]);
     for (const product of MENU_PRODUCTS) {
       expect(shelf.getByRole("link", { name: `Learn more about ${product.name}` }).getAttribute("href")).toBe(`/services/${product.slug}`);
       expect(shelf.getByText(storyOf(product.id)!.promise)).toBeTruthy();
     }
-    expect(shelf.getAllByText("₦750,000")).toHaveLength(2); // the Business Plan and the Pricing and Unit Cost Review
+    expect(shelf.getByText("₦750,000")).toBeTruthy(); // the Business Plan
+    // A Monthly Service shows the quarter it is paid in, with its month beside it.
+    expect(shelf.getByText("₦600,000 a quarter")).toBeTruthy();
+    expect(shelf.getByText("₦200,000 a month")).toBeTruthy();
+    expect(shelf.getByText("₦450,000 a quarter")).toBeTruthy();
     expect(shelf.getAllByText(/^₦600,000$/).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: BRAND.trackRecord.groupName })).toBeTruthy();
   });

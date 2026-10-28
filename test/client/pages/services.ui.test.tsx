@@ -49,7 +49,7 @@ describe("the services page (/services), laid out as a store", () => {
       expect(shelf.getByRole("link", { name: `Learn more about ${product.name}` }).getAttribute("href")).toBe(`/services/${product.slug}`);
       expect(shelf.getByText(storyOf(product.id)!.promise)).toBeTruthy();
     }
-    expect(shelf.getByText("₦750,000")).toBeTruthy();
+    expect(shelf.getAllByText("₦750,000")).toHaveLength(2); // the Business Plan and the Pricing and Unit Cost Review
     expect(shelf.getAllByText(/^₦600,000$/).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: BRAND.trackRecord.groupName })).toBeTruthy();
   });

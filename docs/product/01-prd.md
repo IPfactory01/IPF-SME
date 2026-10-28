@@ -78,8 +78,10 @@ work); Six-Week Fix (50% at the start, 25% at the mid-point, 25% at the result, 
 Fallback prices are kept in the catalogue (`fallbackPrice`) for the 15 December test: a product below 5% of routed checks,
 or the Business Review below 20% of calls, steps down in January (operational plan, page 15).
 
-**Delivery promise** (ET, 22 October): we confirm the delivery date once the records are complete; if we miss it, the
-owner may ask for a full refund. **Boundaries** until counsel answers: management accounts only, and the monthly tax note
+**Delivery promise** (ET, 22 October; wording aligned to the Terms on 22 October): we confirm the delivery date once the
+records are complete; if we cannot deliver as agreed, the owner contacts us and we make it right in line with the Terms
+(§8: a refund, a service credit or an agreed alternative, as the circumstances call for). The site never promises an
+automatic full refund. **Boundaries** until counsel answers: management accounts only, and the monthly tax note
 states record readiness only, not tax advice.
 
 **How a sale runs** (operational plan, page 18; `JOURNEY` in `shared/businessSupport.ts`): free check → the check names

@@ -1,17 +1,23 @@
 /** Small shared pieces of the store pages: the promises, how a product starts, and how its price reads on a tile. */
-import { formatNaira } from "@shared/businessSupport";
+import { LegalLink, TERMS_PATH } from "@/components/LegalLinks";
+import { DELIVERY_REMEDY, formatNaira } from "@shared/businessSupport";
 import { BRAND } from "@shared/brand";
-import { perMonthAmount, priceLabel, startMode, type PriceModel, type Product } from "@shared/products";
+import { DELIVERY_PROMISE, perMonthAmount, priceLabel, startMode, type PriceModel, type Product } from "@shared/products";
 import { ArrowRight, CalendarCheck, LockKeyhole, ShieldCheck } from "lucide-react";
 import React from "react";
 import { Link } from "wouter";
 
 /** The three promises behind every product, on the services page and How we work. */
 export const PROMISES = [
-  { icon: CalendarCheck, title: "A date, or your money back.", body: "We confirm your delivery date once your records are in. Miss it, and you can ask for a full refund." },
+  { icon: CalendarCheck, title: "A date we stand behind.", body: `We confirm your delivery date once your records are in. ${DELIVERY_REMEDY}` },
   { icon: ShieldCheck, title: "Checked before you see it.", body: "A consultant who did not prepare the work signs it off. Every figure is traced to your records." },
   { icon: LockKeyhole, title: "Your records stay private.", body: "Uploads go to private storage that only the people on your order can open." },
 ] as const;
+
+/** The delivery promise as a paragraph, with "Terms" linked to the Terms page (the sentence ends with it: DELIVERY_REMEDY). */
+export function DeliveryPromise({ className }: { className?: string }) {
+  return <p className={className}>{DELIVERY_PROMISE.replace(/Terms\.$/, "")}<LegalLink to={TERMS_PATH}>Terms</LegalLink>.</p>;
+}
 
 export const orderPath = (product: Pick<Product, "slug">) => `/order/${product.slug}`;
 

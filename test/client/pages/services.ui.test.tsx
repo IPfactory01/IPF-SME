@@ -80,9 +80,9 @@ describe("a service page (/services/:slug), told as a story", () => {
     expect(screen.getByRole("region", { name: "What you get" })).toBeTruthy();
     expect(screen.getByText("Business bank statements for the last three months")).toBeTruthy();
     expect(screen.getAllByText("₦300,000").length).toBeGreaterThan(0);
-    expect(screen.getByText(DELIVERY_PROMISE)).toBeTruthy();
-    // The button on the coloured refund band is light with dark text, never white on white.
-    const band = within(screen.getByText(DELIVERY_PROMISE).parentElement!.parentElement!).getByRole("link", { name: /book a free call/i });
+    const promise = screen.getByText((_, element) => element?.tagName === "P" && element.textContent === DELIVERY_PROMISE);
+    // The button on the coloured promise band is light with dark text, never white on white.
+    const band = within(promise.parentElement!.parentElement!).getByRole("link", { name: /book a free call/i });
     expect(band.className).toContain("bg-paper-raised");
     expect(band.className).toContain("text-brand-deep");
     expect(band.className).not.toMatch(/\btext-paper\b|\bbg-brand\b/);

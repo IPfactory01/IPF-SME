@@ -6,14 +6,14 @@
  * gets the same page.
  */
 import { SiteShell, usePageMeta, useScrollToTop } from "@/components/SiteShell";
-import { StartButton, startNote } from "@/components/store/StoreBits";
+import { DeliveryPromise, StartButton, startNote } from "@/components/store/StoreBits";
 import { StoryVisual } from "@/components/store/StoryVisual";
 import { useProductPrice } from "@/lib/productPrice";
 import { EYEBROW } from "@/pages/ServicesPage";
 import { stepName } from "@shared/businessCheck/routing";
 import { storyOf } from "@shared/productStories";
 import {
-  DELIVERY_PROMISE, NEED_DETAILS, nextProduct, priceLabel, priceTerms, productById, productBySlug, servicePath, startMode, WAY_DETAILS, type PriceModel, type Product,
+  NEED_DETAILS, nextProduct, priceLabel, priceTerms, productById, productBySlug, servicePath, startMode, WAY_DETAILS, type PriceModel, type Product,
 } from "@shared/products";
 import { ArrowRight, Check, Minus } from "lucide-react";
 import React from "react";
@@ -212,8 +212,8 @@ export default function ProductPage() {
         <section className="mt-16 bg-gradient-to-r from-brand-plum to-brand text-paper">
           <div className="container mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-7 py-11">
             <div>
-              <h2 className="font-display max-w-xl text-[clamp(1.6rem,3.6vw,2.4rem)] font-extrabold leading-[1.1] tracking-[-0.025em]">Delivered on the date we give you. Or your money back.</h2>
-              <p className="mt-2.5 max-w-2xl text-on-dark-muted">{DELIVERY_PROMISE}</p>
+              <h2 className="font-display max-w-xl text-[clamp(1.6rem,3.6vw,2.4rem)] font-extrabold leading-[1.1] tracking-[-0.025em]">Delivered on the date we give you. Or we make it right.</h2>
+              <DeliveryPromise className="mt-2.5 max-w-2xl text-on-dark-muted" />
             </div>
             <StartButton product={product} tone="light" />
           </div>
@@ -236,7 +236,7 @@ export default function ProductPage() {
 
       <section className="container mx-auto max-w-6xl py-20 text-center sm:py-24">
         <h2 className="font-display mx-auto max-w-3xl text-[clamp(2.1rem,5vw,3.5rem)] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink">{story.closer}</h2>
-        <p className="mt-4 text-lg text-ink-soft">{priceLabel(price)}. {product.delivery}{dated ? " A date, or your money back." : ""}</p>
+        <p className="mt-4 text-lg text-ink-soft">{priceLabel(price)}. {product.delivery}{dated ? " A date we stand behind." : ""}</p>
         <div className="mt-7"><StartButton product={product} /></div>
         {next && (
           <p className="mt-10 text-ink-soft">Usually next: <Link href={servicePath(next)} className="inline-flex items-center gap-1 font-semibold text-brand hover:underline">{stepName(next.id, product.nextVariant)} <ArrowRight className="h-4 w-4" aria-hidden /></Link></p>

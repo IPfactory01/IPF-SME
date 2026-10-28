@@ -34,7 +34,7 @@ describe("How we work (/how-we-work)", () => {
 
   it("states the three promises and lists every place a business gets stuck", () => {
     renderAt("/how-we-work", HowWeWorkPage);
-    for (const promise of ["A date, or your money back.", "Checked before you see it.", "Your records stay private."]) expect(screen.getByRole("heading", { name: promise })).toBeTruthy();
+    for (const promise of ["A date we stand behind.", "Checked before you see it.", "Your records stay private."]) expect(screen.getByRole("heading", { name: promise })).toBeTruthy();
     for (const area of PROBLEM_AREAS.filter((item) => item.siteSentence)) expect(screen.getByText(`“${area.siteSentence}”`)).toBeTruthy();
   });
 

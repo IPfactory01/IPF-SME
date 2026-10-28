@@ -8,6 +8,7 @@ import { onSectionLinkClick } from "@/lib/scrollToSection";
 import { BRAND } from "@shared/brand";
 import { buildJourney, PROBLEM_AREAS, PROMISE } from "@shared/businessSupport";
 import { DELIVERY_PROMISE, MENU_PRODUCTS, NEED_DETAILS, NEED_LEAD, NEEDS, productById, servicePath } from "@shared/products";
+import { DeliveryPromise } from "@/components/store/StoreBits";
 import { ServiceTile } from "@/components/store/ServiceTile";
 import { useServicePricesOrDefault } from "@/lib/servicePrices";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -211,7 +212,7 @@ export function HowWeWorkTeaser() {
             </li>
           ))}
         </ol>
-        <p className="mt-8 text-sm text-ink-muted">{DELIVERY_PROMISE}</p>
+        <DeliveryPromise className="mt-8 text-sm text-ink-muted" />
       </div>
     </section>
   );

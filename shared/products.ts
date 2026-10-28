@@ -12,7 +12,7 @@
  * "door", "sprint", "playbook" or "retainer".
  */
 
-import { formatNaira } from "./businessSupport";
+import { DELIVERY_REMEDY, formatNaira } from "./businessSupport";
 
 /** The four ways to buy (ET, 21 October 2026). */
 export const WAYS_TO_BUY = ["assessment", "done_for_you", "six_week_fix", "monthly_service"] as const;
@@ -119,8 +119,11 @@ const SALES_RECORDS: IntakeRecord = { id: "sales_records", label: "Sales records
 const COSTS: IntakeRecord = { id: "costs", label: "Your main costs", detail: "Rent, salaries, suppliers and any loans, with what each costs a month.", required: true };
 const GOAL: IntakeQuestion = { id: "goal", label: "What do you want this work to help you decide or do?", kind: "textarea", required: true };
 
-/** The refund promise on every dated product (ET, 22 October 2026). */
-export const DELIVERY_PROMISE = "We confirm your delivery date once your records are complete. If we miss it, ask for a full refund and you have it.";
+/**
+ * The delivery promise on every dated product (ET, 22 October 2026). The remedy is the Terms' (§8), not an automatic
+ * refund: the sentence is DELIVERY_REMEDY, shared with the journey and the promise cards.
+ */
+export const DELIVERY_PROMISE = `We confirm your delivery date once your records are complete. ${DELIVERY_REMEDY}`;
 
 export const PRODUCTS: readonly Product[] = [
   {

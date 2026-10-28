@@ -65,12 +65,12 @@ work); Six-Week Fix (50% at the start, 25% at the mid-point, 25% at the result, 
 | Pricing and Unit Cost Review | Done for You | ₦750,000 | 7 working days | After a 20-minute call | Page live; payment link **to build** |
 | Bookkeeping Catch-Up | Done for You | ₦100,000 a month of records (at least three months, ₦300,000) | 5 working days for three months | Buy online | Page live; online order **to build** |
 | 13-Week Cash Flow Forecast | Done for You | ₦300,000 | 5 working days | Buy online | Page live; online order **to build** |
-| Funding Application Pack | Done for You | ₦600,000 | 10 working days of complete records | After a 20-minute call | Page live; payment link **to build** |
+| Funding Application Pack (₦900,000 from 28 October; was ₦600,000) | Done for You | ₦900,000 | 10 working days of complete records | After a 20-minute call | Page live; payment link **to build** |
 | Hiring Toolkit | Done for You | ₦300,000 | 5 working days | Buy online | Page live; online order **to build** |
-| Business Model (added 28 October) | Done for You | ₦450,000 | 7 working days | Buy online | Page live; online order **to build** |
-| Financial Model (added 28 October) | Done for You | ₦450,000 | 7 working days | Buy online | Page live; online order **to build** |
-| Business Plan (added 28 October; includes the Business Model and the Financial Model) | Done for You | ₦1,000,000 | 15 working days | After a 20-minute call | Page live; payment link **to build** |
-| Pitch Deck (added 28 October) | Done for You | ₦450,000 | 7 working days | Buy online | Page live; online order **to build** |
+| Business Model (added 28 October) | Done for You | ₦300,000 | 7 working days | Buy online | Page live; online order **to build** |
+| Financial Model (added 28 October) | Done for You | ₦350,000 | 7 working days | Buy online | Page live; online order **to build** |
+| Business Plan (added 28 October; includes the Business Model and the Financial Model) | Done for You | ₦750,000 | 15 working days | After a 20-minute call | Page live; payment link **to build** |
+| Pitch Deck (added 28 October) | Done for You | ₦300,000 | 7 working days | Buy online | Page live; online order **to build** |
 | Six-Week Fix (Margin, Sales, Cash and Pricing, Delegation and Structure) | Six-Week Fix | ₦1,500,000 | Six weeks | After the Discovery Call | Engagement **built**; instalments **to build** |
 | Monthly Accounts and Cash Report | Monthly Service | ₦200,000 a month (₦600,000 a quarter) | By the 10th of each month | After a call | Page live; quarterly billing **to build** |
 | Monthly Adviser Review | Monthly Service | ₦150,000 a month (₦450,000 a quarter) | One Session a month | After a call | Page live; quarterly billing **to build** |

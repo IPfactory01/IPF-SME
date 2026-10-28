@@ -42,8 +42,8 @@ describe("the services page (/services), laid out as a store", () => {
     at("/services");
     const shelf = within(screen.getByRole("region", { name: "Products" }));
     expect(shelf.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
-      "Funding Readiness Assessment", "Bookkeeping Catch-Up", "13-Week Cash Flow Forecast", "Hiring Toolkit", "Strategy and 90-Day Plan", "Business Model", "Financial Model", "Pitch Deck", "Monthly Adviser Review",
-      "Business Review", "Funding Application Pack", "Monthly Accounts and Cash Report", "Pricing and Unit Cost Review", "Business Plan", "Six-Week Fix",
+      "Funding Readiness Assessment", "Business Model", "Pitch Deck", "Bookkeeping Catch-Up", "13-Week Cash Flow Forecast", "Hiring Toolkit", "Financial Model", "Strategy and 90-Day Plan",
+      "Monthly Adviser Review", "Business Review", "Monthly Accounts and Cash Report", "Business Plan", "Pricing and Unit Cost Review", "Funding Application Pack", "Six-Week Fix",
     ]);
     for (const product of MENU_PRODUCTS) {
       expect(shelf.getByRole("link", { name: `Learn more about ${product.name}` }).getAttribute("href")).toBe(`/services/${product.slug}`);

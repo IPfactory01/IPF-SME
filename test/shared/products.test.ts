@@ -15,16 +15,17 @@ const PLAN_PRICES: Record<string, string> = {
   pricing_unit_cost_review: "₦750,000",
   bookkeeping_catch_up: "₦100,000 a month of records",
   cash_flow_forecast: "₦300,000",
-  funding_application_pack: "₦600,000",
+  // Raised from ₦600,000 by ET on 28 October 2026, above the Business Plan it builds on.
+  funding_application_pack: "₦900,000",
   hiring_toolkit: "₦300,000",
   six_week_fix: "₦1,500,000",
   monthly_accounts: "₦200,000 a month",
   monthly_adviser_review: "₦150,000 a month",
   // Added by ET on 28 October 2026, after the plan.
-  business_model: "₦450,000",
-  financial_model: "₦450,000",
-  business_plan: "₦1,000,000",
-  pitch_deck: "₦450,000",
+  business_model: "₦300,000",
+  financial_model: "₦350,000",
+  business_plan: "₦750,000",
+  pitch_deck: "₦300,000",
 };
 
 describe("the launch menu (Operational Business Plan, 22 October 2026)", () => {

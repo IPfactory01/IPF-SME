@@ -23,7 +23,7 @@ export function StatusBadge({ status }: { status: FunnelStatus }) {
 export function AdminMetricCard({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="border border-line bg-white px-4 py-3">
-      <dt className="text-[11px] uppercase tracking-wider text-ink-muted">{label}</dt>
+      <dt className="text-xs text-ink-muted">{label}</dt>
       <dd className="mt-1 font-serif text-2xl leading-none text-ink">{value}</dd>
     </div>
   );
@@ -66,13 +66,13 @@ export function RowButton({ label, children }: { label: string; children: React.
   );
 }
 
-export const TH = "px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-ink-muted";
+export const TH = "px-3 py-2 text-left text-xs font-semibold text-ink-muted";
 export const TD = "px-3 py-3 align-top text-[13px] text-ink";
 
 export function DetailSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-3 border-t border-line-soft pt-5 first:border-t-0 first:pt-0">
-      <h3 className="text-[11px] font-semibold uppercase tracking-wider text-ink-muted">{title}</h3>
+      <h3 className="text-xs font-semibold text-ink-muted">{title}</h3>
       {children}
     </section>
   );

@@ -317,9 +317,9 @@ export default function BusinessCheck() {
         <div className="container flex items-center justify-between h-16">
           <Link href="/" className="flex items-center gap-3" aria-label={`${BRAND.organisationName} home`}>
             <img src={BRAND.markUrl} alt={BRAND.organisationName} className="h-9 w-auto" />
-            <span className="border-l border-line pl-3 text-xs font-semibold uppercase tracking-widest text-ink-muted">Business Health Check</span>
+            <span className="border-l border-line pl-3 text-sm font-semibold text-ink-muted">Business Health Check</span>
           </Link>
-          <Link href="/" className="text-xs font-semibold uppercase tracking-wider text-brand hover:text-brand-deep">Back to site</Link>
+          <Link href="/" className="text-sm font-semibold text-brand hover:text-brand-deep">Back to site</Link>
         </div>
         {showOutline && (
           <SectionRail
@@ -385,7 +385,7 @@ function SectionRail({ answers, current, onChangeStage }: { answers: Answers; cu
             </motion.span>
           ))}
         </div>
-        <p className="mt-2 flex justify-between gap-4 text-[11px] uppercase tracking-wider text-ink-muted">
+        <p className="mt-2 flex justify-between gap-4 text-xs text-ink-muted">
           <AnimatePresence mode="wait" initial={false}>
             <motion.span key={current ?? "details"} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.25 }} className="truncate font-semibold text-brand">
               {current ? SECTIONS[current].title : "Your details"}
@@ -415,10 +415,10 @@ function Intro({ hasProgress, onStart, onRestart }: { hasProgress: boolean; onSt
   return (
     <motion.div className="space-y-10" variants={listMotion} initial="hidden" animate="show">
       <motion.div variants={itemMotion}>
-        <h1 className="font-serif text-4xl font-black leading-[1.08] sm:text-6xl">
+        <h1 className="font-serif text-4xl font-normal leading-[1.08] sm:text-6xl">
           {PROMISE[0]} {PROMISE[1]} <span className="font-normal italic">{PROMISE[2]}</span>
         </h1>
-        <p className="mt-4 text-xs font-semibold uppercase tracking-[0.25em] text-highlight-ink">The free Business Health Check</p>
+        <p className="mt-4 text-sm font-semibold text-brand">The free Business Health Check</p>
         <p className="mt-6 text-lg leading-relaxed text-ink-600">
           Some owners know exactly what is wrong. Many can only feel it: busy every day, money in and out, and no clear picture of why it isn't working. This check is for both.
         </p>
@@ -434,7 +434,7 @@ function Intro({ hasProgress, onStart, onRestart }: { hasProgress: boolean; onSt
           { title: "The areas that apply", body: "From strategic intent to financials, chosen by your answers." },
         ].map((item, index) => (
           <motion.li key={item.title} variants={itemMotion} whileHover={{ y: -4 }} className="border border-line bg-paper-raised p-5 transition-shadow hover:shadow-lg">
-            <span className="font-serif text-2xl font-black text-highlight-ink">{index + 1}</span>
+            <span className="font-serif text-2xl font-normal text-brand">{index + 1}</span>
             <p className="mt-2 font-semibold">{item.title}</p>
             <p className="mt-1 text-sm leading-relaxed text-ink-muted">{item.body}</p>
           </motion.li>
@@ -467,7 +467,7 @@ function SectionIntro({ step, answers, onContinue, onBack }: { step: Step; answe
   return (
     <motion.div className="space-y-8" variants={listMotion} initial="hidden" animate="show">
       <motion.div variants={itemMotion}>
-        <p className="mb-3 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">
+        <p className="mb-3 flex items-center gap-3 text-sm font-semibold text-brand">
           {section.area !== undefined && (
             <motion.span initial={{ scale: 0, rotate: -90 }} animate={{ scale: 1, rotate: 0 }} transition={SETTLE} className="flex h-8 w-8 items-center justify-center rounded-full bg-highlight-ink font-serif text-sm text-paper">
               {section.area}
@@ -475,16 +475,16 @@ function SectionIntro({ step, answers, onContinue, onBack }: { step: Step; answe
           )}
           {section.area === undefined ? "To begin" : "Of ten areas"}
         </p>
-        <h2 className="font-serif text-3xl font-black leading-tight sm:text-5xl">{section.title}</h2>
+        <h2 className="font-serif text-3xl font-normal leading-tight sm:text-5xl">{section.title}</h2>
       </motion.div>
       <motion.div variants={itemMotion} className="relative pl-5">
         <motion.span aria-hidden className="absolute inset-y-0 left-0 w-1 origin-top bg-brand" initial={{ scaleY: 0 }} animate={{ scaleY: 1 }} transition={{ duration: 0.6, ease: EASE, delay: 0.2 }} />
-        <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">What this means</p>
+        <p className="text-sm font-semibold text-ink-muted">What this means</p>
         <p className="mt-2 text-lg leading-relaxed text-ink-700">{section.means}</p>
       </motion.div>
       {example && (
         <motion.div variants={itemMotion} className="border border-line bg-paper-raised p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">{exampleHeading(section, answers)}</p>
+          <p className="text-sm font-semibold text-ink-muted">{exampleHeading(section, answers)}</p>
           <p className="mt-2 font-serif text-lg italic leading-relaxed text-ink-soft">{example}</p>
         </motion.div>
       )}
@@ -520,8 +520,8 @@ function TextQuestionScreen({ step, answers, onAnswer, onBack }: { step: Step; a
   return (
     <motion.form className="space-y-7" variants={listMotion} initial="hidden" animate="show" onSubmit={(event) => { event.preventDefault(); if (trimmed || question.optional) onAnswer(question, trimmed); }}>
       <motion.div variants={itemMotion}>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">{section.title}</p>
-        <h2 className="font-serif text-2xl font-bold leading-snug sm:text-3xl">{promptFor(question, answers)}</h2>
+        <p className="mb-3 text-sm font-semibold text-brand">{section.title}</p>
+        <h2 className="font-serif text-2xl font-normal leading-snug sm:text-3xl">{promptFor(question, answers)}</h2>
         {question.help && <p className="mt-3 text-sm leading-relaxed text-ink-muted">{question.help}</p>}
       </motion.div>
       <motion.div variants={itemMotion}>
@@ -588,8 +588,8 @@ function QuestionScreen({ step, answers, onAnswer, onBack }: { step: Step; answe
   return (
     <div className="space-y-7">
       <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">{section.title}</p>
-        <h2 className="font-serif text-2xl font-bold leading-snug sm:text-3xl">{promptFor(question, answers)}</h2>
+        <p className="mb-3 text-sm font-semibold text-brand">{section.title}</p>
+        <h2 className="font-serif text-2xl font-normal leading-snug sm:text-3xl">{promptFor(question, answers)}</h2>
         {question.help && <p className="mt-3 text-sm leading-relaxed text-ink-muted">{question.help}</p>}
         {question.kind === "multi" && !question.help && <p className="mt-3 text-sm text-ink-muted">Choose all that apply.</p>}
       </div>
@@ -622,7 +622,7 @@ function QuestionScreen({ step, answers, onAnswer, onBack }: { step: Step; answe
                 index < 9 && <span aria-hidden className={`relative hidden h-6 w-6 shrink-0 items-center justify-center border text-[11px] font-semibold tabular-nums transition-colors sm:flex ${on ? "border-brand bg-brand text-paper" : "border-line text-ink-faint group-hover:border-brand group-hover:text-brand"}`}>{index + 1}</span>
               )}
               <span className="relative flex-1">
-                <span className={`block leading-snug ${cards ? "font-serif text-xl font-bold" : "text-[15px]"}`}>{option.label}</span>
+                <span className={`block leading-snug ${cards ? "font-serif text-xl font-normal" : "text-[15px]"}`}>{option.label}</span>
                 {option.description && <span className={`mt-1 block leading-relaxed text-ink-muted ${cards ? "text-sm" : "text-[13px]"}`}>{option.description}</span>}
               </span>
               <AnimatePresence>
@@ -672,7 +672,7 @@ function Reading() {
     <div className="flex flex-col items-center gap-8 py-14 text-center">
       <div className="relative h-20 w-20">
         <motion.span className="absolute inset-0 rounded-full border-4 border-brand-line border-t-brand" animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }} />
-        <motion.span className="absolute inset-3 rounded-full bg-gradient-to-br from-brand-plum to-highlight" animate={{ scale: [0.8, 1, 0.8], opacity: [0.6, 1, 0.6] }} transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }} />
+        <motion.span className="absolute inset-3 rounded-full bg-brand" animate={{ scale: [0.8, 1, 0.8], opacity: [0.6, 1, 0.6] }} transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }} />
       </div>
       <ul className="w-full max-w-sm space-y-3 text-left">
         {READING_STEPS.map((label, index) => (
@@ -707,8 +707,8 @@ function DetailsScreen({ contact, pending, error, onChange, onBack, onSubmit }: 
   return (
     <motion.form className="space-y-7" variants={listMotion} initial="hidden" animate="show" onSubmit={(event) => { event.preventDefault(); if (valid && !pending) onSubmit(); }}>
       <motion.div variants={itemMotion}>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">Before we start</p>
-        <h2 className="font-serif text-3xl font-black leading-tight">First, who are we talking to?</h2>
+        <p className="mb-3 text-sm font-semibold text-brand">Before we start</p>
+        <h2 className="font-serif text-3xl font-normal leading-tight">First, who are we talking to?</h2>
         <p className="mt-3 leading-relaxed text-ink-muted">So we can save your progress and send you your summary at the end.</p>
       </motion.div>
       <motion.div variants={itemMotion} className="grid gap-5 sm:grid-cols-2">
@@ -749,7 +749,7 @@ function DetailsScreen({ contact, pending, error, onChange, onBack, onSubmit }: 
 function SubmitFailed({ error, onRetry, onBack }: { error: string; onRetry: () => void; onBack: () => void }) {
   return (
     <div className="space-y-6 py-10">
-      <h2 className="font-serif text-2xl font-bold">We could not send your answers.</h2>
+      <h2 className="font-serif text-2xl font-normal">We could not send your answers.</h2>
       <p className="border border-danger-line bg-danger-tint p-3 text-sm text-danger-strong">{error || "Kindly try again."}</p>
       <p className="text-sm text-ink-muted">Your answers are safe on this device.</p>
       <div className="flex items-center justify-between gap-4">
@@ -767,7 +767,7 @@ function OutlinePanel({ answers }: { answers: Answers }) {
   if (!areas.length) return null;
   return (
     <motion.aside initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, ease: EASE }} className="h-fit border border-line bg-paper-raised p-5 lg:sticky lg:top-40">
-      <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">{businessDetails(answers).businessName ? `Outline for ${businessDetails(answers).businessName}` : "Your business outline"}</p>
+      <p className="text-sm font-semibold text-ink-muted">{businessDetails(answers).businessName ? `Outline for ${businessDetails(answers).businessName}` : "Your business outline"}</p>
       <p className="mt-1 text-xs leading-relaxed text-ink-faint">It fills in as you answer.</p>
       <ul className="mt-4 space-y-2">
         <AnimatePresence initial={false}>
@@ -785,7 +785,7 @@ function OutlinePanel({ answers }: { answers: Answers }) {
                   <span className={health === "pending" ? "text-ink-muted" : "text-ink"}>{AREA_NAMES[area]}</span>
                 </span>
                 <AnimatePresence mode="wait" initial={false}>
-                  <motion.span key={health} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className={`text-[11px] font-semibold uppercase tracking-wider ${health === "pending" ? "text-ink-faint" : style.row.split(" ").find((name) => name.startsWith("text-"))}`}>
+                  <motion.span key={health} initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className={`text-xs font-medium ${health === "pending" ? "text-ink-faint" : style.row.split(" ").find((name) => name.startsWith("text-"))}`}>
                     {style.label}
                   </motion.span>
                 </AnimatePresence>
@@ -873,8 +873,8 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
   return (
     <motion.div className="space-y-10" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.12 } } }} initial="hidden" animate="show">
       <motion.div variants={itemMotion}>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">Your Business Health Check{businessName ? ` · ${businessName}` : ""}</p>
-        <h1 className="font-serif text-4xl font-black leading-tight sm:text-5xl">Here is what we see.</h1>
+        <p className="mb-3 text-sm font-semibold text-brand">Your Business Health Check{businessName ? ` · ${businessName}` : ""}</p>
+        <h1 className="font-serif text-4xl font-normal leading-tight sm:text-5xl">Here is what we see.</h1>
         <p className="mt-3 flex items-center gap-2 text-sm text-ink-muted"><Mail className="h-4 w-4" />{response.emailStatus === "Sent" ? `A copy has been sent to ${contact.email}.` : "Your result is saved. We couldn't email you a copy just now, so keep this page open or come back with the same email."}</p>
       </motion.div>
 
@@ -882,8 +882,8 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
         <motion.div variants={itemMotion} className="grid grid-cols-3 gap-3">
           {tally.map(({ health, count }) => (
             <div key={health} className={`border p-4 text-center ${HEALTH_STYLE[health].row}`}>
-              <p className="font-serif text-4xl font-black tabular-nums"><CountUp value={count} /></p>
-              <p className="mt-1 text-[11px] font-semibold uppercase tracking-wider">{HEALTH_STYLE[health].label}</p>
+              <p className="font-serif text-4xl font-normal tabular-nums"><CountUp value={count} /></p>
+              <p className="mt-1 text-xs font-semibold">{HEALTH_STYLE[health].label}</p>
             </div>
           ))}
         </motion.div>
@@ -902,10 +902,10 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
         className="group flex w-full flex-col gap-3 border-2 border-highlight-ink/30 bg-paper-raised p-5 text-left transition-colors hover:border-highlight-ink sm:flex-row sm:items-center sm:justify-between"
       >
         <span>
-          <span className="block text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">This is the summary</span>
-          <span className="mt-1 block font-serif text-xl font-bold text-ink">{FULL_REPORT.pitch}</span>
+          <span className="block text-sm font-semibold text-brand">This is the summary</span>
+          <span className="mt-1 block font-serif text-xl font-normal text-ink">{FULL_REPORT.pitch}</span>
         </span>
-        <span className="inline-flex shrink-0 items-center gap-2 font-semibold text-highlight-ink">
+        <span className="inline-flex shrink-0 items-center gap-2 font-semibold text-brand">
           Get the Full Report{prices ? ` · ${formatNaira(prices.fullReport)}` : ""} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
         </span>
       </motion.button>
@@ -923,15 +923,15 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
                       <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full border border-line-strong" />
                       <span><span className="font-semibold">{row.area}. {row.name}</span><span className="block text-xs text-ink-faint">{row.reason}</span></span>
                     </span>
-                    <span className="text-xs uppercase tracking-wider text-ink-faint">Not assessed</span>
+                    <span className="text-sm text-ink-faint">Not assessed</span>
                   </motion.li>
                 );
               }
               const isMain = result.primaryArea?.area === row.area;
               return (
                 <motion.li key={row.area} variants={rowMotion} whileHover={{ x: 4 }} className={`flex flex-col gap-1 border px-4 py-3 sm:flex-row sm:items-center sm:justify-between ${HEALTH_STYLE[row.health].row} ${isMain ? "ring-2 ring-offset-2 ring-brand" : ""}`}>
-                  <span className="flex items-center gap-2.5 font-semibold"><span className={`h-2.5 w-2.5 rounded-full ${HEALTH_STYLE[row.health].dot}`} />{row.area}. {row.name}{isMain && <span className="ml-1 bg-brand px-2 py-0.5 text-[10px] uppercase tracking-wider text-paper">Start here</span>}</span>
-                  <span className="text-xs uppercase tracking-wider">{HEALTH_STYLE[row.health].label}{row.gap && row.health !== "clear" ? ` · ${GAP_LABELS[row.gap].name}` : ""}</span>
+                  <span className="flex items-center gap-2.5 font-semibold"><span className={`h-2.5 w-2.5 rounded-full ${HEALTH_STYLE[row.health].dot}`} />{row.area}. {row.name}{isMain && <span className="ml-1 bg-brand px-2 py-0.5 text-xs text-paper">Start here</span>}</span>
+                  <span className="text-sm">{HEALTH_STYLE[row.health].label}{row.gap && row.health !== "clear" ? ` · ${GAP_LABELS[row.gap].name}` : ""}</span>
                 </motion.li>
               );
             })}
@@ -946,14 +946,14 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
       {narrative && (
         <motion.section variants={itemMotion} className="border border-line bg-paper-raised p-6">
           <SectionHeading>Founder readiness</SectionHeading>
-          <p className="font-serif text-2xl font-bold">{narrative.heading}</p>
+          <p className="font-serif text-2xl font-normal">{narrative.heading}</p>
           <p className="mt-2 leading-relaxed text-ink-700">{narrative.summary}</p>
           <ul className="mt-5 grid gap-3">
             {narrative.lines.map((line, index) => (
               <motion.li key={line.key} initial={{ opacity: 0, x: -12 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, ease: EASE, delay: 0.2 + index * 0.1 }} className="flex flex-col gap-2 border-l-4 bg-paper p-4 sm:flex-row sm:items-start sm:gap-4" style={{ borderLeftColor: `var(--color-health-${STRENGTH_HEALTH[line.strength]})` }}>
                 <span className="flex shrink-0 items-center gap-2 sm:w-60">
                   <span className="whitespace-nowrap font-semibold text-ink">{line.title}</span>
-                  <span className={`px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${HEALTH_STYLE[STRENGTH_HEALTH[line.strength]].row}`}>{STRENGTH_LABELS[line.strength]}</span>
+                  <span className={`px-2 py-0.5 text-xs font-medium ${HEALTH_STYLE[STRENGTH_HEALTH[line.strength]].row}`}>{STRENGTH_LABELS[line.strength]}</span>
                 </span>
                 <span className="text-sm leading-relaxed text-ink-soft">{line.text}</span>
               </motion.li>
@@ -976,11 +976,10 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
         <SectionHeading>Your next steps</SectionHeading>
         <div className="grid gap-4 lg:grid-cols-2">
           {/* The free call */}
-          <div className="relative flex flex-col overflow-hidden bg-gradient-to-br from-brand-plum via-brand-deep to-brand-deep p-6 text-paper sm:p-8">
-            <motion.div aria-hidden className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-highlight/25 blur-3xl" animate={calm ? undefined : { scale: [1, 1.2, 1], opacity: [0.5, 0.9, 0.5] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }} />
+          <div className="relative flex flex-col overflow-hidden bg-brand-deep p-6 text-paper sm:p-8">
             <div className="relative flex flex-1 flex-col">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight">Free · 20 minutes</p>
-              <p className="mt-3 font-serif text-2xl font-bold leading-snug">{summary.next}</p>
+              <p className="text-sm font-semibold text-highlight">Free · 20 minutes</p>
+              <p className="mt-3 font-serif text-2xl font-normal leading-snug">{summary.next}</p>
               <p className="mt-2 flex-1 text-sm leading-relaxed text-on-dark-muted">By phone or video. If we're not the right fit, we'll say so and point you to who is.</p>
               <AnimatePresence mode="wait" initial={false}>
                 {requested.call ? (
@@ -993,7 +992,7 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
                         : `Booked. The confirmation is on its way to ${contact.email}.`}
                   </motion.p>
                 ) : (
-                  <motion.button key="book" type="button" onClick={bookCall} disabled={requestNext.isPending} exit={{ opacity: 0, scale: 0.96 }} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} className="group mt-6 inline-flex h-14 w-full items-center justify-center bg-highlight px-8 text-sm font-semibold uppercase tracking-widest text-brand-deep shadow-[0_18px_40px_-18px_rgba(54,183,224,0.9)] transition-colors hover:bg-highlight-hover disabled:opacity-60">
+                  <motion.button key="book" type="button" onClick={bookCall} disabled={requestNext.isPending} exit={{ opacity: 0, scale: 0.96 }} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} className="group mt-6 inline-flex h-14 w-full items-center justify-center bg-highlight px-8 text-sm font-semibold text-brand-deep shadow-[0_18px_40px_-18px_rgba(54,183,224,0.9)] transition-colors hover:bg-highlight-hover disabled:opacity-60">
                     <CalendarDays className="mr-2 h-4 w-4" /> {booking.kind === "calendly" && calendarOpen ? "Choose a time below" : booking.kind === "none" ? "Request my free Discovery Call" : "Book my free Discovery Call"}
                   </motion.button>
                 )}
@@ -1003,23 +1002,23 @@ function Result({ response, contact, answers, businessName, onRestart }: { respo
 
           {/* The paid full report */}
           <div className="flex flex-col border-2 border-highlight-ink bg-paper-raised p-6 sm:p-8">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">The Full Report</p>
-            <p className="mt-3 font-serif text-2xl font-bold leading-snug text-ink">{FULL_REPORT.name}</p>
-            <p className="mt-3 font-sans text-5xl font-extrabold tracking-tight tabular-nums text-ink">{prices ? formatNaira(prices.fullReport) : "\u00a0"}</p>
+            <p className="text-sm font-semibold text-brand">The Full Report</p>
+            <p className="mt-3 font-serif text-2xl font-normal leading-snug text-ink">{FULL_REPORT.name}</p>
+            <p className="mt-3 font-sans text-5xl font-semibold tracking-tight tabular-nums text-ink">{prices ? formatNaira(prices.fullReport) : "\u00a0"}</p>
             <ul className="mt-5 flex-1 space-y-2.5">
               {FULL_REPORT.includes.map((item) => (
-                <li key={item} className="flex items-start gap-2.5 text-sm leading-relaxed text-ink-700"><Check className="mt-0.5 h-4 w-4 shrink-0 text-highlight-ink" />{item}</li>
+                <li key={item} className="flex items-start gap-2.5 text-sm leading-relaxed text-ink-700"><Check className="mt-0.5 h-4 w-4 shrink-0 text-brand" />{item}</li>
               ))}
             </ul>
             <p className="mt-4 text-xs text-ink-muted">{FULL_REPORT.delivery}</p>
             <AnimatePresence mode="wait" initial={false}>
               {reportPaid ? (
                 <motion.p key="paid" initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="mt-6 flex items-start gap-3 border border-highlight-ink/40 bg-paper p-4 text-sm leading-relaxed text-ink-700">
-                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-highlight-ink" />
+                  <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-brand" />
                   Your Full Report is already paid. The link to your Report Intake is in your email at {contact.email}.
                 </motion.p>
               ) : (
-                <motion.button key="get" type="button" onClick={() => { setReportProblem(null); startReport.mutate({ token: response.token, item: "full_report" }); }} disabled={startReport.isPending || leavingForPaystack} exit={{ opacity: 0, scale: 0.96 }} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} className="group mt-6 inline-flex h-14 w-full items-center justify-center bg-highlight-ink px-8 text-sm font-semibold uppercase tracking-widest text-paper shadow-[0_18px_40px_-18px_rgba(203,55,86,0.8)] transition-opacity hover:opacity-90 disabled:opacity-60">
+                <motion.button key="get" type="button" onClick={() => { setReportProblem(null); startReport.mutate({ token: response.token, item: "full_report" }); }} disabled={startReport.isPending || leavingForPaystack} exit={{ opacity: 0, scale: 0.96 }} whileHover={{ y: -2 }} whileTap={{ scale: 0.97 }} className="group mt-6 inline-flex h-14 w-full items-center justify-center bg-highlight-ink px-8 text-sm font-semibold text-paper shadow-[0_18px_40px_-18px_rgba(203,55,86,0.8)] transition-opacity hover:opacity-90 disabled:opacity-60">
                   <FileText className="mr-2 h-4 w-4" /> {startReport.isPending || leavingForPaystack ? "Opening Paystack…" : "Get my Full Report"}
                 </motion.button>
               )}
@@ -1070,20 +1069,20 @@ function FirstStepCard({ step, token, onBook }: { step: FirstStep; token: string
     <motion.section variants={itemMotion} aria-labelledby="first-step">
       <SectionHeading><span id="first-step">Your first step</span></SectionHeading>
       <div className="border-2 border-brand bg-paper-raised p-6 sm:p-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">{WAY_DETAILS[product.way].name}</p>
-        <p className="mt-2 font-serif text-3xl font-bold leading-tight text-ink">{stepName(step.productId, step.variantId)}</p>
+        <p className="text-sm font-semibold text-brand">{WAY_DETAILS[product.way].name}</p>
+        <p className="mt-2 font-serif text-3xl font-normal leading-tight text-ink">{stepName(step.productId, step.variantId)}</p>
         <p className="mt-3 leading-relaxed text-ink-soft">{step.because} {product.short}</p>
         <div className="mt-5 flex flex-wrap items-baseline gap-x-6 gap-y-1 border-t border-line pt-5">
-          <p className="font-sans text-2xl font-bold text-ink">{prices ? priceLabel(displayPrice(product, prices)) : "\u00a0"}</p>
+          <p className="font-sans text-2xl font-semibold text-ink">{prices ? priceLabel(displayPrice(product, prices)) : "\u00a0"}</p>
           <p className="text-sm text-ink-muted">{product.delivery}</p>
         </div>
         <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-3">
           {startMode(product) === "self" ? (
-            <Link href={`/order/${product.slug}?check=${encodeURIComponent(token)}`} className="group inline-flex h-12 items-center bg-highlight-ink px-6 text-sm font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-brand-plum">
+            <Link href={`/order/${product.slug}?check=${encodeURIComponent(token)}`} className="group inline-flex h-12 items-center bg-highlight-ink px-6 text-sm font-semibold text-paper transition-colors hover:bg-brand-plum">
               Buy now <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
           ) : (
-            <button type="button" onClick={onBook} className="group inline-flex h-12 items-center bg-highlight-ink px-6 text-sm font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-brand-plum">
+            <button type="button" onClick={onBook} className="group inline-flex h-12 items-center bg-highlight-ink px-6 text-sm font-semibold text-paper transition-colors hover:bg-brand-plum">
               Talk to us first: book the free call <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
             </button>
           )}
@@ -1098,7 +1097,7 @@ function FirstStepCard({ step, token, onBook }: { step: FirstStep; token: string
 function SummaryCard({ title, body, accent }: { title: string; body: string; accent?: boolean }) {
   return (
     <motion.div whileHover={{ y: -3 }} className={`border p-6 transition-shadow hover:shadow-lg ${accent ? "border-brand bg-brand-tint" : "border-line bg-paper-raised"}`}>
-      <p className="text-xs font-semibold uppercase tracking-wider text-ink-muted">{title}</p>
+      <p className="text-sm font-semibold text-ink-muted">{title}</p>
       <p className="mt-3 leading-relaxed text-ink-700">{body}</p>
     </motion.div>
   );
@@ -1113,7 +1112,7 @@ function PrimaryButton({ children, onClick, disabled, type = "button", large, "a
       aria-describedby={describedBy}
       whileHover={disabled ? undefined : { y: -2 }}
       whileTap={disabled ? undefined : { scale: 0.97 }}
-      className={`group inline-flex items-center justify-center bg-ink font-semibold uppercase tracking-widest text-paper shadow-[0_14px_30px_-16px_rgba(18,50,79,0.8)] transition-colors hover:bg-charcoal disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none ${large ? "h-14 px-8 text-sm" : "h-12 px-7 text-xs"}`}
+      className={`group inline-flex items-center justify-center bg-ink font-semibold text-paper shadow-[0_14px_30px_-16px_rgba(18,50,79,0.8)] transition-colors hover:bg-charcoal disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none ${large ? "h-14 px-8 text-sm" : "h-12 px-7 text-xs"}`}
     >
       {children}
       <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
@@ -1122,13 +1121,13 @@ function PrimaryButton({ children, onClick, disabled, type = "button", large, "a
 }
 
 function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <h2 className="mb-4 font-sans text-xs font-semibold uppercase tracking-[0.2em] text-ink-muted">{children}</h2>;
+  return <h2 className="mb-4 font-sans text-sm font-semibold text-ink-muted">{children}</h2>;
 }
 
 function Field({ label, required, wide, htmlFor, children }: { label: string; required?: boolean; wide?: boolean; htmlFor?: string; children: React.ReactNode }) {
   return (
     <div className={wide ? "sm:col-span-2" : undefined}>
-      <Label htmlFor={htmlFor} className="mb-2 block text-xs font-semibold uppercase tracking-wider text-ink-muted">{label}{required && <span className="text-highlight-ink"> *</span>}</Label>
+      <Label htmlFor={htmlFor} className="mb-2 block text-sm font-semibold text-ink-muted">{label}{required && <span className="text-brand"> *</span>}</Label>
       {children}
     </div>
   );

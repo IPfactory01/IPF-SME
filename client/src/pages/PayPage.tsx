@@ -56,7 +56,7 @@ export default function PayPage() {
   if (!item) {
     return (
       <PaymentShell>
-        <h1 className="font-serif text-3xl font-bold">This link is not valid</h1>
+        <h1 className="font-serif text-3xl font-normal">This link is not valid</h1>
         <p className="mt-3 text-ink-soft">Use the link in your payment email, or reply to it for help.</p>
       </PaymentShell>
     );
@@ -65,7 +65,7 @@ export default function PayPage() {
   if (page.error || !page.data) {
     return (
       <PaymentShell>
-        <h1 className="font-serif text-3xl font-bold">This link is not valid</h1>
+        <h1 className="font-serif text-3xl font-normal">This link is not valid</h1>
         <p className="mt-3 text-ink-soft">{page.error?.message ?? "Use the link in your payment email, or reply to it for help."}</p>
       </PaymentShell>
     );
@@ -80,8 +80,8 @@ export default function PayPage() {
       <PaymentShell>
         {banner}
         <div className="space-y-4">
-          <CheckCircle2 className="h-10 w-10 text-highlight-ink" aria-hidden />
-          <h1 className="font-serif text-3xl font-bold">Already paid</h1>
+          <CheckCircle2 className="h-10 w-10 text-brand" aria-hidden />
+          <h1 className="font-serif text-3xl font-normal">Already paid</h1>
           <p className="text-ink-soft">Your {name} is paid. Thank you.</p>
           <p className="text-ink-soft">{ALREADY_PAID[item]}</p>
         </div>
@@ -93,10 +93,10 @@ export default function PayPage() {
   return (
     <PaymentShell>
       {banner}
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">Payment</p>
-      <h1 className="mt-2 font-serif text-3xl font-bold sm:text-4xl">{name}</h1>
+      <p className="text-sm font-semibold text-brand">Payment</p>
+      <h1 className="mt-2 font-serif text-3xl font-normal sm:text-4xl">{name}</h1>
       <p className="mt-3 text-ink-soft">{MEANING[item]}</p>
-      <p className="mt-6 font-sans text-5xl font-extrabold tracking-tight tabular-nums text-ink">{amount}</p>
+      <p className="mt-6 font-sans text-5xl font-semibold tracking-tight tabular-nums text-ink">{amount}</p>
 
       {state === "expired" && (
         <p role="alert" className="mt-6 border border-danger-line bg-danger-tint p-4 text-sm text-danger-strong">
@@ -112,7 +112,7 @@ export default function PayPage() {
       {online && (
         <div className="mt-6 space-y-3">
           <Button type="button" disabled={start.isPending || leaving} onClick={() => { setProblem(null); start.mutate({ token, item }); }}
-            className="h-14 w-full rounded-none bg-highlight-ink px-6 text-sm font-semibold uppercase tracking-widest text-paper hover:opacity-90 disabled:opacity-60">
+            className="h-14 w-full rounded-none bg-highlight-ink px-6 text-sm font-semibold text-paper hover:opacity-90 disabled:opacity-60">
             <Lock className="mr-2 h-4 w-4" aria-hidden />
             {start.isPending || leaving ? "Opening Paystack…" : `Pay ${amount} securely with Paystack`}
           </Button>
@@ -123,7 +123,7 @@ export default function PayPage() {
       )}
 
       <section aria-label="After you pay" className="mt-8">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-brand">After you pay</h2>
+        <h2 className="text-sm font-semibold text-brand">After you pay</h2>
         <p className="mt-2 text-sm leading-relaxed text-ink-soft">{AFTER_PAYING[item]}</p>
       </section>
 

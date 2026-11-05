@@ -121,7 +121,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
 
       <section aria-labelledby="business-support-email-status" className="border border-line bg-white">
         <div className="border-b border-line px-4 py-3">
-          <h2 id="business-support-email-status" className="font-serif text-lg font-semibold">Business Support email status</h2>
+          <h2 id="business-support-email-status" className="font-serif text-lg font-normal">Business Support email status</h2>
           <p className="mt-1 text-xs text-ink-muted">Recent attempts and Resend delivery events. Message contents are not stored here.</p>
         </div>
         {emailStatus.isLoading ? <p className="p-4 text-sm text-ink-muted">Loading email status…</p> : emailStatus.error ? <p role="alert" className="p-4 text-sm text-danger-strong">Email status is unavailable.</p> : emailStatus.data?.length ? (

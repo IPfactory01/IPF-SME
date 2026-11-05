@@ -57,13 +57,13 @@ export default function AdminLoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-paper p-6 text-ink">
       <div className="w-full max-w-md space-y-6">
         <div className="flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-xs uppercase tracking-widest text-brand hover:underline"><ArrowLeft className="h-4 w-4" /> Back to Public Home</Link>
+          <Link href="/" className="flex items-center gap-2 text-sm text-brand hover:underline"><ArrowLeft className="h-4 w-4" /> Back to Public Home</Link>
           <img src={BRAND.logoUrl} alt={BRAND.organisationName} className="h-14 w-auto shrink-0" />
         </div>
         <Card className="rounded-none border-line-soft bg-white shadow-sm">
           <CardHeader className="space-y-3 pb-6">
             <div className="flex h-10 w-10 items-center justify-center bg-brand-tint text-brand"><Lock className="h-5 w-5" /></div>
-            <CardTitle className="font-serif text-2xl font-bold tracking-tight">Admin sign in</CardTitle>
+            <CardTitle className="font-serif text-2xl font-normal tracking-tight">Admin sign in</CardTitle>
             <CardDescription className="text-sm text-ink-muted">Sign in with your IPF administrator account.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -72,7 +72,7 @@ export default function AdminLoginPage() {
                 {error && <div role="alert" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{error}</div>}
                 <div className="space-y-2"><Label htmlFor="admin-email">Email</Label><Input id="admin-email" type="email" autoComplete="email" value={email} onChange={event => { setEmail(event.target.value); setError(null); }} /></div>
                 <div className="space-y-2"><Label htmlFor="admin-password">Password</Label><Input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={event => { setPassword(event.target.value); setError(null); }} /></div>
-                <Button disabled={signIn.isPending} type="submit" size="lg" className="h-12 w-full rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">
+                <Button disabled={signIn.isPending} type="submit" size="lg" className="h-12 w-full rounded-none bg-brand text-sm text-white hover:bg-brand-deep-hover">
                   {signIn.isPending ? "Signing in…" : "Sign in"}
                 </Button>
                 <button type="button" onClick={() => setForgot(true)} className="text-sm font-semibold text-brand underline underline-offset-2">Forgot your password?</button>

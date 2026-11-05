@@ -17,12 +17,12 @@ export function ServiceTile({ product, prices, as: Tag = "li" }: { product: Prod
       <Link href={servicePath(product)} className="mx-auto block w-full max-w-[15.25rem]" tabIndex={-1} aria-hidden>
         <ProductArt kind={story.art} className="h-auto w-full" />
       </Link>
-      <p className="mt-5 text-xs font-bold uppercase tracking-[0.14em] text-ink-muted">{WAY_DETAILS[product.way].name}</p>
-      <h3 className="font-display mt-2 text-2xl font-extrabold tracking-[-0.02em] text-ink">{product.name}</h3>
+      <p className="mt-5 text-sm font-semibold text-ink-muted">{WAY_DETAILS[product.way].name}</p>
+      <h3 className="font-display mt-2 text-2xl font-semibold tracking-[-0.02em] text-ink">{product.name}</h3>
       <p className="mt-2 flex-1 text-[16px] leading-snug text-ink-soft">{story.promise}</p>
-      <p className="mt-5 text-[15px] text-ink-soft"><b className="font-extrabold text-ink tabular-nums">{price.main}</b>{price.note && <span className="block text-[13px]">{price.note}</span>}</p>
+      <p className="mt-5 text-[15px] text-ink-soft"><b className="font-semibold text-ink tabular-nums">{price.main}</b>{price.note && <span className="block text-[13px]">{price.note}</span>}</p>
       <div className="mt-4 flex items-center justify-center gap-5">
-        <Link href={servicePath(product)} aria-label={`Learn more about ${product.name}`} className="inline-flex h-11 items-center bg-brand px-5 text-sm font-bold text-paper transition-[transform,background-color] hover:bg-brand-deep active:scale-[0.97]">Learn more</Link>
+        <Link href={servicePath(product)} aria-label={`Learn more about ${product.name}`} className="inline-flex h-11 items-center bg-brand px-5 text-sm font-semibold text-paper transition-[transform,background-color] hover:bg-brand-deep active:scale-[0.97]">Learn more</Link>
         {orderable(product)
           ? <QuietLink href={`/order/${product.slug}`}>Buy</QuietLink>
           : startMode(product) === "after_call" ? <QuietLink href={BRAND.discoveryCallUrl} external>Book a call</QuietLink> : <QuietLink href="/check">Start</QuietLink>}

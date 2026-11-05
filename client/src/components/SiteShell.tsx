@@ -81,7 +81,7 @@ export function SiteHeader({ cta = true }: { cta?: boolean }) {
       <div className="container flex h-[60px] items-center justify-between gap-4">
         <Link href="/" className="flex shrink-0 items-center gap-3" aria-label={`${BRAND.productEndorsement}: home`}>
           <img src={BRAND.markUrl} alt="" className="h-9 w-auto" />
-          <span className="hidden whitespace-nowrap border-l border-line pl-3 text-xs font-semibold uppercase tracking-widest text-ink-muted sm:inline">{BRAND.productName}</span>
+          <span className="hidden whitespace-nowrap border-l border-line pl-3 text-sm font-semibold text-ink-muted sm:inline">{BRAND.productName}</span>
         </Link>
         <nav aria-label="Site" className="hidden items-center gap-6 text-sm font-medium text-ink-600 lg:flex">
           {SITE_PAGES.map((page) => (
@@ -92,9 +92,9 @@ export function SiteHeader({ cta = true }: { cta?: boolean }) {
           ))}
         </nav>
         <div className="flex items-center gap-3">
-          <Link href="/login" className="hidden whitespace-nowrap border border-brand-line px-3 py-2 text-xs font-semibold uppercase tracking-wider text-brand transition-colors hover:bg-brand-tint sm:inline-flex">Client sign in</Link>
+          <Link href="/login" className="hidden whitespace-nowrap border border-brand-line px-3 py-2 text-sm font-semibold text-brand transition-colors hover:bg-brand-tint sm:inline-flex">Client sign in</Link>
           {cta && (
-            <Link href="/check" className="group hidden items-center whitespace-nowrap bg-ink px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-charcoal md:inline-flex">
+            <Link href="/check" className="group hidden items-center whitespace-nowrap bg-ink px-4 py-2.5 text-sm font-semibold text-paper transition-colors hover:bg-charcoal md:inline-flex">
               Free Business Health Check <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
             </Link>
           )}
@@ -111,7 +111,7 @@ export function SiteHeader({ cta = true }: { cta?: boolean }) {
               <li key={page.href}><Link href={page.href} aria-current={current(page.href) ? "page" : undefined} className={`block border-b border-line-soft py-3.5 text-lg font-semibold ${current(page.href) ? "text-brand" : "text-ink"}`}>{page.label}</Link></li>
             ))}
             <li><Link href="/login" className="block py-3.5 text-lg font-semibold text-ink">Client sign in</Link></li>
-            <li className="pb-3"><Link href="/check" className="flex h-12 items-center justify-center bg-ink font-bold text-paper">Free Business Health Check</Link></li>
+            <li className="pb-3"><Link href="/check" className="flex h-12 items-center justify-center bg-ink font-semibold text-paper">Free Business Health Check</Link></li>
           </ul>
         </nav>
       )}

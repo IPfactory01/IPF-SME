@@ -17,7 +17,7 @@ import { Link } from "wouter";
 import { PAGE_META } from "@shared/seo";
 
 /** The eyebrow over a page or section heading: small crimson capitals. */
-export const EYEBROW = "text-xs font-bold uppercase tracking-[0.16em] text-highlight-ink";
+export const EYEBROW = "text-sm font-semibold text-brand";
 
 export default function ServicesPage() {
   useScrollToTop();
@@ -35,7 +35,7 @@ export default function ServicesPage() {
   return (
     <SiteShell>
       <section className="container mx-auto max-w-6xl pt-16 pb-8 text-center sm:pt-20">
-        <h1 className="font-display mx-auto max-w-3xl text-[clamp(2.6rem,7vw,4.75rem)] font-extrabold leading-[1.02] tracking-[-0.035em] text-ink">Help that does the work.</h1>
+        <h1 className="font-display mx-auto max-w-3xl text-[clamp(2.6rem,7vw,4.75rem)] font-semibold leading-[1.02] tracking-[-0.035em] text-ink">Help that does the work.</h1>
         <p className="mx-auto mt-5 max-w-xl text-[clamp(1.15rem,2.4vw,1.45rem)] leading-snug text-ink-soft">Finished work in days. A fix in six weeks. Every price on the page.</p>
         <div role="group" aria-label="Filter by way to buy" className="mt-8 flex flex-wrap justify-center gap-2">
           {(["all", ...WAYS_TO_BUY] as const).map((option) => (
@@ -56,9 +56,9 @@ export default function ServicesPage() {
       <section className="bg-ink text-paper">
         <div className="container mx-auto grid max-w-6xl items-center gap-10 py-16 md:grid-cols-[1.2fr_1fr]">
           <div>
-            <h2 className="font-display text-[clamp(2rem,4.6vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.03em]">Not sure which one you need?</h2>
+            <h2 className="font-display text-[clamp(2rem,4.6vw,3rem)] font-semibold leading-[1.05] tracking-[-0.03em]">Not sure which one you need?</h2>
             <p className="mt-4 max-w-lg text-lg text-on-dark-muted">The free Business Health Check takes ten minutes on your phone. It names your first step, and the one after it.</p>
-            <Link href="/check" className="group mt-7 inline-flex h-12 items-center gap-2 bg-highlight px-7 font-bold text-brand-deep transition-[transform,background-color] hover:bg-highlight-hover active:scale-[0.97]">
+            <Link href="/check" className="group mt-7 inline-flex h-12 items-center gap-2 bg-highlight px-7 font-semibold text-brand-deep transition-[transform,background-color] hover:bg-highlight-hover active:scale-[0.97]">
               Take the free check <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
             </Link>
           </div>
@@ -71,8 +71,8 @@ export default function ServicesPage() {
       <section aria-label="Why buy from The Shift" className="container mx-auto grid max-w-6xl gap-9 py-16 md:grid-cols-3">
         {PROMISES.map(({ icon: Icon, title, body }) => (
           <div key={title}>
-            <Icon className="h-9 w-9 text-highlight-ink" strokeWidth={1.6} aria-hidden />
-            <h2 className="font-display mt-3.5 text-xl font-extrabold tracking-[-0.015em] text-ink">{title}</h2>
+            <Icon className="h-9 w-9 text-brand" strokeWidth={1.6} aria-hidden />
+            <h2 className="font-display mt-3.5 text-xl font-semibold tracking-[-0.015em] text-ink">{title}</h2>
             <p className="mt-2 text-ink-soft">{body}</p>
           </div>
         ))}

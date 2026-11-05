@@ -34,8 +34,8 @@ export default function TeamSeats() {
   const free = used < included;
   return (
     <section aria-labelledby="your-team" className="border border-line-soft bg-white p-5 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-widest text-ink-muted">Your team</p>
-      <h2 id="your-team" className="mt-1 font-serif text-xl font-bold tracking-tight">Bring in one person from your business</h2>
+      <p className="text-sm font-semibold text-ink-muted">Your team</p>
+      <h2 id="your-team" className="mt-1 font-serif text-xl font-normal tracking-tight">Bring in one person from your business</h2>
       <p className="mt-1 text-sm text-ink-muted">Your engagement includes {included === 1 ? "one person" : `${included} people`} besides you, at no cost. Session notes and Findings stay with you unless you share them.</p>
       <ul className="mt-4 space-y-3">
         {members.map(member => (
@@ -72,7 +72,7 @@ export default function TeamSeats() {
             ))}
           </fieldset>
           {email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim()) && <p className="text-xs text-danger-strong">Enter their full email address, like bola@example.com.</p>}
-          <Button type="submit" size="sm" className="rounded-none bg-brand text-xs uppercase tracking-wider text-white" disabled={invite.isPending || !fullName.trim() || !/^\S+@\S+\.\S+$/.test(email.trim())}>Invite</Button>
+          <Button type="submit" size="sm" className="rounded-none bg-brand text-sm text-white" disabled={invite.isPending || !fullName.trim() || !/^\S+@\S+\.\S+$/.test(email.trim())}>Invite</Button>
         </form>
       )}
       {link && <p role="status" className="mt-3 break-all border border-brand-line bg-brand-tint p-3 text-xs">Send them this link yourself (it works once): {link}</p>}

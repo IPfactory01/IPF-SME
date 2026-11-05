@@ -206,7 +206,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <div className="mx-auto max-w-2xl px-4 py-8 sm:py-12">
         <header className="mb-8 flex items-center gap-4">
           <img src={BRAND.logoUrl} alt={BRAND.organisationName} className="h-14 w-auto" />
-          <span className="border-l border-line pl-4 text-xs font-semibold uppercase tracking-widest text-ink-muted">{BRAND.productName}</span>
+          <span className="border-l border-line pl-4 text-sm font-semibold text-ink-muted">{BRAND.productName}</span>
         </header>
         {children}
         <LegalFooterLinks className="mt-10 !justify-start" />
@@ -238,7 +238,7 @@ export default function FullReportPage() {
   if (form.error || !form.data) {
     return (
       <Shell>
-        <h1 className="font-serif text-3xl font-bold">This link is not valid</h1>
+        <h1 className="font-serif text-3xl font-normal">This link is not valid</h1>
         <p className="mt-3 text-ink-soft">{form.error?.message ?? "Use the link in your payment confirmation email, or reply to it for help."}</p>
       </Shell>
     );
@@ -250,10 +250,10 @@ export default function FullReportPage() {
     return (
       <Shell>
         <div className="space-y-4">
-          <CheckCircle2 className="h-10 w-10 text-highlight-ink" aria-hidden />
-          <h1 className="font-serif text-3xl font-bold">{sent ? "Your Full Report is on its way" : "Your Full Report has been sent"}</h1>
+          <CheckCircle2 className="h-10 w-10 text-brand" aria-hidden />
+          <h1 className="font-serif text-3xl font-normal">{sent ? "Your Full Report is on its way" : "Your Full Report has been sent"}</h1>
           <p className="text-ink-soft">We have emailed your Full Report{businessName ? ` for ${businessName}` : ""} to <span className="font-medium text-ink">{email}</span>. You can also download it here.</p>
-          <Button type="button" className="h-12 rounded-none bg-ink px-6 text-sm font-semibold uppercase tracking-wider text-paper hover:bg-charcoal" disabled={download.isPending}
+          <Button type="button" className="h-12 rounded-none bg-ink px-6 text-sm font-semibold text-paper hover:bg-charcoal" disabled={download.isPending}
             onClick={() => (sent ? savePdf(sent.fileName, sent.pdf) : download.mutate({ token }))}>
             <Download className="mr-2 h-4 w-4" aria-hidden /> Download your Full Report
           </Button>
@@ -297,7 +297,7 @@ export default function FullReportPage() {
     return (
       <fieldset key={id} id={`question-${id}`} className="scroll-mt-24 space-y-3 border-t border-line pt-5">
         <legend className="sr-only">{prompt}</legend>
-        <p className="flex gap-3 font-medium text-ink"><span className="w-6 shrink-0 font-semibold tabular-nums text-highlight-ink">{index + 1}</span><span>{prompt}</span></p>
+        <p className="flex gap-3 font-medium text-ink"><span className="w-6 shrink-0 font-semibold tabular-nums text-brand">{index + 1}</span><span>{prompt}</span></p>
         {hint && <p className="pl-9 text-sm text-ink-muted">{hint}</p>}
         <div className="pl-9">{body}</div>
       </fieldset>
@@ -307,8 +307,8 @@ export default function FullReportPage() {
 
   return (
     <Shell>
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-highlight-ink">Your Report Intake</p>
-      <h1 className="mt-2 font-serif text-3xl font-bold sm:text-4xl">{firstName ? `${firstName}, seventeen questions` : "Seventeen questions"} and your Full Report is done</h1>
+      <p className="text-sm font-semibold text-brand">Your Report Intake</p>
+      <h1 className="mt-2 font-serif text-3xl font-normal sm:text-4xl">{firstName ? `${firstName}, seventeen questions` : "Seventeen questions"} and your Full Report is done</h1>
       <p className="mt-3 text-ink-soft">
         About {FULL_REPORT.formMinutes} minutes. Your Full Report{businessName ? ` for ${businessName}` : ""} is built from these answers and your Business Health Check, and emailed to <span className="font-medium text-ink">{email}</span> the moment you finish. Estimates are fine.
       </p>
@@ -316,7 +316,7 @@ export default function FullReportPage() {
       <form onSubmit={onSubmit} noValidate className="mt-8 space-y-10">
         {groups.map((group) => (
           <section key={group} aria-label={group} className="space-y-5">
-            <h2 className="font-sans text-xs font-semibold uppercase tracking-[0.2em] text-brand">{group}</h2>
+            <h2 className="font-sans text-sm font-semibold text-brand">{group}</h2>
             {INTAKE_QUESTIONS.filter((item) => item.group === group).map((item) => {
               switch (item.id) {
                 case "location": return question(item.id, <Input aria-label="Where you sell from" value={draft.location} maxLength={120} onChange={(event) => set("location", event.target.value)} className="h-11 rounded-none" />);
@@ -438,7 +438,7 @@ export default function FullReportPage() {
         <div className="sticky bottom-0 -mx-4 space-y-3 border-t border-line bg-paper/95 px-4 py-4 backdrop-blur">
           <p className="text-sm text-ink-muted"><span className="font-semibold tabular-nums text-ink">{answered}</span> of 17 answered</p>
           {problem && <p role="alert" className="text-sm text-danger-strong">{problem}</p>}
-          <Button type="submit" disabled={submit.isPending} className="h-12 w-full rounded-none bg-highlight-ink text-sm font-semibold uppercase tracking-widest text-paper hover:opacity-90">
+          <Button type="submit" disabled={submit.isPending} className="h-12 w-full rounded-none bg-highlight-ink text-sm font-semibold text-paper hover:opacity-90">
             <FileText className="mr-2 h-4 w-4" aria-hidden /> {submit.isPending ? "Building your Full Report…" : "Send me my Full Report"}
           </Button>
         </div>

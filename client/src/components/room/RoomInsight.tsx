@@ -14,7 +14,7 @@ import { project, TAB_SPRING } from "./RoomTabs";
  */
 
 const CARD = "border border-line-soft bg-paper-raised p-5 shadow-sm";
-const KICKER = "text-xs font-semibold uppercase tracking-widest text-ink-muted";
+const KICKER = "text-sm font-semibold text-ink-muted";
 const HEALTH: Record<ReportHealth, { label: string; chip: string; bar: string }> = {
   stuck: { label: "Stuck", chip: "bg-health-stuck-tint text-health-stuck", bar: "bg-health-stuck" },
   watch: { label: "Watch", chip: "bg-health-watch-tint text-health-watch", bar: "bg-health-watch" },
@@ -25,7 +25,7 @@ const ZONE: Record<"stuck" | "watch" | "clear", string> = { stuck: "bg-health-st
 
 export function HealthChip({ health }: { health: ReportHealth }) {
   return (
-    <span className={`inline-flex shrink-0 items-center gap-1.5 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider ${HEALTH[health].chip}`}>
+    <span className={`inline-flex shrink-0 items-center gap-1.5 px-2 py-0.5 text-xs font-medium ${HEALTH[health].chip}`}>
       <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />{HEALTH[health].label}
     </span>
   );
@@ -36,7 +36,7 @@ const sourceLine = (insight: RoomInsight) => `From your ${insight.source}`;
 function Heading({ title, source }: { title: string; source: string }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-      <h2 className="font-serif text-2xl font-bold tracking-tight">{title}</h2>
+      <h2 className="font-serif text-2xl font-normal tracking-tight">{title}</h2>
       <span className="text-xs text-ink-muted">{source}</span>
     </div>
   );
@@ -54,7 +54,7 @@ export function FounderPanel({ insight }: { insight: RoomInsight }) {
       {founder.sections.length ? founder.sections.map(section => (
         <article key={section.number} className={CARD} aria-labelledby={`founder-${section.number}`}>
           <div className="flex items-start justify-between gap-3">
-            <h3 id={`founder-${section.number}`} className="font-serif text-xl font-bold tracking-tight"><span className="text-ink-muted tabular-nums">{section.number}.</span> {section.title}</h3>
+            <h3 id={`founder-${section.number}`} className="font-serif text-xl font-normal tracking-tight"><span className="text-ink-muted tabular-nums">{section.number}.</span> {section.title}</h3>
             {section.health && <HealthChip health={section.health} />}
           </div>
           <p className="mt-2 font-serif text-lg leading-snug">{section.standfirst}</p>
@@ -64,7 +64,7 @@ export function FounderPanel({ insight }: { insight: RoomInsight }) {
       )) : (
         <article className={CARD} aria-labelledby="founder-readiness">
           <div className="flex items-start justify-between gap-3">
-            <h3 id="founder-readiness" className="font-serif text-xl font-bold tracking-tight">Founder readiness</h3>
+            <h3 id="founder-readiness" className="font-serif text-xl font-normal tracking-tight">Founder readiness</h3>
             <HealthChip health={founder.readiness.health} />
           </div>
           <p className="mt-2 font-serif text-lg leading-snug">{founder.readiness.label}</p>
@@ -111,7 +111,7 @@ function Facts({ rows }: { rows: { label: string; value: string }[] }) {
 function Recommendation({ code, lines }: { code?: string; lines: React.ReactNode[] }) {
   return (
     <div className="border-l-2 border-highlight-ink bg-brand-tint-softer px-4 py-3 text-sm">
-      <p className="text-[11px] font-bold uppercase tracking-widest text-highlight-ink">Recommendation{code ? ` ${code}` : ""}</p>
+      <p className="text-xs font-semibold text-brand">Recommendation{code ? ` ${code}` : ""}</p>
       <div className="mt-1 space-y-1.5">{lines.map((line, k) => <p key={k}>{line}</p>)}</div>
     </div>
   );
@@ -123,8 +123,8 @@ export function ReportBlocks({ blocks }: { blocks: ReportBlock[] }) {
 
 function ReportBlockView({ block }: { block: ReportBlock }) {
   switch (block.kind) {
-    case "subsection": return <h4 className="pt-1 text-sm font-bold"><span className="text-ink-muted tabular-nums">{block.code}</span> {block.title}</h4>;
-    case "heading": return <h4 className="pt-1 text-sm font-bold">{block.text}</h4>;
+    case "subsection": return <h4 className="pt-1 text-sm font-semibold"><span className="text-ink-muted tabular-nums">{block.code}</span> {block.title}</h4>;
+    case "heading": return <h4 className="pt-1 text-sm font-semibold">{block.text}</h4>;
     case "paragraph": return <p className="text-sm text-ink-600">{block.text}</p>;
     case "facts": return <Facts rows={block.rows} />;
     case "bullets": return <ul className="list-disc space-y-1 pl-5 text-sm text-ink-600">{block.items.map(item => <li key={item}>{item}</li>)}</ul>;
@@ -145,7 +145,7 @@ function ReportBlockView({ block }: { block: ReportBlock }) {
     case "reading": return <Reading reading={block} />;
     case "benchmarks": return <Benchmarks items={block.items} />;
     case "bridge": return <Bridge steps={block.steps} />;
-    case "metrics": return <dl className="grid grid-cols-2 gap-3 text-sm">{block.items.map(item => <div key={item.label} className="border border-line-soft p-3"><dt className="text-xs text-ink-muted">{item.label}</dt><dd className="mt-1 font-serif text-lg font-bold tabular-nums">{item.value}</dd><dd className="text-xs text-ink-muted">{item.note}</dd></div>)}</dl>;
+    case "metrics": return <dl className="grid grid-cols-2 gap-3 text-sm">{block.items.map(item => <div key={item.label} className="border border-line-soft p-3"><dt className="text-xs text-ink-muted">{item.label}</dt><dd className="mt-1 font-serif text-lg font-normal tabular-nums">{item.value}</dd><dd className="text-xs text-ink-muted">{item.note}</dd></div>)}</dl>;
     // The chart-only blocks belong to the PDF; the room shows the same facts elsewhere.
     default: return null;
   }
@@ -244,7 +244,7 @@ export function BusinessPanel({ insight }: { insight: RoomInsight }) {
             >
               <span aria-hidden className={HEALTH[area.health].bar} />
               <span className="min-w-0 py-3">
-                <span className="block font-bold">{area.area}</span>
+                <span className="block font-semibold">{area.area}</span>
                 <span className="mt-0.5 block text-sm text-ink-600">{area.finding}</span>
               </span>
               <span className="flex flex-col items-end justify-between gap-2 py-3 pr-3">
@@ -325,7 +325,7 @@ function AreaSheet({ area, source, onClose }: { area: InsightArea; source: RoomI
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className={KICKER}>{HEALTH[area.health].label} · from your {source}</p>
-              <h2 id="area-sheet-title" className="mt-1 font-serif text-2xl font-bold tracking-tight">{area.area}</h2>
+              <h2 id="area-sheet-title" className="mt-1 font-serif text-2xl font-normal tracking-tight">{area.area}</h2>
             </div>
             <button ref={close} type="button" onClick={() => dismiss()} aria-label="Close" className="flex h-8 w-8 shrink-0 items-center justify-center bg-paper-sunken text-ink-muted hover:text-ink"><X className="h-4 w-4" aria-hidden /></button>
           </div>

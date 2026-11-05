@@ -71,14 +71,16 @@ for structure, not as new accents. Errors use the `danger` family, never the hea
   PDF embeds both (`server/fullReport/fonts.ts`; latin and latin-ext merged so ₦ prints).
 - **₦ in headings:** Playfair Display has no ₦ glyph. A heading containing a naira amount uses Plus Jakarta Sans 700
   (the PDF does this automatically).
-- Eyebrows and section labels: Plus Jakarta Sans, uppercase, 11 to 12 px, letter-spacing about 0.2em, `highlight-ink`.
+- Eyebrows and section labels: Plus Jakarta Sans, sentence case, 14 px, `font-medium` or `font-semibold`, `brand` (or `ink-muted` on signed-in screens). Never uppercase or letter-spaced (5 November, after the unslop pass on the whole site).
 - **Signed-in screens (the room, the dashboard, the account frame) are quieter than the public site** (5 November, after
   an unslop audit): labels in sentence case at 14 px, `font-medium`, `ink-muted`, never uppercase or letter-spaced;
   Playfair headings at regular weight (400), never bold or black; no greeting headline (the business names the room); no
   colour blobs or gradients except the thin brand line at the very top; one accent, `brand`, for the progress bar, the
   current step and the client's own items; everyone else's items, counts and tags in neutral greys; hairline borders
   without shadows. The colour belongs to the content (the timeline, the Measure of Success, the scorecard), not the
-  chrome. The public site keeps its own style until it gets the same pass.
+  chrome. The public site had the same pass on 5 November: no uppercase labels or buttons, Playfair headings at regular weight,
+  no colour blobs, gradient text or gradient bands (the bands are solid `brand-deep`), no looping motion on things that
+  are not live. The thin brand line at the very top of each page is the one gradient kept, as the logo's mark.
 - Numbers in tables and tallies: tabular figures.
 - Load every weight a page uses (`client/index.html`): a weight that is not loaded is faked by the browser and looks
   smudged. Plus Jakarta Sans loads 400 to 800; `test/client/sitemap.test.ts` checks 800 is loaded.
@@ -93,7 +95,7 @@ screenshots before it ships, because every page's line lengths change.
 
 - **Square corners** on buttons, inputs, cards and chips (`rounded-none`); the brand reads as precise, not playful.
 - **Cards:** `paper-raised` on `paper`, a 1 px `line` or `line-soft` border, light shadow at most.
-- **Primary button:** `brand` fill, white text, uppercase, letter-spaced, hover `brand-deep-hover`. **Call to action on
+- **Primary button:** `brand` fill, white text, sentence case, `font-semibold`, hover `brand-deep-hover`. **Call to action on
   the result and report pages:** `highlight-ink` (crimson) fill. **Secondary:** outline.
 - **Selected option:** `brand` border on `brand-tint`.
 - **Containers:** max width 1,280 px with 1.5 rem side padding; reading pages (report form, onboarding) narrower,
@@ -119,8 +121,8 @@ screenshots before it ships, because every page's line lengths change.
   slide on a critically damped spring (`SCREEN_SPRING`, no bounce, 0.35 s) and the outgoing screen leaves at the same
   time (`AnimatePresence mode="popLayout"`), so taps and Back are never locked out; options arrive together, not one
   by one; the page jumps to the top instead of gliding; ticks and markers settle without overshoot.
-- With "reduce motion" on, nothing moves by itself: the hero sentence stops rotating, the colour blobs and the scroll
-  arrow stay still and the pulsing dot stops (`useReducedMotion`, `motion-safe:`). Glass headers turn solid under
+- With "reduce motion" on, nothing moves by itself: the hero sentence stops rotating (`useReducedMotion`). Since
+  5 November nothing loops when it is not live: no drifting colour, bouncing arrow or pulsing dot. Glass headers turn solid under
   "reduce transparency" and gain a firm edge under "increase contrast" (`client/src/index.css`).
 - Touch screens: hover is mouse-only (Tailwind 4 `hover:` and Framer `whileHover` ignore touch), so anything shown on
   hover is shown outright where there is no hover; the owner quotes on the home page are plain links that always show

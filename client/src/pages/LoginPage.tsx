@@ -62,7 +62,7 @@ export default function LoginPage() {
       <div className="container flex items-center justify-between py-4">
         <Link href="/" className="flex items-center gap-3" aria-label={`${BRAND.productEndorsement}: home`}>
           <img src={BRAND.markUrl} alt="" className="h-9 w-auto" />
-          <span className="border-l border-line pl-3 text-xs font-semibold uppercase tracking-widest text-ink-muted">{BRAND.productName}</span>
+          <span className="border-l border-line pl-3 text-sm font-semibold text-ink-muted">{BRAND.productName}</span>
         </Link>
         <Link href="/" className="inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold text-brand"><ArrowLeft className="h-4 w-4" aria-hidden />Back to the site</Link>
       </div>
@@ -70,7 +70,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-6">
         <Card className="rounded-none border-line-soft bg-white shadow-sm">
           <CardHeader className="space-y-2 pb-4">
-            <h1 className="font-serif text-2xl font-bold leading-none tracking-tight">{forgot ? "Reset your password" : "Client sign in"}</h1>
+            <h1 className="font-serif text-2xl font-normal leading-none tracking-tight">{forgot ? "Reset your password" : "Client sign in"}</h1>
             {!forgot && <CardDescription className="text-sm text-ink-muted">Use the email and password you created your account with.</CardDescription>}
           </CardHeader>
           <CardContent>
@@ -90,7 +90,7 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
-              <Button disabled={signIn.isPending} type="submit" size="lg" className="w-full rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">
+              <Button disabled={signIn.isPending} type="submit" size="lg" className="w-full rounded-none bg-brand text-sm text-white hover:bg-brand-deep-hover">
                 {signIn.isPending ? "Signing in…" : "Sign in"}
               </Button>
               <button type="button" onClick={() => setForgot(true)} className="text-sm font-semibold text-brand underline underline-offset-2">Forgot your password?</button>

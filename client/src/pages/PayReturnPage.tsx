@@ -39,7 +39,7 @@ const NEXT_STEPS: Record<PaymentItem, { thanks: string; steps: string[] }> = {
 function NotFound({ message }: { message: string }) {
   return (
     <PaymentShell>
-      <h1 className="font-serif text-3xl font-bold">We could not find your payment</h1>
+      <h1 className="font-serif text-3xl font-normal">We could not find your payment</h1>
       <p className="mt-3 text-ink-soft">{message}</p>
     </PaymentShell>
   );
@@ -71,10 +71,10 @@ export default function PayReturnPage() {
       <PaymentShell>
         {banner}
         <div className="space-y-4">
-          <CheckCircle2 className="h-10 w-10 text-highlight-ink" aria-hidden />
-          <h1 className="font-serif text-3xl font-bold">Payment received</h1>
+          <CheckCircle2 className="h-10 w-10 text-brand" aria-hidden />
+          <h1 className="font-serif text-3xl font-normal">Payment received</h1>
           <p className="text-ink-soft">{next.thanks} We have emailed you a confirmation.</p>
-          <h2 className="pt-2 text-xs font-semibold uppercase tracking-[0.2em] text-brand">What happens next</h2>
+          <h2 className="pt-2 text-sm font-semibold text-brand">What happens next</h2>
           <ul className="space-y-2 text-sm leading-relaxed text-ink-soft" aria-label="What happens next">
             {next.steps.map((step) => <li key={step} className="border-l-2 border-highlight pl-3">{step}</li>)}
           </ul>
@@ -89,10 +89,10 @@ export default function PayReturnPage() {
         {banner}
         <div className="space-y-4">
           <Clock className="h-10 w-10 text-health-watch" aria-hidden />
-          <h1 className="font-serif text-3xl font-bold">Still confirming</h1>
+          <h1 className="font-serif text-3xl font-normal">Still confirming</h1>
           <p className="text-ink-soft">Paystack has not confirmed your payment to us yet. This usually takes a moment.</p>
           <Button type="button" disabled={status.isPending} onClick={() => status.mutate({ reference })}
-            className="h-12 rounded-none bg-brand px-6 text-sm font-semibold uppercase tracking-wider text-white hover:bg-brand-deep-hover disabled:opacity-60">
+            className="h-12 rounded-none bg-brand px-6 text-sm font-semibold text-white hover:bg-brand-deep-hover disabled:opacity-60">
             {status.isPending ? "Checking…" : "Check again"}
           </Button>
           {problem && <p role="alert" className="text-sm text-danger-strong">{problem}</p>}
@@ -108,10 +108,10 @@ export default function PayReturnPage() {
       {banner}
       <div className="space-y-4">
         <XCircle className="h-10 w-10 text-danger" aria-hidden />
-        <h1 className="font-serif text-3xl font-bold">Payment not completed</h1>
+        <h1 className="font-serif text-3xl font-normal">Payment not completed</h1>
         <p className="text-ink-soft">Your payment did not go through, so nothing has been confirmed. You can try again.</p>
         {back
-          ? <Link href={back} className="inline-flex h-12 items-center bg-highlight-ink px-6 text-sm font-semibold uppercase tracking-widest text-paper hover:opacity-90">Try again</Link>
+          ? <Link href={back} className="inline-flex h-12 items-center bg-highlight-ink px-6 text-sm font-semibold text-paper hover:opacity-90">Try again</Link>
           : <p className="text-ink-soft">Use the Pay online button in your payment email to try again.</p>}
       </div>
     </PaymentShell>

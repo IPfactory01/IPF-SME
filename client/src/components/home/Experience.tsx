@@ -34,14 +34,14 @@ export function TrackRecord() {
         {TRACK_RECORD.map((item) => (
           <motion.div key={item.label} variants={staggerChild} className="px-4 text-center md:border-l md:border-line md:first:border-l-0">
             
-            <p className="font-serif text-3xl font-bold text-brand sm:text-4xl">{item.value}</p>
-            <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-ink-muted">{item.label}</p>
+            <p className="font-serif text-3xl font-normal text-brand sm:text-4xl">{item.value}</p>
+            <p className="mt-1 text-sm font-semibold text-ink-muted">{item.label}</p>
           </motion.div>
         ))}
       </Stagger>
       {RECORD.clientLogos.length > 0 && (
         <Reveal className="container mx-auto max-w-5xl pb-10">
-          <p className="text-center text-xs font-semibold uppercase tracking-wider text-ink-muted">The team behind {BRAND.productName} has worked with</p>
+          <p className="text-center text-sm font-semibold text-ink-muted">The team behind {BRAND.productName} has worked with</p>
           {/* One tile per client, all the same size; each logo sized by area, in ink until a mouse points at it. */}
           <ul aria-label="Client logos" className="mt-5 flex flex-wrap justify-center gap-2 sm:gap-3">
             {RECORD.clientLogos.map((client) => {
@@ -76,7 +76,7 @@ export function WhyStuck() {
         {EVIDENCE.map((item) => (
           <motion.div key={item.label} variants={staggerChild} className="border-l-2 border-highlight-ink pl-4">
             
-            <p className="font-serif text-3xl font-bold text-ink">{item.value}</p>
+            <p className="font-serif text-3xl font-normal text-ink">{item.value}</p>
             <p className="mt-1 text-sm text-ink-600">{item.label}</p>
             <p className="mt-2 text-xs text-ink-muted">{item.source}</p>
           </motion.div>
@@ -97,18 +97,18 @@ export function ExperienceBehind() {
     <section id="experience" className="py-24 border-b border-line">
       <div className="container max-w-5xl mx-auto">
         <Reveal className="max-w-3xl">
-          <span className="text-xs uppercase tracking-widest text-ink-muted font-semibold block mb-3">The experience behind {BRAND.productName}</span>
-          <h2 className="font-serif text-4xl font-bold tracking-tight mb-6">Years of consulting, built for a business your size.</h2>
+          <span className="text-sm text-ink-muted font-semibold block mb-3">The experience behind {BRAND.productName}</span>
+          <h2 className="font-serif text-4xl font-normal tracking-tight mb-6">Years of consulting, built for a business your size.</h2>
           <p className="text-lg text-ink-600 leading-relaxed">
             {BRAND.productName} is run by {BRAND.organisationName}, the delivery and method arm of{" "}
             {RECORD.groupUrl
-              ? <a href={RECORD.groupUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand underline underline-offset-4 hover:text-highlight-ink">{RECORD.groupName}</a>
+              ? <a href={RECORD.groupUrl} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand underline underline-offset-4 hover:text-brand">{RECORD.groupName}</a>
               : <span className="font-semibold text-ink">{RECORD.groupName}</span>}
             , {RECORD.lineage}. Since {RECORD.since}, our partners have advised more than {RECORD_TOTAL} clients, from owner-run businesses to boards and development agencies.
           </p>
           <ul aria-label="Sectors we have worked in" className="mt-6 flex flex-wrap gap-2">
             {RECORD.sectors.map((sector) => (
-              <li key={sector} className="border border-brand-line bg-paper-raised px-3 py-1 text-xs font-semibold uppercase tracking-wider text-brand">{sector}</li>
+              <li key={sector} className="border border-brand-line bg-paper-raised px-3 py-1 text-sm font-semibold text-brand">{sector}</li>
             ))}
           </ul>
         </Reveal>
@@ -120,7 +120,7 @@ export function ExperienceBehind() {
         <Stagger className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {POINTS.map(({ icon: Icon, title, text }) => (
             <motion.div key={title} variants={staggerChild} className="border border-line bg-paper-raised p-6">
-              <Icon className="mb-4 h-6 w-6 text-highlight-ink" />
+              <Icon className="mb-4 h-6 w-6 text-brand" />
               <h3 className="mb-2 font-semibold text-ink">{title}</h3>
               <p className="text-ink-600 leading-relaxed">{text}</p>
             </motion.div>

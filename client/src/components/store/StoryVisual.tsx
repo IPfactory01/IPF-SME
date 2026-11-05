@@ -14,8 +14,8 @@ function Frame({ title, children, sample = true }: { title: string; children: Re
   return (
     <figure className="m-0 min-w-0">
       <figcaption className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-sm font-bold text-ink">{title.replace(/^Sample:?\s*/i, "")}</span>
-        {sample && <span className="border border-line px-2 py-0.5 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-muted">Sample</span>}
+        <span className="text-sm font-semibold text-ink">{title.replace(/^Sample:?\s*/i, "")}</span>
+        {sample && <span className="border border-line px-2 py-0.5 text-xs font-semibold text-ink-muted">Sample</span>}
       </figcaption>
       {children}
     </figure>
@@ -93,7 +93,7 @@ function Bars({ visual }: { visual: Extract<Visual, { kind: "bars" }> }) {
       <div className="mt-2 flex flex-wrap gap-5 text-[13px] text-ink-soft">
         <span><i className="mr-1.5 inline-block h-2.5 w-2.5 bg-ink-muted align-[-1px]" />{visual.legend[0]}</span>
         <span><i className="mr-1.5 inline-block h-2.5 w-2.5 bg-brand align-[-1px]" />{visual.legend[1]}</span>
-        {visual.note && <span className="font-semibold text-highlight-ink">{visual.note}</span>}
+        {visual.note && <span className="font-semibold text-brand">{visual.note}</span>}
       </div>
     </div>
   );
@@ -148,13 +148,13 @@ export function StoryVisual({ visual }: { visual: Visual }) {
           <Scroll label={visual.title}>
             <table className="w-full border-collapse text-sm tabular-nums">
               <thead>
-                <tr>{visual.columns.map((column, i) => <th key={i} scope="col" className={`border-b border-line px-2 py-2 text-[11px] font-bold uppercase tracking-[0.12em] text-ink-muted ${i === 0 ? "text-left" : "text-right"}`}>{column}</th>)}</tr>
+                <tr>{visual.columns.map((column, i) => <th key={i} scope="col" className={`border-b border-line px-2 py-2 text-xs font-medium text-ink-muted ${i === 0 ? "text-left" : "text-right"}`}>{column}</th>)}</tr>
               </thead>
               <tbody>
                 {visual.rows.map((row, r) => {
                   const marked = visual.highlight?.includes(r);
                   return (
-                    <tr key={r} className={marked ? "bg-danger-tint font-bold text-danger" : ""}>
+                    <tr key={r} className={marked ? "bg-danger-tint font-semibold text-danger" : ""}>
                       {row.map((cell, c) => <td key={c} className={`border-b border-line px-2 py-2.5 ${c === 0 ? "text-left" : "text-right"}`}>{cell}</td>)}
                     </tr>
                   );
@@ -169,7 +169,7 @@ export function StoryVisual({ visual }: { visual: Visual }) {
         <Frame title={visual.title}>
           {visual.score !== undefined && (
             <div className="mb-4 flex items-center gap-4">
-              <span className="font-sans text-5xl font-extrabold tracking-tight text-ink tabular-nums">{visual.score}%</span>
+              <span className="font-sans text-5xl font-semibold tracking-tight text-ink tabular-nums">{visual.score}%</span>
               <span className="h-2 flex-1 bg-paper-sunken"><span className="block h-2 bg-brand" style={{ width: `${visual.score}%` }} /></span>
             </div>
           )}
@@ -193,9 +193,9 @@ export function StoryVisual({ visual }: { visual: Visual }) {
           <ul className="grid gap-2.5">
             {visual.rows.map((row) => (
               <li key={row.text} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 border border-line bg-paper-raised p-3.5 sm:grid-cols-[6.5rem_1fr_auto]">
-                <b className="col-span-2 text-[11px] font-bold uppercase tracking-[0.14em] text-highlight-ink sm:col-span-1">{row.tag}</b>
+                <b className="col-span-2 text-xs font-semibold text-brand sm:col-span-1">{row.tag}</b>
                 <span className="text-[15px] text-ink">{row.text}</span>
-                <em className="whitespace-nowrap font-sans text-sm font-extrabold not-italic text-health-clear tabular-nums">{row.value}</em>
+                <em className="whitespace-nowrap font-sans text-sm font-semibold not-italic text-health-clear tabular-nums">{row.value}</em>
               </li>
             ))}
           </ul>
@@ -208,8 +208,8 @@ export function StoryVisual({ visual }: { visual: Visual }) {
             {visual.items.map((item, i) => (
               <li key={item.when} className="relative">
                 <span aria-hidden className={`absolute -left-[33px] top-1 h-4 w-4 rounded-full border-2 border-paper-raised ${i === visual.items.length - 1 ? "bg-highlight-ink" : "bg-brand"}`} />
-                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-ink-muted">{item.when}</p>
-                <p className="mt-0.5 font-bold text-ink">{item.title}</p>
+                <p className="text-xs font-semibold text-ink-muted">{item.when}</p>
+                <p className="mt-0.5 font-semibold text-ink">{item.title}</p>
                 {item.detail && <p className="text-sm text-ink-soft">{item.detail}</p>}
               </li>
             ))}

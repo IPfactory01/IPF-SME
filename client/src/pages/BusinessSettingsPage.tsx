@@ -50,7 +50,7 @@ function BusinessSettings({ businessId }: { businessId: number }) {
   return (
     <Card className="rounded-none border-line-soft bg-white shadow-sm">
       <CardHeader className="space-y-2 pb-4">
-        <CardTitle className="font-serif text-2xl font-bold tracking-tight">{data.name}</CardTitle>
+        <CardTitle className="font-serif text-2xl font-normal tracking-tight">{data.name}</CardTitle>
         <CardDescription className="text-sm text-ink-muted">
           Profile {data.completion.percent}% complete. Your role: {BUSINESS_ROLE_LABELS[data.role]}.
           {disabled && " Only owners and business admins can change these details."}
@@ -71,7 +71,7 @@ function BusinessSettings({ businessId }: { businessId: number }) {
             <p className="text-ink-muted">Logo upload is coming soon.</p>
           </div>
           {!disabled && (
-            <Button disabled={save.isPending} type="submit" className="rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">
+            <Button disabled={save.isPending} type="submit" className="rounded-none bg-brand text-sm text-white hover:bg-brand-deep-hover">
               {save.isPending ? "Saving…" : "Save business profile"}
             </Button>
           )}

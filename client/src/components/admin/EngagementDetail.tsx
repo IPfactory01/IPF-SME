@@ -51,7 +51,7 @@ type Checkin = Detail["checkins"][number];
 type UploadTarget = { kind: "task" | "deliverable"; id: number };
 
 const FIELD = "w-full border border-line bg-white px-2 py-1.5 text-sm text-ink";
-const LABEL = "block text-[11px] font-semibold uppercase tracking-wider text-ink-muted";
+const LABEL = "block text-xs font-semibold text-ink-muted";
 const SMALL_BUTTON = "rounded-none text-xs";
 
 const SESSION_STATUS_LABELS: Record<EngagementSessionStatus, string> = { planned: "Planned", held: "Held", cancelled: "Cancelled" };

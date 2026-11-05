@@ -50,7 +50,7 @@ export default function JoinPage() {
   const card = (title: string, description: React.ReactNode, body?: React.ReactNode) => (
     <Card className="rounded-none border-line-soft bg-white shadow-sm">
       <CardHeader className="space-y-2 pb-4">
-        <CardTitle className="font-serif text-2xl font-bold tracking-tight">{title}</CardTitle>
+        <CardTitle className="font-serif text-2xl font-normal tracking-tight">{title}</CardTitle>
         <CardDescription className="text-sm text-ink-muted">{description}</CardDescription>
       </CardHeader>
       {body && <CardContent>{body}</CardContent>}
@@ -63,7 +63,7 @@ export default function JoinPage() {
     return shell(card(
       "You are signed in as someone else",
       <>This invitation is for <strong className="text-ink">{invited.email}</strong>, but this browser is signed in as <strong className="text-ink">{account.user.email}</strong>. Sign out to create the account for {invited.email}.</>,
-      <Button type="button" disabled={signOut.isPending} onClick={() => signOut.mutate()} size="lg" className="w-full rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">{signOut.isPending ? "Signing out…" : "Sign out and continue"}</Button>,
+      <Button type="button" disabled={signOut.isPending} onClick={() => signOut.mutate()} size="lg" className="w-full rounded-none bg-brand text-sm text-white hover:bg-brand-deep-hover">{signOut.isPending ? "Signing out…" : "Sign out and continue"}</Button>,
     ));
   }
 
@@ -94,7 +94,7 @@ export default function JoinPage() {
       <div className="space-y-2"><Label htmlFor="join-password">Password</Label><Input id="join-password" type="password" autoComplete="new-password" value={values.password} onChange={set("password")} /></div>
       <div className="space-y-2"><Label htmlFor="join-confirm-password">Confirm password</Label><Input id="join-confirm-password" type="password" autoComplete="new-password" value={values.confirmPassword} onChange={set("confirmPassword")} /></div>
       <p className="text-xs leading-relaxed text-ink-muted">By creating your account, you agree to the <TermsLink newTab /> and acknowledge the <PrivacyLink newTab />.</p>
-      <Button disabled={accept.isPending} type="submit" size="lg" className="w-full rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">{accept.isPending ? "Creating account…" : "Create account"}</Button>
+      <Button disabled={accept.isPending} type="submit" size="lg" className="w-full rounded-none bg-brand text-sm text-white hover:bg-brand-deep-hover">{accept.isPending ? "Creating account…" : "Create account"}</Button>
     </form>
   )));
 }

@@ -59,7 +59,7 @@ export default function TwoStepStep({ id, challenge, onSignedIn, onCancel }: Pro
         <ul aria-label="Recovery codes" className="grid grid-cols-2 gap-2 border border-line-soft bg-paper-raised p-4 font-mono text-sm tabular-nums">
           {saved.codes.map(item => <li key={item}>{item}</li>)}
         </ul>
-        <Button type="button" size="lg" onClick={() => onSignedIn(saved.view)} className="w-full rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">
+        <Button type="button" size="lg" onClick={() => onSignedIn(saved.view)} className="w-full rounded-none bg-brand text-sm text-white hover:bg-brand-deep-hover">
           I have saved them. Continue
         </Button>
       </div>
@@ -76,7 +76,7 @@ export default function TwoStepStep({ id, challenge, onSignedIn, onCancel }: Pro
             {qr ? <img src={qr} alt="QR code to add your account to an authenticator app" width={192} height={192} /> : <div className="h-48 w-48 bg-paper-raised" aria-hidden />}
           </div>
           <p className="text-sm text-ink-soft">Cannot scan it? Choose "enter a setup key" in the app and type:</p>
-          <p className="break-all border border-line-soft bg-paper-raised px-3 py-2 font-mono text-sm tracking-wider" data-testid={`${id}-setup-key`}>{groupKey(setup.secret)}</p>
+          <p className="break-all border border-line-soft bg-paper-raised px-3 py-2 font-mono text-sm" data-testid={`${id}-setup-key`}>{groupKey(setup.secret)}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -87,9 +87,9 @@ export default function TwoStepStep({ id, challenge, onSignedIn, onCancel }: Pro
       {error && <div role="alert" className="border border-danger-line bg-danger-tint px-4 py-3 text-sm text-danger-strong">{error}</div>}
       <div className="space-y-2">
         <Label htmlFor={`${id}-code`}>{setup ? "Code from the app" : "Code"}</Label>
-        <Input id={`${id}-code`} inputMode={setup ? "numeric" : "text"} autoComplete="one-time-code" autoFocus value={code} maxLength={20} onChange={event => { setCode(event.target.value); setError(null); }} className="font-mono tracking-widest" />
+        <Input id={`${id}-code`} inputMode={setup ? "numeric" : "text"} autoComplete="one-time-code" autoFocus value={code} maxLength={20} onChange={event => { setCode(event.target.value); setError(null); }} className="font-mono" />
       </div>
-      <Button disabled={verify.isPending} type="submit" size="lg" className="w-full rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">
+      <Button disabled={verify.isPending} type="submit" size="lg" className="w-full rounded-none bg-brand text-sm text-white hover:bg-brand-deep-hover">
         {verify.isPending ? "Checking…" : setup ? "Turn on and sign in" : "Sign in"}
       </Button>
       <button type="button" onClick={onCancel} className="text-sm font-semibold text-brand underline underline-offset-2">Start again</button>

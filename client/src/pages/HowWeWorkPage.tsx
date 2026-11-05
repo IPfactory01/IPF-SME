@@ -33,7 +33,7 @@ export default function HowWeWorkPage() {
           <ul aria-label="Ways to buy" className="mt-10 grid gap-4 md:grid-cols-2">
             {WAYS_TO_BUY.map((way) => (
               <li key={way} className="flex flex-col bg-paper-raised p-7">
-                <h3 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-ink">{WAY_DETAILS[way].name}</h3>
+                <h3 className="font-display text-2xl font-semibold tracking-[-0.02em] text-ink">{WAY_DETAILS[way].name}</h3>
                 <p className="mt-2 leading-relaxed text-ink-soft">{WAY_DETAILS[way].summary}</p>
                 <ul className="mt-5 flex-1 divide-y divide-line-soft border-y border-line-soft">
                   {PRODUCTS.filter((product) => product.way === way).map((product) => (
@@ -59,8 +59,8 @@ export default function HowWeWorkPage() {
           <div className="mt-10 grid gap-9 md:grid-cols-3">
             {PROMISES.map(({ icon: Icon, title, body }) => (
               <div key={title}>
-                <Icon className="h-9 w-9 text-highlight-ink" strokeWidth={1.6} aria-hidden />
-                <h3 className="font-display mt-3.5 text-xl font-extrabold tracking-[-0.015em] text-ink">{title}</h3>
+                <Icon className="h-9 w-9 text-brand" strokeWidth={1.6} aria-hidden />
+                <h3 className="font-display mt-3.5 text-xl font-semibold tracking-[-0.015em] text-ink">{title}</h3>
                 <p className="mt-2 text-ink-soft">{body}</p>
               </div>
             ))}

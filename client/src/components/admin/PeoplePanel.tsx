@@ -66,7 +66,7 @@ export default function PeoplePanel() {
   return (
     <div className="space-y-5 border-b border-line p-6">
       <div>
-        <h2 className="font-serif text-xl font-bold">People</h2>
+        <h2 className="font-serif text-xl font-normal">People</h2>
         <p className="text-sm text-ink-muted">Everyone who signs in with a password, clients and staff. A reset link is emailed to the person and shown once here; it works once, for 20 minutes, and signs them out everywhere. Suspending an account signs the person out at once and refuses their sign-in until it is reinstated. Remove access takes away every role and engagement as well, for someone leaving or a contractor whose work has ended. Everyone with a role signs in with a code from their phone; reset it if they lose the phone.</p>
       </div>
       {issued && (
@@ -81,7 +81,7 @@ export default function PeoplePanel() {
           <p className="font-semibold">Remove all access for {removing.name}?</p>
           <p className="text-ink-muted">This signs them out everywhere, takes away every role and engagement, and suspends the account. The Super Admins are told. You can reinstate the account later and give roles again.</p>
           <div className="space-y-1">
-            <label htmlFor="remove-reason" className="text-xs uppercase tracking-wider text-ink-muted">Reason (kept in the audit log)</label>
+            <label htmlFor="remove-reason" className="text-sm text-ink-muted">Reason (kept in the audit log)</label>
             <input id="remove-reason" value={removeReason} onChange={event => setRemoveReason(event.target.value)} maxLength={500} className="w-full border border-line bg-white px-2 py-1" />
           </div>
           <div className="flex gap-2">
@@ -95,7 +95,7 @@ export default function PeoplePanel() {
           <p className="font-semibold">Suspend {suspending.name}?</p>
           <p className="text-ink-muted">They are signed out everywhere at once and cannot sign in until reinstated. Give the reason; it is recorded.</p>
           <div className="space-y-1">
-            <label htmlFor="suspend-reason" className="text-xs uppercase tracking-wider text-ink-muted">Reason</label>
+            <label htmlFor="suspend-reason" className="text-sm text-ink-muted">Reason</label>
             <input id="suspend-reason" value={reason} onChange={event => setReason(event.target.value)} maxLength={500} className="w-full border border-line bg-white px-2 py-1" />
           </div>
           <div className="flex gap-2">

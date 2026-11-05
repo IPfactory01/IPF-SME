@@ -89,7 +89,7 @@ export default function DiscoveryCallDetail({ row, onOpenSection, onClose }: { r
               <div className="space-y-1"><Label htmlFor={`call-date-${row.id}`}>Date</Label><Input id={`call-date-${row.id}`} type="date" value={date} onChange={event => setDate(event.target.value)} className="h-9 rounded-none" /></div>
               <div className="space-y-1"><Label htmlFor={`call-time-${row.id}`}>Time</Label><Input id={`call-time-${row.id}`} type="time" value={time} onChange={event => setTime(event.target.value)} className="h-9 rounded-none" /></div>
             </div>
-            <Button type="submit" variant="outline" disabled={busy || !when} className="rounded-none text-xs uppercase tracking-wider">{row.callScheduledFor ? "Reschedule the Discovery Call" : "Save the Discovery Call time"}</Button>
+            <Button type="submit" variant="outline" disabled={busy || !when} className="rounded-none text-sm">{row.callScheduledFor ? "Reschedule the Discovery Call" : "Save the Discovery Call time"}</Button>
           </form>
         ) : !row.callScheduledFor ? <p className="text-sm text-ink-muted">No time was recorded for this Discovery Call.</p> : null}
       </DetailSection>
@@ -100,9 +100,9 @@ export default function DiscoveryCallDetail({ row, onOpenSection, onClose }: { r
         <DetailSection title="Record the Discovery Call outcome">
           {decided && <p className="mb-3 text-sm text-ink-muted">Recorded: <span className="font-medium text-ink">{OUTCOME_NAME[decided]}</span>. You can change it.</p>}
           <div className="flex flex-wrap gap-2">
-            <Button type="button" disabled={busy || decided === "fit"} className="rounded-none bg-brand text-xs uppercase tracking-wider text-white" onClick={() => decide.mutate({ businessCheckId: row.id, outcome: "fit" })}>Opportunity</Button>
-            <Button type="button" variant="outline" disabled={busy || decided === "refer"} className="rounded-none text-xs uppercase tracking-wider" onClick={() => decide.mutate({ businessCheckId: row.id, outcome: "refer" })}>Refer</Button>
-            <Button type="button" variant="outline" disabled={busy || decided === "decline"} className="rounded-none border-danger-line text-xs uppercase tracking-wider text-danger hover:bg-danger-tint" onClick={() => decide.mutate({ businessCheckId: row.id, outcome: "decline" })}>Lost</Button>
+            <Button type="button" disabled={busy || decided === "fit"} className="rounded-none bg-brand text-sm text-white" onClick={() => decide.mutate({ businessCheckId: row.id, outcome: "fit" })}>Opportunity</Button>
+            <Button type="button" variant="outline" disabled={busy || decided === "refer"} className="rounded-none text-sm" onClick={() => decide.mutate({ businessCheckId: row.id, outcome: "refer" })}>Refer</Button>
+            <Button type="button" variant="outline" disabled={busy || decided === "decline"} className="rounded-none border-danger-line text-sm text-danger hover:bg-danger-tint" onClick={() => decide.mutate({ businessCheckId: row.id, outcome: "decline" })}>Lost</Button>
           </div>
         </DetailSection>
       )}
@@ -111,13 +111,13 @@ export default function DiscoveryCallDetail({ row, onOpenSection, onClose }: { r
         <section aria-label="Suitable to proceed" className="space-y-3 border border-health-clear/40 bg-health-clear-tint p-4">
           <h3 className="text-sm font-semibold text-ink">Suitable to proceed</h3>
           <p className="text-sm text-ink">Confirm commercial approval/payment before sending the onboarding invitation.</p>
-          <Button type="button" className="rounded-none bg-brand text-xs uppercase tracking-wider text-white" onClick={() => go("onboarding")}>Continue to Client Onboarding</Button>
+          <Button type="button" className="rounded-none bg-brand text-sm text-white" onClick={() => go("onboarding")}>Continue to Client Onboarding</Button>
         </section>
       )}
       {status === "onboarding" && (
         <section className="space-y-3 border border-brand-line bg-brand-tint p-4">
           <p className="text-sm text-ink">An onboarding link has been generated for this prospect.</p>
-          <Button type="button" variant="outline" className="rounded-none text-xs uppercase tracking-wider" onClick={() => go("onboarding")}>View the onboarding link</Button>
+          <Button type="button" variant="outline" className="rounded-none text-sm" onClick={() => go("onboarding")}>View the onboarding link</Button>
         </section>
       )}
     </>
@@ -164,9 +164,9 @@ function DebriefSummary({ businessCheckId, heldAt }: { businessCheckId: number; 
           </div>
         ))}
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="submit" disabled={busy || !filled} className="rounded-none bg-brand text-xs uppercase tracking-wider text-white">{row ? "Save the Discovery Call" : "Write up the Discovery Call"}</Button>
+          <Button type="submit" disabled={busy || !filled} className="rounded-none bg-brand text-sm text-white">{row ? "Save the Discovery Call" : "Write up the Discovery Call"}</Button>
           {row && (
-            <Button type="button" variant="outline" disabled={busy} className="rounded-none text-xs uppercase tracking-wider" onClick={() => share.mutate({ businessCheckId, shared: !row.sharedAt })}>
+            <Button type="button" variant="outline" disabled={busy} className="rounded-none text-sm" onClick={() => share.mutate({ businessCheckId, shared: !row.sharedAt })}>
               {row.sharedAt ? "Keep it internal" : "Share with the owner"}
             </Button>
           )}

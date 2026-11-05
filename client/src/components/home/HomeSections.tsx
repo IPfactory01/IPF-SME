@@ -37,7 +37,7 @@ export function CtaButton({ onClick, tone = "dark", children, className = "" }: 
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.97 }}
       transition={{ type: "spring", stiffness: 400, damping: 25 }}
-      className={`group inline-flex h-14 items-center justify-center px-8 text-sm font-semibold uppercase tracking-wider sm:tracking-widest transition-colors ${colours} ${className}`}
+      className={`group inline-flex h-14 items-center justify-center px-8 text-base font-semibold transition-colors ${colours} ${className}`}
     >
       {children}
       <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
@@ -64,22 +64,19 @@ export function Hero({ onStart }: { onStart: () => void }) {
 
   return (
     <section id="top" className="relative overflow-hidden border-b border-line pt-20 pb-20 md:pt-28 md:pb-24">
-      {/* Slow-moving colour from the logo, behind the headline. */}
-      <motion.div aria-hidden className="pointer-events-none absolute -top-32 -left-24 h-[28rem] w-[28rem] rounded-full bg-brand-plum/15 blur-3xl" animate={calm ? undefined : { x: [0, 60, 0], y: [0, 40, 0] }} transition={{ duration: 16, repeat: Infinity, ease: "easeInOut" }} />
-      <motion.div aria-hidden className="pointer-events-none absolute -right-24 top-10 h-[26rem] w-[26rem] rounded-full bg-highlight/20 blur-3xl" animate={calm ? undefined : { x: [0, -50, 0], y: [0, 50, 0] }} transition={{ duration: 18, repeat: Infinity, ease: "easeInOut" }} />
 
       <div className="relative container mx-auto max-w-5xl px-4 text-center">
-        <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }} className="mx-auto mb-8 inline-flex items-center gap-2 border border-brand-line bg-paper-raised/70 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-brand backdrop-blur">
-          <span className="relative flex h-2 w-2"><span className="absolute inline-flex h-full w-full motion-safe:animate-ping rounded-full bg-highlight opacity-75" /><span className="relative inline-flex h-2 w-2 rounded-full bg-highlight" /></span>
+        <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }} className="mx-auto mb-8 inline-flex items-center gap-2 border border-brand-line bg-paper-raised/70 px-4 py-1.5 text-xs font-semibold text-brand backdrop-blur">
+          <span aria-hidden className="inline-flex h-2 w-2 rounded-full bg-brand" />
           {BRAND.productEndorsement}
         </motion.p>
 
-        <motion.h1 initial="hidden" animate="show" transition={{ staggerChildren: 0.18 }} className="mb-8 font-serif text-5xl font-black leading-[1.05] tracking-tight text-ink sm:text-7xl md:text-8xl">
+        <motion.h1 initial="hidden" animate="show" transition={{ staggerChildren: 0.18 }} className="mb-8 font-serif text-5xl font-normal leading-[1.05] tracking-tight text-ink sm:text-7xl md:text-8xl">
           <motion.span variants={word} className="inline-block">{lead1}</motion.span>{" "}
           <motion.span variants={word} className="inline-block">{lead2}</motion.span>{" "}
-          <motion.span variants={word} className="relative inline-block font-normal italic">
+          <motion.span variants={word} className="relative inline-block font-normal">
             {close}
-            <motion.span aria-hidden className="absolute -bottom-1 left-0 h-[0.08em] w-full origin-left bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 1.1, duration: 0.9, ease: EASE }} />
+            <motion.span aria-hidden className="absolute -bottom-1 left-0 h-[0.08em] w-full origin-left bg-brand" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 1.1, duration: 0.9, ease: EASE }} />
           </motion.span>
         </motion.h1>
 
@@ -105,7 +102,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
           className="group mx-auto mt-14 flex w-full max-w-xl flex-col items-center gap-2"
           aria-label="Start the Business Health Check"
         >
-          <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-ink-muted">Sound familiar?</span>
+          <span className="text-xs font-semibold text-ink-muted">Sound familiar?</span>
           <span className="relative block h-24 w-full overflow-hidden sm:h-10">
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
@@ -122,7 +119,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
           </span>
         </motion.button>
 
-        <motion.a href="#problems" onClick={onSectionLinkClick} aria-label="Scroll down" className="mx-auto mt-6 flex h-10 w-10 items-center justify-center rounded-full border border-line text-ink-faint hover:border-brand hover:text-brand" animate={calm ? undefined : { y: [0, 6, 0] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}>
+        <motion.a href="#problems" onClick={onSectionLinkClick} aria-label="Scroll down" className="mx-auto mt-6 flex h-10 w-10 items-center justify-center rounded-full border border-line text-ink-faint hover:border-brand hover:text-brand">
           <ArrowDown className="h-4 w-4" />
         </motion.a>
       </div>
@@ -139,8 +136,8 @@ export function ProblemsToServices() {
     <section id="problems" aria-labelledby="problems-heading" className="scroll-mt-16 border-b border-line py-20 sm:py-24">
       <div className="container mx-auto max-w-6xl">
         <Reveal className="max-w-3xl">
-          <p className="text-xs font-bold uppercase tracking-[0.16em] text-highlight-ink">Start with what's wrong</p>
-          <h2 id="problems-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink">Tell us what it feels like. We'll show you where to start.</h2>
+          <p className="text-sm font-semibold text-brand">Start with what's wrong</p>
+          <h2 id="problems-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">Tell us what it feels like. We'll show you where to start.</h2>
         </Reveal>
         <ul className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {NEEDS.map((need) => {
@@ -150,7 +147,7 @@ export function ProblemsToServices() {
                 <Link href={servicePath(product)} className="group flex h-full flex-col justify-between gap-6 bg-paper-raised p-6 transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_24px_50px_-32px_rgba(18,50,79,0.55)]">
                   <span className="font-serif text-xl italic leading-snug text-ink-750">&ldquo;{NEED_DETAILS[need].ownerWords}&rdquo;</span>
                   <span>
-                    <span className="block text-[11px] font-bold uppercase tracking-[0.14em] text-ink-muted">{NEED_DETAILS[need].name}</span>
+                    <span className="block text-xs font-semibold text-ink-muted">{NEED_DETAILS[need].name}</span>
                     <span className="mt-1 inline-flex items-center gap-1.5 font-semibold text-brand">{product.name} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></span>
                   </span>
                 </Link>
@@ -174,8 +171,8 @@ export function FeaturedServices() {
       <div className="container mx-auto max-w-6xl">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <Reveal>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-highlight-ink">Services</p>
-            <h2 id="featured-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink">Where most owners start.</h2>
+            <p className="text-sm font-semibold text-brand">Services</p>
+            <h2 id="featured-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">Where most owners start.</h2>
           </Reveal>
           <Link href="/services" className="group inline-flex items-center gap-1.5 font-semibold text-brand">See all {MENU_PRODUCTS.length} services <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></Link>
         </div>
@@ -198,16 +195,16 @@ export function HowWeWorkTeaser() {
       <div className="container mx-auto max-w-6xl">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <Reveal>
-            <p className="text-xs font-bold uppercase tracking-[0.16em] text-highlight-ink">How we work</p>
-            <h2 id="how-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink">Find it. Fix it. See the results.</h2>
+            <p className="text-sm font-semibold text-brand">How we work</p>
+            <h2 id="how-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">Find it. Fix it. See the results.</h2>
           </Reveal>
           <Link href="/how-we-work" className="group inline-flex items-center gap-1.5 font-semibold text-brand">How we work <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></Link>
         </div>
         <ol className="mt-10 grid gap-4 md:grid-cols-3">
           {steps.map((step, index) => (
             <li key={step.title} className="bg-paper-raised p-6">
-              <span className="font-display text-5xl font-extrabold leading-none tracking-[-0.04em] text-brand">{index + 1}</span>
-              <h3 className="mt-4 font-sans text-xl font-extrabold text-ink">{step.title}</h3>
+              <span className="font-display text-5xl font-semibold leading-none tracking-[-0.04em] text-brand">{index + 1}</span>
+              <h3 className="mt-4 font-sans text-xl font-semibold text-ink">{step.title}</h3>
               <p className="mt-2 leading-relaxed text-ink-soft">{step.body}</p>
             </li>
           ))}
@@ -249,7 +246,7 @@ export function Journey({ heading = "How it works", sub = "From the free check t
     <section id="how" className="border-b border-line py-24">
       <div ref={ref} className="container mx-auto max-w-4xl">
         <Reveal className="mb-14 text-center">
-          <h2 className="font-display text-[clamp(2.1rem,5vw,3.5rem)] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink">{heading}</h2>
+          <h2 className="font-display text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">{heading}</h2>
           <p className="mt-3 text-ink-muted">{sub}</p>
         </Reveal>
         <ol className="relative">
@@ -271,7 +268,7 @@ export function Journey({ heading = "How it works", sub = "From the free check t
                     {index + 1}
                   </motion.span>
                   <span className="min-w-0 flex-1">
-                    <span className={`block font-sans text-lg font-extrabold tracking-[-0.01em] transition-colors ${open ? "text-ink" : "text-ink-600"}`}>{step.name}</span>
+                    <span className={`block font-sans text-lg font-semibold tracking-[-0.01em] transition-colors ${open ? "text-ink" : "text-ink-600"}`}>{step.name}</span>
                     <AnimatePresence initial={false}>
                       {open && (
                         <motion.span key="body" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.4, ease: EASE }} className="block overflow-hidden">
@@ -301,8 +298,8 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
     <section id="stuck" className="border-b border-line bg-paper-sunken/50 py-24">
       <div className="container mx-auto max-w-5xl">
         <Reveal className="mb-12 text-center">
-          <span className="mb-3 block text-xs font-semibold uppercase tracking-widest text-ink-muted">Where businesses get stuck</span>
-          <h2 className="font-display text-[clamp(2.1rem,5vw,3.5rem)] font-extrabold leading-[1.04] tracking-[-0.035em] text-ink">Pick yours.</h2>
+          <span className="mb-3 block text-sm font-semibold text-ink-muted">Where businesses get stuck</span>
+          <h2 className="font-display text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">Pick yours.</h2>
           <p className="mt-3 text-ink-muted">Not sure which one it is? That is what the free Business Health Check finds out.</p>
         </Reveal>
         <motion.div layout className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
@@ -329,14 +326,14 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
                     <motion.div key="detail" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.4, ease: EASE }} className="overflow-hidden">
                       <div className="grid gap-4 border-t border-line px-5 pb-6 pt-5">
                         <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-highlight-ink">{area.name} · what we do together</p>
+                          <p className="text-xs font-semibold text-brand">{area.name} · what we do together</p>
                           <p className="mt-1.5 leading-relaxed text-ink-700">{area.together}</p>
                         </div>
                         <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-wider text-highlight-ink">Measure of Success</p>
+                          <p className="text-xs font-semibold text-brand">Measure of Success</p>
                           <p className="mt-1.5 leading-relaxed text-ink-700">{area.measure}</p>
                         </div>
-                        <button type="button" onClick={onStart} className="group inline-flex w-fit items-center gap-2 bg-ink px-5 py-3 text-xs font-semibold uppercase tracking-wider text-paper transition-colors hover:bg-charcoal">
+                        <button type="button" onClick={onStart} className="group inline-flex w-fit items-center gap-2 bg-ink px-5 py-3 text-sm font-semibold text-paper transition-colors hover:bg-charcoal">
                           Check this <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                         </button>
                       </div>
@@ -360,7 +357,7 @@ export function Faq({ id, heading, items }: { id: string; heading: string; items
   const [open, setOpen] = useState<number | null>(null);
   return (
     <section id={id} aria-labelledby={`${id}-heading`} className="scroll-mt-24">
-      <h2 id={`${id}-heading`} className="font-sans text-xl font-extrabold tracking-[-0.01em] text-ink sm:text-2xl">{heading}</h2>
+      <h2 id={`${id}-heading`} className="font-sans text-xl font-semibold tracking-[-0.01em] text-ink sm:text-2xl">{heading}</h2>
       <div className="mt-4 divide-y divide-line border-y border-line">
           {items.map((item, index) => {
             const isOpen = open === index;
@@ -387,13 +384,11 @@ export function Faq({ id, heading, items }: { id: string; heading: string; items
 
 /** The closing band of every public page: the free check. */
 export function CheckCta({ onStart }: { onStart: () => void }) {
-  const calm = useReducedMotion();
   return (
-    <section className="relative overflow-hidden bg-linear-to-t from-brand to-brand-plum py-20 text-paper">
-      <motion.div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 h-96 w-[48rem] -translate-x-1/2 rounded-full bg-highlight/20 blur-3xl" animate={calm ? undefined : { x: ["-55%", "-45%", "-55%"], opacity: [0.5, 0.9, 0.5] }} transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }} />
+    <section className="relative overflow-hidden bg-brand-deep py-20 text-paper">
       <Reveal className="relative container mx-auto max-w-3xl text-center">
         <img src={BRAND.logoOnDarkUrl} alt={BRAND.organisationName} className="mx-auto mb-8 h-28 w-auto" />
-        <h2 className="font-display mb-4 text-[clamp(2.1rem,5vw,3.25rem)] font-extrabold leading-[1.05] tracking-[-0.03em]">Start with the free Business Health Check.</h2>
+        <h2 className="font-display mb-4 text-[clamp(2.1rem,5vw,3.25rem)] font-semibold leading-[1.05] tracking-[-0.03em]">Start with the free Business Health Check.</h2>
         <p className="mx-auto mb-8 max-w-xl text-on-dark-muted">Ten minutes. No card. You&apos;ll know where you stand before you decide anything.</p>
         <CtaButton onClick={onStart} tone="light">Start with a free Business Health Check</CtaButton>
       </Reveal>

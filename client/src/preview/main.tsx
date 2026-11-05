@@ -54,7 +54,7 @@ function PreviewBar() {
       className="fixed inset-x-0 bottom-0 z-[100] flex flex-wrap items-center justify-center gap-x-4 gap-y-1 bg-brand-deep/95 px-4 pt-2 text-[11px] text-paper shadow-lg backdrop-blur"
       style={{ paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom, 0px))" }}
     >
-      <span className="font-semibold uppercase tracking-widest text-highlight">Preview</span>
+      <span className="font-semibold text-highlight">Preview</span>
       <span className="text-on-dark-muted">Forms are simulated: nothing is saved or sent.</span>
       <span className="flex gap-3">
         {PAGES.map((page) => (

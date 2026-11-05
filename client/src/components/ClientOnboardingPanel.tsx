@@ -67,7 +67,7 @@ export default function ClientOnboardingPanel() {
       {stats && (
         <dl className="grid grid-cols-2 gap-3 text-sm md:grid-cols-5">
           {[["Business Health Checks", stats.businessChecks], ["Portal users", stats.portalUsers], ["Businesses", stats.businesses], ["Memberships", stats.memberships], ["Pending links", stats.pendingInvitations]].map(([label, value]) => (
-            <div key={label as string} className="border border-line bg-white p-3"><dt className="text-xs uppercase tracking-wider text-ink-muted">{label}</dt><dd className="font-serif text-2xl">{value}</dd></div>
+            <div key={label as string} className="border border-line bg-white p-3"><dt className="text-sm text-ink-muted">{label}</dt><dd className="font-serif text-2xl">{value}</dd></div>
           ))}
         </dl>
       )}
@@ -88,7 +88,7 @@ export default function ClientOnboardingPanel() {
           <p className="font-semibold">{early.fullName} is at {early.stage}: the {CURRENT_STATE.name} is not paid yet.</p>
           <p className="text-ink-muted">The invitation normally goes out when the payment is confirmed. To invite now, give the reason. It is recorded with the invitation.</p>
           <div className="space-y-1">
-            <label htmlFor="invite-early-reason" className="text-xs uppercase tracking-wider text-ink-muted">Reason</label>
+            <label htmlFor="invite-early-reason" className="text-sm text-ink-muted">Reason</label>
             <input id="invite-early-reason" value={reason} onChange={event => setReason(event.target.value)} maxLength={500} className="w-full border border-line bg-white px-2 py-1" placeholder="For example, payment agreed with the desk lead for Friday" />
           </div>
           <div className="flex gap-2">
@@ -101,7 +101,7 @@ export default function ClientOnboardingPanel() {
       <section>
         <h3 className="mb-2 font-serif text-lg">Business Health Checks</h3>
         {candidates.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
-          <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-line text-xs uppercase tracking-wider text-ink-muted"><th className="py-2 pr-3">Name</th><th className="pr-3">Business</th><th className="pr-3">Email</th><th className="pr-3">Discovery Call</th><th className="pr-3">Stage</th><th className="pr-3">Onboarding link</th><th /></tr></thead><tbody>
+          <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-line text-sm text-ink-muted"><th className="py-2 pr-3">Name</th><th className="pr-3">Business</th><th className="pr-3">Email</th><th className="pr-3">Discovery Call</th><th className="pr-3">Stage</th><th className="pr-3">Onboarding link</th><th /></tr></thead><tbody>
             {candidates.data?.map(item => (
               <tr key={item.id} className="border-b border-line-soft">
                 <td className="py-2 pr-3">{item.fullName}</td><td className="pr-3">{item.businessName ?? "-"}</td><td className="pr-3">{item.email}</td><td className="pr-3">{item.callRequestedAt ? `Requested ${formatDate(item.callRequestedAt)}` : "Not requested"}</td><td className="pr-3">{STAGE_NAMES[item.pipelineStage] ?? item.pipelineStage}</td><td className="pr-3">{item.invitationStatus ? INVITATION_NAMES[item.invitationStatus] ?? item.invitationStatus : "None"}</td>
@@ -115,7 +115,7 @@ export default function ClientOnboardingPanel() {
 
       <section>
         <h3 className="mb-2 font-serif text-lg">Invitations</h3>
-        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-line text-xs uppercase tracking-wider text-ink-muted"><th className="py-2 pr-3">Email</th><th className="pr-3">Business</th><th className="pr-3">Status</th><th className="pr-3">Expires</th><th /></tr></thead><tbody>
+        <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-line text-sm text-ink-muted"><th className="py-2 pr-3">Email</th><th className="pr-3">Business</th><th className="pr-3">Status</th><th className="pr-3">Expires</th><th /></tr></thead><tbody>
           {invitations.data?.map(item => (
             <tr key={item.id} className="border-b border-line-soft">
               <td className="py-2 pr-3">{item.email}</td><td className="pr-3">{item.businessName || "-"}</td><td className="pr-3 capitalize">{item.status}</td><td className="pr-3">{formatDate(item.expiresAt)}</td>

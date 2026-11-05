@@ -28,7 +28,7 @@ export default function ResetPasswordPage() {
   const card = (title: string, description: React.ReactNode, body?: React.ReactNode) => (
     <Card className="rounded-none border-line-soft bg-white shadow-sm">
       <CardHeader className="space-y-2 pb-4">
-        <CardTitle className="font-serif text-2xl font-bold tracking-tight">{title}</CardTitle>
+        <CardTitle className="font-serif text-2xl font-normal tracking-tight">{title}</CardTitle>
         <CardDescription className="text-sm text-ink-muted">{description}</CardDescription>
       </CardHeader>
       {body && <CardContent>{body}</CardContent>}
@@ -60,7 +60,7 @@ export default function ResetPasswordPage() {
       <div className="space-y-2"><Label htmlFor="reset-email">Email</Label><Input id="reset-email" type="email" value={email} readOnly aria-readonly="true" className="bg-paper" /></div>
       <div className="space-y-2"><Label htmlFor="reset-password">New password</Label><Input id="reset-password" type="password" autoComplete="new-password" value={form.password} onChange={set("password")} /></div>
       <div className="space-y-2"><Label htmlFor="reset-confirm-password">Confirm new password</Label><Input id="reset-confirm-password" type="password" autoComplete="new-password" value={form.confirmPassword} onChange={set("confirmPassword")} /></div>
-      <Button disabled={reset.isPending} type="submit" size="lg" className="w-full rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">{reset.isPending ? "Saving…" : "Save the new password"}</Button>
+      <Button disabled={reset.isPending} type="submit" size="lg" className="w-full rounded-none bg-brand text-sm text-white hover:bg-brand-deep-hover">{reset.isPending ? "Saving…" : "Save the new password"}</Button>
     </form>
   )));
 }

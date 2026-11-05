@@ -24,20 +24,20 @@ export default function ContactPage() {
       <section aria-label="Ways to reach us" className="bg-paper-sunken/60 py-16 sm:py-20">
         <ul className="container mx-auto grid max-w-6xl gap-4 md:grid-cols-3">
           <li className={card}>
-            <CalendarCheck className="h-9 w-9 text-highlight-ink" strokeWidth={1.6} aria-hidden />
-            <h2 className="font-display mt-4 text-2xl font-extrabold tracking-[-0.02em] text-ink">Book a free call</h2>
+            <CalendarCheck className="h-9 w-9 text-brand" strokeWidth={1.6} aria-hidden />
+            <h2 className="font-display mt-4 text-2xl font-semibold tracking-[-0.02em] text-ink">Book a free call</h2>
             <p className="mt-2 flex-1 leading-relaxed text-ink-soft">Twenty minutes. Pick a time that suits you. If a paid service fits, we send the payment link after the call.</p>
-            <a href={BRAND.discoveryCallUrl} target="_blank" rel="noopener noreferrer" className="group mt-6 inline-flex h-12 w-fit items-center gap-2 bg-brand px-6 font-bold text-paper transition-[transform,background-color] hover:bg-brand-deep active:scale-[0.97]">Book a free call <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></a>
+            <a href={BRAND.discoveryCallUrl} target="_blank" rel="noopener noreferrer" className="group mt-6 inline-flex h-12 w-fit items-center gap-2 bg-brand px-6 font-semibold text-paper transition-[transform,background-color] hover:bg-brand-deep active:scale-[0.97]">Book a free call <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></a>
           </li>
           <li className={card}>
-            <Mail className="h-9 w-9 text-highlight-ink" strokeWidth={1.6} aria-hidden />
-            <h2 className="font-display mt-4 text-2xl font-extrabold tracking-[-0.02em] text-ink">Write to us</h2>
+            <Mail className="h-9 w-9 text-brand" strokeWidth={1.6} aria-hidden />
+            <h2 className="font-display mt-4 text-2xl font-semibold tracking-[-0.02em] text-ink">Write to us</h2>
             <p className="mt-2 flex-1 leading-relaxed text-ink-soft">We answer within one working day.</p>
-            <a href={`mailto:${BRAND.businessSupportMailbox}`} className="mt-6 w-fit select-all text-xl font-bold text-brand underline underline-offset-4">{BRAND.businessSupportMailbox}</a>
+            <a href={`mailto:${BRAND.businessSupportMailbox}`} className="mt-6 w-fit select-all text-xl font-semibold text-brand underline underline-offset-4">{BRAND.businessSupportMailbox}</a>
           </li>
           <li className={card}>
-            <MapPin className="h-9 w-9 text-highlight-ink" strokeWidth={1.6} aria-hidden />
-            <h2 className="font-display mt-4 text-2xl font-extrabold tracking-[-0.02em] text-ink">Our office</h2>
+            <MapPin className="h-9 w-9 text-brand" strokeWidth={1.6} aria-hidden />
+            <h2 className="font-display mt-4 text-2xl font-semibold tracking-[-0.02em] text-ink">Our office</h2>
             <address className="mt-2 text-lg font-semibold not-italic leading-snug text-ink">
               {BRAND.officeAddress.lines.map((line) => <span key={line} className="block">{line}</span>)}
             </address>

@@ -188,7 +188,7 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
           <ul className="grid gap-1.5 sm:grid-cols-2">
             {check.outline.map(row => (
               <li key={row.area} className={`flex items-center justify-between gap-2 border px-2.5 py-1.5 text-[13px] ${row.area === check.primaryAreaNumber ? "border-brand-line bg-brand-tint" : "border-line-soft"}`}>
-                <span className="min-w-0 truncate">{row.name}{row.area === check.primaryAreaNumber && <span className="ml-1.5 text-[11px] font-semibold uppercase tracking-wide text-brand">Start here</span>}</span>
+                <span className="min-w-0 truncate">{row.name}{row.area === check.primaryAreaNumber && <span className="ml-1.5 text-xs font-semibold text-brand">Start here</span>}</span>
                 <span className={`shrink-0 border px-1.5 py-0.5 text-[11px] font-medium ${HEALTH[row.health].className}`}>{HEALTH[row.health].label}</span>
               </li>
             ))}
@@ -263,7 +263,7 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
       {/* Only the action that fits where this prospect is. A check with nothing to do next shows no actions. */}
       {nextStep && (
         <DetailSection title="Next step">
-          <Button type="button" variant={nextStep.primary ? "default" : "outline"} className={`rounded-none text-xs uppercase tracking-wider ${nextStep.primary ? "bg-brand text-white" : ""}`} onClick={() => go(nextStep.section)}>{nextStep.label}</Button>
+          <Button type="button" variant={nextStep.primary ? "default" : "outline"} className={`rounded-none text-sm ${nextStep.primary ? "bg-brand text-white" : ""}`} onClick={() => go(nextStep.section)}>{nextStep.label}</Button>
         </DetailSection>
       )}
     </>

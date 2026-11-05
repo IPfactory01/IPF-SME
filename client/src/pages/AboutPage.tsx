@@ -38,8 +38,8 @@ export default function AboutPage() {
           <Reveal>
             <SectionHeading id="what-heading" eyebrow="What we are, and are not" title="We don't run your business; you do." />
             <ul className="mt-6 space-y-2 text-ink-600">
-              <li className="flex items-center gap-3"><X className="h-4 w-4 text-highlight-ink" aria-hidden />We are not a course.</li>
-              <li className="flex items-start gap-3"><X className="mt-1 h-4 w-4 shrink-0 text-highlight-ink" aria-hidden />We do not hand you a report and disappear. Every piece of work ends with a handover call, and we check in thirty days later.</li>
+              <li className="flex items-center gap-3"><X className="h-4 w-4 text-brand" aria-hidden />We are not a course.</li>
+              <li className="flex items-start gap-3"><X className="mt-1 h-4 w-4 shrink-0 text-brand" aria-hidden />We do not hand you a report and disappear. Every piece of work ends with a handover call, and we check in thirty days later.</li>
             </ul>
           </Reveal>
           <Reveal delay={0.12} className="space-y-5 text-lg leading-relaxed text-ink-600 md:pt-8">
@@ -64,7 +64,7 @@ export default function AboutPage() {
             <Reveal><SectionHeading id="team-heading" eyebrow="Who you work with" title="People, with AI behind them." /></Reveal>
             <Stagger as="ul" className="mt-6 space-y-3 text-lg text-ink-600">
               {WHO_YOU_WORK_WITH.map((line) => (
-                <motion.li key={line} variants={staggerChild} className="flex items-start gap-3"><CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-highlight-ink" aria-hidden />{line}</motion.li>
+                <motion.li key={line} variants={staggerChild} className="flex items-start gap-3"><CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-brand" aria-hidden />{line}</motion.li>
               ))}
             </Stagger>
           </div>

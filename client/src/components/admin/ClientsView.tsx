@@ -14,7 +14,7 @@ export default function ClientsView() {
       {clients.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead><tr className="border-b border-line text-xs uppercase tracking-wider text-ink-muted"><th className="py-2 pr-3">Business</th><th className="pr-3">Person</th><th className="pr-3">Email</th><th className="pr-3">Role</th><th className="pr-3">Onboarded</th></tr></thead>
+            <thead><tr className="border-b border-line text-sm text-ink-muted"><th className="py-2 pr-3">Business</th><th className="pr-3">Person</th><th className="pr-3">Email</th><th className="pr-3">Role</th><th className="pr-3">Onboarded</th></tr></thead>
             <tbody>
               {clients.data?.map(row => (
                 <tr key={row.membershipId} className="border-b border-line-soft">

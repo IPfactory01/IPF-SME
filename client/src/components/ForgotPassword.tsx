@@ -39,7 +39,7 @@ export default function ForgotPassword({ id, initialEmail = "", onBack }: { id: 
         <Label htmlFor={`${id}-reset-email`}>Email</Label>
         <Input id={`${id}-reset-email`} type="email" autoComplete="email" value={email} onChange={event => { setEmail(event.target.value); setError(null); }} />
       </div>
-      <Button disabled={request.isPending} type="submit" size="lg" className="h-12 w-full rounded-none bg-brand text-xs uppercase tracking-wider text-white hover:bg-brand-deep-hover">
+      <Button disabled={request.isPending} type="submit" size="lg" className="h-12 w-full rounded-none bg-brand text-sm text-white hover:bg-brand-deep-hover">
         {request.isPending ? "Sending…" : "Send the reset link"}
       </Button>
       <button type="button" onClick={onBack} className="text-sm font-semibold text-brand underline underline-offset-2">Back to sign in</button>

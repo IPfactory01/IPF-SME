@@ -38,8 +38,8 @@ export default function BusinessSupportConsole({ access, team, jump }: { access:
     <div className="space-y-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="mb-1.5 text-xs uppercase tracking-[0.22em] text-brand">IPF Business Support / Admin</p>
-          <h1 className="font-serif text-3xl font-bold tracking-tight sm:text-4xl">{active ? TITLES[active.id] : "Admin"}</h1>
+          <p className="mb-1.5 text-sm text-brand">IPF Business Support / Admin</p>
+          <h1 className="font-serif text-3xl font-normal tracking-tight sm:text-4xl">{active ? TITLES[active.id] : "Admin"}</h1>
         </div>
         {who && (
           <div className="text-left sm:text-right" aria-label="Signed in">

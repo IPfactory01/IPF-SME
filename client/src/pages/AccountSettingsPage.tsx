@@ -33,7 +33,7 @@ function ProfileForm({ fullName, email }: { fullName: string; email: string }) {
           {error && <div role="alert" className="border border-danger-line bg-danger-tint px-4 py-3 text-sm text-danger-strong">{error}</div>}
           <div className="space-y-2"><Label htmlFor="account-name">Full name</Label><Input id="account-name" autoComplete="name" value={name} onChange={event => { setName(event.target.value); setError(null); }} /></div>
           <div className="space-y-2"><Label htmlFor="account-email">Email</Label><Input id="account-email" value={email} readOnly aria-readonly="true" className="bg-paper" /></div>
-          <Button disabled={update.isPending} type="submit" className="rounded-none bg-brand text-xs uppercase tracking-wider text-white">{update.isPending ? "Saving…" : "Save"}</Button>
+          <Button disabled={update.isPending} type="submit" className="rounded-none bg-brand text-sm text-white">{update.isPending ? "Saving…" : "Save"}</Button>
         </form>
       </CardContent>
     </Card>
@@ -72,7 +72,7 @@ function PasswordForm() {
           <div className="space-y-2"><Label htmlFor="current-password">Current password</Label><Input id="current-password" type="password" autoComplete="current-password" value={form.currentPassword} onChange={set("currentPassword")} /></div>
           <div className="space-y-2"><Label htmlFor="new-password">New password</Label><Input id="new-password" type="password" autoComplete="new-password" value={form.newPassword} onChange={set("newPassword")} /></div>
           <div className="space-y-2"><Label htmlFor="confirm-new-password">Confirm new password</Label><Input id="confirm-new-password" type="password" autoComplete="new-password" value={form.confirmPassword} onChange={set("confirmPassword")} /></div>
-          <Button disabled={change.isPending} type="submit" className="rounded-none bg-brand text-xs uppercase tracking-wider text-white">{change.isPending ? "Changing…" : "Change password"}</Button>
+          <Button disabled={change.isPending} type="submit" className="rounded-none bg-brand text-sm text-white">{change.isPending ? "Changing…" : "Change password"}</Button>
         </form>
       </CardContent>
     </Card>

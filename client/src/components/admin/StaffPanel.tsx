@@ -50,7 +50,7 @@ export default function StaffPanel() {
   return (
     <div className="space-y-5 border-b border-line p-6">
       <div>
-        <h2 className="font-serif text-xl font-bold">Staff</h2>
+        <h2 className="font-serif text-xl font-normal">Staff</h2>
         <p className="text-sm text-ink-muted">Everyone who signs in with email and password and holds a role. Invite a new person with one role below your own; they set their own password from the link, then set up two-step sign-in on their phone at their first sign-in. A specialist's access ends on the date you choose.</p>
       </div>
       <div className="overflow-x-auto border border-line bg-white">
@@ -63,10 +63,10 @@ export default function StaffPanel() {
         </table>
       </div>
       <form className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto_auto] sm:items-end" onSubmit={event => { event.preventDefault(); invite.mutate({ fullName, email, role, expiresOn: expiresOn || null }); }}>
-        <div><label className="block text-[11px] font-semibold uppercase tracking-wider text-ink-muted" htmlFor="staff-name">Full name</label><input id="staff-name" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={fullName} onChange={event => setFullName(event.target.value)} /></div>
-        <div><label className="block text-[11px] font-semibold uppercase tracking-wider text-ink-muted" htmlFor="staff-email">Email</label><input id="staff-email" type="email" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={email} onChange={event => setEmail(event.target.value)} /></div>
+        <div><label className="block text-xs font-semibold text-ink-muted" htmlFor="staff-name">Full name</label><input id="staff-name" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={fullName} onChange={event => setFullName(event.target.value)} /></div>
+        <div><label className="block text-xs font-semibold text-ink-muted" htmlFor="staff-email">Email</label><input id="staff-email" type="email" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={email} onChange={event => setEmail(event.target.value)} /></div>
         <select aria-label="Role" className="border border-line bg-white px-2 py-1.5 text-sm" value={role} onChange={event => setRole(event.target.value as typeof role)}>{INVITABLE.map(item => <option key={item.role} value={item.role}>{item.label}</option>)}</select>
-        <div><label className="block text-[11px] font-semibold uppercase tracking-wider text-ink-muted" htmlFor="staff-ends">Access ends{needsEnd ? "" : " (optional)"}</label><input id="staff-ends" type="date" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={expiresOn} onChange={event => setExpiresOn(event.target.value)} /></div>
+        <div><label className="block text-xs font-semibold text-ink-muted" htmlFor="staff-ends">Access ends{needsEnd ? "" : " (optional)"}</label><input id="staff-ends" type="date" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={expiresOn} onChange={event => setExpiresOn(event.target.value)} /></div>
         <Button type="submit" size="sm" className="rounded-none bg-brand text-xs text-white" disabled={invite.isPending || !fullName.trim() || !email.trim() || (needsEnd && !expiresOn)}>Invite</Button>
       </form>
       {issued && (

@@ -51,6 +51,7 @@ import {
   UPLOAD_MAX_MB,
   type EngagementTaskPriority,
   CLIENT_ACCESS_LABELS,
+  ENGAGEMENT_REVIEW_ROLES,
   type ClientAccessLevel,
 } from "../shared/engagement";
 import type { AccountSession, Database } from "./accountAuth";
@@ -334,7 +335,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     can: {
       manage: authorityAllows(actor.authority, "manage_engagements"),
       assign: authorityAllows(actor.authority, "assign_engagements"),
-      review: authorityAllows(actor.authority, "review_engagements"),
+      review: await canReviewEngagement(db, actor, engagementId),
       sendSignIn: authorityAllows(actor.authority, "manage_client_onboarding"),
     },
   };
@@ -589,10 +590,17 @@ async function requireStaffDeliverable(db: Pick<Database, "select">, actor: Staf
   return deliverable;
 }
 
-/** The desk lead (review_engagements) approves a prescription or plan; whoever wrote it cannot approve it alone. */
+/** Approval on one engagement: review_engagements across the firm, or leading this engagement (ENGAGEMENT_REVIEW_ROLES). */
+async function canReviewEngagement(db: Pick<Database, "select">, actor: StaffActor, engagementId: number) {
+  if (authorityAllows(actor.authority, "review_engagements")) return true;
+  const mine = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and(eq(engagementTeam.engagementId, engagementId), eq(engagementTeam.userId, actor.id))).limit(1))[0];
+  return Boolean(mine && ENGAGEMENT_REVIEW_ROLES.includes(mine.role));
+}
+
+/** The desk lead, a partner, or the engagement's own Engagement Manager or Lead Consultant approves a prescription or plan. */
 export async function approveDeliverable(db: Database, actor: StaffActor, input: { deliverableId: number }) {
-  requirePermission(actor, "review_engagements", "Only the desk lead or a partner can approve this.");
   const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
+  if (!(await canReviewEngagement(db, actor, deliverable.engagementId))) throw new TRPCError({ code: "FORBIDDEN", message: "Only the desk lead, a partner or this engagement's Engagement Manager or Lead Consultant can approve this." });
   if (deliverable.status === "shared") throw new TRPCError({ code: "CONFLICT", message: "This is already shared." });
   await db.transaction(async tx => {
     await tx.update(engagementDeliverables).set({ status: "approved", approvedAt: new Date(), approvedByUserId: actor.id }).where(eq(engagementDeliverables.id, deliverable.id));

@@ -458,6 +458,7 @@ var ENGAGEMENT_STAGE_SUMMARIES = {
 };
 var ENGAGEMENT_TEAM_ROLES = ["manager", "lead", "analyst", "partner", "expert"];
 var ENGAGEMENT_TEAM_ROLE_LABELS = { manager: "Engagement Manager", lead: "Lead Consultant", analyst: "Analyst", partner: "Partner", expert: "Specialist" };
+var ENGAGEMENT_REVIEW_ROLES = ["manager", "lead", "partner"];
 var ENGAGEMENT_TEAM_ROLE_ORDER = { partner: 0, manager: 1, lead: 2, analyst: 3, expert: 4 };
 var JOB_TITLE_MAX_LENGTH = 80;
 var ENGAGEMENT_AUDIENCES = ["team", "owner", "business"];
@@ -12700,7 +12701,7 @@ async function getStaffEngagement(db, actor, engagementId) {
     can: {
       manage: authorityAllows(actor.authority, "manage_engagements"),
       assign: authorityAllows(actor.authority, "assign_engagements"),
-      review: authorityAllows(actor.authority, "review_engagements"),
+      review: await canReviewEngagement(db, actor, engagementId),
       sendSignIn: authorityAllows(actor.authority, "manage_client_onboarding")
     }
   };
@@ -12896,9 +12897,14 @@ async function requireStaffDeliverable(db, actor, deliverableId) {
   await requireStaffEngagement(db, actor, deliverable.engagementId);
   return deliverable;
 }
+async function canReviewEngagement(db, actor, engagementId) {
+  if (authorityAllows(actor.authority, "review_engagements")) return true;
+  const mine = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and12(eq18(engagementTeam.engagementId, engagementId), eq18(engagementTeam.userId, actor.id))).limit(1))[0];
+  return Boolean(mine && ENGAGEMENT_REVIEW_ROLES.includes(mine.role));
+}
 async function approveDeliverable(db, actor, input) {
-  requirePermission(actor, "review_engagements", "Only the desk lead or a partner can approve this.");
   const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
+  if (!await canReviewEngagement(db, actor, deliverable.engagementId)) throw new TRPCError16({ code: "FORBIDDEN", message: "Only the desk lead, a partner or this engagement's Engagement Manager or Lead Consultant can approve this." });
   if (deliverable.status === "shared") throw new TRPCError16({ code: "CONFLICT", message: "This is already shared." });
   await db.transaction(async (tx) => {
     await tx.update(engagementDeliverables).set({ status: "approved", approvedAt: /* @__PURE__ */ new Date(), approvedByUserId: actor.id }).where(eq18(engagementDeliverables.id, deliverable.id));

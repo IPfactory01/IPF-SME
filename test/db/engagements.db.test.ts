@@ -643,6 +643,26 @@ for (const target of targets) {
         expect(audits).toHaveLength(1);
       });
 
+      it("lets the engagement's own Engagement Manager or Lead Consultant approve, on that engagement only, but not its analyst", async () => {
+        const one = await client("lead-approves");
+        const other = await client("lead-elsewhere");
+        const managerUser = await person(["analyst"]);
+        const analystUser = await person(["analyst"]);
+        for (const engagementId of [one.engagementId, other.engagementId]) await (await superAdmin.call()).engagement.staff.assign({ engagementId, userId: managerUser.id, role: engagementId === one.engagementId ? "manager" : "analyst" });
+        await (await superAdmin.call()).engagement.staff.assign({ engagementId: one.engagementId, userId: analystUser.id, role: "analyst" });
+        const manager = await signIn(managerUser, true);
+        const analyst = await signIn(analystUser, true);
+        expect((await (await manager.call()).engagement.staff.detail({ engagementId: one.engagementId })).can.review).toBe(true);
+        expect((await (await manager.call()).engagement.staff.detail({ engagementId: other.engagementId })).can.review).toBe(false);
+        expect((await (await analyst.call()).engagement.staff.detail({ engagementId: one.engagementId })).can.review).toBe(false);
+
+        const { deliverableId } = await (await analyst.call()).engagement.staff.saveDeliverable({ engagementId: one.engagementId, kind: "prescription", title: "Daily cash count", summary: "Count every evening." });
+        await expect((await analyst.call()).engagement.staff.approveDeliverable({ deliverableId })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await (await manager.call()).engagement.staff.approveDeliverable({ deliverableId });
+        const { deliverableId: elsewhere } = await (await manager.call()).engagement.staff.saveDeliverable({ engagementId: other.engagementId, kind: "plan", title: "Your Plan", summary: null });
+        await expect((await manager.call()).engagement.staff.approveDeliverable({ deliverableId: elsewhere })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      });
+
       it("lets the owner comment and sign off, and their staff only comment", async () => {
         const { owner, engagementId, businessId } = await client("signoff");
         const full = await member(businessId, "full");

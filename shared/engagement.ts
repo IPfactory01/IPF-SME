@@ -41,6 +41,12 @@ export const ENGAGEMENT_TEAM_ROLES = ["manager", "lead", "analyst", "partner", "
 export type EngagementTeamRole = (typeof ENGAGEMENT_TEAM_ROLES)[number];
 export const ENGAGEMENT_TEAM_ROLE_LABELS: Record<EngagementTeamRole, string> = { manager: "Engagement Manager", lead: "Lead Consultant", analyst: "Analyst", partner: "Partner", expert: "Specialist" };
 /** The order a team is shown in: who runs it first. */
+/**
+ * Who leads an engagement (ET, 5 November 2026): the Engagement Manager, Lead Consultant and Partner on it may approve
+ * its Deliverables there, whatever their account's firm-wide role. Analysts and Specialists may not.
+ */
+export const ENGAGEMENT_REVIEW_ROLES: readonly EngagementTeamRole[] = ["manager", "lead", "partner"];
+
 export const ENGAGEMENT_TEAM_ROLE_ORDER: Record<EngagementTeamRole, number> = { partner: 0, manager: 1, lead: 2, analyst: 3, expert: 4 };
 
 /** Firm titles at IP Factory and Enzo Krypton, set once per person. Free text is allowed too (an outside specialist). */

@@ -106,6 +106,22 @@ example, exists only in Resend (shown once at creation) and in Vercel.
   needs no database access to get in (`pnpm owner:bootstrap` remains for a database with no email).
 - **Staff** have platform roles and permissions (`shared/platformPermissions.ts`); a client's session never becomes a
   staff identity.
+- **Two-step sign-in** (migration 0012, `server/twoStep.ts`): everyone with an internal role signs in with the password,
+  then a six-digit code from an authenticator app (RFC 6238; a code from the step before or after is accepted, never
+  one already used). The correct password returns a challenge, not a cookie: a ten-minute `user_sessions` row that
+  `resolveAccountSession` refuses until `account.verifyTwoStep` accepts a code. Five wrong codes end the challenge. The
+  first sign-in shows a QR code and the key, and the first correct code returns eight recovery codes once (stored as
+  hashes; each works once). The secret is sealed with AES-256-GCM under a key derived from `JWT_SECRET` (HKDF): **changing
+  `JWT_SECRET` means every staff member sets up two-step again** (reset it for them from People). A staff session lasts
+  12 hours. Always on in production; `TWO_STEP_REQUIRED=false` switches it off only outside production (the unit tests
+  of other features use it). A session made without the code (an accepted staff invitation) does not count until the
+  person signs in with two steps. Clients sign in with the password alone.
+- **Roles that end, granting by seniority, removal and alerts** (0012, `server/platformAccess.ts`,
+  `server/securityAlerts.ts`): `user_platform_roles.expiresAt` (required for a specialist); only roles below your own
+  can be given or removed; **Remove access** in People ends every role, engagement, session and the two-step set-up,
+  suspends the account and records the reason; **Reset two-step** for a lost phone. Security alerts go to every Super
+  Admin by email, best effort, and are always written to the audit log first. The NIST CSF mapping:
+  `docs/security/nist-csf.md`.
 - **Legacy:** Manus OAuth plus an administrator password (`jump_admin_access`, 8 hours) and the JUMP participant session
   (`jump_participant_session`, 30 days) remain for JUMP. JUMP's public forms (registration, portal sign-in link, pricing
   request, Paystack callbacks, emailing a diagnostic) are closed unless `LEGACY_JUMP_ENABLED` is set: each sends email

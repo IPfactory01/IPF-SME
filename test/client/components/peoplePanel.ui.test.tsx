@@ -23,14 +23,18 @@ vi.mock("@/lib/trpc", () => ({
       list: { useQuery: () => ({ data: api.error ? undefined : api.people, error: api.error }) },
       issuePasswordReset: { useMutation: mutation("issue", () => api.resetReply) },
       setStatus: { useMutation: mutation("setStatus", () => api.statusReply) },
+      removeAccess: { useMutation: mutation("removeAccess", () => ({ success: true, sessionsEnded: 2 })) },
+      resetTwoStep: { useMutation: mutation("resetTwoStep") },
     },
   },
 }));
 
 const { default: PeoplePanel } = await import("@/components/admin/PeoplePanel");
 
-const ada = { id: 1, name: "Ada Okafor", email: "ada@example.test", status: "active", lastSignedIn: new Date("2026-10-09T10:00:00Z"), roles: [], businesses: 1, superAdmin: false };
-const lewis = { id: 2, name: "Lewis Desk", email: "lewis@example.test", status: "suspended", lastSignedIn: new Date("2026-10-08T10:00:00Z"), roles: ["desk_lead"], businesses: 0, superAdmin: false };
+const ada = { id: 1, name: "Ada Okafor", email: "ada@example.test", status: "active", lastSignedIn: new Date("2026-10-09T10:00:00Z"), roles: [], businesses: 1, superAdmin: false, twoStep: false, accessEndsAt: null };
+const lewis = { id: 2, name: "Lewis Desk", email: "lewis@example.test", status: "suspended", lastSignedIn: new Date("2026-10-08T10:00:00Z"), roles: ["desk_lead"], businesses: 0, superAdmin: false, twoStep: true, accessEndsAt: null };
+const kemi = { id: 3, name: "Kemi Contractor", email: "kemi@example.test", status: "active", lastSignedIn: new Date("2026-11-20T10:00:00Z"), roles: ["subject_matter_expert"], businesses: 0, superAdmin: false, twoStep: false, accessEndsAt: new Date("2027-03-09T22:59:59Z") };
+const owner = { id: 4, name: "Owner Person", email: "owner@example.test", status: "active", lastSignedIn: new Date("2026-11-20T10:00:00Z"), roles: ["super_admin"], businesses: 0, superAdmin: true, twoStep: true, accessEndsAt: null };
 const rowOf = (name: string) => within(screen.getByText(name).closest("tr")!);
 
 describe("the People panel", () => {
@@ -77,6 +81,36 @@ describe("the People panel", () => {
 
     fireEvent.click(rowOf("Lewis Desk").getByRole("button", { name: "Reinstate" }));
     expect(api.calls.setStatus).toEqual([{ userId: 1, status: "suspended", reason: "Unpaid invoice" }, { userId: 2, status: "active" }]);
+  });
+
+  it("shows two-step status and when access ends, and flags staff who have not set up two-step", () => {
+    api.people = [lewis, kemi];
+    render(<PeoplePanel />);
+    expect(rowOf("Lewis Desk").getByText("On")).toBeTruthy();
+    expect(rowOf("Kemi Contractor").getByText("Not set up")).toBeTruthy();
+    expect(rowOf("Kemi Contractor").getByText(/2027/)).toBeTruthy();
+  });
+
+  it("removes access only with a reason, and never offers it for a Super Admin", () => {
+    api.people = [kemi, owner];
+    render(<PeoplePanel />);
+    expect(rowOf("Owner Person").queryByRole("button", { name: "Remove access" })).toBeNull();
+    fireEvent.click(rowOf("Kemi Contractor").getByRole("button", { name: "Remove access" }));
+    const form = within(screen.getByRole("form", { name: "Remove access" }));
+    expect(form.getByText("Remove all access for Kemi Contractor?")).toBeTruthy();
+    const confirm = form.getByRole("button", { name: "Remove access now" }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    fireEvent.change(form.getByLabelText("Reason (kept in the audit log)"), { target: { value: " Contract ended " } });
+    fireEvent.click(confirm);
+    expect(api.calls.removeAccess).toEqual([{ userId: 3, reason: "Contract ended" }]);
+    expect(screen.queryByRole("form", { name: "Remove access" })).toBeNull();
+  });
+
+  it("resets two-step sign-in for a lost phone", () => {
+    render(<PeoplePanel />);
+    expect(rowOf("Ada Okafor").queryByRole("button", { name: "Reset two-step" })).toBeNull();
+    fireEvent.click(rowOf("Lewis Desk").getByRole("button", { name: "Reset two-step" }));
+    expect(api.calls.resetTwoStep).toEqual([{ userId: 2 }]);
   });
 
   it("shows nothing to someone the server refuses", () => {

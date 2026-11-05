@@ -15,7 +15,11 @@ import {
   PLATFORM_PERMISSIONS,
   PLATFORM_ROLE_PERMISSIONS,
   PLATFORM_TO_LEGACY_CAPABILITIES,
+  PLATFORM_ROLE_RANK,
+  ROLES_REQUIRING_END_DATE,
   authorityAllows,
+  canGrantRole,
+  requiresTwoStep,
   isPlatformPermission,
   isPlatformRole,
   resolveAuthority,
@@ -156,5 +160,35 @@ describe("business capabilities", () => {
 
   it("defines capabilities for every business role", () => {
     expect(Object.keys(BUSINESS_ROLE_CAPABILITIES).sort()).toEqual([...BUSINESS_MEMBERSHIP_ROLES].sort());
+  });
+});
+
+describe("granting by seniority", () => {
+  const authority = (roles: Array<(typeof PLATFORM_ROLES)[number]>, isSuperAdmin = false) => ({ roles, isSuperAdmin });
+
+  it("lets a Super Admin give any role, and everyone else only roles below their own", () => {
+    for (const role of PLATFORM_ROLES) expect(canGrantRole(authority(["super_admin"], true), role)).toBe(true);
+    expect(canGrantRole(authority(["admin"]), "admin")).toBe(false);
+    expect(canGrantRole(authority(["admin"]), "super_admin")).toBe(false);
+    expect(canGrantRole(authority(["admin"]), "desk_lead")).toBe(true);
+    expect(canGrantRole(authority(["admin"]), "subject_matter_expert")).toBe(true);
+    expect(canGrantRole(authority(["desk_lead"]), "partner")).toBe(false);
+    expect(canGrantRole(authority(["desk_lead"]), "analyst")).toBe(true);
+    expect(canGrantRole(authority(["analyst", "desk_lead"]), "finance")).toBe(true);
+    expect(canGrantRole(authority(["subject_matter_expert"]), "subject_matter_expert")).toBe(false);
+    expect(canGrantRole(authority([]), "subject_matter_expert")).toBe(false);
+  });
+
+  it("ranks every role, with Super Admin above Admin above everyone else", () => {
+    expect(Object.keys(PLATFORM_ROLE_RANK).sort()).toEqual([...PLATFORM_ROLES].sort());
+    const others = PLATFORM_ROLES.filter(role => role !== "super_admin" && role !== "admin");
+    for (const role of others) expect(PLATFORM_ROLE_RANK[role]).toBeLessThan(PLATFORM_ROLE_RANK.admin);
+    expect(PLATFORM_ROLE_RANK.admin).toBeLessThan(PLATFORM_ROLE_RANK.super_admin);
+  });
+
+  it("requires two-step sign-in for anyone with an internal role, and an end date for a specialist", () => {
+    expect(requiresTwoStep({ roles: [] })).toBe(false);
+    for (const role of PLATFORM_ROLES) expect(requiresTwoStep({ roles: [role] })).toBe(true);
+    expect(ROLES_REQUIRING_END_DATE).toEqual(["subject_matter_expert"]);
   });
 });

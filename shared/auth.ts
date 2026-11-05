@@ -126,6 +126,38 @@ export const signInInputSchema = z.object({
   password: z.string().min(1).max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
 });
 
+/** How long a password-checked sign-in waits for the two-step code before it must start again. */
+export const TWO_STEP_CHALLENGE_MS = 10 * 60 * 1000;
+/** Wrong codes allowed on one challenge before it is thrown away. */
+export const TWO_STEP_MAX_ATTEMPTS = 5;
+
+export const TWO_STEP_ERRORS = {
+  wrongCode: "That code is not right. Check your authenticator app and try again.",
+  expired: "This sign-in has expired. Enter your email and password again.",
+  notConfigured: "Two-step sign-in is not set up on the server yet. Ask the Super Admin.",
+} as const;
+
+export const verifyTwoStepInputSchema = z.object({
+  challenge: z.string().min(20).max(200),
+  /** Six digits from the app, or a recovery code ("k7m2-9qpx"). */
+  code: z.string().trim().min(6).max(20),
+});
+
+/**
+ * The answer to a correct password when the person needs two-step sign-in. No session cookie is set yet: the
+ * challenge is good for one code, for ten minutes. `setup` is present the first time, when the person adds the
+ * account to their authenticator app.
+ */
+export type TwoStepChallenge = {
+  twoStepRequired: true;
+  challenge: string;
+  setup: null | { secret: string; uri: string };
+};
+
+export function isTwoStepChallenge(value: unknown): value is TwoStepChallenge {
+  return typeof value === "object" && value !== null && (value as { twoStepRequired?: unknown }).twoStepRequired === true;
+}
+
 /** What the client may see. Never includes credentials, session tokens or hashes. */
 export type AccountMembership = {
   businessId: number;

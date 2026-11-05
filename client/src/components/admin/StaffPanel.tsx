@@ -10,7 +10,7 @@ const INVITABLE: { role: Exclude<PlatformRole, "super_admin">; label: string }[]
   { role: "desk_lead", label: "Desk lead" },
   { role: "analyst", label: "Analyst" },
   { role: "partner", label: "Partner" },
-  { role: "subject_matter_expert", label: "Subject matter expert" },
+  { role: "subject_matter_expert", label: "Specialist (contractor, needs an end date)" },
   { role: "finance", label: "Finance" },
   { role: "admin", label: "Administrator (no powers until granted)" },
 ];
@@ -27,6 +27,8 @@ export default function StaffPanel() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<(typeof INVITABLE)[number]["role"]>("analyst");
+  const [expiresOn, setExpiresOn] = useState("");
+  const needsEnd = role === "subject_matter_expert";
   const [issued, setIssued] = useState<{ email: string; url: string; sent: boolean } | null>(null);
   const refresh = () => {
     void utils.invitations.staff.list.invalidate();
@@ -37,6 +39,7 @@ export default function StaffPanel() {
       setIssued({ email, url: result.invitationUrl, sent: result.deliveryStatus === "Sent" });
       setFullName("");
       setEmail("");
+      setExpiresOn("");
       refresh();
     },
     onError: error => toast.error(error.message),
@@ -48,22 +51,23 @@ export default function StaffPanel() {
     <div className="space-y-5 border-b border-line p-6">
       <div>
         <h2 className="font-serif text-xl font-bold">Staff</h2>
-        <p className="text-sm text-ink-muted">Everyone who signs in with email and password and holds a role. Invite a new person with one role; they set their own password from the link.</p>
+        <p className="text-sm text-ink-muted">Everyone who signs in with email and password and holds a role. Invite a new person with one role below your own; they set their own password from the link, then set up two-step sign-in on their phone at their first sign-in. A specialist's access ends on the date you choose.</p>
       </div>
       <div className="overflow-x-auto border border-line bg-white">
         <table className="w-full">
-          <thead><tr className="border-b border-line"><th className={TH}>Person</th><th className={TH}>Roles</th></tr></thead>
+          <thead><tr className="border-b border-line"><th className={TH}>Person</th><th className={TH}>Roles</th><th className={TH}>Access ends</th></tr></thead>
           <tbody>
-            {team.data?.map(member => <tr key={member.userId} className="border-b border-line-soft"><td className={TD}><span className="block font-medium">{member.name || "-"}</span><span className="block text-xs text-ink-muted">{member.email}</span></td><td className={TD}>{roleDisplay(member.roles)}</td></tr>)}
-            {team.data?.length === 0 && <tr><td colSpan={2} className={TD}>No staff yet.</td></tr>}
+            {team.data?.map(member => <tr key={member.userId} className="border-b border-line-soft"><td className={TD}><span className="block font-medium">{member.name || "-"}</span><span className="block text-xs text-ink-muted">{member.email}</span></td><td className={TD}>{roleDisplay(member.roles)}{member.lapsed.length > 0 && <span className="block text-xs text-danger">Ended: {roleDisplay(member.lapsed)}</span>}</td><td className={TD}>{member.accessEndsAt ? formatDate(member.accessEndsAt) : "No end date"}</td></tr>)}
+            {team.data?.length === 0 && <tr><td colSpan={3} className={TD}>No staff yet.</td></tr>}
           </tbody>
         </table>
       </div>
-      <form className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end" onSubmit={event => { event.preventDefault(); invite.mutate({ fullName, email, role }); }}>
+      <form className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto_auto] sm:items-end" onSubmit={event => { event.preventDefault(); invite.mutate({ fullName, email, role, expiresOn: expiresOn || null }); }}>
         <div><label className="block text-[11px] font-semibold uppercase tracking-wider text-ink-muted" htmlFor="staff-name">Full name</label><input id="staff-name" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={fullName} onChange={event => setFullName(event.target.value)} /></div>
         <div><label className="block text-[11px] font-semibold uppercase tracking-wider text-ink-muted" htmlFor="staff-email">Email</label><input id="staff-email" type="email" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={email} onChange={event => setEmail(event.target.value)} /></div>
         <select aria-label="Role" className="border border-line bg-white px-2 py-1.5 text-sm" value={role} onChange={event => setRole(event.target.value as typeof role)}>{INVITABLE.map(item => <option key={item.role} value={item.role}>{item.label}</option>)}</select>
-        <Button type="submit" size="sm" className="rounded-none bg-brand text-xs text-white" disabled={invite.isPending || !fullName.trim() || !email.trim()}>Invite</Button>
+        <div><label className="block text-[11px] font-semibold uppercase tracking-wider text-ink-muted" htmlFor="staff-ends">Access ends{needsEnd ? "" : " (optional)"}</label><input id="staff-ends" type="date" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={expiresOn} onChange={event => setExpiresOn(event.target.value)} /></div>
+        <Button type="submit" size="sm" className="rounded-none bg-brand text-xs text-white" disabled={invite.isPending || !fullName.trim() || !email.trim() || (needsEnd && !expiresOn)}>Invite</Button>
       </form>
       {issued && (
         <div role="status" className="space-y-2 border border-brand-line bg-brand-tint p-3 text-sm">
@@ -76,7 +80,7 @@ export default function StaffPanel() {
         <ul aria-label="Staff invitations" className="space-y-1 text-sm">
           {invitations.data.map(item => (
             <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft py-1">
-              <span>{item.fullName} <span className="text-ink-muted">· {item.email} · {roleDisplay(item.role ? [item.role] : [])} · {STATUS[item.status]}{item.status === "pending" ? ` until ${formatDate(item.expiresAt)}` : ""}</span></span>
+              <span>{item.fullName} <span className="text-ink-muted">· {item.email} · {roleDisplay(item.role ? [item.role] : [])}{item.roleExpiresAt ? ` until ${formatDate(item.roleExpiresAt)}` : ""} · {STATUS[item.status]}{item.status === "pending" ? ` until ${formatDate(item.expiresAt)}` : ""}</span></span>
               {item.status === "pending" && <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={revoke.isPending} onClick={() => revoke.mutate({ invitationId: item.id })}>Revoke</Button>}
             </li>
           ))}

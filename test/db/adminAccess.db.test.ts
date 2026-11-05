@@ -29,7 +29,7 @@ import { createContext } from "@server/_core/context";
 import { resetBusinessCheckRateLimitsForTests } from "@server/routers/businessCheck";
 import { ADMIN_ACCESS_COOKIE, hashAdminPassword, OWNER_ADMIN_EMAIL, sha256 } from "@server/adminSecurity";
 import { bootstrapOwnerCredential } from "@server/ownerBootstrap";
-import { ACCOUNT_AUTH_ERRORS, ACCOUNT_SESSION_COOKIE, PLATFORM_ROLES, type PlatformRole } from "@shared/auth";
+import { ACCOUNT_AUTH_ERRORS, ACCOUNT_SESSION_COOKIE, PLATFORM_ROLES, type PlatformRole, type AccountSessionView } from "@shared/auth";
 import type { TrpcContext } from "@server/_core/context";
 
 const REMOTE_TEST_TIMEOUT_MS = 30_000;
@@ -97,7 +97,7 @@ for (const target of targets) {
       it("signs an internal user in with the universal email and password and opens the admin area, with no administrator password", async () => {
         const user = await person({}, ["analyst"]);
         const b = browser();
-        const view = await (await b.call()).account.signInInternal({ email: user.email.toUpperCase(), password: PASSWORD });
+        const view = (await (await b.call()).account.signInInternal({ email: user.email.toUpperCase(), password: PASSWORD })) as AccountSessionView;
         expect(view.platformRoles).toEqual(["analyst"]);
         expect(b.token()).toBeTruthy();
         const status = await (await b.call()).adminAccess.status();
@@ -187,7 +187,7 @@ for (const target of targets) {
         const business = (await db.insert(schema.businesses).values({ name: "Owner Co", slug: unique("slug"), createdByUserId: client.id }).returning())[0];
         await db.insert(schema.businessMemberships).values({ businessId: business.id, userId: client.id, role: "owner" });
         const b = browser();
-        const view = await (await b.call()).account.signIn({ email: client.email, password: PASSWORD });
+        const view = (await (await b.call()).account.signIn({ email: client.email, password: PASSWORD })) as AccountSessionView;
         expect(view.landingPath).toBe("/dashboard");
         expect(view.activeBusiness?.role).toBe("owner");
         // Signed in as a client, but the staff identity stays empty.

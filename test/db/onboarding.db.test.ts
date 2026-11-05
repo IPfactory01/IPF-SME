@@ -27,7 +27,7 @@ import { appRouter } from "@server/routers";
 import { resetBusinessCheckRateLimitsForTests } from "@server/routers/businessCheck";
 import { ADMIN_ACCESS_COOKIE, OWNER_ADMIN_EMAIL, sha256 } from "@server/adminSecurity";
 import { createOnboardingInvitation, effectiveInvitationStatus } from "@server/clientOnboarding";
-import { ACCOUNT_AUTH_ERRORS, ACCOUNT_SESSION_COOKIE, ONBOARDING_ERRORS, ONBOARDING_INVITATION_TTL_MS } from "@shared/auth";
+import { ACCOUNT_AUTH_ERRORS, ACCOUNT_SESSION_COOKIE, ONBOARDING_ERRORS, ONBOARDING_INVITATION_TTL_MS, type AccountSessionView } from "@shared/auth";
 import type { TrpcContext } from "@server/_core/context";
 
 const REMOTE_TEST_TIMEOUT_MS = 30_000;
@@ -132,7 +132,7 @@ for (const target of targets) {
         const procedures = Object.keys((appRouter as unknown as { _def: { procedures: Record<string, unknown> } })._def.procedures);
         // The reset pair is keyed by an emailed link (test/db/accountRecovery.db.test.ts); "Forgot your password?" only
         // emails one, and creates an account solely for the owner's address (test/db/forgotPassword.db.test.ts). Still no sign-up.
-        expect(procedures.filter(name => name.startsWith("account.")).sort()).toEqual(["account.business", "account.changePassword", "account.me", "account.requestReset", "account.resetPassword", "account.resetPreview", "account.signIn", "account.signInInternal", "account.signOut", "account.switchWorkspace", "account.updateBusiness", "account.updateProfile", "account.workspace"]);
+        expect(procedures.filter(name => name.startsWith("account.")).sort()).toEqual(["account.business", "account.changePassword", "account.me", "account.requestReset", "account.resetPassword", "account.resetPreview", "account.signIn", "account.signInInternal", "account.signOut", "account.switchWorkspace", "account.updateBusiness", "account.updateProfile", "account.verifyTwoStep", "account.workspace"]);
         expect(procedures.filter(name => /sign-?up|register/i.test(name))).toEqual([]);
         // Calling the old procedure by name does not create anything: there is nothing to call.
         const before = await total(schema.users);
@@ -447,7 +447,7 @@ for (const target of targets) {
 
         const later = browser();
         await expect(later.call().account.signIn({ email: check.email, password: "wrong password 1" })).rejects.toMatchObject({ code: "UNAUTHORIZED", message: ACCOUNT_AUTH_ERRORS.invalidCredentials });
-        const view = await later.call().account.signIn({ email: check.email.toUpperCase(), password: PASSWORD });
+        const view = (await later.call().account.signIn({ email: check.email.toUpperCase(), password: PASSWORD })) as AccountSessionView;
         expect(view.activeBusiness?.role).toBe("owner");
         expect((await later.call().account.me())?.user.email).toBe(check.email.toLowerCase());
         expect((await later.call().account.workspace()).memberships).toHaveLength(1);

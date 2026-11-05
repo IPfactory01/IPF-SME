@@ -128,7 +128,7 @@ describe("the owner's team card", () => {
 
 describe("the staff panel", () => {
   it("lists staff with their roles, invites with one role and shows the link once when email is not set up", () => {
-    api.team = [{ userId: 2, name: "Lewis Osako", email: "lewis@example.com", status: "active", roles: ["super_admin", "desk_lead"] }];
+    api.team = [{ userId: 2, name: "Lewis Osako", email: "lewis@example.com", status: "active", roles: ["super_admin", "desk_lead"], accessEndsAt: null, lapsed: [] }];
     api.staffInvitations = [{ id: 9, email: "pending@example.com", fullName: "Pending Person", role: "analyst", status: "pending", expiresAt: new Date("2026-10-16T12:00:00Z"), deliveryStatus: "Simulated", createdAt: new Date() }];
     render(<StaffPanel />);
     expect(screen.getByText("Lewis Osako").closest("tr")!.textContent).toContain("Desk");
@@ -136,10 +136,29 @@ describe("the staff panel", () => {
     fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Ola Analyst" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ola@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Invite" }));
-    expect(api.calls.staffInvite).toEqual([{ fullName: "Ola Analyst", email: "ola@example.com", role: "analyst" }]);
+    expect(api.calls.staffInvite).toEqual([{ fullName: "Ola Analyst", email: "ola@example.com", role: "analyst", expiresOn: null }]);
     expect((screen.getByLabelText("Invitation link") as HTMLInputElement).value).toBe("https://app.example.test/join/TOKEN");
     expect(screen.getByRole("status").textContent).toContain("Email is not set up yet");
     fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
     expect(api.calls.staffRevoke).toEqual([{ invitationId: 9 }]);
+  });
+
+  it("needs an end date to invite a specialist, and shows when each person's access ends", () => {
+    api.calls = {};
+    api.team = [{ userId: 3, name: "Kemi Contractor", email: "kemi@example.com", status: "active", roles: ["subject_matter_expert"], accessEndsAt: new Date("2027-03-09T22:59:59Z"), lapsed: ["analyst"] }];
+    api.staffInvitations = [];
+    render(<StaffPanel />);
+    const row = screen.getByText("Kemi Contractor").closest("tr")!;
+    expect(row.textContent).toContain("2027");
+    expect(row.textContent).toContain("Ended: Analyst");
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Tunde Editor" } });
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "tunde@example.com" } });
+    fireEvent.change(screen.getByLabelText("Role"), { target: { value: "subject_matter_expert" } });
+    const invite = screen.getByRole("button", { name: "Invite" }) as HTMLButtonElement;
+    expect(invite.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText("Access ends"), { target: { value: "2027-03-09" } });
+    expect(invite.disabled).toBe(false);
+    fireEvent.click(invite);
+    expect(api.calls.staffInvite).toEqual([{ fullName: "Tunde Editor", email: "tunde@example.com", role: "subject_matter_expert", expiresOn: "2027-03-09" }]);
   });
 });

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { issuePasswordReset, listPeople, setAccountStatus } from "../accountRecovery";
 import { getDb } from "../db";
+import { removeAccess, removeAccessInputSchema, resetTwoStep } from "../platformAccess";
 import { adminPermissionProcedure, router } from "../_core/trpc";
 
 const manageUsers = adminPermissionProcedure("manage_users");
@@ -25,4 +26,10 @@ export const peopleRouter = router({
     .input(z.object({ userId: z.number().int().positive(), status: z.enum(["active", "suspended"]), reason: z.string().trim().max(500).optional() }))
     .mutation(async ({ ctx, input }) =>
       setAccountStatus(await database(), { actor: { id: ctx.user.id, email: ctx.user.email ?? null, authority: ctx.authority }, targetUserId: input.userId, status: input.status, reason: input.reason })),
+  /** One click: every role, engagement and session gone, account suspended, reason recorded, Super Admins told. */
+  removeAccess: manageUsers.input(removeAccessInputSchema).mutation(async ({ ctx, input }) =>
+    removeAccess(await database(), { actor: { ...ctx.user, authority: ctx.authority }, userId: input.userId, reason: input.reason })),
+  /** A lost phone: clears two-step sign-in and ends sessions; they set it up again at the next sign-in. */
+  resetTwoStep: manageUsers.input(userInput).mutation(async ({ ctx, input }) =>
+    resetTwoStep(await database(), { actor: { ...ctx.user, authority: ctx.authority }, userId: input.userId })),
 });

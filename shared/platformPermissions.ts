@@ -126,3 +126,33 @@ export function authorityAllows(authority: Authority, permission: AnyAuthorityPe
   if (authority.isSuperAdmin) return true;
   return (authority.permissions as readonly string[]).includes(permission) || (authority.legacyCapabilities as readonly string[]).includes(permission);
 }
+
+/**
+ * Seniority, for granting. A person may grant or revoke only roles BELOW their own highest role; only a Super Admin
+ * may grant Admin or Super Admin. So an Admin can add a specialist or an analyst, but never another Admin.
+ */
+export const PLATFORM_ROLE_RANK: Record<PlatformRole, number> = {
+  super_admin: 100,
+  admin: 80,
+  desk_lead: 60,
+  partner: 60,
+  finance: 50,
+  analyst: 40,
+  subject_matter_expert: 20,
+};
+
+export function canGrantRole(actor: Pick<Authority, "roles" | "isSuperAdmin">, role: PlatformRole): boolean {
+  if (actor.isSuperAdmin) return true;
+  const highest = Math.max(0, ...actor.roles.map(item => PLATFORM_ROLE_RANK[item]));
+  return PLATFORM_ROLE_RANK[role] < highest;
+}
+
+/** Contractors' access must end on a date: a specialist role is never granted open-ended. */
+export const ROLES_REQUIRING_END_DATE: readonly PlatformRole[] = ["subject_matter_expert"];
+/** The furthest ahead an end date may be set, in days. */
+export const MAX_ROLE_DURATION_DAYS = 400;
+
+/** Everyone with an internal role signs in with two steps: password, then a code from their phone. */
+export function requiresTwoStep(authority: Pick<Authority, "roles">): boolean {
+  return authority.roles.length > 0;
+}

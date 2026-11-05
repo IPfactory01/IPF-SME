@@ -10,6 +10,7 @@ import {
   toAccountView,
   updateAccountProfile,
   updateBusinessProfile,
+  verifyTwoStep,
 } from "../accountAuth";
 import { confirmPasswordReset, previewPasswordReset, requestPasswordReset } from "../accountRecovery";
 import { getDb } from "../db";
@@ -35,6 +36,12 @@ export const accountRouter = router({
    * no internal platform role is refused BEFORE any session exists, with one generic message.
    */
   signInInternal: publicProcedure.input(signInInputSchema).mutation(({ ctx, input }) => signInAccount(ctx.req, ctx.res, input, { internalOnly: true })),
+
+  /**
+   * Second step of sign-in for anyone with an internal role: the code from their authenticator app (or a recovery code)
+   * against the challenge the password step returned. Public, keyed by the challenge alone; five wrong codes end it.
+   */
+  verifyTwoStep: publicProcedure.input(z.unknown()).mutation(({ ctx, input }) => verifyTwoStep(ctx.req, ctx.res, input)),
 
   signOut: publicProcedure.mutation(({ ctx }) => signOutAccount(ctx.req, ctx.res)),
 

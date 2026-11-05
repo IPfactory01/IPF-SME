@@ -32,7 +32,7 @@ async function guarded<T>(work: () => Promise<T>): Promise<T> {
 
 /** IP Factory staff: authentication through the internal area, permission manage_roles (the Super Admin has it). */
 const roles = adminPermissionProcedure("manage_roles");
-const actorOf = (ctx: { user: { id: number; name: string | null } | null; authority: Parameters<typeof inviteStaff>[1]["authority"] }) => ({ id: ctx.user!.id, name: ctx.user!.name, authority: ctx.authority });
+const actorOf = (ctx: { user: { id: number; name: string | null; email?: string | null } | null; authority: Parameters<typeof inviteStaff>[1]["authority"] }) => ({ id: ctx.user!.id, name: ctx.user!.name, email: ctx.user!.email ?? null, authority: ctx.authority });
 
 /**
  * Invitations that create an email-and-password account. Staff: the Super Admin invites with one role. The owner's

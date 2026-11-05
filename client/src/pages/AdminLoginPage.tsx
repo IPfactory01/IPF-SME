@@ -1,6 +1,7 @@
 import { LegalFooterLinks } from "@/components/LegalLinks";
 import { useAuth } from "@/_core/hooks/useAuth";
 import ForgotPassword from "@/components/ForgotPassword";
+import TwoStepStep from "@/components/TwoStepStep";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { isOAuthLoginConfigured } from "@/const";
 import { trpc } from "@/lib/trpc";
 import { BRAND } from "@shared/brand";
+import { isTwoStepChallenge, type TwoStepChallenge } from "@shared/auth";
 import { ArrowLeft, Lock } from "lucide-react";
 import React, { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation } from "wouter";
@@ -25,15 +27,21 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [forgot, setForgot] = useState(false);
+  const [challenge, setChallenge] = useState<TwoStepChallenge | null>(null);
 
   useEffect(() => {
     if (access.data?.passwordVerified) setLocation("/admin");
   }, [access.data?.passwordVerified, setLocation]);
 
+  const enter = async () => {
+    await Promise.all([utils.auth.me.invalidate(), utils.adminAccess.status.invalidate(), utils.account.me.invalidate()]);
+    setLocation("/admin");
+  };
+
   const signIn = trpc.account.signInInternal.useMutation({
-    onSuccess: async () => {
-      await Promise.all([utils.auth.me.invalidate(), utils.adminAccess.status.invalidate(), utils.account.me.invalidate()]);
-      setLocation("/admin");
+    onSuccess: async result => {
+      if (isTwoStepChallenge(result)) return setChallenge(result);
+      await enter();
     },
     onError: failure => setError(failure.message),
   });
@@ -59,7 +67,7 @@ export default function AdminLoginPage() {
             <CardDescription className="text-sm text-ink-muted">Sign in with your IPF administrator account.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            {loading ? <p className="text-sm text-ink-muted">Checking your secure sign-in…</p> : forgot ? <ForgotPassword id="admin" initialEmail={email} onBack={() => setForgot(false)} /> : (
+            {loading ? <p className="text-sm text-ink-muted">Checking your secure sign-in…</p> : challenge ? <TwoStepStep id="admin" challenge={challenge} onSignedIn={() => void enter()} onCancel={() => { setChallenge(null); setPassword(""); }} /> : forgot ? <ForgotPassword id="admin" initialEmail={email} onBack={() => setForgot(false)} /> : (
               <form className="space-y-4" noValidate onSubmit={submit}>
                 {error && <div role="alert" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{error}</div>}
                 <div className="space-y-2"><Label htmlFor="admin-email">Email</Label><Input id="admin-email" type="email" autoComplete="email" value={email} onChange={event => { setEmail(event.target.value); setError(null); }} /></div>

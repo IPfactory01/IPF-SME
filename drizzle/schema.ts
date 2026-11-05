@@ -64,8 +64,30 @@ export const userSessions = pgTable("user_sessions", {
   revokedAt: timestamp("revokedAt", { withTimezone: true }),
   /** The workspace chosen for this session. Always re-verified against an active membership; never trusted as proof of access. */
   activeBusinessId: integer("activeBusinessId").references((): AnyPgColumn => businesses.id, { onDelete: "set null" }),
+  /**
+   * When the person passed two-step sign-in on this session. Anyone with an internal role needs it: a session without it
+   * is only a ten-minute challenge, waiting for the code, and never counts as signed in.
+   */
+  twoStepVerifiedAt: timestamp("twoStepVerifiedAt", { withTimezone: true }),
+  /** A hash of the browser and network the session was opened from, to notice a new device. Never the address itself. */
+  deviceHash: varchar("deviceHash", { length: 64 }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
 }, table => [index("user_sessions_user_idx").on(table.userId), index("user_sessions_expires_idx").on(table.expiresAt)]);
+
+/**
+ * Two-step sign-in for one person: the authenticator secret, sealed (server/twoStep.ts), and the hashes of their unused
+ * recovery codes. `enabledAt` is empty while they are still setting it up. `lastUsedStep` stops a code being used twice.
+ */
+export const userTwoStep = pgTable("user_two_step", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  userId: integer("userId").notNull().unique().references(() => users.id, { onDelete: "cascade" }),
+  secretSealed: varchar("secretSealed", { length: 512 }).notNull(),
+  recoveryCodeHashes: text("recoveryCodeHashes").default("[]").notNull(),
+  lastUsedStep: integer("lastUsedStep"),
+  enabledAt: timestamp("enabledAt", { withTimezone: true }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+});
 
 /**
  * Fixed-window counters behind the rate limits (server/rateLimit.ts), shared by every function instance. One row per
@@ -110,6 +132,8 @@ export const userPlatformRoles = pgTable("user_platform_roles", {
   userId: integer("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
   role: userPlatformRolesRoleEnum("role").notNull(),
   grantedByUserId: integer("grantedByUserId").references(() => users.id, { onDelete: "set null" }),
+  /** When the role stops counting. Required for a specialist (a contractor); empty means it lasts until revoked. */
+  expiresAt: timestamp("expiresAt", { withTimezone: true }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
 }, table => [unique("user_platform_roles_user_role_unique").on(table.userId, table.role), index("user_platform_roles_role_idx").on(table.role)]);
 
@@ -1074,6 +1098,8 @@ export const accountInvitations = pgTable("account_invitations", {
   fullName: varchar("fullName", { length: 255 }).notNull(),
   /** staff only */
   platformRole: userPlatformRolesRoleEnum("platformRole"),
+  /** staff only: when the role given on acceptance ends (required for a specialist). */
+  roleExpiresAt: timestamp("roleExpiresAt", { withTimezone: true }),
   /** business_member only */
   businessId: integer("businessId").references(() => businesses.id),
   access: clientAccessLevelEnum("access"),

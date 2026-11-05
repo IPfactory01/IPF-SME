@@ -135,6 +135,19 @@ Built with O1, O2 and O3 as recommended (PRD §10), and the owner's seat invitat
 | 4.4 | Needs `engagement_closes` (**migration 0011**, on its own branch when the first fixes approach week 6, December). **Close and day 30**: final value, moved, extension weeks, plan delivered, next problem area, ongoing support defined, day-30 check | The PRD §7 pass marks are countable from the record |
 | 4.5 | **Monday scorecard** for the desk: funnel, active fixes, measures, record completeness, hours | Replaces the spreadsheet export |
 
+## 8a. Privileged access, phase 1 (built 5 November; live before contractors get accounts)
+
+For the Crown Studio pilot (Sales First, from 9 November), contractors join the room. Before they get accounts:
+two-step sign-in for everyone with an internal role, a specialist's role that ends on a date, granting only below your
+own role, **Remove access** and **Reset two-step** in People, and email alerts to the Super Admins (migration 0012;
+[2. Technical requirements](02-technical-requirements.md) §7; `docs/security/nist-csf.md`). Deployment order: apply
+0012 (`drizzle/supabase/apply-0012-two-step-and-access-expiry.sql` in the Supabase SQL Editor, or `pnpm db:migrate`)
+**before** the code reaches production, because sign-in reads the new session columns. Every staff member then sets
+up two-step at their next sign-in.
+
+Phase 2 (by the Month 1 Review, 7 December): an Access page with a quarterly review (who has what, confirm or remove),
+the audit log as a screen, and a written recovery runbook (lost phone, leaked password, suspected break-in).
+
 ## 9. Phase 5: later (v0.2)
 
 - Referral codes on the new flow: 10% off the next invoice per paying referral, up to 30%, never on a first payment.

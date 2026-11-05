@@ -14,6 +14,7 @@ erDiagram
   users ||--o| user_credentials : "password"
   users ||--o{ user_sessions : "signed-in sessions"
   users ||--o{ user_platform_roles : "internal roles"
+  users ||--o| user_two_step : "two-step sign-in"
   users ||--o{ business_memberships : "member of"
   businesses ||--o{ business_memberships : "has members"
   business_checks ||--o{ payment_requests : "report, Current State Assessment"
@@ -53,8 +54,9 @@ erDiagram
 |---|---|---|---|
 | `users` | One identity per person: clients, staff and legacy OAuth users | Unique `openId`; unique `lower(email)`; `status` active, suspended or disabled; legacy `role` user or admin | Name, email, last sign-in |
 | `user_credentials` | A person's password | One per user; lockout after five failures for 15 minutes | Password hash |
-| `user_sessions` | Server-side sessions behind the `ipf_session` cookie | Unique token hash; expiry; revocation; `activeBusinessId` (the workspace in use) | Token hash |
-| `user_platform_roles` | Internal IP Factory roles (super_admin, admin, desk_lead, analyst, partner, subject_matter_expert, finance) | Unique (person, role); who granted it | Who holds which role |
+| `user_sessions` | Server-side sessions behind the `ipf_session` cookie | Unique token hash; expiry; revocation; `activeBusinessId` (the workspace in use); `twoStepVerifiedAt` (0012: a person with an internal role is signed in only once it is set; until then the row is a ten-minute challenge); `deviceHash` (0012: a hash of browser and network, to notice a new device) | Token hash, device hash |
+| `user_platform_roles` | Internal IP Factory roles (super_admin, admin, desk_lead, analyst, partner, subject_matter_expert, finance) | Unique (person, role); who granted it; `expiresAt` (0012: the role gives nothing after it; required for a specialist, at most 400 days ahead) | Who holds which role, until when |
+| `user_two_step` | Two-step sign-in for one person (migration 0012) | One per user; the authenticator secret sealed with AES-256-GCM under a key derived from `JWT_SECRET`; recovery codes as SHA-256 hashes only; `lastUsedStep` so a code is never accepted twice; `enabledAt` empty until the first correct code | Sealed secret, recovery code hashes |
 | `admin_permission_profiles` | Extra capabilities chosen by the Super Admin for a person | One per user | — |
 | `admin_access_audit_events` | Append-only audit trail for staff, payments, reports, roles and onboarding | Written through `recordAudit` (`server/audit.ts`); details never contain secrets; indexed by action and time (0010). A system actor (Paystack confirming a payment) is a null `actorUserId` with `via` in the details, never an account | Actor id, target email |
 | `user_password_reset_tokens` | Password reset links for client and staff accounts, issued by staff with `manage_users` or asked for by the person on a sign-in page (migration 0010) | Only the token's SHA-256; 20 minutes; single use; a new link revokes the one still out; who issued it (empty when the person asked); delivery status | Token hash |
@@ -146,6 +148,15 @@ authority is the union of their roles, any profile the Super Admin set, and the 
 | partner | view_assigned_businesses, review_engagements |
 | subject_matter_expert | view_assigned_businesses |
 | finance | manage_payments, view_financials |
+
+**Privileged access (migration 0012).** Everyone with an internal role signs in with a password and a six-digit code
+from an authenticator app. A role is given or removed only by someone whose own highest role ranks above it
+(`PLATFORM_ROLE_RANK`: super_admin 100, admin 80, desk_lead and partner 60, finance 50, analyst 40,
+subject_matter_expert 20), so only a Super Admin can make an Admin. A specialist's role ends on a date. **Remove access**
+(People, `manage_users`) takes every role, engagement, session and the two-step set-up in one step, suspends the
+account and records the reason. The Super Admins are emailed (and the audit log records `security_alert`) for a role
+given, a staff invitation, a sign-in from a new device, a locked staff account, five wrong codes, a recovery code used,
+a two-step reset and access removed. The controls against the NIST Cybersecurity Framework: `docs/security/nist-csf.md`.
 
 Business membership roles (`shared/businessCapabilities.ts`): an **owner** can view, edit the profile, manage members,
 invite and manage billing; a **business_admin** can view, edit and manage members; a **member** can view.

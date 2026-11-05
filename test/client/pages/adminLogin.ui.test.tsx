@@ -17,7 +17,10 @@ const api = vi.hoisted(() => ({
   error: undefined as string | undefined,
   invalidated: [] as string[],
   resets: [] as unknown[],
+  signInResult: undefined as unknown,
+  verified: [] as unknown[],
 }));
+vi.mock("qrcode", () => ({ default: { toDataURL: async () => "data:image/png;base64,QR" } }));
 
 vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ user: api.user, loading: api.loading }) }));
 vi.mock("@/const", () => ({ isOAuthLoginConfigured: () => api.oauthConfigured, ADMIN_LOGIN_PATH: "/admin/login", startLogin: () => false }));
@@ -34,13 +37,19 @@ vi.mock("@/lib/trpc", () => ({
         useMutation: (options: { onSuccess?: () => void }) => ({ isPending: false, mutate: (input: unknown) => { api.resets.push(input); options.onSuccess?.(); } }),
       },
       signInInternal: {
-        useMutation: (options: { onSuccess?: () => Promise<void> | void; onError?: (error: Error) => void }) => ({
+        useMutation: (options: { onSuccess?: (result: never) => Promise<void> | void; onError?: (error: Error) => void }) => ({
           isPending: false,
           mutate: (input: unknown) => {
             api.calls.push(input);
             if (api.error) options.onError?.(new Error(api.error));
-            else void options.onSuccess?.();
+            else void options.onSuccess?.(api.signInResult as never);
           },
+        }),
+      },
+      verifyTwoStep: {
+        useMutation: (options: { onSuccess?: (result: never) => void }) => ({
+          isPending: false,
+          mutate: (input: unknown) => { api.verified.push(input); options.onSuccess?.({ user: { id: 1 }, recoveryCodes: null } as never); },
         }),
       },
     },
@@ -66,6 +75,8 @@ beforeEach(() => {
   api.error = undefined;
   api.invalidated = [];
   api.resets = [];
+  api.signInResult = undefined;
+  api.verified = [];
 });
 afterEach(cleanup);
 
@@ -94,6 +105,20 @@ describe("admin sign-in page", () => {
     await waitFor(() => expect(location.history.at(-1)).toBe("/admin"));
     expect(api.calls).toEqual([{ email: "staff@example.test", password: "correct horse 42" }]);
     expect(api.invalidated).toEqual(expect.arrayContaining(["auth.me", "status", "account.me"]));
+  });
+
+  it("asks for the two-step code after a correct password, and opens the admin area only once the code is right", async () => {
+    api.signInResult = { twoStepRequired: true, challenge: "c".repeat(43), setup: null };
+    const location = renderPage();
+    fill("Email", "staff@example.test");
+    fill("Password", "correct horse 42");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(screen.getByRole("heading", { name: "Enter your code" })).toBeTruthy();
+    expect(location.history.at(-1)).toBe("/admin/login");
+    fill("Code", "123456");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(api.verified).toEqual([{ challenge: "c".repeat(43), code: "123456" }]);
+    await waitFor(() => expect(location.history.at(-1)).toBe("/admin"));
   });
 
   it("shows the server's message, such as the generic not-authorised refusal, and stays on the page", () => {

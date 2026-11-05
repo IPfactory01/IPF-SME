@@ -100,14 +100,14 @@ for (const target of targets) {
     });
 
     describe("schema", () => {
-      it("creates exactly the 54 expected tables", async () => {
+      it("creates exactly the 55 expected tables", async () => {
         const rows = await harness.query(sql`select table_name from information_schema.tables where table_schema = current_schema() and table_type = 'BASE TABLE'`);
         const created = rows.map(row => String(row.table_name)).sort();
         // 30 from the MySQL migration + user_credentials, user_sessions, businesses, business_memberships, client_onboarding_invitations, user_platform_roles, payment_requests, full_reports,
         // and the engagement room (0008): engagements, engagement_team, engagement_sessions, engagement_tasks, engagement_deliverables, engagement_files, engagement_comments,
         // engagement_measures, engagement_checkins, business_member_access, account_invitations, debriefs (0009), and rate_limit_counters
-        // and user_password_reset_tokens (0010), plus two email delivery metadata tables (0011).
-        expect(expectedTableNames).toHaveLength(54);
+        // and user_password_reset_tokens (0010), plus two email delivery metadata tables (0011), and user_two_step (0012).
+        expect(expectedTableNames).toHaveLength(55);
         expect(expectedTableNames.filter(name => !created.includes(name))).toEqual([]);
         expect(created.filter(name => !expectedTableNames.includes(name))).toEqual([]);
       });
@@ -180,7 +180,7 @@ for (const target of targets) {
           }
         }
         expect(declared).toBe(rows.length); // no foreign key exists that the schema does not declare
-        expect(declared).toBe(55);
+        expect(declared).toBe(56);
       });
 
       it("stores a declared name longer than 63 bytes truncated, which is why lookups must use pgIdentifier", async () => {

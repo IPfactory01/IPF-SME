@@ -1,5 +1,6 @@
 import { LegalFooterLinks } from "@/components/LegalLinks";
 import ForgotPassword from "@/components/ForgotPassword";
+import TwoStepStep from "@/components/TwoStepStep";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import React, { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation } from "wouter";
 import { PAGE_META } from "@shared/seo";
+import { isTwoStepChallenge, type AccountSessionView, type TwoStepChallenge } from "@shared/auth";
 
 /**
  * Client sign in (/login). Linked from every public page, so a visitor who is not a client yet must find a way on: back
@@ -27,18 +29,24 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [forgot, setForgot] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [challenge, setChallenge] = useState<TwoStepChallenge | null>(null);
 
   useEffect(() => {
     if (account) setLocation(account.landingPath);
   }, [account, setLocation]);
 
   const signIn = trpc.account.signIn.useMutation({
-    onSuccess: view => {
-      utils.account.me.setData(undefined, view);
-      setLocation(view.landingPath);
+    onSuccess: result => {
+      if (isTwoStepChallenge(result)) return setChallenge(result);
+      signedIn(result);
     },
     onError: failure => setError(failure.message),
   });
+
+  const signedIn = (view: AccountSessionView) => {
+    utils.account.me.setData(undefined, view);
+    setLocation(view.landingPath);
+  };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -66,7 +74,7 @@ export default function LoginPage() {
             {!forgot && <CardDescription className="text-sm text-ink-muted">Use the email and password you created your account with.</CardDescription>}
           </CardHeader>
           <CardContent>
-            {forgot ? <ForgotPassword id="login" initialEmail={email} onBack={() => setForgot(false)} /> : (
+            {challenge ? <TwoStepStep id="login" challenge={challenge} onSignedIn={signedIn} onCancel={() => { setChallenge(null); setPassword(""); }} /> : forgot ? <ForgotPassword id="login" initialEmail={email} onBack={() => setForgot(false)} /> : (
             <form className="space-y-4" noValidate onSubmit={submit}>
               {error && <div role="alert" className="border border-danger-line bg-danger-tint px-4 py-3 text-sm text-danger-strong">{error}</div>}
               <div className="space-y-2">

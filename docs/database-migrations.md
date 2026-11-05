@@ -79,3 +79,12 @@ what `pnpm db:migrate` does in one transaction: it refused to run unless exactly
 table existed, ran the two migration files unchanged, and recorded both in `drizzle.__drizzle_migrations` with the file
 hashes and journal timestamps. Result: both tables present, 8 migrations recorded, so `pnpm db:verify` and the next
 `pnpm db:migrate` stay in step. Future migrations should still go through `pnpm db:migrate`.
+
+**`0012` and deployment order.** Two-step sign-in and roles that end on a date: `user_two_step` (new),
+`user_platform_roles.expiresAt`, `account_invitations.roleExpiresAt`, `user_sessions.twoStepVerifiedAt` and
+`user_sessions.deviceHash`. Additive: one table and four nullable columns. **Apply it before deploying the code**: every
+sign-in reads the new session columns, so sign-in fails until it is applied. Apply with `pnpm db:migrate`, or paste
+`drizzle/supabase/apply-0012-two-step-and-access-expiry.sql` into the Supabase SQL Editor and press Run: it stops,
+changing nothing, unless exactly `0000` to `0011` are recorded and `user_two_step` does not exist, then applies the
+migration and records `0012`. After it is applied and the code is live, every staff member sets up two-step sign-in at
+their next sign-in.

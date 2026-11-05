@@ -24,7 +24,7 @@ vi.mock("drizzle-orm/node-postgres", () => ({
 }));
 
 import { appRouter } from "@server/routers";
-import { ACCOUNT_AUTH_ERRORS, ACCOUNT_LOCKOUT_MS, ACCOUNT_SESSION_COOKIE } from "@shared/auth";
+import { ACCOUNT_AUTH_ERRORS, ACCOUNT_LOCKOUT_MS, ACCOUNT_SESSION_COOKIE, type AccountSessionView } from "@shared/auth";
 import { OWNER_ADMIN_EMAIL } from "@server/adminSecurity";
 import { createOnboardingInvitation } from "@server/clientOnboarding";
 import { UNAUTHED_ERR_MSG } from "@shared/const";
@@ -259,7 +259,7 @@ for (const target of targets) {
         await db.update(schema.users).set({ lastSignedIn: new Date("2001-01-01T00:00:00Z") }).where(sql`lower(${schema.users.email}) = ${email}`);
 
         const b = browser();
-        const view = await b.call().account.signIn({ email: email.toUpperCase(), password: PASSWORD });
+        const view = (await b.call().account.signIn({ email: email.toUpperCase(), password: PASSWORD })) as AccountSessionView;
         expect(view.user.email).toBe(email);
         expect(view.activeBusiness?.role).toBe("owner");
         const { user, sessions } = await rowsFor(email);

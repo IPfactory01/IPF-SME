@@ -49,6 +49,14 @@ export const AUDIT_ACTIONS = [
   "engagement_file_uploaded",
   "engagement_measure_saved",
   "engagement_checkin_recorded",
+  "two_step_setup_started",
+  "two_step_challenge_issued",
+  "two_step_failed",
+  "two_step_enabled",
+  "two_step_recovery_code_used",
+  "two_step_reset",
+  "access_removed",
+  "security_alert",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

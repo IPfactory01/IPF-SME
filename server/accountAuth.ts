@@ -2,7 +2,7 @@ import { randomBytes } from "crypto";
 import { and, desc, eq, gt, isNotNull, isNull, ne } from "drizzle-orm";
 import type { Request, Response } from "express";
 import { TRPCError } from "@trpc/server";
-import { adminInvitations, businessMemberships, businesses, userCredentials, users, userSessions } from "../drizzle/schema";
+import { adminInvitations, businessMemberships, businesses, userCredentials, users, userSessions, userTwoStep } from "../drizzle/schema";
 import {
   ACCOUNT_AUTH_ERRORS,
   ACCOUNT_LOCKOUT_MS,
@@ -12,14 +12,19 @@ import {
   changePasswordInputSchema,
   landingPathFor,
   normaliseAccountEmail,
+  TWO_STEP_CHALLENGE_MS,
+  TWO_STEP_ERRORS,
+  TWO_STEP_MAX_ATTEMPTS,
   updateAccountInputSchema,
+  verifyTwoStepInputSchema,
   updateBusinessInputSchema,
   type AccountMembership,
   type AccountSessionView,
+  type TwoStepChallenge,
 } from "../shared/auth";
 import { businessRoleCan, type BusinessCapability } from "../shared/businessCapabilities";
 import { businessProfileCompletion } from "../shared/businessMemberships";
-import type { Authority, PlatformPermission } from "../shared/platformPermissions";
+import { requiresTwoStep, type Authority, type PlatformPermission } from "../shared/platformPermissions";
 import { getAccountSessionCookieOptions } from "./_core/cookies";
 import { recordAudit } from "./audit";
 import { getDb } from "./db";
@@ -29,6 +34,11 @@ import { hashAdminPassword, OWNER_ADMIN_EMAIL, sha256, verifyAdminPasswordHash }
 import { loadAuthority } from "./platformAccess";
 import { consumeLimit, releaseLimit } from "./rateLimit";
 import { isSameHostOrigin, isTrustedBrowserOrigin } from "./security";
+import { alertSuperAdmins } from "./securityAlerts";
+import { deviceFingerprint, matchTotp, twoStepEnforced, newRecoveryCodes, newTotpSecret, openSecret, otpauthUri, sealSecret, useRecoveryCode } from "./twoStep";
+
+/** A session opened with two-step sign-in (anyone with an internal role) lasts a working day, not two weeks. */
+export const STAFF_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000;
 
 const PG_UNIQUE_VIOLATION = "23505";
 const RATE_LIMIT_WINDOW_MS = ACCOUNT_LOCKOUT_MS;
@@ -82,15 +92,15 @@ export function slugify(name: string) {
   return `${base || "business"}-${randomBytes(3).toString("hex")}`;
 }
 
-export async function createSession(tx: Pick<Database, "insert">, userId: number, activeBusinessId: number | null = null) {
+export async function createSession(tx: Pick<Database, "insert">, userId: number, activeBusinessId: number | null = null, lifetimeMs = ACCOUNT_SESSION_MAX_AGE_MS) {
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + ACCOUNT_SESSION_MAX_AGE_MS);
+  const expiresAt = new Date(Date.now() + lifetimeMs);
   await tx.insert(userSessions).values({ userId, tokenHash: sha256(token), expiresAt, activeBusinessId });
   return { token, expiresAt };
 }
 
-export function setSessionCookie(req: Request, res: Response, token: string) {
-  res.cookie(ACCOUNT_SESSION_COOKIE, token, { ...getAccountSessionCookieOptions(req), maxAge: ACCOUNT_SESSION_MAX_AGE_MS });
+export function setSessionCookie(req: Request, res: Response, token: string, maxAge = ACCOUNT_SESSION_MAX_AGE_MS) {
+  res.cookie(ACCOUNT_SESSION_COOKIE, token, { ...getAccountSessionCookieOptions(req), maxAge });
 }
 
 function clearSessionCookie(req: Request, res: Response) {
@@ -186,6 +196,7 @@ export async function resolveAccountSession(req: Request): Promise<AccountSessio
       email: users.email,
       role: users.role,
       status: users.status,
+      twoStepVerifiedAt: userSessions.twoStepVerifiedAt,
     })
     .from(userSessions)
     .innerJoin(users, eq(userSessions.userId, users.id))
@@ -197,6 +208,9 @@ export async function resolveAccountSession(req: Request): Promise<AccountSessio
     loadMemberships(db, row.userId),
     loadAuthority(db, { id: row.userId, role: row.role, email: row.email, status: row.status }),
   ]);
+  // A person with an internal role is signed in only once they have passed two-step sign-in on this session. This also
+  // covers a role granted to someone already signed in: their next request asks them to sign in again.
+  if (twoStepEnforced() && requiresTwoStep(authority) && !row.twoStepVerifiedAt) return null;
   return { sessionId: row.sessionId, authority, ...buildView({ id: row.userId, name: row.name, email: row.email }, authority, memberships, row.activeBusinessId) };
 }
 
@@ -265,6 +279,14 @@ export async function signInAccount(req: Request, res: Response, rawInput: { ema
     await db.update(userCredentials).set({ failedAttempts: lock ? 0 : attempts, lockedUntil: lock }).where(eq(userCredentials.id, credential.id));
     // Only an existing account is recorded (an unknown address would let anyone fill the log); no password is ever stored.
     await recordAudit(db, { action: "account_sign_in_failed", actorUserId: user.id, targetEmail: user.email, details: { attempts, locked: Boolean(lock) } });
+    if (lock && requiresTwoStep(await loadAuthority(db, user))) {
+      await alertSuperAdmins(db, {
+        subject: `Account locked: ${user.email}`,
+        lines: [`${user.name || user.email} has had ${ACCOUNT_MAX_FAILED_ATTEMPTS} wrong passwords in a row, so the account is locked for 15 minutes.`, "If this was not them, remove their access from People in the admin area."],
+        event: "staff_account_locked",
+        targetEmail: user.email,
+      });
+    }
     throw new TRPCError({ code: "UNAUTHORIZED", message: ACCOUNT_AUTH_ERRORS.invalidCredentials });
   }
 
@@ -276,6 +298,11 @@ export async function signInAccount(req: Request, res: Response, rawInput: { ema
   }
 
   const memberships = await loadMemberships(db, user.id);
+  if (twoStepEnforced() && requiresTwoStep(authority)) {
+    const challenge = await issueTwoStepChallenge(db, user, credential.id, memberships);
+    await releaseRateLimit("signin", req, email);
+    return challenge;
+  }
   const session = await db.transaction(async tx => {
     await tx.update(userCredentials).set({ failedAttempts: 0, lockedUntil: null }).where(eq(userCredentials.id, credential.id));
     await tx.update(users).set({ lastSignedIn: databaseNow() }).where(eq(users.id, user.id));
@@ -290,6 +317,137 @@ export async function signInAccount(req: Request, res: Response, rawInput: { ema
   await releaseRateLimit("signin", req, email);
   setSessionCookie(req, res, session.token);
   return buildView(user, authority, memberships, session.restored);
+}
+
+/**
+ * The password was right and the person needs two-step sign-in. A short-lived session row holds the challenge; it is
+ * not a sign-in (resolveAccountSession refuses it) and no cookie is set. The first time, a new authenticator secret is
+ * made and returned once, for the person to add to their app; it is enabled only when they enter a correct code.
+ */
+async function issueTwoStepChallenge(
+  db: Database,
+  user: { id: number; email: string | null },
+  credentialId: number,
+  memberships: AccountMembership[],
+): Promise<TwoStepChallenge> {
+  const existing = (await db.select().from(userTwoStep).where(eq(userTwoStep.userId, user.id)).limit(1))[0];
+  let setup: TwoStepChallenge["setup"] = null;
+  let sealed: string | null = null;
+  if (!existing?.enabledAt) {
+    const secret = newTotpSecret();
+    try {
+      sealed = sealSecret(secret);
+    } catch {
+      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: TWO_STEP_ERRORS.notConfigured });
+    }
+    setup = { secret, uri: otpauthUri(secret, user.email ?? "") };
+  }
+  const created = await db.transaction(async tx => {
+    await tx.update(userCredentials).set({ failedAttempts: 0, lockedUntil: null }).where(eq(userCredentials.id, credentialId));
+    if (sealed) {
+      await tx.insert(userTwoStep).values({ userId: user.id, secretSealed: sealed, recoveryCodeHashes: "[]", lastUsedStep: null, enabledAt: null })
+        .onConflictDoUpdate({ target: userTwoStep.userId, set: { secretSealed: sealed, recoveryCodeHashes: "[]", lastUsedStep: null, enabledAt: null } });
+    }
+    const previous = (await tx.select({ activeBusinessId: userSessions.activeBusinessId }).from(userSessions)
+      .where(and(eq(userSessions.userId, user.id), isNotNull(userSessions.activeBusinessId))).orderBy(desc(userSessions.id)).limit(1))[0];
+    const restored = chooseActiveBusiness(memberships, previous?.activeBusinessId ?? null)?.businessId ?? null;
+    const session = await createSession(tx, user.id, restored, TWO_STEP_CHALLENGE_MS);
+    await recordAudit(tx, { action: setup ? "two_step_setup_started" : "two_step_challenge_issued", actorUserId: user.id, targetEmail: user.email });
+    return session;
+  });
+  return { twoStepRequired: true, challenge: created.token, setup };
+}
+
+/**
+ * Second step of sign-in: the code from the authenticator app (or, once set up, a recovery code). On success the
+ * challenge becomes a real session for a working day, the cookie is set, and a sign-in from a device not seen before is
+ * reported to the Super Admin. The first successful code also switches two-step on and returns the recovery codes,
+ * shown once. Five wrong codes end the challenge.
+ */
+export async function verifyTwoStep(req: Request, res: Response, rawInput: unknown): Promise<AccountSessionView & { recoveryCodes: string[] | null }> {
+  assertSameOrigin(req);
+  const parsed = verifyTwoStepInputSchema.safeParse(rawInput);
+  if (!parsed.success) throw new TRPCError({ code: "BAD_REQUEST", message: TWO_STEP_ERRORS.wrongCode });
+  const db = await getDb();
+  if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  const tokenHash = sha256(parsed.data.challenge);
+  const row = (await db
+    .select({ sessionId: userSessions.id, activeBusinessId: userSessions.activeBusinessId, userId: users.id, name: users.name, email: users.email, role: users.role, status: users.status })
+    .from(userSessions)
+    .innerJoin(users, eq(userSessions.userId, users.id))
+    .where(and(eq(userSessions.tokenHash, tokenHash), isNull(userSessions.revokedAt), isNull(userSessions.twoStepVerifiedAt), gt(userSessions.expiresAt, new Date()), eq(users.status, "active")))
+    .limit(1))[0];
+  const record = row ? (await db.select().from(userTwoStep).where(eq(userTwoStep.userId, row.userId)).limit(1))[0] : undefined;
+  if (!row || !record) throw new TRPCError({ code: "UNAUTHORIZED", message: TWO_STEP_ERRORS.expired });
+
+  const limit = { scope: "two_step", max: TWO_STEP_MAX_ATTEMPTS, windowMs: TWO_STEP_CHALLENGE_MS };
+  if (!(await consumeLimit(limit, tokenHash))) {
+    await db.update(userSessions).set({ revokedAt: databaseNow() }).where(eq(userSessions.id, row.sessionId));
+    await alertSuperAdmins(db, {
+      subject: `Wrong two-step codes: ${row.email}`,
+      lines: [`Someone entered the right password for ${row.name || row.email}, then ${TWO_STEP_MAX_ATTEMPTS} wrong two-step codes. The sign-in was stopped.`, "If this was not them, their password is known to someone else: remove their access from People, then issue a new password."],
+      event: "two_step_attempts_exhausted",
+      targetEmail: row.email,
+    });
+    throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: TWO_STEP_ERRORS.expired });
+  }
+
+  let secret: string;
+  try {
+    secret = openSecret(record.secretSealed);
+  } catch {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: TWO_STEP_ERRORS.notConfigured });
+  }
+  const enabled = Boolean(record.enabledAt);
+  const step = matchTotp(secret, parsed.data.code, record.lastUsedStep);
+  const storedHashes = JSON.parse(record.recoveryCodeHashes) as string[];
+  const remaining = step === null && enabled ? useRecoveryCode(storedHashes, parsed.data.code) : null;
+
+  if (step === null && remaining === null) {
+    await recordAudit(db, { action: "two_step_failed", actorUserId: row.userId, targetEmail: row.email });
+    throw new TRPCError({ code: "UNAUTHORIZED", message: TWO_STEP_ERRORS.wrongCode });
+  }
+
+  const recovery = enabled ? null : newRecoveryCodes();
+  const device = deviceFingerprint(req.headers["user-agent"] as string | undefined, req.ip);
+  const knownDevices = await db.select({ deviceHash: userSessions.deviceHash }).from(userSessions)
+    .where(and(eq(userSessions.userId, row.userId), isNotNull(userSessions.twoStepVerifiedAt), isNotNull(userSessions.deviceHash)));
+  const newDevice = knownDevices.length > 0 && !knownDevices.some(item => item.deviceHash === device);
+  const expiresAt = new Date(Date.now() + STAFF_SESSION_MAX_AGE_MS);
+
+  await db.transaction(async tx => {
+    await tx.update(userTwoStep).set({
+      ...(step !== null ? { lastUsedStep: step } : {}),
+      ...(remaining !== null ? { recoveryCodeHashes: JSON.stringify(remaining) } : {}),
+      ...(recovery ? { enabledAt: databaseNow(), recoveryCodeHashes: JSON.stringify(recovery.hashes) } : {}),
+    }).where(eq(userTwoStep.id, record.id));
+    await tx.update(userSessions).set({ twoStepVerifiedAt: databaseNow(), deviceHash: device, expiresAt }).where(eq(userSessions.id, row.sessionId));
+    await tx.update(users).set({ lastSignedIn: databaseNow() }).where(eq(users.id, row.userId));
+    if (recovery) await recordAudit(tx, { action: "two_step_enabled", actorUserId: row.userId, targetEmail: row.email });
+    if (remaining !== null) await recordAudit(tx, { action: "two_step_recovery_code_used", actorUserId: row.userId, targetEmail: row.email, details: { left: remaining.length } });
+    await recordAudit(tx, { action: "account_signed_in", actorUserId: row.userId, targetEmail: row.email, details: { twoStep: true, newDevice } });
+  });
+
+  if (newDevice || remaining !== null) {
+    await alertSuperAdmins(db, {
+      subject: remaining !== null ? `Recovery code used: ${row.email}` : `New device: ${row.email}`,
+      lines: [
+        remaining !== null
+          ? `${row.name || row.email} signed in with a recovery code instead of their authenticator app. ${remaining.length} codes left.`
+          : `${row.name || row.email} signed in from a browser or network not seen before (${String(req.headers["user-agent"] ?? "unknown browser").slice(0, 120)}).`,
+        "If this was not them, remove their access from People in the admin area.",
+      ],
+      event: remaining !== null ? "two_step_recovery_code_used" : "staff_new_device",
+      targetEmail: row.email,
+    });
+  }
+
+  setSessionCookie(req, res, parsed.data.challenge, STAFF_SESSION_MAX_AGE_MS);
+  const [memberships, authority] = await Promise.all([
+    loadMemberships(db, row.userId),
+    loadAuthority(db, { id: row.userId, role: row.role, email: row.email, status: row.status }),
+  ]);
+  return { ...buildView({ id: row.userId, name: row.name, email: row.email }, authority, memberships, row.activeBusinessId), recoveryCodes: recovery?.codes ?? null };
 }
 
 /** Revokes the current session server-side and clears the cookie. Safe to call when already signed out. */

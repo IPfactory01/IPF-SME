@@ -11,7 +11,7 @@ import { hashAdminPassword, isOwnerAdmin, sha256 } from "./adminSecurity";
 import { recordAudit } from "./audit";
 import { databaseNow, emailEquals, isUndefinedTable } from "./dbHelpers";
 import { deliverEmail } from "./email";
-import { listSuperAdminIds } from "./platformAccess";
+import { listSuperAdminIds, listTwoStepStatus } from "./platformAccess";
 import { consumeLimit, LIMITS } from "./rateLimit";
 import { getTrustedApplicationOrigin } from "./security";
 
@@ -40,7 +40,13 @@ const requestIp = (req: Request) => (req.ip || "unknown").trim().toLowerCase();
 export async function listPeople(db: Pick<Database, "select">) {
   const rows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, lastSignedIn: users.lastSignedIn })
     .from(users).innerJoin(userCredentials, eq(userCredentials.userId, users.id)).orderBy(users.name, users.id).limit(500);
-  const roles = await db.select({ userId: userPlatformRoles.userId, role: userPlatformRoles.role }).from(userPlatformRoles);
+  const roles = await db.select({ userId: userPlatformRoles.userId, role: userPlatformRoles.role, expiresAt: userPlatformRoles.expiresAt }).from(userPlatformRoles);
+  const twoStep = await listTwoStepStatus(db);
+  const endsOf = new Map<number, Date>();
+  for (const row of roles) {
+    const earlier = endsOf.get(row.userId);
+    if (row.expiresAt && (!earlier || row.expiresAt < earlier)) endsOf.set(row.userId, row.expiresAt);
+  }
   const memberships = await db.select({ userId: businessMemberships.userId }).from(businessMemberships).where(eq(businessMemberships.status, "active"));
   const rolesOf = new Map<number, PlatformRole[]>();
   for (const row of roles) rolesOf.set(row.userId, [...(rolesOf.get(row.userId) ?? []), row.role]);
@@ -50,6 +56,10 @@ export async function listPeople(db: Pick<Database, "select">) {
     ...row,
     roles: rolesOf.get(row.id) ?? [],
     businesses: businessesOf.get(row.id) ?? 0,
+    /** True once they have finished setting up two-step sign-in. */
+    twoStep: twoStep.get(row.id) ?? false,
+    /** The earliest end date on any of their roles (a contractor's access), or null. */
+    accessEndsAt: endsOf.get(row.id) ?? null,
     superAdmin: isOwnerAdmin({ email: row.email }) || (rolesOf.get(row.id) ?? []).includes("super_admin"),
   }));
 }

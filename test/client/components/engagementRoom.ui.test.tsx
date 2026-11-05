@@ -372,8 +372,8 @@ describe("the room's views", () => {
     fireEvent.click(founder);
     expect(founder.getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("heading", { name: "You, as the founder" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: /1\. Founder readiness/ })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: /2\. Strategic intent/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^1 ?Founder readiness/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: /^2 ?Strategic intent/ })).toBeTruthy();
     expect(screen.getByText("How the gap closes")).toBeTruthy();
     expect(screen.queryByRole("list", { name: "Engagement timeline" })).toBeNull();
     expect(window.location.hash).toBe("#founder");
@@ -384,6 +384,21 @@ describe("the room's views", () => {
     expect(document.activeElement).toBe(tabs.at(-1));
     fireEvent.keyDown(tabs.at(-1)!, { key: "Home" });
     expect(tabs[0].getAttribute("aria-selected")).toBe("true");
+  });
+
+  it("measures again when the page changes width without the window doing so, so the next panel never shows at the edge", async () => {
+    let width = 800;
+    const observers: (() => void)[] = [];
+    vi.stubGlobal("ResizeObserver", class { constructor(callback: () => void) { observers.push(callback); } observe() { return undefined; } disconnect() { return undefined; } });
+    const clientWidth = vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockImplementation(() => width);
+    render(<EngagementRoom room={room()} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Deliverables" }));
+    const track = screen.getByRole("tabpanel", { name: "Deliverables" }).parentElement!;
+    await waitFor(() => expect(track.style.transform).toContain("-3200px"));
+    width = 1000;
+    act(() => { for (const callback of observers) callback(); });
+    await waitFor(() => expect(track.style.transform).toContain("-4000px"));
+    clientWidth.mockRestore();
   });
 
   it("opens the tab a link names, and the Overview when a link points inside it", () => {

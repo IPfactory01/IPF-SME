@@ -69,6 +69,18 @@ describe("the People panel", () => {
     expect(within(screen.getByRole("region", { name: "Clients" })).getByText("Ada Okafor")).toBeTruthy();
   });
 
+  it("keeps a staff member whose access was removed under the IP Factory team, without a level, ready to be given one", () => {
+    const removed = { id: 5, name: "Lewis Reinstated", email: "lewis.r@example.test", status: "active", lastSignedIn: null, roles: [], businesses: 0, superAdmin: false, twoStep: false, accessEndsAt: null, jobTitle: "Senior Associate" };
+    api.people = [ada, removed];
+    render(<PeoplePanel />);
+    const team = within(screen.getByRole("region", { name: "IP Factory team" }));
+    expect(team.getByText("Lewis Reinstated")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Clients" })).queryByText("Lewis Reinstated")).toBeNull();
+    expect(rowOf("Lewis Reinstated").getByText("No access: choose a level")).toBeTruthy();
+    fireEvent.change(rowOf("Lewis Reinstated").getByLabelText("Level of Lewis Reinstated"), { target: { value: "Senior Associate" } });
+    expect(api.calls.setLevel).toEqual([{ userId: 5, level: "Senior Associate", expiresOn: null }]);
+  });
+
   it("sets a staff member's level, which sets their access, and asks a Specialist's end date first", () => {
     render(<PeoplePanel />);
     const row = rowOf("Lewis Desk");

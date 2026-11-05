@@ -61,7 +61,11 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
     };
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    // The page can change width without the window doing so (the rail appears, a scrollbar comes and goes); measure
+    // again then, or the slide offset goes stale and the next panel shows at the edge.
+    const observer = typeof ResizeObserver === "undefined" || !viewport.current ? null : new ResizeObserver(measure);
+    if (observer && viewport.current) observer.observe(viewport.current);
+    return () => { window.removeEventListener("resize", measure); observer?.disconnect(); };
   }, [x]);
 
   // The viewport takes the height of the panel on screen, so a short tab does not leave a long empty page.

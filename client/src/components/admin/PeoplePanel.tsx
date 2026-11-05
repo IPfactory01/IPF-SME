@@ -106,8 +106,8 @@ export default function PeoplePanel() {
         </form>
       )}
       {[
-        { staff: true, title: "IP Factory team", note: "Everyone with a level. The level sets their access; their function on a project is set in Engagements.", rows: people.data.filter(person => person.roles.length > 0) },
-        { staff: false, title: "Clients", note: "Business owners and their people. Clients never hold a role.", rows: people.data.filter(person => person.roles.length === 0) },
+        { staff: true, title: "IP Factory team", note: "Everyone with a level. The level sets their access; their function on a project is set in Engagements. Someone whose access was removed stays here without a level until given one.", rows: people.data.filter(person => person.roles.length > 0 || !person.businesses) },
+        { staff: false, title: "Clients", note: "Business owners and their people. Clients never hold a role.", rows: people.data.filter(person => person.roles.length === 0 && person.businesses) },
       ].map(({ staff, title, note, rows }) => (
         <section key={title} aria-label={title} className="space-y-2">
           <div><h3 className="text-sm font-semibold text-ink">{title} <span className="font-normal text-ink-muted">({rows.length})</span></h3><p className="text-xs text-ink-muted">{note}</p></div>
@@ -119,7 +119,7 @@ export default function PeoplePanel() {
                 <tr key={person.id} className="border-b border-line-soft">
                   <td className={TD}><span className="block font-medium">{person.name || "-"}</span><span className="block text-xs text-ink-muted">{person.email}</span></td>
                   <td className={TD}>
-                    {person.roles.length ? <LevelEditor userId={person.id} name={person.name || person.email || "this person"} level={person.jobTitle ?? null} roles={person.roles} onChanged={refresh} /> : person.businesses ? "Client" : "-"}
+                    {person.roles.length || !person.businesses ? <LevelEditor userId={person.id} name={person.name || person.email || "this person"} level={person.jobTitle ?? null} roles={person.roles} onChanged={refresh} /> : person.businesses ? "Client" : "-"}
                 </td>
                   <td className={TD}>{STATUS[person.status] ?? person.status}</td>
                   <td className={TD}>{person.roles.length === 0 ? "-" : person.twoStep ? "On" : <span className="font-semibold text-danger">Not set up</span>}</td>
@@ -171,7 +171,7 @@ function LevelEditor({ userId, name, level, roles, onChanged }: { userId: number
           <Button type="button" size="sm" className="h-6 rounded-none bg-brand px-2 text-xs text-white" disabled={save.isPending || !endsOn} onClick={() => save.mutate({ userId, level: "Specialist", expiresOn: endsOn })}>Save</Button>
         </span>
       )}
-      <span className="block text-xs text-ink-muted">{isFirmLevel(level) ? LEVEL_ACCESS[level] : `Access: ${roleDisplay(roles)}`}</span>
+      <span className="block text-xs text-ink-muted">{!roles.length ? "No access: choose a level" : isFirmLevel(level) ? LEVEL_ACCESS[level] : `Access: ${roleDisplay(roles)}`}</span>
     </div>
   );
 }

@@ -13,8 +13,8 @@ import { project, TAB_SPRING } from "./RoomTabs";
  * one, their Business Health Check), as the server sent it: the room never says something the report does not.
  */
 
-const CARD = "border border-line-soft bg-paper-raised p-5 shadow-sm";
-const KICKER = "text-sm font-semibold text-ink-muted";
+const CARD = "rounded-xl border border-line-soft bg-white p-5";
+const KICKER = "text-sm font-medium text-ink-muted";
 const HEALTH: Record<ReportHealth, { label: string; chip: string; bar: string }> = {
   stuck: { label: "Stuck", chip: "bg-health-stuck-tint text-health-stuck", bar: "bg-health-stuck" },
   watch: { label: "Watch", chip: "bg-health-watch-tint text-health-watch", bar: "bg-health-watch" },
@@ -25,7 +25,7 @@ const ZONE: Record<"stuck" | "watch" | "clear", string> = { stuck: "bg-health-st
 
 export function HealthChip({ health }: { health: ReportHealth }) {
   return (
-    <span className={`inline-flex shrink-0 items-center gap-1.5 px-2 py-0.5 text-xs font-medium ${HEALTH[health].chip}`}>
+    <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium ${HEALTH[health].chip}`}>
       <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-current" />{HEALTH[health].label}
     </span>
   );
@@ -36,7 +36,7 @@ const sourceLine = (insight: RoomInsight) => `From your ${insight.source}`;
 function Heading({ title, source }: { title: string; source: string }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-      <h2 className="font-serif text-2xl font-normal tracking-tight">{title}</h2>
+      <h2 className="font-sans text-xl font-semibold tracking-tight">{title}</h2>
       <span className="text-xs text-ink-muted">{source}</span>
     </div>
   );
@@ -54,20 +54,20 @@ export function FounderPanel({ insight }: { insight: RoomInsight }) {
       {founder.sections.length ? founder.sections.map(section => (
         <article key={section.number} className={CARD} aria-labelledby={`founder-${section.number}`}>
           <div className="flex items-start justify-between gap-3">
-            <h3 id={`founder-${section.number}`} className="font-serif text-xl font-normal tracking-tight"><span className="text-ink-muted tabular-nums">{section.number}.</span> {section.title}</h3>
+            <h3 id={`founder-${section.number}`} className="font-sans text-base font-semibold"><span className="mr-1 text-ink-muted tabular-nums">{section.number}</span>{section.title}</h3>
             {section.health && <HealthChip health={section.health} />}
           </div>
-          <p className="mt-2 font-serif text-lg leading-snug">{section.standfirst}</p>
+          <p className="mt-2 text-[15px] leading-relaxed text-ink">{section.standfirst}</p>
           <div className="mt-4 space-y-4"><ReportBlocks blocks={section.blocks} /></div>
           {section.number === 2 && founder.question && <Question question={founder.question} />}
         </article>
       )) : (
         <article className={CARD} aria-labelledby="founder-readiness">
           <div className="flex items-start justify-between gap-3">
-            <h3 id="founder-readiness" className="font-serif text-xl font-normal tracking-tight">Founder readiness</h3>
+            <h3 id="founder-readiness" className="font-sans text-base font-semibold">Founder readiness</h3>
             <HealthChip health={founder.readiness.health} />
           </div>
-          <p className="mt-2 font-serif text-lg leading-snug">{founder.readiness.label}</p>
+          <p className="mt-2 text-[15px] leading-relaxed text-ink">{founder.readiness.label}</p>
           {founder.profile.length > 0 && <Facts rows={founder.profile} />}
           <p className="mt-4 text-sm text-ink-muted">Your {METHOD.fullReport} adds the four money basics, your goal and how the gap to it closes. Without it, this tab shows what your {METHOD.businessCheck} found.</p>
         </article>
@@ -87,7 +87,7 @@ function Question({ question }: { question: NonNullable<RoomInsight["founder"]["
         <dl className="mt-3 divide-y divide-line-soft text-sm">
           {question.levers.map(lever => (
             <div key={lever.lever} className="grid grid-cols-[1fr_auto] gap-x-3 py-2">
-              <dt className="font-semibold">{lever.lever} <span className="font-normal text-ink-muted">· {lever.difficulty}</span></dt>
+              <dt className="font-medium">{lever.lever} <span className="font-normal text-ink-muted">· {lever.difficulty}</span></dt>
               <dd className="text-right tabular-nums">{lever.factor}</dd>
               <dd className="col-span-2 text-xs text-ink-muted">{lever.fromTo}</dd>
             </div>
@@ -103,7 +103,7 @@ function Question({ question }: { question: NonNullable<RoomInsight["founder"]["
 function Facts({ rows }: { rows: { label: string; value: string }[] }) {
   return (
     <dl className="mt-3 divide-y divide-line-soft text-sm">
-      {rows.map(row => <div key={row.label} className="flex justify-between gap-4 py-2"><dt className="text-ink-muted">{row.label}</dt><dd className="text-right font-semibold">{row.value}</dd></div>)}
+      {rows.map(row => <div key={row.label} className="grid gap-0.5 py-2 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-4"><dt className="text-ink-muted">{row.label}</dt><dd className="text-ink">{row.value}</dd></div>)}
     </dl>
   );
 }
@@ -111,7 +111,7 @@ function Facts({ rows }: { rows: { label: string; value: string }[] }) {
 function Recommendation({ code, lines }: { code?: string; lines: React.ReactNode[] }) {
   return (
     <div className="border-l-2 border-highlight-ink bg-brand-tint-softer px-4 py-3 text-sm">
-      <p className="text-xs font-semibold text-brand">Recommendation{code ? ` ${code}` : ""}</p>
+      <p className="text-xs font-medium text-brand">Recommendation{code ? ` ${code}` : ""}</p>
       <div className="mt-1 space-y-1.5">{lines.map((line, k) => <p key={k}>{line}</p>)}</div>
     </div>
   );
@@ -123,8 +123,8 @@ export function ReportBlocks({ blocks }: { blocks: ReportBlock[] }) {
 
 function ReportBlockView({ block }: { block: ReportBlock }) {
   switch (block.kind) {
-    case "subsection": return <h4 className="pt-1 text-sm font-semibold"><span className="text-ink-muted tabular-nums">{block.code}</span> {block.title}</h4>;
-    case "heading": return <h4 className="pt-1 text-sm font-semibold">{block.text}</h4>;
+    case "subsection": return <h4 className="pt-2 font-sans text-sm font-semibold"><span className="mr-1 text-ink-muted tabular-nums">{block.code}</span>{block.title}</h4>;
+    case "heading": return <h4 className="pt-2 font-sans text-sm font-medium text-ink-muted">{block.text}</h4>;
     case "paragraph": return <p className="text-sm text-ink-600">{block.text}</p>;
     case "facts": return <Facts rows={block.rows} />;
     case "bullets": return <ul className="list-disc space-y-1 pl-5 text-sm text-ink-600">{block.items.map(item => <li key={item}>{item}</li>)}</ul>;
@@ -135,7 +135,7 @@ function ReportBlockView({ block }: { block: ReportBlock }) {
       </div>
     );
     case "recommendation": return <Recommendation code={block.code} lines={block.lines} />;
-    case "callout": return <div className="border border-brand-line bg-brand-tint p-3 text-sm"><p className="font-semibold">{block.title}</p><p className="mt-1 text-ink-600">{block.text}</p></div>;
+    case "callout": return <div className="rounded-lg border border-brand-line bg-brand-tint p-3 text-sm"><p className="font-medium">{block.title}</p><p className="mt-1 text-ink-600">{block.text}</p></div>;
     case "table": return (
       <table className="w-full table-fixed text-left text-sm">
         <thead><tr className="border-b border-line">{block.columns.map((column, k) => <th key={column} scope="col" className="pb-1.5 pr-2 text-xs font-semibold text-ink-muted" style={block.widths ? { width: `${block.widths[k] * 100}%` } : undefined}>{column}</th>)}</tr></thead>
@@ -145,7 +145,7 @@ function ReportBlockView({ block }: { block: ReportBlock }) {
     case "reading": return <Reading reading={block} />;
     case "benchmarks": return <Benchmarks items={block.items} />;
     case "bridge": return <Bridge steps={block.steps} />;
-    case "metrics": return <dl className="grid grid-cols-2 gap-3 text-sm">{block.items.map(item => <div key={item.label} className="border border-line-soft p-3"><dt className="text-xs text-ink-muted">{item.label}</dt><dd className="mt-1 font-serif text-lg font-normal tabular-nums">{item.value}</dd><dd className="text-xs text-ink-muted">{item.note}</dd></div>)}</dl>;
+    case "metrics": return <dl className="grid grid-cols-2 gap-3 text-sm">{block.items.map(item => <div key={item.label} className="rounded-lg border border-line-soft p-3"><dt className="text-xs text-ink-muted">{item.label}</dt><dd className="mt-1 text-lg font-semibold tracking-tight tabular-nums">{item.value}</dd><dd className="text-xs text-ink-muted">{item.note}</dd></div>)}</dl>;
     // The chart-only blocks belong to the PDF; the room shows the same facts elsewhere.
     default: return null;
   }
@@ -177,7 +177,7 @@ function Benchmarks({ items }: { items: Benchmark[] }) {
         const at = Math.max(0, Math.min(1, (item.value - item.min) / span)) * 100;
         return (
           <div key={item.label} className="text-sm">
-            <div className="flex justify-between gap-3"><span className="font-semibold">{item.label}</span><span className="tabular-nums">{item.display}</span></div>
+            <div className="flex justify-between gap-3"><span className="font-medium">{item.label}</span><span className="tabular-nums">{item.display}</span></div>
             <div className="relative mt-1.5 flex h-2.5" role="img" aria-label={`${item.label}: ${item.display}. ${item.target}`}>
               {zones.map((zone, k) => <i key={k} className={`block h-full ${ZONE[zone.health]}`} style={{ flex: zone.width }} />)}
               <span aria-hidden className="absolute -bottom-1 -top-1 w-0.5 bg-ink" style={{ left: `calc(${at}% - 1px)` }} />
@@ -240,11 +240,11 @@ export function BusinessPanel({ insight }: { insight: RoomInsight }) {
               type="button"
               disabled={!area.reading && !area.benchmarks.length}
               onClick={event => { opener.current = event.currentTarget; setOpen(area); }}
-              className="grid w-full grid-cols-[4px_1fr_auto] items-stretch gap-x-4 border lg:h-full border-line-soft bg-paper-raised text-left shadow-sm transition-[transform,border-color] duration-100 hover:border-brand-line active:scale-[0.985] disabled:cursor-default disabled:active:scale-100 motion-reduce:transition-none"
+              className="grid w-full grid-cols-[4px_1fr_auto] items-stretch gap-x-4 border lg:h-full border-line-soft rounded-xl bg-white text-left transition-[transform,border-color] duration-100 hover:border-brand-line active:scale-[0.985] disabled:cursor-default disabled:active:scale-100 motion-reduce:transition-none"
             >
               <span aria-hidden className={HEALTH[area.health].bar} />
               <span className="min-w-0 py-3">
-                <span className="block font-semibold">{area.area}</span>
+                <span className="block font-medium">{area.area}</span>
                 <span className="mt-0.5 block text-sm text-ink-600">{area.finding}</span>
               </span>
               <span className="flex flex-col items-end justify-between gap-2 py-3 pr-3">
@@ -325,13 +325,13 @@ function AreaSheet({ area, source, onClose }: { area: InsightArea; source: RoomI
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className={KICKER}>{HEALTH[area.health].label} · from your {source}</p>
-              <h2 id="area-sheet-title" className="mt-1 font-serif text-2xl font-normal tracking-tight">{area.area}</h2>
+              <h2 id="area-sheet-title" className="mt-1 font-sans text-xl font-semibold tracking-tight">{area.area}</h2>
             </div>
             <button ref={close} type="button" onClick={() => dismiss()} aria-label="Close" className="flex h-8 w-8 shrink-0 items-center justify-center bg-paper-sunken text-ink-muted hover:text-ink"><X className="h-4 w-4" aria-hidden /></button>
           </div>
         </div>
         <div className={`space-y-4 overflow-y-auto overscroll-contain pb-8 ${side ? "px-6" : "px-5"}`}>
-          <p className="font-serif text-lg leading-snug">{area.finding}</p>
+          <p className="text-[15px] leading-relaxed text-ink">{area.finding}</p>
           {area.benchmarks.length > 0 && <div><p className={KICKER}>Against what good looks like</p><div className="mt-2"><Benchmarks items={area.benchmarks} /></div></div>}
           {area.reading && <Reading reading={area.reading} />}
         </div>

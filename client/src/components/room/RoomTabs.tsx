@@ -108,15 +108,8 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
 
   return (
     <div>
-      <div className="sticky z-30 border-b border-line-soft bg-paper/85 py-2 backdrop-blur-md" style={{ top }} data-room-tabs>
-        <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="relative grid bg-paper-sunken p-1 lg:max-w-md" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
-          <motion.span
-            aria-hidden
-            className="absolute bottom-1 left-1 top-1 border border-line-soft bg-paper-raised shadow-sm"
-            style={{ width: `calc((100% - 0.5rem) / ${tabs.length})` }}
-            animate={{ x: `${index * 100}%` }}
-            transition={reduce ? { duration: 0 } : TAB_SPRING}
-          />
+      <div className="sticky z-30 border-b border-line-soft bg-paper/90 backdrop-blur-md" style={{ top }} data-room-tabs>
+        <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="flex gap-1 overflow-x-auto [scrollbar-width:none]">
           {tabs.map((tab, k) => (
             <button
               key={tab.id}
@@ -128,7 +121,7 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
               aria-selected={k === index}
               tabIndex={k === index ? 0 : -1}
               onClick={() => select(k)}
-              className={`relative z-10 flex items-center justify-center gap-1.5 px-2 py-2 text-sm font-medium transition-colors ${k === index ? "text-ink" : "text-ink-muted hover:text-ink"}`}
+              className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors ${k === index ? "border-brand font-medium text-ink" : "border-transparent text-ink-muted hover:text-ink"}`}
             >
               {tab.label}
               {tab.count && tab.count.value > 0 && <span className="text-xs font-normal text-ink-muted tabular-nums" aria-label={tab.count.label}>{tab.count.value}</span>}

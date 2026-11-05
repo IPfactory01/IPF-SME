@@ -42,7 +42,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
-const { default: EngagementRoom } = await import("@/components/EngagementRoom");
+const { default: EngagementRoom, dueFlag } = await import("@/components/EngagementRoom");
 
 const room = (over: Record<string, unknown> = {}) => ({
   engagementId: 4,
@@ -288,29 +288,35 @@ const report = buildFullReport({ reference: "TS-R-000004", date: new Date("2026-
 const fromReport = roomInsight({ report, result: null })!;
 const fromCheck = roomInsight({ report: null, result: evaluate(checkAnswers) })!;
 
-describe("the room's Founder, Business and Plan tabs", () => {
+describe("the room's views", () => {
   beforeEach(() => {
     MotionGlobalConfig.skipAnimations = true;
     window.history.replaceState(null, "", "/dashboard");
   });
 
-  it("shows no tabs without a Business Health Check or Full Report behind the room (and to limited-access staff, who get none from the server)", () => {
+  // The same frame for every client (5 November): Overview, Plan, Meetings, Data requests (when there are any) and
+  // Deliverables; Founder and Business only with a Business Health Check or Full Report behind the room.
+  const names = () => within(screen.getByRole("tablist", { name: "Your engagement" })).getAllByRole("tab").map(tab => tab.textContent!.replace(/\d+$/, ""));
+
+  it("shows the same views for every client, opening on the Overview, without Founder and Business when nothing is behind the room", () => {
     render(<EngagementRoom room={room()} />);
-    expect(screen.queryByRole("tablist")).toBeNull();
+    expect(names().filter(name => name !== "Data requests")).toEqual(["Overview", "Plan", "Meetings", "Deliverables"]);
+    expect(screen.getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("list", { name: "Engagement timeline" })).toBeTruthy();
   });
 
-  it("opens on the Plan, counts the stuck areas on Business, and moves between tabs by tap and by arrow key", () => {
+  it("adds Founder and Business after the shared views, counts the stuck areas, and moves between tabs by tap and by arrow key", () => {
     render(<EngagementRoom room={room({ insight: fromReport })} />);
     const tabs = within(screen.getByRole("tablist", { name: "Your engagement" })).getAllByRole("tab");
-    expect(tabs.map(tab => tab.textContent)).toEqual(["Founder", `Business${fromReport.areas.filter(area => area.health === "stuck").length || ""}`, "Plan"]);
-    expect(tabs[2].getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByRole("list", { name: "Engagement timeline" })).toBeTruthy();
+    expect(names().slice(-2)).toEqual(["Founder", "Business"]);
+    expect(tabs.at(-1)!.textContent).toBe(`Business${fromReport.areas.filter(area => area.health === "stuck").length || ""}`);
+    expect(tabs[0].getAttribute("aria-selected")).toBe("true");
     // Hidden panels are out of reach: not in the accessibility tree.
     expect(screen.queryByRole("heading", { name: "You, as the founder" })).toBeNull();
 
-    fireEvent.click(tabs[0]);
-    expect(tabs[0].getAttribute("aria-selected")).toBe("true");
+    const founder = tabs.at(-2)!;
+    fireEvent.click(founder);
+    expect(founder.getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("heading", { name: "You, as the founder" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: /1\. Founder readiness/ })).toBeTruthy();
     expect(screen.getByRole("heading", { name: /2\. Strategic intent/ })).toBeTruthy();
@@ -318,20 +324,20 @@ describe("the room's Founder, Business and Plan tabs", () => {
     expect(screen.queryByRole("list", { name: "Engagement timeline" })).toBeNull();
     expect(window.location.hash).toBe("#founder");
 
-    fireEvent.keyDown(tabs[0], { key: "ArrowRight" });
-    expect(tabs[1].getAttribute("aria-selected")).toBe("true");
-    expect(document.activeElement).toBe(tabs[1]);
-    fireEvent.keyDown(tabs[1], { key: "End" });
-    expect(tabs[2].getAttribute("aria-selected")).toBe("true");
+    fireEvent.keyDown(founder, { key: "ArrowRight" });
+    expect(tabs.at(-1)!.getAttribute("aria-selected")).toBe("true");
+    expect(document.activeElement).toBe(tabs.at(-1));
+    fireEvent.keyDown(tabs.at(-1)!, { key: "Home" });
+    expect(tabs[0].getAttribute("aria-selected")).toBe("true");
   });
 
-  it("opens the tab a link names, and the Plan when a link points inside it", () => {
+  it("opens the tab a link names, and the Overview when a link points inside it", () => {
     window.history.replaceState(null, "", "/dashboard#business");
     render(<EngagementRoom room={room({ insight: fromReport })} />);
     expect(screen.getByRole("tab", { name: /Business/ }).getAttribute("aria-selected")).toBe("true");
     window.location.hash = "#step-4";
     fireEvent(window, new HashChangeEvent("hashchange"));
-    expect(screen.getByRole("tab", { name: "Plan" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
   });
 
   it("lists every business area with its health; tapping one opens its reading in a sheet that Escape closes", async () => {
@@ -459,5 +465,60 @@ describe("booking the Business Review Sessions", () => {
     render(<EngagementRoom room={room({ booking: null })} />);
     expect(screen.queryByRole("link", { name: /^Book / })).toBeNull();
     expect(screen.getByText("Next Session:")).toBeTruthy();
+  });
+});
+
+describe("the Plan, Meetings and Data requests views", () => {
+  beforeEach(() => {
+    MotionGlobalConfig.skipAnimations = true;
+    window.history.replaceState(null, "", "/dashboard");
+  });
+  const NOW = new Date("2026-10-13T10:00:00Z").getTime();
+  const open = (name: RegExp | string) => fireEvent.click(screen.getByRole("tab", { name }));
+
+  it("groups every task by where it stands, with who owns it and a due flag, and opens one to act on it", () => {
+    render(<EngagementRoom room={room()} now={NOW} />);
+    open(/^Plan/);
+    const waiting = within(screen.getByRole("region", { name: "Waiting on you" }));
+    expect(waiting.getByText("Your last 12 months of sales")).toBeTruthy();
+    // Twice per row: in the Due column and in the line under the title that phones show instead.
+    expect(waiting.getAllByText("Due in 1 day")).toHaveLength(4);
+    expect(within(screen.getByRole("region", { name: "With IP Factory" })).getByText("Send the cash template")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Done" })).getByText("Who works in the business")).toBeTruthy();
+    fireEvent.click(waiting.getByRole("button", { name: /Your price list/ }));
+    const panel = within(screen.getByRole("complementary", { name: "Task details" }));
+    expect(panel.getByRole("heading", { name: "Your price list" })).toBeTruthy();
+    expect(panel.getByText("We need a bit more: the delivery prices too")).toBeTruthy();
+    expect(panel.getByRole("button", { name: "Mark as submitted" })).toBeTruthy();
+  });
+
+  it("lists the meetings in date order, with the Join link before and the shared notes after", () => {
+    render(<EngagementRoom room={room()} now={NOW} />);
+    open("Meetings");
+    const meetings = within(screen.getByRole("list", { name: "Meetings" })).getAllByRole("listitem");
+    expect(meetings.map(item => item.getAttribute("aria-label"))).toEqual(["Kick-off", "Business Review Session 1"]);
+    expect(within(meetings[0]).getByText("We agreed to start with pricing.")).toBeTruthy();
+    expect(within(meetings[0]).getByText("Held")).toBeTruthy();
+    expect(within(meetings[1]).getByText("Next")).toBeTruthy();
+    expect(within(meetings[1]).getByRole("link", { name: "Join the Session" }).getAttribute("href")).toBe("https://zoom.example.test/j/1");
+  });
+
+  it("shows the Data Requests on their own with how many have arrived", () => {
+    render(<EngagementRoom room={room()} now={NOW} />);
+    open("Data requests");
+    expect(screen.getByText("1 of 3")).toBeTruthy();
+    expect(screen.getByRole("listitem", { name: "Your price list" }).textContent).toContain("We need a bit more");
+  });
+});
+
+describe("the due flag", () => {
+  it("says Done, overdue, today, soon, or the date, in Lagos days", () => {
+    const now = new Date("2026-10-13T22:30:00Z").getTime(); // 23:30 in Lagos, still the 13th
+    expect(dueFlag("2026-10-10", true, now)).toEqual({ text: "Done", tone: "done" });
+    expect(dueFlag("2026-10-12", false, now)).toEqual({ text: "Overdue by 1 day", tone: "late" });
+    expect(dueFlag("2026-10-13", false, now)).toEqual({ text: "Due today", tone: "soon" });
+    expect(dueFlag("2026-10-15", false, now)).toEqual({ text: "Due in 2 days", tone: "soon" });
+    expect(dueFlag("2026-10-30", false, now)?.tone).toBe("calm");
+    expect(dueFlag(null, false, now)).toBeNull();
   });
 });

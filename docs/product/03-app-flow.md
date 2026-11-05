@@ -259,14 +259,27 @@ flowchart TD
   R -->|owner| SO[Sign off, comment, share with my team]
 ```
 
-Under the Now panel the room has three tabs, **Founder · Business · Plan** (built 14 October), opening on Plan. They
-appear for the owner and full-access staff whenever there is a Business Check behind the engagement; a contributor
-sees the Plan only. A link to `#founder`, `#business` or `#plan` opens that tab, and a link into the timeline
-(`#step-5`) opens Plan first.
+**The same frame for every client** (5 November, modelled on the IPF project-folder shell: each view answers one
+question a client folder answers). Under the Now panel: **Overview · Plan · Meetings · Data requests · Deliverables**,
+then **Founder · Business** when a Business Check or Full Report is behind the engagement (owner and full-access staff
+only). It opens on Overview (the timeline, Waiting on you, Deliverables and the team). On a laptop a left rail shows
+the business, the stage, the views as links (with counts) and the team.
+
+- **Plan:** every task grouped Waiting on you / With IP Factory / Sent, we are checking / Done, with who owns it, a due
+  flag ("Due in 2 days", "Due today", "Overdue by 3 days", "Done", in Lagos days) and the type. A task opens in a panel
+  beside the list with its detail, files and the client's buttons (upload, mark as submitted or done). On a phone the
+  owner and due flag sit under each title.
+- **Meetings:** every Session in date order with a date tile, Held / Next / Booked / To be booked, the Join link
+  before it and the notes once shared.
+- **Data requests:** shown only when there are any; "N of M received" and each request with its status and upload.
+- **Deliverables:** the Full Report and every shared Deliverable, with comments and Sign-off.
+
+A link to `#overview`, `#plan`, `#meetings`, `#data`, `#deliverables`, `#founder` or `#business` opens that view, and a
+link into the timeline (`#step-5`) opens Overview first.
 
 | The client clicks | What happens | Who can |
 |---|---|---|
-| A tab, or swipes sideways on a phone | The tab changes; a flick moves one tab, a slow drag springs back. Arrow keys, Home and End move between tabs | Owner and full-access staff |
+| A view (tab, or the left rail on a laptop), or swipes sideways on a phone | The view changes; a flick moves one view, a slow drag springs back. Arrow keys, Home and End move between tabs | Everyone who sees the room (Founder and Business: owner and full-access staff) |
 | A line in **Waiting on you** or **Deliverables** (laptop and desktop only, beside the timeline) | Opens the timeline step that holds it: the Work Plan for a Data Request or action, the Findings, The Fix or Your Plan for a Deliverable, the Full Report step for the report | Everyone who sees the room; the owner's Sign-offs are listed for the owner only |
 | An area on the Business tab | A sheet rises from below (a panel from the right on a laptop or desktop) with what the answers show, what it means, the Recommendation (First move, This week, Number to watch) and the benchmark bars. Drag it down, tap outside, press Escape or Close to dismiss; focus returns to the area. Areas with nothing more to show do not open | Owner and full-access staff, once the Full Report is delivered |
 | "Upload a file" on a request | The browser sends the file straight to the private bucket with a one-off link, then the server records it and the request shows "Sent, we are checking"; a file that did not arrive is not recorded | Owner, full staff, and a contributor for their own requests; only when storage is set up |

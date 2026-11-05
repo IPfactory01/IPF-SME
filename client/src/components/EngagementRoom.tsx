@@ -121,8 +121,22 @@ export default function EngagementRoom({ room, aside, now = Date.now() }: { room
       {team}
     </div>
   );
-  return (
-    <div className="mx-auto max-w-2xl space-y-6 lg:max-w-none">
+  const counts = roomCounts(room);
+  // The same frame for every client: the views below, in this order. Founder and Business appear only when a Business
+  // Health Check or Full Report is behind the room (the server sends no insight to limited-access staff).
+  const tabs = [
+    { id: "overview", label: "Overview", content: plan },
+    { id: "plan", label: "Plan", count: counts.waiting ? { value: counts.waiting, label: `${counts.waiting} waiting on you` } : undefined, content: <PlanView room={room} now={now} /> },
+    { id: "meetings", label: "Meetings", content: <MeetingsView room={room} now={now} /> },
+    ...(counts.dataRequests ? [{ id: "data", label: "Data requests", content: <DataRequestsView room={room} now={now} /> }] : []),
+    { id: "deliverables", label: "Deliverables", content: <DeliverablesView room={room} isOwner={isOwner} /> },
+    ...(room.insight ? [
+      { id: "founder", label: "Founder", content: <FounderPanel insight={room.insight} /> },
+      { id: "business", label: "Business", count: stuckCount(room.insight), content: <BusinessPanel insight={room.insight} /> },
+    ] : []),
+  ];
+  const main = (
+    <div className="min-w-0 space-y-6">
       <section aria-labelledby="room-title" className="relative border border-line-soft bg-paper-raised p-6 sm:p-8">
         <div className="relative lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-start lg:gap-10">
           <div>
@@ -179,18 +193,15 @@ export default function EngagementRoom({ room, aside, now = Date.now() }: { room
         </div>
       </section>
 
-      {room.insight ? (
-        <RoomTabs
-          label="Your engagement"
-          initial="plan"
-          tabs={[
-            { id: "founder", label: "Founder", content: <FounderPanel insight={room.insight} /> },
-            { id: "business", label: "Business", count: stuckCount(room.insight), content: <BusinessPanel insight={room.insight} /> },
-            { id: "plan", label: "Plan", content: plan },
-          ]}
-        />
-      ) : plan}
+      <RoomTabs label="Your engagement" initial="overview" tabs={tabs} />
       {!wide && aside}
+    </div>
+  );
+  if (!wide) return <div className="mx-auto max-w-2xl">{main}</div>;
+  return (
+    <div className="grid grid-cols-[13.5rem_minmax(0,1fr)] items-start gap-8">
+      <RoomSidebar room={room} tabs={tabs} />
+      {main}
     </div>
   );
 }
@@ -636,5 +647,219 @@ function AudienceToggle({ item, id, audience }: { item: "notes" | "deliverable";
     <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" disabled={set.isPending} onClick={() => set.mutate({ item, id, audience: shared ? "owner" : "business" })}>
       {shared ? "Keep this to myself" : "Share with my team"}
     </button>
+  );
+}
+
+// ---- The frame's views (the same for every client) ---------------------------------------------------------------------
+
+type RoomTab = { id: string; label: string; count?: { value: number; label: string } };
+
+const isClientOpen = (task: Task) => task.side === "client" && OPEN_TASK_STATUSES.includes(task.status);
+
+function roomCounts(room: Room) {
+  return {
+    waiting: room.tasks.filter(isClientOpen).length,
+    dataRequests: room.tasks.filter(task => task.kind === "data_request").length,
+  };
+}
+
+/** "Due in 3 days", "Due today", "Overdue by 2 days" or "Done": the timing flag the workplans already use. */
+export function dueFlag(dueOn: string | null, finished: boolean, now: number): { text: string; tone: "late" | "soon" | "calm" | "done" } | null {
+  if (finished) return { text: "Done", tone: "done" };
+  if (!dueOn) return null;
+  const today = new Date(new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date(now)) + "T00:00:00Z").getTime();
+  const days = Math.round((new Date(`${dueOn}T00:00:00Z`).getTime() - today) / DAY);
+  if (days < 0) return { text: `Overdue by ${-days} day${days === -1 ? "" : "s"}`, tone: "late" };
+  if (days === 0) return { text: "Due today", tone: "soon" };
+  if (days <= 3) return { text: `Due in ${days} day${days === 1 ? "" : "s"}`, tone: "soon" };
+  return { text: dueText(dueOn), tone: "calm" };
+}
+const FLAG_TONE = { late: "text-danger font-medium", soon: "text-ink font-medium", calm: "text-ink-muted", done: "text-ink-muted" } as const;
+
+/** The left rail on a laptop: the business, the engagement, and the views as links (each link opens its tab). */
+function RoomSidebar({ room, tabs }: { room: Room; tabs: RoomTab[] }) {
+  return (
+    <nav aria-label="Your room" className="sticky top-24 space-y-6 border-r border-line-soft pr-6 text-sm">
+      <div>
+        <p className="text-xs text-ink-muted">Your space</p>
+        <p className="mt-1 flex items-center gap-2 font-medium text-ink">
+          <span aria-hidden className="flex h-6 w-6 items-center justify-center bg-brand text-xs font-semibold text-white">{room.businessName.trim().charAt(0).toUpperCase()}</span>
+          <span className="min-w-0 truncate">{room.businessName}</span>
+        </p>
+        <p className="mt-1 pl-8 text-xs text-ink-muted">{room.stageLabel}</p>
+      </div>
+      <ul className="space-y-0.5">
+        {tabs.map(tab => (
+          <li key={tab.id}>
+            <a href={`#${tab.id}`} className="flex items-center justify-between gap-2 px-2 py-2 text-ink-600 transition-colors hover:bg-paper-sunken hover:text-ink">
+              <span>{tab.label}</span>
+              {tab.count && tab.count.value > 0 && <span className="text-xs tabular-nums text-ink-muted" aria-label={tab.count.label}>{tab.count.value}</span>}
+            </a>
+          </li>
+        ))}
+      </ul>
+      {room.team.length > 0 && (
+        <div>
+          <p className="text-xs text-ink-muted">Your team</p>
+          <ul className="mt-2 space-y-2">
+            {room.team.map(member => (
+              <li key={`${member.name}-${member.roleLabel}`} className="flex items-center gap-2">
+                <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-muted text-[11px] font-medium text-white">{initials(member.name)}</span>
+                <span className="min-w-0"><span className="block truncate text-ink">{member.name}</span><span className="block text-xs text-ink-muted">{member.roleLabel}</span></span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </nav>
+  );
+}
+
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]!.toUpperCase()).join("") || "?";
+
+const PLAN_GROUPS: { id: string; name: string; dot: string; test: (task: Task) => boolean }[] = [
+  { id: "you", name: "Waiting on you", dot: "border-brand bg-white", test: isClientOpen },
+  { id: "us", name: "With IP Factory", dot: "border-ink-muted bg-white", test: task => task.side !== "client" && OPEN_TASK_STATUSES.includes(task.status) },
+  { id: "checking", name: "Sent, we are checking", dot: "border-ink-muted bg-paper-sunken", test: task => task.status === "received" },
+  { id: "done", name: "Done", dot: "border-brand bg-brand", test: task => task.status === "accepted" || task.status === "done" },
+];
+
+/** Every task in the engagement, grouped by where it stands, with who owns it and when it is due. Open one to act on it. */
+function PlanView({ room, now }: { room: Room; now: number }) {
+  const [selected, setSelected] = useState<number | null>(null);
+  const task = room.tasks.find(item => item.id === selected) ?? null;
+  if (!room.tasks.length) return <p className="text-sm text-ink-muted">Your tasks appear here, grouped by where they stand, once your team sets the {METHOD.workPlan}.</p>;
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
+      <div className={`space-y-6 ${task ? "" : "lg:col-span-2"}`}>
+        {PLAN_GROUPS.map(group => {
+          const items = room.tasks.filter(group.test).sort((a, b) => (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999") || a.sortOrder - b.sortOrder || a.id - b.id);
+          if (!items.length) return null;
+          return (
+            <section key={group.id} aria-label={group.name}>
+              <h3 className="flex items-center gap-2 pb-2 font-sans text-sm font-medium text-ink">{group.name}<span className="text-xs font-normal tabular-nums text-ink-muted">{items.length}</span></h3>
+              <div className="border border-line-soft bg-paper-raised">
+                <table className="w-full table-fixed text-sm">
+                  <thead><tr className="border-b border-line-soft text-left text-xs text-ink-muted"><th className="py-2 pl-3 pr-2 font-normal">Task</th><th className="hidden w-28 px-2 font-normal sm:table-cell">Who</th><th className="hidden w-40 px-2 font-normal sm:table-cell">Due</th><th className="hidden w-32 px-2 pr-3 font-normal sm:table-cell">Type</th></tr></thead>
+                  <tbody>
+                    {items.map(item => {
+                      const flag = dueFlag(item.dueOn, group.id === "done", now);
+                      return (
+                        <tr key={item.id} className={`border-b border-line-soft last:border-b-0 ${selected === item.id ? "bg-brand-tint" : "hover:bg-paper-sunken"}`}>
+                          <td className="py-2 pl-3 pr-2">
+                            <button type="button" onClick={() => setSelected(selected === item.id ? null : item.id)} aria-expanded={selected === item.id} className="flex w-full items-center gap-2.5 text-left">
+                              <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />
+                              <span className="min-w-0"><span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}{item.mine && <span className="ml-2 text-xs text-brand">for you</span>}</span><span className="block text-xs text-ink-muted sm:hidden">{item.side === "client" ? "You" : "IP Factory"}{flag ? <> · <span className={FLAG_TONE[flag.tone]}>{flag.text}</span></> : null}</span></span>
+                            </button>
+                          </td>
+                          <td className="hidden px-2 text-ink-600 sm:table-cell">{item.side === "client" ? "You" : "IP Factory"}</td>
+                          <td className={`hidden whitespace-nowrap px-2 sm:table-cell ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? "-"}</td>
+                          <td className="hidden whitespace-nowrap px-2 pr-3 text-ink-muted sm:table-cell">{item.kind === "data_request" ? METHOD.dataRequest : "Action"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          );
+        })}
+      </div>
+      {task && (
+        <aside aria-label="Task details" className="border border-line-soft bg-paper-raised p-5 lg:sticky lg:top-36">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-xs text-ink-muted">{task.statusLabel}</p>
+            <button type="button" onClick={() => setSelected(null)} className="text-xs text-brand underline underline-offset-2">Close</button>
+          </div>
+          <h3 className="mt-1 font-serif text-xl font-normal tracking-tight">{task.title}</h3>
+          <dl className="mt-3 grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+            <dt className="text-ink-muted">Who</dt><dd>{task.side === "client" ? "You" : "IP Factory"}</dd>
+            <dt className="text-ink-muted">Due</dt><dd>{task.dueOn ? dateOnly(task.dueOn) : "No date"}</dd>
+            <dt className="text-ink-muted">Type</dt><dd>{task.kind === "data_request" ? METHOD.dataRequest : "Action"}</dd>
+          </dl>
+          {task.detail && <TaskDetail text={task.detail} className="mt-3 text-sm text-ink-600" />}
+          {task.status === "needs_more" && task.statusNote && <p className="mt-2 text-sm text-danger">We need a bit more: {task.statusNote}</p>}
+          <FileList files={task.files} />
+          {isClientOpen(task) && <TaskControls task={task} uploadsEnabled={room.uploadsEnabled} />}
+        </aside>
+      )}
+    </div>
+  );
+}
+
+/** What we have asked the client for, and what has arrived: the Data Requests on their own, with the upload where it is needed. */
+function DataRequestsView({ room, now }: { room: Room; now: number }) {
+  const items = room.tasks.filter(task => task.kind === "data_request").sort((a, b) => (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999") || a.id - b.id);
+  const arrived = items.filter(task => task.status === "accepted" || task.status === "done").length;
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-ink-600"><span className="font-medium text-ink tabular-nums">{arrived} of {items.length}</span> received. {METHOD_MEANING.dataRequest}</p>
+      <ul className="divide-y divide-line-soft border border-line-soft bg-paper-raised">
+        {items.map(task => {
+          const finished = task.status === "accepted" || task.status === "done";
+          const flag = dueFlag(task.dueOn, finished, now);
+          return (
+            <li key={task.id} className="p-4" aria-label={task.title}>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className={`font-medium ${finished ? "text-ink-muted" : "text-ink"}`}>{task.title}</span>
+                <span className="text-xs text-ink-muted">{task.statusLabel}{flag && !finished ? <> · <span className={FLAG_TONE[flag.tone]}>{flag.text}</span></> : null}</span>
+              </div>
+              {task.detail && !finished && <TaskDetail text={task.detail} className="mt-1 text-sm text-ink-600" />}
+              {task.status === "needs_more" && task.statusNote && <p className="mt-1 text-sm text-danger">We need a bit more: {task.statusNote}</p>}
+              <FileList files={task.files} />
+              {isClientOpen(task) && <TaskControls task={task} uploadsEnabled={room.uploadsEnabled} />}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/** Every meeting: when, how long, the Join link before it and the shared notes after it. */
+function MeetingsView({ room, now }: { room: Room; now: number }) {
+  const sessions = [...room.sessions].sort((a, b) => (a.scheduledFor ? new Date(a.scheduledFor).getTime() : Infinity) - (b.scheduledFor ? new Date(b.scheduledFor).getTime() : Infinity) || a.sortOrder - b.sortOrder);
+  if (!sessions.length) return <p className="text-sm text-ink-muted">Your {METHOD.session}s appear here once they are planned.</p>;
+  return (
+    <ol className="space-y-3" aria-label="Meetings">
+      {sessions.map(session => {
+        const when = session.scheduledFor ? new Date(session.scheduledFor) : null;
+        const held = session.status === "held" || (when !== null && when.getTime() < now && session.status !== "planned");
+        const isNext = room.nextSession?.id === session.id;
+        const state = held ? "Held" : isNext ? "Next" : when ? "Booked" : "To be booked";
+        const day = when ? new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short" }).formatToParts(when) : null;
+        const part = (type: string) => day?.find(item => item.type === type)?.value ?? "";
+        return (
+          <li key={session.id} className="grid grid-cols-[4rem_minmax(0,1fr)] gap-4 border border-line-soft bg-paper-raised p-4" aria-label={session.title}>
+            <div className={`flex flex-col items-center justify-center py-1.5 text-center ${isNext ? "bg-brand text-white" : held ? "bg-paper-sunken text-ink-muted" : "bg-paper-sunken text-ink"}`}>
+              {when ? <><span className="text-xs">{part("weekday")}</span><span className="text-lg font-medium tabular-nums leading-tight">{part("day")}</span><span className="text-xs">{part("month")}</span></> : <span className="px-1 text-xs">No date</span>}
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="font-medium text-ink">{session.title}</span>
+                <span className={`text-xs ${isNext ? "font-medium text-brand" : "text-ink-muted"}`}>{state}</span>
+              </div>
+              {when && <p className="text-sm text-ink-muted">{lagos(when)} (Lagos time){session.durationMinutes ? `, ${session.durationMinutes} minutes` : ""}</p>}
+              {session.agenda && <p className="mt-1 whitespace-pre-line text-sm text-ink-600">{session.agenda}</p>}
+              {session.status === "planned" && session.meetingLink && <a href={session.meetingLink} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-medium text-brand underline underline-offset-2">Join the {METHOD.session}</a>}
+              {session.notes && <div className="mt-3 border-t border-line-soft pt-2"><p className="text-xs text-ink-muted">Notes, shared {lagos(session.notesSharedAt, false)}</p><p className="mt-1 whitespace-pre-line text-sm">{session.notes}</p></div>}
+            </div>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** What the client has received: the Full Report and every Deliverable shared with them, each with its Sign-off. */
+function DeliverablesView({ room, isOwner }: { room: Room; isOwner: boolean }) {
+  if (!room.deliverables.length && !room.report?.deliveredAt) return <p className="text-sm text-ink-muted">Your {METHOD.findings}, {METHOD.prescription} and {METHOD.plan} appear here once they are shared with you.</p>;
+  return (
+    <div className="space-y-3">
+      {room.report?.deliveredAt && (
+        <div className="border border-line-soft bg-paper-raised p-4"><p className={KICKER}>{METHOD.fullReport}</p><p className="mt-1 text-sm text-ink-600">Emailed to you {lagos(room.report.deliveredAt, false)}.</p></div>
+      )}
+      <ul className="space-y-3" aria-label={METHOD.deliverables}>{room.deliverables.map(item => <DeliverableItem key={item.id} item={item} isOwner={isOwner} />)}</ul>
+    </div>
   );
 }

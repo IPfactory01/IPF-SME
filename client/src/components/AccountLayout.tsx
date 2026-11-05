@@ -38,7 +38,7 @@ export default function AccountLayout({ children, heading, width = "reading" }: 
   const link = (href: string, label: string, short = label) => (
     <Link href={href} aria-label={label} aria-current={location === href ? "page" : undefined} className={`relative inline-flex min-h-11 items-center whitespace-nowrap text-sm font-medium transition-colors hover:text-brand ${location === href ? "text-brand" : "text-ink-600"}`}>
       <span className="sm:hidden">{short}</span><span className="hidden sm:inline">{label}</span>
-      {location === href && <span aria-hidden className="absolute inset-x-0 -bottom-0.5 h-0.5 bg-highlight-ink" />}
+      {location === href && <span aria-hidden className="absolute inset-x-0 -bottom-0.5 h-0.5 bg-brand" />}
     </Link>
   );
 
@@ -49,7 +49,7 @@ export default function AccountLayout({ children, heading, width = "reading" }: 
         <div className="container flex flex-wrap items-center justify-between gap-x-6 gap-y-2 py-3">
           <Link href="/dashboard" className="flex items-center gap-3" aria-label={BRAND.productEndorsement}>
             <img src={BRAND.markUrl} alt={BRAND.organisationName} className="h-9 w-auto shrink-0" />
-            <span className="border-l border-line pl-3 text-xs font-semibold uppercase tracking-widest text-ink-muted">{BRAND.productName}</span>
+            <span className="border-l border-line pl-3 text-sm font-medium text-ink-muted">{BRAND.productName}</span>
           </Link>
           <nav aria-label="Account" className="order-last flex w-full items-center gap-5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] sm:order-none sm:w-auto">
             {link("/dashboard", account.activeBusiness ? "Your room" : "Home")}
@@ -59,14 +59,14 @@ export default function AccountLayout({ children, heading, width = "reading" }: 
           </nav>
           <div className="flex items-center gap-3">
             <WorkspaceSwitcher account={account} />
-            <Button variant="outline" size="sm" disabled={signOut.isPending} onClick={() => signOut.mutate()} className="rounded-none border-brand-line text-xs font-semibold uppercase tracking-wider text-brand hover:bg-brand-tint">
+            <Button variant="outline" size="sm" disabled={signOut.isPending} onClick={() => signOut.mutate()} className="rounded-none border-brand-line text-sm font-medium text-brand hover:bg-brand-tint">
               {signOut.isPending ? "Signing out…" : "Sign out"}
             </Button>
           </div>
         </div>
       </header>
       <div className={`${width === "wide" ? "container" : "mx-auto w-full max-w-3xl px-6"} flex-1 space-y-6 py-8`}>
-        {heading && <h1 className="font-serif text-3xl font-bold tracking-tight">{heading}</h1>}
+        {heading && <h1 className="font-serif text-3xl font-normal tracking-tight">{heading}</h1>}
         {children(account)}
       </div>
       <footer className="space-y-2 border-t border-line py-6 text-center text-xs text-ink-muted">

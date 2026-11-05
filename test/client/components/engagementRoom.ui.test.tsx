@@ -91,9 +91,11 @@ afterEach(() => {
 
 describe("the client's room", () => {
   it("opens on now: the stage with its week and day, the next action as Data Request N of M, the next Session with Join, and the team", () => {
-    render(<EngagementRoom room={room({ assessmentStartedAt: new Date("2026-10-19T08:00:00Z"), deliverables: [] })} greeting="Welcome back, Ada" now={new Date("2026-10-22T10:00:00Z").getTime()} />);
+    render(<EngagementRoom room={room({ assessmentStartedAt: new Date("2026-10-19T08:00:00Z"), deliverables: [] })} now={new Date("2026-10-22T10:00:00Z").getTime()} />);
     const hero = within(screen.getByRole("region", { name: "Business Review · Week 1 of 2" }));
-    expect(hero.getByText("Welcome back, Ada · Ada Foods")).toBeTruthy();
+    // The business names the room; no greeting headline.
+    expect(hero.getByText("Ada Foods")).toBeTruthy();
+    expect(hero.queryByText(/Welcome back/)).toBeNull();
     expect(hero.getByRole("progressbar", { name: "Day 4 of 14" }).getAttribute("aria-valuenow")).toBe("4");
     expect(hero.getByText("Next action · Data Request 1 of 3")).toBeTruthy();
     expect(hero.getByText("Your last 12 months of sales")).toBeTruthy();

@@ -108,7 +108,7 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
 
   return (
     <div>
-      <div className="sticky z-30 border border-line bg-paper/85 p-2 backdrop-blur-md" style={{ top }} data-room-tabs>
+      <div className="sticky z-30 border-b border-line-soft bg-paper/85 py-2 backdrop-blur-md" style={{ top }} data-room-tabs>
         <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="relative grid bg-paper-sunken p-1 lg:max-w-md" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
           <motion.span
             aria-hidden
@@ -128,10 +128,10 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
               aria-selected={k === index}
               tabIndex={k === index ? 0 : -1}
               onClick={() => select(k)}
-              className={`relative z-10 flex items-center justify-center gap-1.5 px-2 py-2 text-sm font-bold transition-colors ${k === index ? "text-ink" : "text-ink-muted hover:text-ink"}`}
+              className={`relative z-10 flex items-center justify-center gap-1.5 px-2 py-2 text-sm font-medium transition-colors ${k === index ? "text-ink" : "text-ink-muted hover:text-ink"}`}
             >
               {tab.label}
-              {tab.count && tab.count.value > 0 && <span className="min-w-[18px] bg-health-stuck-tint px-1.5 text-[11px] leading-[18px] text-health-stuck tabular-nums" aria-label={tab.count.label}>{tab.count.value}</span>}
+              {tab.count && tab.count.value > 0 && <span className="text-xs font-normal text-ink-muted tabular-nums" aria-label={tab.count.label}>{tab.count.value}</span>}
             </button>
           ))}
         </div>

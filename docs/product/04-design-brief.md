@@ -72,6 +72,13 @@ for structure, not as new accents. Errors use the `danger` family, never the hea
 - **₦ in headings:** Playfair Display has no ₦ glyph. A heading containing a naira amount uses Plus Jakarta Sans 700
   (the PDF does this automatically).
 - Eyebrows and section labels: Plus Jakarta Sans, uppercase, 11 to 12 px, letter-spacing about 0.2em, `highlight-ink`.
+- **Signed-in screens (the room, the dashboard, the account frame) are quieter than the public site** (5 November, after
+  an unslop audit): labels in sentence case at 14 px, `font-medium`, `ink-muted`, never uppercase or letter-spaced;
+  Playfair headings at regular weight (400), never bold or black; no greeting headline (the business names the room); no
+  colour blobs or gradients except the thin brand line at the very top; one accent, `brand`, for the progress bar, the
+  current step and the client's own items; everyone else's items, counts and tags in neutral greys; hairline borders
+  without shadows. The colour belongs to the content (the timeline, the Measure of Success, the scorecard), not the
+  chrome. The public site keeps its own style until it gets the same pass.
 - Numbers in tables and tallies: tabular figures.
 - Load every weight a page uses (`client/index.html`): a weight that is not loaded is faked by the browser and looks
   smudged. Plus Jakarta Sans loads 400 to 800; `test/client/sitemap.test.ts` checks 800 is loaded.

@@ -28,10 +28,10 @@ const dateOnly = (value: string) => lagos(`${value}T12:00:00Z`, false);
 const dueText = (dueOn: string | null) => (dueOn ? `By ${dateOnly(dueOn)}` : "");
 const daysSince = (from: Date | string | null | undefined, now: number) => (from ? Math.max(0, Math.floor((now - new Date(from).getTime()) / DAY)) : null);
 
-const CARD = "border border-line-soft bg-paper-raised p-5 shadow-sm sm:p-6";
-const KICKER = "text-xs font-semibold uppercase tracking-widest text-ink-muted";
-const EYEBROW = "text-[11px] font-semibold uppercase tracking-[0.2em] text-highlight-ink";
-const WHO: Record<"You" | "IP Factory" | "Together", string> = { You: "border-brand-line bg-brand-tint text-brand", "IP Factory": "border-line bg-paper-muted text-ink-muted", Together: "border-health-clear bg-health-clear-tint text-health-clear" };
+const CARD = "border border-line-soft bg-paper-raised p-5 sm:p-6";
+const KICKER = "text-sm font-medium text-ink-muted";
+const EYEBROW = "text-xs font-medium text-brand";
+const WHO: Record<"You" | "IP Factory" | "Together", string> = { You: "border-brand-line bg-brand-tint text-brand", "IP Factory": "border-line bg-paper-muted text-ink-muted", Together: "border-line bg-paper-muted text-ink-600" };
 const isOpen = (task: Task) => OPEN_TASK_STATUSES.includes(task.status);
 
 /**
@@ -41,7 +41,7 @@ const isOpen = (task: Task) => OPEN_TASK_STATUSES.includes(task.status);
  * with the team, what is waiting on you and the Deliverables. Everything shown here was filtered on the server for
  * this person; this screen decides nothing about access.
  */
-export default function EngagementRoom({ room, greeting, aside, now = Date.now() }: { room: Room; greeting?: string; aside?: React.ReactNode; now?: number }) {
+export default function EngagementRoom({ room, aside, now = Date.now() }: { room: Room; aside?: React.ReactNode; now?: number }) {
   const [open, setOpen] = useState<number | null>(null);
   const isOwner = room.viewer.kind === "owner";
   const here = nowOf(room, now);
@@ -53,20 +53,20 @@ export default function EngagementRoom({ room, greeting, aside, now = Date.now()
   const timeline = (
         <section aria-labelledby="timeline-title">
           <p className={KICKER}>{METHOD.engagement} timeline</p>
-          <h2 id="timeline-title" className="mt-1 font-serif text-2xl font-bold tracking-tight">{METHOD.businessCheck} to {METHOD.day30}</h2>
+          <h2 id="timeline-title" className="mt-1 font-serif text-2xl font-normal tracking-tight">{METHOD.businessCheck} to {METHOD.day30}</h2>
           <ol className="mt-4" aria-label="Engagement timeline">
             {steps.map((step, index) => {
               const last = index === steps.length - 1;
-              const tone = step.state === "done" ? "border-brand bg-brand text-white" : step.state === "now" ? "border-highlight-ink bg-highlight-ink text-white" : "border-line bg-white text-ink-muted";
+              const tone = step.state === "done" ? "border-brand bg-brand text-white" : step.state === "now" ? "border-2 border-brand bg-white text-brand" : "border-line bg-white text-ink-muted";
               return (
                 <li key={step.n} id={`step-${step.n}`} aria-current={step.state === "now" ? "step" : undefined} className="relative flex gap-4 scroll-mt-24">
                   {!last && <span aria-hidden className={`absolute left-[15px] top-8 h-full w-px ${step.state === "done" ? "bg-brand" : "bg-line"}`} />}
-                  <span className={`relative z-10 mt-1 flex h-8 w-8 shrink-0 items-center justify-center border font-serif text-sm font-bold ${tone}`}>{step.state === "done" ? <Check className="h-4 w-4" aria-hidden /> : step.n}</span>
+                  <span className={`relative z-10 mt-1 flex h-8 w-8 shrink-0 items-center justify-center border text-sm font-medium tabular-nums ${tone}`}>{step.state === "done" ? <Check className="h-4 w-4" aria-hidden /> : step.n}</span>
                   <div className={`min-w-0 flex-1 pb-6 ${step.state === "next" ? "opacity-80" : ""}`}>
                     <button type="button" aria-expanded={shown(step.n)} onClick={() => setOpen(shown(step.n) ? -1 : step.n)} className="flex w-full items-start justify-between gap-3 text-left">
                       <span>
                         <span className="flex flex-wrap items-center gap-2">
-                          <span className={`font-serif text-lg font-bold tracking-tight ${step.state === "next" ? "text-ink-muted" : ""}`}>{step.title}</span>
+                          <span className={`font-serif text-lg font-normal tracking-tight ${step.state === "next" ? "text-ink-muted" : ""}`}>{step.title}</span>
                           {step.state === "now" && <span className={EYEBROW}>Now</span>}
                         </span>
                         <span className="block text-xs text-ink-muted">{step.when}</span>
@@ -74,7 +74,7 @@ export default function EngagementRoom({ room, greeting, aside, now = Date.now()
                       <ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-ink-muted transition-transform ${shown(step.n) ? "rotate-180" : ""}`} aria-hidden />
                     </button>
                     {shown(step.n) && (
-                      <div className="mt-3 border border-line-soft bg-paper-raised p-4 shadow-sm" role="region" aria-label={`Step ${step.n}: ${step.title}`}>
+                      <div className="mt-3 border border-line-soft bg-paper-raised p-4" role="region" aria-label={`Step ${step.n}: ${step.title}`}>
                         <p className="text-sm text-ink-600">{step.summary}</p>
                         {step.body && <div className="mt-3">{step.body}</div>}
                       </div>
@@ -91,10 +91,10 @@ export default function EngagementRoom({ room, greeting, aside, now = Date.now()
           <p className={KICKER}>Your team at IP Factory</p>
           {room.team.length ? (
             <>
-              <h2 id="team-title" className="mt-1 font-serif text-xl font-bold tracking-tight">{room.team.map(member => member.name).join(" and ")}</h2>
+              <h2 id="team-title" className="mt-1 font-serif text-xl font-normal tracking-tight">{room.team.map(member => member.name).join(" and ")}</h2>
               <ul className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm">{room.team.map(member => <li key={`${member.name}-${member.roleLabel}`}><span className="font-medium">{member.name}</span> <span className="text-ink-muted">· {member.roleLabel}</span></li>)}</ul>
             </>
-          ) : <h2 id="team-title" className="mt-1 font-serif text-xl font-bold tracking-tight">We are naming your team now.</h2>}
+          ) : <h2 id="team-title" className="mt-1 font-serif text-xl font-normal tracking-tight">We are naming your team now.</h2>}
         </section>
   );
   // The Plan: the Engagement timeline and the team. With a Business Health Check or Full Report behind it, it sits beside
@@ -123,19 +123,16 @@ export default function EngagementRoom({ room, greeting, aside, now = Date.now()
   );
   return (
     <div className="mx-auto max-w-2xl space-y-6 lg:max-w-none">
-      <section aria-labelledby="room-title" className="relative overflow-hidden border border-line-soft bg-paper-raised p-6 shadow-sm sm:p-8">
-        {/* The colour from the logo, softly, behind the headline: the same idea as the site's hero. */}
-        <div aria-hidden className="pointer-events-none absolute -left-20 -top-28 h-72 w-72 rounded-full bg-brand-plum/10 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-highlight/15 blur-3xl" />
+      <section aria-labelledby="room-title" className="relative border border-line-soft bg-paper-raised p-6 sm:p-8">
         <div className="relative lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-start lg:gap-10">
           <div>
-          <p className={EYEBROW}>{greeting ? `${greeting} · ` : ""}{room.businessName}</p>
-          <h1 id="room-title" className="mt-2 font-serif text-3xl font-black tracking-tight sm:text-4xl">{here.title}</h1>
+          <p className="text-sm font-medium text-ink-muted">{room.businessName}</p>
+          <h1 id="room-title" className="mt-2 font-serif text-3xl font-normal tracking-tight sm:text-4xl">{here.title}</h1>
           {here.progress && (
             <div className="mt-3 max-w-sm">
               <div className="flex justify-between text-xs text-ink-muted"><span>{here.progress.label}</span><span>{Math.round((here.progress.done / here.progress.total) * 100)}%</span></div>
               <div className="mt-1 h-1.5 w-full bg-line-soft" role="progressbar" aria-label={here.progress.label} aria-valuenow={here.progress.done} aria-valuemin={0} aria-valuemax={here.progress.total}>
-                <div className="h-1.5 bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight" style={{ width: `${Math.min(100, (here.progress.done / here.progress.total) * 100)}%` }} />
+                <div className="h-1.5 bg-brand" style={{ width: `${Math.min(100, (here.progress.done / here.progress.total) * 100)}%` }} />
               </div>
             </div>
           )}
@@ -147,7 +144,7 @@ export default function EngagementRoom({ room, greeting, aside, now = Date.now()
             <p id="next-action" className={KICKER}>Next action{action.kind === "task" ? ` · ${action.label}` : ""}</p>
             {action.kind === "task" && (
               <>
-                <p className="mt-1 font-serif text-xl font-bold tracking-tight">{action.task.title}</p>
+                <p className="mt-1 font-serif text-xl font-normal tracking-tight">{action.task.title}</p>
                 {action.task.detail && <TaskDetail text={action.task.detail} className="mt-1 text-sm text-ink-600" />}
                 {action.task.status === "needs_more" && action.task.statusNote && <p className="mt-1 text-sm text-danger">We need a bit more: {action.task.statusNote}</p>}
                 <TaskControls task={action.task} uploadsEnabled={room.uploadsEnabled} due />
@@ -155,7 +152,7 @@ export default function EngagementRoom({ room, greeting, aside, now = Date.now()
             )}
             {action.kind === "signoff" && (
               <>
-                <p className="mt-1 font-serif text-xl font-bold tracking-tight">Read the {action.deliverable.kindLabel} and give your {METHOD.signOff}</p>
+                <p className="mt-1 font-serif text-xl font-normal tracking-tight">Read the {action.deliverable.kindLabel} and give your {METHOD.signOff}</p>
                 <p className="mt-1 text-sm text-ink-600">{METHOD_MEANING.signOff} If you disagree, say so in a comment under it.</p>
                 <a href={`#step-${action.step}`} className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand underline underline-offset-2" onClick={() => setOpen(action.step)}>Open the {action.deliverable.kindLabel} <ArrowRight className="h-3.5 w-3.5" aria-hidden /></a>
               </>
@@ -174,7 +171,7 @@ export default function EngagementRoom({ room, greeting, aside, now = Date.now()
           ) : room.booking ? (
             <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
               <CalendarClock className="h-4 w-4 text-brand" aria-hidden />
-              <a href={room.booking.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 bg-brand px-3 py-2 text-xs font-semibold uppercase tracking-wider text-white hover:bg-brand-deep-hover">Book {room.booking.title}</a>
+              <a href={room.booking.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 bg-brand px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-deep-hover">Book {room.booking.title}</a>
               <span className="text-ink-muted">Pick a time on Calendly. It shows here, with the Join link, once you have booked.</span>
             </div>
           ) : <p className="mt-4 text-sm text-ink-muted">No {METHOD.session} is booked yet. It will show here with a Join link once it is.</p>}
@@ -262,7 +259,7 @@ function WaitingOnYou({ room, isOwner, onOpen }: { room: Room; isOwner: boolean;
     <section aria-labelledby="waiting-title" className={CARD}>
       <div className="flex items-baseline justify-between gap-3">
         <h2 id="waiting-title" className={`font-sans ${KICKER}`}>Waiting on you</h2>
-        <span className="font-serif text-2xl font-bold tabular-nums text-ink">{count}</span>
+        <span className="text-2xl font-medium tabular-nums text-ink">{count}</span>
       </div>
       {count === 0 ? <p className="mt-2 text-sm text-ink-600">Nothing outstanding. We will tell you here when there is.</p> : (
         <ul className="mt-2 divide-y divide-line-soft text-sm">
@@ -310,7 +307,7 @@ function DeliverablesCard({ room, isOwner, onOpen }: { room: Room; isOwner: bool
                   <a href={`#step-${stepForKind(item.kind)}`} onClick={() => onOpen(stepForKind(item.kind))} className="font-medium text-ink hover:text-brand">{item.kindLabel}</a>
                   <span className="block text-xs text-ink-muted">{item.title} · Shared {lagos(item.sharedAt, false)}</span>
                 </span>
-                {state && <span className={`shrink-0 border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${item.accepted ? "border-health-clear bg-health-clear-tint text-health-clear" : "border-brand-line bg-brand-tint text-brand"}`}>{state}</span>}
+                {state && <span className={`shrink-0 border px-1.5 py-0.5 text-xs font-medium ${item.accepted ? "border-line bg-paper-muted text-ink-600" : "border-brand-line bg-brand-tint text-brand"}`}>{state}</span>}
               </li>
             );
           })}
@@ -419,7 +416,7 @@ function WorkPlan({ room, isOwner }: { room: Room; isOwner: boolean }) {
       <p className={KICKER}>{METHOD.workPlan}</p>
       {weeks.map(week => (
         <div key={week ?? "none"}>
-          <p className="text-xs font-semibold uppercase tracking-widest text-ink">{week === null ? "Also" : `Week ${week}`}</p>
+          <p className="text-sm font-medium text-ink">{week === null ? "Also" : `Week ${week}`}</p>
           <ol className="mt-1" aria-label={week === null ? "Also in the plan" : `Week ${week}`}>
             {planRows(room, week).map((row, index) => <PlanRowView key={row.key} row={row} number={index + 1} room={room} isOwner={isOwner} />)}
           </ol>
@@ -438,7 +435,7 @@ function PlanRowView({ row, number, room, isOwner }: { row: PlanRow; number: num
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`font-medium ${row.status === "done" ? "line-through decoration-line-strong" : "text-ink"}`}>{row.title}{row.task?.mine ? <span className="ml-2 text-xs font-normal text-brand">for you</span> : null}</span>
-          <span className={`border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${WHO[row.who]}`}>{row.who}</span>
+          <span className={`border px-1.5 py-0.5 text-xs font-medium ${WHO[row.who]}`}>{row.who}</span>
         </div>
         <p className="text-xs text-ink-muted">{row.when}</p>
         {row.task && (
@@ -501,9 +498,9 @@ function MeasureCard({ measure }: { measure: NonNullable<Room["measure"]> }) {
   return (
     <section aria-labelledby="the-number" className="border border-line-soft bg-paper p-4">
       <p className={KICKER}>{METHOD.measure}</p>
-      <h3 id="the-number" className="mt-1 font-serif text-xl font-bold tracking-tight">{measure.name}</h3>
+      <h3 id="the-number" className="mt-1 font-serif text-xl font-normal tracking-tight">{measure.name}</h3>
       {measure.definition && <p className="mt-1 text-sm text-ink-muted">{measure.definition}</p>}
-      <p className={`mt-4 font-serif text-4xl font-black tracking-tight tabular-nums ${trend.tone}`}>{formatMeasure(measure.latest?.reading ?? measure.baselineValue, measure.unit)}</p>
+      <p className={`mt-4 font-serif text-4xl font-normal tracking-tight tabular-nums ${trend.tone}`}>{formatMeasure(measure.latest?.reading ?? measure.baselineValue, measure.unit)}</p>
       <p className="text-xs text-ink-muted">{measure.latest ? `Week ${measure.latest.weekNumber}` : "Where it starts"}</p>
       <p className={`mt-1 text-sm ${trend.tone}`}>{trend.text}</p>
       <dl className="mt-4 grid grid-cols-2 gap-3">
@@ -512,7 +509,7 @@ function MeasureCard({ measure }: { measure: NonNullable<Room["measure"]> }) {
       </dl>
       {measure.readings.length > 0 && (
         <table className="mt-4 w-full text-left text-sm" aria-label="Week by week">
-          <thead><tr className="border-b border-line text-xs uppercase tracking-wider text-ink-muted"><th className="py-1 pr-3">Week</th><th className="pr-3">Reading</th><th>Next step</th></tr></thead>
+          <thead><tr className="border-b border-line text-xs text-ink-muted"><th className="py-1 pr-3">Week</th><th className="pr-3">Reading</th><th>Next step</th></tr></thead>
           <tbody>{measure.readings.map(row => <tr key={row.weekNumber} className="border-b border-line-soft align-top"><td className="py-1 pr-3">{row.weekNumber}{row.heldOn ? <span className="block text-xs text-ink-muted">{dateOnly(row.heldOn)}</span> : null}</td><td className="pr-3 tabular-nums">{formatMeasure(row.reading, measure.unit)}</td><td className="whitespace-pre-line">{row.nextStep ?? ""}</td></tr>)}</tbody>
         </table>
       )}

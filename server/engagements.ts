@@ -19,6 +19,7 @@ import {
   paymentRequests,
   userPlatformRoles,
   users,
+  engagementFileMatches,
 } from "../drizzle/schema";
 import { authorityAllows, type Authority } from "../shared/platformPermissions";
 import {
@@ -48,6 +49,7 @@ import {
   safeFileName,
   UPLOAD_MAX_BYTES,
   UPLOAD_MAX_MB,
+  type EngagementTaskPriority,
 } from "../shared/engagement";
 import type { AccountSession, Database } from "./accountAuth";
 import { recordAudit } from "./audit";
@@ -287,7 +289,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
   // The team sees a Session the owner booked on Calendly without typing it in.
   if (check) await syncSessionBookings(db, engagement, check.email);
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
-  const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins, matches] = await Promise.all([
     db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq(engagementSessions.engagementId, engagementId)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq(engagementTasks.engagementId, engagementId)).orderBy(asc(engagementTasks.id)),
@@ -298,8 +300,10 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     filesOf(db, engagementId),
     measureOf(db, engagementId),
     checkinsOf(db, engagementId),
+    matchesOf(db, engagementId),
   ]);
-  const filesFor = (where: "taskId" | "deliverableId", id: number) => files.filter(file => file[where] === id).map(file => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt }));
+  const staffFile = (file: EngagementFile) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt });
+  const filesFor = (where: "taskId" | "deliverableId", id: number) => files.filter(file => file[where] === id || (where === "taskId" && matches.some(match => match.fileId === file.id && match.taskId === id))).map(staffFile);
   return {
     uploadsEnabled: isFileStorageConfigured(),
     engagement: { ...engagement, stageLabel: ENGAGEMENT_STAGE_LABELS[engagement.stage] },
@@ -310,6 +314,11 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     clientPeople,
     sessions,
     tasks: tasks.map(task => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id) })),
+    // The drop box: every file the client sent without saying what it answers, with the requests it has been matched to.
+    // Unsorted files come first.
+    inbox: files.filter(file => file.taskId === null && file.deliverableId === null && !file.fromTeam)
+      .map(file => ({ ...staffFile(file), note: file.note, taskIds: matches.filter(match => match.fileId === file.id).map(match => match.taskId) }))
+      .sort((a, b) => Number(a.taskIds.length > 0) - Number(b.taskIds.length > 0) || b.id - a.id),
     deliverables: deliverables.map(item => ({ ...item, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item.kind), comments: comments.filter(comment => comment.deliverableId === item.id), files: filesFor("deliverableId", item.id) })),
     measure,
     checkins,
@@ -484,7 +493,7 @@ export async function shareSessionNotes(db: Database, actor: StaffActor, input: 
   return { success: true } as const;
 }
 
-export type TaskInput = { engagementId: number; taskId?: number; kind: EngagementTaskKind; title: string; detail: string | null; side: EngagementTaskSide; assigneeUserId: number | null; dueOn: string | null; status: EngagementTaskStatus; statusNote: string | null; sessionId: number | null; weekNumber: number | null; sortOrder: number; factor: EngagementTaskFactor | null };
+export type TaskInput = { engagementId: number; taskId?: number; kind: EngagementTaskKind; title: string; detail: string | null; side: EngagementTaskSide; assigneeUserId: number | null; dueOn: string | null; status: EngagementTaskStatus; statusNote: string | null; sessionId: number | null; weekNumber: number | null; sortOrder: number; factor: EngagementTaskFactor | null; section?: string | null; ref?: string | null; informs?: string | null; format?: string | null; priority?: EngagementTaskPriority | null };
 
 export async function saveTask(db: Database, actor: StaffActor, input: TaskInput) {
   requireManage(actor);
@@ -497,7 +506,7 @@ export async function saveTask(db: Database, actor: StaffActor, input: TaskInput
   }
   if (input.sessionId !== null && !(await db.select({ id: engagementSessions.id }).from(engagementSessions).where(and(eq(engagementSessions.id, input.sessionId), eq(engagementSessions.engagementId, engagement.id))).limit(1)).length) throw notFound();
   const finished = input.status === "accepted" || input.status === "done";
-  const values = { kind: input.kind, title: input.title, detail: input.detail, side: input.side, assigneeUserId: input.assigneeUserId, dueOn: input.dueOn, status: input.status, statusNote: input.statusNote, sessionId: input.sessionId, weekNumber: input.weekNumber, sortOrder: input.sortOrder, factor: input.factor, completedAt: finished ? new Date() : null };
+  const values = { kind: input.kind, title: input.title, detail: input.detail, side: input.side, assigneeUserId: input.assigneeUserId, dueOn: input.dueOn, status: input.status, statusNote: input.statusNote, sessionId: input.sessionId, weekNumber: input.weekNumber, sortOrder: input.sortOrder, factor: input.factor, section: input.section ?? null, ref: input.ref ?? null, informs: input.informs ?? null, format: input.format ?? null, priority: input.priority ?? null, completedAt: finished ? new Date() : null };
   if (input.taskId) {
     const updated = await db.update(engagementTasks).set(values).where(and(eq(engagementTasks.id, input.taskId), eq(engagementTasks.engagementId, engagement.id))).returning({ id: engagementTasks.id });
     if (!updated.length) throw notFound();
@@ -664,7 +673,7 @@ export async function getClientRoom(db: Database, session: AccountSession) {
   // Sessions the owner booked on Calendly since the last visit appear with their time before anything is read.
   const owner = (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   if (owner) await syncSessionBookings(db, engagement, owner.email);
-  const [team, sessions, tasks, deliverables, comments, files, measure, checkins] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, files, measure, checkins, matches] = await Promise.all([
     db.select({ name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq(engagementTasks.engagementId, engagement.id)).orderBy(asc(engagementTasks.id)),
@@ -674,6 +683,7 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     filesOf(db, engagement.id),
     measureOf(db, engagement.id),
     checkinsOf(db, engagement.id),
+    matchesOf(db, engagement.id),
   ]);
   const fullView = viewer.kind === "owner" || viewer.access === "full";
   // Where the engagement came from: the check's main finding and readiness, and the Discovery Call once the team shares it.
@@ -684,8 +694,9 @@ export async function getClientRoom(db: Database, session: AccountSession) {
   // The Founder and Business tabs: the owner's own Full Report or Business Health Check, never shown to limited-access staff.
   const insight = fullView ? await insightFor(db, engagement.businessCheckId, Boolean(report?.deliveredAt)) : null;
   const visibleDeliverables = deliverables.filter(item => clientCanSee(item.audience, viewer));
+  const matchedTo = (fileId: number) => matches.filter(match => match.fileId === fileId).map(match => match.taskId);
   const clientFiles = (where: "taskId" | "deliverableId", id: number) => files
-    .filter(file => file[where] === id && clientFileVisible(file, viewer, session.user.id))
+    .filter(file => (file[where] === id || (where === "taskId" && matchedTo(file.id).includes(id))) && clientFileVisible(file, viewer, session.user.id))
     .map(file => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === session.user.id, fromTeam: file.fromTeam }));
   const now = Date.now();
   const scheduled = sessions.filter(item => item.status !== "cancelled");
@@ -733,8 +744,14 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     tasks: tasks.filter(task => task.status !== "cancelled" && clientCanSeeTask(task, viewer)).map(task => ({
       id: task.id, kind: task.kind, side: task.side, title: task.title, detail: task.detail, dueOn: task.dueOn, status: task.status, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], statusNote: task.statusNote, mine: task.assigneeUserId === session.user.id,
       weekNumber: task.weekNumber, sortOrder: task.sortOrder, factor: task.factor,
+      section: task.section, ref: task.ref, informs: task.informs, format: task.format, priority: task.priority,
       files: clientFiles("taskId", task.id),
     })),
+    // What the client's side dropped into the room, newest first, and which visible requests each file was matched to.
+    sentFiles: files.filter(file => file.taskId === null && file.deliverableId === null && !file.fromTeam && clientFileVisible(file, viewer, session.user.id))
+      .map(file => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === session.user.id, note: file.note,
+        matchedTo: tasks.filter(task => matchedTo(file.id).includes(task.id) && task.status !== "cancelled" && clientCanSeeTask(task, viewer)).map(task => ({ taskId: task.id, ref: task.ref, title: task.title })) }))
+      .sort((a, b) => b.id - a.id),
     deliverables: visibleDeliverables.map(item => ({
       id: item.id, kind: item.kind, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind], title: item.title, summary: item.summary, sharedAt: item.sharedAt, audience: item.audience, audienceLabel: ENGAGEMENT_AUDIENCE_LABELS[item.audience], accepted: item.clientAcceptedAt !== null,
       files: clientFiles("deliverableId", item.id),
@@ -846,7 +863,7 @@ const isTargetStorageKey = (key: string, prefix: string) => {
 async function filesOf(db: Pick<Database, "select">, engagementId: number) {
   const rows = await db.select({
     id: engagementFiles.id, taskId: engagementFiles.taskId, deliverableId: engagementFiles.deliverableId, fileName: engagementFiles.fileName, contentType: engagementFiles.contentType,
-    sizeBytes: engagementFiles.sizeBytes, audience: engagementFiles.audience, uploadedByUserId: engagementFiles.uploadedByUserId, uploadedByName: users.name, createdAt: engagementFiles.createdAt,
+    sizeBytes: engagementFiles.sizeBytes, audience: engagementFiles.audience, uploadedByUserId: engagementFiles.uploadedByUserId, uploadedByName: users.name, createdAt: engagementFiles.createdAt, note: engagementFiles.note,
     membershipId: businessMemberships.id,
   }).from(engagementFiles)
     .innerJoin(users, eq(engagementFiles.uploadedByUserId, users.id))
@@ -916,6 +933,92 @@ export async function clientFileLink(db: Database, session: AccountSession, inpu
     if (!deliverable || deliverable.status !== "shared" || !clientCanSee(deliverable.audience, viewer)) throw notFound();
   }
   return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+}
+
+// ---- The drop box: the client sends everything at once; the team sorts it against the Data Requests ------------------
+
+const dropPrefix = (engagementId: number) => `engagements/${engagementId}/inbox/`;
+
+async function matchesOf(db: Pick<Database, "select">, engagementId: number) {
+  return db.select({ fileId: engagementFileMatches.fileId, taskId: engagementFileMatches.taskId }).from(engagementFileMatches)
+    .innerJoin(engagementFiles, eq(engagementFileMatches.fileId, engagementFiles.id)).where(eq(engagementFiles.engagementId, engagementId));
+}
+
+/** The client's current engagement, for the drop box. Anyone in the business may send files; only the owner and the sender see them. */
+async function requireClientRoomEngagement(db: Pick<Database, "select">, session: AccountSession) {
+  const business = session.activeBusiness;
+  if (!business) throw notFound();
+  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq(engagements.businessId, business.businessId)).orderBy(desc(engagements.id)).limit(1))[0];
+  if (!engagement) throw notFound();
+  return engagement;
+}
+
+/** Step one of a drop: where to put the file. Nothing is recorded yet. */
+export async function clientRequestDrop(db: Database, session: AccountSession, input: UploadInput) {
+  requireUploads();
+  validateUpload(input);
+  const engagement = await requireClientRoomEngagement(db, session);
+  const storageKey = `${dropPrefix(engagement.id)}${randomUUID()}-${safeFileName(input.fileName)}`;
+  const upload = await createSignedUpload(storageKey, input.contentType);
+  return { storageKey, uploadUrl: upload.url, headers: upload.headers };
+}
+
+/** Step two: the file arrived. It is recorded unsorted (no request yet); the team matches it. */
+export async function clientConfirmDrop(db: Database, session: AccountSession, input: UploadInput & { storageKey: string; note: string | null }) {
+  requireUploads();
+  validateUpload(input);
+  const engagement = await requireClientRoomEngagement(db, session);
+  if (!isTargetStorageKey(input.storageKey, dropPrefix(engagement.id))) throw notFound();
+  if (!(await objectExists(input.storageKey))) throw new TRPCError({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
+  return db.transaction(async tx => {
+    const [file] = await tx.insert(engagementFiles).values({
+      engagementId: engagement.id, storageKey: input.storageKey, fileName: input.fileName.trim().slice(0, 255), contentType: input.contentType || "application/octet-stream",
+      sizeBytes: input.sizeBytes, audience: "owner", uploadedByUserId: session.user.id, note: input.note,
+    }).returning({ id: engagementFiles.id });
+    await recordAudit(tx, { action: "engagement_file_dropped", actorUserId: session.user.id, details: { engagementId: engagement.id, fileId: file.id } });
+    return { success: true, fileId: file.id } as const;
+  });
+}
+
+/**
+ * "We don't have this": a valid answer to a Data Request, so it stops waiting on the client. They can take it back
+ * while the team has not acted on it.
+ */
+export async function setNotAvailable(db: Database, session: AccountSession, input: { taskId: number; unavailable: boolean; note: string | null }) {
+  const task = (await db.select().from(engagementTasks).where(eq(engagementTasks.id, input.taskId)).limit(1))[0];
+  if (!task) throw notFound();
+  const { viewer } = await requireClientEngagement(db, session, task.engagementId);
+  if (task.side !== "client" || task.kind !== "data_request" || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound();
+  if (input.unavailable && task.status !== "open" && task.status !== "needs_more") throw new TRPCError({ code: "CONFLICT", message: "This is already with us." });
+  if (!input.unavailable && task.status !== "not_available") throw new TRPCError({ code: "CONFLICT", message: "This is already with us." });
+  const status: EngagementTaskStatus = input.unavailable ? "not_available" : "open";
+  await db.transaction(async tx => {
+    await tx.update(engagementTasks).set({ status, statusNote: input.unavailable ? input.note : null }).where(eq(engagementTasks.id, task.id));
+    await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status } });
+  });
+  return { success: true, status } as const;
+}
+
+/**
+ * The team says which Data Requests a dropped file answers (replacing what it said before). A request still waiting on
+ * the client moves to "Sent, we are checking"; the team then marks it Received or asks for more, as for any request.
+ */
+export async function matchFile(db: Database, actor: StaffActor, input: { fileId: number; taskIds: number[] }) {
+  requireManage(actor);
+  const file = (await db.select().from(engagementFiles).where(eq(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file || file.taskId !== null || file.deliverableId !== null) throw notFound();
+  await requireStaffEngagement(db, actor, file.engagementId);
+  const wanted = Array.from(new Set(input.taskIds));
+  const requests = wanted.length ? await db.select().from(engagementTasks).where(and(inArray(engagementTasks.id, wanted), eq(engagementTasks.engagementId, file.engagementId), eq(engagementTasks.kind, "data_request"))) : [];
+  if (requests.length !== wanted.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Match the file to this engagement's Data Requests only." });
+  return db.transaction(async tx => {
+    await tx.delete(engagementFileMatches).where(eq(engagementFileMatches.fileId, file.id));
+    if (wanted.length) await tx.insert(engagementFileMatches).values(wanted.map(taskId => ({ fileId: file.id, taskId, matchedByUserId: actor.id })));
+    const waiting = requests.filter(task => task.status === "open" || task.status === "needs_more" || task.status === "not_available").map(task => task.id);
+    if (waiting.length) await tx.update(engagementTasks).set({ status: "received", statusNote: "From the files you sent" }).where(inArray(engagementTasks.id, waiting));
+    await recordAudit(tx, { action: "engagement_file_matched", actorUserId: actor.id, details: { engagementId: file.engagementId, fileId: file.id, taskIds: wanted } });
+    return { success: true, moved: waiting.length } as const;
+  });
 }
 
 async function requireStaffTarget(db: Pick<Database, "select">, actor: StaffActor, engagementId: number, target: UploadTarget) {

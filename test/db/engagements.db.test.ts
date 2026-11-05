@@ -484,6 +484,60 @@ for (const target of targets) {
         expect((await (await owner.call()).engagement.client.room())!.tasks.find(item => item.id === taskId)!.status).toBe("open");
       });
 
+      it("takes files into the drop box unsorted; the team matches each to Data Requests; only this client and the team see them", async () => {
+        configure();
+        storage();
+        const a = await client("drop-a");
+        const b = await client("drop-b");
+        const room = (await (await a.owner.call()).engagement.client.room())!;
+        const [first, second] = room.tasks.filter(task => task.kind === "data_request");
+        const ticket = await (await a.owner.call()).engagement.client.requestDrop(pdf("everything.pdf"));
+        expect(ticket.storageKey).toMatch(new RegExp(`^engagements/${a.engagementId}/inbox/[0-9a-f-]+-everything\\.pdf$`));
+        // A key outside this engagement's drop box is refused, however it was obtained.
+        await expect((await a.owner.call()).engagement.client.confirmDrop({ storageKey: `engagements/${b.engagementId}/inbox/x-everything.pdf`, note: null, ...pdf("everything.pdf") })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect((await a.owner.call()).engagement.client.confirmDrop({ storageKey: `engagements/${a.engagementId}/tasks/${first.id}/x-everything.pdf`, note: null, ...pdf("everything.pdf") })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        const { fileId } = await (await a.owner.call()).engagement.client.confirmDrop({ storageKey: ticket.storageKey, note: "From our accountant", ...pdf("everything.pdf") });
+
+        let after = (await (await a.owner.call()).engagement.client.room())!;
+        expect(after.sentFiles).toEqual([expect.objectContaining({ id: fileId, fileName: "everything.pdf", mine: true, note: "From our accountant", matchedTo: [] })]);
+        expect(after.tasks.find(task => task.id === first.id)!.status).toBe("open");
+        const detail = await (await superAdmin.call()).engagement.staff.detail({ engagementId: a.engagementId });
+        expect(detail.inbox).toEqual([expect.objectContaining({ id: fileId, fileName: "everything.pdf", note: "From our accountant", taskIds: [] })]);
+
+        // Another engagement's request cannot be matched; this one's can, and a waiting request moves to "we are checking".
+        const otherTask = (await (await b.owner.call()).engagement.client.room())!.tasks[0];
+        await expect((await superAdmin.call()).engagement.staff.matchFile({ fileId, taskIds: [otherTask.id] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        expect(await (await superAdmin.call()).engagement.staff.matchFile({ fileId, taskIds: [first.id, second.id] })).toMatchObject({ moved: 2 });
+        after = (await (await a.owner.call()).engagement.client.room())!;
+        expect(after.tasks.find(task => task.id === first.id)).toMatchObject({ status: "received", statusNote: "From the files you sent", files: [expect.objectContaining({ id: fileId })] });
+        expect(after.sentFiles[0].matchedTo.map(match => match.taskId).sort()).toEqual([first.id, second.id].sort());
+        expect((await (await superAdmin.call()).engagement.staff.detail({ engagementId: a.engagementId })).inbox[0].taskIds.sort()).toEqual([first.id, second.id].sort());
+
+        expect((await (await a.owner.call()).engagement.client.fileLink({ fileId })).url).toContain("download=everything.pdf");
+        await expect((await b.owner.call()).engagement.client.fileLink({ fileId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        expect((await (await b.owner.call()).engagement.client.room())!.sentFiles).toEqual([]);
+
+        // Clearing the match keeps the file and takes it off the requests.
+        await (await superAdmin.call()).engagement.staff.matchFile({ fileId, taskIds: [] });
+        after = (await (await a.owner.call()).engagement.client.room())!;
+        expect(after.sentFiles[0].matchedTo).toEqual([]);
+        expect(after.tasks.find(task => task.id === first.id)!.files).toEqual([]);
+      });
+
+      it("lets the client mark a Data Request not available, and undo it, but not once the team has it", async () => {
+        const { owner } = await client("not-available");
+        const request = (await (await owner.call()).engagement.client.room())!.tasks.find(task => task.kind === "data_request")!;
+        expect(await (await owner.call()).engagement.client.setNotAvailable({ taskId: request.id, unavailable: true, note: "We kept no records before March" })).toMatchObject({ status: "not_available" });
+        let task = (await (await owner.call()).engagement.client.room())!.tasks.find(item => item.id === request.id)!;
+        expect(task).toMatchObject({ status: "not_available", statusLabel: "Not available", statusNote: "We kept no records before March" });
+        await expect((await owner.call()).engagement.client.setNotAvailable({ taskId: request.id, unavailable: true, note: null })).rejects.toMatchObject({ code: "CONFLICT" });
+        await (await owner.call()).engagement.client.setNotAvailable({ taskId: request.id, unavailable: false, note: null });
+        task = (await (await owner.call()).engagement.client.room())!.tasks.find(item => item.id === request.id)!;
+        expect(task).toMatchObject({ status: "open", statusNote: null });
+        await (await owner.call()).engagement.client.respondToTask({ taskId: request.id, note: "On WhatsApp" });
+        await expect((await owner.call()).engagement.client.setNotAvailable({ taskId: request.id, unavailable: true, note: null })).rejects.toMatchObject({ code: "CONFLICT" });
+      });
+
       it("shows the team's file on a deliverable only once the deliverable is shared, and to the audience chosen", async () => {
         configure();
         storage();

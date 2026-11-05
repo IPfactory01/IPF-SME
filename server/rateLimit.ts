@@ -48,6 +48,8 @@ export const LIMITS = {
   paymentStatusAddress: { scope: "payment_status_ip", max: 60, windowMs: HOUR },
   /** New private upload tickets from one authenticated actor or upload address. */
   fileUpload: { scope: "file_upload", max: 30, windowMs: DAY },
+  /** The room's drop box: a client sends everything they have at once, so the cap is per day and generous. */
+  fileDrop: { scope: "file_drop", max: 200, windowMs: DAY },
   /** Engagement-room comments from one actor. */
   engagementComment: { scope: "engagement_comment", max: 60, windowMs: HOUR },
   /** Invitation and sign-in-link sends initiated by one internal actor. */

@@ -2,10 +2,10 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { READINESS_LABELS } from "@shared/businessCheck/engine";
 import { AREA_NAMES } from "@shared/businessCheck/questions";
-import { ASSESSMENT_DAYS, ASSESSMENT_WEEKS, FIX_WEEKS, formatFileSize, formatMeasure, OPEN_TASK_STATUSES, UPLOAD_ACCEPT, UPLOAD_MAX_MB } from "@shared/engagement";
+import { ASSESSMENT_DAYS, ASSESSMENT_WEEKS, ENGAGEMENT_TASK_PRIORITY_LABELS, FIX_WEEKS, formatFileSize, formatMeasure, OPEN_TASK_STATUSES, UPLOAD_ACCEPT, UPLOAD_MAX_MB } from "@shared/engagement";
 import { METHOD, METHOD_MEANING } from "@shared/method";
 import type { inferRouterOutputs } from "@trpc/server";
-import { ArrowRight, CalendarClock, Check, ChevronDown, Download, Paperclip } from "lucide-react";
+import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlash, Download, FileText, Paperclip, UploadCloud } from "lucide-react";
 import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
@@ -96,7 +96,18 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
   const nextAction = (
     <section aria-labelledby="next-action" className="rounded-xl border border-brand-line bg-brand-tint p-5 lg:col-span-2">
       <p id="next-action" className="text-xs font-semibold text-brand">Next action{action.kind === "task" ? ` · ${action.label}` : ""}</p>
-      {action.kind === "task" && (
+      {action.kind === "task" && action.task.kind === "data_request" && (() => {
+        const requests = room.tasks.filter(task => task.side === "client" && task.kind === "data_request");
+        const answered = requests.filter(task => !isOpen(task)).length;
+        return (
+          <>
+            <p className="mt-2 text-lg font-semibold tracking-tight">{requests.length - answered} {requests.length - answered === 1 ? "item" : "items"} outstanding</p>
+            <p className="mt-1 text-sm text-ink-600"><span className="tabular-nums">{answered} of {requests.length}</span> received</p>
+            <a href="#data" className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-deep-hover">Open the {METHOD.dataRequest}<ArrowRight className="h-4 w-4" aria-hidden /></a>
+          </>
+        );
+      })()}
+      {action.kind === "task" && action.task.kind !== "data_request" && (
         <>
           <p className="mt-2 text-lg font-semibold tracking-tight">{action.task.title}</p>
           {action.task.detail && <TaskDetail text={action.task.detail} className="mt-1 text-sm text-ink-600" />}
@@ -151,8 +162,8 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
 
   const overview = (
     <div className="space-y-5">
-      <div className="grid gap-5 lg:grid-cols-3">{nextAction}{nextMeeting}</div>
       <RoomDashboard room={room} steps={steps} now={now} />
+      <div className="grid gap-5 lg:grid-cols-3">{nextAction}{nextMeeting}</div>
       <div className="grid items-start gap-5 lg:grid-cols-3">
         <div className={`${card} lg:col-span-2`}>{timeline}</div>
         <aside aria-label="At a glance" className="space-y-5">
@@ -257,7 +268,7 @@ function nextActionOf(room: Room, isOwner: boolean): NextAction {
   if (open[0]) {
     const task = open[0];
     const requests = mine.filter(item => item.kind === "data_request");
-    const label = task.kind === "data_request" ? `${METHOD.dataRequest} ${requests.findIndex(item => item.id === task.id) + 1} of ${requests.length}` : "Action";
+    const label = task.kind === "data_request" ? METHOD.dataRequest : "Action";
     return { kind: "task", task, label };
   }
   if (isOwner) {
@@ -549,28 +560,39 @@ function useRoomRefresh() {
 }
 
 /** Request a place for the file, send it there from the browser, then tell the server it arrived. */
-function useClientUpload(taskId: number) {
+type DropItem = { key: string; name: string; state: "sending" | "sent" | "failed"; error?: string };
+
+/** The drop box: each file goes straight to private storage, then is recorded unsorted for the team to match. */
+function useDropUpload() {
   const refresh = useRoomRefresh();
-  const request = trpc.engagement.client.requestUpload.useMutation();
-  const confirm = trpc.engagement.client.confirmUpload.useMutation();
-  const [busy, setBusy] = useState(false);
-  const send = async (file: File, note: string) => {
-    setBusy(true);
-    try {
-      const meta = { fileName: file.name, contentType: file.type, sizeBytes: file.size };
-      const ticket = await request.mutateAsync({ taskId, ...meta });
-      const put = await fetch(ticket.uploadUrl, { method: "PUT", headers: ticket.headers, body: file });
-      if (!put.ok) throw new Error("The upload did not finish. Check your connection and try again.");
-      await confirm.mutateAsync({ taskId, storageKey: ticket.storageKey, note: note || null, ...meta });
+  const request = trpc.engagement.client.requestDrop.useMutation();
+  const confirm = trpc.engagement.client.confirmDrop.useMutation();
+  const [items, setItems] = useState<DropItem[]>([]);
+  const busy = items.some(item => item.state === "sending");
+  const update = (key: string, patch: Partial<DropItem>) => setItems(list => list.map(item => (item.key === key ? { ...item, ...patch } : item)));
+  const send = async (files: File[], note: string) => {
+    const batch = files.map((file, index) => ({ file, key: `${Date.now()}-${index}-${file.name}` }));
+    setItems(list => [...batch.map(({ file, key }) => ({ key, name: file.name, state: "sending" as const })), ...list]);
+    let sent = 0;
+    for (const { file, key } of batch) {
+      try {
+        const meta = { fileName: file.name, contentType: file.type, sizeBytes: file.size };
+        const ticket = await request.mutateAsync(meta);
+        const put = await fetch(ticket.uploadUrl, { method: "PUT", headers: ticket.headers, body: file });
+        if (!put.ok) throw new Error("The upload did not finish. Check your connection and try again.");
+        await confirm.mutateAsync({ storageKey: ticket.storageKey, note: note || null, ...meta });
+        update(key, { state: "sent" });
+        sent += 1;
+      } catch (error) {
+        update(key, { state: "failed", error: error instanceof Error ? error.message : "The upload did not finish." });
+      }
+    }
+    if (sent) {
       refresh.onSuccess();
-      toast.success("Thank you, we have your file. We will tell you if we need more.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "The upload did not finish.");
-    } finally {
-      setBusy(false);
+      toast.success(`${sent} ${sent === 1 ? "file" : "files"} received. We will match ${sent === 1 ? "it" : "them"} to the ${METHOD.dataRequest}.`);
     }
   };
-  return { send, busy };
+  return { send, busy, items };
 }
 
 /** Files on an item, each opened through a short-lived link the server issues after checking who is asking. */
@@ -593,33 +615,63 @@ function FileList({ files }: { files: RoomFile[] }) {
   );
 }
 
-/** Upload, or mark as submitted with a note on how it was sent; "Mark as done" for an action. */
+/**
+ * A Data Request is answered by sending files to the drop box (the team matches them), by "We don't have this", or by
+ * saying it went another way. An action is marked done.
+ */
 function TaskControls({ task, uploadsEnabled, due }: { task: Task; uploadsEnabled: boolean; due?: boolean }) {
+  if (task.kind === "data_request") return <RequestControls task={task} />;
+  return <ActionControls task={task} uploadsEnabled={uploadsEnabled} due={due} />;
+}
+
+function RequestControls({ task }: { task: Task }) {
+  const refresh = useRoomRefresh();
+  const [mode, setMode] = useState<"none" | "missing" | "other">("none");
+  const [note, setNote] = useState("");
+  const unavailable = trpc.engagement.client.setNotAvailable.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); setMode("none"); toast.success("Marked as not available."); } });
+  const respond = trpc.engagement.client.respondToTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); setMode("none"); toast.success("Noted. We will confirm receipt."); } });
+  if (task.status === "not_available") {
+    return <button type="button" className="mt-2 text-xs font-medium text-brand underline underline-offset-2" disabled={unavailable.isPending} onClick={() => unavailable.mutate({ taskId: task.id, unavailable: false, note: null })}>Undo</button>;
+  }
+  if (!isOpen(task)) return null;
+  if (mode !== "none") {
+    return (
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <input aria-label={mode === "missing" ? `Note on ${task.title}` : `How you sent ${task.title}`} className="w-full rounded-lg border border-line bg-white px-3 py-1.5 text-sm" placeholder={mode === "missing" ? "Note (optional)" : "Channel, e.g. WhatsApp or email (optional)"} value={note} maxLength={500} onChange={event => setNote(event.target.value)} />
+        <div className="flex gap-2">
+          <Button type="button" size="sm" className="rounded-lg bg-brand text-xs text-white" disabled={unavailable.isPending || respond.isPending} onClick={() => (mode === "missing" ? unavailable.mutate({ taskId: task.id, unavailable: true, note }) : respond.mutate({ taskId: task.id, note }))}>Confirm</Button>
+          <Button type="button" size="sm" variant="outline" className="rounded-lg text-xs" onClick={() => setMode("none")}>Cancel</Button>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+      <a href="#drop" className="inline-flex items-center gap-1 font-medium text-brand underline underline-offset-2"><UploadCloud className="h-3.5 w-3.5" aria-hidden />Upload</a>
+      <button type="button" className="font-medium text-ink-600 underline underline-offset-2 hover:text-ink" onClick={() => setMode("missing")}>Not available</button>
+      <button type="button" className="text-ink-muted underline underline-offset-2 hover:text-ink" onClick={() => setMode("other")}>Submitted another way</button>
+    </div>
+  );
+}
+
+/** "Mark as done" for an action, with an optional note. */
+function ActionControls({ task, due }: { task: Task; uploadsEnabled: boolean; due?: boolean }) {
   const refresh = useRoomRefresh();
   const [note, setNote] = useState("");
   const [asking, setAsking] = useState(false);
-  const respond = trpc.engagement.client.respondToTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success(task.kind === "data_request" ? "Thank you. We will check it and tell you if we need more." : "Marked as done."); } });
-  const upload = useClientUpload(task.id);
-  const canUpload = uploadsEnabled && task.kind === "data_request";
+  const respond = trpc.engagement.client.respondToTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Marked as done."); } });
   if (asking) {
     return (
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-        <input aria-label={`How you sent ${task.title}`} className="w-full border border-line bg-white px-2 py-1.5 text-sm" placeholder={task.kind === "data_request" ? "How you sent it, e.g. on WhatsApp (optional)" : "Anything we should know (optional)"} value={note} maxLength={500} onChange={event => setNote(event.target.value)} />
-        <Button type="button" size="sm" className="rounded-none bg-brand text-xs text-white" disabled={respond.isPending} onClick={() => respond.mutate({ taskId: task.id, note })}>Confirm</Button>
+        <input aria-label={`How you sent ${task.title}`} className="w-full rounded-lg border border-line bg-white px-3 py-1.5 text-sm" placeholder="Anything we should know (optional)" value={note} maxLength={500} onChange={event => setNote(event.target.value)} />
+        <Button type="button" size="sm" className="rounded-lg bg-brand text-xs text-white" disabled={respond.isPending} onClick={() => respond.mutate({ taskId: task.id, note })}>Confirm</Button>
       </div>
     );
   }
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
-      {canUpload && (
-        <label className={`inline-flex cursor-pointer items-center gap-1.5 border border-brand bg-brand px-3 py-1.5 text-xs font-medium text-white ${upload.busy ? "opacity-60" : ""}`}>
-          <Paperclip className="h-3.5 w-3.5" aria-hidden />{upload.busy ? "Uploading…" : "Upload a file"}
-          <input type="file" className="sr-only" accept={UPLOAD_ACCEPT} disabled={upload.busy} aria-label={`Upload a file for ${task.title}`} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void upload.send(file, ""); }} />
-        </label>
-      )}
-      <Button type="button" size="sm" variant={canUpload ? "outline" : "default"} className={canUpload ? "rounded-none text-xs" : "rounded-none bg-brand text-xs text-white"} onClick={() => setAsking(true)}>{task.kind === "data_request" ? (canUpload ? "Sent another way" : "Mark as submitted") : "Mark as done"}</Button>
+      <Button type="button" size="sm" className="rounded-lg bg-brand text-xs text-white" onClick={() => setAsking(true)}>Mark as done</Button>
       {due && task.dueOn && <span className="text-xs text-ink-muted">{dueText(task.dueOn)}</span>}
-      {canUpload && <span className="text-xs text-ink-muted">PDF, photos or spreadsheets, up to {UPLOAD_MAX_MB} MB.</span>}
     </div>
   );
 }
@@ -772,7 +824,7 @@ const PLAN_GROUPS: { id: string; name: string; dot: string; pill: string; test: 
   { id: "you", name: "Waiting on you", dot: "border-brand-plum bg-white", pill: "bg-brand-plum text-white", test: isClientOpen },
   { id: "us", name: "With IP Factory", dot: "border-brand bg-white", pill: "bg-brand text-white", test: task => task.side !== "client" && OPEN_TASK_STATUSES.includes(task.status) },
   { id: "checking", name: "Sent, we are checking", dot: "border-highlight bg-white", pill: "bg-brand-tint text-brand-deep", test: task => task.status === "received" },
-  { id: "done", name: "Done", dot: "border-health-clear bg-health-clear", pill: "bg-health-clear-tint text-health-clear", test: task => task.status === "accepted" || task.status === "done" },
+  { id: "done", name: "Done", dot: "border-health-clear bg-health-clear", pill: "bg-health-clear-tint text-health-clear", test: task => task.status === "accepted" || task.status === "done" || task.status === "not_available" },
 ];
 
 /** Every task in the engagement, grouped by where it stands, with who owns it and when it is due. Open one to act on it. */
@@ -838,31 +890,182 @@ function PlanView({ room, now }: { room: Room; now: number }) {
   );
 }
 
-/** What we have asked the client for, and what has arrived: the Data Requests on their own, with the upload where it is needed. */
-function DataRequestsView({ room, now }: { room: Room; now: number }) {
-  const items = room.tasks.filter(task => task.kind === "data_request").sort((a, b) => (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999") || a.id - b.id);
-  const arrived = items.filter(task => task.status === "accepted" || task.status === "done").length;
+// ---- Data Requests: one drop box, one checklist ----------------------------------------------------------------------
+
+const PRIORITY_CHIP = { high: "bg-health-stuck-tint text-health-stuck", medium: "bg-health-watch-tint text-health-watch", low: "bg-paper-sunken text-ink-muted" } as const;
+const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 } as const;
+const answeredShare = (task: Task) => (task.status === "accepted" || task.status === "done" || task.status === "not_available" ? 1 : task.status === "received" || task.status === "needs_more" ? 0.5 : 0);
+
+/** What we need, at a glance: how much is in (a part-answered item counts as half), what is still to come, what is late. */
+function RequestSummary({ items, now }: { items: Task[]; now: number }) {
+  const share = items.length ? items.reduce((sum, task) => sum + answeredShare(task), 0) / items.length : 0;
+  const toCome = items.filter(isOpen).length;
+  const overdue = items.filter(task => isOpen(task) && dueFlag(task.dueOn, false, now)?.tone === "late").length;
+  const urgent = items.filter(task => isOpen(task) && task.priority === "high").length;
+  const tiles = [
+    { label: "Requested", value: String(items.length) },
+    { label: "Received", value: `${Math.round(share * 100)}%` },
+    { label: "Outstanding", value: String(toCome), note: urgent ? `${urgent} high priority` : undefined },
+    { label: "Overdue", value: String(overdue), late: overdue > 0 },
+  ];
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-ink-600"><span className="font-medium text-ink tabular-nums">{arrived} of {items.length}</span> received. {METHOD_MEANING.dataRequest}</p>
-      <ul className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line-soft bg-white">
-        {items.map(task => {
-          const finished = task.status === "accepted" || task.status === "done";
-          const flag = dueFlag(task.dueOn, finished, now);
-          return (
-            <li key={task.id} className="p-4" aria-label={task.title}>
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className={`font-medium ${finished ? "text-ink-muted" : "text-ink"}`}>{task.title}</span>
-                <span className="text-xs text-ink-muted">{task.statusLabel}{flag && !finished ? <> · <span className={FLAG_TONE[flag.tone]}>{flag.text}</span></> : null}</span>
-              </div>
-              {task.detail && !finished && <TaskDetail text={task.detail} className="mt-1 text-sm text-ink-600" />}
-              {task.status === "needs_more" && task.statusNote && <p className="mt-1 text-sm text-danger">We need a bit more: {task.statusNote}</p>}
-              <FileList files={task.files} />
-              {isClientOpen(task) && <TaskControls task={task} uploadsEnabled={room.uploadsEnabled} />}
-            </li>
-          );
-        })}
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" role="group" aria-label="Where your Data Requests stand">
+      {tiles.map(tile => (
+        <div key={tile.label} className="rounded-xl border border-line-soft bg-white p-4">
+          <p className="text-xs font-medium text-ink-muted">{tile.label}</p>
+          <p className={`mt-1 text-2xl font-semibold tracking-tight tabular-nums ${tile.late ? "text-danger" : "text-ink"}`}>{tile.value}</p>
+          {tile.note && <p className="text-xs text-ink-muted">{tile.note}</p>}
+        </div>
+      ))}
+      <div className="col-span-2 h-2 overflow-hidden rounded-full bg-chart-track lg:col-span-4" role="progressbar" aria-label="Data Request received" aria-valuenow={Math.round(share * 100)} aria-valuemin={0} aria-valuemax={100}>
+        <div className="h-full rounded-full bg-chart-done motion-safe:transition-[width] motion-safe:duration-700" style={{ width: `${share * 100}%` }} />
+      </div>
+    </div>
+  );
+}
+
+/** Drag everything in, or choose many files at once. No need to say which file is which: the team sorts them. */
+function DropBox({ uploadsEnabled }: { uploadsEnabled: boolean }) {
+  const drop = useDropUpload();
+  const [over, setOver] = useState(false);
+  const take = (list: FileList | null) => { const files = list ? Array.from(list) : []; if (files.length) void drop.send(files, ""); };
+  return (
+    <section id="drop" aria-labelledby="drop-title" className="scroll-mt-24 rounded-xl border border-line-soft bg-white p-5">
+      <h3 id="drop-title" className="font-sans text-base font-semibold tracking-tight">Upload documents</h3>
+      <p className="mt-1 text-sm text-ink-600">Upload in any order. We match each file to the {METHOD.dataRequest}.</p>
+      {uploadsEnabled ? (
+        <>
+          <label
+            onDragOver={event => { event.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+            onDrop={event => { event.preventDefault(); setOver(false); take(event.dataTransfer.files); }}
+            className={`mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors ${over ? "border-brand bg-brand-tint" : "border-brand-line-strong bg-brand-tint-softest hover:border-brand hover:bg-brand-tint"}`}>
+            <UploadCloud className="h-8 w-8 text-brand" aria-hidden />
+            <span className="text-sm font-semibold text-ink">{drop.busy ? "Uploading…" : "Drop files or browse"}</span>
+            <span className="text-xs text-ink-muted">PDF, Excel, Word or photos, up to {UPLOAD_MAX_MB} MB each</span>
+            <input type="file" multiple className="sr-only" accept={UPLOAD_ACCEPT} aria-label="Choose files to send" onChange={event => { take(event.target.files); event.target.value = ""; }} />
+          </label>
+          {drop.items.length > 0 && (
+            <ul className="mt-3 space-y-1 text-sm" aria-label="Uploads">
+              {drop.items.map(item => (
+                <li key={item.key} className="flex items-center justify-between gap-3">
+                  <span className="flex min-w-0 items-center gap-2"><FileText className="h-3.5 w-3.5 shrink-0 text-ink-muted" aria-hidden /><span className="truncate">{item.name}</span></span>
+                  <span className={`shrink-0 text-xs ${item.state === "failed" ? "text-danger" : item.state === "sent" ? "text-health-clear" : "text-ink-muted"}`}>{item.state === "sending" ? "Uploading…" : item.state === "sent" ? "Received" : item.error}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      ) : <p className="mt-3 rounded-lg bg-brand-tint p-3 text-sm text-ink-600">Send files by WhatsApp to your team, or by email to <span className="font-medium text-ink">{BRAND.businessSupportMailbox}</span>.</p>}
+    </section>
+  );
+}
+
+/** Everything the client's side sent through the drop box, and what each file was matched to. */
+function SentFiles({ files }: { files: Room["sentFiles"] }) {
+  const link = trpc.engagement.client.fileLink.useMutation({ onError: error => toast.error(error.message) });
+  if (!files.length) return null;
+  return (
+    <section aria-labelledby="sent-title" className="rounded-xl border border-line-soft bg-white p-5">
+      <h3 id="sent-title" className="font-sans text-sm font-medium text-ink-muted">Documents received <span className="tabular-nums">({files.length})</span></h3>
+      <ul className="mt-2 divide-y divide-line-soft text-sm">
+        {files.map(file => (
+          <li key={file.id} className="py-2.5">
+            <div className="flex items-start justify-between gap-3">
+              <button type="button" className="flex min-w-0 items-center gap-2 text-left text-ink hover:text-brand" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>
+                <FileText className="h-3.5 w-3.5 shrink-0 text-ink-muted" aria-hidden /><span className="truncate">{file.fileName}</span>
+              </button>
+              <span className="shrink-0 text-xs text-ink-muted">{lagos(file.createdAt, false)}</span>
+            </div>
+            <p className="mt-1 flex flex-wrap gap-1 pl-5.5 text-xs">
+              {file.matchedTo.length ? file.matchedTo.map(match => <span key={match.taskId} className="rounded-md bg-health-clear-tint px-1.5 py-0.5 text-health-clear-strong">{match.ref ? `${match.ref} ` : ""}{match.title}</span>)
+                : <span className="text-ink-muted">Under review</span>}
+            </p>
+          </li>
+        ))}
       </ul>
+    </section>
+  );
+}
+
+const STATUS_MARK: Record<string, { icon: React.ReactNode; tone: string }> = {
+  done: { icon: <Check className="h-3.5 w-3.5" aria-hidden />, tone: "bg-chart-done text-white border-chart-done" },
+  half: { icon: <span className="h-2 w-2 rounded-full bg-current" aria-hidden />, tone: "border-chart-checking text-chart-checking bg-white" },
+  missing: { icon: <CircleSlash className="h-3.5 w-3.5" aria-hidden />, tone: "border-line text-ink-muted bg-paper-sunken" },
+  open: { icon: <CircleDashed className="h-3.5 w-3.5" aria-hidden />, tone: "border-line-strong text-ink-faint bg-white" },
+};
+const markOf = (task: Task) => (task.status === "accepted" || task.status === "done" ? "done" : task.status === "not_available" ? "missing" : task.status === "received" || task.status === "needs_more" ? "half" : "open");
+
+/** One requested item: a line you can open for why we ask, the format, the files matched to it and the two answers. */
+function RequestRow({ task, now }: { task: Task; now: number }) {
+  const [open, setOpen] = useState(false);
+  const mark = STATUS_MARK[markOf(task)]!;
+  const finished = markOf(task) === "done" || markOf(task) === "missing";
+  const flag = dueFlag(task.dueOn, finished, now);
+  return (
+    <li aria-label={task.title} className="py-3">
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-start gap-3 text-left">
+        <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${mark.tone}`}>{mark.icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className={`block font-medium ${finished ? "text-ink-muted" : "text-ink"}`}>{task.ref && <span className="mr-1.5 tabular-nums text-ink-muted">{task.ref}</span>}{task.title}</span>
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
+            <span className={task.status === "needs_more" ? "text-danger" : ""}>{task.statusLabel}</span>
+            {flag && !finished && <span className={FLAG_TONE[flag.tone]}>{flag.text}</span>}
+            {task.priority && isOpen(task) && <span className={`rounded px-1.5 py-px font-medium ${PRIORITY_CHIP[task.priority]}`}>{ENGAGEMENT_TASK_PRIORITY_LABELS[task.priority]}</span>}
+            {task.files.length > 0 && <span className="inline-flex items-center gap-0.5"><Paperclip className="h-3 w-3" aria-hidden />{task.files.length}</span>}
+          </span>
+        </span>
+        <ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-ink-muted transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
+      </button>
+      {open && (
+        <div className="ml-9 mt-2 space-y-1.5 text-sm">
+          {task.detail && <TaskDetail text={task.detail} className="text-ink-600" />}
+          {task.informs && <p className="text-ink-600"><span className="text-ink-muted">Purpose: </span>{task.informs}</p>}
+          {task.format && <p className="text-ink-600"><span className="text-ink-muted">Format: </span>{task.format}</p>}
+          {task.status === "needs_more" && task.statusNote && <p className="text-danger">Further information required: {task.statusNote}</p>}
+          {task.status === "not_available" && task.statusNote && <p className="text-ink-600"><span className="text-ink-muted">Your note: </span>{task.statusNote}</p>}
+          <FileList files={task.files} />
+          <RequestControls task={task} />
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** The Data Requests: where they stand, the drop box, and the checklist by section, with what still waits on you first. */
+function DataRequestsView({ room, now }: { room: Room; now: number }) {
+  const items = room.tasks.filter(task => task.kind === "data_request");
+  const sections = Array.from(new Set(items.map(task => task.section ?? ""))).sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b)));
+  const order = (a: Task, b: Task) => Number(!isOpen(a)) - Number(!isOpen(b)) || (a.ref ?? "").localeCompare(b.ref ?? "", undefined, { numeric: true }) || PRIORITY_ORDER[a.priority ?? "low"] - PRIORITY_ORDER[b.priority ?? "low"] || (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999") || a.sortOrder - b.sortOrder || a.id - b.id;
+  return (
+    <div className="space-y-5">
+      <RequestSummary items={items} now={now} />
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <section aria-labelledby="asked-title" className="rounded-xl border border-line-soft bg-white p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h3 id="asked-title" className="font-sans text-base font-semibold tracking-tight">{METHOD.dataRequest}</h3>
+            <a href="#drop" className="inline-flex items-center gap-1 rounded-lg bg-brand px-2.5 py-1.5 text-xs font-medium text-white lg:hidden"><UploadCloud className="h-3.5 w-3.5" aria-hidden />Upload</a>
+          </div>
+          {sections.map(section => {
+            const list = items.filter(task => (task.section ?? "") === section).sort(order);
+            const done = list.filter(task => !isOpen(task)).length;
+            return (
+              <div key={section || "other"} className="mt-4">
+                {(sections.length > 1 || section) && (
+                  <div className="flex items-center justify-between gap-3 border-b border-line-soft pb-1.5">
+                    <h4 className="font-sans text-xs font-semibold text-ink">{section || "Other"}</h4>
+                    <span className="flex items-center gap-2 text-xs tabular-nums text-ink-muted">{done} of {list.length}<span aria-hidden className="h-1.5 w-16 overflow-hidden rounded-full bg-chart-track"><span className="block h-full rounded-full bg-chart-done" style={{ width: `${(done / list.length) * 100}%` }} /></span></span>
+                  </div>
+                )}
+                <ul className="divide-y divide-line-soft">{list.map(task => <RequestRow key={task.id} task={task} now={now} />)}</ul>
+              </div>
+            );
+          })}
+        </section>
+        <div className="space-y-5 lg:sticky lg:top-16">
+          <DropBox uploadsEnabled={room.uploadsEnabled} />
+          <SentFiles files={room.sentFiles} />
+        </div>
+      </div>
     </div>
   );
 }

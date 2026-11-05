@@ -18,7 +18,7 @@ export const WORK_GROUPS = [
   { id: "you", name: "Waiting on you", stroke: "stroke-chart-you", bg: "bg-chart-you", test: (task: Task) => task.side === "client" && OPEN_TASK_STATUSES.includes(task.status) },
   { id: "us", name: "With IP Factory", stroke: "stroke-chart-us", bg: "bg-chart-us", test: (task: Task) => task.side !== "client" && OPEN_TASK_STATUSES.includes(task.status) },
   { id: "checking", name: "We are checking", stroke: "stroke-chart-checking", bg: "bg-chart-checking", test: (task: Task) => task.status === "received" },
-  { id: "done", name: "Done", stroke: "stroke-chart-done", bg: "bg-chart-done", test: (task: Task) => task.status === "accepted" || task.status === "done" },
+  { id: "done", name: "Done", stroke: "stroke-chart-done", bg: "bg-chart-done", test: (task: Task) => task.status === "accepted" || task.status === "done" || task.status === "not_available" },
 ] as const;
 
 export function workSplit(tasks: Task[]) {
@@ -82,7 +82,7 @@ function StageMap({ steps }: { steps: DashboardStep[] }) {
   if (!steps.length) return null;
   return (
     <div className={CARD}>
-      <p className={LABEL}>Your {METHOD.engagement.toLowerCase()} at a glance</p>
+      <p className={LABEL}>{METHOD.engagement} stages</p>
       <ol className="mt-3 grid gap-1.5" style={{ gridTemplateColumns: `repeat(${steps.length}, minmax(0, 1fr))` }} aria-label="Stages">
         {steps.map(step => (
           <li key={step.n} aria-current={step.state === "now" ? "step" : undefined} className="min-w-0">
@@ -177,7 +177,7 @@ function WorkDonut({ tasks, drawn }: { tasks: Task[]; drawn: boolean }) {
             ))}
           </ul>
         </div>
-      ) : <p className="mt-3 text-sm text-ink-600">The split appears once your team sets the {METHOD.workPlan}.</p>}
+      ) : <p className="mt-3 text-sm text-ink-600">Shown once the {METHOD.workPlan} is set.</p>}
     </div>
   );
 }
@@ -190,21 +190,21 @@ function DataRequestMeter({ tasks, now }: { tasks: Task[]; now: number }) {
   const overdue = late.you + late.us;
   return (
     <div className={CARD}>
-      <p className={LABEL}>{METHOD.dataRequest}s</p>
+      <p className={LABEL}>{METHOD.dataRequest}</p>
       {requests.length ? (
         <>
           <p className="mt-3 text-3xl font-semibold tracking-tight tabular-nums">{received}<span className="text-base text-ink-muted"> of {requests.length}</span></p>
           <p className="text-sm text-ink-600">received</p>
-          <button type="button" onClick={() => goTo("data")} className="mt-3 flex w-full gap-1" aria-label={`${received} of ${requests.length} received. Open the ${METHOD.dataRequest}s`}>
+          <button type="button" onClick={() => goTo("data")} className="mt-3 flex w-full gap-1" aria-label={`${received} of ${requests.length} received. Open the ${METHOD.dataRequest}`}>
             {requests.map(task => {
-              const state = task.status === "received" ? "bg-chart-checking" : OPEN_TASK_STATUSES.includes(task.status) ? "border border-chart-you bg-white" : "bg-chart-done";
+              const state = task.status === "received" ? "bg-chart-checking" : task.status === "not_available" ? "bg-line-strong" : OPEN_TASK_STATUSES.includes(task.status) ? "border border-chart-you bg-white" : "bg-chart-done";
               return <span key={task.id} title={`${task.title}: ${task.statusLabel}`} aria-hidden className={`h-3 min-w-0 flex-1 rounded-sm transition-transform hover:scale-y-150 ${state}`} />;
             })}
           </button>
           {overdue > 0 ? <p className="mt-3 flex items-center gap-1.5 text-xs font-medium text-danger"><AlertCircle className="h-3.5 w-3.5" aria-hidden />{overdue} overdue</p>
-            : <p className="mt-3 text-xs text-ink-muted">Nothing overdue</p>}
+            : <p className="mt-3 text-xs text-ink-muted">None overdue</p>}
         </>
-      ) : <p className="mt-3 text-sm text-ink-600">Nothing requested yet.</p>}
+      ) : <p className="mt-3 text-sm text-ink-600">None issued yet.</p>}
     </div>
   );
 }
@@ -217,7 +217,7 @@ function DueBars({ tasks, now, drawn }: { tasks: Task[]; now: number; drawn: boo
   return (
     <div className={CARD}>
       <div className="flex items-baseline justify-between gap-2">
-        <p className={LABEL}>Coming due</p>
+        <p className={LABEL}>Due dates</p>
         <p className="flex gap-2 text-[11px] text-ink-muted">
           <span className="flex items-center gap-1"><span aria-hidden className="h-2 w-2 rounded-sm bg-chart-you" />You</span>
           <span className="flex items-center gap-1"><span aria-hidden className="h-2 w-2 rounded-sm bg-chart-us" />Us</span>

@@ -13,10 +13,12 @@ import { WIDE_QUERY } from "@/hooks/useWide";
 import { businessCheckProfiles } from "../../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../../fixtures/reportIntake";
 
-const api = vi.hoisted(() => ({ calls: { respond: [] as unknown[], comment: [] as unknown[], accept: [] as unknown[], audience: [] as unknown[], requestUpload: [] as unknown[], confirmUpload: [] as unknown[], fileLink: [] as unknown[] } }));
+const api = vi.hoisted(() => ({ calls: { respond: [] as unknown[], comment: [] as unknown[], accept: [] as unknown[], audience: [] as unknown[], requestUpload: [] as unknown[], confirmUpload: [] as unknown[], fileLink: [] as unknown[], requestDrop: [] as unknown[], confirmDrop: [] as unknown[], setNotAvailable: [] as unknown[] } }));
 const replies: Record<string, unknown> = {
   requestUpload: { storageKey: "engagements/4/tasks/11/abc-sales.pdf", uploadUrl: "https://example-project.supabase.co/storage/v1/object/upload/sign/engagement-files/engagements/4/tasks/11/abc-sales.pdf?token=up", headers: { "content-type": "application/pdf", "x-upsert": "false" } },
   confirmUpload: { success: true, fileId: 99, status: "received" },
+  requestDrop: { storageKey: "engagements/4/inbox/abc-sales.pdf", uploadUrl: "https://example-project.supabase.co/storage/v1/object/upload/sign/engagement-files/engagements/4/inbox/abc-sales.pdf?token=up", headers: { "content-type": "application/pdf", "x-upsert": "false" } },
+  confirmDrop: { success: true, fileId: 99 },
   fileLink: { url: "https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf" },
 };
 const mutation = (bucket: keyof typeof api.calls) => (options?: { onSuccess?: () => void }) => ({
@@ -37,6 +39,9 @@ vi.mock("@/lib/trpc", () => ({
         requestUpload: { useMutation: mutation("requestUpload") },
         confirmUpload: { useMutation: mutation("confirmUpload") },
         fileLink: { useMutation: mutation("fileLink") },
+        requestDrop: { useMutation: mutation("requestDrop") },
+        confirmDrop: { useMutation: mutation("confirmDrop") },
+        setNotAvailable: { useMutation: mutation("setNotAvailable") },
       },
     },
   },
@@ -70,23 +75,26 @@ const room = (over: Record<string, unknown> = {}) => ({
     { id: 2, title: "Kick-off", scheduledFor: new Date("2026-10-16T09:00:00Z"), durationMinutes: 30, meetingLink: null, status: "held" as const, weekNumber: null, sortOrder: 0, agenda: null, notes: "We agreed to start with pricing.", notesSharedAt: new Date("2026-10-16T12:00:00Z"), notesAudience: "owner" as const },
   ],
   tasks: [
-    { id: 11, kind: "data_request" as const, side: "client" as const, title: "Your last 12 months of sales", detail: "Monthly totals are enough.", dueOn: "2026-10-14", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 1, sortOrder: 1, factor: "internal" as const, files: [] },
-    { id: 12, kind: "data_request" as const, side: "client" as const, title: "Your price list", detail: null, dueOn: "2026-10-14", status: "needs_more" as const, statusLabel: "We need a bit more", statusNote: "the delivery prices too", mine: true, weekNumber: 1, sortOrder: 2, factor: "internal" as const, files: [] },
-    { id: 13, kind: "data_request" as const, side: "client" as const, title: "Who works in the business", detail: null, dueOn: null, status: "accepted" as const, statusLabel: "Received", statusNote: null, mine: false, weekNumber: 1, sortOrder: 3, factor: "internal" as const, files: [] },
-    { id: 14, kind: "action" as const, side: "ipf" as const, title: "Send the cash template", detail: null, dueOn: "2026-10-20", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 2, sortOrder: 1, factor: "internal" as const, files: [] },
+    { id: 11, kind: "data_request" as const, side: "client" as const, title: "Your last 12 months of sales", detail: "Monthly totals are enough.", dueOn: "2026-10-14", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 1, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, files: [] },
+    { id: 12, kind: "data_request" as const, side: "client" as const, title: "Your price list", detail: null, dueOn: "2026-10-14", status: "needs_more" as const, statusLabel: "We need a bit more", statusNote: "the delivery prices too", mine: true, weekNumber: 1, sortOrder: 2, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, files: [] },
+    { id: 13, kind: "data_request" as const, side: "client" as const, title: "Who works in the business", detail: null, dueOn: null, status: "accepted" as const, statusLabel: "Received", statusNote: null, mine: false, weekNumber: 1, sortOrder: 3, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, files: [] },
+    { id: 14, kind: "action" as const, side: "ipf" as const, title: "Send the cash template", detail: null, dueOn: "2026-10-20", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 2, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, files: [] },
   ],
   deliverables: [
     { id: 21, kind: "findings" as const, kindLabel: "Findings", title: "What we found", summary: "Cash leaks at the till.", sharedAt: new Date("2026-10-30T12:00:00Z"), audience: "owner" as const, audienceLabel: "Owner only", accepted: false, files: [], comments: [{ body: "Is this every day?", createdAt: new Date(), authorName: "Ada" }] },
   ],
+  sentFiles: [] as { id: number; fileName: string; sizeBytes: number; createdAt: Date; mine: boolean; note: string | null; matchedTo: { taskId: number; ref: string | null; title: string }[] }[],
   ...over,
 });
 
 beforeEach(() => {
-  api.calls = { respond: [], comment: [], accept: [], audience: [], requestUpload: [], confirmUpload: [], fileLink: [] };
+  api.calls = { respond: [], comment: [], accept: [], audience: [], requestUpload: [], confirmUpload: [], fileLink: [], requestDrop: [], confirmDrop: [], setNotAvailable: [] };
 });
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  // A tab or chart link writes the address's hash, which the next render would open on.
+  window.history.replaceState(null, "", window.location.pathname);
 });
 
 describe("the client's room", () => {
@@ -98,9 +106,11 @@ describe("the client's room", () => {
     expect(hero.queryByText(/Welcome back/)).toBeNull();
     expect(hero.getByRole("progressbar", { name: "Day 4 of 14" }).getAttribute("aria-valuenow")).toBe("4");
     // The Overview opens with the next action and the next meeting, side by side, and the team in the column.
-    const action = within(screen.getByRole("region", { name: "Next action · Data Request 1 of 3" }));
-    expect(action.getByText("Your last 12 months of sales")).toBeTruthy();
-    expect(action.getByText("By Wed 14 Oct")).toBeTruthy();
+    // Data Requests are one next action: how many are outstanding, and the way to the list.
+    const action = within(screen.getByRole("region", { name: "Next action · Data Request" }));
+    expect(action.getByText("2 items outstanding")).toBeTruthy();
+    expect(action.getByText("1 of 3")).toBeTruthy();
+    expect(action.getByRole("link", { name: "Open the Data Request" }).getAttribute("href")).toBe("#data");
     const meeting = within(screen.getByRole("region", { name: "Next meeting" }));
     expect(meeting.getByText("Business Review Session 1")).toBeTruthy();
     expect(meeting.getByText(/Fri 23 Oct, 10:00 am \(Lagos time\), 90 minutes/)).toBeTruthy();
@@ -144,7 +154,7 @@ describe("the client's room", () => {
     expect(within(plan.getByRole("listitem", { name: "Business Review Session 1" })).getByText("Together")).toBeTruthy();
     expect(within(plan.getByRole("listitem", { name: "Your price list" })).getByText("We need a bit more: the delivery prices too")).toBeTruthy();
     expect(within(plan.getByRole("listitem", { name: "Your price list" })).getByText("for you")).toBeTruthy();
-    fireEvent.click(sales.getByRole("button", { name: "Mark as submitted" }));
+    fireEvent.click(sales.getByRole("button", { name: "Submitted another way" }));
     fireEvent.change(sales.getByLabelText("How you sent Your last 12 months of sales"), { target: { value: "On WhatsApp" } });
     fireEvent.click(sales.getByRole("button", { name: "Confirm" }));
     expect(api.calls.respond).toEqual([{ taskId: 11, note: "On WhatsApp" }]);
@@ -212,32 +222,63 @@ describe("the client's room", () => {
 });
 
 describe("files in the room", () => {
-  it("offers no upload until storage is set up: the owner tells us they sent it another way", () => {
+  const openData = () => fireEvent.click(screen.getByRole("tab", { name: /^Data requests/ }));
+
+  it("offers no upload until storage is set up: the client sends by WhatsApp or email, or says it went another way", () => {
     render(<EngagementRoom room={room()} />);
+    openData();
+    expect(screen.queryByLabelText("Choose files to send")).toBeNull();
+    expect(screen.getByText("info@ipfactory.co")).toBeTruthy();
     expect(screen.queryByLabelText(/^Upload a file for/)).toBeNull();
-    expect(screen.getAllByRole("button", { name: "Mark as submitted" }).length).toBeGreaterThan(0);
   });
 
-  it("uploads straight to the bucket, then tells the server, with the file's own details", async () => {
+  it("takes many files at once into the drop box: each goes straight to the bucket, then the server records it unsorted", async () => {
     const put = vi.fn(async () => ({ ok: true }));
     vi.stubGlobal("fetch", put);
     render(<EngagementRoom room={room({ uploadsEnabled: true })} />);
-    const file = new File(["%PDF-1.4"], "sales.pdf", { type: "application/pdf" });
-    fireEvent.change(screen.getAllByLabelText("Upload a file for Your last 12 months of sales")[0], { target: { files: [file] } });
-    await waitFor(() => expect(api.calls.confirmUpload).toHaveLength(1));
-    expect(api.calls.requestUpload).toEqual([{ taskId: 11, fileName: "sales.pdf", contentType: "application/pdf", sizeBytes: 8 }]);
-    expect(put).toHaveBeenCalledWith("https://example-project.supabase.co/storage/v1/object/upload/sign/engagement-files/engagements/4/tasks/11/abc-sales.pdf?token=up", expect.objectContaining({ method: "PUT", headers: { "content-type": "application/pdf", "x-upsert": "false" }, body: file }));
-    expect(api.calls.confirmUpload).toEqual([{ taskId: 11, storageKey: "engagements/4/tasks/11/abc-sales.pdf", note: null, fileName: "sales.pdf", contentType: "application/pdf", sizeBytes: 8 }]);
-    expect(screen.getAllByRole("button", { name: "Sent another way" }).length).toBeGreaterThan(0);
+    openData();
+    const sales = new File(["%PDF-1.4"], "sales.pdf", { type: "application/pdf" });
+    const prices = new File(["%PDF-1.4"], "prices.pdf", { type: "application/pdf" });
+    fireEvent.change(screen.getByLabelText("Choose files to send"), { target: { files: [sales, prices] } });
+    await waitFor(() => expect(api.calls.confirmDrop).toHaveLength(2));
+    expect(api.calls.requestDrop).toEqual([{ fileName: "sales.pdf", contentType: "application/pdf", sizeBytes: 8 }, { fileName: "prices.pdf", contentType: "application/pdf", sizeBytes: 8 }]);
+    expect(put).toHaveBeenCalledWith("https://example-project.supabase.co/storage/v1/object/upload/sign/engagement-files/engagements/4/inbox/abc-sales.pdf?token=up", expect.objectContaining({ method: "PUT", body: sales }));
+    expect(api.calls.confirmDrop[0]).toEqual({ storageKey: "engagements/4/inbox/abc-sales.pdf", note: null, fileName: "sales.pdf", contentType: "application/pdf", sizeBytes: 8 });
+    expect(api.calls.requestUpload).toEqual([]);
+    await waitFor(() => expect(within(screen.getByRole("list", { name: "Uploads" })).getAllByText("Received")).toHaveLength(2));
   });
 
   it("tells the server nothing when the upload to the bucket fails", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false })));
     render(<EngagementRoom room={room({ uploadsEnabled: true })} />);
-    fireEvent.change(screen.getAllByLabelText("Upload a file for Your last 12 months of sales")[0], { target: { files: [new File(["x"], "sales.pdf", { type: "application/pdf" })] } });
-    await waitFor(() => expect(api.calls.requestUpload).toHaveLength(1));
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(api.calls.confirmUpload).toEqual([]);
+    openData();
+    fireEvent.change(screen.getByLabelText("Choose files to send"), { target: { files: [new File(["x"], "sales.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => expect(api.calls.requestDrop).toHaveLength(1));
+    await waitFor(() => expect(screen.getByText(/The upload did not finish/)).toBeTruthy());
+    expect(api.calls.confirmDrop).toEqual([]);
+  });
+
+  it("lets the client mark an item not available, with a note", () => {
+    render(<EngagementRoom room={room()} />);
+    openData();
+    const sales = within(screen.getByRole("listitem", { name: "Your last 12 months of sales" }));
+    fireEvent.click(sales.getByRole("button", { name: /Your last 12 months of sales/ }));
+    fireEvent.click(sales.getByRole("button", { name: "Not available" }));
+    fireEvent.change(sales.getByLabelText("Note on Your last 12 months of sales"), { target: { value: "We kept no records before March" } });
+    fireEvent.click(sales.getByRole("button", { name: "Confirm" }));
+    expect(api.calls.setNotAvailable).toEqual([{ taskId: 11, unavailable: true, note: "We kept no records before March" }]);
+  });
+
+  it("shows the documents received with the item each was matched to, or that it is under review", () => {
+    const sentFiles = [
+      { id: 7, fileName: "Sales 2025.xlsx", sizeBytes: 9_000, createdAt: new Date("2026-10-20T10:00:00Z"), mine: true, note: null, matchedTo: [{ taskId: 11, ref: "B1", title: "Your last 12 months of sales" }] },
+      { id: 8, fileName: "IMG_2041.jpg", sizeBytes: 90_000, createdAt: new Date("2026-10-21T10:00:00Z"), mine: true, note: null, matchedTo: [] },
+    ];
+    render(<EngagementRoom room={room({ sentFiles })} />);
+    openData();
+    const received = within(screen.getByRole("region", { name: /Documents received/ }));
+    expect(received.getByText("B1 Your last 12 months of sales")).toBeTruthy();
+    expect(received.getByText("Under review")).toBeTruthy();
   });
 
   it("lists files with who sent them, and opens one through a link the server issues", async () => {
@@ -246,7 +287,7 @@ describe("files in the room", () => {
     const files = [{ id: 99, fileName: "sales.pdf", sizeBytes: 120_000, createdAt: new Date(), mine: true, fromTeam: false }, { id: 100, fileName: "cash-template.xlsx", sizeBytes: 9_000, createdAt: new Date(), mine: false, fromTeam: true }];
     const base = room();
     render(<EngagementRoom room={room({ tasks: [{ ...base.tasks[2], files }], deliverables: [] })} />);
-    const list = within(screen.getByRole("list", { name: "Files" }));
+    const list = within(screen.getAllByRole("list", { name: "Files" })[0]);
     expect(list.getByText("sales.pdf")).toBeTruthy();
     expect(list.getByText(/117 KB · you/)).toBeTruthy();
     expect(list.getByText(/9 KB · from your team at IP Factory/)).toBeTruthy();
@@ -256,200 +297,13 @@ describe("files in the room", () => {
   });
 });
 
-describe("the Measure of Success", () => {
-  it("shows where it started, this week's reading and where it is going, week by week", () => {
-    const measure = { name: "Cash in the bank on Friday", definition: "The business account balance after the week's payments.", unit: "₦", baselineValue: 150000, targetValue: 400000,
-      latest: { weekNumber: 2, heldOn: "2026-11-20", reading: 210000, nextStep: "Chase the two late invoices." },
-      readings: [{ weekNumber: 1, heldOn: "2026-11-13", reading: 160000, nextStep: "Start the daily cash count." }, { weekNumber: 2, heldOn: "2026-11-20", reading: 210000, nextStep: "Chase the two late invoices." }] };
-    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "Six-Week Fix", journey: journeyOf("fix"), measure })} />);
-    const card = within(screen.getByRole("region", { name: "Cash in the bank on Friday" }));
-    expect(card.getByText("₦150,000")).toBeTruthy();
-    expect(card.getAllByText("₦210,000")).toHaveLength(2);
-    expect(card.getByText("₦400,000")).toBeTruthy();
-    expect(card.getByText("Week 2")).toBeTruthy();
-    expect(card.getByText("Up ₦60,000 since the start.").className).toContain("text-health-clear");
-    expect(within(card.getByRole("table", { name: "Week by week" })).getByText("Chase the two late invoices.")).toBeTruthy();
-  });
-
-  it("colours a move the wrong way as a watch, and says when there is no reading yet", () => {
-    const measure = { name: "Debtors over 30 days", definition: null, unit: "₦", baselineValue: 900000, targetValue: 300000, latest: { weekNumber: 1, heldOn: "2026-11-13", reading: 950000, nextStep: null }, readings: [{ weekNumber: 1, heldOn: "2026-11-13", reading: 950000, nextStep: null }] };
-    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "Six-Week Fix", journey: journeyOf("fix"), measure })} />);
-    expect(screen.getByText("Up ₦50,000 since the start.").className).toContain("text-health-watch");
-    cleanup();
-    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "Six-Week Fix", journey: journeyOf("fix"), measure: { ...measure, latest: null, readings: [] } })} />);
-    expect(screen.getByText("The first reading comes with the first Weekly Check-in.")).toBeTruthy();
-    expect(screen.getByText("Where it starts")).toBeTruthy();
-  });
-
-  it("shows no Measure of Success before the Six-Week Fix has one", () => {
-    render(<EngagementRoom room={room({ stage: "fix", stageLabel: "Six-Week Fix", journey: journeyOf("fix") })} />);
-    expect(screen.queryByText("Measure of Success")).toBeNull();
-  });
-});
-
-const checkAnswers = { ...businessCheckProfiles.smallOperatingTrader, p_name: "Ada Foods" } as Record<string, string>;
-const report = buildFullReport({ reference: "TS-R-000004", date: new Date("2026-10-14T09:00:00Z"), contact: { fullName: "Ada Example", businessName: "Ada Foods" }, answers: checkAnswers, result: evaluate(checkAnswers), intake: { ...sampleIntake, revenueTarget: 4_000_000 } });
-const fromReport = roomInsight({ report, result: null })!;
-const fromCheck = roomInsight({ report: null, result: evaluate(checkAnswers) })!;
-
-describe("the room's views", () => {
-  beforeEach(() => {
-    MotionGlobalConfig.skipAnimations = true;
-    window.history.replaceState(null, "", "/dashboard");
-  });
-
-  // The same frame for every client (5 November): Overview, Plan, Meetings, Data requests (when there are any) and
-  // Deliverables; Founder and Business only with a Business Health Check or Full Report behind the room.
-  const names = () => within(screen.getByRole("tablist", { name: "Your engagement" })).getAllByRole("tab").map(tab => tab.textContent!.replace(/\d+$/, ""));
-
-  it("shows the same views for every client, opening on the Overview, without Founder and Business when nothing is behind the room", () => {
-    render(<EngagementRoom room={room()} />);
-    expect(names().filter(name => name !== "Data requests")).toEqual(["Overview", "List", "Schedule", "Documents"]);
-    expect(screen.getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByRole("list", { name: "Engagement timeline" })).toBeTruthy();
-  });
-
-  it("adds Founder and Business after the shared views, counts the stuck areas, and moves between tabs by tap and by arrow key", () => {
-    render(<EngagementRoom room={room({ insight: fromReport })} />);
-    const tabs = within(screen.getByRole("tablist", { name: "Your engagement" })).getAllByRole("tab");
-    expect(names().slice(-2)).toEqual(["Founder", "Business"]);
-    expect(tabs.at(-1)!.textContent).toBe(`Business${fromReport.areas.filter(area => area.health === "stuck").length || ""}`);
-    expect(tabs[0].getAttribute("aria-selected")).toBe("true");
-    // Hidden panels are out of reach: not in the accessibility tree.
-    expect(screen.queryByRole("heading", { name: "You, as the founder" })).toBeNull();
-
-    const founder = tabs.at(-2)!;
-    fireEvent.click(founder);
-    expect(founder.getAttribute("aria-selected")).toBe("true");
-    expect(screen.getByRole("heading", { name: "You, as the founder" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: /1\. Founder readiness/ })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: /2\. Strategic intent/ })).toBeTruthy();
-    expect(screen.getByText("How the gap closes")).toBeTruthy();
-    expect(screen.queryByRole("list", { name: "Engagement timeline" })).toBeNull();
-    expect(window.location.hash).toBe("#founder");
-
-    fireEvent.keyDown(founder, { key: "ArrowRight" });
-    expect(tabs.at(-1)!.getAttribute("aria-selected")).toBe("true");
-    expect(document.activeElement).toBe(tabs.at(-1));
-    fireEvent.keyDown(tabs.at(-1)!, { key: "Home" });
-    expect(tabs[0].getAttribute("aria-selected")).toBe("true");
-  });
-
-  it("opens the tab a link names, and the Overview when a link points inside it", () => {
-    window.history.replaceState(null, "", "/dashboard#business");
-    render(<EngagementRoom room={room({ insight: fromReport })} />);
-    expect(screen.getByRole("tab", { name: /Business/ }).getAttribute("aria-selected")).toBe("true");
-    window.location.hash = "#step-4";
-    fireEvent(window, new HashChangeEvent("hashchange"));
-    expect(screen.getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
-  });
-
-  it("lists every business area with its health; tapping one opens its reading in a sheet that Escape closes", async () => {
-    render(<EngagementRoom room={room({ insight: fromReport })} />);
-    fireEvent.click(screen.getByRole("tab", { name: /Business/ }));
-    const list = screen.getByRole("list", { name: "Areas of your business" });
-    const rows = within(list).getAllByRole("button");
-    expect(rows).toHaveLength(fromReport.areas.length);
-    const withReading = fromReport.areas.find(area => area.reading)!;
-    const row = rows[fromReport.areas.indexOf(withReading)];
-    fireEvent.click(row);
-    const sheet = screen.getByRole("dialog", { name: withReading.area });
-    expect(sheet.getAttribute("data-placement")).toBe("bottom");
-    expect(within(sheet).getByText("What your answers show")).toBeTruthy();
-    expect(within(sheet).getByText(`Recommendation ${withReading.reading!.code}`)).toBeTruthy();
-    expect(within(sheet).getByText(withReading.reading!.move)).toBeTruthy();
-    expect(document.activeElement).toBe(within(sheet).getByRole("button", { name: "Close" }));
-
-    fireEvent.keyDown(document, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-    expect(document.activeElement).toBe(row);
-  });
-
-  it("without a Full Report, shows what the Business Health Check found and says what the report adds", () => {
-    render(<EngagementRoom room={room({ insight: fromCheck })} />);
-    fireEvent.click(screen.getByRole("tab", { name: "Founder" }));
-    const founder = within(screen.getByRole("tabpanel", { name: "Founder" }));
-    expect(founder.getByText("From your Business Health Check")).toBeTruthy();
-    expect(founder.getByText(fromCheck.founder.readiness.label)).toBeTruthy();
-    expect(founder.getByText(/Your Full Report adds the four money basics/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: /Business/ }));
-    // Nothing to open without a reading: the rows are not buttons that do nothing.
-    for (const button of within(screen.getByRole("list", { name: "Areas of your business" })).getAllByRole("button")) expect((button as HTMLButtonElement).disabled).toBe(true);
-  });
-});
-
-/** A laptop or desktop: the browser reports the room's wide-screen query as matching. */
-const onWideScreen = () => vi.stubGlobal("matchMedia", (query: string) => ({
-  matches: query === WIDE_QUERY, media: query, onchange: null,
-  addEventListener: () => undefined, removeEventListener: () => undefined, addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false,
-}));
-
-describe("the room on a laptop or desktop", () => {
-  beforeEach(() => {
-    MotionGlobalConfig.skipAnimations = true;
-    window.history.replaceState(null, "", "/dashboard");
-  });
-
-  it("keeps one column on a phone, with no rail: the column of cards follows the timeline, the seat card once", () => {
-    render(<EngagementRoom room={room()} aside={<p>Seat card</p>} />);
-    expect(screen.queryByRole("navigation", { name: "Your room" })).toBeNull();
-    expect(screen.getByRole("complementary", { name: "At a glance" })).toBeTruthy();
-    expect(screen.getAllByText("Seat card")).toHaveLength(1);
-  });
-
-  it("puts what is waiting on the owner and the Deliverables beside the timeline, and the two team cards under it", () => {
-    onWideScreen();
-    render(<EngagementRoom room={room({ report: { requestedAt: new Date("2026-10-14T09:00:00Z"), deliveredAt: new Date("2026-10-14T10:00:00Z") } })} aside={<p>Seat card</p>} />);
-    const glance = within(screen.getByRole("complementary", { name: "At a glance" }));
-    // Two open Data Requests (one needing more) and the Findings to sign off; never the team's own action or a received one.
-    const waiting = within(glance.getByRole("region", { name: "Waiting on you" }));
-    expect(waiting.getByText("3")).toBeTruthy();
-    expect(waiting.getByRole("link", { name: "Your Sign-off on the Findings" })).toBeTruthy();
-    expect(waiting.getByRole("link", { name: "Your last 12 months of sales" })).toBeTruthy();
-    expect(waiting.getByText(/We need a bit more/)).toBeTruthy();
-    expect(waiting.queryByText("Send the cash template")).toBeNull();
-    expect(waiting.queryByText("Who works in the business")).toBeNull();
-    const deliverables = within(glance.getByRole("region", { name: "Deliverables" }));
-    expect(deliverables.getByRole("link", { name: "Full Report" })).toBeTruthy();
-    expect(deliverables.getByRole("link", { name: "Findings" })).toBeTruthy();
-    expect(deliverables.getByText("Your Sign-off")).toBeTruthy();
-    // The seat card is shown once, with the team, in the column; the rail is there on a laptop.
-    expect(screen.getAllByText("Seat card")).toHaveLength(1);
-    expect(glance.getByText("Seat card")).toBeTruthy();
-    expect(within(glance.getByRole("region", { name: "Your team" })).getByText("Lewis Lead")).toBeTruthy();
-    expect(screen.getByRole("navigation", { name: "Your room" })).toBeTruthy();
-
-    // A link in the column opens the step that holds it.
-    fireEvent.click(waiting.getByRole("link", { name: "Your Sign-off on the Findings" }));
-    expect(screen.getByRole("region", { name: "Step 5: Findings" })).toBeTruthy();
-  });
-
-  it("tells a staff member with full access that the Sign-off is the owner's, and says when nothing is waiting", () => {
-    onWideScreen();
-    render(<EngagementRoom room={room({ viewer: { kind: "member", access: "full" }, tasks: [] })} />);
-    const glance = within(screen.getByRole("complementary", { name: "At a glance" }));
-    expect(glance.getByText("Nothing outstanding. We will tell you here when there is.")).toBeTruthy();
-    expect(glance.getByText("Awaiting Sign-off")).toBeTruthy();
-  });
-
-  it("opens an area's detail in a panel from the right, beside the page, instead of a sheet from below", async () => {
-    onWideScreen();
-    render(<EngagementRoom room={room({ insight: fromReport })} />);
-    fireEvent.click(screen.getByRole("tab", { name: /Business/ }));
-    const withReading = fromReport.areas.find(area => area.reading)!;
-    fireEvent.click(within(screen.getByRole("list", { name: "Areas of your business" })).getAllByRole("button")[fromReport.areas.indexOf(withReading)]);
-    expect(screen.getByRole("dialog", { name: withReading.area }).getAttribute("data-placement")).toBe("side");
-    fireEvent.keyDown(document, { key: "Escape" });
-    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
-  });
-});
 
 describe("a Data Request's detail", () => {
-  it("shows numbered questions as a list, one per line, in the next action and in the Work Plan", () => {
+  it("shows numbered questions as a list, one per line, in the Work Plan", () => {
     const six = "A few words each is enough. 1. What do you sell, and who buys it? 2. Which decisions wait for you? 3. What would you fix first?";
     const base = room();
     render(<EngagementRoom room={room({ tasks: [{ ...base.tasks[0], detail: six }], deliverables: [] })} />);
-    const lists = screen.getAllByRole("list").filter(list => list.tagName === "OL" && list.textContent?.includes("Which decisions wait for you?"));
+    const lists = screen.getAllByRole("list").filter(list => list.tagName === "OL" && !list.querySelector("ol") && list.textContent?.includes("Which decisions wait for you?"));
     expect(lists.length).toBeGreaterThan(0);
     expect(within(lists[0]).getAllByRole("listitem").map(item => item.textContent)).toEqual(["What do you sell, and who buys it?", "Which decisions wait for you?", "What would you fix first?"]);
     expect(screen.getAllByText("A few words each is enough.").length).toBeGreaterThan(0);
@@ -495,7 +349,7 @@ describe("the Plan, Meetings and Data requests views", () => {
     const panel = within(screen.getByRole("complementary", { name: "Task details" }));
     expect(panel.getByRole("heading", { name: "Your price list" })).toBeTruthy();
     expect(panel.getByText("We need a bit more: the delivery prices too")).toBeTruthy();
-    expect(panel.getByRole("button", { name: "Mark as submitted" })).toBeTruthy();
+    expect(panel.getByRole("button", { name: "Submitted another way" })).toBeTruthy();
   });
 
   it("lists the meetings in date order, with the Join link before and the shared notes after", () => {
@@ -509,10 +363,15 @@ describe("the Plan, Meetings and Data requests views", () => {
     expect(within(meetings[1]).getByRole("link", { name: "Join the Session" }).getAttribute("href")).toBe("https://zoom.example.test/j/1");
   });
 
-  it("shows the Data Requests on their own with how many have arrived", () => {
+  it("shows the Data Request as a list, with requested, received, outstanding and overdue above it", () => {
     render(<EngagementRoom room={room()} now={NOW} />);
     open("Data requests");
-    expect(screen.getByText("1 of 3")).toBeTruthy();
+    const summary = screen.getByRole("group", { name: "Where your Data Requests stand" });
+    expect(summary.textContent).toContain("Requested3");
+    expect(summary.textContent).toContain("Outstanding2");
+    // The open items come first; the received one last.
+    const rows = within(screen.getByRole("region", { name: "Data Request" })).getAllByRole("listitem").map(item => item.getAttribute("aria-label"));
+    expect(rows).toEqual(["Your last 12 months of sales", "Your price list", "Who works in the business"]);
     expect(screen.getByRole("listitem", { name: "Your price list" }).textContent).toContain("We need a bit more");
   });
 });

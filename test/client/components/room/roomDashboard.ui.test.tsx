@@ -52,7 +52,7 @@ describe("the room's dashboard", () => {
     expect(board.getByRole("img", { name: "3 of 7 stages done" })).toBeTruthy();
     expect(board.getByText("43")).toBeTruthy();
     expect(board.getByRole("button", { name: "Work Plan: 4 waiting on you, 2 with ip factory, 1 we are checking, 1 done. Open the list" })).toBeTruthy();
-    expect(board.getByRole("button", { name: "2 of 4 received. Open the Data Requests" })).toBeTruthy();
+    expect(board.getByRole("button", { name: "2 of 4 received. Open the Data Request" })).toBeTruthy();
     expect(board.getByText("2 overdue")).toBeTruthy();
     expect(board.getByRole("button", { name: "Overdue: 2 yours, 1 ours" })).toBeTruthy();
     expect(board.getByText("1 with no date yet")).toBeTruthy();
@@ -63,7 +63,7 @@ describe("the room's dashboard", () => {
 
   it("opens the tab behind a chart when it is clicked, and names a bar on hover", () => {
     render(<RoomDashboard room={room} steps={steps} now={NOW} />);
-    fireEvent.click(screen.getByRole("button", { name: /Open the Data Requests/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Open the Data Request$/ }));
     expect(window.location.hash).toBe("#data");
     fireEvent.click(screen.getByRole("button", { name: /Open the list/ }));
     expect(window.location.hash).toBe("#plan");
@@ -74,7 +74,7 @@ describe("the room's dashboard", () => {
   it("says what will appear when there is no Work Plan or Data Request yet", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     render(<RoomDashboard room={{ tasks: [] } as any} steps={steps} now={NOW} />);
-    expect(screen.getByText("The split appears once your team sets the Work Plan.")).toBeTruthy();
-    expect(screen.getByText("Nothing requested yet.")).toBeTruthy();
+    expect(screen.getByText("Shown once the Work Plan is set.")).toBeTruthy();
+    expect(screen.getByText("None issued yet.")).toBeTruthy();
   });
 });

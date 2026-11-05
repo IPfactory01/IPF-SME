@@ -460,8 +460,13 @@ var ENGAGEMENT_SESSION_STATUSES = ["planned", "held", "cancelled"];
 var ENGAGEMENT_TASK_KINDS = ["data_request", "action"];
 var ENGAGEMENT_TASK_SIDES = ["client", "ipf"];
 var ENGAGEMENT_TASK_FACTORS = ["internal", "external"];
-var ENGAGEMENT_TASK_STATUSES = ["open", "received", "accepted", "needs_more", "done", "cancelled"];
-var ENGAGEMENT_TASK_STATUS_LABELS = { open: "To do", received: "Sent, we are checking", accepted: "Received", needs_more: "We need a bit more", done: "Done", cancelled: "No longer needed" };
+var ENGAGEMENT_TASK_STATUSES = ["open", "received", "accepted", "needs_more", "done", "not_available", "cancelled"];
+var ENGAGEMENT_TASK_STATUS_LABELS = { open: "To do", received: "Sent, we are checking", accepted: "Received", needs_more: "We need a bit more", done: "Done", not_available: "Not available", cancelled: "No longer needed" };
+var ENGAGEMENT_TASK_PRIORITIES = ["high", "medium", "low"];
+var TASK_SECTION_MAX = 80;
+var TASK_REF_MAX = 8;
+var TASK_INFORMS_MAX = 200;
+var TASK_FORMAT_MAX = 80;
 var ENGAGEMENT_DELIVERABLE_KINDS = ["findings", "problem_statement", "prescription", "tools", "plan", "other"];
 var ENGAGEMENT_DELIVERABLE_KIND_LABELS = { findings: "Findings", problem_statement: "Problem Statement", prescription: "Prescription", tools: "Tools", plan: "Plan", other: "Document" };
 var DELIVERABLES_NEEDING_APPROVAL = ["prescription", "plan"];
@@ -1182,6 +1187,7 @@ var engagementTasksKindEnum = pgEnum("engagement_tasks_kind", ENGAGEMENT_TASK_KI
 var engagementTasksSideEnum = pgEnum("engagement_tasks_side", ENGAGEMENT_TASK_SIDES);
 var engagementTasksStatusEnum = pgEnum("engagement_tasks_status", ENGAGEMENT_TASK_STATUSES);
 var engagementTasksFactorEnum = pgEnum("engagement_tasks_factor", ENGAGEMENT_TASK_FACTORS);
+var engagementTasksPriorityEnum = pgEnum("engagement_tasks_priority", ENGAGEMENT_TASK_PRIORITIES);
 var engagementDeliverablesKindEnum = pgEnum("engagement_deliverables_kind", ENGAGEMENT_DELIVERABLE_KINDS);
 var engagementDeliverablesStatusEnum = pgEnum("engagement_deliverables_status", ENGAGEMENT_DELIVERABLE_STATUSES);
 var clientAccessLevelEnum = pgEnum("client_access_level", CLIENT_ACCESS_LEVELS);
@@ -1249,6 +1255,13 @@ var engagementTasks = pgTable("engagement_tasks", {
   weekNumber: integer("weekNumber"),
   sortOrder: integer("sortOrder").default(0).notNull(),
   factor: engagementTasksFactorEnum("factor"),
+  /** For a Data Request, as on the firm's Data Request sheet: its section and reference ("B Financial performance", "B1"),
+   *  what it informs (why we ask), the format that is fine, and its priority. */
+  section: varchar("section", { length: 80 }),
+  ref: varchar("ref", { length: 8 }),
+  informs: varchar("informs", { length: 200 }),
+  format: varchar("format", { length: 80 }),
+  priority: engagementTasksPriorityEnum("priority"),
   /** Why more is needed, or how the client sent it ("by WhatsApp"). */
   statusNote: varchar("statusNote", { length: 500 }),
   /** The session the action came out of. */
@@ -1289,8 +1302,17 @@ var engagementFiles = pgTable("engagement_files", {
   sizeBytes: integer("sizeBytes").notNull(),
   audience: engagementAudienceEnum("audience").default("owner").notNull(),
   uploadedByUserId: integer("uploadedByUserId").notNull().references(() => users.id),
+  /** What the client said when they sent it through the drop box ("from our accountant"). */
+  note: varchar("note", { length: 500 }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
 }, (table2) => [index("engagement_files_engagement_idx").on(table2.engagementId), index("engagement_files_task_idx").on(table2.taskId), index("engagement_files_deliverable_idx").on(table2.deliverableId)]);
+var engagementFileMatches = pgTable("engagement_file_matches", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  fileId: integer("fileId").notNull().references(() => engagementFiles.id, { onDelete: "cascade" }),
+  taskId: integer("taskId").notNull().references(() => engagementTasks.id, { onDelete: "cascade" }),
+  matchedByUserId: integer("matchedByUserId").notNull().references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
+}, (table2) => [unique("engagement_file_matches_file_task_unique").on(table2.fileId, table2.taskId), index("engagement_file_matches_task_idx").on(table2.taskId)]);
 var engagementComments = pgTable("engagement_comments", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
@@ -3731,6 +3753,8 @@ var LIMITS = {
   paymentStatusAddress: { scope: "payment_status_ip", max: 60, windowMs: HOUR2 },
   /** New private upload tickets from one authenticated actor or upload address. */
   fileUpload: { scope: "file_upload", max: 30, windowMs: DAY },
+  /** The room's drop box: a client sends everything they have at once, so the cap is per day and generous. */
+  fileDrop: { scope: "file_drop", max: 200, windowMs: DAY },
   /** Engagement-room comments from one actor. */
   engagementComment: { scope: "engagement_comment", max: 60, windowMs: HOUR2 },
   /** Invitation and sign-in-link sends initiated by one internal actor. */
@@ -12619,7 +12643,7 @@ async function getStaffEngagement(db, actor, engagementId) {
   const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq18(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   if (check) await syncSessionBookings(db, engagement, check.email);
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq18(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
-  const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins, matches] = await Promise.all([
     db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq18(engagementTeam.userId, users.id)).where(eq18(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq18(engagementSessions.engagementId, engagementId)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq18(engagementTasks.engagementId, engagementId)).orderBy(asc(engagementTasks.id)),
@@ -12628,9 +12652,11 @@ async function getStaffEngagement(db, actor, engagementId) {
     engagement.businessId ? clientPeopleOf(db, engagement.businessId) : Promise.resolve([]),
     filesOf(db, engagementId),
     measureOf(db, engagementId),
-    checkinsOf(db, engagementId)
+    checkinsOf(db, engagementId),
+    matchesOf(db, engagementId)
   ]);
-  const filesFor = (where, id3) => files.filter((file) => file[where] === id3).map((file) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt }));
+  const staffFile = (file) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt });
+  const filesFor = (where, id3) => files.filter((file) => file[where] === id3 || where === "taskId" && matches.some((match) => match.fileId === file.id && match.taskId === id3)).map(staffFile);
   return {
     uploadsEnabled: isFileStorageConfigured(),
     engagement: { ...engagement, stageLabel: ENGAGEMENT_STAGE_LABELS[engagement.stage] },
@@ -12641,6 +12667,9 @@ async function getStaffEngagement(db, actor, engagementId) {
     clientPeople,
     sessions,
     tasks: tasks.map((task) => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id) })),
+    // The drop box: every file the client sent without saying what it answers, with the requests it has been matched to.
+    // Unsorted files come first.
+    inbox: files.filter((file) => file.taskId === null && file.deliverableId === null && !file.fromTeam).map((file) => ({ ...staffFile(file), note: file.note, taskIds: matches.filter((match) => match.fileId === file.id).map((match) => match.taskId) })).sort((a, b) => Number(a.taskIds.length > 0) - Number(b.taskIds.length > 0) || b.id - a.id),
     deliverables: deliverables.map((item2) => ({ ...item2, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item2.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item2.kind), comments: comments.filter((comment) => comment.deliverableId === item2.id), files: filesFor("deliverableId", item2.id) })),
     measure,
     checkins,
@@ -12785,7 +12814,7 @@ async function saveTask(db, actor, input) {
   }
   if (input.sessionId !== null && !(await db.select({ id: engagementSessions.id }).from(engagementSessions).where(and12(eq18(engagementSessions.id, input.sessionId), eq18(engagementSessions.engagementId, engagement.id))).limit(1)).length) throw notFound();
   const finished = input.status === "accepted" || input.status === "done";
-  const values2 = { kind: input.kind, title: input.title, detail: input.detail, side: input.side, assigneeUserId: input.assigneeUserId, dueOn: input.dueOn, status: input.status, statusNote: input.statusNote, sessionId: input.sessionId, weekNumber: input.weekNumber, sortOrder: input.sortOrder, factor: input.factor, completedAt: finished ? /* @__PURE__ */ new Date() : null };
+  const values2 = { kind: input.kind, title: input.title, detail: input.detail, side: input.side, assigneeUserId: input.assigneeUserId, dueOn: input.dueOn, status: input.status, statusNote: input.statusNote, sessionId: input.sessionId, weekNumber: input.weekNumber, sortOrder: input.sortOrder, factor: input.factor, section: input.section ?? null, ref: input.ref ?? null, informs: input.informs ?? null, format: input.format ?? null, priority: input.priority ?? null, completedAt: finished ? /* @__PURE__ */ new Date() : null };
   if (input.taskId) {
     const updated = await db.update(engagementTasks).set(values2).where(and12(eq18(engagementTasks.id, input.taskId), eq18(engagementTasks.engagementId, engagement.id))).returning({ id: engagementTasks.id });
     if (!updated.length) throw notFound();
@@ -12907,7 +12936,7 @@ async function getClientRoom(db, session) {
   const viewer = await clientViewerFor(db, session, business.businessId);
   const owner = (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq18(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   if (owner) await syncSessionBookings(db, engagement, owner.email);
-  const [team, sessions, tasks, deliverables, comments, files, measure, checkins] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, files, measure, checkins, matches] = await Promise.all([
     db.select({ name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq18(engagementTeam.userId, users.id)).where(eq18(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq18(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq18(engagementTasks.engagementId, engagement.id)).orderBy(asc(engagementTasks.id)),
@@ -12915,7 +12944,8 @@ async function getClientRoom(db, session) {
     db.select({ deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq18(engagementComments.authorUserId, users.id)).where(eq18(engagementComments.engagementId, engagement.id)).orderBy(asc(engagementComments.id)),
     filesOf(db, engagement.id),
     measureOf(db, engagement.id),
-    checkinsOf(db, engagement.id)
+    checkinsOf(db, engagement.id),
+    matchesOf(db, engagement.id)
   ]);
   const fullView = viewer.kind === "owner" || viewer.access === "full";
   const check = (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor }).from(businessChecks).where(eq18(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
@@ -12923,7 +12953,8 @@ async function getClientRoom(db, session) {
   const debrief = fullView ? await sharedDebriefFor(db, engagement.businessCheckId) : null;
   const insight = fullView ? await insightFor(db, engagement.businessCheckId, Boolean(report?.deliveredAt)) : null;
   const visibleDeliverables = deliverables.filter((item2) => clientCanSee(item2.audience, viewer));
-  const clientFiles = (where, id3) => files.filter((file) => file[where] === id3 && clientFileVisible(file, viewer, session.user.id)).map((file) => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === session.user.id, fromTeam: file.fromTeam }));
+  const matchedTo = (fileId) => matches.filter((match) => match.fileId === fileId).map((match) => match.taskId);
+  const clientFiles = (where, id3) => files.filter((file) => (file[where] === id3 || where === "taskId" && matchedTo(file.id).includes(id3)) && clientFileVisible(file, viewer, session.user.id)).map((file) => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === session.user.id, fromTeam: file.fromTeam }));
   const now = Date.now();
   const scheduled = sessions.filter((item2) => item2.status !== "cancelled");
   const next = scheduled.filter((item2) => item2.status === "planned" && item2.scheduledFor && item2.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime())[0];
@@ -12980,8 +13011,23 @@ async function getClientRoom(db, session) {
       weekNumber: task.weekNumber,
       sortOrder: task.sortOrder,
       factor: task.factor,
+      section: task.section,
+      ref: task.ref,
+      informs: task.informs,
+      format: task.format,
+      priority: task.priority,
       files: clientFiles("taskId", task.id)
     })),
+    // What the client's side dropped into the room, newest first, and which visible requests each file was matched to.
+    sentFiles: files.filter((file) => file.taskId === null && file.deliverableId === null && !file.fromTeam && clientFileVisible(file, viewer, session.user.id)).map((file) => ({
+      id: file.id,
+      fileName: file.fileName,
+      sizeBytes: file.sizeBytes,
+      createdAt: file.createdAt,
+      mine: file.uploadedByUserId === session.user.id,
+      note: file.note,
+      matchedTo: tasks.filter((task) => matchedTo(file.id).includes(task.id) && task.status !== "cancelled" && clientCanSeeTask(task, viewer)).map((task) => ({ taskId: task.id, ref: task.ref, title: task.title }))
+    })).sort((a, b) => b.id - a.id),
     deliverables: visibleDeliverables.map((item2) => ({
       id: item2.id,
       kind: item2.kind,
@@ -13085,6 +13131,7 @@ async function filesOf(db, engagementId) {
     uploadedByUserId: engagementFiles.uploadedByUserId,
     uploadedByName: users.name,
     createdAt: engagementFiles.createdAt,
+    note: engagementFiles.note,
     membershipId: businessMemberships.id
   }).from(engagementFiles).innerJoin(users, eq18(engagementFiles.uploadedByUserId, users.id)).innerJoin(engagements, eq18(engagementFiles.engagementId, engagements.id)).leftJoin(businessMemberships, and12(eq18(businessMemberships.userId, engagementFiles.uploadedByUserId), eq18(businessMemberships.businessId, engagements.businessId))).where(eq18(engagementFiles.engagementId, engagementId)).orderBy(asc(engagementFiles.id));
   return rows.map(({ membershipId, ...row }) => ({ ...row, fromTeam: membershipId === null }));
@@ -13142,6 +13189,77 @@ async function clientFileLink(db, session, input) {
     if (!deliverable || deliverable.status !== "shared" || !clientCanSee(deliverable.audience, viewer)) throw notFound();
   }
   return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+}
+var dropPrefix = (engagementId) => `engagements/${engagementId}/inbox/`;
+async function matchesOf(db, engagementId) {
+  return db.select({ fileId: engagementFileMatches.fileId, taskId: engagementFileMatches.taskId }).from(engagementFileMatches).innerJoin(engagementFiles, eq18(engagementFileMatches.fileId, engagementFiles.id)).where(eq18(engagementFiles.engagementId, engagementId));
+}
+async function requireClientRoomEngagement(db, session) {
+  const business = session.activeBusiness;
+  if (!business) throw notFound();
+  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq18(engagements.businessId, business.businessId)).orderBy(desc9(engagements.id)).limit(1))[0];
+  if (!engagement) throw notFound();
+  return engagement;
+}
+async function clientRequestDrop(db, session, input) {
+  requireUploads();
+  validateUpload(input);
+  const engagement = await requireClientRoomEngagement(db, session);
+  const storageKey2 = `${dropPrefix(engagement.id)}${randomUUID()}-${safeFileName(input.fileName)}`;
+  const upload2 = await createSignedUpload(storageKey2, input.contentType);
+  return { storageKey: storageKey2, uploadUrl: upload2.url, headers: upload2.headers };
+}
+async function clientConfirmDrop(db, session, input) {
+  requireUploads();
+  validateUpload(input);
+  const engagement = await requireClientRoomEngagement(db, session);
+  if (!isTargetStorageKey(input.storageKey, dropPrefix(engagement.id))) throw notFound();
+  if (!await objectExists(input.storageKey)) throw new TRPCError16({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
+  return db.transaction(async (tx) => {
+    const [file] = await tx.insert(engagementFiles).values({
+      engagementId: engagement.id,
+      storageKey: input.storageKey,
+      fileName: input.fileName.trim().slice(0, 255),
+      contentType: input.contentType || "application/octet-stream",
+      sizeBytes: input.sizeBytes,
+      audience: "owner",
+      uploadedByUserId: session.user.id,
+      note: input.note
+    }).returning({ id: engagementFiles.id });
+    await recordAudit(tx, { action: "engagement_file_dropped", actorUserId: session.user.id, details: { engagementId: engagement.id, fileId: file.id } });
+    return { success: true, fileId: file.id };
+  });
+}
+async function setNotAvailable(db, session, input) {
+  const task = (await db.select().from(engagementTasks).where(eq18(engagementTasks.id, input.taskId)).limit(1))[0];
+  if (!task) throw notFound();
+  const { viewer } = await requireClientEngagement(db, session, task.engagementId);
+  if (task.side !== "client" || task.kind !== "data_request" || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound();
+  if (input.unavailable && task.status !== "open" && task.status !== "needs_more") throw new TRPCError16({ code: "CONFLICT", message: "This is already with us." });
+  if (!input.unavailable && task.status !== "not_available") throw new TRPCError16({ code: "CONFLICT", message: "This is already with us." });
+  const status = input.unavailable ? "not_available" : "open";
+  await db.transaction(async (tx) => {
+    await tx.update(engagementTasks).set({ status, statusNote: input.unavailable ? input.note : null }).where(eq18(engagementTasks.id, task.id));
+    await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status } });
+  });
+  return { success: true, status };
+}
+async function matchFile(db, actor, input) {
+  requireManage(actor);
+  const file = (await db.select().from(engagementFiles).where(eq18(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file || file.taskId !== null || file.deliverableId !== null) throw notFound();
+  await requireStaffEngagement(db, actor, file.engagementId);
+  const wanted = Array.from(new Set(input.taskIds));
+  const requests = wanted.length ? await db.select().from(engagementTasks).where(and12(inArray5(engagementTasks.id, wanted), eq18(engagementTasks.engagementId, file.engagementId), eq18(engagementTasks.kind, "data_request"))) : [];
+  if (requests.length !== wanted.length) throw new TRPCError16({ code: "BAD_REQUEST", message: "Match the file to this engagement's Data Requests only." });
+  return db.transaction(async (tx) => {
+    await tx.delete(engagementFileMatches).where(eq18(engagementFileMatches.fileId, file.id));
+    if (wanted.length) await tx.insert(engagementFileMatches).values(wanted.map((taskId) => ({ fileId: file.id, taskId, matchedByUserId: actor.id })));
+    const waiting = requests.filter((task) => task.status === "open" || task.status === "needs_more" || task.status === "not_available").map((task) => task.id);
+    if (waiting.length) await tx.update(engagementTasks).set({ status: "received", statusNote: "From the files you sent" }).where(inArray5(engagementTasks.id, waiting));
+    await recordAudit(tx, { action: "engagement_file_matched", actorUserId: actor.id, details: { engagementId: file.engagementId, fileId: file.id, taskIds: wanted } });
+    return { success: true, moved: waiting.length };
+  });
 }
 async function requireStaffTarget(db, actor, engagementId, target) {
   await requireStaffEngagement(db, actor, engagementId);
@@ -14543,7 +14661,12 @@ var staffRouter = router({
     sessionId: id.nullable(),
     weekNumber: z23.number().int().min(1).max(12).nullable(),
     sortOrder: z23.number().int().min(0).max(999),
-    factor: z23.enum(ENGAGEMENT_TASK_FACTORS).nullable()
+    factor: z23.enum(ENGAGEMENT_TASK_FACTORS).nullable(),
+    section: optionalText2(TASK_SECTION_MAX).optional(),
+    ref: optionalText2(TASK_REF_MAX).optional(),
+    informs: optionalText2(TASK_INFORMS_MAX).optional(),
+    format: optionalText2(TASK_FORMAT_MAX).optional(),
+    priority: z23.enum(ENGAGEMENT_TASK_PRIORITIES).nullable().optional()
   })).mutation(async ({ ctx, input }) => guarded(async () => saveTask(await engagementDb(), ctx.actor, input))),
   saveDeliverable: staff.input(z23.object({ engagementId: id, deliverableId: id.optional(), kind: z23.enum(ENGAGEMENT_DELIVERABLE_KINDS), title: text3(200).min(1, "Give it a title."), summary: optionalText2(2e4) })).mutation(async ({ ctx, input }) => guarded(async () => saveDeliverable(await engagementDb(), ctx.actor, input))),
   approveDeliverable: staff.input(z23.object({ deliverableId: id })).mutation(async ({ ctx, input }) => guarded(async () => approveDeliverable(await engagementDb(), ctx.actor, input))),
@@ -14558,6 +14681,8 @@ var staffRouter = router({
   }),
   confirmUpload: staff.input(z23.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z23.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
+  /** Sort a file the client dropped: the Data Requests it answers (an empty list clears the match). */
+  matchFile: staff.input(z23.object({ fileId: id, taskIds: z23.array(id).max(50) })).mutation(async ({ ctx, input }) => guarded(async () => matchFile(await engagementDb(), ctx.actor, input))),
   saveMeasure: staff.input(z23.object({ engagementId: id, name: text3(160).min(1, "Name the number."), definition: optionalText2(2e3), unit: optionalText2(32), baselineValue: reading3, targetValue: reading3 })).mutation(async ({ ctx, input }) => guarded(async () => saveMeasure(await engagementDb(), ctx.actor, input))),
   saveCheckin: staff.input(z23.object({
     engagementId: id,
@@ -14596,7 +14721,15 @@ var clientRouter = router({
     return guarded(async () => clientRequestUpload(await engagementDb(), ctx.account, input));
   }),
   confirmUpload: accountProcedure.input(z23.object({ taskId: id, storageKey, note: optionalText2(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmUpload(await engagementDb(), ctx.account, input))),
-  fileLink: accountProcedure.input(z23.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => clientFileLink(await engagementDb(), ctx.account, input)))
+  fileLink: accountProcedure.input(z23.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => clientFileLink(await engagementDb(), ctx.account, input))),
+  /** The drop box: send any file without saying which request it answers; the team sorts it. */
+  requestDrop: accountProcedure.input(z23.object(upload)).mutation(async ({ ctx, input }) => {
+    await enforceLimit(LIMITS.fileDrop, `account:${ctx.account.user.id}`);
+    return guarded(async () => clientRequestDrop(await engagementDb(), ctx.account, input));
+  }),
+  confirmDrop: accountProcedure.input(z23.object({ storageKey, note: optionalText2(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmDrop(await engagementDb(), ctx.account, input))),
+  /** "We don't have this", or take it back. */
+  setNotAvailable: accountProcedure.input(z23.object({ taskId: id, unavailable: z23.boolean(), note: optionalText2(500) })).mutation(async ({ ctx, input }) => guarded(async () => setNotAvailable(await engagementDb(), ctx.account, input)))
 });
 var engagementRouter = router({ staff: staffRouter, client: clientRouter });
 

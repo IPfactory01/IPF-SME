@@ -95,11 +95,25 @@ export const ASSESSMENT_DAYS = 14;
 
 /**
  * open: not done yet · received: the client sent it, we have not checked · accepted: it is what we needed ·
- * needs_more: we need more (the note says what) · done: an action is finished · cancelled: no longer needed.
+ * needs_more: we need more (the note says what) · done: an action is finished · not_available: the client told us they
+ * do not have it (a valid answer, so it no longer waits on them) · cancelled: no longer needed.
  */
-export const ENGAGEMENT_TASK_STATUSES = ["open", "received", "accepted", "needs_more", "done", "cancelled"] as const;
+export const ENGAGEMENT_TASK_STATUSES = ["open", "received", "accepted", "needs_more", "done", "not_available", "cancelled"] as const;
 export type EngagementTaskStatus = (typeof ENGAGEMENT_TASK_STATUSES)[number];
-export const ENGAGEMENT_TASK_STATUS_LABELS: Record<EngagementTaskStatus, string> = { open: "To do", received: "Sent, we are checking", accepted: "Received", needs_more: "We need a bit more", done: "Done", cancelled: "No longer needed" };
+export const ENGAGEMENT_TASK_STATUS_LABELS: Record<EngagementTaskStatus, string> = { open: "To do", received: "Sent, we are checking", accepted: "Received", needs_more: "We need a bit more", done: "Done", not_available: "Not available", cancelled: "No longer needed" };
+
+/**
+ * How much a Data Request matters, as in the firm's Data Request sheet: high is needed by kick-off, medium by the end of
+ * week 1, low by the end of week 2. Shown to the client beside each item.
+ */
+export const ENGAGEMENT_TASK_PRIORITIES = ["high", "medium", "low"] as const;
+export type EngagementTaskPriority = (typeof ENGAGEMENT_TASK_PRIORITIES)[number];
+export const ENGAGEMENT_TASK_PRIORITY_LABELS: Record<EngagementTaskPriority, string> = { high: "High", medium: "Medium", low: "Low" };
+/** Lengths of a Data Request's section ("B Financial performance"), reference ("B1"), purpose and format. */
+export const TASK_SECTION_MAX = 80;
+export const TASK_REF_MAX = 8;
+export const TASK_INFORMS_MAX = 200;
+export const TASK_FORMAT_MAX = 80;
 
 /** Statuses that still ask something of whoever owns the task. */
 export const OPEN_TASK_STATUSES: readonly EngagementTaskStatus[] = ["open", "needs_more"];

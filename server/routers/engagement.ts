@@ -6,6 +6,11 @@ import {
   ENGAGEMENT_SESSION_STATUSES,
   ENGAGEMENT_STAGES,
   ENGAGEMENT_TASK_FACTORS,
+  ENGAGEMENT_TASK_PRIORITIES,
+  TASK_FORMAT_MAX,
+  TASK_INFORMS_MAX,
+  TASK_REF_MAX,
+  TASK_SECTION_MAX,
   ENGAGEMENT_TASK_KINDS,
   ENGAGEMENT_TASK_SIDES,
   ENGAGEMENT_TASK_STATUSES,
@@ -39,6 +44,10 @@ import {
   saveSession,
   saveSessionNotes,
   saveTask,
+  clientRequestDrop,
+  clientConfirmDrop,
+  setNotAvailable,
+  matchFile,
   setClientAudience,
   setEngagementStage,
   shareDeliverable,
@@ -54,7 +63,7 @@ import { loadAuthority } from "../platformAccess";
 import { accountProcedure, adminProcedure, router } from "../_core/trpc";
 import { consumeLimit, LIMITS } from "../rateLimit";
 
-async function enforceLimit(rule: typeof LIMITS.fileUpload | typeof LIMITS.engagementComment, subject: string) {
+async function enforceLimit(rule: typeof LIMITS.fileUpload | typeof LIMITS.fileDrop | typeof LIMITS.engagementComment, subject: string) {
   if (!(await consumeLimit(rule, subject))) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Kindly try again later." });
 }
 
@@ -150,6 +159,11 @@ const staffRouter = router({
     weekNumber: z.number().int().min(1).max(12).nullable(),
     sortOrder: z.number().int().min(0).max(999),
     factor: z.enum(ENGAGEMENT_TASK_FACTORS).nullable(),
+    section: optionalText(TASK_SECTION_MAX).optional(),
+    ref: optionalText(TASK_REF_MAX).optional(),
+    informs: optionalText(TASK_INFORMS_MAX).optional(),
+    format: optionalText(TASK_FORMAT_MAX).optional(),
+    priority: z.enum(ENGAGEMENT_TASK_PRIORITIES).nullable().optional(),
   })).mutation(async ({ ctx, input }) => guarded(async () => saveTask(await engagementDb(), ctx.actor, input))),
   saveDeliverable: staff.input(z.object({ engagementId: id, deliverableId: id.optional(), kind: z.enum(ENGAGEMENT_DELIVERABLE_KINDS), title: text(200).min(1, "Give it a title."), summary: optionalText(20000) }))
     .mutation(async ({ ctx, input }) => guarded(async () => saveDeliverable(await engagementDb(), ctx.actor, input))),
@@ -159,6 +173,8 @@ const staffRouter = router({
   requestUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, ...upload })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileUpload, `staff:${ctx.actor.id}`); return guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input)); }),
   confirmUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
+  /** Sort a file the client dropped: the Data Requests it answers (an empty list clears the match). */
+  matchFile: staff.input(z.object({ fileId: id, taskIds: z.array(id).max(50) })).mutation(async ({ ctx, input }) => guarded(async () => matchFile(await engagementDb(), ctx.actor, input))),
   saveMeasure: staff.input(z.object({ engagementId: id, name: text(160).min(1, "Name the number."), definition: optionalText(2000), unit: optionalText(32), baselineValue: reading, targetValue: reading }))
     .mutation(async ({ ctx, input }) => guarded(async () => saveMeasure(await engagementDb(), ctx.actor, input))),
   saveCheckin: staff.input(z.object({
@@ -188,6 +204,11 @@ const clientRouter = router({
   requestUpload: accountProcedure.input(z.object({ taskId: id, ...upload })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileUpload, `account:${ctx.account.user.id}`); return guarded(async () => clientRequestUpload(await engagementDb(), ctx.account, input)); }),
   confirmUpload: accountProcedure.input(z.object({ taskId: id, storageKey, note: optionalText(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmUpload(await engagementDb(), ctx.account, input))),
   fileLink: accountProcedure.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => clientFileLink(await engagementDb(), ctx.account, input))),
+  /** The drop box: send any file without saying which request it answers; the team sorts it. */
+  requestDrop: accountProcedure.input(z.object(upload)).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileDrop, `account:${ctx.account.user.id}`); return guarded(async () => clientRequestDrop(await engagementDb(), ctx.account, input)); }),
+  confirmDrop: accountProcedure.input(z.object({ storageKey, note: optionalText(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmDrop(await engagementDb(), ctx.account, input))),
+  /** "We don't have this", or take it back. */
+  setNotAvailable: accountProcedure.input(z.object({ taskId: id, unavailable: z.boolean(), note: optionalText(500) })).mutation(async ({ ctx, input }) => guarded(async () => setNotAvailable(await engagementDb(), ctx.account, input))),
 });
 
 export const engagementRouter = router({ staff: staffRouter, client: clientRouter });

@@ -41,7 +41,7 @@ describe("rate limits without the shared store", () => {
   });
 
   it("names a limit for every public path that sends email, calls a provider or renders a file", () => {
-    expect(Object.keys(LIMITS).sort()).toEqual(["checkNext", "checkSave", "checkStartEmail", "checkStartIp", "checkSubmit", "engagementComment", "fileUpload", "onboardingEmail", "paymentPage", "paymentStart", "paymentStatus", "paymentStatusAddress", "publicLookup", "reportDownload", "reportForm", "resetRequest"]);
+    expect(Object.keys(LIMITS).sort()).toEqual(["checkNext", "checkSave", "checkStartEmail", "checkStartIp", "checkSubmit", "engagementComment", "fileDrop", "fileUpload", "onboardingEmail", "paymentPage", "paymentStart", "paymentStatus", "paymentStatusAddress", "publicLookup", "reportDownload", "reportForm", "resetRequest"]);
     expect(LIMITS.checkSubmit).toEqual({ scope: "check_submit", max: 3, windowMs: 3_600_000 });
     // Paying online: each start opens a Paystack transaction and each status check asks Paystack.
     expect(LIMITS.paymentStart).toEqual({ scope: "payment_start", max: 10, windowMs: 3_600_000 });
@@ -53,6 +53,8 @@ describe("rate limits without the shared store", () => {
     // "Forgot your password?" can send an email: five an hour, per address and per email.
     expect(LIMITS.resetRequest).toEqual({ scope: "reset_request", max: 5, windowMs: 3_600_000 });
     expect(LIMITS.fileUpload).toEqual({ scope: "file_upload", max: 30, windowMs: 86_400_000 });
+    // The Data Request drop box takes many files at once.
+    expect(LIMITS.fileDrop).toEqual({ scope: "file_drop", max: 200, windowMs: 86_400_000 });
     expect(LIMITS.engagementComment).toEqual({ scope: "engagement_comment", max: 60, windowMs: 3_600_000 });
     expect(LIMITS.onboardingEmail).toEqual({ scope: "onboarding_email", max: 10, windowMs: 3_600_000 });
   });

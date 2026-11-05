@@ -13,6 +13,7 @@ import {
   ENGAGEMENT_TASK_KINDS,
   ENGAGEMENT_TASK_SIDES,
   ENGAGEMENT_TASK_FACTORS,
+  ENGAGEMENT_TASK_PRIORITIES,
   ENGAGEMENT_TASK_STATUSES,
   ENGAGEMENT_TEAM_ROLES,
 } from "../shared/engagement";
@@ -900,6 +901,7 @@ export const engagementTasksKindEnum = pgEnum("engagement_tasks_kind", ENGAGEMEN
 export const engagementTasksSideEnum = pgEnum("engagement_tasks_side", ENGAGEMENT_TASK_SIDES);
 export const engagementTasksStatusEnum = pgEnum("engagement_tasks_status", ENGAGEMENT_TASK_STATUSES);
 export const engagementTasksFactorEnum = pgEnum("engagement_tasks_factor", ENGAGEMENT_TASK_FACTORS);
+export const engagementTasksPriorityEnum = pgEnum("engagement_tasks_priority", ENGAGEMENT_TASK_PRIORITIES);
 export const engagementDeliverablesKindEnum = pgEnum("engagement_deliverables_kind", ENGAGEMENT_DELIVERABLE_KINDS);
 export const engagementDeliverablesStatusEnum = pgEnum("engagement_deliverables_status", ENGAGEMENT_DELIVERABLE_STATUSES);
 export const clientAccessLevelEnum = pgEnum("client_access_level", CLIENT_ACCESS_LEVELS);
@@ -980,6 +982,13 @@ export const engagementTasks = pgTable("engagement_tasks", {
   weekNumber: integer("weekNumber"),
   sortOrder: integer("sortOrder").default(0).notNull(),
   factor: engagementTasksFactorEnum("factor"),
+  /** For a Data Request, as on the firm's Data Request sheet: its section and reference ("B Financial performance", "B1"),
+   *  what it informs (why we ask), the format that is fine, and its priority. */
+  section: varchar("section", { length: 80 }),
+  ref: varchar("ref", { length: 8 }),
+  informs: varchar("informs", { length: 200 }),
+  format: varchar("format", { length: 80 }),
+  priority: engagementTasksPriorityEnum("priority"),
   /** Why more is needed, or how the client sent it ("by WhatsApp"). */
   statusNote: varchar("statusNote", { length: 500 }),
   /** The session the action came out of. */
@@ -1024,8 +1033,22 @@ export const engagementFiles = pgTable("engagement_files", {
   sizeBytes: integer("sizeBytes").notNull(),
   audience: engagementAudienceEnum("audience").default("owner").notNull(),
   uploadedByUserId: integer("uploadedByUserId").notNull().references(() => users.id),
+  /** What the client said when they sent it through the drop box ("from our accountant"). */
+  note: varchar("note", { length: 500 }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
 }, table => [index("engagement_files_engagement_idx").on(table.engagementId), index("engagement_files_task_idx").on(table.taskId), index("engagement_files_deliverable_idx").on(table.deliverableId)]);
+
+/**
+ * Which Data Requests a file answers. The client drops files without saying; the team sorts each one against the
+ * requests (one spreadsheet can answer several), and the client sees the match.
+ */
+export const engagementFileMatches = pgTable("engagement_file_matches", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  fileId: integer("fileId").notNull().references(() => engagementFiles.id, { onDelete: "cascade" }),
+  taskId: integer("taskId").notNull().references(() => engagementTasks.id, { onDelete: "cascade" }),
+  matchedByUserId: integer("matchedByUserId").notNull().references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+}, table => [unique("engagement_file_matches_file_task_unique").on(table.fileId, table.taskId), index("engagement_file_matches_task_idx").on(table.taskId)]);
 
 /** Feedback on a deliverable, from the client or the team. */
 export const engagementComments = pgTable("engagement_comments", {

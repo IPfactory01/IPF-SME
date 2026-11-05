@@ -96,3 +96,10 @@ Senior Business Analyst, Business Analyst, or free text). Additive. **Apply it b
 reads `users.jobTitle`. Paste `drizzle/supabase/apply-0013-team-roles-and-titles.sql` into the Supabase SQL Editor and
 press Run; it stops, changing nothing, unless exactly `0000` to `0012` are recorded.
 
+**`0014` and deployment order.** The Data Request drop box. Clients upload files without naming the item each answers,
+and the team matches each file to one or more Data Requests (`engagement_file_matches`). Data Requests gain a section,
+reference, purpose (`informs`), format and priority; `engagement_tasks_status` gains `not_available` (the client has
+no such record); `engagement_files` gains the client's `note`. Additive. **Apply it before deploying**: the client room
+reads the new columns. Paste `drizzle/supabase/apply-0014-drop-box-and-file-matches.sql` into the Supabase SQL Editor
+and press Run; it stops, changing nothing, unless exactly `0000` to `0013` are recorded.
+

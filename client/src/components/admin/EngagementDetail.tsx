@@ -16,6 +16,9 @@ import {
   ENGAGEMENT_STAGES,
   ENGAGEMENT_TASK_STATUS_LABELS,
   ENGAGEMENT_TASK_STATUSES,
+  ENGAGEMENT_TASK_PRIORITIES,
+  ENGAGEMENT_TASK_PRIORITY_LABELS,
+  type EngagementTaskPriority,
   ENGAGEMENT_TEAM_ROLE_LABELS,
   ENGAGEMENT_TEAM_ROLES,
   CHECKIN_QUESTIONS,
@@ -88,6 +91,7 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
       <StageAndTeam data={data} engagementId={engagementId} />
       <Problem data={data} engagementId={engagementId} />
       <Sessions data={data} engagementId={engagementId} />
+      <FileInbox data={data} engagementId={engagementId} />
       <Tasks data={data} engagementId={engagementId} />
       <Deliverables data={data} engagementId={engagementId} />
       <TheFix data={data} engagementId={engagementId} />
@@ -318,6 +322,53 @@ function SessionCard({ session, engagementId, canManage, onDone }: { session?: S
 }
 
 /** The Work Plan: every Data Request and action, by week and in order, the client's side and ours. */
+type InboxFile = Detail["inbox"][number];
+
+/**
+ * The drop box, for the team: every file the client sent without saying what it answers. Tick the Data Requests a file
+ * answers and save; the client sees the match, and a request still waiting on them moves to "Sent, we are checking".
+ */
+function FileInbox({ data, engagementId }: { data: Detail; engagementId: number }) {
+  if (!data.inbox.length) return null;
+  const unsorted = data.inbox.filter(file => !file.taskIds.length).length;
+  return (
+    <DetailSection title={`Files the client sent (${unsorted} to sort)`}>
+      <p className="text-xs text-ink-muted">The client drops everything here without saying which file is which. Match each file to the Data Requests it answers; one file can answer several. Then mark each request Received, or ask for more, in the Work Plan below.</p>
+      <div className="space-y-2">{data.inbox.map(file => <InboxRow key={file.id} file={file} data={data} engagementId={engagementId} />)}</div>
+    </DetailSection>
+  );
+}
+
+function InboxRow({ file, data, engagementId }: { file: InboxFile; data: Detail; engagementId: number }) {
+  const refresh = useRefresh(engagementId);
+  const [picked, setPicked] = useState<number[]>(file.taskIds);
+  const match = trpc.engagement.staff.matchFile.useMutation({ ...refresh, onSuccess: result => { refresh.onSuccess(); toast.success(result.moved ? `Matched. ${result.moved} request${result.moved === 1 ? "" : "s"} moved to "Sent, we are checking".` : "Matched."); } });
+  const link = trpc.engagement.staff.fileLink.useMutation({ onError: error => toast.error(error.message) });
+  const requests = data.tasks.filter(task => task.kind === "data_request" && task.status !== "cancelled").sort((a, b) => (a.ref ?? "").localeCompare(b.ref ?? "", undefined, { numeric: true }) || a.id - b.id);
+  const changed = picked.length !== file.taskIds.length || picked.some(taskId => !file.taskIds.includes(taskId));
+  return (
+    <div className="border border-line bg-paper-raised p-3" aria-label={file.fileName}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+        <button type="button" className="font-medium text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>{file.fileName}</button>
+        <span className="text-xs text-ink-muted">{formatFileSize(file.sizeBytes)} · {file.uploadedByName ?? "The client"} · {formatDateTime(file.createdAt)}</span>
+      </div>
+      {file.note && <p className="mt-1 text-xs text-ink-600">“{file.note}”</p>}
+      <fieldset className="mt-2">
+        <legend className={LABEL}>Answers</legend>
+        <div className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-2">
+          {requests.map(task => (
+            <label key={task.id} className="flex items-start gap-2 text-xs text-ink">
+              <input type="checkbox" disabled={!data.can.manage} checked={picked.includes(task.id)} onChange={event => setPicked(event.target.checked ? [...picked, task.id] : picked.filter(taskId => taskId !== task.id))} />
+              <span>{task.ref ? `${task.ref} ` : ""}{task.title} <span className="text-ink-muted">({task.statusLabel})</span></span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      {data.can.manage && <Button type="button" size="sm" className={`${SMALL_BUTTON} mt-2 bg-brand text-white`} disabled={match.isPending || !changed} onClick={() => match.mutate({ fileId: file.id, taskIds: picked })}>Save the match</Button>}
+    </div>
+  );
+}
+
 function Tasks({ data, engagementId }: { data: Detail; engagementId: number }) {
   const [adding, setAdding] = useState(false);
   const weekOf = (task: Task) => task.weekNumber ?? null;
@@ -350,6 +401,11 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
   const [week, setWeek] = useState(task?.weekNumber ? String(task.weekNumber) : "");
   const [order, setOrder] = useState(String(task?.sortOrder ?? 0));
   const [factor, setFactor] = useState<EngagementTaskFactor | "">(task?.factor ?? "");
+  const [section, setSection] = useState(task?.section ?? "");
+  const [ref, setRef] = useState(task?.ref ?? "");
+  const [informs, setInforms] = useState(task?.informs ?? "");
+  const [format, setFormat] = useState(task?.format ?? "");
+  const [priority, setPriority] = useState<EngagementTaskPriority | "">(task?.priority ?? "");
   const save = trpc.engagement.staff.saveTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Saved."); onDone?.(); } });
   const people = side === "client" ? data.clientPeople.map(person => ({ userId: person.userId, name: person.name })) : data.team.map(member => ({ userId: member.userId, name: member.name ?? "" }));
   const id = task?.id ?? "new";
@@ -374,6 +430,17 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
         <div><label className={LABEL} htmlFor={`task-order-${id}`}>Order in the week</label><input id={`task-order-${id}`} type="number" min={0} max={999} className={FIELD} disabled={!canManage} value={order} onChange={event => setOrder(event.target.value)} /></div>
         <div><label className={LABEL} htmlFor={`task-factor-${id}`}>Factor</label><select id={`task-factor-${id}`} className={FIELD} disabled={!canManage} value={factor} onChange={event => setFactor(event.target.value as EngagementTaskFactor | "")}><option value="">Not tagged</option>{ENGAGEMENT_TASK_FACTORS.map(item => <option key={item} value={item}>{ENGAGEMENT_TASK_FACTOR_LABELS[item]}</option>)}</select></div>
       </div>
+      {kind === "data_request" && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div><label className={LABEL} htmlFor={`task-section-${id}`}>Section</label><input id={`task-section-${id}`} className={FIELD} disabled={!canManage} maxLength={80} placeholder="B Financial performance" value={section} onChange={event => setSection(event.target.value)} /></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={LABEL} htmlFor={`task-ref-${id}`}>Reference</label><input id={`task-ref-${id}`} className={FIELD} disabled={!canManage} maxLength={8} placeholder="B1" value={ref} onChange={event => setRef(event.target.value)} /></div>
+            <div><label className={LABEL} htmlFor={`task-priority-${id}`}>Priority</label><select id={`task-priority-${id}`} className={FIELD} disabled={!canManage} value={priority} onChange={event => setPriority(event.target.value as EngagementTaskPriority | "")}><option value="">Not set</option>{ENGAGEMENT_TASK_PRIORITIES.map(item => <option key={item} value={item}>{ENGAGEMENT_TASK_PRIORITY_LABELS[item]}</option>)}</select></div>
+          </div>
+          <div><label className={LABEL} htmlFor={`task-informs-${id}`}>Why we ask (what it informs)</label><input id={`task-informs-${id}`} className={FIELD} disabled={!canManage} maxLength={200} placeholder="Where the business makes its money" value={informs} onChange={event => setInforms(event.target.value)} /></div>
+          <div><label className={LABEL} htmlFor={`task-format-${id}`}>Format that is fine</label><input id={`task-format-${id}`} className={FIELD} disabled={!canManage} maxLength={80} placeholder="Excel preferred; photos are fine" value={format} onChange={event => setFormat(event.target.value)} /></div>
+        </div>
+      )}
       <label className={LABEL} htmlFor={`task-note-${id}`}>Note (the client sees it)</label>
       <input id={`task-note-${id}`} className={FIELD} disabled={!canManage} placeholder={status === "needs_more" ? "Say what else you need" : ""} value={note} onChange={event => setNote(event.target.value)} />
       {task && <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && canManage} />}
@@ -382,6 +449,7 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
           <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !title.trim()} onClick={() => save.mutate({
             engagementId, taskId: task?.id, kind, side, title, detail, assigneeUserId: assignee ? Number(assignee) : null, dueOn: dueOn || null, status, statusNote: note, sessionId: task?.sessionId ?? null,
             weekNumber: week ? Number(week) : null, sortOrder: Number(order) || 0, factor: factor || null,
+            ...(kind === "data_request" ? { section, ref, informs, format, priority: priority || null } : { section: null, ref: null, informs: null, format: null, priority: null }),
           })}>Save</Button>
           {onDone && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={onDone}>Cancel</Button>}
         </div>

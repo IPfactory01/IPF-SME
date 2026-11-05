@@ -31,7 +31,7 @@ vi.mock("@/lib/trpc", () => ({
         storageStatus: { useQuery: () => ({ data: api.storageError ? undefined : api.storage, error: api.storageError, refetch: () => undefined }) },
         detail: { useQuery: () => ({ data: api.detail, isLoading: false, error: null }) },
         assignableStaff: { useQuery: () => ({ data: [{ userId: 9, name: "Ola Analyst", email: "ola@example.test", roles: ["analyst"] }] }) },
-        ...Object.fromEntries(["start", "fileLink", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -56,6 +56,7 @@ const detail = (can: { manage: boolean; assign: boolean; review: boolean; sendSi
   deliverables,
   measure: null as unknown,
   checkins: [] as unknown[],
+  inbox: [] as unknown[],
   can,
 });
 
@@ -283,5 +284,40 @@ describe("send sign-in link on the client's record", () => {
     fireEvent.click(screen.getByText("Ada Foods"));
     await screen.findByText("The client");
     expect(screen.queryByRole("button", { name: "Send sign-in link" })).toBeNull();
+  });
+});
+
+describe("the drop box on the team's side", () => {
+  it("lists what the client sent with the unsorted count, and saves which Data Requests a file answers", () => {
+    const tasks = [task({ id: 51, title: "Your price list", ref: "B3", section: "B Money" }), task({ id: 52, title: "Your sales for the last 12 months", ref: "B1", section: "B Money" }), task({ id: 53, kind: "action", side: "ipf", title: "Send the cash template" })];
+    api.detail = { ...detail({ manage: true, assign: false, review: false }, [], tasks), inbox: [{ id: 99, fileName: "Sales and prices.xlsx", contentType: "application/vnd.ms-excel", sizeBytes: 9_000, audience: "owner", uploadedByName: "Ada Okafor", createdAt: new Date(), note: "From our accountant", taskIds: [] }] };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText("Files the client sent (1 to sort)")).toBeTruthy();
+    const file = within(dialog.getByLabelText("Sales and prices.xlsx"));
+    expect(file.getByText("“From our accountant”")).toBeTruthy();
+    // Data Requests only, by reference: an action is not something a file answers.
+    expect(file.queryByText(/Send the cash template/)).toBeNull();
+    const save = file.getByRole("button", { name: "Save the match" }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.click(file.getByLabelText(/^B1 Your sales for the last 12 months/));
+    fireEvent.click(file.getByLabelText(/^B3 Your price list/));
+    fireEvent.click(save);
+    expect(api.calls.matchFile).toEqual([{ fileId: 99, taskIds: [52, 51] }]);
+  });
+
+  it("saves a Data Request's section, reference, purpose, format and priority", () => {
+    api.detail = detail({ manage: true, assign: false, review: false }, [], [task({ id: 51, title: "Your price list" })]);
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const card = within(within(screen.getByRole("dialog")).getByLabelText("Your price list"));
+    fireEvent.change(card.getByLabelText("Section"), { target: { value: "B Money" } });
+    fireEvent.change(card.getByLabelText("Reference"), { target: { value: "B3" } });
+    fireEvent.change(card.getByLabelText("Priority"), { target: { value: "high" } });
+    fireEvent.change(card.getByLabelText("Why we ask (what it informs)"), { target: { value: "Whether prices cover costs" } });
+    fireEvent.change(card.getByLabelText("Format that is fine"), { target: { value: "Any" } });
+    fireEvent.click(card.getByRole("button", { name: "Save" }));
+    expect(api.calls.saveTask).toEqual([expect.objectContaining({ taskId: 51, section: "B Money", ref: "B3", priority: "high", informs: "Whether prices cover costs", format: "Any" })]);
   });
 });

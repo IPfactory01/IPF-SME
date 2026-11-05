@@ -262,7 +262,7 @@ flowchart TD
 **The same frame for every client** (5 November, modelled on the IPF project-folder shell: each view answers one
 question a client folder answers). Laid out like the approved prototype (Marcelle's room): the room fills the screen with its own left rail (the product, Home, My tasks, Files, the client's space with its views, and the account links), a white header (business / stage, the title, Day N of M with the logo-coloured bar, team avatars) and the views as tabs: **Overview · List · Schedule · Data requests · Documents**,
 then **Founder · Business** when a Business Check or Full Report is behind the engagement (owner and full-access staff
-only). It opens on Overview: the next action and the next meeting, then a dashboard (a stage band across the seven steps, a progress ring, a donut of the Work Plan by who holds each task, Data Requests received as one block each with the overdue count, and open work by due date, yours and ours; clicking a chart opens the tab behind it), then the timeline beside Waiting on you, Deliverables and
+only). It opens on Overview: a dashboard first (a stage band across the seven steps, a progress ring, a donut of the Work Plan by who holds each task, Data Requests received as one block each with the overdue count, and open work by due date, yours and ours; clicking a chart opens the tab behind it), then the next action (for Data Requests, one card with the number outstanding and a link to the list) and the next meeting, then the timeline beside Waiting on you, Deliverables and
 the team (each person's role on this engagement and firm title). Phones get a slim top bar instead of the rail.
 
 - **List:** every task grouped Waiting on you / With IP Factory / Sent, we are checking / Done, with who owns it, a due
@@ -271,7 +271,13 @@ the team (each person's role on this engagement and firm title). Phones get a sl
   owner and due flag sit under each title.
 - **Schedule:** every Session in date order with a date tile, Held / Next / Booked / To be booked, the Join link
   before it and the notes once shared.
-- **Data requests:** shown only when there are any; "N of M received" and each request with its status and upload.
+- **Data requests:** shown only when there are any. Requested, received (a part-received item counts as half),
+  outstanding and overdue above the Data Request itself: a checklist by section, open items first, each with its
+  reference, status, due flag and priority, and, when opened, its purpose, format and files. The client answers an item
+  by uploading, by "Not available" (with an optional note, which they can undo) or by "Submitted another way". Uploads
+  go to one drop box beside the list: many files at once, in any order, without naming the item. The team matches each
+  file to one or more items in the engagement record ("Files the client sent"); the client sees each file under
+  "Documents received" with its match, or "Under review".
 - **Documents:** the Full Report and every shared Deliverable, with comments and Sign-off.
 
 A link to `#overview`, `#plan`, `#meetings`, `#data`, `#deliverables`, `#founder` or `#business` opens that view, and a

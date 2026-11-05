@@ -12733,11 +12733,42 @@ async function assignTeamMember(db, actor, input) {
   await requireStaffEngagement(db, actor, input.engagementId);
   const staff2 = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq18(userPlatformRoles.userId, users.id)).where(and12(eq18(userPlatformRoles.userId, input.userId), eq18(users.status, "active"))).limit(1))[0];
   if (!staff2) throw new TRPCError16({ code: "BAD_REQUEST", message: "Only IP Factory staff can join an engagement team." });
+  const existing = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and12(eq18(engagementTeam.engagementId, input.engagementId), eq18(engagementTeam.userId, input.userId))).limit(1))[0];
   await db.transaction(async (tx) => {
     await tx.insert(engagementTeam).values({ engagementId: input.engagementId, userId: input.userId, role: input.role, assignedByUserId: actor.id }).onConflictDoUpdate({ target: [engagementTeam.engagementId, engagementTeam.userId], set: { role: input.role, assignedByUserId: actor.id } });
-    await recordAudit(tx, { action: "engagement_team_assigned", actorUserId: actor.id, details: { engagementId: input.engagementId, userId: input.userId, role: input.role } });
+    await recordAudit(tx, { action: "engagement_team_assigned", actorUserId: actor.id, details: { engagementId: input.engagementId, userId: input.userId, role: input.role, ...existing ? { previousRole: existing.role } : {} } });
   });
-  return { success: true };
+  const notified = existing?.role === input.role || input.userId === actor.id ? false : await notifyAssigned(db, input.engagementId, input.userId, input.role, Boolean(existing));
+  return { success: true, added: !existing, notified };
+}
+function assignedNoticeEmail(input) {
+  const name = input.fullName.split(" ")[0] || "there";
+  return {
+    subject: input.changed ? `Your role on ${input.businessName}: ${input.roleLabel}` : `You are on ${input.businessName} as ${input.roleLabel}`,
+    body: [
+      `Dear ${name},`,
+      "",
+      input.changed ? `Your role on the ${input.businessName} engagement is now ${input.roleLabel}.` : `You have been added to the ${input.businessName} engagement as ${input.roleLabel}.`,
+      "",
+      `Open it in the internal area: ${input.url}`,
+      "",
+      BRAND.organisationName
+    ].join("\n")
+  };
+}
+async function notifyAssigned(db, engagementId, userId, role, changed) {
+  try {
+    const person = (await db.select({ name: users.name, email: users.email }).from(users).where(eq18(users.id, userId)).limit(1))[0];
+    if (!person?.email) return false;
+    const row = (await db.select({ businessName: businesses.name, checkBusiness: businessChecks.businessName, ownerName: businessChecks.fullName }).from(engagements).innerJoin(businessChecks, eq18(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq18(engagements.businessId, businesses.id)).where(eq18(engagements.id, engagementId)).limit(1))[0];
+    const businessName = row?.businessName ?? row?.checkBusiness ?? row?.ownerName ?? "a client";
+    const message = assignedNoticeEmail({ fullName: person.name ?? "", businessName, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[role], changed, url: `${getTrustedApplicationOrigin()}/admin` });
+    await deliverEmail({ to: person.email, subject: message.subject, body: message.body, sender: "business_support" });
+    return true;
+  } catch (error) {
+    console.error("[Engagements] Assigned, but the team member could not be emailed:", error instanceof Error ? error.message : error);
+    return false;
+  }
 }
 async function removeTeamMember(db, actor, input) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");

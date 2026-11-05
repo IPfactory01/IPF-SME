@@ -408,12 +408,51 @@ export async function assignTeamMember(db: Database, actor: StaffActor, input: {
   const staff = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq(userPlatformRoles.userId, users.id))
     .where(and(eq(userPlatformRoles.userId, input.userId), eq(users.status, "active"))).limit(1))[0];
   if (!staff) throw new TRPCError({ code: "BAD_REQUEST", message: "Only IP Factory staff can join an engagement team." });
+  const existing = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and(eq(engagementTeam.engagementId, input.engagementId), eq(engagementTeam.userId, input.userId))).limit(1))[0];
   await db.transaction(async tx => {
     await tx.insert(engagementTeam).values({ engagementId: input.engagementId, userId: input.userId, role: input.role, assignedByUserId: actor.id })
       .onConflictDoUpdate({ target: [engagementTeam.engagementId, engagementTeam.userId], set: { role: input.role, assignedByUserId: actor.id } });
-    await recordAudit(tx, { action: "engagement_team_assigned", actorUserId: actor.id, details: { engagementId: input.engagementId, userId: input.userId, role: input.role } });
+    await recordAudit(tx, { action: "engagement_team_assigned", actorUserId: actor.id, details: { engagementId: input.engagementId, userId: input.userId, role: input.role, ...(existing ? { previousRole: existing.role } : {}) } });
   });
-  return { success: true } as const;
+  // The person is told by email when they join or their role changes, unless they did it themselves.
+  const notified = existing?.role === input.role || input.userId === actor.id ? false : await notifyAssigned(db, input.engagementId, input.userId, input.role, Boolean(existing));
+  return { success: true, added: !existing, notified } as const;
+}
+
+export function assignedNoticeEmail(input: { fullName: string; businessName: string; roleLabel: string; changed: boolean; url: string }) {
+  const name = input.fullName.split(" ")[0] || "there";
+  return {
+    subject: input.changed ? `Your role on ${input.businessName}: ${input.roleLabel}` : `You are on ${input.businessName} as ${input.roleLabel}`,
+    body: [
+      `Dear ${name},`,
+      "",
+      input.changed
+        ? `Your role on the ${input.businessName} engagement is now ${input.roleLabel}.`
+        : `You have been added to the ${input.businessName} engagement as ${input.roleLabel}.`,
+      "",
+      `Open it in the internal area: ${input.url}`,
+      "",
+      BRAND.organisationName,
+    ].join("\n"),
+  };
+}
+
+/** Best effort: an assignment stands even when the email cannot be sent. Returns whether it was sent. */
+async function notifyAssigned(db: Pick<Database, "select">, engagementId: number, userId: number, role: EngagementTeamRole, changed: boolean) {
+  try {
+    const person = (await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, userId)).limit(1))[0];
+    if (!person?.email) return false;
+    const row = (await db.select({ businessName: businesses.name, checkBusiness: businessChecks.businessName, ownerName: businessChecks.fullName }).from(engagements)
+      .innerJoin(businessChecks, eq(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq(engagements.businessId, businesses.id))
+      .where(eq(engagements.id, engagementId)).limit(1))[0];
+    const businessName = row?.businessName ?? row?.checkBusiness ?? row?.ownerName ?? "a client";
+    const message = assignedNoticeEmail({ fullName: person.name ?? "", businessName, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[role], changed, url: `${getTrustedApplicationOrigin()}/admin` });
+    await deliverEmail({ to: person.email, subject: message.subject, body: message.body, sender: "business_support" });
+    return true;
+  } catch (error) {
+    console.error("[Engagements] Assigned, but the team member could not be emailed:", error instanceof Error ? error.message : error);
+    return false;
+  }
 }
 
 export async function removeTeamMember(db: Database, actor: StaffActor, input: { engagementId: number; userId: number }) {

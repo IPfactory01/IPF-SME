@@ -260,6 +260,28 @@ for (const target of targets) {
         await expect((await superAdmin.call()).engagement.staff.assign({ engagementId, userId: ownerId, role: "expert" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
       });
 
+      it("keeps several people on one engagement, changes a role without replacing anyone, and emails each person", async () => {
+        const { engagementId } = await client("team-of-three");
+        const lead = await person(["analyst"], "Lena Lead");
+        const analyst = await person(["analyst"], "Ade Analyst");
+        const specialist = await person(["subject_matter_expert"], "Sola Specialist");
+        mocked.deliverEmail.mockClear();
+        expect(await (await superAdmin.call()).engagement.staff.assign({ engagementId, userId: lead.id, role: "lead" })).toEqual({ success: true, added: true, notified: true });
+        await (await superAdmin.call()).engagement.staff.assign({ engagementId, userId: analyst.id, role: "analyst" });
+        await (await superAdmin.call()).engagement.staff.assign({ engagementId, userId: specialist.id, role: "expert" });
+        // Changing a role keeps everyone else, and tells the person.
+        expect(await (await superAdmin.call()).engagement.staff.assign({ engagementId, userId: analyst.id, role: "manager" })).toEqual({ success: true, added: false, notified: true });
+        const team = (await (await superAdmin.call()).engagement.staff.detail({ engagementId })).team;
+        expect(team.map(member => [member.name, member.role])).toEqual([["Lena Lead", "lead"], ["Ade Analyst", "manager"], ["Sola Specialist", "expert"]]);
+        const sent = emails();
+        expect(sent.map(email => email.to)).toEqual([lead.email, analyst.email, specialist.email, analyst.email]);
+        expect(sent[0]).toMatchObject({ subject: expect.stringContaining("as Lead Consultant"), body: expect.stringContaining("/admin") });
+        expect(sent[3].subject).toContain("Engagement Manager");
+        // The same role again changes nothing and sends nothing.
+        expect(await (await superAdmin.call()).engagement.staff.assign({ engagementId, userId: analyst.id, role: "manager" })).toMatchObject({ added: false, notified: false });
+        expect(emails()).toHaveLength(4);
+      });
+
       it("keeps clients out of the team's side", async () => {
         const { owner, engagementId } = await client("no-staff");
         await expect((await owner.call()).engagement.staff.detail({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });

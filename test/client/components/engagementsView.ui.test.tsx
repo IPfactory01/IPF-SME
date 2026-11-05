@@ -185,6 +185,18 @@ describe("the team's engagements", () => {
     expect(api.calls.approveDeliverable).toEqual([{ deliverableId: 41 }]);
   });
 
+  it("keeps a team member out of the Add list and changes their role on their own row, so adding never replaces anyone", () => {
+    api.detail = { ...detail({ manage: true, assign: true, review: true }), team: [{ userId: 9, role: "analyst", roleLabel: "Analyst", name: "Ola Analyst", email: "ola@example.test", jobTitle: "Senior Business Analyst" }] };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const drawer = within(screen.getByRole("dialog"));
+    const add = drawer.getByLabelText("Add to the team") as HTMLSelectElement;
+    expect(Array.from(add.options).map(option => option.textContent)).toEqual(["Everyone with a staff account is on the team"]);
+    expect(drawer.getByText(/Invite one in People/)).toBeTruthy();
+    fireEvent.change(drawer.getByLabelText("Role of Ola Analyst"), { target: { value: "manager" } });
+    expect(api.calls.assign).toEqual([{ engagementId: 4, userId: 9, role: "manager" }]);
+  });
+
   it("gives an analyst the work but not the team or the approval", () => {
     api.detail = detail({ manage: true, assign: false, review: false });
     render(<EngagementsView />);

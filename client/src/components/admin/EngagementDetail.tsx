@@ -187,11 +187,13 @@ function StaffFiles({ files, engagementId, target, canUpload }: { files: StaffFi
 function StageAndTeam({ data, engagementId }: { data: Detail; engagementId: number }) {
   const refresh = useRefresh(engagementId);
   const setStage = trpc.engagement.staff.setStage.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Stage saved."); } });
-  const assign = trpc.engagement.staff.assign.useMutation(refresh);
+  const assign = trpc.engagement.staff.assign.useMutation({ ...refresh, onSuccess: result => { refresh.onSuccess(); toast.success(`${result.added ? "Added to the team" : "Role changed"}${result.notified ? ", and emailed" : ""}.`); } });
   const remove = trpc.engagement.staff.removeMember.useMutation(refresh);
   const staff = trpc.engagement.staff.assignableStaff.useQuery(undefined, { enabled: data.can.assign, retry: false });
   const [person, setPerson] = useState("");
   const [role, setRole] = useState<EngagementTeamRole>("analyst");
+  // Someone already on the team changes role on their own row, so adding never replaces anyone.
+  const available = (staff.data ?? []).filter(item => !data.team.some(member => member.userId === item.userId));
   return (
     <DetailSection title="Stage and team">
       <div className="space-y-1">
@@ -202,27 +204,37 @@ function StageAndTeam({ data, engagementId }: { data: Detail; engagementId: numb
       </div>
       <ul aria-label="Team" className="space-y-1 text-sm">
         {data.team.map(member => (
-          <li key={member.userId} className="flex items-center justify-between gap-2 border-b border-line-soft py-1">
-            <span>{member.name} <span className="text-ink-muted">· {member.roleLabel}</span></span>
-            {data.can.assign && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={remove.isPending} onClick={() => remove.mutate({ engagementId, userId: member.userId })}>Remove</Button>}
+          <li key={member.userId} className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft py-1">
+            <span>{member.name || member.email}{member.jobTitle ? <span className="text-ink-muted"> · {member.jobTitle}</span> : null}</span>
+            {data.can.assign ? (
+              <span className="flex items-center gap-2">
+                <select aria-label={`Role of ${member.name || member.email}`} className={`${FIELD} w-auto`} disabled={assign.isPending} value={member.role} onChange={event => assign.mutate({ engagementId, userId: member.userId, role: event.target.value as EngagementTeamRole })}>
+                  {ENGAGEMENT_TEAM_ROLES.map(item => <option key={item} value={item}>{ENGAGEMENT_TEAM_ROLE_LABELS[item]}</option>)}
+                </select>
+                <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={remove.isPending} onClick={() => remove.mutate({ engagementId, userId: member.userId })}>Remove</Button>
+              </span>
+            ) : <span className="text-ink-muted">{member.roleLabel}</span>}
           </li>
         ))}
         {data.team.length === 0 && <li className="text-danger">No one is on this engagement yet.</li>}
       </ul>
       {data.can.assign && (
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-0 flex-1 space-y-1">
-            <label className={LABEL} htmlFor="team-person">Add to the team</label>
-            <select id="team-person" className={FIELD} value={person} onChange={event => setPerson(event.target.value)}>
-              <option value="">Choose a person</option>
-              {staff.data?.map(item => <option key={item.userId} value={item.userId}>{item.name || item.email}</option>)}
+        <>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-0 flex-1 space-y-1">
+              <label className={LABEL} htmlFor="team-person">Add to the team</label>
+              <select id="team-person" className={FIELD} value={person} onChange={event => setPerson(event.target.value)}>
+                <option value="">{available.length ? "Choose a person" : "Everyone with a staff account is on the team"}</option>
+                {available.map(item => <option key={item.userId} value={item.userId}>{item.name || item.email}</option>)}
+              </select>
+            </div>
+            <select aria-label="Role on the engagement" className={`${FIELD} w-auto`} value={role} onChange={event => setRole(event.target.value as EngagementTeamRole)}>
+              {ENGAGEMENT_TEAM_ROLES.map(item => <option key={item} value={item}>{ENGAGEMENT_TEAM_ROLE_LABELS[item]}</option>)}
             </select>
+            <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={!person || assign.isPending} onClick={() => { assign.mutate({ engagementId, userId: Number(person), role }); setPerson(""); }}>Add</Button>
           </div>
-          <select aria-label="Role on the engagement" className={`${FIELD} w-auto`} value={role} onChange={event => setRole(event.target.value as EngagementTeamRole)}>
-            {ENGAGEMENT_TEAM_ROLES.map(item => <option key={item} value={item}>{ENGAGEMENT_TEAM_ROLE_LABELS[item]}</option>)}
-          </select>
-          <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={!person || assign.isPending} onClick={() => { assign.mutate({ engagementId, userId: Number(person), role }); setPerson(""); }}>Add</Button>
-        </div>
+          <p className="text-xs text-ink-muted">Only colleagues with a staff account appear here. Invite one in People, with a role; once they accept, add them here. They are emailed when added.</p>
+        </>
       )}
     </DetailSection>
   );

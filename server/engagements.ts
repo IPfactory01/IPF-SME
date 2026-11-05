@@ -741,6 +741,8 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     checkinsOf(db, engagement.id),
     matchesOf(db, engagement.id),
   ]);
+  const assigneeIds = Array.from(new Set(tasks.map(task => task.assigneeUserId).filter((value): value is number => value !== null)));
+  const assigneeNames = new Map((assigneeIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, assigneeIds)) : []).map(row => [row.id, row.name ?? ""]));
   const fullView = viewer.kind === "owner" || viewer.access === "full";
   // Where the engagement came from: the check's main finding and readiness, and the Discovery Call once the team shares it.
   const check = (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor })
@@ -803,6 +805,8 @@ export async function getClientRoom(db: Database, session: AccountSession) {
       notesAudience: notesVisible(item) ? item.notesAudience : null,
     })),
     tasks: tasks.filter(task => task.status !== "cancelled" && clientCanSeeTask(task, viewer)).map(task => ({
+      // Who it is with, by name, for the initials in the List: the person named on it, or null for the business or the team.
+      assigneeName: task.assigneeUserId ? assigneeNames.get(task.assigneeUserId) ?? null : null,
       id: task.id, kind: task.kind, side: task.side, title: task.title, detail: task.detail, dueOn: task.dueOn, status: task.status, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], statusNote: task.statusNote, mine: task.assigneeUserId === session.user.id,
       weekNumber: task.weekNumber, sortOrder: task.sortOrder, factor: task.factor,
       section: task.section, ref: task.ref, informs: task.informs, format: task.format, priority: task.priority,

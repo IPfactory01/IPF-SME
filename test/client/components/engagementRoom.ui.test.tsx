@@ -75,10 +75,10 @@ const room = (over: Record<string, unknown> = {}) => ({
     { id: 2, title: "Kick-off", scheduledFor: new Date("2026-10-16T09:00:00Z"), durationMinutes: 30, meetingLink: null, status: "held" as const, weekNumber: null, sortOrder: 0, agenda: null, notes: "We agreed to start with pricing.", notesSharedAt: new Date("2026-10-16T12:00:00Z"), notesAudience: "owner" as const },
   ],
   tasks: [
-    { id: 11, kind: "data_request" as const, side: "client" as const, title: "Your last 12 months of sales", detail: "Monthly totals are enough.", dueOn: "2026-10-14", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 1, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, files: [] },
-    { id: 12, kind: "data_request" as const, side: "client" as const, title: "Your price list", detail: null, dueOn: "2026-10-14", status: "needs_more" as const, statusLabel: "We need a bit more", statusNote: "the delivery prices too", mine: true, weekNumber: 1, sortOrder: 2, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, files: [] },
-    { id: 13, kind: "data_request" as const, side: "client" as const, title: "Who works in the business", detail: null, dueOn: null, status: "accepted" as const, statusLabel: "Received", statusNote: null, mine: false, weekNumber: 1, sortOrder: 3, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, files: [] },
-    { id: 14, kind: "action" as const, side: "ipf" as const, title: "Send the cash template", detail: null, dueOn: "2026-10-20", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 2, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, files: [] },
+    { id: 11, kind: "data_request" as const, side: "client" as const, title: "Your last 12 months of sales", detail: "Monthly totals are enough.", dueOn: "2026-10-14", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 1, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
+    { id: 12, kind: "data_request" as const, side: "client" as const, title: "Your price list", detail: null, dueOn: "2026-10-14", status: "needs_more" as const, statusLabel: "We need a bit more", statusNote: "the delivery prices too", mine: true, weekNumber: 1, sortOrder: 2, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
+    { id: 13, kind: "data_request" as const, side: "client" as const, title: "Who works in the business", detail: null, dueOn: null, status: "accepted" as const, statusLabel: "Received", statusNote: null, mine: false, weekNumber: 1, sortOrder: 3, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
+    { id: 14, kind: "action" as const, side: "ipf" as const, title: "Send the cash template", detail: null, dueOn: "2026-10-20", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 2, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
   ],
   deliverables: [
     { id: 21, kind: "findings" as const, kindLabel: "Findings", title: "What we found", summary: "Cash leaks at the till.", sharedAt: new Date("2026-10-30T12:00:00Z"), audience: "owner" as const, audienceLabel: "Owner only", accepted: false, files: [], comments: [{ body: "Is this every day?", createdAt: new Date(), authorName: "Ada" }] },
@@ -367,6 +367,19 @@ describe("the Plan, Meetings and Data requests views", () => {
     const panel = within(screen.getByRole("complementary", { name: "Task details" }));
     expect(panel.getByRole("heading", { name: "Your price list" })).toBeTruthy();
     expect(panel.getByRole("button", { name: "Submitted another way" })).toBeTruthy();
+  });
+
+  it("shows who each item is with as initials, and its priority with a flag, only High in colour", () => {
+    const base = room();
+    const tasks = [{ ...base.tasks[0], assigneeName: "Marcelle Tiogo", priority: "high" as const }, { ...base.tasks[1], priority: "medium" as const }, base.tasks[3]];
+    render(<EngagementRoom room={room({ tasks })} now={NOW} />);
+    open(/^List/);
+    const row = (title: string) => screen.getAllByText(title).map(item => item.closest("tr")).find(Boolean)!;
+    expect(within(row("Your last 12 months of sales")).getByTitle("Marcelle Tiogo").textContent).toContain("MT");
+    expect(within(row("Your price list")).getByTitle("Ada Foods").textContent).toContain("AF");
+    expect(within(row("Send the cash template")).getByTitle("IP Factory").textContent).toContain("IF");
+    expect(within(row("Your last 12 months of sales")).getByText("High").className).toContain("text-health-stuck");
+    expect(within(row("Your price list")).getByText("Medium").className).toContain("text-ink-muted");
   });
 
   it("lists the meetings in date order, with the Join link before and the shared notes after", () => {

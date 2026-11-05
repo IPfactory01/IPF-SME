@@ -445,14 +445,12 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
       {kind === "data_request" && (
         <div className="grid gap-2 sm:grid-cols-2">
           <div><label className={LABEL} htmlFor={`task-section-${id}`}>Section</label><input id={`task-section-${id}`} className={FIELD} disabled={!canManage} maxLength={80} placeholder="B Financial performance" value={section} onChange={event => setSection(event.target.value)} /></div>
-          <div className="grid grid-cols-2 gap-2">
-            <div><label className={LABEL} htmlFor={`task-ref-${id}`}>Reference</label><input id={`task-ref-${id}`} className={FIELD} disabled={!canManage} maxLength={8} placeholder="B1" value={ref} onChange={event => setRef(event.target.value)} /></div>
-            <div><label className={LABEL} htmlFor={`task-priority-${id}`}>Priority</label><select id={`task-priority-${id}`} className={FIELD} disabled={!canManage} value={priority} onChange={event => setPriority(event.target.value as EngagementTaskPriority | "")}><option value="">Not set</option>{ENGAGEMENT_TASK_PRIORITIES.map(item => <option key={item} value={item}>{ENGAGEMENT_TASK_PRIORITY_LABELS[item]}</option>)}</select></div>
-          </div>
+          <div><label className={LABEL} htmlFor={`task-ref-${id}`}>Reference</label><input id={`task-ref-${id}`} className={FIELD} disabled={!canManage} maxLength={8} placeholder="B1" value={ref} onChange={event => setRef(event.target.value)} /></div>
           <div><label className={LABEL} htmlFor={`task-informs-${id}`}>Why we ask (what it informs)</label><input id={`task-informs-${id}`} className={FIELD} disabled={!canManage} maxLength={200} placeholder="Where the business makes its money" value={informs} onChange={event => setInforms(event.target.value)} /></div>
           <div><label className={LABEL} htmlFor={`task-format-${id}`}>Format that is fine</label><input id={`task-format-${id}`} className={FIELD} disabled={!canManage} maxLength={80} placeholder="Excel preferred; photos are fine" value={format} onChange={event => setFormat(event.target.value)} /></div>
         </div>
       )}
+      <div><label className={LABEL} htmlFor={`task-priority-${id}`}>Priority</label><select id={`task-priority-${id}`} className={FIELD} disabled={!canManage} value={priority} onChange={event => setPriority(event.target.value as EngagementTaskPriority | "")}><option value="">Not set</option>{ENGAGEMENT_TASK_PRIORITIES.map(item => <option key={item} value={item}>{ENGAGEMENT_TASK_PRIORITY_LABELS[item]}</option>)}</select></div>
       <label className={LABEL} htmlFor={`task-note-${id}`}>Note (the client sees it)</label>
       <input id={`task-note-${id}`} className={FIELD} disabled={!canManage} placeholder={status === "needs_more" ? "Say what else you need" : ""} value={note} onChange={event => setNote(event.target.value)} />
       {task && <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && canManage} />}
@@ -461,7 +459,8 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
           <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !title.trim()} onClick={() => save.mutate({
             engagementId, taskId: task?.id, kind, side, title, detail, assigneeUserId: assignee ? Number(assignee) : null, dueOn: dueOn || null, status, statusNote: note, sessionId: task?.sessionId ?? null,
             weekNumber: week ? Number(week) : null, sortOrder: Number(order) || 0, factor: factor || null,
-            ...(kind === "data_request" ? { section, ref, informs, format, priority: priority || null } : { section: null, ref: null, informs: null, format: null, priority: null }),
+            priority: priority || null,
+            ...(kind === "data_request" ? { section, ref, informs, format } : { section: null, ref: null, informs: null, format: null }),
           })}>Save</Button>
           {onDone && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={onDone}>Cancel</Button>}
         </div>

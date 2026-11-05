@@ -13008,6 +13008,8 @@ async function getClientRoom(db, session) {
     checkinsOf(db, engagement.id),
     matchesOf(db, engagement.id)
   ]);
+  const assigneeIds = Array.from(new Set(tasks.map((task) => task.assigneeUserId).filter((value) => value !== null)));
+  const assigneeNames = new Map((assigneeIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray5(users.id, assigneeIds)) : []).map((row) => [row.id, row.name ?? ""]));
   const fullView = viewer.kind === "owner" || viewer.access === "full";
   const check = (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor }).from(businessChecks).where(eq18(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   const report = (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq18(fullReports.businessCheckId, engagement.businessCheckId)).limit(1))[0] ?? null;
@@ -13065,6 +13067,8 @@ async function getClientRoom(db, session) {
       notesAudience: notesVisible(item2) ? item2.notesAudience : null
     })),
     tasks: tasks.filter((task) => task.status !== "cancelled" && clientCanSeeTask(task, viewer)).map((task) => ({
+      // Who it is with, by name, for the initials in the List: the person named on it, or null for the business or the team.
+      assigneeName: task.assigneeUserId ? assigneeNames.get(task.assigneeUserId) ?? null : null,
       id: task.id,
       kind: task.kind,
       side: task.side,

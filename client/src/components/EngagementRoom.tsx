@@ -5,7 +5,7 @@ import { AREA_NAMES } from "@shared/businessCheck/questions";
 import { ASSESSMENT_DAYS, ASSESSMENT_WEEKS, ENGAGEMENT_TASK_PRIORITY_LABELS, FIX_WEEKS, formatFileSize, formatMeasure, OPEN_TASK_STATUSES, UPLOAD_ACCEPT, UPLOAD_MAX_MB } from "@shared/engagement";
 import { METHOD, METHOD_MEANING } from "@shared/method";
 import type { inferRouterOutputs } from "@trpc/server";
-import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlash, Download, FileText, Paperclip, UploadCloud } from "lucide-react";
+import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlash, Download, FileText, Flag, Paperclip, UploadCloud } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
@@ -818,6 +818,12 @@ function RoomTopBar({ account }: { account?: RoomAccount }) {
 const AVATAR_COLOURS = ["bg-brand-deep"] as const;
 export const avatarColour = (name: string) => AVATAR_COLOURS[name.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) % AVATAR_COLOURS.length];
 
+/** Who an item is with: the person named on it, else the business (client side) or IP Factory. */
+const whoName = (task: Task, room: Room) => task.assigneeName || (task.side === "client" ? room.businessName : BRAND.organisationName);
+/** A person's initials in a circle; the name shows on hover and to screen readers. */
+function Avatar({ name }: { name: string }) {
+  return <span title={name} className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-medium text-white ${avatarColour(name)}`}><span aria-hidden>{initials(name)}</span><span className="sr-only">{name}</span></span>;
+}
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]!.toUpperCase()).join("") || "?";
 
 const PLAN_GROUPS: { id: string; name: string; dot: string; pill: string; test: (task: Task) => boolean }[] = [
@@ -850,7 +856,7 @@ function PlanView({ room, now }: { room: Room; now: number }) {
               <h3 className="flex items-center gap-2 pb-2 font-sans"><span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${group.pill}`}>{group.name}</span><span className="text-xs font-normal tabular-nums text-ink-muted">{items.length}</span></h3>
               <div className="overflow-hidden rounded-xl border border-line-soft bg-white">
                 <table className="w-full table-fixed text-sm">
-                  <thead><tr className="border-b border-line-soft text-left text-xs text-ink-muted"><th className="py-2 pl-3 pr-2 font-normal">Task</th><th className="hidden w-28 px-2 font-normal sm:table-cell">Who</th><th className="hidden w-40 px-2 font-normal sm:table-cell">Due</th><th className="hidden w-32 px-2 pr-3 font-normal sm:table-cell">Type</th></tr></thead>
+                  <thead><tr className="border-b border-line-soft text-left text-xs text-ink-muted"><th className="py-2 pl-3 pr-2 font-normal">Task</th><th className="hidden w-20 px-2 font-normal sm:table-cell">Who</th><th className="hidden w-40 px-2 font-normal sm:table-cell">Due</th><th className="hidden w-28 px-2 font-normal md:table-cell">Priority</th><th className="hidden w-32 px-2 pr-3 font-normal sm:table-cell">Type</th></tr></thead>
                   <tbody>
                     {items.map(item => {
                       const flag = dueFlag(item.dueOn, group.id === "done", now);
@@ -862,8 +868,9 @@ function PlanView({ room, now }: { room: Room; now: number }) {
                               <span className="min-w-0"><span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}{item.mine && <span className="ml-2 text-xs text-brand">for you</span>}</span><span className="block text-xs text-ink-muted sm:hidden">{item.side === "client" ? "You" : "IP Factory"}{flag ? <> · <span className={FLAG_TONE[flag.tone]}>{flag.text}</span></> : null}</span></span>
                             </button>
                           </td>
-                          <td className="hidden px-2 text-ink-600 sm:table-cell">{item.side === "client" ? "You" : "IP Factory"}</td>
+                          <td className="hidden px-2 sm:table-cell"><Avatar name={whoName(item, room)} /></td>
                           <td className={`hidden whitespace-nowrap px-2 sm:table-cell ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? "-"}</td>
+                          <td className="hidden whitespace-nowrap px-2 md:table-cell">{item.priority ? <span className={`inline-flex items-center gap-1.5 ${PRIORITY_TONE[item.priority]}`}><Flag className={`h-3.5 w-3.5 ${item.priority === "high" ? "fill-current" : ""}`} aria-hidden />{ENGAGEMENT_TASK_PRIORITY_LABELS[item.priority]}</span> : <span className="text-ink-muted">-</span>}</td>
                           <td className="hidden whitespace-nowrap px-2 pr-3 text-ink-muted sm:table-cell">{item.kind === "data_request" ? METHOD.dataRequest : "Action"}</td>
                         </tr>
                       );

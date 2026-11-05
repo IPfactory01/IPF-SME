@@ -27,6 +27,10 @@ vi.mock("@/lib/trpc", () => ({
       resetTwoStep: { useMutation: mutation("resetTwoStep") },
       setJobTitle: { useMutation: mutation("setJobTitle") },
     },
+    platformRoles: {
+      grant: { useMutation: mutation("grant") },
+      revoke: { useMutation: mutation("revoke") },
+    },
   },
 }));
 
@@ -55,6 +59,30 @@ describe("the People panel", () => {
     expect(rowOf("Lewis Desk").getByText("Suspended")).toBeTruthy();
     expect(rowOf("Lewis Desk").queryByRole("button", { name: "Reset link" })).toBeNull();
     expect(rowOf("Lewis Desk").getByRole("button", { name: "Reinstate" })).toBeTruthy();
+  });
+
+  it("keeps the IP Factory team and clients in separate tables", () => {
+    render(<PeoplePanel />);
+    expect(within(screen.getByRole("region", { name: "IP Factory team" })).getByText("Lewis Desk")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "IP Factory team" })).queryByText("Ada Okafor")).toBeNull();
+    expect(within(screen.getByRole("region", { name: "Clients" })).getByText("Ada Okafor")).toBeTruthy();
+  });
+
+  it("gives a staff member a role, asks a Specialist's end date first, and removes a role", () => {
+    render(<PeoplePanel />);
+    const row = rowOf("Lewis Desk");
+    fireEvent.change(row.getByLabelText("Add a role for Lewis Desk"), { target: { value: "analyst" } });
+    fireEvent.click(row.getByRole("button", { name: "Give" }));
+    expect(api.calls.grant).toEqual([{ userId: 2, role: "analyst", expiresOn: null }]);
+    fireEvent.change(row.getByLabelText("Add a role for Lewis Desk"), { target: { value: "subject_matter_expert" } });
+    expect((row.getByRole("button", { name: "Give" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(row.getByLabelText("Access ends for Lewis Desk"), { target: { value: "2027-03-09" } });
+    fireEvent.click(row.getByRole("button", { name: "Give" }));
+    expect(api.calls.grant[1]).toEqual({ userId: 2, role: "subject_matter_expert", expiresOn: "2027-03-09" });
+    fireEvent.click(row.getByRole("button", { name: "Remove Desk Lead from Lewis Desk" }));
+    expect(api.calls.revoke).toEqual([{ userId: 2, role: "desk_lead" }]);
+    // Administrator alone gives nothing, so it is never offered.
+    expect(Array.from((row.getByLabelText("Add a role for Lewis Desk") as HTMLSelectElement).options).map(option => option.value)).not.toContain("admin");
   });
 
   it("issues a reset link and shows it once, saying to send it by hand when no email went out", () => {

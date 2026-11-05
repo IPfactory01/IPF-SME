@@ -12,7 +12,6 @@ const INVITABLE: { role: Exclude<PlatformRole, "super_admin">; label: string }[]
   { role: "partner", label: "Partner" },
   { role: "subject_matter_expert", label: "Specialist (contractor, needs an end date)" },
   { role: "finance", label: "Finance" },
-  { role: "admin", label: "Administrator (no powers until granted)" },
 ];
 const STATUS: Record<string, string> = { pending: "Link sent, waiting", accepted: "Accepted", revoked: "Revoked", expired: "Expired" };
 

@@ -51,7 +51,7 @@ export default function BusinessSupportConsole({ access, team, jump }: { access:
       </div>
 
       {sections.length === 0 ? (
-        <p role="note" className="border border-line bg-white p-6 text-sm text-ink-muted">Your account is signed in, but no admin responsibilities have been assigned to it yet. Ask the Super Admin to grant them.</p>
+        <p role="note" className="border border-line bg-white p-6 text-sm text-ink-muted">Your account is signed in, but its role gives it nothing to do here yet. A Super Admin gives you a role, such as Analyst or Desk Lead, in Admin Team › People.</p>
       ) : (
         <>
           <nav aria-label="Admin sections" className="flex flex-wrap gap-x-1 gap-y-1 border-b border-line">

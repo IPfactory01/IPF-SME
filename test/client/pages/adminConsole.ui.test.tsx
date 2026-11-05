@@ -165,7 +165,7 @@ describe("which sections each person sees (decided from what the server resolved
 
   it("says plainly when an account has no responsibilities yet, instead of showing an empty console", () => {
     renderConsole({ permissions: [], platformPermissions: [], email: "analyst@example.test", name: "Ayo Analyst", platformRoles: ["analyst"] });
-    expect(screen.getByRole("note").textContent).toMatch(/no admin responsibilities/);
+    expect(screen.getByRole("note").textContent).toMatch(/its role gives it nothing to do here yet/);
     expect(screen.queryByRole("navigation", { name: "Admin sections" })).toBeNull();
     expect(screen.getByText("Ayo Analyst")).toBeTruthy();
     expect(screen.getByText("Analyst")).toBeTruthy();

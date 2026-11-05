@@ -109,41 +109,95 @@ export default function PeoplePanel() {
           </div>
         </form>
       )}
-      <div className="overflow-x-auto border border-line bg-white">
-        <table className="w-full">
-          <thead><tr className="border-b border-line"><th className={TH}>Person</th><th className={TH}>Roles</th><th className={TH}>Status</th><th className={TH}>Two-step</th><th className={TH}>Access ends</th><th className={TH}>Last signed in</th><th className={TH} /></tr></thead>
-          <tbody>
-            {people.data.map(person => (
-              <tr key={person.id} className="border-b border-line-soft">
-                <td className={TD}><span className="block font-medium">{person.name || "-"}</span><span className="block text-xs text-ink-muted">{person.email}</span></td>
-                <td className={TD}>
-                  {person.roles.length ? roleDisplay(person.roles) : person.businesses ? "Client" : "-"}
-                  {person.roles.length > 0 && (
-                    <select aria-label={`Firm title for ${person.name || person.email}`} className="mt-1 block border border-line bg-white px-1 py-0.5 text-xs" value={person.jobTitle ?? ""} disabled={setTitle.isPending} onChange={event => setTitle.mutate({ userId: person.id, jobTitle: event.target.value || null })}>
-                      <option value="">No title</option>
-                      {[...FIRM_TITLES, ...(person.jobTitle && !(FIRM_TITLES as readonly string[]).includes(person.jobTitle) ? [person.jobTitle] : [])].map(title => <option key={title} value={title}>{title}</option>)}
-                    </select>
-                  )}
-                </td>
-                <td className={TD}>{STATUS[person.status] ?? person.status}</td>
-                <td className={TD}>{person.roles.length === 0 ? "-" : person.twoStep ? "On" : <span className="font-semibold text-danger">Not set up</span>}</td>
-                <td className={TD}>{person.accessEndsAt ? formatDate(person.accessEndsAt) : "-"}</td>
-                <td className={TD}>{formatDate(person.lastSignedIn)}</td>
-                <td className={`${TD} text-right`}>
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {person.status === "active" && <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={issue.isPending} onClick={() => issue.mutate({ userId: person.id })}>Reset link</Button>}
-                    {person.status === "active" && <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={setStatus.isPending} onClick={() => { setSuspending({ id: person.id, name: person.name || person.email || "this person" }); setReason(""); }}>Suspend</Button>}
-                    {person.twoStep && <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={resetTwoStep.isPending} onClick={() => resetTwoStep.mutate({ userId: person.id })}>Reset two-step</Button>}
-                    {(person.roles.length > 0 || person.status === "active") && !person.superAdmin && <Button type="button" size="sm" variant="outline" className="rounded-none border-danger-line text-xs text-danger" disabled={removeAccess.isPending} onClick={() => { setRemoving({ id: person.id, name: person.name || person.email || "this person" }); setRemoveReason(""); }}>Remove access</Button>}
-                    {person.status === "suspended" && <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={setStatus.isPending} onClick={() => setStatus.mutate({ userId: person.id, status: "active" })}>Reinstate</Button>}
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {people.data.length === 0 && <tr><td colSpan={7} className={TD}>Nobody has a password account yet.</td></tr>}
-          </tbody>
-        </table>
-      </div>
+      {[
+        { staff: true, title: "IP Factory team", note: "Everyone with a role: give or remove roles, set the firm title.", rows: people.data.filter(person => person.roles.length > 0) },
+        { staff: false, title: "Clients", note: "Business owners and their people. Clients never hold a role.", rows: people.data.filter(person => person.roles.length === 0) },
+      ].map(({ staff, title, note, rows }) => (
+        <section key={title} aria-label={title} className="space-y-2">
+          <div><h3 className="text-sm font-semibold text-ink">{title} <span className="font-normal text-ink-muted">({rows.length})</span></h3><p className="text-xs text-ink-muted">{note}</p></div>
+        <div className="overflow-x-auto border border-line bg-white">
+          <table className="w-full">
+            <thead><tr className="border-b border-line"><th className={TH}>Person</th><th className={TH}>{staff ? "Roles and title" : "Account"}</th><th className={TH}>Status</th><th className={TH}>Two-step</th><th className={TH}>Access ends</th><th className={TH}>Last signed in</th><th className={TH} /></tr></thead>
+            <tbody>
+              {rows.map(person => (
+                <tr key={person.id} className="border-b border-line-soft">
+                  <td className={TD}><span className="block font-medium">{person.name || "-"}</span><span className="block text-xs text-ink-muted">{person.email}</span></td>
+                  <td className={TD}>
+                    {person.roles.length ? <RoleEditor userId={person.id} name={person.name || person.email || "this person"} roles={person.roles} onChanged={refresh} /> : person.businesses ? "Client" : "-"}
+                    {person.roles.length > 0 && (
+                      <select aria-label={`Firm title for ${person.name || person.email}`} className="mt-1 block border border-line bg-white px-1 py-0.5 text-xs" value={person.jobTitle ?? ""} disabled={setTitle.isPending} onChange={event => setTitle.mutate({ userId: person.id, jobTitle: event.target.value || null })}>
+                        <option value="">No title</option>
+                        {[...FIRM_TITLES, ...(person.jobTitle && !(FIRM_TITLES as readonly string[]).includes(person.jobTitle) ? [person.jobTitle] : [])].map(title => <option key={title} value={title}>{title}</option>)}
+                      </select>
+                    )}
+                  </td>
+                  <td className={TD}>{STATUS[person.status] ?? person.status}</td>
+                  <td className={TD}>{person.roles.length === 0 ? "-" : person.twoStep ? "On" : <span className="font-semibold text-danger">Not set up</span>}</td>
+                  <td className={TD}>{person.accessEndsAt ? formatDate(person.accessEndsAt) : "-"}</td>
+                  <td className={TD}>{formatDate(person.lastSignedIn)}</td>
+                  <td className={`${TD} text-right`}>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {person.status === "active" && <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={issue.isPending} onClick={() => issue.mutate({ userId: person.id })}>Reset link</Button>}
+                      {person.status === "active" && <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={setStatus.isPending} onClick={() => { setSuspending({ id: person.id, name: person.name || person.email || "this person" }); setReason(""); }}>Suspend</Button>}
+                      {person.twoStep && <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={resetTwoStep.isPending} onClick={() => resetTwoStep.mutate({ userId: person.id })}>Reset two-step</Button>}
+                      {(person.roles.length > 0 || person.status === "active") && !person.superAdmin && <Button type="button" size="sm" variant="outline" className="rounded-none border-danger-line text-xs text-danger" disabled={removeAccess.isPending} onClick={() => { setRemoving({ id: person.id, name: person.name || person.email || "this person" }); setRemoveReason(""); }}>Remove access</Button>}
+                      {person.status === "suspended" && <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={setStatus.isPending} onClick={() => setStatus.mutate({ userId: person.id, status: "active" })}>Reinstate</Button>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {people.data.length === 0 && <tr><td colSpan={7} className={TD}>Nobody has a password account yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        </section>
+      ))}
     </div>
   );
 }
+
+/** The roles that do something, in the order people are usually given them. Administrator alone grants nothing. */
+const GRANTABLE: { role: "desk_lead" | "analyst" | "partner" | "subject_matter_expert" | "finance"; label: string }[] = [
+  { role: "analyst", label: "Analyst" },
+  { role: "desk_lead", label: "Desk Lead" },
+  { role: "partner", label: "Partner" },
+  { role: "subject_matter_expert", label: "Specialist (needs an end date)" },
+  { role: "finance", label: "Finance" },
+];
+
+/**
+ * A staff member's roles: each with a remove button, and a role to add. The server decides: roles are given and
+ * removed only below the giver's own, a Specialist needs an end date, and Super Admin is never changed here.
+ */
+function RoleEditor({ userId, name, roles, onChanged }: { userId: number; name: string; roles: string[]; onChanged: () => void }) {
+  const [adding, setAdding] = useState("");
+  const [endsOn, setEndsOn] = useState("");
+  const done = (message: string) => ({ onSuccess: () => { toast.success(message); setAdding(""); setEndsOn(""); onChanged(); }, onError: (error: { message: string }) => toast.error(error.message) });
+  const grant = trpc.platformRoles.grant.useMutation(done("Role given."));
+  const revoke = trpc.platformRoles.revoke.useMutation(done("Role removed."));
+  const options = GRANTABLE.filter(item => !roles.includes(item.role));
+  const needsEnd = adding === "subject_matter_expert";
+  return (
+    <div className="space-y-1">
+      <ul className="flex flex-wrap gap-1" aria-label={`Roles of ${name}`}>
+        {roles.filter(role => !(role === "admin" && roles.includes("super_admin"))).map(role => (
+          <li key={role} className="inline-flex items-center gap-1 rounded border border-line bg-paper px-1.5 py-0.5 text-xs">
+            {roleDisplay([role])}
+            {role !== "super_admin" && <button type="button" aria-label={`Remove ${roleDisplay([role])} from ${name}`} className="text-ink-muted hover:text-danger" disabled={revoke.isPending} onClick={() => revoke.mutate({ userId, role: role as never })}>×</button>}
+          </li>
+        ))}
+      </ul>
+      {options.length > 0 && !roles.includes("super_admin") && (
+        <div className="flex flex-wrap items-center gap-1">
+          <select aria-label={`Add a role for ${name}`} className="border border-line bg-white px-1 py-0.5 text-xs" value={adding} onChange={event => setAdding(event.target.value)}>
+            <option value="">Add a role</option>
+            {options.map(item => <option key={item.role} value={item.role}>{item.label}</option>)}
+          </select>
+          {needsEnd && <input type="date" aria-label={`Access ends for ${name}`} className="border border-line bg-white px-1 py-0.5 text-xs" value={endsOn} onChange={event => setEndsOn(event.target.value)} />}
+          {adding && <Button type="button" size="sm" className="h-6 rounded-none bg-brand px-2 text-xs text-white" disabled={grant.isPending || (needsEnd && !endsOn)} onClick={() => grant.mutate({ userId, role: adding as never, expiresOn: needsEnd ? endsOn : null })}>Give</Button>}
+        </div>
+      )}
+    </div>
+  );
+}
+

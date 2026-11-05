@@ -379,10 +379,10 @@ describe("sign-in screen", () => {
 });
 
 describe("account dashboard", () => {
-  it("greets the person, names their business, says the room opens with the assessment, and offers to finish the profile", () => {
+  it("names their business without a greeting, says the room opens with the assessment, and offers to finish the profile", () => {
     api.state.me = SESSION;
     renderAt("/dashboard", <AccountDashboard />);
-    expect(screen.getByText("Welcome back, Richie")).toBeTruthy();
+    expect(screen.queryByText(/Welcome back/)).toBeNull();
     expect(screen.getByRole("heading", { name: "Richie Tech" })).toBeTruthy();
     expect(screen.getByText(/Your room opens here when your Business Review starts/)).toBeTruthy();
     expect(screen.getByText(/60% complete/)).toBeTruthy();
@@ -406,7 +406,8 @@ describe("account dashboard", () => {
     api.state.me = SESSION;
     api.state.room = { engagementId: 4, uploadsEnabled: false, businessName: "Richie Tech", viewer: { kind: "member", access: "full" }, stage: "assessment", stageLabel: "Business Review", journey: journeyOf("assessment"), problemStatement: null, measure: null, team: [], nextSession: null, sessions: [], tasks: [], deliverables: [] };
     renderAt("/dashboard", <AccountDashboard />);
-    expect(screen.getByText("Welcome back, Richie · Richie Tech")).toBeTruthy();
+    expect(screen.getAllByText("Richie Tech").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Welcome back/)).toBeNull();
     expect(screen.getByRole("region", { name: "Business Review · Week 1 of 2" })).toBeTruthy();
     expect(screen.getByRole("list", { name: "Engagement timeline" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Complete profile" })).toBeNull();

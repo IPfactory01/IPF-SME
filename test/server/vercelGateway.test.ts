@@ -1,4 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The database answer is decided per test; the real check needs a database these tests do not have.
+const database = vi.hoisted(() => ({ result: { ok: true } as Record<string, unknown> }));
+vi.mock("@server/databaseHealth", async (original) => ({ ...(await original<object>()), checkDatabase: async () => database.result }));
 import express from "express";
 import { createServer } from "http";
 import type { AddressInfo } from "net";
@@ -142,13 +146,24 @@ describe("createApp and the Vercel gateway", () => {
   it("serves GET /api/health", async () => {
     const res = await request(createApp(), "/api/health");
     expect(res.status).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ ok: true, service: "ipfactory-sme", build: null });
+    expect(JSON.parse(res.body)).toEqual({ ok: true, service: "ipfactory-sme", build: null, database: { ok: true } });
+  });
+
+  it("answers 503 with the database's code and reason when the database does not answer", async () => {
+    database.result = { ok: false, code: "28P01", reason: "password authentication failed for user \"postgres\"" };
+    try {
+      const res = await request(createApp(), "/api/health");
+      expect(res.status).toBe(503);
+      expect(JSON.parse(res.body)).toMatchObject({ ok: false, database: { ok: false, code: "28P01" } });
+    } finally {
+      database.result = { ok: true };
+    }
   });
 
   it("routes rewritten URLs to the original Express route", async () => {
     const gateway = createVercelGateway(createApp());
     const health = await request(gateway, "/api/index?__prefix=api&__path=health");
-    expect(JSON.parse(health.body)).toEqual({ ok: true, service: "ipfactory-sme", build: null });
+    expect(JSON.parse(health.body)).toEqual({ ok: true, service: "ipfactory-sme", build: null, database: { ok: true } });
     const portal = await request(gateway, "/api/index?__prefix=portal&__path=authenticate");
     expect(portal.status).toBe(302);
     expect(portal.location).toBe("/?participant_signin=1");

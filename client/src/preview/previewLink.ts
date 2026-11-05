@@ -109,7 +109,7 @@ const SAMPLE_ROOM = {
   problemStatement: null,
   booking: null,
   measure: null,
-  team: [{ name: "Femi Adebayo", roleLabel: "Engagement lead" }, { name: "Ngozi Eze", roleLabel: "Analyst" }],
+  team: [{ name: "Femi Adebayo", roleLabel: "Lead Consultant", jobTitle: "Senior Associate" }, { name: "Ngozi Eze", roleLabel: "Analyst", jobTitle: "Senior Business Analyst" }],
   nextSession: { id: 1, title: "Business Review Session 1", scheduledFor: day(0), durationMinutes: 90, meetingLink: "https://zoom.us/" },
   sessions: [
     { id: 1, title: "Business Review Session 1", scheduledFor: day(0), durationMinutes: 90, meetingLink: "https://zoom.us/", status: "planned", weekNumber: 1, sortOrder: 7, agenda: "Your business today: your six answers, the numbers, and how a normal week runs.", notes: null, notesSharedAt: null, notesAudience: null },

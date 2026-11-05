@@ -306,7 +306,7 @@ for (const target of targets) {
         await (await superAdmin.call()).engagement.staff.assign({ engagementId, userId: lead.id, role: "lead" });
 
         const room = (await (await owner.call()).engagement.client.room())!;
-        expect(room).toMatchObject({ engagementId, stage: "setting_up", stageLabel: "Getting set up", viewer: { kind: "owner" }, team: [{ name: "Lewis Lead", roleLabel: "Engagement lead" }] });
+        expect(room).toMatchObject({ engagementId, stage: "setting_up", stageLabel: "Getting set up", viewer: { kind: "owner" }, team: [{ name: "Lewis Lead", roleLabel: "Lead Consultant" }] });
         expect(room.journey.map(step => [step.label, step.state])).toEqual([["Getting set up", "current"], ["Business Review", "next"], ["Six-Week Fix", "next"], ["Your Plan", "next"]]);
         expect(room.tasks).toHaveLength(ASSESSMENT_TEMPLATE.dataRequests.length + ASSESSMENT_TEMPLATE.teamActions.length);
 

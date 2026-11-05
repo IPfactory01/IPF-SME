@@ -442,8 +442,10 @@ var ENGAGEMENT_STAGE_SUMMARIES = {
   plan: "The plan in your hands, and what support looks like from here.",
   closed: "This engagement is closed."
 };
-var ENGAGEMENT_TEAM_ROLES = ["lead", "analyst", "partner", "expert"];
-var ENGAGEMENT_TEAM_ROLE_LABELS = { lead: "Engagement lead", analyst: "Analyst", partner: "Partner", expert: "Specialist" };
+var ENGAGEMENT_TEAM_ROLES = ["manager", "lead", "analyst", "partner", "expert"];
+var ENGAGEMENT_TEAM_ROLE_LABELS = { manager: "Engagement Manager", lead: "Lead Consultant", analyst: "Analyst", partner: "Partner", expert: "Specialist" };
+var ENGAGEMENT_TEAM_ROLE_ORDER = { partner: 0, manager: 1, lead: 2, analyst: 3, expert: 4 };
+var JOB_TITLE_MAX_LENGTH = 80;
 var ENGAGEMENT_AUDIENCES = ["team", "owner", "business"];
 var ENGAGEMENT_AUDIENCE_LABELS = { team: "IP Factory only", owner: "Owner only", business: "Owner and their team" };
 var CLIENT_ACCESS_LEVELS = ["full", "contributor"];
@@ -570,7 +572,9 @@ var users = pgTable("users", {
   status: usersStatusEnum("status").default("active").notNull(),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
-  lastSignedIn: timestamp("lastSignedIn", { withTimezone: true }).defaultNow().notNull()
+  lastSignedIn: timestamp("lastSignedIn", { withTimezone: true }).defaultNow().notNull(),
+  /** Firm title (Partner, Senior Associate, ...), shown to clients beside the person's role on their engagement. 0013. */
+  jobTitle: varchar("jobTitle", { length: 80 })
 }, (table2) => [uniqueIndex("users_email_lower_unique").on(sql`lower(${table2.email})`)]);
 var userCredentials = pgTable("user_credentials", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
@@ -12616,7 +12620,7 @@ async function getStaffEngagement(db, actor, engagementId) {
   if (check) await syncSessionBookings(db, engagement, check.email);
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq18(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
   const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins] = await Promise.all([
-    db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email }).from(engagementTeam).innerJoin(users, eq18(engagementTeam.userId, users.id)).where(eq18(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
+    db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq18(engagementTeam.userId, users.id)).where(eq18(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq18(engagementSessions.engagementId, engagementId)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq18(engagementTasks.engagementId, engagementId)).orderBy(asc(engagementTasks.id)),
     db.select().from(engagementDeliverables).where(eq18(engagementDeliverables.engagementId, engagementId)).orderBy(asc(engagementDeliverables.id)),
@@ -12904,7 +12908,7 @@ async function getClientRoom(db, session) {
   const owner = (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq18(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   if (owner) await syncSessionBookings(db, engagement, owner.email);
   const [team, sessions, tasks, deliverables, comments, files, measure, checkins] = await Promise.all([
-    db.select({ name: users.name, role: engagementTeam.role }).from(engagementTeam).innerJoin(users, eq18(engagementTeam.userId, users.id)).where(eq18(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
+    db.select({ name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq18(engagementTeam.userId, users.id)).where(eq18(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq18(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq18(engagementTasks.engagementId, engagement.id)).orderBy(asc(engagementTasks.id)),
     db.select().from(engagementDeliverables).where(and12(eq18(engagementDeliverables.engagementId, engagement.id), eq18(engagementDeliverables.status, "shared"))).orderBy(asc(engagementDeliverables.id)),
@@ -12943,7 +12947,8 @@ async function getClientRoom(db, session) {
     problemStatement: fullView ? engagement.problemStatement : null,
     // The one number: the business's own result, so the owner and their full-access staff; never the hours behind it.
     measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,
-    team: team.map((member) => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
+    // Who runs it first (partner, Engagement Manager, Lead Consultant), then analysts and specialists; each with their firm title.
+    team: [...team].sort((a, b) => ENGAGEMENT_TEAM_ROLE_ORDER[a.role] - ENGAGEMENT_TEAM_ROLE_ORDER[b.role]).map((member) => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role], jobTitle: member.jobTitle ?? null })),
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
     // The owner books the Business Review Sessions on Calendly, in order, with their details filled in.
     booking: bookingFor(sessions, viewer, owner ?? null),
@@ -13253,7 +13258,7 @@ var notSetUp = () => new TRPCError17({ code: "PRECONDITION_FAILED", message: PAS
 var tooMany = () => new TRPCError17({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
 var requestIp2 = (req) => (req.ip || "unknown").trim().toLowerCase();
 async function listPeople(db) {
-  const rows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, lastSignedIn: users.lastSignedIn }).from(users).innerJoin(userCredentials, eq19(userCredentials.userId, users.id)).orderBy(users.name, users.id).limit(500);
+  const rows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, lastSignedIn: users.lastSignedIn, jobTitle: users.jobTitle }).from(users).innerJoin(userCredentials, eq19(userCredentials.userId, users.id)).orderBy(users.name, users.id).limit(500);
   const roles2 = await db.select({ userId: userPlatformRoles.userId, role: userPlatformRoles.role, expiresAt: userPlatformRoles.expiresAt }).from(userPlatformRoles);
   const twoStep = await listTwoStepStatus(db);
   const endsOf = /* @__PURE__ */ new Map();
@@ -13444,6 +13449,16 @@ async function setAccountStatus(db, input) {
     });
   });
   return { success: true, changed: true, status: input.status };
+}
+async function setJobTitle(db, input) {
+  const title = input.jobTitle?.trim() || null;
+  const target = (await db.select({ id: users.id, email: users.email }).from(users).where(eq19(users.id, input.targetUserId)).limit(1))[0];
+  if (!target) throw new TRPCError17({ code: "NOT_FOUND", message: "That person does not exist." });
+  await db.transaction(async (tx) => {
+    await tx.update(users).set({ jobTitle: title }).where(eq19(users.id, target.id));
+    await recordAudit(tx, { action: "account_profile_updated", actorUserId: input.actor.id, targetEmail: target.email, details: { targetUserId: target.id, fields: ["jobTitle"] } });
+  });
+  return { success: true, jobTitle: title };
 }
 
 // server/clientOnboarding.ts
@@ -14869,6 +14884,8 @@ var peopleRouter = router({
   list: manageUsers.query(async () => listPeople(await database5())),
   issuePasswordReset: manageUsers.input(userInput).mutation(async ({ ctx, input }) => issuePasswordReset(await database5(), { actor: { id: ctx.user.id, email: ctx.user.email ?? null, authority: ctx.authority }, targetUserId: input.userId })),
   setStatus: manageUsers.input(z26.object({ userId: z26.number().int().positive(), status: z26.enum(["active", "suspended"]), reason: z26.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => setAccountStatus(await database5(), { actor: { id: ctx.user.id, email: ctx.user.email ?? null, authority: ctx.authority }, targetUserId: input.userId, status: input.status, reason: input.reason })),
+  /** The firm title clients see beside the person's role on their engagement. */
+  setJobTitle: manageUsers.input(z26.object({ userId: z26.number().int().positive(), jobTitle: z26.string().trim().max(JOB_TITLE_MAX_LENGTH).nullable() })).mutation(async ({ ctx, input }) => setJobTitle(await database5(), { actor: { id: ctx.user.id, email: ctx.user.email ?? null, authority: ctx.authority }, targetUserId: input.userId, jobTitle: input.jobTitle })),
   /** One click: every role, engagement and session gone, account suspended, reason recorded, Super Admins told. */
   removeAccess: manageUsers.input(removeAccessInputSchema).mutation(async ({ ctx, input }) => removeAccess(await database5(), { actor: { ...ctx.user, authority: ctx.authority }, userId: input.userId, reason: input.reason })),
   /** A lost phone: clears two-step sign-in and ends sessions; they set it up again at the next sign-in. */

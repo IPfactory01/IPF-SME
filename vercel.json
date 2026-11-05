@@ -2,6 +2,12 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "pnpm build",
   "outputDirectory": "dist/public",
+  "crons": [
+    {
+      "path": "/api/health",
+      "schedule": "17 6 * * *"
+    }
+  ],
   "functions": {
     "api/index.js": {
       "maxDuration": 60

@@ -99,6 +99,11 @@ describe("how the build and the host serve those pages", () => {
     expect(vercel.outputDirectory).toBe("dist/public");
   });
 
+  it("visits /api/health once a day, so the database is used and a free Supabase project is not paused for inactivity", () => {
+    const vercel = JSON.parse(readFileSync(resolve(process.cwd(), "vercel.json"), "utf8")) as { crons?: { path: string; schedule: string }[] };
+    expect(vercel.crons).toEqual([{ path: "/api/health", schedule: "17 6 * * *" }]);
+  });
+
   it("adds breadcrumbs Google can show: Home › Services › the service, and Home › the page", () => {
     const crumbs = (path: string) => (structuredDataFor(path).find((data) => (data as { "@type": string })["@type"] === "BreadcrumbList") as { itemListElement: { name: string; item: string }[] } | undefined)?.itemListElement.map((step) => step.name);
     expect(crumbs("/services/six-week-fix")).toEqual(["Home", "Services", "Six-Week Fix"]);

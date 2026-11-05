@@ -72,3 +72,9 @@ as one plain sentence and the full error goes to the Vercel function log.
 - **F email:** `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET`, `EMAIL_FROM`, `EMAIL_REPLY_TO`; Gmail fallback adds `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`; workspace mailbox adds `JUMP_GMAIL_REFRESH_TOKEN`
 - **G uploads:** `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY`
 - **H Google OAuth/Calendar:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_CALENDAR_ID`
+
+**Keep-alive.** `vercel.json` has one cron: `GET /api/health` every day at 06:17 UTC (07:17 in Lagos). The health check
+runs a query, so the database is used daily and the Supabase free plan does not pause the project for inactivity (it
+paused once, on 5 November, and every sign-in failed with "Tenant or user not found"). It adds no backups: Supabase
+Pro does that, and removes the pausing too.
+

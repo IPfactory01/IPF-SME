@@ -13,6 +13,8 @@ import { buildParticipantUploadKey, buildPaymentReceiptUploadKey, getParticipant
 import { applySecurityHeaders, requireTrustedBrowserOrigin } from "../security";
 import { ENV } from "./env";
 import { healthReport } from "./health";
+import { checkDatabase } from "../databaseHealth";
+import { getDb } from "../db";
 import { handlePaystackWebhook } from "../onlinePayment";
 import { PAYSTACK_WEBHOOK_PATH } from "../paystack";
 import { handleResendWebhook } from "../resendWebhook";
@@ -29,9 +31,11 @@ export function createApp() {
   app.set("trust proxy", 1);
   app.use(applySecurityHeaders);
   // "build" is the short commit the live site was built from, so anyone can tell whether a change has reached it.
-  app.get("/api/health", (_req, res) => {
+  // It also says whether the database answers, and if not, why (code and reason, never the connection string).
+  app.get("/api/health", async (_req, res) => {
     const report = healthReport();
-    res.status(report.status).json(report.body);
+    const database = await checkDatabase(await getDb().catch(() => null));
+    res.status(database.ok ? report.status : 503).json({ ...report.body, ok: report.body.ok && database.ok, database });
   });
   // Paystack's signed webhook: before the JSON parser, so the signature is checked on the exact bytes Paystack sent,
   // and before the browser-origin guard, which exempts it (a server-to-server call has no Origin; the signature is the check).

@@ -58,6 +58,12 @@ Requirement groups: **A** basic API, **B** database, **C** registration, **D** p
 `RESEND_API_KEY`, `RESEND_WEBHOOK_SECRET` and `PAYSTACK_SECRET_KEY` that production is missing (`REQUIRED_IN_PRODUCTION` in `server/_core/env.ts`); the function also logs
 them once when it starts.
 
+`/api/health` also runs one `select 1` against the database (5 seconds at most) and answers `database: { ok }`, or
+`{ ok: false, code, reason }` with the driver's code and reason (for example `28P01` password authentication failed,
+`XX000` Tenant or user not found, `ECONNREFUSED`, `TIMEOUT`), never the connection string; it answers 503 when the
+database does not answer. Visitors never see a raw database error: an unplanned server failure reaches the browser
+as one plain sentence and the full error goes to the Vercel function log.
+
 - **A basic API:** `NODE_ENV` (automatic), `APP_ORIGIN`
 - **B database:** `DATABASE_URL`
 - **C registration:** A + B (+ F for confirmation email)

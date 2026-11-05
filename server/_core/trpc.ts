@@ -10,10 +10,26 @@ import { ACCOUNT_AUTH_ERRORS } from "../../shared/auth";
 import { hasVerifiedAdminAccess, isOwnerAdmin } from "../adminSecurity";
 import { getDb } from "../db";
 import { BRAND } from "../../shared/brand";
+import { UNEXPECTED_ERROR_MESSAGE } from "../databaseHealth";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
+  errorFormatter: ({ shape, error }) => safeErrorShape(shape, error),
 });
+
+/**
+ * A failure nobody planned for (the database not answering, a query that breaks) reaches the browser as one plain
+ * sentence, never the SQL or the driver's message; the full error goes to the hosting log. Errors the code raises on
+ * purpose (TRPCError with a message written for people) pass through unchanged.
+ */
+export function safeErrorShape<S extends { message: string; data: { code: string } & Record<string, unknown> }>(shape: S, error: TRPCError): S {
+  const unplanned = error.code === "INTERNAL_SERVER_ERROR" && error.cause !== undefined && !(error.cause instanceof TRPCError);
+  if (!unplanned) return shape;
+  console.error("[Server] Unexpected error:", error.cause);
+  const data = { ...shape.data };
+  delete data.stack;
+  return { ...shape, message: UNEXPECTED_ERROR_MESSAGE, data };
+}
 
 export const router = t.router;
 export const publicProcedure = t.procedure;

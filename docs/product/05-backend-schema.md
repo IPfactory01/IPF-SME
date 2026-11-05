@@ -115,7 +115,7 @@ and the room says it is not set up. Vocabulary and the who-sees-what rules: `sha
 | `engagement_measures` | The fix's one number: name, definition, unit, baseline, target | One per engagement (D3) | Business figures |
 | `engagement_checkins` | One row per fix week: the five-question check-in, the reading, the questions asked and the hours by role (concept note §17) | Unique (engagement, week); week N is recorded only after week N-1 | The client sees the reading and the next step only; hours, blockers, questions and AI use stay with the team |
 | `business_member_access` | The owner's staff: `full` or `contributor` | One per membership; no row means full (owners and business admins never have one) | — |
-| `account_invitations` | Invitations that create an account for IP Factory staff (with a role) or the owner's staff (with an access level) | Token stored as a hash; single use, expiring, revocable; one pending per email. Staff: `manage_roles` invites, never Super Admin. Seats: the owner of the business in use, within `TEAM_SEATS_INCLUDED` | Email and name |
+| `account_invitations` | Invitations that create an account for IP Factory staff (with a role, or by level, `jobTitle`, 0015, which gives the level's roles and title) or the owner's staff (with an access level) | Token stored as a hash; single use, expiring, revocable; one pending per email. Staff: `manage_roles` invites, never Super Admin. Seats: the owner of the business in use, within `TEAM_SEATS_INCLUDED` | Email and name |
 
 ## 3. JUMP-era tables (legacy)
 

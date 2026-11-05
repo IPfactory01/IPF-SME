@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { PLATFORM_ROLES } from "../../shared/auth";
 import { getDb } from "../db";
-import { grantPlatformRole, listPlatformRoleAssignments, revokePlatformRole } from "../platformAccess";
+import { grantPlatformRole, listPlatformRoleAssignments, revokePlatformRole, setStaffLevel } from "../platformAccess";
+import { FIRM_LEVELS } from "../../shared/platformPermissions";
 import { adminPermissionProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 
@@ -27,6 +28,9 @@ export const platformRolesRouter = router({
   list: manageRoles.query(async () => listPlatformRoleAssignments(await database())),
   grant: manageRoles.input(grantInput).mutation(async ({ ctx, input }) =>
     grantPlatformRole(await database(), { actor: { ...ctx.user, authority: ctx.authority }, targetUserId: input.userId, role: input.role, expiresAt: input.expiresOn ? endOfDay(input.expiresOn) : null })),
+  /** A staff member's level: their firm title and the roles it gives (LEVEL_ROLES). */
+  setLevel: manageRoles.input(z.object({ userId: z.number().int().positive(), level: z.enum(FIRM_LEVELS), expiresOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional() })).mutation(async ({ ctx, input }) =>
+    setStaffLevel(await database(), { actor: { ...ctx.user, authority: ctx.authority }, targetUserId: input.userId, level: input.level, expiresAt: input.expiresOn ? endOfDay(input.expiresOn) : null })),
   revoke: manageRoles.input(roleInput).mutation(async ({ ctx, input }) =>
     revokePlatformRole(await database(), { actor: { ...ctx.user, authority: ctx.authority }, targetUserId: input.userId, role: input.role })),
 });

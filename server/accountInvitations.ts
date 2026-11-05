@@ -26,7 +26,7 @@ import {
 } from "../shared/auth";
 import { BRAND } from "../shared/brand";
 import { CLIENT_ACCESS_LABELS, TEAM_SEATS_INCLUDED, type ClientAccessLevel } from "../shared/engagement";
-import { authorityAllows, canGrantRole, MAX_ROLE_DURATION_DAYS, ROLES_REQUIRING_END_DATE } from "../shared/platformPermissions";
+import { authorityAllows, canGrantRole, FIRM_LEVELS, isFirmLevel, LEVEL_ROLES, MAX_ROLE_DURATION_DAYS, ROLES_REQUIRING_END_DATE } from "../shared/platformPermissions";
 import { assertSameOrigin, buildView, consumeRateLimit, createSession, emailIsReserved, isUniqueViolation, setSessionCookie, type AccountSession, type Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { databaseNow, emailEquals } from "./dbHelpers";
@@ -94,7 +94,7 @@ export function buildInvitationEmail(input: { kind: "staff" | "business_member";
   };
 }
 
-async function issue(db: Database, input: { kind: "staff" | "business_member"; email: string; fullName: string; platformRole?: PlatformRole; roleExpiresAt?: Date | null; businessId?: number; access?: ClientAccessLevel; actorUserId: number; inviterName: string; businessName?: string }) {
+async function issue(db: Database, input: { kind: "staff" | "business_member"; email: string; fullName: string; platformRole?: PlatformRole; roleExpiresAt?: Date | null; jobTitle?: string | null; businessId?: number; access?: ClientAccessLevel; actorUserId: number; inviterName: string; businessName?: string }) {
   const token = randomBytes(32).toString("base64url");
   let invitation: { id: number };
   try {
@@ -102,10 +102,10 @@ async function issue(db: Database, input: { kind: "staff" | "business_member"; e
       // A fresh invitation to the same address replaces the one still out.
       await tx.update(accountInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and(emailEquals(accountInvitations.email, input.email), eq(accountInvitations.status, "pending")));
       const [row] = await tx.insert(accountInvitations).values({
-        kind: input.kind, email: input.email, fullName: input.fullName, platformRole: input.platformRole ?? null, roleExpiresAt: input.roleExpiresAt ?? null, businessId: input.businessId ?? null, access: input.access ?? null,
+        kind: input.kind, email: input.email, fullName: input.fullName, platformRole: input.platformRole ?? null, roleExpiresAt: input.roleExpiresAt ?? null, jobTitle: input.jobTitle ?? null, businessId: input.businessId ?? null, access: input.access ?? null,
         tokenHash: sha256(token), expiresAt: new Date(Date.now() + ONBOARDING_INVITATION_TTL_MS), createdByUserId: input.actorUserId,
       }).returning({ id: accountInvitations.id });
-      await recordAudit(tx, { action: "account_invitation_created", actorUserId: input.actorUserId, targetEmail: input.email, details: { invitationId: row.id, kind: input.kind, ...(input.platformRole ? { role: input.platformRole, roleExpiresAt: input.roleExpiresAt?.toISOString() ?? null } : {}), ...(input.businessId ? { businessId: input.businessId, access: input.access } : {}) } });
+      await recordAudit(tx, { action: "account_invitation_created", actorUserId: input.actorUserId, targetEmail: input.email, details: { invitationId: row.id, kind: input.kind, ...(input.platformRole ? { role: input.platformRole, roleExpiresAt: input.roleExpiresAt?.toISOString() ?? null, ...(input.jobTitle ? { level: input.jobTitle } : {}) } : {}), ...(input.businessId ? { businessId: input.businessId, access: input.access } : {}) } });
       return row;
     });
   } catch (error) {
@@ -123,7 +123,10 @@ async function issue(db: Database, input: { kind: "staff" | "business_member"; e
 // ---- IP Factory staff ----------------------------------------------------------------------------------------------
 
 export const staffInvitationSchema = newInvitationSchema.extend({
-  role: z.enum(["admin", "desk_lead", "analyst", "partner", "subject_matter_expert", "finance"]),
+  /** The person's level in the firm, which decides their roles (LEVEL_ROLES). The way to invite. */
+  level: z.enum(FIRM_LEVELS).optional(),
+  /** A single role, for an invitation not tied to a level. */
+  role: z.enum(["admin", "desk_lead", "analyst", "partner", "subject_matter_expert", "finance"]).optional(),
   /** The last day of access ("2027-03-09"); required for a specialist. Access ends at the end of that day, Lagos time. */
   expiresOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
 });
@@ -135,18 +138,21 @@ export const staffInvitationSchema = newInvitationSchema.extend({
  */
 export async function inviteStaff(db: Database, actor: StaffActor & { name: string | null; email?: string | null }, rawInput: unknown) {
   if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError({ code: "FORBIDDEN", message: "Only someone who manages roles can invite staff." });
-  const input = staffInvitationSchema.parse(rawInput);
-  if (!canGrantRole(actor.authority, input.role)) throw new TRPCError({ code: "FORBIDDEN", message: `You can only invite people to roles below your own. Ask a Super Admin to invite ${roleLabel(input.role)}.` });
+  const parsed = staffInvitationSchema.parse(rawInput);
+  const roles: readonly PlatformRole[] = parsed.level ? LEVEL_ROLES[parsed.level] : parsed.role ? [parsed.role] : [];
+  if (!roles.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose their level." });
+  const input = { ...parsed, role: roles[0]! };
+  for (const role of roles) if (!canGrantRole(actor.authority, role)) throw new TRPCError({ code: "FORBIDDEN", message: `You can only invite people to roles below your own. Ask a Super Admin to invite ${parsed.level ?? roleLabel(role)}.` });
   const roleExpiresAt = input.expiresOn ? new Date(`${input.expiresOn}T23:59:59+01:00`) : null;
-  if (!roleExpiresAt && ROLES_REQUIRING_END_DATE.includes(input.role)) throw new TRPCError({ code: "BAD_REQUEST", message: `${roleLabel(input.role)} access needs an end date.` });
+  if (!roleExpiresAt && roles.some(role => ROLES_REQUIRING_END_DATE.includes(role))) throw new TRPCError({ code: "BAD_REQUEST", message: `${parsed.level ?? roleLabel(input.role)} access needs an end date.` });
   if (roleExpiresAt && (roleExpiresAt.getTime() <= Date.now() || roleExpiresAt.getTime() > Date.now() + MAX_ROLE_DURATION_DAYS * 86_400_000)) {
     throw new TRPCError({ code: "BAD_REQUEST", message: `Choose an end date between tomorrow and ${MAX_ROLE_DURATION_DAYS} days from now.` });
   }
   if (await identityTaken(db, input.email)) throw new TRPCError({ code: "CONFLICT", message: "This email already has an account. Give that person a role instead." });
-  const result = await issue(db, { kind: "staff", email: input.email, fullName: input.fullName, platformRole: input.role, roleExpiresAt, actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName });
+  const result = await issue(db, { kind: "staff", email: input.email, fullName: input.fullName, platformRole: input.role, roleExpiresAt, jobTitle: parsed.level ?? null, actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName });
   await alertSuperAdmins(db, {
-    subject: `Staff invitation: ${roleLabel(input.role)} for ${input.email}`,
-    lines: [`${actor.name || actor.email || "An administrator"} invited ${input.fullName} (${input.email}) to join as ${roleLabel(input.role)}${roleExpiresAt ? `, with access until ${input.expiresOn}` : ""}.`, "If you did not expect this, revoke the invitation in Administration Team."],
+    subject: `Staff invitation: ${parsed.level ?? roleLabel(input.role)} for ${input.email}`,
+    lines: [`${actor.name || actor.email || "An administrator"} invited ${input.fullName} (${input.email}) to join as ${parsed.level ?? roleLabel(input.role)}${roleExpiresAt ? `, with access until ${input.expiresOn}` : ""}.`, "If you did not expect this, revoke the invitation in Administration Team."],
     event: "staff_invited",
     actorUserId: actor.id,
     targetEmail: input.email,
@@ -156,7 +162,7 @@ export async function inviteStaff(db: Database, actor: StaffActor & { name: stri
 
 export async function listStaffInvitations(db: Database, actor: StaffActor) {
   if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError({ code: "FORBIDDEN", message: "Only someone who manages roles can see staff invitations." });
-  const rows = await db.select({ id: accountInvitations.id, email: accountInvitations.email, fullName: accountInvitations.fullName, role: accountInvitations.platformRole, roleExpiresAt: accountInvitations.roleExpiresAt, status: accountInvitations.status, expiresAt: accountInvitations.expiresAt, deliveryStatus: accountInvitations.deliveryStatus, createdAt: accountInvitations.createdAt })
+  const rows = await db.select({ id: accountInvitations.id, email: accountInvitations.email, fullName: accountInvitations.fullName, role: accountInvitations.platformRole, level: accountInvitations.jobTitle, roleExpiresAt: accountInvitations.roleExpiresAt, status: accountInvitations.status, expiresAt: accountInvitations.expiresAt, deliveryStatus: accountInvitations.deliveryStatus, createdAt: accountInvitations.createdAt })
     .from(accountInvitations).where(eq(accountInvitations.kind, "staff")).orderBy(desc(accountInvitations.id)).limit(100);
   return rows.map(row => ({ ...row, status: invitationState(row) }));
 }
@@ -287,13 +293,16 @@ export async function acceptAccountInvitation(db: Database, req: Request, res: R
       if (!invitation || invitationState(invitation) !== "pending") throw unavailable();
       if (input.email !== normaliseAccountEmail(invitation.email)) throw new TRPCError({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
       if (await identityTaken(tx, invitation.email)) throw new TRPCError({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
-      const [user] = await tx.insert(users).values({ openId: `local:${randomUUID()}`, name: input.fullName, email: invitation.email, loginMethod: "password", role: "user", status: "active" }).returning({ id: users.id });
+      const level = invitation.kind === "staff" && isFirmLevel(invitation.jobTitle) ? invitation.jobTitle : null;
+      const [user] = await tx.insert(users).values({ openId: `local:${randomUUID()}`, name: input.fullName, email: invitation.email, loginMethod: "password", role: "user", status: "active", jobTitle: level }).returning({ id: users.id });
       await tx.insert(userCredentials).values({ userId: user.id, passwordHash });
       let businessId: number | null = null;
       if (invitation.kind === "staff") {
         if (!invitation.platformRole || invitation.platformRole === "super_admin") throw unavailable();
         if (invitation.roleExpiresAt && invitation.roleExpiresAt.getTime() <= Date.now()) throw unavailable();
-        await tx.insert(userPlatformRoles).values({ userId: user.id, role: invitation.platformRole, grantedByUserId: invitation.createdByUserId, expiresAt: invitation.roleExpiresAt });
+        // A level gives all its roles; an older single-role invitation gives that role.
+        const granted = level ? LEVEL_ROLES[level] : [invitation.platformRole];
+        await tx.insert(userPlatformRoles).values(granted.map(role => ({ userId: user.id, role, grantedByUserId: invitation.createdByUserId, expiresAt: ROLES_REQUIRING_END_DATE.includes(role) || !level ? invitation.roleExpiresAt : null })));
       } else {
         const business = invitation.businessId ? (await tx.select({ id: businesses.id, status: businesses.status }).from(businesses).where(eq(businesses.id, invitation.businessId)).limit(1))[0] : undefined;
         if (!business || business.status !== "active") throw unavailable();

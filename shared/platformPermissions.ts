@@ -156,3 +156,36 @@ export const MAX_ROLE_DURATION_DAYS = 400;
 export function requiresTwoStep(authority: Pick<Authority, "roles">): boolean {
   return authority.roles.length > 0;
 }
+
+/**
+ * Levels (ET, 5 November 2026): staff are onboarded by their level in the firm, and the level decides their access.
+ * Their function on a project (Engagement Manager, Lead Consultant, Analyst, Specialist) is set per engagement. Partner,
+ * Vice President and Senior Associate see every engagement, assign people and approve; Associates and Business Analysts
+ * see the engagements they are on (an Associate leading one approves there); a Specialist is a contractor with an end
+ * date; Finance sees payments only. Super Admin is not a level: it is the platform owner, kept apart.
+ */
+export const FIRM_LEVELS = ["Partner", "Vice President", "Senior Associate", "Associate", "Senior Business Analyst", "Business Analyst", "Specialist", "Finance"] as const;
+export type FirmLevel = (typeof FIRM_LEVELS)[number];
+export const LEVEL_ROLES: Record<FirmLevel, readonly PlatformRole[]> = {
+  Partner: ["desk_lead", "partner"],
+  "Vice President": ["desk_lead"],
+  "Senior Associate": ["desk_lead"],
+  Associate: ["analyst"],
+  "Senior Business Analyst": ["analyst"],
+  "Business Analyst": ["analyst"],
+  Specialist: ["subject_matter_expert"],
+  Finance: ["finance"],
+};
+/** What a level can do, in one line, for the invite form and People. */
+export const LEVEL_ACCESS: Record<FirmLevel, string> = {
+  Partner: "Every engagement; assigns people and approves",
+  "Vice President": "Every engagement; assigns people and approves",
+  "Senior Associate": "Every engagement; assigns people and approves",
+  Associate: "Engagements they are on; approves when leading one",
+  "Senior Business Analyst": "Engagements they are on",
+  "Business Analyst": "Engagements they are on",
+  Specialist: "Engagements they are on, until an end date",
+  Finance: "Payments only",
+};
+export const isFirmLevel = (value: string | null | undefined): value is FirmLevel => (FIRM_LEVELS as readonly string[]).includes(value ?? "");
+

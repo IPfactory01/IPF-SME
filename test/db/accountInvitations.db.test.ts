@@ -141,6 +141,38 @@ for (const target of targets) {
         expect((await (await superAdmin.call()).invitations.staff.list()).find(item => item.email === email)).toMatchObject({ status: "accepted" });
       });
 
+      it("invites by level: a Senior Associate joins with the desk's access and the title; a Partner gets both roles", async () => {
+        const email = uniqueEmail("senior");
+        const issued = await (await superAdmin.call()).invitations.staff.invite({ email, fullName: "Sade Senior", level: "Senior Associate" });
+        expect((await (await superAdmin.call()).invitations.staff.list()).find(item => item.id === issued.invitationId)).toMatchObject({ level: "Senior Associate", role: "desk_lead" });
+        const { view } = await accept(email, "Sade Senior");
+        expect(view.platformRoles).toEqual(["desk_lead"]);
+        expect((await db.select({ jobTitle: schema.users.jobTitle }).from(schema.users).where(eq(schema.users.email, email)))[0]!.jobTitle).toBe("Senior Associate");
+
+        const partnerEmail = uniqueEmail("partner");
+        await (await superAdmin.call()).invitations.staff.invite({ email: partnerEmail, fullName: "Pat Partner", level: "Partner" });
+        expect((await accept(partnerEmail, "Pat Partner")).view.platformRoles.sort()).toEqual(["desk_lead", "partner"]);
+
+        // A Specialist needs an end date; no level and no role is refused.
+        await expect((await superAdmin.call()).invitations.staff.invite({ email: uniqueEmail("spec"), fullName: "Kemi Contractor", level: "Specialist" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await expect((await superAdmin.call()).invitations.staff.invite({ email: uniqueEmail("none"), fullName: "No Level" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      });
+
+      it("changes a staff member's level: the new access first, then the old roles go, and the title follows", async () => {
+        const email = uniqueEmail("mover");
+        await (await superAdmin.call()).invitations.staff.invite({ email, fullName: "Mo Mover", role: "admin" });
+        await accept(email, "Mo Mover");
+        const userId = (await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email)))[0]!.id;
+        await (await superAdmin.call()).platformRoles.setLevel({ userId, level: "Senior Associate" });
+        let team = (await (await superAdmin.call()).invitations.staff.team()).find(member => member.email === email)!;
+        expect(team.roles).toEqual(["desk_lead"]);
+        await (await superAdmin.call()).platformRoles.setLevel({ userId, level: "Business Analyst" });
+        team = (await (await superAdmin.call()).invitations.staff.team()).find(member => member.email === email)!;
+        expect(team.roles).toEqual(["analyst"]);
+        expect((await db.select({ jobTitle: schema.users.jobTitle }).from(schema.users).where(eq(schema.users.id, userId)))[0]!.jobTitle).toBe("Business Analyst");
+        await expect((await superAdmin.call()).platformRoles.setLevel({ userId, level: "Specialist" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      });
+
       it("works once, only for the invited email, and never for an address that already has an account", async () => {
         const email = uniqueEmail("once");
         await (await superAdmin.call()).invitations.staff.invite({ email, fullName: "Once Only", role: "finance" });

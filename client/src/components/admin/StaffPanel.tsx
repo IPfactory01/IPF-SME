@@ -1,18 +1,11 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import type { PlatformRole } from "@shared/auth";
+import { FIRM_LEVELS, LEVEL_ACCESS, type FirmLevel } from "@shared/platformPermissions";
 import React, { useState } from "react";
 import { toast } from "sonner";
 import { CopyButton, TD, TH } from "./AdminPrimitives";
 import { formatDate, roleDisplay } from "./format";
 
-const INVITABLE: { role: Exclude<PlatformRole, "super_admin">; label: string }[] = [
-  { role: "desk_lead", label: "Desk lead" },
-  { role: "analyst", label: "Analyst" },
-  { role: "partner", label: "Partner" },
-  { role: "subject_matter_expert", label: "Specialist (contractor, needs an end date)" },
-  { role: "finance", label: "Finance" },
-];
 const STATUS: Record<string, string> = { pending: "Link sent, waiting", accepted: "Accepted", revoked: "Revoked", expired: "Expired" };
 
 /**
@@ -25,9 +18,9 @@ export default function StaffPanel() {
   const invitations = trpc.invitations.staff.list.useQuery(undefined, { retry: false });
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<(typeof INVITABLE)[number]["role"]>("analyst");
+  const [level, setLevel] = useState<FirmLevel>("Business Analyst");
   const [expiresOn, setExpiresOn] = useState("");
-  const needsEnd = role === "subject_matter_expert";
+  const needsEnd = level === "Specialist";
   const [issued, setIssued] = useState<{ email: string; url: string; sent: boolean } | null>(null);
   const refresh = () => {
     void utils.invitations.staff.list.invalidate();
@@ -61,13 +54,14 @@ export default function StaffPanel() {
           </tbody>
         </table>
       </div>
-      <form className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto_auto] sm:items-end" onSubmit={event => { event.preventDefault(); invite.mutate({ fullName, email, role, expiresOn: expiresOn || null }); }}>
+      <form className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto_auto] sm:items-end" onSubmit={event => { event.preventDefault(); invite.mutate({ fullName, email, level, expiresOn: expiresOn || null }); }}>
         <div><label className="block text-xs font-semibold text-ink-muted" htmlFor="staff-name">Full name</label><input id="staff-name" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={fullName} onChange={event => setFullName(event.target.value)} /></div>
         <div><label className="block text-xs font-semibold text-ink-muted" htmlFor="staff-email">Email</label><input id="staff-email" type="email" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={email} onChange={event => setEmail(event.target.value)} /></div>
-        <select aria-label="Role" className="border border-line bg-white px-2 py-1.5 text-sm" value={role} onChange={event => setRole(event.target.value as typeof role)}>{INVITABLE.map(item => <option key={item.role} value={item.role}>{item.label}</option>)}</select>
+        <div><label className="block text-xs font-semibold text-ink-muted" htmlFor="staff-level">Level</label><select id="staff-level" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={level} onChange={event => setLevel(event.target.value as FirmLevel)}>{FIRM_LEVELS.map(item => <option key={item} value={item}>{item}</option>)}</select></div>
         <div><label className="block text-xs font-semibold text-ink-muted" htmlFor="staff-ends">Access ends{needsEnd ? "" : " (optional)"}</label><input id="staff-ends" type="date" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={expiresOn} onChange={event => setExpiresOn(event.target.value)} /></div>
         <Button type="submit" size="sm" className="rounded-none bg-brand text-xs text-white" disabled={invite.isPending || !fullName.trim() || !email.trim() || (needsEnd && !expiresOn)}>Invite</Button>
       </form>
+      <p className="text-xs text-ink-muted">{level}: {LEVEL_ACCESS[level]}. Their function on each project (Engagement Manager, Lead Consultant, Analyst, Specialist) is set in Engagements.</p>
       {issued && (
         <div role="status" className="space-y-2 border border-brand-line bg-brand-tint p-3 text-sm">
           <p className="font-semibold">Invitation for {issued.email}</p>
@@ -79,7 +73,7 @@ export default function StaffPanel() {
         <ul aria-label="Staff invitations" className="space-y-1 text-sm">
           {invitations.data.map(item => (
             <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-line-soft py-1">
-              <span>{item.fullName} <span className="text-ink-muted">· {item.email} · {roleDisplay(item.role ? [item.role] : [])}{item.roleExpiresAt ? ` until ${formatDate(item.roleExpiresAt)}` : ""} · {STATUS[item.status]}{item.status === "pending" ? ` until ${formatDate(item.expiresAt)}` : ""}</span></span>
+              <span>{item.fullName} <span className="text-ink-muted">· {item.email} · {item.level ?? roleDisplay(item.role ? [item.role] : [])}{item.roleExpiresAt ? ` until ${formatDate(item.roleExpiresAt)}` : ""} · {STATUS[item.status]}{item.status === "pending" ? ` until ${formatDate(item.expiresAt)}` : ""}</span></span>
               {item.status === "pending" && <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={revoke.isPending} onClick={() => revoke.mutate({ invitationId: item.id })}>Revoke</Button>}
             </li>
           ))}

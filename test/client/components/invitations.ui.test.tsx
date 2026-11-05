@@ -139,7 +139,7 @@ describe("the staff panel", () => {
     fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Ola Analyst" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ola@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: "Invite" }));
-    expect(api.calls.staffInvite).toEqual([{ fullName: "Ola Analyst", email: "ola@example.com", role: "analyst", expiresOn: null }]);
+    expect(api.calls.staffInvite).toEqual([{ fullName: "Ola Analyst", email: "ola@example.com", level: "Business Analyst", expiresOn: null }]);
     expect((screen.getByLabelText("Invitation link") as HTMLInputElement).value).toBe("https://app.example.test/join/TOKEN");
     expect(screen.getByRole("status").textContent).toContain("Email is not set up yet");
     fireEvent.click(screen.getByRole("button", { name: "Revoke" }));
@@ -156,12 +156,12 @@ describe("the staff panel", () => {
     expect(row.textContent).toContain("Ended: Analyst");
     fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Tunde Editor" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "tunde@example.com" } });
-    fireEvent.change(screen.getByLabelText("Role"), { target: { value: "subject_matter_expert" } });
+    fireEvent.change(screen.getByLabelText("Level"), { target: { value: "Specialist" } });
     const invite = screen.getByRole("button", { name: "Invite" }) as HTMLButtonElement;
     expect(invite.disabled).toBe(true);
     fireEvent.change(screen.getByLabelText("Access ends"), { target: { value: "2027-03-09" } });
     expect(invite.disabled).toBe(false);
     fireEvent.click(invite);
-    expect(api.calls.staffInvite).toEqual([{ fullName: "Tunde Editor", email: "tunde@example.com", role: "subject_matter_expert", expiresOn: "2027-03-09" }]);
+    expect(api.calls.staffInvite).toEqual([{ fullName: "Tunde Editor", email: "tunde@example.com", level: "Specialist", expiresOn: "2027-03-09" }]);
   });
 });

@@ -49,8 +49,8 @@ export const ENGAGEMENT_REVIEW_ROLES: readonly EngagementTeamRole[] = ["manager"
 
 export const ENGAGEMENT_TEAM_ROLE_ORDER: Record<EngagementTeamRole, number> = { partner: 0, manager: 1, lead: 2, analyst: 3, expert: 4 };
 
-/** Firm titles at IP Factory and Enzo Krypton, set once per person. Free text is allowed too (an outside specialist). */
-export const FIRM_TITLES = ["Partner", "Vice President", "Senior Associate", "Associate", "Senior Business Analyst", "Business Analyst"] as const;
+/** Firm titles: the levels, which decide access (shared/platformPermissions.ts, FIRM_LEVELS). */
+export { FIRM_LEVELS as FIRM_TITLES } from "./platformPermissions";
 export const JOB_TITLE_MAX_LENGTH = 80;
 
 /**

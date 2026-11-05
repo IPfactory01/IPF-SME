@@ -440,6 +440,331 @@ var PAYMENT_ITEM_TITLES = { full_report: METHOD.fullReport, current_state: METHO
 var payPath = (token3, item2) => `/pay/${encodeURIComponent(token3)}/${item2}`;
 var PAY_RETURN_PATH = "/pay/return";
 
+// shared/adminPermissions.ts
+init_brand();
+var ADMIN_PERMISSION_DEFINITIONS = [
+  {
+    id: "view_participants",
+    label: "Review participant records",
+    description: "View applications, contact details, business context, and programme pathway."
+  },
+  {
+    id: "view_assessments",
+    label: "Review Business Reviews",
+    description: "View saved diagnostic progress, answers, and available working-report context."
+  },
+  {
+    id: "decide_applications",
+    label: "Make application decisions",
+    description: "Accept, reject, or waitlist applications. Archiving remains a Super Admin safeguard."
+  },
+  {
+    id: "manage_payments",
+    label: "Update payment milestones",
+    description: "Record verified deposits and instalment status. This does not process or move money."
+  },
+  {
+    id: "manage_cohorts",
+    label: "Manage cohort placement",
+    description: "Assign participants to the appropriate programme group after review."
+  },
+  {
+    id: "view_documents",
+    label: "Review supporting documents",
+    description: "View participant uploads and engagement materials already held in the portal."
+  },
+  {
+    id: "manage_documents",
+    label: "Manage participant materials",
+    description: "Upload or maintain briefs and programme materials for participants. This does not remove participant-uploaded evidence."
+  },
+  {
+    id: "manage_scheduling",
+    label: "Manage scheduling",
+    description: "Review availability and manage programme session slots. Booking safeguards remain enforced."
+  },
+  {
+    id: "view_communications",
+    label: "Review communication history",
+    description: `Read the recorded email history for participant context. ${BRAND.facilitatorFirstName} retains approval and sending authority.`
+  },
+  {
+    id: "manage_client_onboarding",
+    label: "Invite clients to onboard",
+    description: "Send a client the secure onboarding link that creates their account and business workspace, and revoke unused links. Only for clients who have reached onboarding."
+  },
+  {
+    id: "manage_portal_access",
+    label: "Manage portal access",
+    description: "Replace a participant\u2019s private portal link when access needs to be reset."
+  }
+];
+var ADMIN_PERMISSION_IDS = ADMIN_PERMISSION_DEFINITIONS.map((permission) => permission.id);
+function isAdminPermission(value) {
+  return ADMIN_PERMISSION_IDS.includes(value);
+}
+function parseAdminPermissions(value) {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return Array.from(new Set(parsed.filter((entry) => typeof entry === "string").filter(isAdminPermission)));
+  } catch {
+    return [];
+  }
+}
+function serializeAdminPermissions(permissions) {
+  return JSON.stringify(Array.from(new Set(permissions)).filter(isAdminPermission));
+}
+
+// shared/auth.ts
+import { z } from "zod";
+
+// shared/businessMemberships.ts
+var BUSINESS_NAME_MAX_LENGTH = 255;
+var BUSINESS_PROFILE_COMPLETION_FIELDS = ["name", "description", "yearFounded", "sector", "website"];
+var isFilled = (value) => typeof value === "number" ? Number.isFinite(value) : Boolean(value?.toString().trim());
+function businessProfileCompletion(business) {
+  const missing = BUSINESS_PROFILE_COMPLETION_FIELDS.filter((field) => !isFilled(business[field]));
+  const filled = BUSINESS_PROFILE_COMPLETION_FIELDS.length - missing.length;
+  return { percent: Math.round(filled / BUSINESS_PROFILE_COMPLETION_FIELDS.length * 100), missing, complete: missing.length === 0 };
+}
+
+// shared/auth.ts
+var ACCOUNT_SESSION_COOKIE = "ipf_session";
+var ACCOUNT_SESSION_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1e3;
+var ACCOUNT_PASSWORD_MIN_LENGTH = 10;
+var ACCOUNT_PASSWORD_MAX_LENGTH = 128;
+var ACCOUNT_MAX_FAILED_ATTEMPTS = 5;
+var ACCOUNT_LOCKOUT_MS = 15 * 60 * 1e3;
+var ACCOUNT_FULL_NAME_MAX_LENGTH = 255;
+var ACCOUNT_EMAIL_MAX_LENGTH = 320;
+var PLATFORM_ROLES = ["super_admin", "admin", "desk_lead", "analyst", "partner", "subject_matter_expert", "finance"];
+var ACCOUNT_AUTH_ERRORS = {
+  signInRequired: "Please sign in to continue.",
+  invalidCredentials: "Your email or password is not correct.",
+  locked: "Too many attempts. Kindly try again in 15 minutes.",
+  tooManyRequests: "Too many attempts. Kindly wait a few minutes and try again.",
+  emailTaken: "An account with this email already exists. Try signing in.",
+  noBusinessAccess: "You do not have access to this business.",
+  crossSite: "This request did not come from this site.",
+  notAuthorisedForAdmin: "This account is not authorised for the IPF administrator area.",
+  noActiveBusiness: "You are not working inside a business.",
+  cannotEditBusiness: "Your role in this business does not allow you to change its profile.",
+  wrongCurrentPassword: "Your current password is not correct."
+};
+function normaliseAccountEmail(email) {
+  return (email ?? "").trim().toLowerCase();
+}
+function validateAccountPassword(password) {
+  if (password.length < ACCOUNT_PASSWORD_MIN_LENGTH) return `Use at least ${ACCOUNT_PASSWORD_MIN_LENGTH} characters.`;
+  if (password.length > ACCOUNT_PASSWORD_MAX_LENGTH) return `Use no more than ${ACCOUNT_PASSWORD_MAX_LENGTH} characters.`;
+  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) return "Use at least one letter and one number.";
+  return null;
+}
+var onboardingAcceptInputSchema = z.object({
+  token: z.string().min(20).max(200),
+  fullName: z.string().trim().min(2, "Enter your full name.").max(ACCOUNT_FULL_NAME_MAX_LENGTH),
+  email: z.string().trim().email("Enter a valid email address.").max(ACCOUNT_EMAIL_MAX_LENGTH).transform(normaliseAccountEmail),
+  password: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
+  confirmPassword: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
+  businessName: z.string().trim().min(2, "Enter your business name.").max(BUSINESS_NAME_MAX_LENGTH)
+}).superRefine((value, context) => {
+  const policy = validateAccountPassword(value.password);
+  if (policy) context.addIssue({ code: "custom", path: ["password"], message: policy });
+  if (value.password !== value.confirmPassword) {
+    context.addIssue({ code: "custom", path: ["confirmPassword"], message: "The password confirmation does not match." });
+  }
+});
+var ONBOARDING_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
+var PASSWORD_RESET_TTL_MS = 20 * 60 * 1e3;
+var PASSWORD_RESET_ERRORS = {
+  unavailable: "This reset link is unavailable. It may have expired or already been used. Ask for a new one from the sign-in page.",
+  notSetUp: "Password reset links are not set up in the database yet (migration 0010)."
+};
+var requestPasswordResetInputSchema = z.object({
+  email: z.string().trim().email("Enter the email address you sign in with.").max(ACCOUNT_EMAIL_MAX_LENGTH).transform(normaliseAccountEmail)
+});
+var resetPasswordInputSchema = z.object({
+  token: z.string().min(20).max(200),
+  password: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
+  confirmPassword: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1)
+}).superRefine((value, context) => {
+  const policy = validateAccountPassword(value.password);
+  if (policy) context.addIssue({ code: "custom", path: ["password"], message: policy });
+  if (value.password !== value.confirmPassword) {
+    context.addIssue({ code: "custom", path: ["confirmPassword"], message: "The password confirmation does not match." });
+  }
+});
+var ONBOARDING_ERRORS = {
+  unavailable: "This invitation is unavailable. It may have expired or already been used. Ask the IPF team for a new link.",
+  emailMismatch: "The email does not match this invitation.",
+  existingAccount: "An account already exists for this email address. The IPF team will help you sign in.",
+  existingAccountAdmin: "This email already belongs to an account. Linking an existing account to a new business is not available yet.",
+  noCheck: "That Business Health Check does not exist.",
+  invalidCheckEmail: "The Business Health Check does not have a valid email address to invite.",
+  unpaid: "The Business Review is not paid yet. Confirm the payment first, or give the reason for inviting anyway."
+};
+var signInInputSchema = z.object({
+  email: z.string().trim().max(ACCOUNT_EMAIL_MAX_LENGTH).transform(normaliseAccountEmail),
+  // No policy check on sign-in: a wrong or short password must fail like any other wrong password.
+  password: z.string().min(1).max(ACCOUNT_PASSWORD_MAX_LENGTH + 1)
+});
+var TWO_STEP_CHALLENGE_MS = 10 * 60 * 1e3;
+var TWO_STEP_MAX_ATTEMPTS = 5;
+var TWO_STEP_ERRORS = {
+  wrongCode: "That code is not right. Check your authenticator app and try again.",
+  expired: "This sign-in has expired. Enter your email and password again.",
+  notConfigured: "Two-step sign-in is not set up on the server yet. Ask the Super Admin."
+};
+var verifyTwoStepInputSchema = z.object({
+  challenge: z.string().min(20).max(200),
+  /** Six digits from the app, or a recovery code ("k7m2-9qpx"). */
+  code: z.string().trim().min(6).max(20)
+});
+function landingPathFor(view) {
+  return view.memberships.length === 0 && view.platformRoles.length > 0 ? "/admin" : "/dashboard";
+}
+var BUSINESS_NAME_MIN = 2;
+var BUSINESS_DESCRIPTION_MAX = 2e3;
+var BUSINESS_YEAR_MIN = 1900;
+var optionalText = (max) => z.string().trim().max(max).transform((value) => value === "" ? null : value).nullable().optional();
+var websiteSchema = z.string().trim().max(512).transform((value) => value === "" ? null : value).refine((value) => {
+  if (value === null) return true;
+  try {
+    const url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}, "Enter a valid website address.").transform((value) => value === null || /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`).nullable().optional();
+var updateBusinessInputSchema = z.object({
+  businessId: z.number().int().positive(),
+  name: z.string().trim().min(BUSINESS_NAME_MIN, "Enter your business name.").max(BUSINESS_NAME_MAX_LENGTH).optional(),
+  description: optionalText(BUSINESS_DESCRIPTION_MAX),
+  yearFounded: z.number().int().min(BUSINESS_YEAR_MIN, "Enter a valid year.").max((/* @__PURE__ */ new Date()).getFullYear(), "Enter a valid year.").nullable().optional(),
+  sector: optionalText(128),
+  website: websiteSchema,
+  staffBand: optionalText(64),
+  revenueBand: optionalText(64),
+  country: optionalText(64),
+  state: optionalText(64)
+});
+var updateAccountInputSchema = z.object({
+  fullName: z.string().trim().min(2, "Enter your full name.").max(ACCOUNT_FULL_NAME_MAX_LENGTH)
+});
+var changePasswordInputSchema = z.object({
+  currentPassword: z.string().min(1, "Enter your current password.").max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
+  newPassword: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
+  confirmPassword: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1)
+}).superRefine((value, context) => {
+  const policy = validateAccountPassword(value.newPassword);
+  if (policy) context.addIssue({ code: "custom", path: ["newPassword"], message: policy });
+  if (value.newPassword !== value.confirmPassword) {
+    context.addIssue({ code: "custom", path: ["confirmPassword"], message: "The password confirmation does not match." });
+  }
+  if (value.newPassword === value.currentPassword) {
+    context.addIssue({ code: "custom", path: ["newPassword"], message: "Choose a password you have not used for this account just now." });
+  }
+});
+var switchWorkspaceInputSchema = z.object({ businessId: z.number().int().positive() });
+
+// shared/platformPermissions.ts
+var PLATFORM_PERMISSIONS = [
+  "view_all_businesses",
+  "view_assigned_businesses",
+  "manage_businesses",
+  "manage_client_onboarding",
+  "manage_engagements",
+  "assign_engagements",
+  "review_engagements",
+  "manage_payments",
+  "view_financials",
+  "manage_scheduling",
+  "manage_communications",
+  "manage_users",
+  "manage_roles",
+  "manage_admins",
+  "manage_platform_settings"
+];
+var PLATFORM_ROLE_PERMISSIONS = {
+  super_admin: PLATFORM_PERMISSIONS,
+  admin: [],
+  desk_lead: ["view_all_businesses", "manage_engagements", "assign_engagements", "review_engagements", "manage_scheduling", "manage_communications"],
+  analyst: ["view_assigned_businesses", "manage_engagements"],
+  partner: ["view_assigned_businesses", "review_engagements"],
+  subject_matter_expert: ["view_assigned_businesses"],
+  finance: ["manage_payments", "view_financials"]
+};
+var LEGACY_CAPABILITY_TO_PLATFORM = {
+  manage_payments: "manage_payments",
+  manage_scheduling: "manage_scheduling",
+  manage_client_onboarding: "manage_client_onboarding"
+};
+var PLATFORM_TO_LEGACY_CAPABILITIES = {
+  manage_payments: ["manage_payments"],
+  manage_scheduling: ["manage_scheduling"],
+  manage_client_onboarding: ["manage_client_onboarding"],
+  manage_communications: ["view_communications"]
+};
+function resolveAuthority(input) {
+  if (!input.active) return { roles: [], permissions: [], legacyCapabilities: [], isSuperAdmin: false };
+  const roles2 = new Set(input.storedRoles);
+  if (input.legacyAdmin) roles2.add("admin");
+  if (input.ownerBridge) roles2.add("super_admin");
+  const isSuperAdmin2 = roles2.has("super_admin");
+  const permissions = /* @__PURE__ */ new Set();
+  for (const role of Array.from(roles2)) for (const permission of PLATFORM_ROLE_PERMISSIONS[role]) permissions.add(permission);
+  for (const capability of input.legacyProfile) {
+    const equivalent = LEGACY_CAPABILITY_TO_PLATFORM[capability];
+    if (equivalent) permissions.add(equivalent);
+  }
+  const legacy = new Set(isSuperAdmin2 ? ADMIN_PERMISSION_IDS : input.legacyProfile);
+  for (const permission of Array.from(permissions)) for (const capability of PLATFORM_TO_LEGACY_CAPABILITIES[permission] ?? []) legacy.add(capability);
+  const order = (list2) => (item2) => list2.indexOf(item2);
+  return {
+    roles: Array.from(roles2).sort((a, b) => order(PLATFORM_ROLES)(a) - order(PLATFORM_ROLES)(b)),
+    permissions: Array.from(permissions).sort((a, b) => order(PLATFORM_PERMISSIONS)(a) - order(PLATFORM_PERMISSIONS)(b)),
+    legacyCapabilities: Array.from(legacy).sort((a, b) => order(ADMIN_PERMISSION_IDS)(a) - order(ADMIN_PERMISSION_IDS)(b)),
+    isSuperAdmin: isSuperAdmin2
+  };
+}
+function authorityAllows(authority, permission) {
+  if (authority.isSuperAdmin) return true;
+  return authority.permissions.includes(permission) || authority.legacyCapabilities.includes(permission);
+}
+var PLATFORM_ROLE_RANK = {
+  super_admin: 100,
+  admin: 80,
+  desk_lead: 60,
+  partner: 60,
+  finance: 50,
+  analyst: 40,
+  subject_matter_expert: 20
+};
+function canGrantRole(actor, role) {
+  if (actor.isSuperAdmin) return true;
+  const highest = Math.max(0, ...actor.roles.map((item2) => PLATFORM_ROLE_RANK[item2]));
+  return PLATFORM_ROLE_RANK[role] < highest;
+}
+var ROLES_REQUIRING_END_DATE = ["subject_matter_expert"];
+var MAX_ROLE_DURATION_DAYS = 400;
+function requiresTwoStep(authority) {
+  return authority.roles.length > 0;
+}
+var FIRM_LEVELS = ["Partner", "Vice President", "Senior Associate", "Associate", "Senior Business Analyst", "Business Analyst", "Specialist", "Finance"];
+var LEVEL_ROLES = {
+  Partner: ["desk_lead", "partner"],
+  "Vice President": ["desk_lead"],
+  "Senior Associate": ["desk_lead"],
+  Associate: ["analyst"],
+  "Senior Business Analyst": ["analyst"],
+  "Business Analyst": ["analyst"],
+  Specialist: ["subject_matter_expert"],
+  Finance: ["finance"]
+};
+var isFirmLevel = (value) => FIRM_LEVELS.includes(value ?? "");
+
 // shared/engagement.ts
 var ENGAGEMENT_STAGES = ["setting_up", "assessment", "fix", "plan", "closed"];
 var ENGAGEMENT_STAGE_LABELS = {
@@ -1386,6 +1711,8 @@ var accountInvitations = pgTable("account_invitations", {
   platformRole: userPlatformRolesRoleEnum("platformRole"),
   /** staff only: when the role given on acceptance ends (required for a specialist). */
   roleExpiresAt: timestamp("roleExpiresAt", { withTimezone: true }),
+  /** A staff invitation by level (0015): the level becomes the person's firm title, and its roles are granted. */
+  jobTitle: varchar("jobTitle", { length: 80 }),
   /** business_member only */
   businessId: integer("businessId").references(() => businesses.id),
   access: clientAccessLevelEnum("access"),
@@ -3181,158 +3508,6 @@ import { randomBytes as randomBytes5 } from "crypto";
 import { and as and5, desc as desc2, eq as eq8, gt as gt4, isNotNull, isNull as isNull4, ne } from "drizzle-orm";
 import { TRPCError as TRPCError3 } from "@trpc/server";
 
-// shared/auth.ts
-import { z } from "zod";
-
-// shared/businessMemberships.ts
-var BUSINESS_NAME_MAX_LENGTH = 255;
-var BUSINESS_PROFILE_COMPLETION_FIELDS = ["name", "description", "yearFounded", "sector", "website"];
-var isFilled = (value) => typeof value === "number" ? Number.isFinite(value) : Boolean(value?.toString().trim());
-function businessProfileCompletion(business) {
-  const missing = BUSINESS_PROFILE_COMPLETION_FIELDS.filter((field) => !isFilled(business[field]));
-  const filled = BUSINESS_PROFILE_COMPLETION_FIELDS.length - missing.length;
-  return { percent: Math.round(filled / BUSINESS_PROFILE_COMPLETION_FIELDS.length * 100), missing, complete: missing.length === 0 };
-}
-
-// shared/auth.ts
-var ACCOUNT_SESSION_COOKIE = "ipf_session";
-var ACCOUNT_SESSION_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1e3;
-var ACCOUNT_PASSWORD_MIN_LENGTH = 10;
-var ACCOUNT_PASSWORD_MAX_LENGTH = 128;
-var ACCOUNT_MAX_FAILED_ATTEMPTS = 5;
-var ACCOUNT_LOCKOUT_MS = 15 * 60 * 1e3;
-var ACCOUNT_FULL_NAME_MAX_LENGTH = 255;
-var ACCOUNT_EMAIL_MAX_LENGTH = 320;
-var PLATFORM_ROLES = ["super_admin", "admin", "desk_lead", "analyst", "partner", "subject_matter_expert", "finance"];
-var ACCOUNT_AUTH_ERRORS = {
-  signInRequired: "Please sign in to continue.",
-  invalidCredentials: "Your email or password is not correct.",
-  locked: "Too many attempts. Kindly try again in 15 minutes.",
-  tooManyRequests: "Too many attempts. Kindly wait a few minutes and try again.",
-  emailTaken: "An account with this email already exists. Try signing in.",
-  noBusinessAccess: "You do not have access to this business.",
-  crossSite: "This request did not come from this site.",
-  notAuthorisedForAdmin: "This account is not authorised for the IPF administrator area.",
-  noActiveBusiness: "You are not working inside a business.",
-  cannotEditBusiness: "Your role in this business does not allow you to change its profile.",
-  wrongCurrentPassword: "Your current password is not correct."
-};
-function normaliseAccountEmail(email) {
-  return (email ?? "").trim().toLowerCase();
-}
-function validateAccountPassword(password) {
-  if (password.length < ACCOUNT_PASSWORD_MIN_LENGTH) return `Use at least ${ACCOUNT_PASSWORD_MIN_LENGTH} characters.`;
-  if (password.length > ACCOUNT_PASSWORD_MAX_LENGTH) return `Use no more than ${ACCOUNT_PASSWORD_MAX_LENGTH} characters.`;
-  if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) return "Use at least one letter and one number.";
-  return null;
-}
-var onboardingAcceptInputSchema = z.object({
-  token: z.string().min(20).max(200),
-  fullName: z.string().trim().min(2, "Enter your full name.").max(ACCOUNT_FULL_NAME_MAX_LENGTH),
-  email: z.string().trim().email("Enter a valid email address.").max(ACCOUNT_EMAIL_MAX_LENGTH).transform(normaliseAccountEmail),
-  password: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
-  confirmPassword: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
-  businessName: z.string().trim().min(2, "Enter your business name.").max(BUSINESS_NAME_MAX_LENGTH)
-}).superRefine((value, context) => {
-  const policy = validateAccountPassword(value.password);
-  if (policy) context.addIssue({ code: "custom", path: ["password"], message: policy });
-  if (value.password !== value.confirmPassword) {
-    context.addIssue({ code: "custom", path: ["confirmPassword"], message: "The password confirmation does not match." });
-  }
-});
-var ONBOARDING_INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
-var PASSWORD_RESET_TTL_MS = 20 * 60 * 1e3;
-var PASSWORD_RESET_ERRORS = {
-  unavailable: "This reset link is unavailable. It may have expired or already been used. Ask for a new one from the sign-in page.",
-  notSetUp: "Password reset links are not set up in the database yet (migration 0010)."
-};
-var requestPasswordResetInputSchema = z.object({
-  email: z.string().trim().email("Enter the email address you sign in with.").max(ACCOUNT_EMAIL_MAX_LENGTH).transform(normaliseAccountEmail)
-});
-var resetPasswordInputSchema = z.object({
-  token: z.string().min(20).max(200),
-  password: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
-  confirmPassword: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1)
-}).superRefine((value, context) => {
-  const policy = validateAccountPassword(value.password);
-  if (policy) context.addIssue({ code: "custom", path: ["password"], message: policy });
-  if (value.password !== value.confirmPassword) {
-    context.addIssue({ code: "custom", path: ["confirmPassword"], message: "The password confirmation does not match." });
-  }
-});
-var ONBOARDING_ERRORS = {
-  unavailable: "This invitation is unavailable. It may have expired or already been used. Ask the IPF team for a new link.",
-  emailMismatch: "The email does not match this invitation.",
-  existingAccount: "An account already exists for this email address. The IPF team will help you sign in.",
-  existingAccountAdmin: "This email already belongs to an account. Linking an existing account to a new business is not available yet.",
-  noCheck: "That Business Health Check does not exist.",
-  invalidCheckEmail: "The Business Health Check does not have a valid email address to invite.",
-  unpaid: "The Business Review is not paid yet. Confirm the payment first, or give the reason for inviting anyway."
-};
-var signInInputSchema = z.object({
-  email: z.string().trim().max(ACCOUNT_EMAIL_MAX_LENGTH).transform(normaliseAccountEmail),
-  // No policy check on sign-in: a wrong or short password must fail like any other wrong password.
-  password: z.string().min(1).max(ACCOUNT_PASSWORD_MAX_LENGTH + 1)
-});
-var TWO_STEP_CHALLENGE_MS = 10 * 60 * 1e3;
-var TWO_STEP_MAX_ATTEMPTS = 5;
-var TWO_STEP_ERRORS = {
-  wrongCode: "That code is not right. Check your authenticator app and try again.",
-  expired: "This sign-in has expired. Enter your email and password again.",
-  notConfigured: "Two-step sign-in is not set up on the server yet. Ask the Super Admin."
-};
-var verifyTwoStepInputSchema = z.object({
-  challenge: z.string().min(20).max(200),
-  /** Six digits from the app, or a recovery code ("k7m2-9qpx"). */
-  code: z.string().trim().min(6).max(20)
-});
-function landingPathFor(view) {
-  return view.memberships.length === 0 && view.platformRoles.length > 0 ? "/admin" : "/dashboard";
-}
-var BUSINESS_NAME_MIN = 2;
-var BUSINESS_DESCRIPTION_MAX = 2e3;
-var BUSINESS_YEAR_MIN = 1900;
-var optionalText = (max) => z.string().trim().max(max).transform((value) => value === "" ? null : value).nullable().optional();
-var websiteSchema = z.string().trim().max(512).transform((value) => value === "" ? null : value).refine((value) => {
-  if (value === null) return true;
-  try {
-    const url = new URL(/^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`);
-    return url.protocol === "https:" || url.protocol === "http:";
-  } catch {
-    return false;
-  }
-}, "Enter a valid website address.").transform((value) => value === null || /^[a-z][a-z0-9+.-]*:/i.test(value) ? value : `https://${value}`).nullable().optional();
-var updateBusinessInputSchema = z.object({
-  businessId: z.number().int().positive(),
-  name: z.string().trim().min(BUSINESS_NAME_MIN, "Enter your business name.").max(BUSINESS_NAME_MAX_LENGTH).optional(),
-  description: optionalText(BUSINESS_DESCRIPTION_MAX),
-  yearFounded: z.number().int().min(BUSINESS_YEAR_MIN, "Enter a valid year.").max((/* @__PURE__ */ new Date()).getFullYear(), "Enter a valid year.").nullable().optional(),
-  sector: optionalText(128),
-  website: websiteSchema,
-  staffBand: optionalText(64),
-  revenueBand: optionalText(64),
-  country: optionalText(64),
-  state: optionalText(64)
-});
-var updateAccountInputSchema = z.object({
-  fullName: z.string().trim().min(2, "Enter your full name.").max(ACCOUNT_FULL_NAME_MAX_LENGTH)
-});
-var changePasswordInputSchema = z.object({
-  currentPassword: z.string().min(1, "Enter your current password.").max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
-  newPassword: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1),
-  confirmPassword: z.string().max(ACCOUNT_PASSWORD_MAX_LENGTH + 1)
-}).superRefine((value, context) => {
-  const policy = validateAccountPassword(value.newPassword);
-  if (policy) context.addIssue({ code: "custom", path: ["newPassword"], message: policy });
-  if (value.newPassword !== value.confirmPassword) {
-    context.addIssue({ code: "custom", path: ["confirmPassword"], message: "The password confirmation does not match." });
-  }
-  if (value.newPassword === value.currentPassword) {
-    context.addIssue({ code: "custom", path: ["newPassword"], message: "Choose a password you have not used for this account just now." });
-  }
-});
-var switchWorkspaceInputSchema = z.object({ businessId: z.number().int().positive() });
-
 // shared/businessCapabilities.ts
 var BUSINESS_CAPABILITIES = [
   "view_business",
@@ -3349,167 +3524,6 @@ var BUSINESS_ROLE_CAPABILITIES = {
 };
 function businessRoleCan(role, capability) {
   return BUSINESS_ROLE_CAPABILITIES[role].includes(capability);
-}
-
-// shared/adminPermissions.ts
-init_brand();
-var ADMIN_PERMISSION_DEFINITIONS = [
-  {
-    id: "view_participants",
-    label: "Review participant records",
-    description: "View applications, contact details, business context, and programme pathway."
-  },
-  {
-    id: "view_assessments",
-    label: "Review Business Reviews",
-    description: "View saved diagnostic progress, answers, and available working-report context."
-  },
-  {
-    id: "decide_applications",
-    label: "Make application decisions",
-    description: "Accept, reject, or waitlist applications. Archiving remains a Super Admin safeguard."
-  },
-  {
-    id: "manage_payments",
-    label: "Update payment milestones",
-    description: "Record verified deposits and instalment status. This does not process or move money."
-  },
-  {
-    id: "manage_cohorts",
-    label: "Manage cohort placement",
-    description: "Assign participants to the appropriate programme group after review."
-  },
-  {
-    id: "view_documents",
-    label: "Review supporting documents",
-    description: "View participant uploads and engagement materials already held in the portal."
-  },
-  {
-    id: "manage_documents",
-    label: "Manage participant materials",
-    description: "Upload or maintain briefs and programme materials for participants. This does not remove participant-uploaded evidence."
-  },
-  {
-    id: "manage_scheduling",
-    label: "Manage scheduling",
-    description: "Review availability and manage programme session slots. Booking safeguards remain enforced."
-  },
-  {
-    id: "view_communications",
-    label: "Review communication history",
-    description: `Read the recorded email history for participant context. ${BRAND.facilitatorFirstName} retains approval and sending authority.`
-  },
-  {
-    id: "manage_client_onboarding",
-    label: "Invite clients to onboard",
-    description: "Send a client the secure onboarding link that creates their account and business workspace, and revoke unused links. Only for clients who have reached onboarding."
-  },
-  {
-    id: "manage_portal_access",
-    label: "Manage portal access",
-    description: "Replace a participant\u2019s private portal link when access needs to be reset."
-  }
-];
-var ADMIN_PERMISSION_IDS = ADMIN_PERMISSION_DEFINITIONS.map((permission) => permission.id);
-function isAdminPermission(value) {
-  return ADMIN_PERMISSION_IDS.includes(value);
-}
-function parseAdminPermissions(value) {
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) return [];
-    return Array.from(new Set(parsed.filter((entry) => typeof entry === "string").filter(isAdminPermission)));
-  } catch {
-    return [];
-  }
-}
-function serializeAdminPermissions(permissions) {
-  return JSON.stringify(Array.from(new Set(permissions)).filter(isAdminPermission));
-}
-
-// shared/platformPermissions.ts
-var PLATFORM_PERMISSIONS = [
-  "view_all_businesses",
-  "view_assigned_businesses",
-  "manage_businesses",
-  "manage_client_onboarding",
-  "manage_engagements",
-  "assign_engagements",
-  "review_engagements",
-  "manage_payments",
-  "view_financials",
-  "manage_scheduling",
-  "manage_communications",
-  "manage_users",
-  "manage_roles",
-  "manage_admins",
-  "manage_platform_settings"
-];
-var PLATFORM_ROLE_PERMISSIONS = {
-  super_admin: PLATFORM_PERMISSIONS,
-  admin: [],
-  desk_lead: ["view_all_businesses", "manage_engagements", "assign_engagements", "review_engagements", "manage_scheduling", "manage_communications"],
-  analyst: ["view_assigned_businesses", "manage_engagements"],
-  partner: ["view_assigned_businesses", "review_engagements"],
-  subject_matter_expert: ["view_assigned_businesses"],
-  finance: ["manage_payments", "view_financials"]
-};
-var LEGACY_CAPABILITY_TO_PLATFORM = {
-  manage_payments: "manage_payments",
-  manage_scheduling: "manage_scheduling",
-  manage_client_onboarding: "manage_client_onboarding"
-};
-var PLATFORM_TO_LEGACY_CAPABILITIES = {
-  manage_payments: ["manage_payments"],
-  manage_scheduling: ["manage_scheduling"],
-  manage_client_onboarding: ["manage_client_onboarding"],
-  manage_communications: ["view_communications"]
-};
-function resolveAuthority(input) {
-  if (!input.active) return { roles: [], permissions: [], legacyCapabilities: [], isSuperAdmin: false };
-  const roles2 = new Set(input.storedRoles);
-  if (input.legacyAdmin) roles2.add("admin");
-  if (input.ownerBridge) roles2.add("super_admin");
-  const isSuperAdmin2 = roles2.has("super_admin");
-  const permissions = /* @__PURE__ */ new Set();
-  for (const role of Array.from(roles2)) for (const permission of PLATFORM_ROLE_PERMISSIONS[role]) permissions.add(permission);
-  for (const capability of input.legacyProfile) {
-    const equivalent = LEGACY_CAPABILITY_TO_PLATFORM[capability];
-    if (equivalent) permissions.add(equivalent);
-  }
-  const legacy = new Set(isSuperAdmin2 ? ADMIN_PERMISSION_IDS : input.legacyProfile);
-  for (const permission of Array.from(permissions)) for (const capability of PLATFORM_TO_LEGACY_CAPABILITIES[permission] ?? []) legacy.add(capability);
-  const order = (list2) => (item2) => list2.indexOf(item2);
-  return {
-    roles: Array.from(roles2).sort((a, b) => order(PLATFORM_ROLES)(a) - order(PLATFORM_ROLES)(b)),
-    permissions: Array.from(permissions).sort((a, b) => order(PLATFORM_PERMISSIONS)(a) - order(PLATFORM_PERMISSIONS)(b)),
-    legacyCapabilities: Array.from(legacy).sort((a, b) => order(ADMIN_PERMISSION_IDS)(a) - order(ADMIN_PERMISSION_IDS)(b)),
-    isSuperAdmin: isSuperAdmin2
-  };
-}
-function authorityAllows(authority, permission) {
-  if (authority.isSuperAdmin) return true;
-  return authority.permissions.includes(permission) || authority.legacyCapabilities.includes(permission);
-}
-var PLATFORM_ROLE_RANK = {
-  super_admin: 100,
-  admin: 80,
-  desk_lead: 60,
-  partner: 60,
-  finance: 50,
-  analyst: 40,
-  subject_matter_expert: 20
-};
-function canGrantRole(actor, role) {
-  if (actor.isSuperAdmin) return true;
-  const highest = Math.max(0, ...actor.roles.map((item2) => PLATFORM_ROLE_RANK[item2]));
-  return PLATFORM_ROLE_RANK[role] < highest;
-}
-var ROLES_REQUIRING_END_DATE = ["subject_matter_expert"];
-var MAX_ROLE_DURATION_DAYS = 400;
-function requiresTwoStep(authority) {
-  return authority.roles.length > 0;
 }
 
 // server/audit.ts
@@ -3732,6 +3746,22 @@ async function resetTwoStep(db, input) {
 async function listTwoStepStatus(db) {
   const rows = await db.select({ userId: userTwoStep.userId, enabledAt: userTwoStep.enabledAt }).from(userTwoStep);
   return new Map(rows.map((row) => [row.userId, Boolean(row.enabledAt)]));
+}
+async function setStaffLevel(db, input) {
+  const desired = LEVEL_ROLES[input.level];
+  const held = (await db.select({ role: userPlatformRoles.role, expiresAt: userPlatformRoles.expiresAt }).from(userPlatformRoles).where(eq6(userPlatformRoles.userId, input.targetUserId))).filter((row) => !row.expiresAt || row.expiresAt.getTime() > Date.now()).map((row) => row.role);
+  for (const role of desired) {
+    if (!held.includes(role)) await grantPlatformRole(db, { actor: input.actor, targetUserId: input.targetUserId, role, expiresAt: ROLES_REQUIRING_END_DATE.includes(role) ? input.expiresAt : null });
+  }
+  for (const role of held) {
+    if (role !== "super_admin" && !desired.includes(role)) await revokePlatformRole(db, { actor: input.actor, targetUserId: input.targetUserId, role });
+  }
+  const target = (await db.select({ email: users.email }).from(users).where(eq6(users.id, input.targetUserId)).limit(1))[0];
+  await db.transaction(async (tx) => {
+    await tx.update(users).set({ jobTitle: input.level }).where(eq6(users.id, input.targetUserId));
+    await recordAudit(tx, { action: "staff_level_set", actorUserId: input.actor.id, targetEmail: target?.email ?? null, details: { targetUserId: input.targetUserId, level: input.level, roles: desired } });
+  });
+  return { success: true, level: input.level };
 }
 
 // server/rateLimit.ts
@@ -14371,6 +14401,8 @@ async function database3() {
 var platformRolesRouter = router({
   list: manageRoles.query(async () => listPlatformRoleAssignments(await database3())),
   grant: manageRoles.input(grantInput).mutation(async ({ ctx, input }) => grantPlatformRole(await database3(), { actor: { ...ctx.user, authority: ctx.authority }, targetUserId: input.userId, role: input.role, expiresAt: input.expiresOn ? endOfDay(input.expiresOn) : null })),
+  /** A staff member's level: their firm title and the roles it gives (LEVEL_ROLES). */
+  setLevel: manageRoles.input(z20.object({ userId: z20.number().int().positive(), level: z20.enum(FIRM_LEVELS), expiresOn: z20.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional() })).mutation(async ({ ctx, input }) => setStaffLevel(await database3(), { actor: { ...ctx.user, authority: ctx.authority }, targetUserId: input.userId, level: input.level, expiresAt: input.expiresOn ? endOfDay(input.expiresOn) : null })),
   revoke: manageRoles.input(roleInput).mutation(async ({ ctx, input }) => revokePlatformRole(await database3(), { actor: { ...ctx.user, authority: ctx.authority }, targetUserId: input.userId, role: input.role }))
 });
 
@@ -14868,13 +14900,14 @@ async function issue(db, input) {
         fullName: input.fullName,
         platformRole: input.platformRole ?? null,
         roleExpiresAt: input.roleExpiresAt ?? null,
+        jobTitle: input.jobTitle ?? null,
         businessId: input.businessId ?? null,
         access: input.access ?? null,
         tokenHash: sha256(token3),
         expiresAt: new Date(Date.now() + ONBOARDING_INVITATION_TTL_MS),
         createdByUserId: input.actorUserId
       }).returning({ id: accountInvitations.id });
-      await recordAudit(tx, { action: "account_invitation_created", actorUserId: input.actorUserId, targetEmail: input.email, details: { invitationId: row.id, kind: input.kind, ...input.platformRole ? { role: input.platformRole, roleExpiresAt: input.roleExpiresAt?.toISOString() ?? null } : {}, ...input.businessId ? { businessId: input.businessId, access: input.access } : {} } });
+      await recordAudit(tx, { action: "account_invitation_created", actorUserId: input.actorUserId, targetEmail: input.email, details: { invitationId: row.id, kind: input.kind, ...input.platformRole ? { role: input.platformRole, roleExpiresAt: input.roleExpiresAt?.toISOString() ?? null, ...input.jobTitle ? { level: input.jobTitle } : {} } : {}, ...input.businessId ? { businessId: input.businessId, access: input.access } : {} } });
       return row;
     });
   } catch (error) {
@@ -14888,24 +14921,30 @@ async function issue(db, input) {
   return { invitationId: invitation.id, invitationUrl, deliveryStatus: delivery.status };
 }
 var staffInvitationSchema = newInvitationSchema.extend({
-  role: z24.enum(["admin", "desk_lead", "analyst", "partner", "subject_matter_expert", "finance"]),
+  /** The person's level in the firm, which decides their roles (LEVEL_ROLES). The way to invite. */
+  level: z24.enum(FIRM_LEVELS).optional(),
+  /** A single role, for an invitation not tied to a level. */
+  role: z24.enum(["admin", "desk_lead", "analyst", "partner", "subject_matter_expert", "finance"]).optional(),
   /** The last day of access ("2027-03-09"); required for a specialist. Access ends at the end of that day, Lagos time. */
   expiresOn: z24.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional()
 });
 async function inviteStaff(db, actor, rawInput) {
   if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError28({ code: "FORBIDDEN", message: "Only someone who manages roles can invite staff." });
-  const input = staffInvitationSchema.parse(rawInput);
-  if (!canGrantRole(actor.authority, input.role)) throw new TRPCError28({ code: "FORBIDDEN", message: `You can only invite people to roles below your own. Ask a Super Admin to invite ${roleLabel(input.role)}.` });
+  const parsed = staffInvitationSchema.parse(rawInput);
+  const roles2 = parsed.level ? LEVEL_ROLES[parsed.level] : parsed.role ? [parsed.role] : [];
+  if (!roles2.length) throw new TRPCError28({ code: "BAD_REQUEST", message: "Choose their level." });
+  const input = { ...parsed, role: roles2[0] };
+  for (const role of roles2) if (!canGrantRole(actor.authority, role)) throw new TRPCError28({ code: "FORBIDDEN", message: `You can only invite people to roles below your own. Ask a Super Admin to invite ${parsed.level ?? roleLabel(role)}.` });
   const roleExpiresAt = input.expiresOn ? /* @__PURE__ */ new Date(`${input.expiresOn}T23:59:59+01:00`) : null;
-  if (!roleExpiresAt && ROLES_REQUIRING_END_DATE.includes(input.role)) throw new TRPCError28({ code: "BAD_REQUEST", message: `${roleLabel(input.role)} access needs an end date.` });
+  if (!roleExpiresAt && roles2.some((role) => ROLES_REQUIRING_END_DATE.includes(role))) throw new TRPCError28({ code: "BAD_REQUEST", message: `${parsed.level ?? roleLabel(input.role)} access needs an end date.` });
   if (roleExpiresAt && (roleExpiresAt.getTime() <= Date.now() || roleExpiresAt.getTime() > Date.now() + MAX_ROLE_DURATION_DAYS * 864e5)) {
     throw new TRPCError28({ code: "BAD_REQUEST", message: `Choose an end date between tomorrow and ${MAX_ROLE_DURATION_DAYS} days from now.` });
   }
   if (await identityTaken(db, input.email)) throw new TRPCError28({ code: "CONFLICT", message: "This email already has an account. Give that person a role instead." });
-  const result = await issue(db, { kind: "staff", email: input.email, fullName: input.fullName, platformRole: input.role, roleExpiresAt, actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName });
+  const result = await issue(db, { kind: "staff", email: input.email, fullName: input.fullName, platformRole: input.role, roleExpiresAt, jobTitle: parsed.level ?? null, actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName });
   await alertSuperAdmins(db, {
-    subject: `Staff invitation: ${roleLabel(input.role)} for ${input.email}`,
-    lines: [`${actor.name || actor.email || "An administrator"} invited ${input.fullName} (${input.email}) to join as ${roleLabel(input.role)}${roleExpiresAt ? `, with access until ${input.expiresOn}` : ""}.`, "If you did not expect this, revoke the invitation in Administration Team."],
+    subject: `Staff invitation: ${parsed.level ?? roleLabel(input.role)} for ${input.email}`,
+    lines: [`${actor.name || actor.email || "An administrator"} invited ${input.fullName} (${input.email}) to join as ${parsed.level ?? roleLabel(input.role)}${roleExpiresAt ? `, with access until ${input.expiresOn}` : ""}.`, "If you did not expect this, revoke the invitation in Administration Team."],
     event: "staff_invited",
     actorUserId: actor.id,
     targetEmail: input.email
@@ -14914,7 +14953,7 @@ async function inviteStaff(db, actor, rawInput) {
 }
 async function listStaffInvitations(db, actor) {
   if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError28({ code: "FORBIDDEN", message: "Only someone who manages roles can see staff invitations." });
-  const rows = await db.select({ id: accountInvitations.id, email: accountInvitations.email, fullName: accountInvitations.fullName, role: accountInvitations.platformRole, roleExpiresAt: accountInvitations.roleExpiresAt, status: accountInvitations.status, expiresAt: accountInvitations.expiresAt, deliveryStatus: accountInvitations.deliveryStatus, createdAt: accountInvitations.createdAt }).from(accountInvitations).where(eq25(accountInvitations.kind, "staff")).orderBy(desc14(accountInvitations.id)).limit(100);
+  const rows = await db.select({ id: accountInvitations.id, email: accountInvitations.email, fullName: accountInvitations.fullName, role: accountInvitations.platformRole, level: accountInvitations.jobTitle, roleExpiresAt: accountInvitations.roleExpiresAt, status: accountInvitations.status, expiresAt: accountInvitations.expiresAt, deliveryStatus: accountInvitations.deliveryStatus, createdAt: accountInvitations.createdAt }).from(accountInvitations).where(eq25(accountInvitations.kind, "staff")).orderBy(desc14(accountInvitations.id)).limit(100);
   return rows.map((row) => ({ ...row, status: invitationState(row) }));
 }
 async function listStaff(db, actor) {
@@ -15007,13 +15046,15 @@ async function acceptAccountInvitation(db, req, res, rawInput) {
       if (!invitation || invitationState(invitation) !== "pending") throw unavailable4();
       if (input.email !== normaliseAccountEmail(invitation.email)) throw new TRPCError28({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
       if (await identityTaken(tx, invitation.email)) throw new TRPCError28({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
-      const [user] = await tx.insert(users).values({ openId: `local:${randomUUID4()}`, name: input.fullName, email: invitation.email, loginMethod: "password", role: "user", status: "active" }).returning({ id: users.id });
+      const level = invitation.kind === "staff" && isFirmLevel(invitation.jobTitle) ? invitation.jobTitle : null;
+      const [user] = await tx.insert(users).values({ openId: `local:${randomUUID4()}`, name: input.fullName, email: invitation.email, loginMethod: "password", role: "user", status: "active", jobTitle: level }).returning({ id: users.id });
       await tx.insert(userCredentials).values({ userId: user.id, passwordHash });
       let businessId = null;
       if (invitation.kind === "staff") {
         if (!invitation.platformRole || invitation.platformRole === "super_admin") throw unavailable4();
         if (invitation.roleExpiresAt && invitation.roleExpiresAt.getTime() <= Date.now()) throw unavailable4();
-        await tx.insert(userPlatformRoles).values({ userId: user.id, role: invitation.platformRole, grantedByUserId: invitation.createdByUserId, expiresAt: invitation.roleExpiresAt });
+        const granted = level ? LEVEL_ROLES[level] : [invitation.platformRole];
+        await tx.insert(userPlatformRoles).values(granted.map((role) => ({ userId: user.id, role, grantedByUserId: invitation.createdByUserId, expiresAt: ROLES_REQUIRING_END_DATE.includes(role) || !level ? invitation.roleExpiresAt : null })));
       } else {
         const business = invitation.businessId ? (await tx.select({ id: businesses.id, status: businesses.status }).from(businesses).where(eq25(businesses.id, invitation.businessId)).limit(1))[0] : void 0;
         if (!business || business.status !== "active") throw unavailable4();

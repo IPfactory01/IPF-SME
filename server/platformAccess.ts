@@ -10,6 +10,8 @@ import {
   MAX_ROLE_DURATION_DAYS,
   resolveAuthority,
   ROLES_REQUIRING_END_DATE,
+  LEVEL_ROLES,
+  type FirmLevel,
   type AnyAuthorityPermission,
   type Authority,
 } from "../shared/platformPermissions";
@@ -262,3 +264,28 @@ export async function listTwoStepStatus(db: Pick<Database, "select">): Promise<M
   const rows = await db.select({ userId: userTwoStep.userId, enabledAt: userTwoStep.enabledAt }).from(userTwoStep);
   return new Map(rows.map(row => [row.userId, Boolean(row.enabledAt)]));
 }
+
+/**
+ * Sets a staff member's level (ET, 5 November 2026): their firm title, and the roles that level gives (LEVEL_ROLES).
+ * The new roles are given first, then roles the level does not include are removed, so access never drops to nothing
+ * on the way. Super Admin is never touched. Each grant and removal follows the usual rules (below the giver's own
+ * role; a Specialist needs an end date), and each is in the audit log.
+ */
+export async function setStaffLevel(db: Database, input: { actor: Person & { authority: Authority }; targetUserId: number; level: FirmLevel; expiresAt: Date | null }) {
+  const desired = LEVEL_ROLES[input.level];
+  const held = (await db.select({ role: userPlatformRoles.role, expiresAt: userPlatformRoles.expiresAt }).from(userPlatformRoles).where(eq(userPlatformRoles.userId, input.targetUserId)))
+    .filter(row => !row.expiresAt || row.expiresAt.getTime() > Date.now()).map(row => row.role);
+  for (const role of desired) {
+    if (!held.includes(role)) await grantPlatformRole(db, { actor: input.actor, targetUserId: input.targetUserId, role, expiresAt: ROLES_REQUIRING_END_DATE.includes(role) ? input.expiresAt : null });
+  }
+  for (const role of held) {
+    if (role !== "super_admin" && !desired.includes(role)) await revokePlatformRole(db, { actor: input.actor, targetUserId: input.targetUserId, role });
+  }
+  const target = (await db.select({ email: users.email }).from(users).where(eq(users.id, input.targetUserId)).limit(1))[0];
+  await db.transaction(async tx => {
+    await tx.update(users).set({ jobTitle: input.level }).where(eq(users.id, input.targetUserId));
+    await recordAudit(tx, { action: "staff_level_set", actorUserId: input.actor.id, targetEmail: target?.email ?? null, details: { targetUserId: input.targetUserId, level: input.level, roles: desired } });
+  });
+  return { success: true, level: input.level } as const;
+}
+

@@ -1,0 +1,1 @@
+ALTER TABLE "account_invitations" ADD COLUMN "jobTitle" varchar(80);

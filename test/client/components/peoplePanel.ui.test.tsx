@@ -30,6 +30,7 @@ vi.mock("@/lib/trpc", () => ({
     platformRoles: {
       grant: { useMutation: mutation("grant") },
       revoke: { useMutation: mutation("revoke") },
+      setLevel: { useMutation: mutation("setLevel", () => ({ success: true, level: "Senior Associate" })) },
     },
   },
 }));
@@ -68,21 +69,16 @@ describe("the People panel", () => {
     expect(within(screen.getByRole("region", { name: "Clients" })).getByText("Ada Okafor")).toBeTruthy();
   });
 
-  it("gives a staff member a role, asks a Specialist's end date first, and removes a role", () => {
+  it("sets a staff member's level, which sets their access, and asks a Specialist's end date first", () => {
     render(<PeoplePanel />);
     const row = rowOf("Lewis Desk");
-    fireEvent.change(row.getByLabelText("Add a role for Lewis Desk"), { target: { value: "analyst" } });
-    fireEvent.click(row.getByRole("button", { name: "Give" }));
-    expect(api.calls.grant).toEqual([{ userId: 2, role: "analyst", expiresOn: null }]);
-    fireEvent.change(row.getByLabelText("Add a role for Lewis Desk"), { target: { value: "subject_matter_expert" } });
-    expect((row.getByRole("button", { name: "Give" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(row.getByLabelText("Level of Lewis Desk"), { target: { value: "Senior Associate" } });
+    expect(api.calls.setLevel).toEqual([{ userId: 2, level: "Senior Associate", expiresOn: null }]);
+    fireEvent.change(row.getByLabelText("Level of Lewis Desk"), { target: { value: "Specialist" } });
+    expect(api.calls.setLevel).toHaveLength(1);
     fireEvent.change(row.getByLabelText("Access ends for Lewis Desk"), { target: { value: "2027-03-09" } });
-    fireEvent.click(row.getByRole("button", { name: "Give" }));
-    expect(api.calls.grant[1]).toEqual({ userId: 2, role: "subject_matter_expert", expiresOn: "2027-03-09" });
-    fireEvent.click(row.getByRole("button", { name: "Remove Desk Lead from Lewis Desk" }));
-    expect(api.calls.revoke).toEqual([{ userId: 2, role: "desk_lead" }]);
-    // Administrator alone gives nothing, so it is never offered.
-    expect(Array.from((row.getByLabelText("Add a role for Lewis Desk") as HTMLSelectElement).options).map(option => option.value)).not.toContain("admin");
+    fireEvent.click(row.getByRole("button", { name: "Save" }));
+    expect(api.calls.setLevel[1]).toEqual({ userId: 2, level: "Specialist", expiresOn: "2027-03-09" });
   });
 
   it("issues a reset link and shows it once, saying to send it by hand when no email went out", () => {
@@ -135,11 +131,12 @@ describe("the People panel", () => {
     expect(screen.queryByRole("form", { name: "Remove access" })).toBeNull();
   });
 
-  it("sets a staff member's firm title, which clients see beside their role on an engagement", () => {
+  it("offers a level only for staff, never for a client, and shows what the level gives", () => {
+    api.people = [ada, { ...lewis, jobTitle: "Senior Associate" }];
     render(<PeoplePanel />);
     expect(rowOf("Ada Okafor").queryByRole("combobox")).toBeNull();
-    fireEvent.change(rowOf("Lewis Desk").getByRole("combobox", { name: "Firm title for Lewis Desk" }), { target: { value: "Senior Associate" } });
-    expect(api.calls.setJobTitle).toEqual([{ userId: 2, jobTitle: "Senior Associate" }]);
+    expect((rowOf("Lewis Desk").getByLabelText("Level of Lewis Desk") as HTMLSelectElement).value).toBe("Senior Associate");
+    expect(rowOf("Lewis Desk").getByText("Every engagement; assigns people and approves")).toBeTruthy();
   });
 
   it("resets two-step sign-in for a lost phone", () => {

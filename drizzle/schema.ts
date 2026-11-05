@@ -1125,6 +1125,8 @@ export const accountInvitations = pgTable("account_invitations", {
   platformRole: userPlatformRolesRoleEnum("platformRole"),
   /** staff only: when the role given on acceptance ends (required for a specialist). */
   roleExpiresAt: timestamp("roleExpiresAt", { withTimezone: true }),
+  /** A staff invitation by level (0015): the level becomes the person's firm title, and its roles are granted. */
+  jobTitle: varchar("jobTitle", { length: 80 }),
   /** business_member only */
   businessId: integer("businessId").references(() => businesses.id),
   access: clientAccessLevelEnum("access"),

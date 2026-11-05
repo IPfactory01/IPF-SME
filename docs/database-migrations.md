@@ -103,3 +103,9 @@ no such record); `engagement_files` gains the client's `note`. Additive. **Apply
 reads the new columns. Paste `drizzle/supabase/apply-0014-drop-box-and-file-matches.sql` into the Supabase SQL Editor
 and press Run; it stops, changing nothing, unless exactly `0000` to `0013` are recorded.
 
+**`0015` and deployment order.** Staff are invited by level (Partner, Vice President, Senior Associate, Associate,
+Senior Business Analyst, Business Analyst, Specialist, Finance), and the level decides their roles (`LEVEL_ROLES` in
+`shared/platformPermissions.ts`). `account_invitations.jobTitle` keeps the level until the person accepts. Additive.
+**Apply it before deploying.** Paste `drizzle/supabase/apply-0015-staff-invitation-level.sql` into the Supabase SQL
+Editor and press Run; it stops, changing nothing, unless exactly `0000` to `0014` are recorded.
+

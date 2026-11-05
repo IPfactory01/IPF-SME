@@ -42,6 +42,8 @@ export const users = pgTable("users", {
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
   lastSignedIn: timestamp("lastSignedIn", { withTimezone: true }).defaultNow().notNull(),
+  /** Firm title (Partner, Senior Associate, ...), shown to clients beside the person's role on their engagement. 0013. */
+  jobTitle: varchar("jobTitle", { length: 80 }),
 }, table => [uniqueIndex("users_email_lower_unique").on(sql`lower(${table.email})`)]);
 
 /** Password credential for a universal account: one row per user. */

@@ -38,7 +38,7 @@ const requestIp = (req: Request) => (req.ip || "unknown").trim().toLowerCase();
 
 /** Everyone who can sign in with a password, with their roles and whether they are a Super Admin. For `manage_users`. */
 export async function listPeople(db: Pick<Database, "select">) {
-  const rows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, lastSignedIn: users.lastSignedIn })
+  const rows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, lastSignedIn: users.lastSignedIn, jobTitle: users.jobTitle })
     .from(users).innerJoin(userCredentials, eq(userCredentials.userId, users.id)).orderBy(users.name, users.id).limit(500);
   const roles = await db.select({ userId: userPlatformRoles.userId, role: userPlatformRoles.role, expiresAt: userPlatformRoles.expiresAt }).from(userPlatformRoles);
   const twoStep = await listTwoStepStatus(db);
@@ -286,4 +286,19 @@ export async function setAccountStatus(db: Database, input: { actor: Actor; targ
     });
   });
   return { success: true as const, changed: true as const, status: input.status };
+}
+
+/**
+ * A person's firm title (Partner, Senior Associate, ...), shown to clients beside their role on an engagement. Anyone
+ * with manage_users may set it, for anyone; it grants nothing.
+ */
+export async function setJobTitle(db: Database, input: { actor: Actor; targetUserId: number; jobTitle: string | null }) {
+  const title = input.jobTitle?.trim() || null;
+  const target = (await db.select({ id: users.id, email: users.email }).from(users).where(eq(users.id, input.targetUserId)).limit(1))[0];
+  if (!target) throw new TRPCError({ code: "NOT_FOUND", message: "That person does not exist." });
+  await db.transaction(async tx => {
+    await tx.update(users).set({ jobTitle: title }).where(eq(users.id, target.id));
+    await recordAudit(tx, { action: "account_profile_updated", actorUserId: input.actor.id, targetEmail: target.email, details: { targetUserId: target.id, fields: ["jobTitle"] } });
+  });
+  return { success: true as const, jobTitle: title };
 }

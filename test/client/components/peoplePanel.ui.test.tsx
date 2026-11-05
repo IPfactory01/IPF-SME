@@ -25,6 +25,7 @@ vi.mock("@/lib/trpc", () => ({
       setStatus: { useMutation: mutation("setStatus", () => api.statusReply) },
       removeAccess: { useMutation: mutation("removeAccess", () => ({ success: true, sessionsEnded: 2 })) },
       resetTwoStep: { useMutation: mutation("resetTwoStep") },
+      setJobTitle: { useMutation: mutation("setJobTitle") },
     },
   },
 }));
@@ -32,7 +33,7 @@ vi.mock("@/lib/trpc", () => ({
 const { default: PeoplePanel } = await import("@/components/admin/PeoplePanel");
 
 const ada = { id: 1, name: "Ada Okafor", email: "ada@example.test", status: "active", lastSignedIn: new Date("2026-10-09T10:00:00Z"), roles: [], businesses: 1, superAdmin: false, twoStep: false, accessEndsAt: null };
-const lewis = { id: 2, name: "Lewis Desk", email: "lewis@example.test", status: "suspended", lastSignedIn: new Date("2026-10-08T10:00:00Z"), roles: ["desk_lead"], businesses: 0, superAdmin: false, twoStep: true, accessEndsAt: null };
+const lewis = { id: 2, name: "Lewis Desk", email: "lewis@example.test", status: "suspended", lastSignedIn: new Date("2026-10-08T10:00:00Z"), roles: ["desk_lead"], businesses: 0, superAdmin: false, twoStep: true, accessEndsAt: null, jobTitle: null };
 const kemi = { id: 3, name: "Kemi Contractor", email: "kemi@example.test", status: "active", lastSignedIn: new Date("2026-11-20T10:00:00Z"), roles: ["subject_matter_expert"], businesses: 0, superAdmin: false, twoStep: false, accessEndsAt: new Date("2027-03-09T22:59:59Z") };
 const owner = { id: 4, name: "Owner Person", email: "owner@example.test", status: "active", lastSignedIn: new Date("2026-11-20T10:00:00Z"), roles: ["super_admin"], businesses: 0, superAdmin: true, twoStep: true, accessEndsAt: null };
 const rowOf = (name: string) => within(screen.getByText(name).closest("tr")!);
@@ -104,6 +105,13 @@ describe("the People panel", () => {
     fireEvent.click(confirm);
     expect(api.calls.removeAccess).toEqual([{ userId: 3, reason: "Contract ended" }]);
     expect(screen.queryByRole("form", { name: "Remove access" })).toBeNull();
+  });
+
+  it("sets a staff member's firm title, which clients see beside their role on an engagement", () => {
+    render(<PeoplePanel />);
+    expect(rowOf("Ada Okafor").queryByRole("combobox")).toBeNull();
+    fireEvent.change(rowOf("Lewis Desk").getByRole("combobox", { name: "Firm title for Lewis Desk" }), { target: { value: "Senior Associate" } });
+    expect(api.calls.setJobTitle).toEqual([{ userId: 2, jobTitle: "Senior Associate" }]);
   });
 
   it("resets two-step sign-in for a lost phone", () => {

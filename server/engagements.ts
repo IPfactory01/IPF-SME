@@ -31,6 +31,7 @@ import {
   ENGAGEMENT_STAGE_LABELS,
   ENGAGEMENT_TASK_STATUS_LABELS,
   ENGAGEMENT_TEAM_ROLE_LABELS,
+  ENGAGEMENT_TEAM_ROLE_ORDER,
   journeyOf,
   type ClientViewer,
   type EngagementAudience,
@@ -287,7 +288,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
   if (check) await syncSessionBookings(db, engagement, check.email);
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
   const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins] = await Promise.all([
-    db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
+    db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq(engagementSessions.engagementId, engagementId)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq(engagementTasks.engagementId, engagementId)).orderBy(asc(engagementTasks.id)),
     db.select().from(engagementDeliverables).where(eq(engagementDeliverables.engagementId, engagementId)).orderBy(asc(engagementDeliverables.id)),
@@ -664,7 +665,7 @@ export async function getClientRoom(db: Database, session: AccountSession) {
   const owner = (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   if (owner) await syncSessionBookings(db, engagement, owner.email);
   const [team, sessions, tasks, deliverables, comments, files, measure, checkins] = await Promise.all([
-    db.select({ name: users.name, role: engagementTeam.role }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
+    db.select({ name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq(engagementTasks.engagementId, engagement.id)).orderBy(asc(engagementTasks.id)),
     db.select().from(engagementDeliverables).where(and(eq(engagementDeliverables.engagementId, engagement.id), eq(engagementDeliverables.status, "shared"))).orderBy(asc(engagementDeliverables.id)),
@@ -709,7 +710,9 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     problemStatement: fullView ? engagement.problemStatement : null,
     // The one number: the business's own result, so the owner and their full-access staff; never the hours behind it.
     measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,
-    team: team.map(member => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
+    // Who runs it first (partner, Engagement Manager, Lead Consultant), then analysts and specialists; each with their firm title.
+    team: [...team].sort((a, b) => ENGAGEMENT_TEAM_ROLE_ORDER[a.role] - ENGAGEMENT_TEAM_ROLE_ORDER[b.role])
+      .map(member => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role], jobTitle: member.jobTitle ?? null })),
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
     // The owner books the Business Review Sessions on Calendly, in order, with their details filled in.
     booking: bookingFor(sessions, viewer, owner ?? null),

@@ -1,3 +1,4 @@
+import { useAccount } from "@/hooks/useAccount";
 import AccountLayout from "@/components/AccountLayout";
 import EngagementRoom from "@/components/EngagementRoom";
 import TeamSeats from "@/components/TeamSeats";
@@ -20,9 +21,6 @@ function Dashboard({ account }: { account: AccountSessionView }) {
   const internal = account.platformRoles.length > 0;
   const room = trpc.engagement.client.room.useQuery(undefined, { retry: false, enabled: Boolean(business) });
 
-  if (business && room.data) {
-    return <EngagementRoom room={room.data} aside={room.data.viewer.kind === "owner" ? <TeamSeats /> : undefined} />;
-  }
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <section aria-labelledby="welcome" className="border border-line-soft bg-paper-raised p-6 sm:p-8">
@@ -72,6 +70,22 @@ function Dashboard({ account }: { account: AccountSessionView }) {
   );
 }
 
+/**
+ * Once the engagement exists, the room is the whole screen, like an app: its own rail with the product, the views and
+ * the account links, so the site header and footer step aside. Before that, the welcome sits in the usual frame.
+ */
 export default function AccountDashboard() {
-  return <AccountLayout width="wide">{account => <Dashboard account={account} />}</AccountLayout>;
+  const { account } = useAccount();
+  const business = account?.activeBusiness;
+  const room = trpc.engagement.client.room.useQuery(undefined, { retry: false, enabled: Boolean(business) });
+  if (account && business && room.data) {
+    const roomAccount = {
+      name: account.user.fullName,
+      email: account.user.email,
+      role: business.role === "owner" ? "Owner" : "Team member",
+      internal: account.platformRoles.length > 0,
+    };
+    return <EngagementRoom room={room.data} account={roomAccount} aside={room.data.viewer.kind === "owner" ? <TeamSeats /> : undefined} />;
+  }
+  return <AccountLayout width="wide">{acc => <Dashboard account={acc} />}</AccountLayout>;
 }

@@ -88,3 +88,11 @@ sign-in reads the new session columns, so sign-in fails until it is applied. App
 changing nothing, unless exactly `0000` to `0011` are recorded and `user_two_step` does not exist, then applies the
 migration and records `0012`. After it is applied and the code is live, every staff member sets up two-step sign-in at
 their next sign-in.
+
+**`0013` and deployment order.** Engagement Manager as a role on an engagement (`engagement_team_role` gains `manager`;
+the stored values keep their names, and their labels are now Engagement Manager, Lead Consultant, Analyst, Partner and
+Specialist) and a firm title on each person (`users.jobTitle`: Partner, Vice President, Senior Associate, Associate,
+Senior Business Analyst, Business Analyst, or free text). Additive. **Apply it before deploying**: the client room
+reads `users.jobTitle`. Paste `drizzle/supabase/apply-0013-team-roles-and-titles.sql` into the Supabase SQL Editor and
+press Run; it stops, changing nothing, unless exactly `0000` to `0012` are recorded.
+

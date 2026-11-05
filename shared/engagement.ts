@@ -35,9 +35,17 @@ export const ENGAGEMENT_STAGE_SUMMARIES: Record<EngagementStage, string> = {
 };
 
 /** Roles on an engagement team. Separate from platform roles: a role says what kind of person, this says which job here. */
-export const ENGAGEMENT_TEAM_ROLES = ["lead", "analyst", "partner", "expert"] as const;
+// Anyone on the team can hold any of these on a given engagement; their firm title (users.jobTitle) does not change.
+// "manager" was added in migration 0013; the stored values keep their old names so no row changes.
+export const ENGAGEMENT_TEAM_ROLES = ["manager", "lead", "analyst", "partner", "expert"] as const;
 export type EngagementTeamRole = (typeof ENGAGEMENT_TEAM_ROLES)[number];
-export const ENGAGEMENT_TEAM_ROLE_LABELS: Record<EngagementTeamRole, string> = { lead: "Engagement lead", analyst: "Analyst", partner: "Partner", expert: "Specialist" };
+export const ENGAGEMENT_TEAM_ROLE_LABELS: Record<EngagementTeamRole, string> = { manager: "Engagement Manager", lead: "Lead Consultant", analyst: "Analyst", partner: "Partner", expert: "Specialist" };
+/** The order a team is shown in: who runs it first. */
+export const ENGAGEMENT_TEAM_ROLE_ORDER: Record<EngagementTeamRole, number> = { partner: 0, manager: 1, lead: 2, analyst: 3, expert: 4 };
+
+/** Firm titles at IP Factory and Enzo Krypton, set once per person. Free text is allowed too (an outside specialist). */
+export const FIRM_TITLES = ["Partner", "Vice President", "Senior Associate", "Associate", "Senior Business Analyst", "Business Analyst"] as const;
+export const JOB_TITLE_MAX_LENGTH = 80;
 
 /**
  * Who may see an item. `team` is IP Factory only. `owner` is the owner (and any business admin) plus the team: the

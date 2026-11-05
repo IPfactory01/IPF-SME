@@ -7,6 +7,8 @@ import { METHOD, METHOD_MEANING } from "@shared/method";
 import type { inferRouterOutputs } from "@trpc/server";
 import { ArrowRight, CalendarClock, Check, ChevronDown, Download, Paperclip } from "lucide-react";
 import React, { useState } from "react";
+import { useLocation } from "wouter";
+import { BRAND } from "@shared/brand";
 import { toast } from "sonner";
 import { useWide } from "@/hooks/useWide";
 import { BusinessPanel, FounderPanel } from "./room/RoomInsight";
@@ -28,7 +30,7 @@ const dateOnly = (value: string) => lagos(`${value}T12:00:00Z`, false);
 const dueText = (dueOn: string | null) => (dueOn ? `By ${dateOnly(dueOn)}` : "");
 const daysSince = (from: Date | string | null | undefined, now: number) => (from ? Math.max(0, Math.floor((now - new Date(from).getTime()) / DAY)) : null);
 
-const CARD = "border border-line-soft bg-paper-raised p-5 sm:p-6";
+const CARD = "rounded-xl border border-line-soft bg-white p-5";
 const KICKER = "text-sm font-medium text-ink-muted";
 const EYEBROW = "text-xs font-medium text-brand";
 const WHO: Record<"You" | "IP Factory" | "Together", string> = { You: "border-brand-line bg-brand-tint text-brand", "IP Factory": "border-line bg-paper-muted text-ink-muted", Together: "border-line bg-paper-muted text-ink-600" };
@@ -41,7 +43,7 @@ const isOpen = (task: Task) => OPEN_TASK_STATUSES.includes(task.status);
  * with the team, what is waiting on you and the Deliverables. Everything shown here was filtered on the server for
  * this person; this screen decides nothing about access.
  */
-export default function EngagementRoom({ room, aside, now = Date.now() }: { room: Room; aside?: React.ReactNode; now?: number }) {
+export default function EngagementRoom({ room, aside, account, now = Date.now() }: { room: Room; aside?: React.ReactNode; account?: RoomAccount; now?: number }) {
   const [open, setOpen] = useState<number | null>(null);
   const isOwner = room.viewer.kind === "owner";
   const here = nowOf(room, now);
@@ -53,20 +55,20 @@ export default function EngagementRoom({ room, aside, now = Date.now() }: { room
   const timeline = (
         <section aria-labelledby="timeline-title">
           <p className={KICKER}>{METHOD.engagement} timeline</p>
-          <h2 id="timeline-title" className="mt-1 font-serif text-2xl font-normal tracking-tight">{METHOD.businessCheck} to {METHOD.day30}</h2>
+          <h2 id="timeline-title" className="mt-1 font-sans text-lg font-semibold tracking-tight">{METHOD.businessCheck} to {METHOD.day30}</h2>
           <ol className="mt-4" aria-label="Engagement timeline">
             {steps.map((step, index) => {
               const last = index === steps.length - 1;
-              const tone = step.state === "done" ? "border-brand bg-brand text-white" : step.state === "now" ? "border-2 border-brand bg-white text-brand" : "border-line bg-white text-ink-muted";
+              const tone = step.state === "done" ? "border-health-clear bg-health-clear text-white" : step.state === "now" ? "border-brand-plum bg-brand-plum text-white" : "border-line bg-white text-ink-muted";
               return (
                 <li key={step.n} id={`step-${step.n}`} aria-current={step.state === "now" ? "step" : undefined} className="relative flex gap-4 scroll-mt-24">
-                  {!last && <span aria-hidden className={`absolute left-[15px] top-8 h-full w-px ${step.state === "done" ? "bg-brand" : "bg-line"}`} />}
-                  <span className={`relative z-10 mt-1 flex h-8 w-8 shrink-0 items-center justify-center border text-sm font-medium tabular-nums ${tone}`}>{step.state === "done" ? <Check className="h-4 w-4" aria-hidden /> : step.n}</span>
+                  {!last && <span aria-hidden className={`absolute left-[15px] top-8 h-full w-px ${step.state === "done" ? "bg-health-clear" : "bg-line"}`} />}
+                  <span className={`relative z-10 mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-medium tabular-nums ${tone}`}>{step.state === "done" ? <Check className="h-4 w-4" aria-hidden /> : step.n}</span>
                   <div className={`min-w-0 flex-1 pb-6 ${step.state === "next" ? "opacity-80" : ""}`}>
                     <button type="button" aria-expanded={shown(step.n)} onClick={() => setOpen(shown(step.n) ? -1 : step.n)} className="flex w-full items-start justify-between gap-3 text-left">
                       <span>
                         <span className="flex flex-wrap items-center gap-2">
-                          <span className={`font-serif text-lg font-normal tracking-tight ${step.state === "next" ? "text-ink-muted" : ""}`}>{step.title}</span>
+                          <span className={`font-sans text-base font-medium ${step.state === "next" ? "text-ink-muted" : ""}`}>{step.title}</span>
                           {step.state === "now" && <span className={EYEBROW}>Now</span>}
                         </span>
                         <span className="block text-xs text-ink-muted">{step.when}</span>
@@ -86,122 +88,131 @@ export default function EngagementRoom({ room, aside, now = Date.now() }: { room
           </ol>
         </section>
   );
-  const team = (
-        <section aria-labelledby="team-title" className={CARD}>
-          <p className={KICKER}>Your team at IP Factory</p>
-          {room.team.length ? (
-            <>
-              <h2 id="team-title" className="mt-1 font-serif text-xl font-normal tracking-tight">{room.team.map(member => member.name).join(" and ")}</h2>
-              <ul className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm">{room.team.map(member => <li key={`${member.name}-${member.roleLabel}`}><span className="font-medium">{member.name}</span> <span className="text-ink-muted">· {member.roleLabel}</span></li>)}</ul>
-            </>
-          ) : <h2 id="team-title" className="mt-1 font-serif text-xl font-normal tracking-tight">We are naming your team now.</h2>}
-        </section>
+  const counts = roomCounts(room);
+  const card = "rounded-xl border border-line-soft bg-white p-5";
+  const label = "text-xs font-medium text-ink-muted";
+
+  const nextAction = (
+    <section aria-labelledby="next-action" className="rounded-xl border border-brand-line bg-brand-tint p-5 lg:col-span-2">
+      <p id="next-action" className="text-xs font-semibold text-brand">Next action{action.kind === "task" ? ` · ${action.label}` : ""}</p>
+      {action.kind === "task" && (
+        <>
+          <p className="mt-2 text-lg font-semibold tracking-tight">{action.task.title}</p>
+          {action.task.detail && <TaskDetail text={action.task.detail} className="mt-1 text-sm text-ink-600" />}
+          {action.task.status === "needs_more" && action.task.statusNote && <p className="mt-1 text-sm text-danger">We need a bit more: {action.task.statusNote}</p>}
+          <TaskControls task={action.task} uploadsEnabled={room.uploadsEnabled} due />
+        </>
+      )}
+      {action.kind === "signoff" && (
+        <>
+          <p className="mt-2 text-lg font-semibold tracking-tight">Read the {action.deliverable.kindLabel} and give your {METHOD.signOff}</p>
+          <p className="mt-1 text-sm text-ink-600">{METHOD_MEANING.signOff} If you disagree, say so in a comment under it.</p>
+          <a href={`#step-${action.step}`} onClick={() => setOpen(action.step)} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand underline underline-offset-2">Open the {action.deliverable.kindLabel} <ArrowRight className="h-3.5 w-3.5" aria-hidden /></a>
+        </>
+      )}
+      {action.kind === "none" && <p className="mt-2 text-sm text-ink-600">Nothing outstanding. We will tell you here when there is.</p>}
+    </section>
   );
-  // The Plan: the Engagement timeline and the team. With a Business Health Check or Full Report behind it, it sits beside
-  // the Founder and Business tabs; a limited-access member sees it alone. On a wide screen the team, what is waiting
-  // on the client and the Deliverables sit in a column beside the timeline that stays in view while it scrolls (short
-  // enough to fit a laptop screen); the two team cards sit side by side under it.
-  const plan = wide ? (
-    <div className="space-y-8">
-      <div className="grid grid-cols-[minmax(0,1fr)_22rem] items-start gap-8 xl:grid-cols-[minmax(0,1fr)_24rem]">
-        {timeline}
-        <aside aria-label="At a glance" className={`sticky space-y-4 ${room.insight ? "top-36" : "top-24"}`}>
+
+  const nextMeeting = (
+    <section aria-labelledby="next-meeting" className={card}>
+      <p id="next-meeting" className={label}>Next meeting</p>
+      {room.nextSession ? (
+        <>
+          <p className="mt-2 text-lg font-semibold tracking-tight">{room.nextSession.title}</p>
+          <p className="mt-1 text-sm text-ink-600">{lagos(room.nextSession.scheduledFor)} (Lagos time){room.nextSession.durationMinutes ? `, ${room.nextSession.durationMinutes} minutes` : ""}</p>
+          {room.nextSession.meetingLink && <a href={room.nextSession.meetingLink} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-brand underline underline-offset-2"><CalendarClock className="h-4 w-4" aria-hidden />Join the {METHOD.session}</a>}
+        </>
+      ) : room.booking ? (
+        <>
+          <p className="mt-2 text-sm text-ink-600">Pick a time on Calendly. It shows here, with the Join link, once you have booked.</p>
+          <a href={room.booking.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-deep-hover">Book {room.booking.title}</a>
+        </>
+      ) : <p className="mt-2 text-sm text-ink-600">No {METHOD.session} is booked yet. It will show here with a Join link once it is.</p>}
+    </section>
+  );
+
+  const team = (
+    <section aria-labelledby="team-title" className={card}>
+      <h2 id="team-title" className={`font-sans ${label}`}>Your team</h2>
+      {room.team.length ? (
+        <ul className="mt-3 space-y-3">
+          {room.team.map(member => (
+            <li key={`${member.name}-${member.roleLabel}`} className="flex items-center gap-3">
+              <span aria-hidden className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColour(member.name)}`}>{initials(member.name)}</span>
+              <span className="min-w-0"><span className="block font-medium text-ink">{member.name}</span><span className="block text-xs text-ink-muted">{member.roleLabel}{member.jobTitle ? ` · ${member.jobTitle}` : ""}</span></span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="mt-2 text-sm text-ink-600">We are naming your team now.</p>}
+    </section>
+  );
+
+  const overview = (
+    <div className="space-y-5">
+      <div className="grid gap-5 lg:grid-cols-3">{nextAction}{nextMeeting}</div>
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        <div className={`${card} lg:col-span-2`}>{timeline}</div>
+        <aside aria-label="At a glance" className="space-y-5">
           <WaitingOnYou room={room} isOwner={isOwner} onOpen={setOpen} />
           <DeliverablesCard room={room} isOwner={isOwner} onOpen={setOpen} />
+          {team}
+          {aside}
         </aside>
       </div>
-      <div className="grid grid-cols-2 items-start gap-6">
-        {team}
-        {aside}
-      </div>
-    </div>
-  ) : (
-    <div className="space-y-6">
-      {timeline}
-      {team}
     </div>
   );
-  const counts = roomCounts(room);
+
   // The same frame for every client: the views below, in this order. Founder and Business appear only when a Business
   // Health Check or Full Report is behind the room (the server sends no insight to limited-access staff).
   const tabs = [
-    { id: "overview", label: "Overview", content: plan },
-    { id: "plan", label: "Plan", count: counts.waiting ? { value: counts.waiting, label: `${counts.waiting} waiting on you` } : undefined, content: <PlanView room={room} now={now} /> },
-    { id: "meetings", label: "Meetings", content: <MeetingsView room={room} now={now} /> },
+    { id: "overview", label: "Overview", content: overview },
+    { id: "plan", label: "List", count: counts.waiting ? { value: counts.waiting, label: `${counts.waiting} waiting on you` } : undefined, content: <PlanView room={room} now={now} /> },
+    { id: "meetings", label: "Schedule", content: <MeetingsView room={room} now={now} /> },
     ...(counts.dataRequests ? [{ id: "data", label: "Data requests", content: <DataRequestsView room={room} now={now} /> }] : []),
-    { id: "deliverables", label: "Deliverables", content: <DeliverablesView room={room} isOwner={isOwner} /> },
+    { id: "deliverables", label: "Documents", content: <DeliverablesView room={room} isOwner={isOwner} /> },
     ...(room.insight ? [
       { id: "founder", label: "Founder", content: <FounderPanel insight={room.insight} /> },
       { id: "business", label: "Business", count: stuckCount(room.insight), content: <BusinessPanel insight={room.insight} /> },
     ] : []),
   ];
-  const main = (
-    <div className="min-w-0 space-y-6">
-      <section aria-labelledby="room-title" className="relative border border-line-soft bg-paper-raised p-6 sm:p-8">
-        <div className="relative lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-start lg:gap-10">
-          <div>
-          <p className="text-sm font-medium text-ink-muted">{room.businessName}</p>
-          <h1 id="room-title" className="mt-2 font-serif text-3xl font-normal tracking-tight sm:text-4xl">{here.title}</h1>
+
+  const header = (
+    <section aria-labelledby="room-title" className="border-b border-line-soft bg-white px-4 pt-5 pb-4 sm:px-7">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-xs text-ink-muted"><span>{room.businessName}</span><span aria-hidden className="px-1.5">/</span><span>{room.stageLabel}</span></p>
+          <h1 id="room-title" className="mt-1 font-sans text-2xl font-semibold tracking-tight">{here.title}</h1>
+          <p className="mt-1 max-w-2xl text-sm text-ink-600">{here.line}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-5">
           {here.progress && (
-            <div className="mt-3 max-w-sm">
-              <div className="flex justify-between text-xs text-ink-muted"><span>{here.progress.label}</span><span>{Math.round((here.progress.done / here.progress.total) * 100)}%</span></div>
-              <div className="mt-1 h-1.5 w-full bg-line-soft" role="progressbar" aria-label={here.progress.label} aria-valuenow={here.progress.done} aria-valuemin={0} aria-valuemax={here.progress.total}>
-                <div className="h-1.5 bg-brand" style={{ width: `${Math.min(100, (here.progress.done / here.progress.total) * 100)}%` }} />
+            <div className="w-56">
+              <div className="flex justify-between gap-3 text-xs"><span className="font-medium text-ink">{here.progress.label}</span><span className="text-ink-muted tabular-nums">{Math.round((here.progress.done / here.progress.total) * 100)}%</span></div>
+              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-paper-sunken" role="progressbar" aria-label={here.progress.label} aria-valuenow={here.progress.done} aria-valuemin={0} aria-valuemax={here.progress.total}>
+                <div className="h-full rounded-full bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight" style={{ width: `${Math.min(100, (here.progress.done / here.progress.total) * 100)}%` }} />
               </div>
             </div>
           )}
-          <p className="mt-3 max-w-xl text-ink-600">{here.line}</p>
-          </div>
-
-          <div>
-          <div className="mt-6 border border-brand-line bg-brand-tint p-4 lg:mt-0" aria-labelledby="next-action">
-            <p id="next-action" className={KICKER}>Next action{action.kind === "task" ? ` · ${action.label}` : ""}</p>
-            {action.kind === "task" && (
-              <>
-                <p className="mt-1 font-serif text-xl font-normal tracking-tight">{action.task.title}</p>
-                {action.task.detail && <TaskDetail text={action.task.detail} className="mt-1 text-sm text-ink-600" />}
-                {action.task.status === "needs_more" && action.task.statusNote && <p className="mt-1 text-sm text-danger">We need a bit more: {action.task.statusNote}</p>}
-                <TaskControls task={action.task} uploadsEnabled={room.uploadsEnabled} due />
-              </>
-            )}
-            {action.kind === "signoff" && (
-              <>
-                <p className="mt-1 font-serif text-xl font-normal tracking-tight">Read the {action.deliverable.kindLabel} and give your {METHOD.signOff}</p>
-                <p className="mt-1 text-sm text-ink-600">{METHOD_MEANING.signOff} If you disagree, say so in a comment under it.</p>
-                <a href={`#step-${action.step}`} className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand underline underline-offset-2" onClick={() => setOpen(action.step)}>Open the {action.deliverable.kindLabel} <ArrowRight className="h-3.5 w-3.5" aria-hidden /></a>
-              </>
-            )}
-            {action.kind === "none" && <p className="mt-1 text-sm text-ink-600">Nothing outstanding. We will tell you here when there is.</p>}
-          </div>
-
-          {room.nextSession ? (
-            <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-              <CalendarClock className="h-4 w-4 text-brand" aria-hidden />
-              <span className="font-semibold">Next {METHOD.session}:</span>
-              <span>{room.nextSession.title}</span>
-              <span className="text-ink-muted">{lagos(room.nextSession.scheduledFor)} (Lagos time){room.nextSession.durationMinutes ? `, ${room.nextSession.durationMinutes} minutes` : ""}</span>
-              {room.nextSession.meetingLink && <a href={room.nextSession.meetingLink} target="_blank" rel="noreferrer" className="font-semibold text-brand underline underline-offset-2">Join the {METHOD.session}</a>}
-            </p>
-          ) : room.booking ? (
-            <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-              <CalendarClock className="h-4 w-4 text-brand" aria-hidden />
-              <a href={room.booking.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 bg-brand px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-deep-hover">Book {room.booking.title}</a>
-              <span className="text-ink-muted">Pick a time on Calendly. It shows here, with the Join link, once you have booked.</span>
+          {room.team.length > 0 && (
+            <div className="flex" aria-label={`Team: ${room.team.map(member => member.name).join(", ")}`}>
+              {room.team.map(member => <span key={`${member.name}-${member.roleLabel}`} title={`${member.name}, ${member.roleLabel}`} aria-hidden className={`-ml-1.5 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[11px] font-medium text-white first:ml-0 ${avatarColour(member.name)}`}>{initials(member.name)}</span>)}
             </div>
-          ) : <p className="mt-4 text-sm text-ink-muted">No {METHOD.session} is booked yet. It will show here with a Join link once it is.</p>}
-          </div>
+          )}
         </div>
-      </section>
-
-      <RoomTabs label="Your engagement" initial="overview" tabs={tabs} />
-      {!wide && aside}
-    </div>
+      </div>
+    </section>
   );
-  if (!wide) return <div className="mx-auto max-w-2xl">{main}</div>;
+
   return (
-    <div className="grid grid-cols-[13.5rem_minmax(0,1fr)] items-start gap-8">
-      <RoomSidebar room={room} tabs={tabs} />
-      {main}
+    <div className="flex min-h-screen bg-paper text-ink">
+      {wide && <RoomSidebar room={room} tabs={tabs} account={account} />}
+      <div className="min-w-0 flex-1">
+        <div aria-hidden className="h-[3px] bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight" />
+        {!wide && <RoomTopBar account={account} />}
+        {header}
+        <RoomTabs label="Your engagement" initial="overview" tabs={tabs} />
+      </div>
     </div>
   );
 }
@@ -617,7 +628,7 @@ function DeliverableItem({ item, isOwner }: { item: Deliverable; isOwner: boolea
   const accept = trpc.engagement.client.accept.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success(`${METHOD.signOff} recorded. Thank you.`); } });
   const addComment = trpc.engagement.client.comment.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); setComment(""); } });
   return (
-    <li className="border border-line-soft bg-paper p-3" aria-label={item.title}>
+    <li className="rounded-xl border border-line-soft bg-white p-4" aria-label={item.title}>
       <p className={KICKER}>{item.kindLabel}</p>
       <h4 className="font-semibold">{item.title}</h4>
       <p className="text-xs text-ink-muted">Shared {lagos(item.sharedAt, false)}{isOwner && item.audience === "owner" ? " · only you can see this" : ""}</p>
@@ -676,52 +687,90 @@ export function dueFlag(dueOn: string | null, finished: boolean, now: number): {
 }
 const FLAG_TONE = { late: "text-danger font-medium", soon: "text-ink font-medium", calm: "text-ink-muted", done: "text-ink-muted" } as const;
 
-/** The left rail on a laptop: the business, the engagement, and the views as links (each link opens its tab). */
-function RoomSidebar({ room, tabs }: { room: Room; tabs: RoomTab[] }) {
+/** Who is signed in, for the rail and the phone bar. Optional so the room can render on its own (tests, previews). */
+export type RoomAccount = { name: string; email: string; role: string; internal: boolean };
+
+function useSignOut() {
+  const utils = trpc.useUtils();
+  const [, setLocation] = useLocation();
+  return trpc.account.signOut.useMutation({ onSuccess: () => { utils.account.me.setData(undefined, null); setLocation("/login"); } });
+}
+
+const RAIL_LINK = "flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm text-ink-600 transition-colors hover:bg-paper-sunken hover:text-ink";
+
+/** The left rail on a laptop: the product, the shortcuts, the client's space and engagement, and who is signed in. */
+function SignOutButton({ className }: { className: string }) {
+  const signOut = useSignOut();
+  return <button type="button" onClick={() => signOut.mutate()} disabled={signOut.isPending} className={className}>{signOut.isPending ? "Signing out…" : "Sign out"}</button>;
+}
+
+function RoomSidebar({ room, tabs, account }: { room: Room; tabs: RoomTab[]; account?: RoomAccount }) {
+  const plan = tabs.find(tab => tab.id === "plan");
   return (
-    <nav aria-label="Your room" className="sticky top-24 space-y-6 border-r border-line-soft pr-6 text-sm">
+    <nav aria-label="Your room" className="sticky top-0 flex h-screen w-64 shrink-0 flex-col gap-6 overflow-y-auto border-r border-line-soft bg-white px-3 py-5 text-sm">
+      <a href="/dashboard" className="flex items-center gap-2.5 px-2" aria-label={BRAND.productEndorsement}>
+        <img src={BRAND.markUrl} alt="" className="h-8 w-auto" />
+        <span className="leading-tight"><span className="block font-semibold text-ink">{BRAND.productName}</span><span className="block text-xs text-ink-muted">by {BRAND.organisationName}</span></span>
+      </a>
+      <ul className="space-y-0.5">
+        <li><a href="#overview" className={RAIL_LINK}>Home</a></li>
+        <li><a href="#plan" className={RAIL_LINK}><span>My tasks</span>{plan?.count && plan.count.value > 0 && <span className="rounded-full bg-brand-plum px-2 text-xs font-medium text-white tabular-nums" aria-label={plan.count.label}>{plan.count.value}</span>}</a></li>
+        <li><a href="#deliverables" className={RAIL_LINK}>Files</a></li>
+      </ul>
       <div>
-        <p className="text-xs text-ink-muted">Your space</p>
-        <p className="mt-1 flex items-center gap-2 font-medium text-ink">
-          <span aria-hidden className="flex h-6 w-6 items-center justify-center bg-brand text-xs font-semibold text-white">{room.businessName.trim().charAt(0).toUpperCase()}</span>
+        <p className="px-3 text-xs text-ink-muted">Your space</p>
+        <p className="mt-2 flex items-center gap-2 px-3 font-medium text-ink">
+          <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-brand-plum to-brand text-xs font-semibold text-white">{room.businessName.trim().charAt(0).toUpperCase()}</span>
           <span className="min-w-0 truncate">{room.businessName}</span>
         </p>
-        <p className="mt-1 pl-8 text-xs text-ink-muted">{room.stageLabel}</p>
+        <ul className="ml-6 mt-1 space-y-0.5 border-l border-line-soft pl-3">
+          {tabs.map(tab => (
+            <li key={tab.id}><a href={`#${tab.id}`} className={RAIL_LINK}><span>{tab.label}</span>{tab.count && tab.count.value > 0 && <span className="text-xs tabular-nums text-ink-muted" aria-label={tab.count.label}>{tab.count.value}</span>}</a></li>
+          ))}
+        </ul>
       </div>
-      <ul className="space-y-0.5">
-        {tabs.map(tab => (
-          <li key={tab.id}>
-            <a href={`#${tab.id}`} className="flex items-center justify-between gap-2 px-2 py-2 text-ink-600 transition-colors hover:bg-paper-sunken hover:text-ink">
-              <span>{tab.label}</span>
-              {tab.count && tab.count.value > 0 && <span className="text-xs tabular-nums text-ink-muted" aria-label={tab.count.label}>{tab.count.value}</span>}
-            </a>
-          </li>
-        ))}
-      </ul>
-      {room.team.length > 0 && (
-        <div>
-          <p className="text-xs text-ink-muted">Your team</p>
-          <ul className="mt-2 space-y-2">
-            {room.team.map(member => (
-              <li key={`${member.name}-${member.roleLabel}`} className="flex items-center gap-2">
-                <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-ink-muted text-[11px] font-medium text-white">{initials(member.name)}</span>
-                <span className="min-w-0"><span className="block truncate text-ink">{member.name}</span><span className="block text-xs text-ink-muted">{member.roleLabel}</span></span>
-              </li>
-            ))}
-          </ul>
+      {account && (
+        <div className="mt-auto space-y-1 border-t border-line-soft pt-4">
+          <div className="flex items-center gap-2.5 px-3 pb-2">
+            <span aria-hidden className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColour(account.name || account.email)}`}>{initials(account.name || account.email)}</span>
+            <span className="min-w-0"><span className="block truncate font-medium text-ink">{account.name || account.email}</span><span className="block text-xs text-ink-muted">{account.role}</span></span>
+          </div>
+          <a href="/settings/business" className={RAIL_LINK}>Business settings</a>
+          <a href="/settings/account" className={RAIL_LINK}>Account settings</a>
+          {account.internal && <a href="/admin" className={RAIL_LINK}>Internal area</a>}
+          <SignOutButton className={`${RAIL_LINK} w-full text-left`} />
         </div>
       )}
     </nav>
   );
 }
 
+/** On a phone: the product and the account links in one slim bar; the views are the tabs under the header. */
+function RoomTopBar({ account }: { account?: RoomAccount }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-line-soft bg-white px-4 py-3">
+      <a href="/dashboard" className="flex items-center gap-2" aria-label={BRAND.productEndorsement}><img src={BRAND.markUrl} alt="" className="h-7 w-auto" /><span className="text-sm font-semibold">{BRAND.productName}</span></a>
+      {account && (
+        <div className="flex items-center gap-4 text-sm">
+          <a href="/settings/account" className="text-ink-600">Account</a>
+          <SignOutButton className="text-ink-600" />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Each person keeps one colour from the IP Factory palette, so faces are easy to tell apart. */
+const AVATAR_COLOURS = ["bg-brand", "bg-brand-plum", "bg-highlight-ink", "bg-brand-deep", "bg-health-clear"] as const;
+export const avatarColour = (name: string) => AVATAR_COLOURS[name.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) % AVATAR_COLOURS.length];
+
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]!.toUpperCase()).join("") || "?";
 
-const PLAN_GROUPS: { id: string; name: string; dot: string; test: (task: Task) => boolean }[] = [
-  { id: "you", name: "Waiting on you", dot: "border-brand bg-white", test: isClientOpen },
-  { id: "us", name: "With IP Factory", dot: "border-ink-muted bg-white", test: task => task.side !== "client" && OPEN_TASK_STATUSES.includes(task.status) },
-  { id: "checking", name: "Sent, we are checking", dot: "border-ink-muted bg-paper-sunken", test: task => task.status === "received" },
-  { id: "done", name: "Done", dot: "border-brand bg-brand", test: task => task.status === "accepted" || task.status === "done" },
+const PLAN_GROUPS: { id: string; name: string; dot: string; pill: string; test: (task: Task) => boolean }[] = [
+  { id: "you", name: "Waiting on you", dot: "border-brand-plum bg-white", pill: "bg-brand-plum text-white", test: isClientOpen },
+  { id: "us", name: "With IP Factory", dot: "border-brand bg-white", pill: "bg-brand text-white", test: task => task.side !== "client" && OPEN_TASK_STATUSES.includes(task.status) },
+  { id: "checking", name: "Sent, we are checking", dot: "border-highlight bg-white", pill: "bg-brand-tint text-brand-deep", test: task => task.status === "received" },
+  { id: "done", name: "Done", dot: "border-health-clear bg-health-clear", pill: "bg-health-clear-tint text-health-clear", test: task => task.status === "accepted" || task.status === "done" },
 ];
 
 /** Every task in the engagement, grouped by where it stands, with who owns it and when it is due. Open one to act on it. */
@@ -737,8 +786,8 @@ function PlanView({ room, now }: { room: Room; now: number }) {
           if (!items.length) return null;
           return (
             <section key={group.id} aria-label={group.name}>
-              <h3 className="flex items-center gap-2 pb-2 font-sans text-sm font-medium text-ink">{group.name}<span className="text-xs font-normal tabular-nums text-ink-muted">{items.length}</span></h3>
-              <div className="border border-line-soft bg-paper-raised">
+              <h3 className="flex items-center gap-2 pb-2 font-sans"><span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${group.pill}`}>{group.name}</span><span className="text-xs font-normal tabular-nums text-ink-muted">{items.length}</span></h3>
+              <div className="overflow-hidden rounded-xl border border-line-soft bg-white">
                 <table className="w-full table-fixed text-sm">
                   <thead><tr className="border-b border-line-soft text-left text-xs text-ink-muted"><th className="py-2 pl-3 pr-2 font-normal">Task</th><th className="hidden w-28 px-2 font-normal sm:table-cell">Who</th><th className="hidden w-40 px-2 font-normal sm:table-cell">Due</th><th className="hidden w-32 px-2 pr-3 font-normal sm:table-cell">Type</th></tr></thead>
                   <tbody>
@@ -766,12 +815,12 @@ function PlanView({ room, now }: { room: Room; now: number }) {
         })}
       </div>
       {task && (
-        <aside aria-label="Task details" className="border border-line-soft bg-paper-raised p-5 lg:sticky lg:top-36">
+        <aside aria-label="Task details" className="rounded-xl border border-line-soft bg-white p-5 lg:sticky lg:top-16">
           <div className="flex items-start justify-between gap-3">
             <p className="text-xs text-ink-muted">{task.statusLabel}</p>
             <button type="button" onClick={() => setSelected(null)} className="text-xs text-brand underline underline-offset-2">Close</button>
           </div>
-          <h3 className="mt-1 font-serif text-xl font-normal tracking-tight">{task.title}</h3>
+          <h3 className="mt-1 font-sans text-lg font-semibold tracking-tight">{task.title}</h3>
           <dl className="mt-3 grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
             <dt className="text-ink-muted">Who</dt><dd>{task.side === "client" ? "You" : "IP Factory"}</dd>
             <dt className="text-ink-muted">Due</dt><dd>{task.dueOn ? dateOnly(task.dueOn) : "No date"}</dd>
@@ -794,7 +843,7 @@ function DataRequestsView({ room, now }: { room: Room; now: number }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-ink-600"><span className="font-medium text-ink tabular-nums">{arrived} of {items.length}</span> received. {METHOD_MEANING.dataRequest}</p>
-      <ul className="divide-y divide-line-soft border border-line-soft bg-paper-raised">
+      <ul className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line-soft bg-white">
         {items.map(task => {
           const finished = task.status === "accepted" || task.status === "done";
           const flag = dueFlag(task.dueOn, finished, now);
@@ -830,8 +879,8 @@ function MeetingsView({ room, now }: { room: Room; now: number }) {
         const day = when ? new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short" }).formatToParts(when) : null;
         const part = (type: string) => day?.find(item => item.type === type)?.value ?? "";
         return (
-          <li key={session.id} className="grid grid-cols-[4rem_minmax(0,1fr)] gap-4 border border-line-soft bg-paper-raised p-4" aria-label={session.title}>
-            <div className={`flex flex-col items-center justify-center py-1.5 text-center ${isNext ? "bg-brand text-white" : held ? "bg-paper-sunken text-ink-muted" : "bg-paper-sunken text-ink"}`}>
+          <li key={session.id} className="grid grid-cols-[4rem_minmax(0,1fr)] gap-4 rounded-xl border border-line-soft bg-white p-4" aria-label={session.title}>
+            <div className={`flex flex-col items-center justify-center rounded-lg py-1.5 text-center ${isNext ? "bg-brand text-white" : held ? "bg-health-clear-tint text-health-clear" : "bg-brand-tint text-brand-deep"}`}>
               {when ? <><span className="text-xs">{part("weekday")}</span><span className="text-lg font-medium tabular-nums leading-tight">{part("day")}</span><span className="text-xs">{part("month")}</span></> : <span className="px-1 text-xs">No date</span>}
             </div>
             <div className="min-w-0">
@@ -857,7 +906,7 @@ function DeliverablesView({ room, isOwner }: { room: Room; isOwner: boolean }) {
   return (
     <div className="space-y-3">
       {room.report?.deliveredAt && (
-        <div className="border border-line-soft bg-paper-raised p-4"><p className={KICKER}>{METHOD.fullReport}</p><p className="mt-1 text-sm text-ink-600">Emailed to you {lagos(room.report.deliveredAt, false)}.</p></div>
+        <div className="rounded-xl border border-line-soft bg-white p-4"><p className={KICKER}>{METHOD.fullReport}</p><p className="mt-1 text-sm text-ink-600">Emailed to you {lagos(room.report.deliveredAt, false)}.</p></div>
       )}
       <ul className="space-y-3" aria-label={METHOD.deliverables}>{room.deliverables.map(item => <DeliverableItem key={item.id} item={item} isOwner={isOwner} />)}</ul>
     </div>

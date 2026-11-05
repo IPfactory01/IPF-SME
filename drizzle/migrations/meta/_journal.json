@@ -92,6 +92,13 @@
       "when": 1793836342055,
       "tag": "0012_two_step_and_access_expiry",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793870126978,
+      "tag": "0013_team_roles_and_titles",
+      "breakpoints": true
     }
   ]
 }

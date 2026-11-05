@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { toast } from "sonner";
 import { CopyButton, TD, TH } from "./AdminPrimitives";
 import { formatDate, roleDisplay } from "./format";
+import { FIRM_TITLES } from "@shared/engagement";
 
 const STATUS: Record<string, string> = { active: "Active", suspended: "Suspended", disabled: "Disabled" };
 
@@ -49,6 +50,10 @@ export default function PeoplePanel() {
   });
   const resetTwoStep = trpc.people.resetTwoStep.useMutation({
     onSuccess: () => { toast.success("Two-step sign-in reset. They set it up again at their next sign-in."); refresh(); },
+    onError: error => toast.error(error.message),
+  });
+  const setTitle = trpc.people.setJobTitle.useMutation({
+    onSuccess: () => { toast.success("Title saved."); refresh(); },
     onError: error => toast.error(error.message),
   });
   const remove = (event: React.FormEvent) => {
@@ -111,7 +116,15 @@ export default function PeoplePanel() {
             {people.data.map(person => (
               <tr key={person.id} className="border-b border-line-soft">
                 <td className={TD}><span className="block font-medium">{person.name || "-"}</span><span className="block text-xs text-ink-muted">{person.email}</span></td>
-                <td className={TD}>{person.roles.length ? roleDisplay(person.roles) : person.businesses ? "Client" : "-"}</td>
+                <td className={TD}>
+                  {person.roles.length ? roleDisplay(person.roles) : person.businesses ? "Client" : "-"}
+                  {person.roles.length > 0 && (
+                    <select aria-label={`Firm title for ${person.name || person.email}`} className="mt-1 block border border-line bg-white px-1 py-0.5 text-xs" value={person.jobTitle ?? ""} disabled={setTitle.isPending} onChange={event => setTitle.mutate({ userId: person.id, jobTitle: event.target.value || null })}>
+                      <option value="">No title</option>
+                      {[...FIRM_TITLES, ...(person.jobTitle && !(FIRM_TITLES as readonly string[]).includes(person.jobTitle) ? [person.jobTitle] : [])].map(title => <option key={title} value={title}>{title}</option>)}
+                    </select>
+                  )}
+                </td>
                 <td className={TD}>{STATUS[person.status] ?? person.status}</td>
                 <td className={TD}>{person.roles.length === 0 ? "-" : person.twoStep ? "On" : <span className="font-semibold text-danger">Not set up</span>}</td>
                 <td className={TD}>{person.accessEndsAt ? formatDate(person.accessEndsAt) : "-"}</td>

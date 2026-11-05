@@ -108,7 +108,7 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
 
   return (
     <div>
-      <div className="sticky z-30 border-b border-line-soft bg-paper/90 backdrop-blur-md" style={{ top }} data-room-tabs>
+      <div className="sticky z-30 border-b border-line-soft bg-white px-2 sm:px-5" style={{ top }} data-room-tabs>
         <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="flex gap-1 overflow-x-auto [scrollbar-width:none]">
           {tabs.map((tab, k) => (
             <button
@@ -163,7 +163,7 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
               aria-labelledby={`tab-${tab.id}`}
               aria-hidden={k !== index}
               inert={k !== index}
-              className="min-w-0 pb-2 pt-6"
+              className="min-w-0 px-4 pb-10 pt-6 sm:px-7"
               style={{ width: `${100 / tabs.length}%` }}
             >
               {tab.content}

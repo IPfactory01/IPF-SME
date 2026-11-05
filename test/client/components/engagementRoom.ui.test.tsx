@@ -63,7 +63,7 @@ const room = (over: Record<string, unknown> = {}) => ({
   insight: null as RoomInsight | null,
   booking: null as null | { sessionId: number; title: string; url: string },
   measure: null,
-  team: [{ name: "Lewis Lead", roleLabel: "Engagement lead" }, { name: "Ola Analyst", roleLabel: "Analyst" }],
+  team: [{ name: "Lewis Lead", roleLabel: "Engagement Manager", jobTitle: null as string | null }, { name: "Ola Analyst", roleLabel: "Analyst", jobTitle: null as string | null }],
   nextSession: { id: 1, title: "Business Review Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1" },
   sessions: [
     { id: 1, title: "Business Review Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1", status: "planned" as const, weekNumber: 1, sortOrder: 7, agenda: null, notes: null, notesSharedAt: null, notesAudience: null },
@@ -97,13 +97,17 @@ describe("the client's room", () => {
     expect(hero.getByText("Ada Foods")).toBeTruthy();
     expect(hero.queryByText(/Welcome back/)).toBeNull();
     expect(hero.getByRole("progressbar", { name: "Day 4 of 14" }).getAttribute("aria-valuenow")).toBe("4");
-    expect(hero.getByText("Next action · Data Request 1 of 3")).toBeTruthy();
-    expect(hero.getByText("Your last 12 months of sales")).toBeTruthy();
-    expect(hero.getByText("By Wed 14 Oct")).toBeTruthy();
-    expect(hero.getByText("Business Review Session 1")).toBeTruthy();
-    expect(hero.getByText(/Fri 23 Oct, 10:00 am \(Lagos time\), 90 minutes/)).toBeTruthy();
-    expect(hero.getByRole("link", { name: "Join the Session" }).getAttribute("href")).toBe("https://zoom.example.test/j/1");
-    expect(screen.getByRole("heading", { name: "Lewis Lead and Ola Analyst" })).toBeTruthy();
+    // The Overview opens with the next action and the next meeting, side by side, and the team in the column.
+    const action = within(screen.getByRole("region", { name: "Next action · Data Request 1 of 3" }));
+    expect(action.getByText("Your last 12 months of sales")).toBeTruthy();
+    expect(action.getByText("By Wed 14 Oct")).toBeTruthy();
+    const meeting = within(screen.getByRole("region", { name: "Next meeting" }));
+    expect(meeting.getByText("Business Review Session 1")).toBeTruthy();
+    expect(meeting.getByText(/Fri 23 Oct, 10:00 am \(Lagos time\), 90 minutes/)).toBeTruthy();
+    expect(meeting.getByRole("link", { name: "Join the Session" }).getAttribute("href")).toBe("https://zoom.example.test/j/1");
+    const team = within(screen.getByRole("region", { name: "Your team" }));
+    expect(team.getByText("Lewis Lead")).toBeTruthy();
+    expect(team.getByText("Ola Analyst")).toBeTruthy();
   });
 
   it("numbers the Engagement timeline one to seven, marks what is done with its date, and opens the current step by itself", () => {
@@ -189,14 +193,14 @@ describe("the client's room", () => {
     expect(screen.queryByRole("button", { name: /Sign off the/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "Share with my team" })).toBeNull();
     expect(screen.queryByText(/only you can see/)).toBeNull();
-    expect(screen.getByText("Nothing outstanding. We will tell you here when there is.")).toBeTruthy();
+    expect(screen.getAllByText("Nothing outstanding. We will tell you here when there is.").length).toBeGreaterThan(0);
   });
 
   it("says plainly when nothing is booked, planned or shared yet", () => {
     render(<EngagementRoom room={room({ stage: "setting_up", stageLabel: "Getting set up", journey: journeyOf("setting_up"), nextSession: null, team: [], tasks: [], deliverables: [], sessions: [] })} />);
     expect(screen.getByRole("heading", { name: "Getting set up" })).toBeTruthy();
     expect(screen.getByText("No Session is booked yet. It will show here with a Join link once it is.")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "We are naming your team now." })).toBeTruthy();
+    expect(screen.getByText("We are naming your team now.")).toBeTruthy();
     expect(screen.getByText("Your Work Plan appears here once your team sets it.")).toBeTruthy();
   });
 
@@ -300,7 +304,7 @@ describe("the room's views", () => {
 
   it("shows the same views for every client, opening on the Overview, without Founder and Business when nothing is behind the room", () => {
     render(<EngagementRoom room={room()} />);
-    expect(names().filter(name => name !== "Data requests")).toEqual(["Overview", "Plan", "Meetings", "Deliverables"]);
+    expect(names().filter(name => name !== "Data requests")).toEqual(["Overview", "List", "Schedule", "Documents"]);
     expect(screen.getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("list", { name: "Engagement timeline" })).toBeTruthy();
   });
@@ -386,9 +390,10 @@ describe("the room on a laptop or desktop", () => {
     window.history.replaceState(null, "", "/dashboard");
   });
 
-  it("keeps the phone layout where the screen is narrow: no column beside the timeline, the seat card at the end", () => {
+  it("keeps one column on a phone, with no rail: the column of cards follows the timeline, the seat card once", () => {
     render(<EngagementRoom room={room()} aside={<p>Seat card</p>} />);
-    expect(screen.queryByRole("complementary", { name: "At a glance" })).toBeNull();
+    expect(screen.queryByRole("navigation", { name: "Your room" })).toBeNull();
+    expect(screen.getByRole("complementary", { name: "At a glance" })).toBeTruthy();
     expect(screen.getAllByText("Seat card")).toHaveLength(1);
   });
 
@@ -408,10 +413,11 @@ describe("the room on a laptop or desktop", () => {
     expect(deliverables.getByRole("link", { name: "Full Report" })).toBeTruthy();
     expect(deliverables.getByRole("link", { name: "Findings" })).toBeTruthy();
     expect(deliverables.getByText("Your Sign-off")).toBeTruthy();
-    // The seat card is shown once, beside the team, not in the column.
+    // The seat card is shown once, with the team, in the column; the rail is there on a laptop.
     expect(screen.getAllByText("Seat card")).toHaveLength(1);
-    expect(glance.queryByText("Seat card")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Lewis Lead and Ola Analyst" })).toBeTruthy();
+    expect(glance.getByText("Seat card")).toBeTruthy();
+    expect(within(glance.getByRole("region", { name: "Your team" })).getByText("Lewis Lead")).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "Your room" })).toBeTruthy();
 
     // A link in the column opens the step that holds it.
     fireEvent.click(waiting.getByRole("link", { name: "Your Sign-off on the Findings" }));
@@ -464,7 +470,7 @@ describe("booking the Business Review Sessions", () => {
   it("shows the booked Session instead of a Book button once there is one", () => {
     render(<EngagementRoom room={room({ booking: null })} />);
     expect(screen.queryByRole("link", { name: /^Book / })).toBeNull();
-    expect(screen.getByText("Next Session:")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Next meeting" })).getByText("Business Review Session 1")).toBeTruthy();
   });
 });
 
@@ -478,7 +484,7 @@ describe("the Plan, Meetings and Data requests views", () => {
 
   it("groups every task by where it stands, with who owns it and a due flag, and opens one to act on it", () => {
     render(<EngagementRoom room={room()} now={NOW} />);
-    open(/^Plan/);
+    open(/^List/);
     const waiting = within(screen.getByRole("region", { name: "Waiting on you" }));
     expect(waiting.getByText("Your last 12 months of sales")).toBeTruthy();
     // Twice per row: in the Due column and in the line under the title that phones show instead.
@@ -494,7 +500,7 @@ describe("the Plan, Meetings and Data requests views", () => {
 
   it("lists the meetings in date order, with the Join link before and the shared notes after", () => {
     render(<EngagementRoom room={room()} now={NOW} />);
-    open("Meetings");
+    open("Schedule");
     const meetings = within(screen.getByRole("list", { name: "Meetings" })).getAllByRole("listitem");
     expect(meetings.map(item => item.getAttribute("aria-label"))).toEqual(["Kick-off", "Business Review Session 1"]);
     expect(within(meetings[0]).getByText("We agreed to start with pricing.")).toBeTruthy();
@@ -522,3 +528,14 @@ describe("the due flag", () => {
     expect(dueFlag(null, false, now)).toBeNull();
   });
 });
+
+describe("the team on the room", () => {
+  beforeEach(() => { window.history.replaceState(null, "", "/dashboard"); });
+  it("shows each person's role on this engagement and their firm title", () => {
+    render(<EngagementRoom room={room({ team: [{ name: "Tola Manager", roleLabel: "Engagement Manager", jobTitle: "Senior Associate" }, { name: "Ola Analyst", roleLabel: "Analyst", jobTitle: null }] })} />);
+    const team = within(screen.getByRole("region", { name: "Your team" }));
+    expect(team.getByText("Engagement Manager · Senior Associate")).toBeTruthy();
+    expect(team.getByText("Analyst")).toBeTruthy();
+  });
+});
+

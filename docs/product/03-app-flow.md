@@ -260,19 +260,19 @@ flowchart TD
 ```
 
 **The same frame for every client** (5 November, modelled on the IPF project-folder shell: each view answers one
-question a client folder answers). Under the Now panel: **Overview · Plan · Meetings · Data requests · Deliverables**,
+question a client folder answers). Laid out like the approved prototype (Marcelle's room): the room fills the screen with its own left rail (the product, Home, My tasks, Files, the client's space with its views, and the account links), a white header (business / stage, the title, Day N of M with the logo-coloured bar, team avatars) and the views as tabs: **Overview · List · Schedule · Data requests · Documents**,
 then **Founder · Business** when a Business Check or Full Report is behind the engagement (owner and full-access staff
-only). It opens on Overview (the timeline, Waiting on you, Deliverables and the team). On a laptop a left rail shows
-the business, the stage, the views as links (with counts) and the team.
+only). It opens on Overview: the next action and the next meeting, then the timeline beside Waiting on you, Deliverables and
+the team (each person's role on this engagement and firm title). Phones get a slim top bar instead of the rail.
 
-- **Plan:** every task grouped Waiting on you / With IP Factory / Sent, we are checking / Done, with who owns it, a due
+- **List:** every task grouped Waiting on you / With IP Factory / Sent, we are checking / Done, with who owns it, a due
   flag ("Due in 2 days", "Due today", "Overdue by 3 days", "Done", in Lagos days) and the type. A task opens in a panel
   beside the list with its detail, files and the client's buttons (upload, mark as submitted or done). On a phone the
   owner and due flag sit under each title.
-- **Meetings:** every Session in date order with a date tile, Held / Next / Booked / To be booked, the Join link
+- **Schedule:** every Session in date order with a date tile, Held / Next / Booked / To be booked, the Join link
   before it and the notes once shared.
 - **Data requests:** shown only when there are any; "N of M received" and each request with its status and upload.
-- **Deliverables:** the Full Report and every shared Deliverable, with comments and Sign-off.
+- **Documents:** the Full Report and every shared Deliverable, with comments and Sign-off.
 
 A link to `#overview`, `#plan`, `#meetings`, `#data`, `#deliverables`, `#founder` or `#business` opens that view, and a
 link into the timeline (`#step-5`) opens Overview first.

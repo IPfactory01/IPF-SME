@@ -277,7 +277,8 @@ describe("files in the room", () => {
     render(<EngagementRoom room={room({ sentFiles })} />);
     openData();
     const received = within(screen.getByRole("region", { name: /Documents received/ }));
-    expect(received.getByText("B1 Your last 12 months of sales")).toBeTruthy();
+    expect(received.getByText("B1")).toBeTruthy();
+    expect(received.getByText("Your last 12 months of sales")).toBeTruthy();
     expect(received.getByText("Under review")).toBeTruthy();
   });
 

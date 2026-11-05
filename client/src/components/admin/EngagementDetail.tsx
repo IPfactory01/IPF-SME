@@ -359,7 +359,7 @@ function InboxRow({ file, data, engagementId }: { file: InboxFile; data: Detail;
           {requests.map(task => (
             <label key={task.id} className="flex items-start gap-2 text-xs text-ink">
               <input type="checkbox" disabled={!data.can.manage} checked={picked.includes(task.id)} onChange={event => setPicked(event.target.checked ? [...picked, task.id] : picked.filter(taskId => taskId !== task.id))} />
-              <span>{task.ref ? `${task.ref} ` : ""}{task.title} <span className="text-ink-muted">({task.statusLabel})</span></span>
+              <span>{task.ref && <span className="mr-1 font-mono">{task.ref}</span>}{task.title} <span className="text-ink-muted">({task.statusLabel})</span></span>
             </label>
           ))}
         </div>

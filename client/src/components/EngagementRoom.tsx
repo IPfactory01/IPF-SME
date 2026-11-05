@@ -203,7 +203,7 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
             <div className="w-56">
               <div className="flex justify-between gap-3 text-xs"><span className="font-medium text-ink">{here.progress.label}</span><span className="text-ink-muted tabular-nums">{Math.round((here.progress.done / here.progress.total) * 100)}%</span></div>
               <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-paper-sunken" role="progressbar" aria-label={here.progress.label} aria-valuenow={here.progress.done} aria-valuemin={0} aria-valuemax={here.progress.total}>
-                <div className="h-full rounded-full bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight" style={{ width: `${Math.min(100, (here.progress.done / here.progress.total) * 100)}%` }} />
+                <div className="h-full rounded-full bg-brand" style={{ width: `${Math.min(100, (here.progress.done / here.progress.total) * 100)}%` }} />
               </div>
             </div>
           )}
@@ -815,7 +815,8 @@ function RoomTopBar({ account }: { account?: RoomAccount }) {
 }
 
 /** Each person keeps one colour from the IP Factory palette, so faces are easy to tell apart. */
-const AVATAR_COLOURS = ["bg-brand", "bg-brand-plum", "bg-highlight-ink", "bg-brand-deep", "bg-health-clear"] as const;
+/** One tone for every person: the room's colour belongs to the stage band. */
+const AVATAR_COLOURS = ["bg-brand-deep"] as const;
 export const avatarColour = (name: string) => AVATAR_COLOURS[name.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) % AVATAR_COLOURS.length];
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]!.toUpperCase()).join("") || "?";
@@ -892,7 +893,8 @@ function PlanView({ room, now }: { room: Room; now: number }) {
 
 // ---- Data Requests: one drop box, one checklist ----------------------------------------------------------------------
 
-const PRIORITY_CHIP = { high: "bg-health-stuck-tint text-health-stuck", medium: "bg-health-watch-tint text-health-watch", low: "bg-paper-sunken text-ink-muted" } as const;
+/** Only high priority carries colour; the overdue flag is the other red on a row. */
+const PRIORITY_TONE = { high: "font-medium text-health-stuck", medium: "text-ink-muted", low: "text-ink-muted" } as const;
 const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 } as const;
 const answeredShare = (task: Task) => (task.status === "accepted" || task.status === "done" || task.status === "not_available" ? 1 : task.status === "received" || task.status === "needs_more" ? 0.5 : 0);
 
@@ -918,7 +920,7 @@ function RequestSummary({ items, now }: { items: Task[]; now: number }) {
         </div>
       ))}
       <div className="col-span-2 h-2 overflow-hidden rounded-full bg-chart-track lg:col-span-4" role="progressbar" aria-label="Data Request received" aria-valuenow={Math.round(share * 100)} aria-valuemin={0} aria-valuemax={100}>
-        <div className="h-full rounded-full bg-chart-done motion-safe:transition-[width] motion-safe:duration-700" style={{ width: `${share * 100}%` }} />
+        <div className="h-full rounded-full bg-brand" style={{ width: `${share * 100}%` }} />
       </div>
     </div>
   );
@@ -977,7 +979,7 @@ function SentFiles({ files }: { files: Room["sentFiles"] }) {
               <span className="shrink-0 text-xs text-ink-muted">{lagos(file.createdAt, false)}</span>
             </div>
             <p className="mt-1 flex flex-wrap gap-1 pl-5.5 text-xs">
-              {file.matchedTo.length ? file.matchedTo.map(match => <span key={match.taskId} className="rounded-md bg-health-clear-tint px-1.5 py-0.5 text-health-clear-strong">{match.ref ? `${match.ref} ` : ""}{match.title}</span>)
+              {file.matchedTo.length ? file.matchedTo.map(match => <span key={match.taskId} className="rounded-md bg-health-clear-tint px-1.5 py-0.5 text-health-clear-strong">{match.ref && <span className="mr-1 font-mono">{match.ref}</span>}{match.title}</span>)
                 : <span className="text-ink-muted">Under review</span>}
             </p>
           </li>
@@ -989,7 +991,7 @@ function SentFiles({ files }: { files: Room["sentFiles"] }) {
 
 const STATUS_MARK: Record<string, { icon: React.ReactNode; tone: string }> = {
   done: { icon: <Check className="h-3.5 w-3.5" aria-hidden />, tone: "bg-chart-done text-white border-chart-done" },
-  half: { icon: <span className="h-2 w-2 rounded-full bg-current" aria-hidden />, tone: "border-chart-checking text-chart-checking bg-white" },
+  half: { icon: <span className="h-2 w-2 rounded-full bg-current" aria-hidden />, tone: "border-brand text-brand bg-white" },
   missing: { icon: <CircleSlash className="h-3.5 w-3.5" aria-hidden />, tone: "border-line text-ink-muted bg-paper-sunken" },
   open: { icon: <CircleDashed className="h-3.5 w-3.5" aria-hidden />, tone: "border-line-strong text-ink-faint bg-white" },
 };
@@ -1006,11 +1008,11 @@ function RequestRow({ task, now }: { task: Task; now: number }) {
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-start gap-3 text-left">
         <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${mark.tone}`}>{mark.icon}</span>
         <span className="min-w-0 flex-1">
-          <span className={`block font-medium ${finished ? "text-ink-muted" : "text-ink"}`}>{task.ref && <span className="mr-1.5 tabular-nums text-ink-muted">{task.ref}</span>}{task.title}</span>
+          <span className={`block font-medium ${finished ? "text-ink-muted" : "text-ink"}`}>{task.ref && <span className="mr-2 font-mono text-xs text-ink-muted">{task.ref}</span>}{task.title}</span>
           <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
             <span className={task.status === "needs_more" ? "text-danger" : ""}>{task.statusLabel}</span>
             {flag && !finished && <span className={FLAG_TONE[flag.tone]}>{flag.text}</span>}
-            {task.priority && isOpen(task) && <span className={`rounded px-1.5 py-px font-medium ${PRIORITY_CHIP[task.priority]}`}>{ENGAGEMENT_TASK_PRIORITY_LABELS[task.priority]}</span>}
+            {task.priority && isOpen(task) && <span className={PRIORITY_TONE[task.priority]}>{ENGAGEMENT_TASK_PRIORITY_LABELS[task.priority]} priority</span>}
             {task.files.length > 0 && <span className="inline-flex items-center gap-0.5"><Paperclip className="h-3 w-3" aria-hidden />{task.files.length}</span>}
           </span>
         </span>
@@ -1053,7 +1055,7 @@ function DataRequestsView({ room, now }: { room: Room; now: number }) {
                 {(sections.length > 1 || section) && (
                   <div className="flex items-center justify-between gap-3 border-b border-line-soft pb-1.5">
                     <h4 className="font-sans text-xs font-semibold text-ink">{section || "Other"}</h4>
-                    <span className="flex items-center gap-2 text-xs tabular-nums text-ink-muted">{done} of {list.length}<span aria-hidden className="h-1.5 w-16 overflow-hidden rounded-full bg-chart-track"><span className="block h-full rounded-full bg-chart-done" style={{ width: `${(done / list.length) * 100}%` }} /></span></span>
+                    <span className="flex items-center gap-2 text-xs tabular-nums text-ink-muted">{done} of {list.length}<span aria-hidden className="h-1.5 w-16 overflow-hidden rounded-full bg-chart-track"><span className="block h-full rounded-full bg-brand" style={{ width: `${(done / list.length) * 100}%` }} /></span></span>
                   </div>
                 )}
                 <ul className="divide-y divide-line-soft">{list.map(task => <RequestRow key={task.id} task={task} now={now} />)}</ul>

@@ -301,8 +301,8 @@ describe("the drop box on the team's side", () => {
     expect(file.queryByText(/Send the cash template/)).toBeNull();
     const save = file.getByRole("button", { name: "Save the match" }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
-    fireEvent.click(file.getByLabelText(/^B1 Your sales for the last 12 months/));
-    fireEvent.click(file.getByLabelText(/^B3 Your price list/));
+    fireEvent.click(file.getByLabelText(/Your sales for the last 12 months/));
+    fireEvent.click(file.getByLabelText(/Your price list/));
     fireEvent.click(save);
     expect(api.calls.matchFile).toEqual([{ fileId: 99, taskIds: [52, 51] }]);
   });

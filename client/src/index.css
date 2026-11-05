@@ -71,12 +71,8 @@
   --color-health-stuck: #B42318; /* Stuck: text, dots and borders */
   --color-health-stuck-tint: #FCE9E7; /* Stuck: background */
 
-  /* Charts in the client room: who holds each piece of work. Brand hues lifted into one lightness band so they stay
-     apart for colour-blind readers (checked with the dataviz validator: CVD dE 10.7, normal-vision dE 15.5). Always
-     shown with a legend or a label, never colour alone. */
-  --color-chart-you: #A3407A; /* Waiting on you (brand plum, lifted) */
-  --color-chart-us: #2F6DB5; /* With IP Factory (brand navy, lifted) */
-  --color-chart-checking: #2AA6CF; /* Sent, we are checking (brand cyan) */
+  /* Charts in the client room: done is the health green, the empty track a quiet neutral. Colour in the room's
+     dashboard belongs to the stage band (brand navy and plum); see the design brief. */
   --color-chart-done: #3A9A62; /* Done (health green, lifted) */
   --color-chart-track: #EEF2F5; /* Empty track behind a ring or bar */
 

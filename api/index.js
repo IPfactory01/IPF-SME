@@ -4373,9 +4373,55 @@ async function notifyOwner(payload) {
 import { initTRPC, TRPCError as TRPCError5 } from "@trpc/server";
 import superjson from "superjson";
 init_brand();
+
+// server/databaseHealth.ts
+import { sql as sql4 } from "drizzle-orm";
+var CONNECTION_STRING = /\b[a-z][a-z0-9+.-]*:\/\/[^\s'"]+/gi;
+var PASSWORD_PAIR = /(password|pwd|secret|key)=\S+/gi;
+function describeDatabaseError(error) {
+  let code = null;
+  let reason = "";
+  for (let current = error, depth = 0; current && depth < 5; depth++) {
+    const item2 = current;
+    if (typeof item2.code === "string" && !code) code = item2.code;
+    if (typeof item2.message === "string" && item2.message && !item2.message.startsWith("Failed query")) reason = item2.message;
+    current = item2.cause;
+  }
+  reason = (reason || "Unknown database error").replace(CONNECTION_STRING, "[connection string]").replace(PASSWORD_PAIR, "$1=[hidden]").slice(0, 240);
+  return { code, reason };
+}
+async function checkDatabase(db, timeoutMs = 5e3) {
+  if (!db) return { ok: false, code: null, reason: "DATABASE_URL is not set" };
+  let timer;
+  try {
+    await Promise.race([
+      db.execute(sql4`select 1`),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(Object.assign(new Error(`No answer from the database within ${timeoutMs / 1e3} seconds`), { code: "TIMEOUT" })), timeoutMs);
+      })
+    ]);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, ...describeDatabaseError(error) };
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+var UNEXPECTED_ERROR_MESSAGE = "Something went wrong on our side. Please try again in a minute. If it keeps happening, write to us.";
+
+// server/_core/trpc.ts
 var t = initTRPC.context().create({
-  transformer: superjson
+  transformer: superjson,
+  errorFormatter: ({ shape, error }) => safeErrorShape(shape, error)
 });
+function safeErrorShape(shape, error) {
+  const unplanned = error.code === "INTERNAL_SERVER_ERROR" && error.cause !== void 0 && !(error.cause instanceof TRPCError5);
+  if (!unplanned) return shape;
+  console.error("[Server] Unexpected error:", error.cause);
+  const data = { ...shape.data };
+  delete data.stack;
+  return { ...shape, message: UNEXPECTED_ERROR_MESSAGE, data };
+}
 var router = t.router;
 var publicProcedure = t.procedure;
 var requireUser = t.middleware(async (opts) => {
@@ -4491,7 +4537,7 @@ function requireLegacyJump() {
 
 // server/routers/registration.ts
 import { TRPCError as TRPCError7 } from "@trpc/server";
-import { and as and6, desc as desc3, eq as eq9, inArray as inArray2, sql as sql4 } from "drizzle-orm";
+import { and as and6, desc as desc3, eq as eq9, inArray as inArray2, sql as sql5 } from "drizzle-orm";
 import { z as z5 } from "zod";
 import { nanoid } from "nanoid";
 
@@ -4772,7 +4818,7 @@ var registrationRouter = router({
   capacity: publicProcedure.query(async () => {
     const db = await getDb();
     if (!db) return { boardroomCount: 0, boardroomAvailable: true };
-    const result = await db.select({ count: sql4`count(*)` }).from(registrations).where(
+    const result = await db.select({ count: sql5`count(*)` }).from(registrations).where(
       and6(
         eq9(registrations.package, "Boardroom"),
         eq9(registrations.status, "Accepted")
@@ -4813,7 +4859,7 @@ var registrationRouter = router({
     const bookingToken = nanoid(32);
     const { diagnostic, registrationFields } = buildRegistrationInsertFields(input, bookingToken);
     if (input.package === "Boardroom") {
-      const capacityCheck = await db.select({ count: sql4`count(*)` }).from(registrations).where(
+      const capacityCheck = await db.select({ count: sql5`count(*)` }).from(registrations).where(
         and6(
           eq9(registrations.package, "Boardroom"),
           eq9(registrations.status, "Accepted")
@@ -4972,7 +5018,7 @@ Pre-submitted Question: ${input.question || "None"}`
       const applicant = current[0];
       if (!applicant) throw new TRPCError7({ code: "NOT_FOUND", message: "Registration not found" });
       if (applicant.package === "Boardroom") {
-        const acceptedBoardroom = await db.select({ count: sql4`count(*)` }).from(registrations).where(
+        const acceptedBoardroom = await db.select({ count: sql5`count(*)` }).from(registrations).where(
           and6(
             eq9(registrations.package, "Boardroom"),
             eq9(registrations.status, "Accepted")
@@ -5310,7 +5356,7 @@ Notes: ${input.messageNotes || "Please join on time."}`,
 
 // server/routers/scheduling.ts
 import { TRPCError as TRPCError8 } from "@trpc/server";
-import { and as and7, desc as desc4, eq as eq10, sql as sql5 } from "drizzle-orm";
+import { and as and7, desc as desc4, eq as eq10, sql as sql6 } from "drizzle-orm";
 import { z as z6 } from "zod";
 
 // server/calendar.ts
@@ -5778,7 +5824,7 @@ var schedulingRouter = router({
       if (required.kind !== slot.kind) {
         throw new TRPCError8({ code: "BAD_REQUEST", message: `This package books ${required.kind} sessions.` });
       }
-      const currentBookings = await tx.select({ count: sql5`count(*)` }).from(scheduleBookings).where(and7(
+      const currentBookings = await tx.select({ count: sql6`count(*)` }).from(scheduleBookings).where(and7(
         eq10(scheduleBookings.registrationId, applicant.id),
         eq10(scheduleBookings.kind, slot.kind),
         eq10(scheduleBookings.status, "Confirmed")
@@ -5809,10 +5855,10 @@ var schedulingRouter = router({
         }
       }
       const claimedSlots = await tx.update(scheduleSlots).set({
-        bookedCount: sql5`${scheduleSlots.bookedCount} + 1`,
+        bookedCount: sql6`${scheduleSlots.bookedCount} + 1`,
         // PostgreSQL does not coerce a text CASE result into an enum column, so the result is cast explicitly.
-        status: sql5`(CASE WHEN ${scheduleSlots.bookedCount} + 1 >= ${scheduleSlots.capacity} THEN 'Booked' ELSE 'Open' END)::${sql5.identifier(scheduleSlotsStatusEnum.enumName)}`
-      }).where(and7(eq10(scheduleSlots.id, slot.id), eq10(scheduleSlots.status, "Open"), sql5`${scheduleSlots.bookedCount} < ${scheduleSlots.capacity}`)).returning({ id: scheduleSlots.id });
+        status: sql6`(CASE WHEN ${scheduleSlots.bookedCount} + 1 >= ${scheduleSlots.capacity} THEN 'Booked' ELSE 'Open' END)::${sql6.identifier(scheduleSlotsStatusEnum.enumName)}`
+      }).where(and7(eq10(scheduleSlots.id, slot.id), eq10(scheduleSlots.status, "Open"), sql6`${scheduleSlots.bookedCount} < ${scheduleSlots.capacity}`)).returning({ id: scheduleSlots.id });
       if (claimedSlots.length !== 1) {
         throw new TRPCError8({ code: "CONFLICT", message: "That slot has just been taken. Please choose another available time." });
       }
@@ -7260,7 +7306,7 @@ ${BRAND.senderDisplayName}`
 
 // server/routers/referrals.ts
 import { TRPCError as TRPCError11 } from "@trpc/server";
-import { and as and10, desc as desc7, eq as eq13, sql as sql6 } from "drizzle-orm";
+import { and as and10, desc as desc7, eq as eq13, sql as sql7 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { nanoid as nanoid2 } from "nanoid";
 
@@ -7346,7 +7392,7 @@ var referralsRouter = router({
     }
     if (input.decision === "Approved") {
       if (referral.status !== "Qualified") throw new TRPCError11({ code: "PRECONDITION_FAILED", message: "Mark the referral Qualified before approving a credit." });
-      const countRow = (await db.select({ count: sql6`count(*)` }).from(participantReferrals).where(and10(eq13(participantReferrals.referrerRegistrationId, referral.referrerRegistrationId), eq13(participantReferrals.status, "Approved"))))[0];
+      const countRow = (await db.select({ count: sql7`count(*)` }).from(participantReferrals).where(and10(eq13(participantReferrals.referrerRegistrationId, referral.referrerRegistrationId), eq13(participantReferrals.status, "Approved"))))[0];
       if (!referralCreditIsAvailable(Number(countRow?.count ?? 0))) {
         throw new TRPCError11({ code: "PRECONDITION_FAILED", message: `The referrer has reached the maximum of ${REFERRAL_MAX_APPROVED_CREDITS} approved referral credits.` });
       }
@@ -14126,7 +14172,7 @@ var platformRolesRouter = router({
 import { z as z21 } from "zod";
 
 // server/businessSupportAdmin.ts
-import { and as and17, desc as desc12, eq as eq24, inArray as inArray7, isNotNull as isNotNull2, isNull as isNull10, sql as sql8 } from "drizzle-orm";
+import { and as and17, desc as desc12, eq as eq24, inArray as inArray7, isNotNull as isNotNull2, isNull as isNull10, sql as sql9 } from "drizzle-orm";
 import { TRPCError as TRPCError25 } from "@trpc/server";
 async function requireDatabase2() {
   const db = await getDb();
@@ -14242,7 +14288,7 @@ async function getBusinessCheckDetail(db, businessCheckId) {
 }
 var HISTORY_ACTIONS = ["business_check_stage_changed", "business_check_call_outcome", "business_check_call_scheduled", "business_check_call_booked", "payment_details_sent", "payment_proof_received", "payment_confirmed", "payment_confirmation_sent", "full_report_link_sent", "full_report_delivered"];
 async function stageHistoryFor(db, businessCheckId) {
-  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq24(users.id, adminAccessAuditEvents.actorUserId)).where(and17(inArray7(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql8`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc12(adminAccessAuditEvents.createdAt), desc12(adminAccessAuditEvents.id)).limit(100);
+  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq24(users.id, adminAccessAuditEvents.actorUserId)).where(and17(inArray7(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql9`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc12(adminAccessAuditEvents.createdAt), desc12(adminAccessAuditEvents.id)).limit(100);
   return events.map((event) => {
     const details = parseJson2(event.details) ?? {};
     return { id: event.id, action: event.action, from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, delivery: details.delivery ?? null, via: details.via === "paystack" ? "paystack" : null, by: event.by ?? null, at: event.at };
@@ -15260,7 +15306,7 @@ function healthReport(settings = ENV) {
 
 // server/resendWebhook.ts
 import { createHmac as createHmac3, timingSafeEqual as timingSafeEqual6 } from "node:crypto";
-import { and as and20, eq as eq28, sql as sql9 } from "drizzle-orm";
+import { and as and20, eq as eq28, sql as sql10 } from "drizzle-orm";
 init_env();
 var SUPPORTED = /* @__PURE__ */ new Set(["email.sent", "email.delivered", "email.delivery_delayed", "email.bounced", "email.complained", "email.failed", "email.suppressed"]);
 var MAX_SKEW_SECONDS = 5 * 60;
@@ -15317,7 +15363,7 @@ async function handleResendWebhook(req, res) {
     await db.transaction(async (tx) => {
       const [inserted] = await tx.insert(resendEmailEvents).values({ eventId, providerMessageId, eventType: state, recipientEmail, happenedAt }).onConflictDoNothing({ target: resendEmailEvents.eventId }).returning({ id: resendEmailEvents.id });
       if (!inserted) return;
-      await tx.update(businessSupportEmailDeliveries).set({ latestState: state, lastEventAt: happenedAt }).where(and20(eq28(businessSupportEmailDeliveries.providerMessageId, providerMessageId), sql9`(${businessSupportEmailDeliveries.lastEventAt} is null or ${businessSupportEmailDeliveries.lastEventAt} < ${happenedAt})`));
+      await tx.update(businessSupportEmailDeliveries).set({ latestState: state, lastEventAt: happenedAt }).where(and20(eq28(businessSupportEmailDeliveries.providerMessageId, providerMessageId), sql10`(${businessSupportEmailDeliveries.lastEventAt} is null or ${businessSupportEmailDeliveries.lastEventAt} < ${happenedAt})`));
     });
     return res.status(200).json({ received: true });
   } catch (error) {
@@ -15333,9 +15379,10 @@ function createApp() {
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
   app.use(applySecurityHeaders);
-  app.get("/api/health", (_req, res) => {
+  app.get("/api/health", async (_req, res) => {
     const report = healthReport();
-    res.status(report.status).json(report.body);
+    const database7 = await checkDatabase(await getDb().catch(() => null));
+    res.status(database7.ok ? report.status : 503).json({ ...report.body, ok: report.body.ok && database7.ok, database: database7 });
   });
   app.post(PAYSTACK_WEBHOOK_PATH, express.raw({ type: () => true, limit: "256kb" }), handlePaystackWebhook);
   app.post("/api/resend/webhook", express.raw({ type: () => true, limit: "256kb" }), handleResendWebhook);

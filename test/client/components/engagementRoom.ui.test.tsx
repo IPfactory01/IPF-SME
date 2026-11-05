@@ -83,6 +83,7 @@ const room = (over: Record<string, unknown> = {}) => ({
   deliverables: [
     { id: 21, kind: "findings" as const, kindLabel: "Findings", title: "What we found", summary: "Cash leaks at the till.", sharedAt: new Date("2026-10-30T12:00:00Z"), audience: "owner" as const, audienceLabel: "Owner only", accepted: false, files: [], comments: [{ body: "Is this every day?", createdAt: new Date(), authorName: "Ada" }] },
   ],
+  people: [{ name: "Ada Okafor", label: "Owner", you: true }, { name: "Bola Ade", label: "Contributor access", you: false }],
   sentFiles: [] as { id: number; fileName: string; sizeBytes: number; createdAt: Date; mine: boolean; note: string | null; matchedTo: { taskId: number; ref: string | null; title: string }[] }[],
   ...over,
 });
@@ -411,6 +412,16 @@ describe("the team on the room", () => {
     const team = within(screen.getByRole("region", { name: "Your team" }));
     expect(team.getByText("Engagement Manager · Senior Associate")).toBeTruthy();
     expect(team.getByText("Analyst")).toBeTruthy();
+  });
+
+  it("shows the client's own people under the IP Factory team, with what each can see and who is you", () => {
+    render(<EngagementRoom room={room()} />);
+    const team = within(screen.getByRole("region", { name: "Your team" }));
+    expect(within(team.getByRole("list", { name: "IP Factory" })).getAllByRole("listitem")).toHaveLength(2);
+    const own = within(team.getByRole("list", { name: "Ada Foods" }));
+    expect(own.getByText("Ada Okafor").textContent).toContain("(you)");
+    expect(own.getByText("Owner")).toBeTruthy();
+    expect(own.getByText("Contributor access")).toBeTruthy();
   });
 });
 

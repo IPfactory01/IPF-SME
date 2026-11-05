@@ -404,7 +404,7 @@ describe("account dashboard", () => {
 
   it("is the room itself once the engagement exists: no profile card, no account card", () => {
     api.state.me = SESSION;
-    api.state.room = { engagementId: 4, uploadsEnabled: false, businessName: "Richie Tech", viewer: { kind: "member", access: "full" }, stage: "assessment", stageLabel: "Business Review", journey: journeyOf("assessment"), problemStatement: null, measure: null, team: [], nextSession: null, sessions: [], tasks: [], deliverables: [] };
+    api.state.room = { engagementId: 4, uploadsEnabled: false, businessName: "Richie Tech", viewer: { kind: "member", access: "full" }, stage: "assessment", stageLabel: "Business Review", journey: journeyOf("assessment"), problemStatement: null, measure: null, team: [], people: [], sentFiles: [], nextSession: null, sessions: [], tasks: [], deliverables: [] };
     renderAt("/dashboard", <AccountDashboard />);
     expect(screen.getAllByText("Richie Tech").length).toBeGreaterThan(0);
     expect(screen.queryByText(/Welcome back/)).toBeNull();

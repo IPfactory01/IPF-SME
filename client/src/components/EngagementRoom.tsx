@@ -144,19 +144,29 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
     </section>
   );
 
+  const person = (key: string, name: string, line: string, you = false) => (
+    <li key={key} className="flex items-center gap-3">
+      <span aria-hidden className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColour(name)}`}>{initials(name)}</span>
+      <span className="min-w-0"><span className="block font-medium text-ink">{name}{you && <span className="ml-1.5 text-xs font-normal text-ink-muted">(you)</span>}</span><span className="block text-xs text-ink-muted">{line}</span></span>
+    </li>
+  );
   const team = (
     <section aria-labelledby="team-title" className={card}>
       <h2 id="team-title" className={`font-sans ${label}`}>Your team</h2>
+      <h3 className="mt-3 font-sans text-xs font-semibold text-ink">IP Factory</h3>
       {room.team.length ? (
-        <ul className="mt-3 space-y-3">
-          {room.team.map(member => (
-            <li key={`${member.name}-${member.roleLabel}`} className="flex items-center gap-3">
-              <span aria-hidden className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColour(member.name)}`}>{initials(member.name)}</span>
-              <span className="min-w-0"><span className="block font-medium text-ink">{member.name}</span><span className="block text-xs text-ink-muted">{member.roleLabel}{member.jobTitle ? ` · ${member.jobTitle}` : ""}</span></span>
-            </li>
-          ))}
+        <ul className="mt-2 space-y-3" aria-label="IP Factory">
+          {room.team.map(member => person(`${member.name}-${member.roleLabel}`, member.name, `${member.roleLabel}${member.jobTitle ? ` · ${member.jobTitle}` : ""}`))}
         </ul>
-      ) : <p className="mt-2 text-sm text-ink-600">We are naming your team now.</p>}
+      ) : <p className="mt-1 text-sm text-ink-600">We are naming your team now.</p>}
+      {room.people.length > 0 && (
+        <>
+          <h3 className="mt-4 border-t border-line-soft pt-3 font-sans text-xs font-semibold text-ink">{room.businessName}</h3>
+          <ul className="mt-2 space-y-3" aria-label={room.businessName}>
+            {room.people.map((member, index) => person(`p${index}-${member.name}`, member.name, member.label, member.you))}
+          </ul>
+        </>
+      )}
     </section>
   );
 

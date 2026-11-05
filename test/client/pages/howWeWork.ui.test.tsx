@@ -13,10 +13,14 @@ const { PROBLEM_AREAS } = await import("@shared/businessSupport");
 afterEach(cleanup);
 
 describe("How we work (/how-we-work)", () => {
-  it("names the page and walks through the steps from the free check", () => {
+  it("names the page and sets out the seven-step method, what each step produces and where The Shift's stages sit", () => {
     renderAt("/how-we-work", HowWeWorkPage);
     expect(screen.getByRole("heading", { level: 1, name: "Find it. Fix it. See the results." })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "The steps" })).toBeTruthy();
+    const steps = within(screen.getByRole("list", { name: "The seven steps" }));
+    expect(steps.getAllByRole("heading").map((heading) => heading.textContent)).toEqual(["1. Define", "2. Structure", "3. Prioritise", "4. Analyse", "5. Synthesise", "6. Recommend", "7. Implement", "Outcome standard"]);
+    expect(steps.getByText("Question, scope, intended outcome and success measures")).toBeTruthy();
+    expect(steps.getByText("Six-Week Fix, Weekly Check-in, Measure of Success")).toBeTruthy();
+    expect(steps.getByText("Day-30 Review")).toBeTruthy();
   });
 
   it("shows the four ways to work with us, every product under its way with its price and page, and how each way is paid", () => {

@@ -39,7 +39,7 @@ vi.mock("@/lib/trpc", () => ({
 
 const { default: EngagementsView } = await import("@/components/admin/EngagementsView");
 
-const row = { id: 4, stage: "setting_up", stageLabel: "Getting set up", businessName: "Ada Foods", ownerName: "Ada Okafor", ownerEmail: "ada@example.test", hasAccount: true, createdAt: new Date(), team: [], openClientRequests: 5, overdueClientRequests: 2, unscheduledSessions: 2, nextSession: null };
+const row = { id: 4, stage: "setting_up", stageLabel: "Getting set up", businessName: "Ada Foods", ownerName: "Ada Okafor", ownerEmail: "ada@example.test", hasAccount: true, createdAt: new Date(), team: [], openClientRequests: 5, overdueClientRequests: 2, unscheduledSessions: 2, nextSession: null, myRole: null as string | null, unsortedFiles: 0 };
 const task = (over: Record<string, unknown>) => ({ id: 51, engagementId: 4, kind: "data_request", side: "client", title: "Your price list", detail: null, assigneeUserId: null, dueOn: "2026-10-21", status: "open", statusLabel: "To do", statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 4, factor: "internal", createdByUserId: 1, completedAt: null, createdAt: new Date(), updatedAt: new Date(), files: [], ...over });
 const session = { id: 31, engagementId: 4, kind: "assessment_call", title: "Business Review call 1", scheduledFor: null, durationMinutes: 90, meetingLink: null, agenda: null, status: "planned", weekNumber: 1, sortOrder: 7, clientNotes: "Pricing first.", internalNotes: "Watch cash sales.", notesAudience: "owner", notesSharedAt: null, notesSharedByUserId: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() };
 const deliverable = (over: Record<string, unknown>) => ({ id: 41, engagementId: 4, kind: "prescription", kindLabel: "Prescription", title: "Daily cash count", summary: "Count every evening.", status: "draft", audience: "owner", approvedByUserId: null, approvedAt: null, sharedByUserId: null, sharedAt: null, clientAcceptedByUserId: null, clientAcceptedAt: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date(), needsApproval: true, comments: [], files: [], ...over });
@@ -333,3 +333,26 @@ describe("the drop box on the team's side", () => {
     expect(api.calls.saveTask).toEqual([expect.objectContaining({ taskId: 51, section: "B Money", ref: "B3", priority: "high", informs: "Whether prices cover costs", format: "Any" })]);
   });
 });
+
+describe("my projects", () => {
+  it("puts the engagements the person is on first, with their role and what needs them, and opens one", () => {
+    api.list = { setUp: true, items: [{ ...row, myRole: "Lead Consultant", unsortedFiles: 3 }, { ...row, id: 5, businessName: "Bola Bakery", myRole: null }] };
+    api.detail = detail({ manage: true, assign: false, review: false });
+    render(<EngagementsView />);
+    const mine = within(screen.getByRole("region", { name: /My projects/ }));
+    expect(mine.getAllByRole("button")).toHaveLength(1);
+    const card = mine.getByRole("button", { name: "Open Ada Foods" });
+    expect(card.textContent).toContain("Lead Consultant");
+    expect(card.textContent).toContain("3files to sort");
+    expect(card.textContent).toContain("2overdue");
+    fireEvent.click(card);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("is not shown to someone on no engagement", () => {
+    api.list = { setUp: true, items: [row] };
+    render(<EngagementsView />);
+    expect(screen.queryByRole("region", { name: /My projects/ })).toBeNull();
+  });
+});
+

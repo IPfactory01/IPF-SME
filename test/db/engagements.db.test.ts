@@ -261,7 +261,7 @@ for (const target of targets) {
       });
 
       it("keeps several people on one engagement, changes a role without replacing anyone, and emails each person", async () => {
-        const { engagementId } = await client("team-of-three");
+        const { engagementId, owner } = await client("team-of-three");
         const lead = await person(["analyst"], "Lena Lead");
         const analyst = await person(["analyst"], "Ade Analyst");
         const specialist = await person(["subject_matter_expert"], "Sola Specialist");
@@ -280,6 +280,14 @@ for (const target of targets) {
         // The same role again changes nothing and sends nothing.
         expect(await (await superAdmin.call()).engagement.staff.assign({ engagementId, userId: analyst.id, role: "manager" })).toMatchObject({ added: false, notified: false });
         expect(emails()).toHaveLength(4);
+        // Each person sees the engagement under My projects with their own role; the desk's view shows no role for others.
+        const leadList = await (await signIn(lead, true)).call().then(api => api.engagement.staff.list());
+        expect(leadList.items.find(item => item.id === engagementId)).toMatchObject({ myRole: "Lead Consultant", unsortedFiles: 0 });
+        expect((await (await superAdmin.call()).engagement.staff.list()).items.find(item => item.id === engagementId)!.myRole).toBeNull();
+        // The client sees the three, in role order, and their own people with what each can see.
+        const room = (await (await owner.call()).engagement.client.room())!;
+        expect(room.team.map(member => member.roleLabel)).toEqual(["Engagement Manager", "Lead Consultant", "Specialist"]);
+        expect(room.people).toEqual([expect.objectContaining({ label: "Owner", you: true })]);
       });
 
       it("keeps clients out of the team's side", async () => {

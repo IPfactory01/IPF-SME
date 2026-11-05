@@ -1,9 +1,9 @@
 /**
- * How we work (/how-we-work): the steps from the free check to finished work, the four ways to work with us and how
+ * How we work (/how-we-work): the firm's seven-step consulting method with The Shift's stages on each step, the four ways to work with us and how
  * each is paid, what every piece of work comes with, and the ten places businesses get stuck. Steps from
  * shared/businessSupport.ts; ways, products and payment terms from shared/products.ts.
  */
-import { CheckCta, Journey, StuckPicker, useStartCheck } from "@/components/home/HomeSections";
+import { CheckCta, StuckPicker, useStartCheck } from "@/components/home/HomeSections";
 import { PageHero, SectionHeading } from "@/components/PageHero";
 import { SiteShell, usePageMeta, useScrollToTop } from "@/components/SiteShell";
 import { PROMISES, tilePrice } from "@/components/store/StoreBits";
@@ -14,6 +14,7 @@ import { ArrowRight } from "lucide-react";
 import React from "react";
 import { Link } from "wouter";
 import { PAGE_META } from "@shared/seo";
+import { CONSULTING_METHOD, OUTCOME_STANDARD } from "@shared/method";
 
 export default function HowWeWorkPage() {
   useScrollToTop();
@@ -25,7 +26,7 @@ export default function HowWeWorkPage() {
     <SiteShell>
       <PageHero eyebrow="How we work" title="Find it. Fix it. See the results." sub="Every piece of work starts with the real problem and ends with a number that moved. A consultant checks it before you see it." />
 
-      <Journey heading="The steps" sub="From the free check to finished work. Tap a step." />
+      <MethodSection />
 
       <section aria-labelledby="ways-heading" className="border-b border-line bg-paper-sunken/60 py-20 sm:py-24">
         <div className="container mx-auto max-w-6xl">
@@ -74,3 +75,36 @@ export default function HowWeWorkPage() {
     </SiteShell>
   );
 }
+
+/**
+ * The master consulting method (shared/method.ts): seven steps from a question to measurable change, what each step
+ * produces, and where The Shift's named stages sit, then the outcome standard every engagement is held to.
+ */
+function MethodSection() {
+  return (
+    <section aria-labelledby="method-heading" className="border-b border-line py-20 sm:py-24">
+      <div className="container mx-auto max-w-6xl">
+        <SectionHeading id="method-heading" eyebrow="Our method" title="One method takes your question to measurable change." sub="Seven steps, the same discipline on every piece of work. Each step has an output you can see." />
+        <ol aria-label="The seven steps" className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {CONSULTING_METHOD.map((item, index) => (
+            <li key={item.step} className="flex flex-col rounded-xl border border-line bg-paper-raised">
+              <h3 className={`rounded-t-xl px-5 py-3 font-sans text-sm font-semibold text-white ${index === CONSULTING_METHOD.length - 1 ? "bg-brand-plum" : "bg-brand-deep"}`}>{index + 1}. {item.step}</h3>
+              <div className="flex flex-1 flex-col gap-3 p-5">
+                <p className="text-sm leading-relaxed text-ink-soft">{item.produces}</p>
+                <p className="mt-auto border-t border-line-soft pt-3 text-xs text-ink-muted">In The Shift: <span className="text-ink">{item.shift.join(", ")}</span></p>
+              </div>
+            </li>
+          ))}
+          <li className="flex flex-col rounded-xl border border-brand-line bg-brand-tint">
+            <h3 className="px-5 py-3 font-sans text-sm font-semibold text-brand-deep">Outcome standard</h3>
+            <div className="flex flex-1 flex-col gap-3 px-5 pb-5">
+              <p className="text-sm leading-relaxed text-ink">{OUTCOME_STANDARD.test}</p>
+              <p className="mt-auto border-t border-brand-line pt-3 text-xs text-ink-muted">In The Shift: <span className="text-ink">{OUTCOME_STANDARD.shift.join(", ")}</span></p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+  );
+}
+

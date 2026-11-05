@@ -55,3 +55,25 @@ export const METHOD_MEANING: Record<keyof typeof METHOD, string> = {
   engagement: "Everything from your Business Review to the Day-30 Review, in one room.",
   plan: "The plan in your hands at the end, and what support looks like from here.",
 };
+
+/**
+ * The master consulting method (Enzo Krypton & Co. Operational Business Plan v1.0, 14 August 2026, slide 9): one
+ * problem-solving discipline from a client question to implemented and measurable change, used across every service.
+ * `produces` is the plan's wording; `shift` places The Shift's named stages on each step (ET to confirm the mapping).
+ */
+export const CONSULTING_METHOD = [
+  { step: "Define", produces: "Question, scope, intended outcome and success measures", shift: [METHOD.businessCheck, METHOD.discoveryCall] },
+  { step: "Structure", produces: "Issues, hypotheses, workstreams and evidence", shift: [METHOD.workPlan, METHOD.dataRequest] },
+  { step: "Prioritise", produces: "Impact, urgency, materiality and decision relevance", shift: [METHOD.fullReport] },
+  { step: "Analyse", produces: "Data, research, interviews and operational evidence", shift: [METHOD.currentState, `${METHOD.session}s`] },
+  { step: "Synthesise", produces: "Patterns, insights, root causes, implications and choices", shift: [METHOD.findings, METHOD.problemStatement] },
+  { step: "Recommend", produces: "Action, rationale, trade-offs, priorities and decisions", shift: [METHOD.prescription, METHOD.signOff] },
+  { step: "Implement", produces: "Owners, workplan, milestones, governance and measurement", shift: [METHOD.fix, METHOD.checkin, METHOD.measure] },
+] as const;
+
+/** The outcome standard every engagement is held to, and the review that applies it. */
+export const OUTCOME_STANDARD = {
+  test: "Has the work added useful value, created something necessary and materially reduced or resolved the problem that brought the business to us?",
+  formula: "Value added + value created − the client's problem = client fulfilment",
+  shift: [METHOD.day30],
+} as const;

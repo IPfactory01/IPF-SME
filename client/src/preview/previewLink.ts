@@ -109,6 +109,7 @@ const SAMPLE_ROOM = {
   problemStatement: null,
   booking: null,
   measure: null,
+  people: [{ name: "Ada Okafor", label: "Owner", you: true }, { name: "Bola Ade", label: "Contributor access", you: false }],
   team: [{ name: "Femi Adebayo", roleLabel: "Lead Consultant", jobTitle: "Senior Associate" }, { name: "Ngozi Eze", roleLabel: "Analyst", jobTitle: "Senior Business Analyst" }],
   nextSession: { id: 1, title: "Business Review Session 1", scheduledFor: day(0), durationMinutes: 90, meetingLink: "https://zoom.us/" },
   sessions: [

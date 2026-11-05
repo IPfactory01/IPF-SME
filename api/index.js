@@ -399,6 +399,20 @@ var METHOD = {
   engagement: "Engagement",
   plan: "Your Plan"
 };
+var CONSULTING_METHOD = [
+  { step: "Define", produces: "Question, scope, intended outcome and success measures", shift: [METHOD.businessCheck, METHOD.discoveryCall] },
+  { step: "Structure", produces: "Issues, hypotheses, workstreams and evidence", shift: [METHOD.workPlan, METHOD.dataRequest] },
+  { step: "Prioritise", produces: "Impact, urgency, materiality and decision relevance", shift: [METHOD.fullReport] },
+  { step: "Analyse", produces: "Data, research, interviews and operational evidence", shift: [METHOD.currentState, `${METHOD.session}s`] },
+  { step: "Synthesise", produces: "Patterns, insights, root causes, implications and choices", shift: [METHOD.findings, METHOD.problemStatement] },
+  { step: "Recommend", produces: "Action, rationale, trade-offs, priorities and decisions", shift: [METHOD.prescription, METHOD.signOff] },
+  { step: "Implement", produces: "Owners, workplan, milestones, governance and measurement", shift: [METHOD.fix, METHOD.checkin, METHOD.measure] }
+];
+var OUTCOME_STANDARD = {
+  test: "Has the work added useful value, created something necessary and materially reduced or resolved the problem that brought the business to us?",
+  formula: "Value added + value created \u2212 the client's problem = client fulfilment",
+  shift: [METHOD.day30]
+};
 
 // shared/payments.ts
 var PAYMENT_ITEMS = ["full_report", "current_state"];
@@ -12612,12 +12626,16 @@ async function listStaffEngagements(db, actor) {
   }).from(engagements).innerJoin(businessChecks, eq18(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq18(engagements.businessId, businesses.id)).where(scope ? inArray5(engagements.id, scope) : void 0).orderBy(desc9(engagements.id));
   if (!rows.length) return [];
   const ids = rows.map((row) => row.id);
-  const [team, tasks, sessions] = await Promise.all([
-    db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role, name: users.name }).from(engagementTeam).innerJoin(users, eq18(engagementTeam.userId, users.id)).where(inArray5(engagementTeam.engagementId, ids)),
+  const [team, tasks, sessions, drops, matched] = await Promise.all([
+    db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role, name: users.name, userId: engagementTeam.userId }).from(engagementTeam).innerJoin(users, eq18(engagementTeam.userId, users.id)).where(inArray5(engagementTeam.engagementId, ids)),
     db.select({ engagementId: engagementTasks.engagementId, side: engagementTasks.side, status: engagementTasks.status, dueOn: engagementTasks.dueOn }).from(engagementTasks).where(inArray5(engagementTasks.engagementId, ids)),
-    db.select({ engagementId: engagementSessions.engagementId, title: engagementSessions.title, scheduledFor: engagementSessions.scheduledFor, status: engagementSessions.status }).from(engagementSessions).where(inArray5(engagementSessions.engagementId, ids))
+    db.select({ engagementId: engagementSessions.engagementId, title: engagementSessions.title, scheduledFor: engagementSessions.scheduledFor, status: engagementSessions.status }).from(engagementSessions).where(inArray5(engagementSessions.engagementId, ids)),
+    // Files in the drop box (on no request or deliverable yet), and which of them the team has matched.
+    db.select({ id: engagementFiles.id, engagementId: engagementFiles.engagementId }).from(engagementFiles).where(and12(inArray5(engagementFiles.engagementId, ids), isNull6(engagementFiles.taskId), isNull6(engagementFiles.deliverableId))),
+    db.select({ fileId: engagementFileMatches.fileId }).from(engagementFileMatches).innerJoin(engagementFiles, eq18(engagementFileMatches.fileId, engagementFiles.id)).where(inArray5(engagementFiles.engagementId, ids))
   ]);
   const now = Date.now();
+  const matchedIds = new Set(matched.map((row) => row.fileId));
   return rows.map((row) => {
     const open = tasks.filter((task) => task.engagementId === row.id && task.side === "client" && (task.status === "open" || task.status === "needs_more"));
     const next = sessions.filter((item2) => item2.engagementId === row.id && item2.status === "planned" && item2.scheduledFor && item2.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime())[0];
@@ -12634,7 +12652,13 @@ async function listStaffEngagements(db, actor) {
       openClientRequests: open.length,
       overdueClientRequests: open.filter((task) => task.dueOn && task.dueOn < new Date(now).toISOString().slice(0, 10)).length,
       unscheduledSessions: sessions.filter((item2) => item2.engagementId === row.id && item2.status === "planned" && !item2.scheduledFor).length,
-      nextSession: next ? { title: next.title, scheduledFor: next.scheduledFor } : null
+      nextSession: next ? { title: next.title, scheduledFor: next.scheduledFor } : null,
+      // The signed-in person's own role here, for My projects; null when they are not on the team.
+      myRole: (() => {
+        const mine = team.find((member) => member.engagementId === row.id && member.userId === actor.id);
+        return mine ? ENGAGEMENT_TEAM_ROLE_LABELS[mine.role] : null;
+      })(),
+      unsortedFiles: drops.filter((file) => file.engagementId === row.id && !matchedIds.has(file.id)).length
     };
   });
 }
@@ -13011,6 +13035,12 @@ async function getClientRoom(db, session) {
     measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,
     // Who runs it first (partner, Engagement Manager, Lead Consultant), then analysts and specialists; each with their firm title.
     team: [...team].sort((a, b) => ENGAGEMENT_TEAM_ROLE_ORDER[a.role] - ENGAGEMENT_TEAM_ROLE_ORDER[b.role]).map((member) => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role], jobTitle: member.jobTitle ?? null })),
+    // The client's own people on the engagement, owner first, with what each can see. Names only: no email or phone.
+    people: (await clientPeopleOf(db, business.businessId)).map((person) => ({
+      name: person.name,
+      you: person.userId === session.user.id,
+      label: person.role === "owner" ? "Owner" : person.role === "business_admin" ? "Administrator" : `${CLIENT_ACCESS_LABELS[person.access].name} access`
+    })),
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
     // The owner books the Business Review Sessions on Calendly, in order, with their details filled in.
     booking: bookingFor(sessions, viewer, owner ?? null),

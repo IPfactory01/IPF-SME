@@ -55,6 +55,7 @@ export default function EngagementsView() {
           </ul>
         </section>
       )}
+      <MyProjects items={list.data?.items ?? []} onOpen={setOpenId} />
       {list.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
         <div className="overflow-x-auto border border-line bg-white">
           <table className="w-full">
@@ -118,6 +119,37 @@ function StorageLine({ status, onCheck }: { status: StorageStatus; onCheck: () =
         {status.problem && <p className="text-xs text-ink">{status.problem}</p>}
       </div>
       <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={onCheck}>Check again</Button>
+    </section>
+  );
+}
+
+
+/**
+ * My projects: the engagements the signed-in person is on, with their role there and what needs them, ahead of the
+ * full list. Opening one opens the same record as the table.
+ */
+function MyProjects({ items, onOpen }: { items: Row[]; onOpen: (id: number) => void }) {
+  const mine = items.filter(item => item.myRole);
+  if (!mine.length) return null;
+  return (
+    <section aria-labelledby="my-projects" className="space-y-2">
+      <h2 id="my-projects" className="text-sm font-semibold text-ink">My projects <span className="font-normal text-ink-muted">({mine.length})</span></h2>
+      <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {mine.map(item => (
+          <li key={item.id}>
+            <button type="button" onClick={() => onOpen(item.id)} aria-label={`Open ${item.businessName}`} className="block w-full rounded-xl border border-line bg-white p-4 text-left transition-colors hover:border-brand">
+              <span className="flex items-baseline justify-between gap-2"><span className="truncate font-medium text-ink">{item.businessName}</span><span className="shrink-0 text-xs text-ink-muted">{item.stageLabel}</span></span>
+              <span className="mt-0.5 block text-xs text-brand">{item.myRole}</span>
+              <span className="mt-3 grid grid-cols-3 gap-2 text-xs text-ink-muted">
+                <span><span className="block text-lg font-semibold tabular-nums text-ink">{item.openClientRequests}</span>with the client</span>
+                <span><span className={`block text-lg font-semibold tabular-nums ${item.overdueClientRequests ? "text-danger" : "text-ink"}`}>{item.overdueClientRequests}</span>overdue</span>
+                <span><span className={`block text-lg font-semibold tabular-nums ${item.unsortedFiles ? "text-brand" : "text-ink"}`}>{item.unsortedFiles}</span>files to sort</span>
+              </span>
+              <span className="mt-3 block border-t border-line-soft pt-2 text-xs text-ink-muted">{item.nextSession ? `Next: ${item.nextSession.title}, ${formatDateTime(item.nextSession.scheduledFor)}` : item.unscheduledSessions ? `${item.unscheduledSessions} ${item.unscheduledSessions === 1 ? "Session" : "Sessions"} not booked` : "No Session planned"}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

@@ -12,6 +12,7 @@ import { BRAND } from "@shared/brand";
 import { toast } from "sonner";
 import { useWide } from "@/hooks/useWide";
 import { BusinessPanel, FounderPanel } from "./room/RoomInsight";
+import RoomDashboard from "./room/RoomDashboard";
 import RoomTabs from "./room/RoomTabs";
 import TaskDetail from "./TaskDetail";
 import type { AppRouter } from "../../../server/routers";
@@ -151,6 +152,7 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
   const overview = (
     <div className="space-y-5">
       <div className="grid gap-5 lg:grid-cols-3">{nextAction}{nextMeeting}</div>
+      <RoomDashboard room={room} steps={steps} now={now} />
       <div className="grid items-start gap-5 lg:grid-cols-3">
         <div className={`${card} lg:col-span-2`}>{timeline}</div>
         <aside aria-label="At a glance" className="space-y-5">

@@ -262,7 +262,7 @@ flowchart TD
 **The same frame for every client** (5 November, modelled on the IPF project-folder shell: each view answers one
 question a client folder answers). Laid out like the approved prototype (Marcelle's room): the room fills the screen with its own left rail (the product, Home, My tasks, Files, the client's space with its views, and the account links), a white header (business / stage, the title, Day N of M with the logo-coloured bar, team avatars) and the views as tabs: **Overview · List · Schedule · Data requests · Documents**,
 then **Founder · Business** when a Business Check or Full Report is behind the engagement (owner and full-access staff
-only). It opens on Overview: the next action and the next meeting, then the timeline beside Waiting on you, Deliverables and
+only). It opens on Overview: the next action and the next meeting, then a dashboard (a stage band across the seven steps, a progress ring, a donut of the Work Plan by who holds each task, Data Requests received as one block each with the overdue count, and open work by due date, yours and ours; clicking a chart opens the tab behind it), then the timeline beside Waiting on you, Deliverables and
 the team (each person's role on this engagement and firm title). Phones get a slim top bar instead of the rail.
 
 - **List:** every task grouped Waiting on you / With IP Factory / Sent, we are checking / Done, with who owns it, a due

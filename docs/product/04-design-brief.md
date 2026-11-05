@@ -197,6 +197,10 @@ Since version 4 (14 October 2026) the report is laid out as IP Factory's partner
   the block that follows it.
 - **Section Eight** carries the phases table, the month columns, a numbered action table per phase (#, action, owner,
   month) and "The gate at the end of Phase One" call-out.
+- **Room charts** (the client room's dashboard) use the chart tokens in `index.css` (`chart-you`, `chart-us`,
+  `chart-checking`, `chart-done`, `chart-track`): the brand hues lifted into one lightness band, checked with the
+  dataviz validator for colour-blind separation. Every chart carries its numbers in words (legend, label or accessible
+  name), so nothing depends on colour alone; hover shows a value, a click opens the tab behind the chart.
 - **Charts,** drawn in PDFKit from `BRAND.palette` only: benchmark bars (zones in the health tints, a marker in the
   health colour, "Good: …" underneath); the cash waterfall (money in brand, costs slate, what is left green or red,
   dashed connectors); the target bridge (today and the target in slate and brand, each lever a green step between

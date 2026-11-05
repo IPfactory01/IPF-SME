@@ -20,7 +20,12 @@ export function describeDatabaseError(error: unknown): Described {
     if (typeof item.message === "string" && item.message && !item.message.startsWith("Failed query")) reason = item.message;
     current = item.cause;
   }
-  reason = (reason || "Unknown database error").replace(CONNECTION_STRING, "[connection string]").replace(PASSWORD_PAIR, "$1=[hidden]").slice(0, 240);
+  reason = (reason || "Unknown database error").replace(CONNECTION_STRING, "[connection string]").replace(PASSWORD_PAIR, "$1=[hidden]");
+  // A host name is shown only when it looks like one. A broken connection string (a password with "@" or "#" in it)
+  // makes the driver treat part of the password as the host, and that must never be shown.
+  reason = reason.replace(/\b(getaddrinfo (?:ENOTFOUND|EAI_AGAIN)) (\S+)/g, (_match, prefix: string, host: string) =>
+    /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(host) ? `${prefix} ${host}` : `${prefix} [not a valid host name: check the connection string; a password with @, #, / or ? in it breaks it]`);
+  reason = reason.slice(0, 240);
   return { code, reason };
 }
 

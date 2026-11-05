@@ -19,6 +19,14 @@ describe("describing a database failure safely", () => {
     expect(described.reason).toContain("[connection string]");
   });
 
+  it("never shows a host name that is really part of a password broken out of the connection string", () => {
+    const broken = describeDatabaseError(Object.assign(new Error("getaddrinfo ENOTFOUND Pa55wo*&rd"), { code: "ENOTFOUND" }));
+    expect(broken.reason).not.toContain("Pa55wo");
+    expect(broken.reason).toContain("check the connection string");
+    const real = describeDatabaseError(Object.assign(new Error("getaddrinfo ENOTFOUND aws-0-eu-west-1.pooler.supabase.com"), { code: "ENOTFOUND" }));
+    expect(real.reason).toBe("getaddrinfo ENOTFOUND aws-0-eu-west-1.pooler.supabase.com");
+  });
+
   it("checks with one select, says when there is no database or no answer, and never throws", async () => {
     expect(await checkDatabase({ execute: async () => [] })).toEqual({ ok: true });
     expect(await checkDatabase(null)).toEqual({ ok: false, code: null, reason: "DATABASE_URL is not set" });

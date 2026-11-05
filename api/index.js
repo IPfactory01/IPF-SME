@@ -4387,7 +4387,9 @@ function describeDatabaseError(error) {
     if (typeof item2.message === "string" && item2.message && !item2.message.startsWith("Failed query")) reason = item2.message;
     current = item2.cause;
   }
-  reason = (reason || "Unknown database error").replace(CONNECTION_STRING, "[connection string]").replace(PASSWORD_PAIR, "$1=[hidden]").slice(0, 240);
+  reason = (reason || "Unknown database error").replace(CONNECTION_STRING, "[connection string]").replace(PASSWORD_PAIR, "$1=[hidden]");
+  reason = reason.replace(/\b(getaddrinfo (?:ENOTFOUND|EAI_AGAIN)) (\S+)/g, (_match, prefix, host) => /^[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(host) ? `${prefix} ${host}` : `${prefix} [not a valid host name: check the connection string; a password with @, #, / or ? in it breaks it]`);
+  reason = reason.slice(0, 240);
   return { code, reason };
 }
 async function checkDatabase(db, timeoutMs = 5e3) {

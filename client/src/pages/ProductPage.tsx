@@ -213,7 +213,7 @@ export default function ProductPage() {
           <div className="container mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-7 py-11">
             <div>
               <h2 className="font-display max-w-xl text-[clamp(1.6rem,3.6vw,2.4rem)] font-semibold leading-[1.1] tracking-[-0.025em]">Delivered on the date we give you. Or we make it right.</h2>
-              <DeliveryPromise className="mt-2.5 max-w-2xl text-on-dark-muted" />
+              <DeliveryPromise onDark className="mt-2.5 max-w-2xl text-on-dark-muted" />
             </div>
             <StartButton product={product} tone="light" />
           </div>

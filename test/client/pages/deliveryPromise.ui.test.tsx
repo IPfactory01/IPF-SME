@@ -77,6 +77,13 @@ describe("the delivery promise says what the Terms say", () => {
     });
   }
 
+  it("on a service page, the Terms link in the dark promise band is light, so it reads on navy", () => {
+    at(`/services/${DATED[0].slug}`);
+    const terms = within(promiseParagraph()).getByRole("link", { name: "Terms" });
+    expect(terms.className).toContain("text-paper");
+    expect(terms.className).not.toMatch(/(^| )text-brand( |$)/);
+  });
+
   it("a product without a delivery date makes no delivery promise", () => {
     const undated = PRODUCTS.find((product) => product.workingDays === undefined && product.buy !== "check")!;
     at(`/services/${undated.slug}`);

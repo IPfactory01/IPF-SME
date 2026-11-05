@@ -15,8 +15,8 @@ export const PROMISES = [
 ] as const;
 
 /** The delivery promise as a paragraph, with "Terms" linked to the Terms page (the sentence ends with it: DELIVERY_REMEDY). */
-export function DeliveryPromise({ className }: { className?: string }) {
-  return <p className={className}>{DELIVERY_PROMISE.replace(/Terms\.$/, "")}<LegalLink to={TERMS_PATH}>Terms</LegalLink>.</p>;
+export function DeliveryPromise({ className, onDark }: { className?: string; onDark?: boolean }) {
+  return <p className={className}>{DELIVERY_PROMISE.replace(/Terms\.$/, "")}<LegalLink to={TERMS_PATH} onDark={onDark}>Terms</LegalLink>.</p>;
 }
 
 export const orderPath = (product: Pick<Product, "slug">) => `/order/${product.slug}`;

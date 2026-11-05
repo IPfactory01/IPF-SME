@@ -10,10 +10,14 @@ const linkClass = "font-medium text-brand underline underline-offset-2 hover:tex
  * A link to one of the legal pages. `newTab` is for the middle of a form or a payment, where leaving the page would
  * lose what the person has typed.
  */
-export function LegalLink({ to, newTab, children }: { to: typeof TERMS_PATH | typeof PRIVACY_PATH; newTab?: boolean; children: React.ReactNode }) {
+const onDarkClass = "font-medium text-paper underline underline-offset-2 hover:text-on-dark-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-paper";
+
+/** `onDark` for a link sitting on a navy band, where the brand colour would not read. */
+export function LegalLink({ to, newTab, onDark, children }: { to: typeof TERMS_PATH | typeof PRIVACY_PATH; newTab?: boolean; onDark?: boolean; children: React.ReactNode }) {
+  const className = onDark ? onDarkClass : linkClass;
   return newTab
-    ? <a href={to} target="_blank" rel="noopener" className={linkClass}>{children}</a>
-    : <Link href={to} className={linkClass}>{children}</Link>;
+    ? <a href={to} target="_blank" rel="noopener" className={className}>{children}</a>
+    : <Link href={to} className={className}>{children}</Link>;
 }
 
 export const TermsLink = ({ newTab }: { newTab?: boolean }) => <LegalLink to={TERMS_PATH} newTab={newTab}>Terms &amp; Conditions</LegalLink>;

@@ -188,16 +188,18 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
 
   // The same frame for every client: the views below, in this order. Founder and Business appear only when a Business
   // Health Check or Full Report is behind the room (the server sends no insight to limited-access staff).
-  const tabs = [
+  // In the order of the client's three questions: the work (what happens, what we need, when we meet), what we
+  // found, and what they receive. Named as the method names them.
+  const tabs: (RoomTab & { content: React.ReactNode })[] = [
     { id: "overview", label: "Overview", content: overview },
-    { id: "plan", label: "List", count: counts.waiting ? { value: counts.waiting, label: `${counts.waiting} waiting on you` } : undefined, content: <PlanView room={room} now={now} /> },
-    { id: "meetings", label: "Schedule", content: <MeetingsView room={room} now={now} isOwner={isOwner} /> },
-    ...(counts.dataRequests ? [{ id: "data", label: "Data requests", content: <DataRequestsView room={room} now={now} /> }] : []),
-    { id: "deliverables", label: "Documents", content: <DeliverablesView room={room} isOwner={isOwner} /> },
+    { id: "plan", label: METHOD.workPlan, group: "The work", count: counts.waiting ? { value: counts.waiting, label: `${counts.waiting} waiting on you` } : undefined, content: <PlanView room={room} now={now} /> },
+    ...(counts.dataRequests ? [{ id: "data", label: METHOD.dataRequest, group: "The work", content: <DataRequestsView room={room} now={now} /> }] : []),
+    { id: "meetings", label: `${METHOD.session}s`, group: "The work", content: <MeetingsView room={room} now={now} isOwner={isOwner} /> },
     ...(room.insight ? [
-      { id: "founder", label: "Founder", content: <FounderPanel insight={room.insight} /> },
-      { id: "business", label: "Business", count: stuckCount(room.insight), content: <BusinessPanel insight={room.insight} /> },
+      { id: "business", label: "Business", group: "What we found", count: stuckCount(room.insight), content: <BusinessPanel insight={room.insight} /> },
+      { id: "founder", label: "Founder", group: "What we found", content: <FounderPanel insight={room.insight} /> },
     ] : []),
+    { id: "deliverables", label: METHOD.deliverables, group: "What you receive", content: <DeliverablesView room={room} isOwner={isOwner} /> },
   ];
 
   const header = (
@@ -716,7 +718,7 @@ function AudienceToggle({ item, id, audience }: { item: "notes" | "deliverable";
 
 // ---- The frame's views (the same for every client) ---------------------------------------------------------------------
 
-type RoomTab = { id: string; label: string; count?: { value: number; label: string } };
+type RoomTab = { id: string; label: string; group?: string; count?: { value: number; label: string } };
 
 const isClientOpen = (task: Task) => task.side === "client" && OPEN_TASK_STATUSES.includes(task.status);
 
@@ -768,7 +770,7 @@ function RoomSidebar({ room, tabs, account }: { room: Room; tabs: RoomTab[]; acc
       <ul className="space-y-0.5">
         <li><a href="#overview" className={RAIL_LINK}>Home</a></li>
         <li><a href="#plan" className={RAIL_LINK}><span>My tasks</span>{plan?.count && plan.count.value > 0 && <span className="rounded-full bg-brand-plum px-2 text-xs font-medium text-white tabular-nums" aria-label={plan.count.label}>{plan.count.value}</span>}</a></li>
-        <li><a href="#deliverables" className={RAIL_LINK}>Files</a></li>
+        <li><a href="#data" className={RAIL_LINK}>Files</a></li>
       </ul>
       <div>
         <p className="px-3 text-xs text-ink-muted">Your space</p>
@@ -776,11 +778,18 @@ function RoomSidebar({ room, tabs, account }: { room: Room; tabs: RoomTab[]; acc
           <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-brand-plum to-brand text-xs font-semibold text-white">{room.businessName.trim().charAt(0).toUpperCase()}</span>
           <span className="min-w-0 truncate">{room.businessName}</span>
         </p>
-        <ul className="ml-6 mt-1 space-y-0.5 border-l border-line-soft pl-3">
-          {tabs.map(tab => (
-            <li key={tab.id}><a href={`#${tab.id}`} className={RAIL_LINK}><span>{tab.label}</span>{tab.count && tab.count.value > 0 && <span className="text-xs tabular-nums text-ink-muted" aria-label={tab.count.label}>{tab.count.value}</span>}</a></li>
+        <div className="ml-6 mt-1 space-y-3 border-l border-line-soft pl-3">
+          {Array.from(new Set(tabs.map(tab => tab.group ?? ""))).map(group => (
+            <div key={group || "top"}>
+              {group && <p className="px-3 pb-1 text-[11px] font-medium text-ink-muted">{group}</p>}
+              <ul className="space-y-0.5" aria-label={group || "Overview"}>
+                {tabs.filter(tab => (tab.group ?? "") === group).map(tab => (
+                  <li key={tab.id}><a href={`#${tab.id}`} className={RAIL_LINK}><span>{tab.label}</span>{tab.count && tab.count.value > 0 && <span className="text-xs tabular-nums text-ink-muted" aria-label={tab.count.label}>{tab.count.value}</span>}</a></li>
+                ))}
+              </ul>
+            </div>
           ))}
-        </ul>
+        </div>
       </div>
       {account && (
         <div className="mt-auto space-y-1 border-t border-line-soft pt-4">

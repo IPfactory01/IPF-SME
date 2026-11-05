@@ -271,6 +271,10 @@ the team (each person's role on this engagement and firm title). Phones get a sl
   owner and due flag sit under each title.
 - **Schedule:** every Session in date order with a date tile, Held / Next / Booked / To be booked, the Join link
   before it and the notes once shared.
+- **The timeline's current step** shows the Work Plan as one line per item (number or tick, title, who, due date or
+  status), grouped by week with "N of M done". A line opens the item in the List (`#task-N`), a Session in Schedule;
+  the detail, buttons, agendas and Session notes live there, not in the timeline. Schedule folds each agenda and holds
+  the owner's choice of who sees the notes.
 - **Data requests:** shown only when there are any. Requested, received (a part-received item counts as half),
   outstanding and overdue above the Data Request itself: a checklist by section, open items first, each with its
   reference, status, due flag and priority, and, when opened, its purpose, format and files. The client answers an item

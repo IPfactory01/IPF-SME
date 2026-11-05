@@ -108,6 +108,9 @@ describe("the owner's team card", () => {
   it("invites one person with the access the owner picks, then shows the seat as used", () => {
     api.seats = { included: 1, used: 0, members: [], invitations: [] };
     render(<TeamSeats />);
+    // The form stays closed until the owner asks for it.
+    expect(screen.queryByLabelText("Their name")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Invite a colleague" }));
     fireEvent.change(screen.getByLabelText("Their name"), { target: { value: "Chidi Coordinator" } });
     fireEvent.change(screen.getByLabelText("Their email"), { target: { value: "chidi@" } });
     expect((screen.getByRole("button", { name: "Invite" }) as HTMLButtonElement).disabled).toBe(true);
@@ -120,7 +123,7 @@ describe("the owner's team card", () => {
     cleanup();
     api.seats = { included: 1, used: 1, members: [{ membershipId: 5, name: "Chidi Coordinator", email: "chidi@example.com", access: "full" }], invitations: [] };
     render(<TeamSeats />);
-    expect(screen.queryByRole("button", { name: "Invite" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Invite a colleague" })).toBeNull();
     fireEvent.change(screen.getByLabelText("What Chidi Coordinator can see"), { target: { value: "contributor" } });
     expect(api.calls.seatAccess).toEqual([{ membershipId: 5, access: "contributor" }]);
   });

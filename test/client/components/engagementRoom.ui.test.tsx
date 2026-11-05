@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { journeyOf } from "@shared/engagement";
 import { AREA_NAMES } from "@shared/businessCheck/questions";
@@ -142,7 +142,7 @@ describe("the client's room", () => {
     expect(check.getByText(READINESS_LABELS.intermediate)).toBeTruthy();
   });
 
-  it("shows the Work Plan by week and in order, who does each item, and lets the owner mark a Data Request as submitted", () => {
+  it("shows the Work Plan by week as one line per item, who does it, and opens each item where its detail and buttons are", () => {
     render(<EngagementRoom room={room({ deliverables: [] })} />);
     const plan = within(screen.getByRole("region", { name: "Step 4: Business Review" }));
     const week1 = within(plan.getByRole("list", { name: "Week 1" })).getAllByRole("listitem").map(item => item.getAttribute("aria-label"));
@@ -152,15 +152,17 @@ describe("the client's room", () => {
     expect(sales.getByText("You")).toBeTruthy();
     expect(within(plan.getByRole("listitem", { name: "Send the cash template" })).getByText("IP Factory")).toBeTruthy();
     expect(within(plan.getByRole("listitem", { name: "Business Review Session 1" })).getByText("Together")).toBeTruthy();
-    expect(within(plan.getByRole("listitem", { name: "Your price list" })).getByText("We need a bit more: the delivery prices too")).toBeTruthy();
+    expect(within(plan.getByRole("listitem", { name: "Your price list" })).getByText("We need a bit more")).toBeTruthy();
     expect(within(plan.getByRole("listitem", { name: "Your price list" })).getByText("for you")).toBeTruthy();
-    fireEvent.click(sales.getByRole("button", { name: "Submitted another way" }));
-    fireEvent.change(sales.getByLabelText("How you sent Your last 12 months of sales"), { target: { value: "On WhatsApp" } });
-    fireEvent.click(sales.getByRole("button", { name: "Confirm" }));
-    expect(api.calls.respond).toEqual([{ taskId: 11, note: "On WhatsApp" }]);
+    // No detail or buttons in the timeline: a line opens the item in the List, a Session in Schedule.
+    expect(plan.queryByRole("button", { name: "Submitted another way" })).toBeNull();
+    expect(plan.queryByText("Monthly totals are enough.")).toBeNull();
+    expect(sales.getByRole("link").getAttribute("href")).toBe("#task-11");
+    expect(within(plan.getByRole("listitem", { name: "Business Review Session 1" })).getByRole("link").getAttribute("href")).toBe("#meetings");
+    expect(plan.getByText("1 of 4 done")).toBeTruthy();
   });
 
-  it("shows the owner the Findings, lets them sign off, comment, and decide whether their staff see it, and shows Session notes in the plan", () => {
+  it("shows the owner the Findings, lets them sign off, comment, and decide whether their staff see it, and shows Session notes in Schedule", () => {
     render(<EngagementRoom room={room()} />);
     const timeline = screen.getByRole("list", { name: "Engagement timeline" });
     // The Findings are out and not yet signed off, so their step is open when the page loads.
@@ -174,9 +176,10 @@ describe("the client's room", () => {
     expect(api.calls.comment).toEqual([{ deliverableId: 21, body: "Thank you" }]);
     fireEvent.click(found.getByRole("button", { name: "Share with my team" }));
     expect(api.calls.audience).toEqual([{ item: "deliverable", id: 21, audience: "business" }]);
-    // The kick-off's notes sit on its row in the plan; the assessment is done once the Findings are out.
-    fireEvent.click(within(timeline).getByRole("button", { name: /^Business Review/ }));
-    const kickoff = within(screen.getByRole("listitem", { name: "Kick-off" }));
+    expect(timeline).toBeTruthy();
+    // The kick-off's notes sit with the meeting in Schedule, where the owner decides who sees them.
+    fireEvent.click(screen.getByRole("tab", { name: "Schedule" }));
+    const kickoff = within(within(screen.getByRole("list", { name: "Meetings" })).getByRole("listitem", { name: "Kick-off" }));
     expect(kickoff.getByText("We agreed to start with pricing.")).toBeTruthy();
     expect(kickoff.getByText(/only you can see these/)).toBeTruthy();
   });
@@ -186,7 +189,7 @@ describe("the client's room", () => {
     const gaps = { ...base, tasks: base.tasks.map((task, index) => ({ ...task, sortOrder: [1, 2, 5, 9][index] ?? task.sortOrder })) };
     render(<EngagementRoom room={gaps} />);
     const plan = within(screen.getByRole("region", { name: "Step 4: Business Review" }));
-    const badges = within(plan.getByRole("list", { name: "Week 1" })).getAllByRole("listitem").map(item => item.firstElementChild!.textContent);
+    const badges = within(plan.getByRole("list", { name: "Week 1" })).getAllByRole("listitem").map(item => item.querySelector("a")!.firstElementChild!.textContent);
     // A finished item shows a tick instead of its number; every other item shows its place in the week.
     expect(badges).toEqual(["1", "2", "", "4"]);
     expect(screen.getByRole("region", { name: "Step 4: Business Review" }).textContent).not.toMatch(/internal|external/i);
@@ -288,6 +291,8 @@ describe("files in the room", () => {
     const files = [{ id: 99, fileName: "sales.pdf", sizeBytes: 120_000, createdAt: new Date(), mine: true, fromTeam: false }, { id: 100, fileName: "cash-template.xlsx", sizeBytes: 9_000, createdAt: new Date(), mine: false, fromTeam: true }];
     const base = room();
     render(<EngagementRoom room={room({ tasks: [{ ...base.tasks[2], files }], deliverables: [] })} />);
+    openData();
+    fireEvent.click(screen.getByRole("button", { name: /Who works in the business/ }));
     const list = within(screen.getAllByRole("list", { name: "Files" })[0]);
     expect(list.getByText("sales.pdf")).toBeTruthy();
     expect(list.getByText(/117 KB · you/)).toBeTruthy();
@@ -300,10 +305,12 @@ describe("files in the room", () => {
 
 
 describe("a Data Request's detail", () => {
-  it("shows numbered questions as a list, one per line, in the Work Plan", () => {
+  it("shows numbered questions as a list, one per line, when the item is opened in the Data Request", () => {
     const six = "A few words each is enough. 1. What do you sell, and who buys it? 2. Which decisions wait for you? 3. What would you fix first?";
     const base = room();
     render(<EngagementRoom room={room({ tasks: [{ ...base.tasks[0], detail: six }], deliverables: [] })} />);
+    fireEvent.click(screen.getByRole("tab", { name: /^Data requests/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Your last 12 months of sales/ }));
     const lists = screen.getAllByRole("list").filter(list => list.tagName === "OL" && !list.querySelector("ol") && list.textContent?.includes("Which decisions wait for you?"));
     expect(lists.length).toBeGreaterThan(0);
     expect(within(lists[0]).getAllByRole("listitem").map(item => item.textContent)).toEqual(["What do you sell, and who buys it?", "Which decisions wait for you?", "What would you fix first?"]);
@@ -350,6 +357,14 @@ describe("the Plan, Meetings and Data requests views", () => {
     const panel = within(screen.getByRole("complementary", { name: "Task details" }));
     expect(panel.getByRole("heading", { name: "Your price list" })).toBeTruthy();
     expect(panel.getByText("We need a bit more: the delivery prices too")).toBeTruthy();
+    expect(panel.getByRole("button", { name: "Submitted another way" })).toBeTruthy();
+  });
+
+  it("opens the item a timeline line points to (#task-N) in the List, with its detail and buttons", () => {
+    render(<EngagementRoom room={room()} now={NOW} />);
+    act(() => { window.location.hash = "#task-12"; window.dispatchEvent(new HashChangeEvent("hashchange")); });
+    const panel = within(screen.getByRole("complementary", { name: "Task details" }));
+    expect(panel.getByRole("heading", { name: "Your price list" })).toBeTruthy();
     expect(panel.getByRole("button", { name: "Submitted another way" })).toBeTruthy();
   });
 

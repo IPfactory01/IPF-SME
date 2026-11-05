@@ -15,6 +15,7 @@ export default function TeamSeats() {
   const [email, setEmail] = useState("");
   const [access, setAccess] = useState<ClientAccessLevel>("contributor");
   const [link, setLink] = useState<string | null>(null);
+  const [opened, setOpened] = useState(false);
   const refresh = { onSuccess: () => void utils.invitations.seats.list.invalidate(), onError: (error: { message: string }) => toast.error(error.message) };
   const invite = trpc.invitations.seats.invite.useMutation({
     ...refresh,
@@ -33,10 +34,9 @@ export default function TeamSeats() {
   const { included, used, members, invitations } = seats.data;
   const free = used < included;
   return (
-    <section aria-labelledby="your-team" className="border border-line-soft bg-white p-5 shadow-sm">
-      <p className="text-sm font-semibold text-ink-muted">Your team</p>
-      <h2 id="your-team" className="mt-1 font-serif text-xl font-normal tracking-tight">Bring in one person from your business</h2>
-      <p className="mt-1 text-sm text-ink-muted">Your engagement includes {included === 1 ? "one person" : `${included} people`} besides you, at no cost. Session notes and Findings stay with you unless you share them.</p>
+    <section aria-labelledby="your-team" className="rounded-xl border border-line-soft bg-white p-5">
+      <h2 id="your-team" className="font-sans text-sm font-medium text-ink-muted">Add a colleague</h2>
+      <p className="mt-1 text-sm text-ink-600">{included === 1 ? "One seat" : `${included} seats`} included at no cost. Session notes and Findings stay with you unless you share them.</p>
       <ul className="mt-4 space-y-3">
         {members.map(member => (
           <li key={member.membershipId} className="flex flex-col gap-2 border border-line-soft p-3 sm:flex-row sm:items-center sm:justify-between">
@@ -56,7 +56,8 @@ export default function TeamSeats() {
           </li>
         ))}
       </ul>
-      {free && (
+      {free && !opened && <Button type="button" size="sm" className="mt-4 rounded-lg bg-brand text-sm text-white" onClick={() => setOpened(true)}>Invite a colleague</Button>}
+      {free && opened && (
         <form className="mt-4 space-y-3" onSubmit={event => { event.preventDefault(); invite.mutate({ fullName, email, access }); }}>
           <div className="grid gap-2 sm:grid-cols-2">
             <div><label className="block text-xs font-semibold text-ink-muted" htmlFor="seat-name">Their name</label><input id="seat-name" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={fullName} onChange={event => setFullName(event.target.value)} /></div>
@@ -72,7 +73,7 @@ export default function TeamSeats() {
             ))}
           </fieldset>
           {email.trim() && !/^\S+@\S+\.\S+$/.test(email.trim()) && <p className="text-xs text-danger-strong">Enter their full email address, like bola@example.com.</p>}
-          <Button type="submit" size="sm" className="rounded-none bg-brand text-sm text-white" disabled={invite.isPending || !fullName.trim() || !/^\S+@\S+\.\S+$/.test(email.trim())}>Invite</Button>
+          <Button type="submit" size="sm" className="rounded-lg bg-brand text-sm text-white" disabled={invite.isPending || !fullName.trim() || !/^\S+@\S+\.\S+$/.test(email.trim())}>Invite</Button>
         </form>
       )}
       {link && <p role="status" className="mt-3 break-all border border-brand-line bg-brand-tint p-3 text-xs">Send them this link yourself (it works once): {link}</p>}

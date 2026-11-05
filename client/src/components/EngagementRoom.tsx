@@ -6,7 +6,7 @@ import { ASSESSMENT_DAYS, ASSESSMENT_WEEKS, ENGAGEMENT_TASK_PRIORITY_LABELS, FIX
 import { METHOD, METHOD_MEANING } from "@shared/method";
 import type { inferRouterOutputs } from "@trpc/server";
 import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlash, Download, FileText, Paperclip, UploadCloud } from "lucide-react";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
 import { toast } from "sonner";
@@ -181,7 +181,7 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
   const tabs = [
     { id: "overview", label: "Overview", content: overview },
     { id: "plan", label: "List", count: counts.waiting ? { value: counts.waiting, label: `${counts.waiting} waiting on you` } : undefined, content: <PlanView room={room} now={now} /> },
-    { id: "meetings", label: "Schedule", content: <MeetingsView room={room} now={now} /> },
+    { id: "meetings", label: "Schedule", content: <MeetingsView room={room} now={now} isOwner={isOwner} /> },
     ...(counts.dataRequests ? [{ id: "data", label: "Data requests", content: <DataRequestsView room={room} now={now} /> }] : []),
     { id: "deliverables", label: "Documents", content: <DeliverablesView room={room} isOwner={isOwner} /> },
     ...(room.insight ? [
@@ -443,72 +443,61 @@ function planRows(room: Room, week: number | null): PlanRow[] {
   return rows.sort((a, b) => a.order - b.order || a.key.localeCompare(b.key));
 }
 
-function WorkPlan({ room, isOwner }: { room: Room; isOwner: boolean }) {
+/**
+ * The Work Plan inside the timeline: one line per item, grouped by week with how much is done. The detail and the
+ * buttons live in one place, the List (a line opens its item there) and Schedule for Sessions, so the step stays short.
+ */
+function WorkPlan({ room }: { room: Room; isOwner: boolean }) {
   const weeks = Array.from(new Set([...room.tasks.map(task => task.weekNumber ?? null), ...room.sessions.filter(item => item.status !== "cancelled").map(item => item.weekNumber ?? null)])).sort((a, b) => (a ?? 99) - (b ?? 99));
   if (!weeks.length) return <p className="text-sm text-ink-muted">Your {METHOD.workPlan} appears here once your team sets it.</p>;
   return (
     <div className="space-y-4">
       <p className={KICKER}>{METHOD.workPlan}</p>
-      {weeks.map(week => (
-        <div key={week ?? "none"}>
-          <p className="text-sm font-medium text-ink">{week === null ? "Also" : `Week ${week}`}</p>
-          <ol className="mt-1" aria-label={week === null ? "Also in the plan" : `Week ${week}`}>
-            {planRows(room, week).map((row, index) => <PlanRowView key={row.key} row={row} number={index + 1} room={room} isOwner={isOwner} />)}
-          </ol>
-        </div>
-      ))}
+      {weeks.map(week => {
+        const rows = planRows(room, week);
+        const done = rows.filter(row => row.status === "done" || row.status === "submitted").length;
+        return (
+          <div key={week ?? "none"}>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-ink">{week === null ? "Also" : `Week ${week}`}</p>
+              <span className="flex items-center gap-2 text-xs tabular-nums text-ink-muted">{done} of {rows.length} done<span aria-hidden className="h-1.5 w-16 overflow-hidden rounded-full bg-chart-track"><span className="block h-full rounded-full bg-brand" style={{ width: `${rows.length ? (done / rows.length) * 100 : 0}%` }} /></span></span>
+            </div>
+            <ol className="mt-1" aria-label={week === null ? "Also in the plan" : `Week ${week}`}>
+              {rows.map((row, index) => <PlanRowView key={row.key} row={row} number={index + 1} />)}
+            </ol>
+          </div>
+        );
+      })}
+      <a href="#plan" className="inline-flex items-center gap-1 text-sm font-medium text-brand underline underline-offset-2">Open the List<ArrowRight className="h-3.5 w-3.5" aria-hidden /></a>
     </div>
   );
 }
 
 /** One line of the Work Plan, numbered by its place in the week (the stored sort order can have gaps). */
-function PlanRowView({ row, number, room, isOwner }: { row: PlanRow; number: number; room: Room; isOwner: boolean }) {
+function PlanRowView({ row, number }: { row: PlanRow; number: number }) {
   const finished = row.status === "done" || row.status === "submitted";
+  const href = row.task ? `#task-${row.task.id}` : "#meetings";
   return (
-    <li className={`flex gap-3 border-t border-line-soft py-3 ${finished ? "text-ink-muted" : ""}`} aria-label={row.title}>
-      <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center border text-xs font-semibold ${row.status === "done" ? "border-brand bg-brand text-white" : row.status === "open" || row.status === "needs_more" ? "border-brand text-brand" : "border-line text-ink-muted"}`}>{row.status === "done" ? <Check className="h-3.5 w-3.5" aria-hidden /> : number}</span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`font-medium ${row.status === "done" ? "line-through decoration-line-strong" : "text-ink"}`}>{row.title}{row.task?.mine ? <span className="ml-2 text-xs font-normal text-brand">for you</span> : null}</span>
-          <span className={`border px-1.5 py-0.5 text-xs font-medium ${WHO[row.who]}`}>{row.who}</span>
-        </div>
-        <p className="text-xs text-ink-muted">{row.when}</p>
-        {row.task && (
-          <>
-            {row.task.detail && !finished && <TaskDetail text={row.task.detail} className="mt-1 text-sm text-ink-muted" />}
-            {row.status === "needs_more" && row.task.statusNote && <p className="mt-1 text-sm text-danger">We need a bit more: {row.task.statusNote}</p>}
-            <FileList files={row.task.files} />
-            {row.task.side === "client" && isOpen(row.task) && <TaskControls task={row.task} uploadsEnabled={room.uploadsEnabled} />}
-          </>
-        )}
-        {row.session && (
-          <>
-            {row.session.status === "planned" && row.session.agenda && <p className="mt-1 whitespace-pre-line text-xs text-ink-muted">{row.session.agenda}</p>}
-            {row.session.status === "planned" && row.session.meetingLink && <a href={row.session.meetingLink} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs font-semibold text-brand underline underline-offset-2">Join the {METHOD.session}</a>}
-            {room.booking?.sessionId === row.session.id && <a href={room.booking.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs font-semibold text-brand underline underline-offset-2">Book this {METHOD.session} on Calendly</a>}
-            {row.session.notes && (
-              <article className="mt-2 border border-line-soft bg-paper p-3 text-ink">
-                <p className={KICKER}>{METHOD.session} notes{isOwner && row.session.notesAudience === "owner" ? " · only you can see these" : ""}</p>
-                <p className="mt-1 whitespace-pre-line text-sm">{row.session.notes}</p>
-                {isOwner && <AudienceToggle item="notes" id={row.session.id} audience={row.session.notesAudience ?? "owner"} />}
-              </article>
-            )}
-          </>
-        )}
-      </div>
+    <li className="border-t border-line-soft" aria-label={row.title}>
+      <a href={href} className="flex items-center gap-3 rounded-md px-1 py-2 transition-colors hover:bg-paper-sunken">
+        <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-medium tabular-nums ${row.status === "done" ? "border-brand bg-brand text-white" : row.status === "submitted" ? "border-brand text-brand" : "border-line-strong text-ink-muted"}`}>{row.status === "done" ? <Check className="h-3 w-3" aria-hidden /> : number}</span>
+        <span className={`min-w-0 flex-1 truncate text-sm ${finished ? "text-ink-muted" : "text-ink"}`}>{row.title}{row.task?.mine ? <span className="ml-2 text-xs text-brand">for you</span> : null}</span>
+        <span className="hidden shrink-0 text-xs text-ink-muted sm:inline">{row.who}</span>
+        <span className={`w-36 shrink-0 truncate text-right text-xs ${row.status === "needs_more" ? "text-danger" : "text-ink-muted"}`}>{row.status === "needs_more" ? row.task?.statusLabel : row.when}</span>
+      </a>
     </li>
   );
 }
 
 /** The Weekly Check-ins of the Six-Week Fix, with their notes, outside the two-week Work Plan. */
-function CheckinSessions({ room, isOwner }: { room: Room; isOwner: boolean }) {
+function CheckinSessions({ room }: { room: Room; isOwner: boolean }) {
   const rows = room.sessions.filter(item => item.status !== "cancelled" && (item.weekNumber === null || item.weekNumber > ASSESSMENT_WEEKS));
   if (!rows.length) return null;
   return (
     <div>
       <p className={KICKER}>{METHOD.checkin}s</p>
       <ol className="mt-1" aria-label="Weekly Check-ins">
-        {rows.map((session, index) => <PlanRowView key={session.id} number={index + 1} row={{ key: `s${session.id}`, order: session.sortOrder, title: session.title, who: "Together", when: session.scheduledFor ? lagos(session.scheduledFor) : "To be booked", status: session.status === "held" ? "done" : "open", factor: null, session }} room={room} isOwner={isOwner} />)}
+        {rows.map((session, index) => <PlanRowView key={session.id} number={index + 1} row={{ key: `s${session.id}`, order: session.sortOrder, title: session.title, who: "Together", when: session.scheduledFor ? lagos(session.scheduledFor) : "To be booked", status: session.status === "held" ? "done" : "open", factor: null, session }} />)}
       </ol>
     </div>
   );
@@ -832,6 +821,13 @@ const PLAN_GROUPS: { id: string; name: string; dot: string; pill: string; test: 
 function PlanView({ room, now }: { room: Room; now: number }) {
   const [selected, setSelected] = useState<number | null>(null);
   const task = room.tasks.find(item => item.id === selected) ?? null;
+  // A line in the timeline links here as #task-N: open that item's detail.
+  useEffect(() => {
+    const open = () => { const match = /^#task-(\d+)$/.exec(window.location.hash); if (match) setSelected(Number(match[1])); };
+    open();
+    window.addEventListener("hashchange", open);
+    return () => window.removeEventListener("hashchange", open);
+  }, []);
   if (!room.tasks.length) return <p className="text-sm text-ink-muted">Your tasks appear here, grouped by where they stand, once your team sets the {METHOD.workPlan}.</p>;
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
@@ -849,7 +845,7 @@ function PlanView({ room, now }: { room: Room; now: number }) {
                     {items.map(item => {
                       const flag = dueFlag(item.dueOn, group.id === "done", now);
                       return (
-                        <tr key={item.id} className={`border-b border-line-soft last:border-b-0 ${selected === item.id ? "bg-brand-tint" : "hover:bg-paper-sunken"}`}>
+                        <tr key={item.id} id={`task-${item.id}`} className={`scroll-mt-24 border-b border-line-soft last:border-b-0 ${selected === item.id ? "bg-brand-tint" : "hover:bg-paper-sunken"}`}>
                           <td className="py-2 pl-3 pr-2">
                             <button type="button" onClick={() => setSelected(selected === item.id ? null : item.id)} aria-expanded={selected === item.id} className="flex w-full items-center gap-2.5 text-left">
                               <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />
@@ -1073,7 +1069,7 @@ function DataRequestsView({ room, now }: { room: Room; now: number }) {
 }
 
 /** Every meeting: when, how long, the Join link before it and the shared notes after it. */
-function MeetingsView({ room, now }: { room: Room; now: number }) {
+function MeetingsView({ room, now, isOwner }: { room: Room; now: number; isOwner: boolean }) {
   const sessions = [...room.sessions].sort((a, b) => (a.scheduledFor ? new Date(a.scheduledFor).getTime() : Infinity) - (b.scheduledFor ? new Date(b.scheduledFor).getTime() : Infinity) || a.sortOrder - b.sortOrder);
   if (!sessions.length) return <p className="text-sm text-ink-muted">Your {METHOD.session}s appear here once they are planned.</p>;
   return (
@@ -1096,9 +1092,21 @@ function MeetingsView({ room, now }: { room: Room; now: number }) {
                 <span className={`text-xs ${isNext ? "font-medium text-brand" : "text-ink-muted"}`}>{state}</span>
               </div>
               {when && <p className="text-sm text-ink-muted">{lagos(when)} (Lagos time){session.durationMinutes ? `, ${session.durationMinutes} minutes` : ""}</p>}
-              {session.agenda && <p className="mt-1 whitespace-pre-line text-sm text-ink-600">{session.agenda}</p>}
+              {session.agenda && (
+                <details className="mt-1 text-sm">
+                  <summary className="cursor-pointer text-ink-600">Agenda</summary>
+                  <p className="mt-1 whitespace-pre-line text-ink-600">{session.agenda}</p>
+                </details>
+              )}
               {session.status === "planned" && session.meetingLink && <a href={session.meetingLink} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-medium text-brand underline underline-offset-2">Join the {METHOD.session}</a>}
-              {session.notes && <div className="mt-3 border-t border-line-soft pt-2"><p className="text-xs text-ink-muted">Notes, shared {lagos(session.notesSharedAt, false)}</p><p className="mt-1 whitespace-pre-line text-sm">{session.notes}</p></div>}
+              {room.booking?.sessionId === session.id && <a href={room.booking.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-medium text-brand underline underline-offset-2">Book this {METHOD.session} on Calendly</a>}
+              {session.notes && (
+                <div className="mt-3 border-t border-line-soft pt-2">
+                  <p className="text-xs text-ink-muted">{METHOD.session} notes, shared {lagos(session.notesSharedAt, false)}{isOwner && session.notesAudience === "owner" ? " · only you can see these" : ""}</p>
+                  <p className="mt-1 whitespace-pre-line text-sm">{session.notes}</p>
+                  {isOwner && <AudienceToggle item="notes" id={session.id} audience={session.notesAudience ?? "owner"} />}
+                </div>
+              )}
             </div>
           </li>
         );

@@ -91,6 +91,14 @@ describe("how the build and the host serve those pages", () => {
     expect(vercel.rewrites.indexOf(pages.at(-1)!)).toBe(vercel.rewrites.length - 2);
   });
 
+  it("tells the host to run the whole build and serve dist/public, so app.html and the ready-made pages exist there", () => {
+    // Without this the host can fall back to its framework default (vite build alone): no prerender, no app.html, and
+    // every address that is not a public page (/admin, /login, the room) answers with the host's own 404.
+    const vercel = JSON.parse(readFileSync(resolve(process.cwd(), "vercel.json"), "utf8")) as { buildCommand?: string; outputDirectory?: string };
+    expect(vercel.buildCommand).toBe("pnpm build");
+    expect(vercel.outputDirectory).toBe("dist/public");
+  });
+
   it("adds breadcrumbs Google can show: Home › Services › the service, and Home › the page", () => {
     const crumbs = (path: string) => (structuredDataFor(path).find((data) => (data as { "@type": string })["@type"] === "BreadcrumbList") as { itemListElement: { name: string; item: string }[] } | undefined)?.itemListElement.map((step) => step.name);
     expect(crumbs("/services/six-week-fix")).toEqual(["Home", "Services", "Six-Week Fix"]);

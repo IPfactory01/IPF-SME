@@ -13,7 +13,7 @@ import { WIDE_QUERY } from "@/hooks/useWide";
 import { businessCheckProfiles } from "../../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../../fixtures/reportIntake";
 
-const api = vi.hoisted(() => ({ calls: { respond: [] as unknown[], comment: [] as unknown[], accept: [] as unknown[], audience: [] as unknown[], requestUpload: [] as unknown[], confirmUpload: [] as unknown[], fileLink: [] as unknown[], requestDrop: [] as unknown[], confirmDrop: [] as unknown[], setNotAvailable: [] as unknown[], respondToContent: [] as unknown[] } }));
+const api = vi.hoisted(() => ({ calls: { respond: [] as unknown[], comment: [] as unknown[], accept: [] as unknown[], audience: [] as unknown[], requestUpload: [] as unknown[], confirmUpload: [] as unknown[], fileLink: [] as unknown[], requestDrop: [] as unknown[], confirmDrop: [] as unknown[], setNotAvailable: [] as unknown[], respondToContent: [] as unknown[], requestService: [] as unknown[] } }));
 const replies: Record<string, unknown> = {
   requestUpload: { storageKey: "engagements/4/tasks/11/abc-sales.pdf", uploadUrl: "https://example-project.supabase.co/storage/v1/object/upload/sign/engagement-files/engagements/4/tasks/11/abc-sales.pdf?token=up", headers: { "content-type": "application/pdf", "x-upsert": "false" } },
   confirmUpload: { success: true, fileId: 99, status: "received" },
@@ -45,6 +45,7 @@ vi.mock("@/lib/trpc", () => ({
         confirmDrop: { useMutation: mutation("confirmDrop") },
         setNotAvailable: { useMutation: mutation("setNotAvailable") },
         respondToContent: { useMutation: mutation("respondToContent") },
+        requestService: { useMutation: mutation("requestService") },
       },
     },
   },
@@ -56,6 +57,11 @@ const room = (over: Record<string, unknown> = {}) => ({
   engagementId: 4,
   content: [] as { id: number; kind: "reel" | "post" | "story"; kindLabel: string; title: string; month: number; status: "planned" | "in_edit" | "for_approval" | "changes_requested" | "approved" | "published"; statusLabel: string; dueOn: string | null; link: string | null; clientNote: string | null; approvedAt: Date | null; publishedAt: Date | null }[],
   contentTargets: [] as { label: string; count: number }[],
+  service: null as string | null,
+  title: "Business Review",
+  serviceStep: null as number | null,
+  projects: [{ id: 4, title: "Business Review", stageLabel: "Business Review", closed: false, current: true }] as { id: number; title: string; stageLabel: string; closed: boolean; current: boolean }[],
+  requests: [] as { id: number; service: string; serviceName: string; createdAt: Date }[],
   type: "business_review" as "business_review" | "digital_marketing",
   typeLabel: "Business Review",
   startedOn: null as string | null,
@@ -97,7 +103,7 @@ const room = (over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
-  api.calls = { respond: [], comment: [], accept: [], audience: [], requestUpload: [], confirmUpload: [], fileLink: [], requestDrop: [], confirmDrop: [], setNotAvailable: [], respondToContent: [] };
+  api.calls = { respond: [], comment: [], accept: [], audience: [], requestUpload: [], confirmUpload: [], fileLink: [], requestDrop: [], confirmDrop: [], setNotAvailable: [], respondToContent: [], requestService: [] };
 });
 afterEach(() => {
   cleanup();
@@ -253,9 +259,10 @@ describe("files in the room", () => {
     const prices = new File(["%PDF-1.4"], "prices.pdf", { type: "application/pdf" });
     fireEvent.change(screen.getByLabelText("Choose files to send"), { target: { files: [sales, prices] } });
     await waitFor(() => expect(api.calls.confirmDrop).toHaveLength(2));
-    expect(api.calls.requestDrop).toEqual([{ fileName: "sales.pdf", contentType: "application/pdf", sizeBytes: 8 }, { fileName: "prices.pdf", contentType: "application/pdf", sizeBytes: 8 }]);
+    // Each file goes to the project open in the room (a client may have several).
+    expect(api.calls.requestDrop).toEqual([{ fileName: "sales.pdf", contentType: "application/pdf", sizeBytes: 8, engagementId: 4 }, { fileName: "prices.pdf", contentType: "application/pdf", sizeBytes: 8, engagementId: 4 }]);
     expect(put).toHaveBeenCalledWith("https://example-project.supabase.co/storage/v1/object/upload/sign/engagement-files/engagements/4/inbox/abc-sales.pdf?token=up", expect.objectContaining({ method: "PUT", body: sales }));
-    expect(api.calls.confirmDrop[0]).toEqual({ storageKey: "engagements/4/inbox/abc-sales.pdf", note: null, fileName: "sales.pdf", contentType: "application/pdf", sizeBytes: 8 });
+    expect(api.calls.confirmDrop[0]).toEqual({ storageKey: "engagements/4/inbox/abc-sales.pdf", note: null, fileName: "sales.pdf", contentType: "application/pdf", sizeBytes: 8, engagementId: 4 });
     expect(api.calls.requestUpload).toEqual([]);
     await waitFor(() => expect(within(screen.getByRole("list", { name: "Uploads" })).getAllByText("Received")).toHaveLength(2));
   });
@@ -749,5 +756,45 @@ describe("Preview as client", () => {
     const card = within(screen.getByRole("article", { name: "Opening day reel" }));
     expect(card.queryByRole("button", { name: "Approve" })).toBeNull();
     expect(card.queryByRole("button", { name: "Request changes" })).toBeNull();
+  });
+});
+
+describe("one client, many projects", () => {
+  it("lists the client's projects and opens another, keeping it in the address", () => {
+    render(<EngagementRoom room={room({ projects: [{ id: 9, title: "Pitch Deck", stageLabel: "Open", closed: false, current: false }, { id: 4, title: "Business Review", stageLabel: "Business Review", closed: false, current: true }] })} />);
+    const projects = within(screen.getByRole("navigation", { name: "Your projects" }));
+    expect(projects.getByRole("button", { name: /Business Review/ }).getAttribute("aria-current")).toBe("page");
+    fireEvent.click(projects.getByRole("button", { name: /Pitch Deck/ }));
+    expect(new URLSearchParams(window.location.search).get("project")).toBe("9");
+  });
+
+  it("shows no switcher with one project", () => {
+    render(<EngagementRoom room={room()} />);
+    expect(screen.queryByRole("navigation", { name: "Your projects" })).toBeNull();
+  });
+
+  it("walks a service project through its four steps, read from its work", () => {
+    render(<EngagementRoom room={room({ type: "done_for_you", typeLabel: "Done for You", service: "pitch_deck", title: "Pitch Deck", serviceStep: 2, stage: "setting_up" })} />);
+    expect(screen.getAllByText("Pitch Deck: In progress").length).toBeGreaterThan(0);
+    const steps = Array.from(screen.getByRole("list", { name: "Engagement timeline" }).querySelectorAll(":scope > li"));
+    expect(steps.map(item => item.querySelector("button span span span")?.textContent)).toEqual(["Records in", "In progress", "Delivered", "Sign-off"]);
+    expect(steps[1]!.getAttribute("aria-current")).toBe("step");
+  });
+});
+
+describe("Fix the next problem", () => {
+  it("asks the team for another service with a note, and links to every service", () => {
+    render(<EngagementRoom room={room()} />);
+    const card = within(screen.getByRole("region", { name: "Fix the next problem" }));
+    fireEvent.change(card.getByLabelText("The service you need"), { target: { value: "pitch_deck" } });
+    fireEvent.change(card.getByLabelText("What is the problem? (optional)"), { target: { value: "Investor in December" } });
+    fireEvent.click(card.getByRole("button", { name: "Ask your team" }));
+    expect(api.calls.requestService).toEqual([{ service: "pitch_deck", note: "Investor in December", engagementId: 4 }]);
+    expect(card.getByRole("link", { name: /See every service/ }).getAttribute("href")).toBe("/services");
+  });
+
+  it("shows what the client has already asked for", () => {
+    render(<EngagementRoom room={room({ requests: [{ id: 1, service: "pitch_deck", serviceName: "Pitch Deck", createdAt: new Date("2026-11-06T10:00:00Z") }] })} />);
+    expect(within(screen.getByRole("list", { name: "Your requests" })).getByText("Pitch Deck")).toBeTruthy();
   });
 });

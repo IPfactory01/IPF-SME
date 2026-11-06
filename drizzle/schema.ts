@@ -920,6 +920,8 @@ export const engagements = pgTable("engagements", {
   businessId: integer("businessId").references(() => businesses.id),
   /** What kind of engagement it is (0016): it decides the timeline and the starting content (shared/engagementTypes.ts). */
   type: engagementsTypeEnum("type").default("business_review").notNull(),
+  /** The service bought, a product id from shared/products.ts, for an Assessment, Done for You or Monthly Service (0018). */
+  service: varchar("service", { length: 64 }),
   /** Day 0 of a dated engagement (Digital marketing). */
   startedOn: date("startedOn"),
   /** The client contact for an engagement opened directly, when there is no Business Health Check to name them. */
@@ -1089,6 +1091,29 @@ export const engagementContentItems = pgTable("engagement_content_items", {
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
 }, table => [index("engagement_content_items_engagement_idx").on(table.engagementId)]);
+
+export const SERVICE_REQUEST_STATUSES = ["open", "done", "declined"] as const;
+export const serviceRequestsStatusEnum = pgEnum("service_requests_status", SERVICE_REQUEST_STATUSES);
+
+/**
+ * "Fix the next problem" (0018): a client asks, from their room, for another service. It lands with the desk, who
+ * confirms it, sends the payment link and opens the engagement; the request is then marked done.
+ */
+export const serviceRequests = pgTable("service_requests", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  businessId: integer("businessId").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  /** The engagement the client was in when they asked; null if none. */
+  engagementId: integer("engagementId").references(() => engagements.id, { onDelete: "set null" }),
+  requestedByUserId: integer("requestedByUserId").notNull().references(() => users.id),
+  /** A product id from shared/products.ts. */
+  service: varchar("service", { length: 64 }).notNull(),
+  note: varchar("note", { length: 1000 }),
+  status: serviceRequestsStatusEnum("status").default("open").notNull(),
+  handledByUserId: integer("handledByUserId").references(() => users.id),
+  handledAt: timestamp("handledAt", { withTimezone: true }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [index("service_requests_business_idx").on(table.businessId), index("service_requests_status_idx").on(table.status)]);
 
 /** Feedback on a deliverable, from the client or the team. */
 export const engagementComments = pgTable("engagement_comments", {

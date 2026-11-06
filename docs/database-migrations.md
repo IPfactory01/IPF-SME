@@ -122,3 +122,9 @@ nothing, unless exactly `0000` to `0015` are recorded.
 Additive. **Apply it before deploying.** Paste `drizzle/supabase/apply-0017-content-board.sql` into the Supabase SQL
 Editor and press Run; it stops, changing nothing, unless exactly `0000` to `0016` are recorded.
 
+**`0018` and deployment order.** One client, many engagements: four engagement types that follow how the site sells
+(`assessment`, `done_for_you`, `six_week_fix`, `monthly_service`), `engagements.service` (the service bought), and
+`service_requests` (a client asks for another service from their room; the desk opens the engagement from it).
+Additive. **Apply it before deploying.** Paste `drizzle/supabase/apply-0018-many-engagements-and-requests.sql` into the
+Supabase SQL Editor and press Run; it stops, changing nothing, unless exactly `0000` to `0017` are recorded.
+

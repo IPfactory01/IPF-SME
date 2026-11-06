@@ -21,10 +21,12 @@ import {
   users,
   engagementFileMatches,
   engagementContentItems,
+  serviceRequests,
 } from "../drizzle/schema";
 import { authorityAllows, type Authority } from "../shared/platformPermissions";
 import {
   ASSESSMENT_TEMPLATE,
+  OPEN_TASK_STATUSES,
   clientCanSee,
   clientCanSeeTask,
   DELIVERABLES_NEEDING_APPROVAL,
@@ -56,7 +58,8 @@ import {
   type ClientAccessLevel,
 } from "../shared/engagement";
 import type { AccountSession, Database } from "./accountAuth";
-import { CONTENT_KIND_LABELS, CONTENT_STATUS_LABELS, DATED_TYPES, datedProgress, ENGAGEMENT_TYPE_LABELS, type ContentKind, type ContentStatus, type EngagementType } from "../shared/engagementTypes";
+import { CONTENT_KIND_LABELS, CONTENT_STATUS_LABELS, DATED_TYPES, datedProgress, engagementTitle, ENGAGEMENT_TYPE_LABELS, SERVICE_TYPES, serviceStarter, servicesFor, serviceStep, SERVICE_STEPS, STAGED_TYPES, type ContentKind, type ContentStatus, type DatedEngagementType, type EngagementType } from "../shared/engagementTypes";
+import { PRODUCTS } from "../shared/products";
 import { inviteBusinessOwner } from "./accountInvitations";
 import { slugify } from "./accountAuth";
 import { recordAudit } from "./audit";
@@ -145,7 +148,11 @@ export async function startEngagement(db: Database, input: { businessCheckId: nu
   });
 }
 
-export type DirectEngagementInput = { type: EngagementType; businessName: string; contactName: string; contactEmail: string; startedOn: string };
+/**
+ * A new engagement opened by the desk: for a new client (named, emailed an owner invitation) or for an existing client's
+ * business (businessId), which adds a project to the account they already have. Service types name the service bought.
+ */
+export type DirectEngagementInput = { type: EngagementType; startedOn: string; service?: string | null; businessId?: number | null; businessName?: string | null; contactName?: string | null; contactEmail?: string | null };
 
 const addDays = (day: string, days: number) => { const date = new Date(`${day}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
 
@@ -157,37 +164,71 @@ const addDays = (day: string, days: number) => { const date = new Date(`${day}T1
  */
 export async function createDirectEngagement(db: Database, actor: StaffActor & { name?: string | null }, input: DirectEngagementInput) {
   requireStart(actor);
-  const email = input.contactEmail.trim().toLowerCase();
+  // The service bought, for the types tied to one; the Six-Week Fix is its own service.
+  const service = input.type === "six_week_fix" ? "six_week_fix" : SERVICE_TYPES[input.type] ? input.service ?? null : null;
+  const product = service ? PRODUCTS.find(item => item.id === service) : undefined;
+  if (SERVICE_TYPES[input.type] && (!product || (input.type !== "six_week_fix" && !servicesFor(input.type).some(item => item.id === product.id)))) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Choose the service this engagement is for." });
+  }
+  const dated = DATED_TYPES[input.type];
+  const starter = dated ?? (product ? serviceStarter(product) : null);
+  const dueFor = (week: number) => addDays(input.startedOn, (week - 1) * 7 + 3);
+
+  // An existing client: the project joins their business and account; nobody is invited.
+  if (input.businessId) {
+    const business = (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq(businesses.id, input.businessId)).limit(1))[0];
+    if (!business) throw notFound();
+    const owner = (await db.select({ email: users.email }).from(businessMemberships).innerJoin(users, eq(businessMemberships.userId, users.id))
+      .where(and(eq(businessMemberships.businessId, business.id), eq(businessMemberships.role, "owner"))).limit(1))[0];
+    const engagementId = await db.transaction(async tx => insertDirect(tx, actor, input, { businessId: business.id, service, starter, dueFor, contactName: null, contactEmail: owner?.email ?? null }));
+    return { engagementId, invitationUrl: null, deliveryStatus: null, hasAccount: true } as const;
+  }
+
+  const businessName = input.businessName?.trim() ?? "";
+  const contactName = input.contactName?.trim() ?? "";
+  const email = input.contactEmail?.trim().toLowerCase() ?? "";
+  if (businessName.length < 2 || contactName.length < 2 || !email.includes("@")) throw new TRPCError({ code: "BAD_REQUEST", message: "Name the business and the client, and give the client's email." });
   const existing = (await db.select({ id: users.id, status: users.status }).from(users).where(sql`lower(${users.email}) = ${email}`).limit(1))[0];
   if (existing) {
     const staff = (await db.select({ id: userPlatformRoles.id }).from(userPlatformRoles).where(eq(userPlatformRoles.userId, existing.id)).limit(1)).length > 0;
     if (staff) throw new TRPCError({ code: "BAD_REQUEST", message: "This email belongs to a staff account. Use the client's own email." });
   }
-  const dated = DATED_TYPES[input.type];
-  const dueFor = (week: number) => addDays(input.startedOn, (week - 1) * 7 + 3);
   const { engagementId, businessId } = await db.transaction(async tx => {
-    const [business] = await tx.insert(businesses).values({ name: input.businessName.trim(), slug: slugify(input.businessName), createdByUserId: existing?.id ?? actor.id }).returning({ id: businesses.id });
+    const [business] = await tx.insert(businesses).values({ name: businessName, slug: slugify(businessName), createdByUserId: existing?.id ?? actor.id }).returning({ id: businesses.id });
     if (existing) await tx.insert(businessMemberships).values({ businessId: business.id, userId: existing.id, role: "owner", status: "active" });
-    const [created] = await tx.insert(engagements).values({ businessId: business.id, type: input.type, startedOn: input.startedOn, contactName: input.contactName.trim(), contactEmail: email }).returning({ id: engagements.id });
-    const tasks = dated
-      ? [
-        ...dated.dataRequests.map(item => ({ kind: "data_request" as const, side: "client" as const, ...item })),
-        ...dated.clientActions.map(item => ({ kind: "action" as const, side: "client" as const, ...item })),
-        ...dated.teamActions.map(item => ({ kind: "action" as const, side: "ipf" as const, ...item })),
-      ].map(({ week, order, ...item }) => ({ engagementId: created.id, kind: item.kind, side: item.side, title: item.title, detail: item.detail, dueOn: dueFor(week), weekNumber: week, sortOrder: order, section: item.section ?? null, ref: item.ref ?? null, informs: item.informs ?? null, format: item.format ?? null, priority: item.priority ?? null, createdByUserId: actor.id }))
-      : [
-        ...ASSESSMENT_TEMPLATE.dataRequests.map(item => ({ engagementId: created.id, kind: "data_request" as const, side: "client" as const, title: item.title, detail: item.detail, dueOn: dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: actor.id })),
-        ...ASSESSMENT_TEMPLATE.teamActions.map(item => ({ engagementId: created.id, kind: "action" as const, side: "ipf" as const, title: item.title, detail: item.detail, dueOn: dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: actor.id })),
-      ];
-    if (tasks.length) await tx.insert(engagementTasks).values(tasks);
-    const sessions = dated ? dated.sessions : ASSESSMENT_TEMPLATE.sessions;
-    await tx.insert(engagementSessions).values(sessions.map(item => ({ engagementId: created.id, kind: item.kind, title: item.title, durationMinutes: item.durationMinutes, agenda: item.agenda, weekNumber: item.week, sortOrder: item.order, createdByUserId: actor.id })));
-    await recordAudit(tx, { action: "engagement_started", actorUserId: actor.id, targetEmail: email, details: { engagementId: created.id, type: input.type, direct: true, businessId: business.id } });
-    return { engagementId: created.id, businessId: business.id };
+    const id = await insertDirect(tx, actor, input, { businessId: business.id, service, starter, dueFor, contactName, contactEmail: email });
+    return { engagementId: id, businessId: business.id };
   });
   if (existing) return { engagementId, invitationUrl: null, deliveryStatus: null, hasAccount: true } as const;
-  const invitation = await inviteBusinessOwner(db, { email, fullName: input.contactName.trim(), businessId, businessName: input.businessName.trim(), actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName });
+  const invitation = await inviteBusinessOwner(db, { email, fullName: contactName, businessId, businessName, actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName });
   return { engagementId, invitationUrl: invitation.invitationUrl, deliveryStatus: invitation.deliveryStatus, hasAccount: false } as const;
+}
+
+type Starter = Pick<DatedEngagementType, "dataRequests" | "clientActions" | "teamActions" | "sessions">;
+
+/** The engagement row and where it begins: the type's (or the service's) Work Plan, Data Request and Sessions. */
+async function insertDirect(tx: Pick<Database, "insert">, actor: StaffActor, input: DirectEngagementInput, at: { businessId: number; service: string | null; starter: Starter | null; dueFor: (week: number) => string; contactName: string | null; contactEmail: string | null }) {
+  const [created] = await tx.insert(engagements).values({
+    businessId: at.businessId, type: input.type, service: at.service, startedOn: input.startedOn, contactName: at.contactName, contactEmail: at.contactEmail,
+    // The Six-Week Fix starts in the fix; every other direct engagement is getting set up.
+    stage: input.type === "six_week_fix" ? "fix" : "setting_up", fixStartedAt: input.type === "six_week_fix" ? new Date() : null,
+  }).returning({ id: engagements.id });
+  const starter = at.starter;
+  const tasks = starter
+    ? [
+      ...starter.dataRequests.map(item => ({ kind: "data_request" as const, side: "client" as const, ...item })),
+      ...starter.clientActions.map(item => ({ kind: "action" as const, side: "client" as const, ...item })),
+      ...starter.teamActions.map(item => ({ kind: "action" as const, side: "ipf" as const, ...item })),
+    ].map(({ week, order, ...item }) => ({ engagementId: created.id, kind: item.kind, side: item.side, title: item.title, detail: item.detail, dueOn: at.dueFor(week), weekNumber: week, sortOrder: order, section: item.section ?? null, ref: item.ref ?? null, informs: item.informs ?? null, format: item.format ?? null, priority: item.priority ?? null, createdByUserId: actor.id }))
+    : [
+      ...ASSESSMENT_TEMPLATE.dataRequests.map(item => ({ engagementId: created.id, kind: "data_request" as const, side: "client" as const, title: item.title, detail: item.detail, dueOn: at.dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: actor.id })),
+      ...ASSESSMENT_TEMPLATE.teamActions.map(item => ({ engagementId: created.id, kind: "action" as const, side: "ipf" as const, title: item.title, detail: item.detail, dueOn: at.dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: actor.id })),
+    ];
+  if (tasks.length) await tx.insert(engagementTasks).values(tasks);
+  const sessions = starter ? starter.sessions : ASSESSMENT_TEMPLATE.sessions;
+  if (sessions.length) await tx.insert(engagementSessions).values(sessions.map(item => ({ engagementId: created.id, kind: item.kind, title: item.title, durationMinutes: item.durationMinutes, agenda: item.agenda, weekNumber: item.week, sortOrder: item.order, createdByUserId: actor.id })));
+  await recordAudit(tx, { action: "engagement_started", actorUserId: actor.id, targetEmail: at.contactEmail, details: { engagementId: created.id, type: input.type, service: at.service, direct: true, businessId: at.businessId } });
+  return created.id;
 }
 
 export type EngagementStart = "started" | "exists" | "not_set_up" | "failed";
@@ -283,6 +324,7 @@ const requireManage = (actor: StaffActor) => requirePermission(actor, "manage_en
 /** The engagements this person may see, newest first, with what the desk needs at a glance. */
 /** The stage in words: a dated engagement's current stage from its start date, else the stored stage. */
 export function engagementStageLabel(row: { type: EngagementType; stage: EngagementStage; startedOn: string | null }, now: number) {
+  if (!STAGED_TYPES.includes(row.type) && !DATED_TYPES[row.type]) return row.stage === "closed" ? "Closed" : "Open";
   const dated = DATED_TYPES[row.type];
   if (!dated || !row.startedOn) return ENGAGEMENT_STAGE_LABELS[row.stage];
   const progress = datedProgress(dated, row.startedOn, now);
@@ -300,6 +342,7 @@ export async function listStaffEngagements(db: Database, actor: StaffActor) {
   const rows = await db.select({
     id: engagements.id,
     stage: engagements.stage,
+    service: engagements.service,
     businessId: engagements.businessId,
     businessCheckId: engagements.businessCheckId,
     createdAt: engagements.createdAt,
@@ -337,7 +380,8 @@ export async function listStaffEngagements(db: Database, actor: StaffActor) {
       stage: row.stage,
       stageLabel: engagementStageLabel(row, now),
       type: row.type,
-      typeLabel: ENGAGEMENT_TYPE_LABELS[row.type],
+      // The service for a service engagement ("Pitch Deck"), else the type.
+      typeLabel: engagementTitle(row.type, row.service),
       businessName: row.businessName ?? row.checkBusinessName ?? row.ownerName ?? row.contactName ?? "",
       ownerName: row.ownerName ?? row.contactName ?? "",
       ownerEmail: row.ownerEmail ?? row.contactEmail ?? "",
@@ -383,7 +427,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
   const filesFor = (where: "taskId" | "deliverableId", id: number) => files.filter(file => file[where] === id || (where === "taskId" && matches.some(match => match.fileId === file.id && match.taskId === id))).map(staffFile);
   return {
     uploadsEnabled: isFileStorageConfigured(),
-    engagement: { ...engagement, stageLabel: engagementStageLabel(engagement, Date.now()), typeLabel: ENGAGEMENT_TYPE_LABELS[engagement.type] },
+    engagement: { ...engagement, stageLabel: engagementStageLabel(engagement, Date.now()), typeLabel: engagementTitle(engagement.type, engagement.service) },
     owner: check ? { name: check.fullName, email: check.email, whatsapp: check.whatsapp } : null,
     businessName: business?.name ?? check?.businessName ?? check?.fullName ?? "",
     hasAccount: business !== null,
@@ -521,7 +565,7 @@ async function notifyAssigned(db: Pick<Database, "select">, engagementId: number
     const person = (await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, userId)).limit(1))[0];
     if (!person?.email) return false;
     const row = (await db.select({ businessName: businesses.name, checkBusiness: businessChecks.businessName, ownerName: businessChecks.fullName }).from(engagements)
-      .innerJoin(businessChecks, eq(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq(engagements.businessId, businesses.id))
+      .leftJoin(businessChecks, eq(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq(engagements.businessId, businesses.id))
       .where(eq(engagements.id, engagementId)).limit(1))[0];
     const businessName = row?.businessName ?? row?.checkBusiness ?? row?.ownerName ?? "a client";
     const message = assignedNoticeEmail({ fullName: person.name ?? "", businessName, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[role], changed, url: `${getTrustedApplicationOrigin()}/admin` });
@@ -788,10 +832,16 @@ function bookingFor(sessions: (typeof engagementSessions.$inferSelect)[], viewer
   return nextToBook && url ? { sessionId: nextToBook.id, title: nextToBook.title, url } : null;
 }
 
-export async function getClientRoom(db: Database, session: AccountSession) {
+/**
+ * The client's room for one of their business's engagements (a client may have several: a Business Review, then a
+ * Pitch Deck). Without a choice, the newest one still open, else the newest. An id from another business is not found.
+ */
+export async function getClientRoom(db: Database, session: AccountSession, engagementId?: number | null) {
   const business = session.activeBusiness;
   if (!business) return null;
-  const engagement = (await db.select().from(engagements).where(eq(engagements.businessId, business.businessId)).orderBy(desc(engagements.id)).limit(1))[0];
+  const all = await db.select().from(engagements).where(eq(engagements.businessId, business.businessId)).orderBy(desc(engagements.id));
+  if (engagementId && !all.some(row => row.id === engagementId)) throw notFound();
+  const engagement = engagementId ? all.find(row => row.id === engagementId) : all.find(row => row.stage !== "closed") ?? all[0];
   if (!engagement) return null;
   const viewer = await clientViewerFor(db, session, business.businessId);
   return buildClientRoom(db, engagement, viewer, session.user.id, business.businessName);
@@ -833,8 +883,11 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
   const assigneeIds = Array.from(new Set(tasks.map(task => task.assigneeUserId).filter((value): value is number => value !== null)));
   const assigneeNames = new Map((assigneeIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, assigneeIds)) : []).map(row => [row.id, row.name ?? ""]));
   const fullView = viewer.kind === "owner" || viewer.access === "full";
+  // The business's other engagements, newest first: the room lists them, and a later one (a Pitch Deck after the Business
+  // Review) still shows what the Business Health Check found.
+  const projects = engagement.businessId === null ? [engagement] : await db.select().from(engagements).where(eq(engagements.businessId, engagement.businessId)).orderBy(desc(engagements.id));
   // Where the engagement came from: the check's main finding and readiness, and the Discovery Call once the team shares it.
-  const checkId = engagement.businessCheckId;
+  const checkId = engagement.businessCheckId ?? projects.find(row => row.businessCheckId !== null)?.businessCheckId ?? null;
   const check = checkId === null ? undefined : (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor })
     .from(businessChecks).where(eq(businessChecks.id, checkId)).limit(1))[0];
   const report = checkId === null ? null : (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq(fullReports.businessCheckId, checkId)).limit(1))[0] ?? null;
@@ -857,6 +910,20 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
     contentTargets: DATED_TYPES[engagement.type]?.monthly ?? [],
     type: engagement.type,
     typeLabel: ENGAGEMENT_TYPE_LABELS[engagement.type],
+    /** The service bought, for a service engagement, and the engagement's name for people. */
+    service: engagement.service,
+    title: engagementTitle(engagement.type, engagement.service),
+    /** Where a service engagement stands, read from its work (1 to 4 of SERVICE_STEPS); null for the other types. */
+    serviceStep: SERVICE_TYPES[engagement.type] && !STAGED_TYPES.includes(engagement.type) ? serviceStep({
+      recordsOpen: tasks.filter(task => task.side === "client" && task.kind === "data_request" && OPEN_TASK_STATUSES.includes(task.status)).length,
+      shared: visibleDeliverables.length, accepted: visibleDeliverables.filter(item => item.clientAcceptedAt !== null).length, closed: engagement.stage === "closed",
+    }) : null,
+    /** Every engagement of the business, newest first, to move between them. */
+    projects: projects.map(row => ({ id: row.id, title: engagementTitle(row.type, row.service), stageLabel: engagementStageLabel(row, now), closed: row.stage === "closed", current: row.id === engagement.id })),
+    /** "Fix the next problem": what the business has asked for that the desk has not handled yet. */
+    requests: engagement.businessId === null ? [] : (await db.select({ id: serviceRequests.id, service: serviceRequests.service, createdAt: serviceRequests.createdAt }).from(serviceRequests)
+      .where(and(eq(serviceRequests.businessId, engagement.businessId), eq(serviceRequests.status, "open"))).orderBy(desc(serviceRequests.id)))
+      .map(row => ({ ...row, serviceName: PRODUCTS.find(product => product.id === row.service)?.name ?? row.service })),
     startedOn: engagement.startedOn,
     uploadsEnabled: isFileStorageConfigured(),
     businessName: businessName,
@@ -1167,30 +1234,34 @@ async function matchesOf(db: Pick<Database, "select">, engagementId: number) {
     .innerJoin(engagementFiles, eq(engagementFileMatches.fileId, engagementFiles.id)).where(eq(engagementFiles.engagementId, engagementId));
 }
 
-/** The client's current engagement, for the drop box. Anyone in the business may send files; only the owner and the sender see them. */
-async function requireClientRoomEngagement(db: Pick<Database, "select">, session: AccountSession) {
+/**
+ * The engagement a drop is for: the one the client has open in their room, which must be their business's; without one,
+ * the newest. Anyone in the business may send files; only the owner and the sender see them.
+ */
+async function requireClientRoomEngagement(db: Pick<Database, "select">, session: AccountSession, engagementId?: number | null) {
   const business = session.activeBusiness;
   if (!business) throw notFound();
-  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq(engagements.businessId, business.businessId)).orderBy(desc(engagements.id)).limit(1))[0];
+  const engagement = (await db.select({ id: engagements.id }).from(engagements)
+    .where(engagementId ? and(eq(engagements.businessId, business.businessId), eq(engagements.id, engagementId)) : eq(engagements.businessId, business.businessId)).orderBy(desc(engagements.id)).limit(1))[0];
   if (!engagement) throw notFound();
   return engagement;
 }
 
 /** Step one of a drop: where to put the file. Nothing is recorded yet. */
-export async function clientRequestDrop(db: Database, session: AccountSession, input: UploadInput) {
+export async function clientRequestDrop(db: Database, session: AccountSession, input: UploadInput & { engagementId?: number | null }) {
   requireUploads();
   validateUpload(input);
-  const engagement = await requireClientRoomEngagement(db, session);
+  const engagement = await requireClientRoomEngagement(db, session, input.engagementId);
   const storageKey = `${dropPrefix(engagement.id)}${randomUUID()}-${safeFileName(input.fileName)}`;
   const upload = await createSignedUpload(storageKey, input.contentType);
   return { storageKey, uploadUrl: upload.url, headers: upload.headers };
 }
 
 /** Step two: the file arrived. It is recorded unsorted (no request yet); the team matches it. */
-export async function clientConfirmDrop(db: Database, session: AccountSession, input: UploadInput & { storageKey: string; note: string | null }) {
+export async function clientConfirmDrop(db: Database, session: AccountSession, input: UploadInput & { storageKey: string; note: string | null; engagementId?: number | null }) {
   requireUploads();
   validateUpload(input);
-  const engagement = await requireClientRoomEngagement(db, session);
+  const engagement = await requireClientRoomEngagement(db, session, input.engagementId);
   if (!isTargetStorageKey(input.storageKey, dropPrefix(engagement.id))) throw notFound();
   if (!(await objectExists(input.storageKey))) throw new TRPCError({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
   return db.transaction(async tx => {
@@ -1354,4 +1425,62 @@ export async function saveCheckin(db: Database, actor: StaffActor, input: Checki
     await recordAudit(tx, { action: "engagement_checkin_recorded", actorUserId: actor.id, details: { engagementId: input.engagementId, weekNumber: input.weekNumber } });
   });
   return { success: true } as const;
+}
+
+// ---- "Fix the next problem": a client asks for another service ------------------------------------------------------
+
+/**
+ * Anyone in the business asks, from their room, for another service. The desk is emailed and sees it in Engagements;
+ * nothing is charged or opened until they confirm. One open request per service at a time.
+ */
+export async function requestService(db: Database, session: AccountSession, input: { service: string; note: string | null; engagementId?: number | null }) {
+  const business = session.activeBusiness;
+  if (!business) throw notFound();
+  const product = PRODUCTS.find(item => item.id === input.service && item.id !== "business_health_check");
+  if (!product) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose a service." });
+  if (input.engagementId) await requireClientRoomEngagement(db, session, input.engagementId);
+  const open = (await db.select({ id: serviceRequests.id }).from(serviceRequests)
+    .where(and(eq(serviceRequests.businessId, business.businessId), eq(serviceRequests.service, product.id), eq(serviceRequests.status, "open"))).limit(1))[0];
+  if (open) return { success: true, requestId: open.id, already: true } as const;
+  const [created] = await db.insert(serviceRequests).values({ businessId: business.businessId, engagementId: input.engagementId ?? null, requestedByUserId: session.user.id, service: product.id, note: input.note?.trim() || null }).returning({ id: serviceRequests.id });
+  await recordAudit(db, { action: "service_requested", actorUserId: session.user.id, details: { requestId: created.id, businessId: business.businessId, service: product.id } });
+  try {
+    await deliverEmail({
+      to: BRAND.businessSupportMailbox, sender: "business_support",
+      subject: `${business.businessName} asked for the ${product.name}`,
+      body: `${session.user.fullName || "A client"} at ${business.businessName} asked for the ${product.name} from their client room.${input.note?.trim() ? `\n\nTheir note: ${input.note.trim()}` : ""}\n\nConfirm it with them, send the payment link, then open the engagement from the request in Engagements: ${getTrustedApplicationOrigin()}/admin`,
+    });
+  } catch (error) {
+    console.error("[Engagements] Service requested, but the desk could not be emailed:", error instanceof Error ? error.message : error);
+  }
+  return { success: true, requestId: created.id, already: false } as const;
+}
+
+/** The desk's list of requests not yet handled, and the clients' businesses to open an engagement for. Desk only. */
+export async function listServiceRequests(db: Database, actor: StaffActor) {
+  if (!canStart(actor)) return [];
+  const rows = await db.select({ id: serviceRequests.id, businessId: serviceRequests.businessId, businessName: businesses.name, service: serviceRequests.service, note: serviceRequests.note, createdAt: serviceRequests.createdAt, requestedBy: users.name })
+    .from(serviceRequests).innerJoin(businesses, eq(serviceRequests.businessId, businesses.id)).innerJoin(users, eq(serviceRequests.requestedByUserId, users.id))
+    .where(eq(serviceRequests.status, "open")).orderBy(asc(serviceRequests.id));
+  return rows.map(row => {
+    const product = PRODUCTS.find(item => item.id === row.service);
+    const type: EngagementType = row.service === "six_week_fix" ? "six_week_fix" : row.service === "business_review" ? "business_review" : product?.way === "assessment" ? "assessment" : product?.way === "monthly_service" ? "monthly_service" : "done_for_you";
+    return { ...row, serviceName: product?.name ?? row.service, type };
+  });
+}
+
+export async function handleServiceRequest(db: Database, actor: StaffActor, input: { requestId: number; status: "done" | "declined" }) {
+  requireStart(actor);
+  const updated = await db.update(serviceRequests).set({ status: input.status, handledByUserId: actor.id, handledAt: new Date() })
+    .where(and(eq(serviceRequests.id, input.requestId), eq(serviceRequests.status, "open"))).returning({ id: serviceRequests.id });
+  if (!updated.length) throw notFound();
+  await recordAudit(db, { action: "service_request_handled", actorUserId: actor.id, details: { requestId: input.requestId, status: input.status } });
+  return { success: true } as const;
+}
+
+/** The businesses that already have an engagement, for "New engagement for an existing client". Desk only. */
+export async function listClientBusinesses(db: Database, actor: StaffActor) {
+  if (!canStart(actor)) return [];
+  const rows = await db.selectDistinct({ id: businesses.id, name: businesses.name }).from(businesses).innerJoin(engagements, eq(engagements.businessId, businesses.id)).orderBy(asc(businesses.name));
+  return rows;
 }

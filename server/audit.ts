@@ -43,6 +43,8 @@ export const AUDIT_ACTIONS = [
   "engagement_task_answered",
   "engagement_audience_changed",
   "engagement_room_previewed",
+  "service_requested",
+  "service_request_handled",
   "account_invitation_created",
   "account_invitation_revoked",
   "account_invitation_accepted",

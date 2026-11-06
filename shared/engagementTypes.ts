@@ -10,10 +10,30 @@
  * 15 reels, 5 posts and 20 stories a month over 90 days, a weekly check-in and a review each month.
  */
 import type { EngagementSessionKind, EngagementTaskPriority } from "./engagement";
+import { PRODUCTS, type Product, type WayToBuy } from "./products";
 
-export const ENGAGEMENT_TYPES = ["business_review", "digital_marketing"] as const;
+/**
+ * The types follow how the website sells (ET, 6 November 2026): an Assessment (the Business Review has its own type, with
+ * the seven-step method), Done for You, the Six-Week Fix and a Monthly Service, each tied to the service bought; and
+ * Digital marketing. A client may have several engagements over time, one per service they buy.
+ */
+export const ENGAGEMENT_TYPES = ["business_review", "digital_marketing", "assessment", "done_for_you", "six_week_fix", "monthly_service"] as const;
 export type EngagementType = (typeof ENGAGEMENT_TYPES)[number];
-export const ENGAGEMENT_TYPE_LABELS: Record<EngagementType, string> = { business_review: "Business Review", digital_marketing: "Digital marketing" };
+export const ENGAGEMENT_TYPE_LABELS: Record<EngagementType, string> = {
+  business_review: "Business Review", digital_marketing: "Digital marketing", assessment: "Assessment", done_for_you: "Done for You", six_week_fix: "Six-Week Fix", monthly_service: "Monthly Service",
+};
+
+/** The types tied to a service on the website, and the way to buy each one covers. */
+export const SERVICE_TYPES: Partial<Record<EngagementType, WayToBuy>> = { assessment: "assessment", done_for_you: "done_for_you", six_week_fix: "six_week_fix", monthly_service: "monthly_service" };
+/** The services an engagement of this type can be for. The Business Health Check is free and the Business Review has its own type. */
+export const servicesFor = (type: EngagementType): Product[] => {
+  const way = SERVICE_TYPES[type];
+  return way ? PRODUCTS.filter(product => product.way === way && product.id !== "business_health_check" && product.id !== "business_review") : [];
+};
+/** The engagement's name for people: the service bought, or the type. */
+export const engagementTitle = (type: EngagementType, service: string | null) => PRODUCTS.find(product => product.id === service)?.name ?? ENGAGEMENT_TYPE_LABELS[type];
+/** Types whose stage the team moves through the method (setting up, assessment, the fix, the plan); every other type is open or closed. */
+export const STAGED_TYPES: readonly EngagementType[] = ["business_review", "six_week_fix"];
 
 /** A stage on a dated engagement: from and to are days from the start (day 0 is the start date). */
 export type TypeStage = { title: string; summary: string; from: number; to: number };
@@ -97,3 +117,39 @@ export const CONTENT_COUNTED: readonly ContentStatus[] = ["approved", "published
 /** The engagement month a day falls in (1 for days 1 to 30, and so on), capped at the programme's last month. */
 export const monthOfDay = (day: number, durationDays: number) => Math.min(Math.max(1, Math.ceil(durationDays / 30)), Math.max(1, Math.ceil(day / 30)));
 
+
+// ---- Service engagements (Assessment, Done for You, Monthly Service) ----------------------------------------------------
+
+/**
+ * Where a service engagement stands, read from its work rather than set by hand: the records first, then the work,
+ * then the Deliverable shared, then the client's Sign-off.
+ */
+export const SERVICE_STEPS = ["Records in", "In progress", "Delivered", "Sign-off"] as const;
+export function serviceStep(input: { recordsOpen: number; shared: number; accepted: number; closed: boolean }): number {
+  if (input.closed || (input.shared > 0 && input.accepted >= input.shared)) return 4;
+  if (input.shared > 0) return 3;
+  if (input.recordsOpen > 0) return 1;
+  return 2;
+}
+
+/**
+ * Where a service engagement begins: the records and questions the service asks for on the website become the Data
+ * Request, the team's drafting and review are on the Work Plan, and there is a Kick-off and a Handover call (every piece
+ * of work ends with one).
+ */
+export function serviceStarter(product: Product): Pick<DatedEngagementType, "dataRequests" | "clientActions" | "teamActions" | "sessions"> {
+  const records = product.intake.records.map((record, index) => ({ week: 1, order: index + 1, section: "A Records", ref: `A${index + 1}`, priority: (record.required ? "high" : "medium") as EngagementTaskPriority, title: record.label, detail: record.detail }));
+  const questions = product.intake.questions.map((question, index) => ({ week: 1, order: records.length + index + 1, section: "B Questions", ref: `B${index + 1}`, priority: (question.required ? "high" : "medium") as EngagementTaskPriority, title: question.label, detail: question.hint ?? "Answer in a few lines; a voice note is fine.", format: "A short answer" }));
+  return {
+    dataRequests: [...records, ...questions],
+    clientActions: [],
+    teamActions: [
+      { week: 1, order: 20, title: `Draft the ${product.name}`, detail: "From the records and answers, once they are complete." },
+      { week: 2, order: 21, title: "Consultant review", detail: "A named consultant checks the work before the client sees it." },
+    ],
+    sessions: [
+      { kind: "other", title: "Kick-off", week: 1, order: 0, durationMinutes: 30, agenda: `What the ${product.name} is for, the records we need, and the delivery date.` },
+      { kind: "review", title: "Handover", week: 3, order: 1, durationMinutes: 45, agenda: `Walk through the ${product.name}, answer questions, agree what to do next.` },
+    ],
+  };
+}

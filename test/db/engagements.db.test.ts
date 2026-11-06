@@ -226,6 +226,67 @@ for (const target of targets) {
       });
     });
 
+    describe("one client, many projects, and the next problem", () => {
+      it("adds a Pitch Deck for an existing client: no new invitation, its Data Request from the service, both projects in the room", async () => {
+        const { owner, engagementId: review, businessId } = await client("two-projects");
+        mocked.deliverEmail.mockClear();
+        // A service type needs its service; the Business Review's own type does not take one.
+        await expect((await superAdmin.call()).engagement.staff.createDirect({ type: "done_for_you", startedOn: "2026-11-09", businessId })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await expect((await superAdmin.call()).engagement.staff.createDirect({ type: "done_for_you", service: "six_week_fix", startedOn: "2026-11-09", businessId })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        const deck = await (await superAdmin.call()).engagement.staff.createDirect({ type: "done_for_you", service: "pitch_deck", startedOn: "2026-11-09", businessId });
+        expect(deck).toMatchObject({ hasAccount: true, invitationUrl: null });
+        expect(emails()).toEqual([]);
+        expect((await (await superAdmin.call()).engagement.staff.clientBusinesses()).map(item => item.id)).toContain(businessId);
+
+        // The room opens on the newest open project, lists both, and opens either by id.
+        const room = (await (await owner.call()).engagement.client.room())!;
+        expect(room).toMatchObject({ engagementId: deck.engagementId, type: "done_for_you", service: "pitch_deck", title: "Pitch Deck", serviceStep: 1 });
+        expect(room.projects.map(item => [item.title, item.current])).toEqual([["Pitch Deck", true], ["Business Review", false]]);
+        expect(room.tasks.filter(task => task.kind === "data_request").map(task => task.title)).toEqual(["Sales records", "Your main costs", "Any plan, deck or notes", "What do you want this work to help you decide or do?", "Who will you present to, and what do you want them to do?", "What are you asking for, and what will you do with it?"]);
+        expect(room.sessions.map(item => item.title)).toEqual(["Kick-off", "Handover"]);
+        // A later project still shows what the Business Health Check found.
+        expect(room.check).not.toBeNull();
+        const back = (await (await owner.call()).engagement.client.room({ engagementId: review }))!;
+        expect(back).toMatchObject({ engagementId: review, type: "business_review", serviceStep: null });
+
+        // The desk's list names the service; the stage is open or closed.
+        const listed = (await (await superAdmin.call()).engagement.staff.list()).items.find(item => item.id === deck.engagementId)!;
+        expect(listed).toMatchObject({ typeLabel: "Pitch Deck", stageLabel: "Open" });
+
+        // Another business's project is never reachable by changing the id, for the room or the drop box.
+        const other = await client("two-projects-other");
+        await expect((await other.owner.call()).engagement.client.room({ engagementId: deck.engagementId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+      });
+
+      it("takes a client's request for another service to the desk, who open it from the request; others cannot see or handle it", async () => {
+        const { owner, engagementId, businessId } = await client("next-problem");
+        mocked.deliverEmail.mockClear();
+        const asked = await (await owner.call()).engagement.client.requestService({ service: "pitch_deck", note: "Meeting an investor in December.", engagementId });
+        expect(asked).toMatchObject({ success: true, already: false });
+        expect(emails()).toEqual([expect.objectContaining({ to: "info@ipfactory.co", subject: expect.stringContaining("asked for the Pitch Deck") })]);
+        // Asking twice keeps one request.
+        expect(await (await owner.call()).engagement.client.requestService({ service: "pitch_deck", note: null })).toMatchObject({ already: true });
+        await expect((await owner.call()).engagement.client.requestService({ service: "not_a_service", note: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        expect((await (await owner.call()).engagement.client.room())!.requests.map(item => item.serviceName)).toEqual(["Pitch Deck"]);
+
+        const requests = await (await superAdmin.call()).engagement.staff.serviceRequests();
+        const request = requests.find(item => item.businessId === businessId)!;
+        expect(request).toMatchObject({ service: "pitch_deck", serviceName: "Pitch Deck", type: "done_for_you", note: "Meeting an investor in December." });
+
+        // An analyst sees no requests and cannot handle one.
+        const analyst = await signIn(await person(["analyst"]), true);
+        expect(await (await analyst.call()).engagement.staff.serviceRequests()).toEqual([]);
+        await expect((await analyst.call()).engagement.staff.handleRequest({ requestId: request.id, status: "done" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+        await (await superAdmin.call()).engagement.staff.createDirect({ type: request.type, service: request.service, startedOn: "2026-11-09", businessId });
+        expect(await (await superAdmin.call()).engagement.staff.handleRequest({ requestId: request.id, status: "done" })).toEqual({ success: true });
+        expect((await (await superAdmin.call()).engagement.staff.serviceRequests()).some(item => item.id === request.id)).toBe(false);
+        expect((await (await owner.call()).engagement.client.room())!.requests).toEqual([]);
+        const audits = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "service_requested"));
+        expect(audits.length).toBeGreaterThan(0);
+      });
+    });
+
     describe("engagements opened directly, by type", () => {
       it("opens a Digital marketing engagement: the business, the type's starting content, and the owner's invitation", async () => {
         const email = uniqueEmail("crown");

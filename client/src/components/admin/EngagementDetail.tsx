@@ -1,3 +1,4 @@
+import { STAGED_TYPES } from "@shared/engagementTypes";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import PreviewAsClient from "./PreviewAsClient";
@@ -202,8 +203,10 @@ function StageAndTeam({ data, engagementId }: { data: Detail; engagementId: numb
     <DetailSection title="Stage and team">
       <div className="space-y-1">
         <label className={LABEL} htmlFor="engagement-stage">Stage</label>
-        <select id="engagement-stage" className={FIELD} disabled={!data.can.manage || setStage.isPending} value={data.engagement.stage} onChange={event => setStage.mutate({ engagementId, stage: event.target.value as EngagementStage })}>
-          {ENGAGEMENT_STAGES.map(stage => <option key={stage} value={stage}>{ENGAGEMENT_STAGE_LABELS[stage]}</option>)}
+        <select id="engagement-stage" className={FIELD} disabled={!data.can.manage || setStage.isPending} value={STAGED_TYPES.includes(data.engagement.type) || data.engagement.stage === "closed" ? data.engagement.stage : "setting_up"} onChange={event => setStage.mutate({ engagementId, stage: event.target.value as EngagementStage })}>
+          {/* The stage follows the type: a Business Review or Six-Week Fix moves through the method; any other type is open or closed (its steps are read from its dates or its work). */}
+          {(STAGED_TYPES.includes(data.engagement.type) ? ENGAGEMENT_STAGES.map(stage => [stage, ENGAGEMENT_STAGE_LABELS[stage]] as const) : ([["setting_up", "Open"], ["closed", "Closed"]] as const))
+            .map(([stage, name]) => <option key={stage} value={stage}>{name}</option>)}
         </select>
       </div>
       <ul aria-label="Team" className="space-y-1 text-sm">

@@ -5,6 +5,7 @@ import TeamSeats from "@/components/TeamSeats";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
+import { useRoomProject } from "@/lib/roomProject";
 import { CURRENT_STATE } from "@shared/businessSupport";
 import type { AccountSessionView } from "@shared/auth";
 import React from "react";
@@ -19,7 +20,9 @@ import { Link } from "wouter";
 function Dashboard({ account }: { account: AccountSessionView }) {
   const business = account.activeBusiness;
   const internal = account.platformRoles.length > 0;
-  const room = trpc.engagement.client.room.useQuery(undefined, { retry: false, enabled: Boolean(business) });
+  const { project } = useRoomProject();
+  // The previous project stays on screen while the next one loads, so switching never flashes the welcome page.
+  const room = trpc.engagement.client.room.useQuery(project ? { engagementId: project } : undefined, { retry: false, enabled: Boolean(business), placeholderData: previous => previous });
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -77,7 +80,9 @@ function Dashboard({ account }: { account: AccountSessionView }) {
 export default function AccountDashboard() {
   const { account } = useAccount();
   const business = account?.activeBusiness;
-  const room = trpc.engagement.client.room.useQuery(undefined, { retry: false, enabled: Boolean(business) });
+  const { project } = useRoomProject();
+  // The previous project stays on screen while the next one loads, so switching never flashes the welcome page.
+  const room = trpc.engagement.client.room.useQuery(project ? { engagementId: project } : undefined, { retry: false, enabled: Boolean(business), placeholderData: previous => previous });
   if (account && business && room.data) {
     const roomAccount = {
       name: account.user.fullName,

@@ -31,6 +31,10 @@ import {
   engagementDb,
   getClientRoom,
   previewClientRoom,
+  requestService,
+  listServiceRequests,
+  handleServiceRequest,
+  listClientBusinesses,
   getStaffEngagement,
   isMissingEngagementTable,
   listAssignableStaff,
@@ -183,13 +187,22 @@ const staffRouter = router({
   requestUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, ...upload })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileUpload, `staff:${ctx.actor.id}`); return guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input)); }),
   confirmUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
+  /** "Fix the next problem": the clients' requests for another service, and handling one. Desk only. */
+  serviceRequests: staff.query(async ({ ctx }) => listServiceRequests(await engagementDb(), ctx.actor)),
+  handleRequest: staff.input(z.object({ requestId: id, status: z.enum(["done", "declined"]) })).mutation(async ({ ctx, input }) => guarded(async () => handleServiceRequest(await engagementDb(), ctx.actor, input))),
+  /** The businesses that already have an engagement, to open another for. Desk only. */
+  clientBusinesses: staff.query(async ({ ctx }) => listClientBusinesses(await engagementDb(), ctx.actor)),
   /** Open an engagement directly, for a client who did not come through the Business Health Check. */
   createDirect: staff.input(z.object({
     type: z.enum(ENGAGEMENT_TYPES),
-    businessName: text(255).min(2, "Name the business."),
-    contactName: text(200).min(2, "Name the client."),
-    contactEmail: z.string().trim().email("Enter the client's email address.").max(320),
     startedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the start date."),
+    /** The service bought, for an Assessment, Done for You or Monthly Service. */
+    service: z.string().max(64).nullish(),
+    /** An existing client's business: the project joins their account and nobody is invited. */
+    businessId: id.nullish(),
+    businessName: text(255).nullish(),
+    contactName: text(200).nullish(),
+    contactEmail: z.string().trim().email("Enter the client's email address.").max(320).nullish(),
   })).mutation(async ({ ctx, input }) => guarded(async () => createDirectEngagement(await engagementDb(), { ...ctx.actor, name: ctx.user?.name ?? null }, input))),
   /** The content board: add or update a reel, post or story; remove one. */
   saveContent: staff.input(z.object({
@@ -213,9 +226,9 @@ const staffRouter = router({
  */
 const clientRouter = router({
   /** Null when the business has no engagement yet, or the room is not set up in the database yet. */
-  room: accountProcedure.query(async ({ ctx }) => {
+  room: accountProcedure.input(z.object({ engagementId: id.nullish() }).optional()).query(async ({ ctx, input }) => {
     try {
-      return await getClientRoom(await engagementDb(), ctx.account);
+      return await getClientRoom(await engagementDb(), ctx.account, input?.engagementId);
     } catch (error) {
       if (isMissingEngagementTable(error)) return null;
       throw error;
@@ -229,8 +242,11 @@ const clientRouter = router({
   confirmUpload: accountProcedure.input(z.object({ taskId: id, storageKey, note: optionalText(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmUpload(await engagementDb(), ctx.account, input))),
   fileLink: accountProcedure.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => clientFileLink(await engagementDb(), ctx.account, input))),
   /** The drop box: send any file without saying which request it answers; the team sorts it. */
-  requestDrop: accountProcedure.input(z.object(upload)).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileDrop, `account:${ctx.account.user.id}`); return guarded(async () => clientRequestDrop(await engagementDb(), ctx.account, input)); }),
-  confirmDrop: accountProcedure.input(z.object({ storageKey, note: optionalText(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmDrop(await engagementDb(), ctx.account, input))),
+  requestDrop: accountProcedure.input(z.object({ ...upload, engagementId: id.nullish() })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileDrop, `account:${ctx.account.user.id}`); return guarded(async () => clientRequestDrop(await engagementDb(), ctx.account, input)); }),
+  confirmDrop: accountProcedure.input(z.object({ storageKey, note: optionalText(500), ...upload, engagementId: id.nullish() })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmDrop(await engagementDb(), ctx.account, input))),
+  /** "Fix the next problem": ask for another service; the desk confirms it. */
+  requestService: accountProcedure.input(z.object({ service: z.string().min(1).max(64), note: optionalText(1000), engagementId: id.nullish() }))
+    .mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.engagementComment, `account:${ctx.account.user.id}`); return guarded(async () => requestService(await engagementDb(), ctx.account, input)); }),
   /** Approve a reel, post or story, or ask for changes with a note. */
   respondToContent: accountProcedure.input(z.object({ itemId: id, approve: z.boolean(), note: optionalText(1000) })).mutation(async ({ ctx, input }) => guarded(async () => respondToContent(await engagementDb(), ctx.account, input))),
   /** "We don't have this", or take it back. */

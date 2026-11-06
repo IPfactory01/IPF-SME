@@ -5,7 +5,7 @@ import React, { useState } from "react";
 import { toast } from "sonner";
 import type { AppRouter } from "../../../../server/routers";
 import { ClickableRow, CopyButton, RecordDrawer, TD, TH } from "./AdminPrimitives";
-import { ENGAGEMENT_TYPE_LABELS, ENGAGEMENT_TYPES, type EngagementType } from "@shared/engagementTypes";
+import { ENGAGEMENT_TYPE_LABELS, ENGAGEMENT_TYPES, servicesFor, type EngagementType } from "@shared/engagementTypes";
 import EngagementDetail from "./EngagementDetail";
 import { formatDate, formatDateTime } from "./format";
 
@@ -31,6 +31,7 @@ export default function EngagementsView() {
     onError: error => toast.error(error.message),
   });
   const [openId, setOpenId] = useState<number | null>(null);
+  const [prefill, setPrefill] = useState<EngagementPrefill | null>(null);
   const open = list.data?.items.find(item => item.id === openId) ?? null;
 
   // Every type of engagement, not only the Business Review. The desk sees every engagement and how each starts; anyone
@@ -62,7 +63,8 @@ export default function EngagementsView() {
           </ul>
         </section>
       )}
-      {list.data && "canStart" in list.data && list.data.canStart && <NewEngagement onCreated={setOpenId} />}
+      {canOpen && <ServiceRequests onOpen={setPrefill} />}
+      {canOpen && <NewEngagement key={prefill?.requestId ?? "new"} onCreated={setOpenId} prefill={prefill} onDone={() => setPrefill(null)} />}
       <MyProjects items={list.data?.items ?? []} onOpen={setOpenId} />
       {list.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
         <div className="overflow-x-auto border border-line bg-white">
@@ -168,54 +170,108 @@ function MyProjects({ items, onOpen }: { items: Row[]; onOpen: (id: number) => v
  * New engagement: for a client who did not come through the Business Health Check (Crown Studio, from JUMP). The type
  * decides the timeline and the starting content; the client's invitation link is shown once to send by hand.
  */
-function NewEngagement({ onCreated }: { onCreated: (id: number) => void }) {
+/** What a client's request fills in when the desk opens the engagement from it. */
+export type EngagementPrefill = { requestId: number; businessId: number; type: EngagementType; service: string };
+
+function NewEngagement({ onCreated, prefill = null, onDone }: { onCreated: (id: number) => void; prefill?: EngagementPrefill | null; onDone?: () => void }) {
   const utils = trpc.useUtils();
-  const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ type: "digital_marketing" as EngagementType, businessName: "", contactName: "", contactEmail: "", startedOn: new Date().toISOString().slice(0, 10) });
-  const [issued, setIssued] = useState<{ url: string | null; sent: boolean; engagementId: number } | null>(null);
+  const [open, setOpen] = useState(Boolean(prefill));
+  const blank = { client: prefill ? "existing" : "new", businessId: prefill ? String(prefill.businessId) : "", type: (prefill?.type ?? "digital_marketing") as EngagementType, service: prefill?.service ?? "", businessName: "", contactName: "", contactEmail: "", startedOn: new Date().toISOString().slice(0, 10) };
+  const [form, setForm] = useState(blank);
+  const [issued, setIssued] = useState<{ url: string | null; sent: boolean; engagementId: number; name: string } | null>(null);
+  const clients = trpc.engagement.staff.clientBusinesses.useQuery(undefined, { enabled: open });
+  const handle = trpc.engagement.staff.handleRequest.useMutation({ onSuccess: () => void utils.engagement.staff.serviceRequests.invalidate() });
   const create = trpc.engagement.staff.createDirect.useMutation({
     onSuccess: result => {
       void utils.engagement.staff.list.invalidate();
-      setIssued({ url: result.invitationUrl, sent: result.deliveryStatus === "Sent", engagementId: result.engagementId });
+      // Opened from a client's request: the request is done.
+      if (prefill) handle.mutate({ requestId: prefill.requestId, status: "done" });
+      const name = form.client === "existing" ? clients.data?.find(item => String(item.id) === form.businessId)?.name ?? "The engagement" : form.businessName;
+      setIssued({ url: result.invitationUrl, sent: result.deliveryStatus === "Sent", engagementId: result.engagementId, name });
       toast.success("Engagement opened.");
     },
     onError: error => toast.error(error.message),
   });
-  const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [key]: event.target.value });
+  const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [key]: event.target.value, ...(key === "type" ? { service: "" } : {}) });
   const field = "w-full border border-line bg-white px-2 py-1.5 text-sm";
   const label = "block text-xs font-semibold text-ink-muted";
+  const services = servicesFor(form.type);
+  const needsService = services.length > 0 && form.type !== "six_week_fix";
+  const existing = form.client === "existing";
+  const ready = Boolean(form.startedOn) && (!needsService || form.service) && (existing ? Boolean(form.businessId) : Boolean(form.businessName.trim() && form.contactName.trim() && form.contactEmail.trim()));
+  const submit = () => create.mutate({
+    type: form.type, startedOn: form.startedOn,
+    ...(needsService ? { service: form.service } : {}),
+    ...(existing ? { businessId: Number(form.businessId) } : { businessName: form.businessName, contactName: form.contactName, contactEmail: form.contactEmail }),
+  });
   if (!open) return <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => setOpen(true)}>New engagement</Button>;
   return (
     <section aria-labelledby="new-engagement" className="space-y-3 border border-line bg-white p-4">
       <h2 id="new-engagement" className="text-sm font-semibold text-ink">New engagement</h2>
-      <p className="text-xs text-ink-muted">For a client who did not come through the Business Health Check. The type sets the timeline and the starting Work Plan, Data Request and Sessions; the team can change all of it after.</p>
+      <p className="text-xs text-ink-muted">For a new client, or another project for a client you already have (it joins their account; nobody is invited). The type, and the service for a Done for You, Assessment or Monthly Service, set the starting Work Plan, Data Request and Sessions; the team can change all of it after.</p>
       {issued ? (
         <div role="status" className="space-y-2 border border-brand-line bg-brand-tint p-3 text-sm">
-          <p className="font-semibold">{form.businessName} is open.</p>
+          <p className="font-semibold">{issued.name} is open.</p>
           {issued.url ? (
             <>
               <p className="text-ink-muted">{issued.sent ? "The invitation was emailed. The link is shown once here as well." : "Email is not set up yet: copy this link and send it to the client yourself. It is shown once."}</p>
               <div className="flex items-center gap-2"><input readOnly aria-label="Client invitation link" className={`${field} text-xs`} value={issued.url} /><CopyButton value={issued.url} label="Copy the client invitation link" /></div>
             </>
-          ) : <p className="text-ink-muted">The client already has an account; the room is in it now.</p>}
+          ) : <p className="text-ink-muted">The client already has an account; the project is in their room now.</p>}
           <div className="flex gap-2">
             <Button type="button" size="sm" className="rounded-none bg-brand text-xs text-white" onClick={() => onCreated(issued.engagementId)}>Open the engagement</Button>
-            <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => { setOpen(false); setIssued(null); }}>Close</Button>
+            <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => { setOpen(false); setIssued(null); setForm(blank); onDone?.(); }}>Close</Button>
           </div>
         </div>
       ) : (
-        <form className="grid gap-2 sm:grid-cols-2" onSubmit={event => { event.preventDefault(); create.mutate(form); }}>
-          <div><label className={label} htmlFor="new-type">Type</label><select id="new-type" className={field} value={form.type} onChange={set("type")}>{ENGAGEMENT_TYPES.map(type => <option key={type} value={type}>{ENGAGEMENT_TYPE_LABELS[type]}</option>)}</select></div>
+        <form className="grid gap-2 sm:grid-cols-2" onSubmit={event => { event.preventDefault(); submit(); }}>
+          <div><label className={label} htmlFor="new-client">Client</label><select id="new-client" className={field} value={form.client} onChange={set("client")}><option value="new">A new client</option><option value="existing">An existing client</option></select></div>
           <div><label className={label} htmlFor="new-start">Start date</label><input id="new-start" type="date" className={field} value={form.startedOn} onChange={set("startedOn")} /></div>
-          <div><label className={label} htmlFor="new-business">Business name</label><input id="new-business" className={field} value={form.businessName} onChange={set("businessName")} /></div>
-          <div><label className={label} htmlFor="new-contact">Client name</label><input id="new-contact" className={field} value={form.contactName} onChange={set("contactName")} /></div>
-          <div className="sm:col-span-2"><label className={label} htmlFor="new-email">Client email</label><input id="new-email" type="email" className={field} value={form.contactEmail} onChange={set("contactEmail")} /></div>
+          <div><label className={label} htmlFor="new-type">Type</label><select id="new-type" className={field} value={form.type} onChange={set("type")}>{ENGAGEMENT_TYPES.map(type => <option key={type} value={type}>{ENGAGEMENT_TYPE_LABELS[type]}</option>)}</select></div>
+          {needsService && <div><label className={label} htmlFor="new-service">Service</label><select id="new-service" className={field} value={form.service} onChange={set("service")}><option value="">Choose the service</option>{services.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}</select></div>}
+          {existing ? (
+            <div className="sm:col-span-2"><label className={label} htmlFor="new-existing">Business</label><select id="new-existing" className={field} value={form.businessId} onChange={set("businessId")}><option value="">Choose the client's business</option>{(clients.data ?? []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+          ) : (
+            <>
+              <div><label className={label} htmlFor="new-business">Business name</label><input id="new-business" className={field} value={form.businessName} onChange={set("businessName")} /></div>
+              <div><label className={label} htmlFor="new-contact">Client name</label><input id="new-contact" className={field} value={form.contactName} onChange={set("contactName")} /></div>
+              <div className="sm:col-span-2"><label className={label} htmlFor="new-email">Client email</label><input id="new-email" type="email" className={field} value={form.contactEmail} onChange={set("contactEmail")} /></div>
+            </>
+          )}
           <div className="flex gap-2 sm:col-span-2">
-            <Button type="submit" size="sm" className="rounded-none bg-brand text-xs text-white" disabled={create.isPending || !form.businessName.trim() || !form.contactName.trim() || !form.contactEmail.trim() || !form.startedOn}>Open the engagement</Button>
-            <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="submit" size="sm" className="rounded-none bg-brand text-xs text-white" disabled={create.isPending || !ready}>Open the engagement</Button>
+            <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => { setOpen(false); onDone?.(); }}>Cancel</Button>
           </div>
         </form>
       )}
+    </section>
+  );
+}
+
+/**
+ * "Fix the next problem" on the desk's side: what clients asked for from their rooms. Open the engagement from a
+ * request once it is paid (it fills the client, type and service), or decline it.
+ */
+function ServiceRequests({ onOpen }: { onOpen: (prefill: EngagementPrefill) => void }) {
+  const utils = trpc.useUtils();
+  const requests = trpc.engagement.staff.serviceRequests.useQuery();
+  const handle = trpc.engagement.staff.handleRequest.useMutation({ onSuccess: () => { void utils.engagement.staff.serviceRequests.invalidate(); toast.success("Request closed."); }, onError: error => toast.error(error.message) });
+  if (!requests.data?.length) return null;
+  return (
+    <section aria-labelledby="service-requests" className="space-y-2 border border-brand-line bg-brand-tint p-4">
+      <h2 id="service-requests" className="text-sm font-semibold text-ink">Clients asking for another service ({requests.data.length})</h2>
+      <p className="text-xs text-ink-muted">Confirm it with them and send the payment link; once paid, open the engagement from here.</p>
+      <ul className="space-y-1">
+        {requests.data.map(item => (
+          <li key={item.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-brand-line pt-2 text-sm">
+            <span><span className="font-medium">{item.businessName}</span> · {item.serviceName}<span className="text-ink-muted"> · {item.requestedBy} · {formatDate(item.createdAt)}</span>{item.note && <span className="block text-xs text-ink-600">“{item.note}”</span>}</span>
+            <span className="flex gap-2">
+              <Button type="button" size="sm" className="rounded-none bg-brand text-xs text-white" onClick={() => onOpen({ requestId: item.id, businessId: item.businessId, type: item.type, service: item.service })}>Open the engagement</Button>
+              <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={handle.isPending} onClick={() => handle.mutate({ requestId: item.id, status: "declined" })}>Decline</Button>
+            </span>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

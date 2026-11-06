@@ -442,9 +442,384 @@ var PAYMENT_ITEM_TITLES = { full_report: METHOD.fullReport, current_state: METHO
 var payPath = (token3, item2) => `/pay/${encodeURIComponent(token3)}/${item2}`;
 var PAY_RETURN_PATH = "/pay/return";
 
+// shared/products.ts
+var STATEMENTS = (months) => ({ id: "bank_statements", label: `Business bank statements for ${months}`, detail: "Every business account, as PDF or spreadsheet exports from your bank.", required: true });
+var SALES_RECORDS = { id: "sales_records", label: "Sales records", detail: "Invoices, POS reports or your sales book for the same months.", required: true };
+var COSTS = { id: "costs", label: "Your main costs", detail: "Rent, salaries, suppliers and any loans, with what each costs a month.", required: true };
+var GOAL = { id: "goal", label: "What do you want this work to help you decide or do?", kind: "textarea", required: true };
+var DELIVERY_PROMISE = `We confirm your delivery date once your records are complete. ${DELIVERY_REMEDY}`;
+var PRODUCTS = [
+  {
+    id: "business_health_check",
+    slug: "business-health-check",
+    name: "Free Business Health Check",
+    way: "assessment",
+    needs: ["whole_business"],
+    short: "Ten minutes on your phone. A first read on where your business is stuck, and the first thing to buy, if anything.",
+    forWhom: "Any business owner who wants to know where to start.",
+    youGet: ["A summary of where your business stands, area by area", "The first product that fits, and the one after it", "The option of a free 20-minute Discovery Call"],
+    price: { kind: "free" },
+    delivery: "At once, on screen and by email.",
+    buy: "check",
+    intake: { records: [], questions: [] }
+  },
+  {
+    id: "full_report",
+    slug: "full-report",
+    name: "Full Report",
+    way: "assessment",
+    needs: ["whole_business"],
+    short: "Your Business Health Check in depth: what your answers show, the root causes, and what to fix first.",
+    forWhom: "Owners who have taken the Business Health Check and want the detail.",
+    youGet: ["Every area of your outline in depth", "The root cause behind each red and amber", "What to fix first, in order, with the Measure of Success for each"],
+    price: { kind: "fixed", amount: 1e5 },
+    delivery: "Emailed the moment you finish the short Report Intake after paying.",
+    buy: "check",
+    intake: { records: [], questions: [] }
+  },
+  {
+    id: "funding_readiness_assessment",
+    slug: "funding-readiness-assessment",
+    name: "Funding Readiness Assessment",
+    way: "assessment",
+    needs: ["funding"],
+    short: "Before you apply: are you ready for the loan you want, and what is missing?",
+    forWhom: "Owners with a lender window open, or about to apply for a loan or grant.",
+    youGet: ["A readiness score against what lenders such as LSETF and BOI ask for", "The gaps in your records, plan and documents, in order", "What to fix before you apply, and how long it will take"],
+    price: { kind: "fixed", amount: 15e4 },
+    fallbackPrice: 1e5,
+    delivery: "Three working days from complete records.",
+    workingDays: 3,
+    buy: "self",
+    intake: {
+      records: [STATEMENTS("the last six months"), { id: "registration", label: "Business registration documents", detail: "CAC certificate and status report, and your TIN.", required: true }, { id: "lender_form", label: "The lender's application form or checklist", detail: "So we check you against what this lender asks for.", required: false }],
+      questions: [{ id: "lender", label: "Which lender or programme are you applying to?", kind: "text", required: true }, { id: "amount", label: "How much do you want to borrow, and for what?", kind: "textarea", required: true }]
+    },
+    next: "funding_application_pack"
+  },
+  {
+    id: "business_review",
+    slug: "business-review",
+    name: "Business Review",
+    way: "assessment",
+    needs: ["whole_business"],
+    short: "Two weeks and two Sessions that test your whole business, to find the one problem to fix first and what to do about it.",
+    forWhom: "Owners with several connected problems who are not sure which to fix first.",
+    youGet: ["Your numbers, how the business runs and your market, tested together", "The one problem to fix first, in your words", "The Prescription: the first steps, the tools and who owns each"],
+    price: { kind: "fixed", amount: 6e5 },
+    fallbackPrice: 5e5,
+    delivery: "Two weeks, with two Sessions.",
+    buy: "after_call",
+    intake: { records: [], questions: [] },
+    next: "six_week_fix"
+  },
+  {
+    id: "strategy_90_day_plan",
+    slug: "strategy-and-90-day-plan",
+    name: "Strategy and 90-Day Plan",
+    way: "done_for_you",
+    needs: ["strategy"],
+    short: "Three priorities for your business and a 90-day plan to deliver them.",
+    forWhom: "Owners with no clear direction, or too many priorities at once.",
+    youGet: ["Where the business is going and what to stop", "Three priorities, each with a number to watch", "A 90-day plan: who does what, by when", "A 30-minute handover call"],
+    price: { kind: "fixed", amount: 45e4 },
+    fallbackPrice: 35e4,
+    delivery: "Seven working days from complete records.",
+    workingDays: 7,
+    buy: "self",
+    intake: {
+      records: [STATEMENTS("the last six months"), { id: "existing_plans", label: "Any plan, budget or targets you already have", detail: "Even a page of notes helps.", required: false }],
+      questions: [GOAL, { id: "priorities", label: "What are you trying to do over the next year?", kind: "textarea", required: true }, { id: "blockers", label: "What keeps getting in the way?", kind: "textarea", required: true }]
+    },
+    next: "monthly_adviser_review"
+  },
+  {
+    id: "business_model",
+    slug: "business-model",
+    name: "Business Model",
+    way: "done_for_you",
+    needs: ["strategy", "pricing"],
+    short: "How your business makes money, on one page, and what to change so each sale earns more.",
+    forWhom: "Owners whose business works but does not earn enough, or who are starting out or changing direction.",
+    youGet: ["How your business makes money, on one page", "Who you sell to, what they pay for, and how they find you", "What each sale really earns, and what to change first", "A 30-minute handover call"],
+    price: { kind: "fixed", amount: 3e5 },
+    delivery: "Seven working days from complete records.",
+    workingDays: 7,
+    buy: "self",
+    intake: {
+      records: [{ id: "price_list", label: "Your price list", detail: "What you charge for each product or service, and the discounts you give.", required: true }, { ...COSTS }, { id: "existing_plans", label: "Any plan, pitch or notes", detail: "Even a page of notes helps.", required: false }],
+      questions: [GOAL, { id: "customers", label: "Who are your best customers, and why do they buy from you?", kind: "textarea", required: true }, { id: "change", label: "What would you like to change about how the business makes money?", kind: "textarea", required: true }]
+    },
+    next: "business_plan"
+  },
+  {
+    id: "financial_model",
+    slug: "financial-model",
+    name: "Financial Model",
+    way: "done_for_you",
+    needs: ["finance", "funding"],
+    short: "Three years of numbers: sales, costs, profit, cash and how much funding you need, in three cases.",
+    forWhom: "Owners raising money, planning growth, or who want to know when the business breaks even.",
+    youGet: ["Three years of sales, costs, profit and cash, month by month for the first year", "Worst, medium and best cases, and what each depends on", "When you break even, and how much funding you need and when", "The Excel model, yours to keep, with a 30-minute handover call"],
+    price: { kind: "fixed", amount: 35e4 },
+    delivery: "Seven working days from complete records.",
+    workingDays: 7,
+    buy: "self",
+    intake: {
+      records: [STATEMENTS("the last twelve months"), SALES_RECORDS, COSTS],
+      questions: [GOAL, { id: "plans", label: "What are you planning over the next three years?", kind: "textarea", required: true, hint: "New outlets, products, hires or equipment, and roughly when." }, { id: "funding", label: "How much funding are you looking for, if any, and from whom?", kind: "textarea", required: false }]
+    },
+    next: "business_plan"
+  },
+  {
+    id: "business_plan",
+    slug: "business-plan",
+    name: "Business Plan",
+    way: "done_for_you",
+    needs: ["strategy", "funding"],
+    short: "The whole plan: your Business Model, the market, how you will run and grow, and the Financial Model.",
+    forWhom: "Owners bringing in a partner or investor, or who need one plan the whole team works from.",
+    youGet: ["The Business Model and the Financial Model, both included", "The market, your competitors and where you win", "How you will sell, run and staff the business, and the risks to watch", "Written for your reader: partners, investors or your own team", "A 30-minute handover call"],
+    price: { kind: "fixed", amount: 75e4 },
+    delivery: "Fifteen working days from complete records.",
+    workingDays: 15,
+    buy: "after_call",
+    intake: {
+      records: [STATEMENTS("the last twelve months"), SALES_RECORDS, COSTS, { id: "existing_plans", label: "Any plan, pitch or notes", detail: "Even a page of notes helps.", required: false }],
+      questions: [GOAL, { id: "reader", label: "Who will read the plan, and what do you want them to do?", kind: "textarea", required: true, hint: "For example: an investor to put in money, a partner to join, or your managers to follow it." }, { id: "plans", label: "What are you planning over the next three years?", kind: "textarea", required: true }]
+    },
+    next: "funding_application_pack"
+  },
+  {
+    id: "pitch_deck",
+    slug: "pitch-deck",
+    name: "Pitch Deck",
+    way: "done_for_you",
+    needs: ["funding", "strategy"],
+    short: "Twelve slides that tell an investor or partner why your business, why now, and what you are asking for.",
+    forWhom: "Owners meeting investors, partners or big customers who need the business told in ten minutes.",
+    youGet: ["A deck of about twelve slides, in your brand, ready to present", "The story: the problem, your answer, the market, the traction and the team", "The numbers and the ask, consistent with your records", "The editable file, with a 30-minute rehearsal call"],
+    price: { kind: "fixed", amount: 3e5 },
+    delivery: "Seven working days from complete records.",
+    workingDays: 7,
+    buy: "self",
+    intake: {
+      records: [SALES_RECORDS, COSTS, { id: "existing_plans", label: "Any plan, deck or notes", detail: "Your logo and brand colours too, if you have them.", required: false }],
+      questions: [GOAL, { id: "audience", label: "Who will you present to, and what do you want them to do?", kind: "textarea", required: true, hint: "For example: an investor to put in \u20A620 million, or a buyer to stock your product." }, { id: "ask", label: "What are you asking for, and what will you do with it?", kind: "textarea", required: true }]
+    },
+    next: "financial_model"
+  },
+  {
+    id: "pricing_unit_cost_review",
+    slug: "pricing-and-unit-cost-review",
+    name: "Pricing and Unit Cost Review",
+    way: "done_for_you",
+    needs: ["pricing"],
+    short: "What each product really costs you, what it earns, and what to charge.",
+    forWhom: "Owners whose prices are guesses, or whose margins are unclear.",
+    youGet: ["The true cost of each product or service", "Margin by line: what makes money and what loses it", "New prices to test, with what each change is worth", "A 30-minute handover call"],
+    price: { kind: "fixed", amount: 4e5 },
+    fallbackPrice: 45e4,
+    delivery: "Seven working days from complete records.",
+    workingDays: 7,
+    buy: "after_call",
+    intake: {
+      records: [STATEMENTS("the last six months"), SALES_RECORDS, COSTS, { id: "price_list", label: "Your current price list", detail: "With what competitors charge, if you know.", required: true }],
+      questions: [GOAL, { id: "lines", label: "Which products or services sell most?", kind: "textarea", required: true }]
+    },
+    next: "six_week_fix",
+    nextVariant: "margin"
+  },
+  {
+    id: "bookkeeping_catch_up",
+    slug: "bookkeeping-catch-up",
+    name: "Bookkeeping Catch-Up",
+    way: "done_for_you",
+    needs: ["finance"],
+    short: "Your books brought up to date: every transaction sorted, and management accounts you can use.",
+    forWhom: "Owners with no records, or numbers they cannot trust.",
+    youGet: ["Every transaction categorised and reconciled to your bank statements", "Management accounts for each month: income, costs and profit", "Business and personal money separated", "A 30-minute handover call"],
+    price: { kind: "per_month", perMonth: 1e5, minMonths: 3, maxMonths: 12 },
+    fallbackPrice: 75e3,
+    delivery: "Five working days for three months of complete records.",
+    workingDays: 5,
+    buy: "self",
+    intake: {
+      records: [STATEMENTS("the months you are buying"), SALES_RECORDS, { id: "receipts", label: "Receipts and supplier invoices", detail: "Photos are fine.", required: false }],
+      questions: [{ id: "accounts", label: "Which bank accounts does the business use?", kind: "textarea", required: true }]
+    },
+    next: "monthly_accounts",
+    boundary: "Management accounts only. We do not prepare statutory accounts or file tax returns."
+  },
+  {
+    id: "cash_flow_forecast",
+    slug: "13-week-cash-flow-forecast",
+    name: "13-Week Cash Flow Forecast",
+    way: "done_for_you",
+    needs: ["finance"],
+    short: "Week by week for the next 13 weeks: what comes in, what goes out, and when cash runs short.",
+    forWhom: "Owners whose cash is always tight.",
+    youGet: ["A 13-week forecast built from your own records", "The weeks when cash runs short, and by how much", "What to do about each: collect, delay, cut or fund", "A 30-minute handover call"],
+    price: { kind: "fixed", amount: 3e5 },
+    fallbackPrice: 2e5,
+    delivery: "Five working days from complete records.",
+    workingDays: 5,
+    buy: "self",
+    intake: {
+      records: [STATEMENTS("the last three months"), COSTS, { id: "debtors", label: "Who owes you money, and who you owe", detail: "A list with amounts and due dates.", required: true }],
+      questions: [GOAL]
+    },
+    next: "six_week_fix",
+    nextVariant: "cash_pricing"
+  },
+  {
+    id: "funding_application_pack",
+    slug: "funding-application-pack",
+    name: "Funding Application Pack",
+    way: "done_for_you",
+    needs: ["funding"],
+    short: "The plan, forecasts and documents your lender asks for, checked against their list.",
+    forWhom: "Owners applying for a loan or grant, ideally after a Funding Readiness Assessment.",
+    youGet: ["The business plan in the format the lender asks for", "Financial forecasts built from your records", "The lender's checklist ticked item by item", "A 30-minute handover call"],
+    price: { kind: "fixed", amount: 9e5 },
+    fallbackPrice: 4e5,
+    delivery: "Ten working days from complete records.",
+    workingDays: 10,
+    buy: "after_call",
+    intake: {
+      records: [STATEMENTS("the last twelve months"), { id: "registration", label: "Business registration documents", detail: "CAC certificate and status report, and your TIN.", required: true }, { id: "lender_form", label: "The lender's application form and checklist", detail: "We build the pack to it.", required: true }, COSTS],
+      questions: [{ id: "lender", label: "Which lender or programme, and when does the window close?", kind: "text", required: true }, { id: "amount", label: "How much do you want, and what will you spend it on?", kind: "textarea", required: true }]
+    },
+    next: "monthly_accounts"
+  },
+  {
+    id: "hiring_toolkit",
+    slug: "hiring-toolkit",
+    name: "Hiring Toolkit",
+    way: "done_for_you",
+    needs: ["people"],
+    short: "Everything you need to hire right the first time: the role, the interview, the offer and the first 90 days.",
+    forWhom: "Owners about to hire.",
+    youGet: ["A job description and what good looks like in the role", "An interview guide and scorecard", "Offer terms and a first-90-days plan for the new hire", "A 30-minute handover call"],
+    price: { kind: "fixed", amount: 3e5 },
+    fallbackPrice: 2e5,
+    delivery: "Five working days from complete answers.",
+    workingDays: 5,
+    buy: "self",
+    intake: {
+      records: [{ id: "current_roles", label: "Your current team: roles and what each person does", detail: "A short list is enough.", required: false }],
+      questions: [{ id: "role", label: "Which role are you hiring for, and why now?", kind: "textarea", required: true }, { id: "budget", label: "What can you pay for the role each month?", kind: "text", required: true }]
+    },
+    next: "six_week_fix",
+    nextVariant: "delegation_structure"
+  },
+  {
+    id: "six_week_fix",
+    slug: "six-week-fix",
+    name: "Six-Week Fix",
+    way: "six_week_fix",
+    needs: ["pricing", "sales", "finance", "people"],
+    short: "Six weeks on one problem: we prescribe and equip, your team does the work, and we review it with you every week.",
+    forWhom: "Owners who know the problem and want it fixed, with someone checking every week.",
+    youGet: ["The Prescription: what to do, the tools and who owns each step", "A Weekly Check-in for six weeks", "One Measure of Success, tracked every week", "A Day-30 Review after the six weeks"],
+    price: { kind: "milestones", total: 15e5, stages: [{ name: "At the start", percent: 50 }, { name: "At the mid-point", percent: 25 }, { name: "At the result", percent: 25 }], payInFullDiscountPercent: 5 },
+    fallbackPrice: 12e5,
+    delivery: "Six weeks from your first Session.",
+    buy: "after_call",
+    variants: [
+      { id: "margin", name: "Margin", problem: "Money comes in, but the business does not make money." },
+      { id: "sales", name: "Sales", problem: "Sales are flat and customers do not come consistently." },
+      { id: "cash_pricing", name: "Cash and Pricing", problem: "Cash is always tight and prices are guesses." },
+      { id: "delegation_structure", name: "Delegation and Structure", problem: "Nothing moves unless you are there." }
+    ],
+    variantForNeed: { pricing: "margin", sales: "sales", finance: "cash_pricing", people: "delegation_structure" },
+    intake: { records: [], questions: [] },
+    next: "monthly_adviser_review"
+  },
+  {
+    id: "monthly_accounts",
+    slug: "monthly-accounts-and-cash-report",
+    name: "Monthly Accounts and Cash Report",
+    way: "monthly_service",
+    needs: ["finance"],
+    short: "Know your profit and cash by the 10th of every month.",
+    forWhom: "Owners who want their numbers every month without keeping the books themselves.",
+    youGet: ["Monthly management accounts by the 10th", "Your cash position and the month ahead", "A note on whether your records are ready for tax", "A short call to walk you through it"],
+    price: { kind: "quarterly", perMonth: 2e5 },
+    fallbackPrice: 15e4,
+    delivery: "By the 10th of each month.",
+    buy: "after_call",
+    intake: { records: [], questions: [] },
+    boundary: "Management accounts only. The tax note says whether your records are ready; it is not tax advice."
+  },
+  {
+    id: "monthly_adviser_review",
+    slug: "monthly-adviser-review",
+    name: "Monthly Adviser Review",
+    way: "monthly_service",
+    needs: ["strategy"],
+    short: "One Session a month with an adviser: your numbers, your priorities and the decisions in front of you.",
+    forWhom: "Owners who want someone experienced to check their thinking every month.",
+    youGet: ["One Session a month with an IP Factory adviser", "Your numbers and priorities reviewed before each Session", "Agreed actions in writing after each Session"],
+    price: { kind: "quarterly", perMonth: 15e4 },
+    fallbackPrice: 1e5,
+    delivery: "One Session a month.",
+    buy: "after_call",
+    intake: { records: [], questions: [] }
+  }
+];
+var productById = (id3) => PRODUCTS.find((product2) => product2.id === id3);
+var MENU_PRODUCTS = PRODUCTS.filter((product2) => product2.buy !== "check");
+var servicePath = (product2) => `/services/${product2.slug}`;
+function priceLabel(price) {
+  switch (price.kind) {
+    case "free":
+      return "Free";
+    case "fixed":
+      return formatNaira(price.amount);
+    case "per_month":
+      return `${formatNaira(price.perMonth)} a month of records`;
+    case "milestones":
+      return formatNaira(price.total);
+    // Paid a quarter at a time, so the quarter is the price; the month is shown beside it.
+    case "quarterly":
+      return `${formatNaira(quarterAmount(price))} a quarter`;
+  }
+}
+var quarterAmount = (price) => price.perMonth * 3;
+var perMonthAmount = (price, months) => price.perMonth * months;
+function startingAmount(price) {
+  switch (price.kind) {
+    case "free":
+      return 0;
+    case "fixed":
+      return price.amount;
+    case "per_month":
+      return perMonthAmount(price, price.minMonths);
+    case "milestones":
+      return price.total;
+    case "quarterly":
+      return quarterAmount(price);
+  }
+}
+
 // shared/engagementTypes.ts
-var ENGAGEMENT_TYPES = ["business_review", "digital_marketing"];
-var ENGAGEMENT_TYPE_LABELS = { business_review: "Business Review", digital_marketing: "Digital marketing" };
+var ENGAGEMENT_TYPES = ["business_review", "digital_marketing", "assessment", "done_for_you", "six_week_fix", "monthly_service"];
+var ENGAGEMENT_TYPE_LABELS = {
+  business_review: "Business Review",
+  digital_marketing: "Digital marketing",
+  assessment: "Assessment",
+  done_for_you: "Done for You",
+  six_week_fix: "Six-Week Fix",
+  monthly_service: "Monthly Service"
+};
+var SERVICE_TYPES = { assessment: "assessment", done_for_you: "done_for_you", six_week_fix: "six_week_fix", monthly_service: "monthly_service" };
+var servicesFor = (type) => {
+  const way = SERVICE_TYPES[type];
+  return way ? PRODUCTS.filter((product2) => product2.way === way && product2.id !== "business_health_check" && product2.id !== "business_review") : [];
+};
+var engagementTitle = (type, service) => PRODUCTS.find((product2) => product2.id === service)?.name ?? ENGAGEMENT_TYPE_LABELS[type];
+var STAGED_TYPES = ["business_review", "six_week_fix"];
 var DIGITAL_MARKETING = {
   durationDays: 90,
   stages: [
@@ -495,6 +870,28 @@ var CONTENT_STATUS_LABELS = {
   approved: "Approved",
   published: "Published"
 };
+function serviceStep(input) {
+  if (input.closed || input.shared > 0 && input.accepted >= input.shared) return 4;
+  if (input.shared > 0) return 3;
+  if (input.recordsOpen > 0) return 1;
+  return 2;
+}
+function serviceStarter(product2) {
+  const records = product2.intake.records.map((record, index2) => ({ week: 1, order: index2 + 1, section: "A Records", ref: `A${index2 + 1}`, priority: record.required ? "high" : "medium", title: record.label, detail: record.detail }));
+  const questions = product2.intake.questions.map((question, index2) => ({ week: 1, order: records.length + index2 + 1, section: "B Questions", ref: `B${index2 + 1}`, priority: question.required ? "high" : "medium", title: question.label, detail: question.hint ?? "Answer in a few lines; a voice note is fine.", format: "A short answer" }));
+  return {
+    dataRequests: [...records, ...questions],
+    clientActions: [],
+    teamActions: [
+      { week: 1, order: 20, title: `Draft the ${product2.name}`, detail: "From the records and answers, once they are complete." },
+      { week: 2, order: 21, title: "Consultant review", detail: "A named consultant checks the work before the client sees it." }
+    ],
+    sessions: [
+      { kind: "other", title: "Kick-off", week: 1, order: 0, durationMinutes: 30, agenda: `What the ${product2.name} is for, the records we need, and the delivery date.` },
+      { kind: "review", title: "Handover", week: 3, order: 1, durationMinutes: 45, agenda: `Walk through the ${product2.name}, answer questions, agree what to do next.` }
+    ]
+  };
+}
 
 // shared/adminPermissions.ts
 init_brand();
@@ -863,6 +1260,7 @@ var TASK_SECTION_MAX = 80;
 var TASK_REF_MAX = 8;
 var TASK_INFORMS_MAX = 200;
 var TASK_FORMAT_MAX = 80;
+var OPEN_TASK_STATUSES = ["open", "needs_more"];
 var ENGAGEMENT_DELIVERABLE_KINDS = ["findings", "problem_statement", "prescription", "tools", "plan", "other"];
 var ENGAGEMENT_DELIVERABLE_KIND_LABELS = { findings: "Findings", problem_statement: "Problem Statement", prescription: "Prescription", tools: "Tools", plan: "Plan", other: "Document" };
 var DELIVERABLES_NEEDING_APPROVAL = ["prescription", "plan"];
@@ -1595,6 +1993,8 @@ var engagements = pgTable("engagements", {
   businessId: integer("businessId").references(() => businesses.id),
   /** What kind of engagement it is (0016): it decides the timeline and the starting content (shared/engagementTypes.ts). */
   type: engagementsTypeEnum("type").default("business_review").notNull(),
+  /** The service bought, a product id from shared/products.ts, for an Assessment, Done for You or Monthly Service (0018). */
+  service: varchar("service", { length: 64 }),
   /** Day 0 of a dated engagement (Digital marketing). */
   startedOn: date("startedOn"),
   /** The client contact for an engagement opened directly, when there is no Business Health Check to name them. */
@@ -1741,6 +2141,23 @@ var engagementContentItems = pgTable("engagement_content_items", {
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
 }, (table2) => [index("engagement_content_items_engagement_idx").on(table2.engagementId)]);
+var SERVICE_REQUEST_STATUSES = ["open", "done", "declined"];
+var serviceRequestsStatusEnum = pgEnum("service_requests_status", SERVICE_REQUEST_STATUSES);
+var serviceRequests = pgTable("service_requests", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  businessId: integer("businessId").notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  /** The engagement the client was in when they asked; null if none. */
+  engagementId: integer("engagementId").references(() => engagements.id, { onDelete: "set null" }),
+  requestedByUserId: integer("requestedByUserId").notNull().references(() => users.id),
+  /** A product id from shared/products.ts. */
+  service: varchar("service", { length: 64 }).notNull(),
+  note: varchar("note", { length: 1e3 }),
+  status: serviceRequestsStatusEnum("status").default("open").notNull(),
+  handledByUserId: integer("handledByUserId").references(() => users.id),
+  handledAt: timestamp("handledAt", { withTimezone: true }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [index("service_requests_business_idx").on(table2.businessId), index("service_requests_status_idx").on(table2.status)]);
 var engagementComments = pgTable("engagement_comments", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
@@ -8103,367 +8520,6 @@ function offeringById(id3) {
   return OFFERINGS.find((offering) => offering.id === id3);
 }
 
-// shared/products.ts
-var STATEMENTS = (months) => ({ id: "bank_statements", label: `Business bank statements for ${months}`, detail: "Every business account, as PDF or spreadsheet exports from your bank.", required: true });
-var SALES_RECORDS = { id: "sales_records", label: "Sales records", detail: "Invoices, POS reports or your sales book for the same months.", required: true };
-var COSTS = { id: "costs", label: "Your main costs", detail: "Rent, salaries, suppliers and any loans, with what each costs a month.", required: true };
-var GOAL = { id: "goal", label: "What do you want this work to help you decide or do?", kind: "textarea", required: true };
-var DELIVERY_PROMISE = `We confirm your delivery date once your records are complete. ${DELIVERY_REMEDY}`;
-var PRODUCTS = [
-  {
-    id: "business_health_check",
-    slug: "business-health-check",
-    name: "Free Business Health Check",
-    way: "assessment",
-    needs: ["whole_business"],
-    short: "Ten minutes on your phone. A first read on where your business is stuck, and the first thing to buy, if anything.",
-    forWhom: "Any business owner who wants to know where to start.",
-    youGet: ["A summary of where your business stands, area by area", "The first product that fits, and the one after it", "The option of a free 20-minute Discovery Call"],
-    price: { kind: "free" },
-    delivery: "At once, on screen and by email.",
-    buy: "check",
-    intake: { records: [], questions: [] }
-  },
-  {
-    id: "full_report",
-    slug: "full-report",
-    name: "Full Report",
-    way: "assessment",
-    needs: ["whole_business"],
-    short: "Your Business Health Check in depth: what your answers show, the root causes, and what to fix first.",
-    forWhom: "Owners who have taken the Business Health Check and want the detail.",
-    youGet: ["Every area of your outline in depth", "The root cause behind each red and amber", "What to fix first, in order, with the Measure of Success for each"],
-    price: { kind: "fixed", amount: 1e5 },
-    delivery: "Emailed the moment you finish the short Report Intake after paying.",
-    buy: "check",
-    intake: { records: [], questions: [] }
-  },
-  {
-    id: "funding_readiness_assessment",
-    slug: "funding-readiness-assessment",
-    name: "Funding Readiness Assessment",
-    way: "assessment",
-    needs: ["funding"],
-    short: "Before you apply: are you ready for the loan you want, and what is missing?",
-    forWhom: "Owners with a lender window open, or about to apply for a loan or grant.",
-    youGet: ["A readiness score against what lenders such as LSETF and BOI ask for", "The gaps in your records, plan and documents, in order", "What to fix before you apply, and how long it will take"],
-    price: { kind: "fixed", amount: 15e4 },
-    fallbackPrice: 1e5,
-    delivery: "Three working days from complete records.",
-    workingDays: 3,
-    buy: "self",
-    intake: {
-      records: [STATEMENTS("the last six months"), { id: "registration", label: "Business registration documents", detail: "CAC certificate and status report, and your TIN.", required: true }, { id: "lender_form", label: "The lender's application form or checklist", detail: "So we check you against what this lender asks for.", required: false }],
-      questions: [{ id: "lender", label: "Which lender or programme are you applying to?", kind: "text", required: true }, { id: "amount", label: "How much do you want to borrow, and for what?", kind: "textarea", required: true }]
-    },
-    next: "funding_application_pack"
-  },
-  {
-    id: "business_review",
-    slug: "business-review",
-    name: "Business Review",
-    way: "assessment",
-    needs: ["whole_business"],
-    short: "Two weeks and two Sessions that test your whole business, to find the one problem to fix first and what to do about it.",
-    forWhom: "Owners with several connected problems who are not sure which to fix first.",
-    youGet: ["Your numbers, how the business runs and your market, tested together", "The one problem to fix first, in your words", "The Prescription: the first steps, the tools and who owns each"],
-    price: { kind: "fixed", amount: 6e5 },
-    fallbackPrice: 5e5,
-    delivery: "Two weeks, with two Sessions.",
-    buy: "after_call",
-    intake: { records: [], questions: [] },
-    next: "six_week_fix"
-  },
-  {
-    id: "strategy_90_day_plan",
-    slug: "strategy-and-90-day-plan",
-    name: "Strategy and 90-Day Plan",
-    way: "done_for_you",
-    needs: ["strategy"],
-    short: "Three priorities for your business and a 90-day plan to deliver them.",
-    forWhom: "Owners with no clear direction, or too many priorities at once.",
-    youGet: ["Where the business is going and what to stop", "Three priorities, each with a number to watch", "A 90-day plan: who does what, by when", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 45e4 },
-    fallbackPrice: 35e4,
-    delivery: "Seven working days from complete records.",
-    workingDays: 7,
-    buy: "self",
-    intake: {
-      records: [STATEMENTS("the last six months"), { id: "existing_plans", label: "Any plan, budget or targets you already have", detail: "Even a page of notes helps.", required: false }],
-      questions: [GOAL, { id: "priorities", label: "What are you trying to do over the next year?", kind: "textarea", required: true }, { id: "blockers", label: "What keeps getting in the way?", kind: "textarea", required: true }]
-    },
-    next: "monthly_adviser_review"
-  },
-  {
-    id: "business_model",
-    slug: "business-model",
-    name: "Business Model",
-    way: "done_for_you",
-    needs: ["strategy", "pricing"],
-    short: "How your business makes money, on one page, and what to change so each sale earns more.",
-    forWhom: "Owners whose business works but does not earn enough, or who are starting out or changing direction.",
-    youGet: ["How your business makes money, on one page", "Who you sell to, what they pay for, and how they find you", "What each sale really earns, and what to change first", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 3e5 },
-    delivery: "Seven working days from complete records.",
-    workingDays: 7,
-    buy: "self",
-    intake: {
-      records: [{ id: "price_list", label: "Your price list", detail: "What you charge for each product or service, and the discounts you give.", required: true }, { ...COSTS }, { id: "existing_plans", label: "Any plan, pitch or notes", detail: "Even a page of notes helps.", required: false }],
-      questions: [GOAL, { id: "customers", label: "Who are your best customers, and why do they buy from you?", kind: "textarea", required: true }, { id: "change", label: "What would you like to change about how the business makes money?", kind: "textarea", required: true }]
-    },
-    next: "business_plan"
-  },
-  {
-    id: "financial_model",
-    slug: "financial-model",
-    name: "Financial Model",
-    way: "done_for_you",
-    needs: ["finance", "funding"],
-    short: "Three years of numbers: sales, costs, profit, cash and how much funding you need, in three cases.",
-    forWhom: "Owners raising money, planning growth, or who want to know when the business breaks even.",
-    youGet: ["Three years of sales, costs, profit and cash, month by month for the first year", "Worst, medium and best cases, and what each depends on", "When you break even, and how much funding you need and when", "The Excel model, yours to keep, with a 30-minute handover call"],
-    price: { kind: "fixed", amount: 35e4 },
-    delivery: "Seven working days from complete records.",
-    workingDays: 7,
-    buy: "self",
-    intake: {
-      records: [STATEMENTS("the last twelve months"), SALES_RECORDS, COSTS],
-      questions: [GOAL, { id: "plans", label: "What are you planning over the next three years?", kind: "textarea", required: true, hint: "New outlets, products, hires or equipment, and roughly when." }, { id: "funding", label: "How much funding are you looking for, if any, and from whom?", kind: "textarea", required: false }]
-    },
-    next: "business_plan"
-  },
-  {
-    id: "business_plan",
-    slug: "business-plan",
-    name: "Business Plan",
-    way: "done_for_you",
-    needs: ["strategy", "funding"],
-    short: "The whole plan: your Business Model, the market, how you will run and grow, and the Financial Model.",
-    forWhom: "Owners bringing in a partner or investor, or who need one plan the whole team works from.",
-    youGet: ["The Business Model and the Financial Model, both included", "The market, your competitors and where you win", "How you will sell, run and staff the business, and the risks to watch", "Written for your reader: partners, investors or your own team", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 75e4 },
-    delivery: "Fifteen working days from complete records.",
-    workingDays: 15,
-    buy: "after_call",
-    intake: {
-      records: [STATEMENTS("the last twelve months"), SALES_RECORDS, COSTS, { id: "existing_plans", label: "Any plan, pitch or notes", detail: "Even a page of notes helps.", required: false }],
-      questions: [GOAL, { id: "reader", label: "Who will read the plan, and what do you want them to do?", kind: "textarea", required: true, hint: "For example: an investor to put in money, a partner to join, or your managers to follow it." }, { id: "plans", label: "What are you planning over the next three years?", kind: "textarea", required: true }]
-    },
-    next: "funding_application_pack"
-  },
-  {
-    id: "pitch_deck",
-    slug: "pitch-deck",
-    name: "Pitch Deck",
-    way: "done_for_you",
-    needs: ["funding", "strategy"],
-    short: "Twelve slides that tell an investor or partner why your business, why now, and what you are asking for.",
-    forWhom: "Owners meeting investors, partners or big customers who need the business told in ten minutes.",
-    youGet: ["A deck of about twelve slides, in your brand, ready to present", "The story: the problem, your answer, the market, the traction and the team", "The numbers and the ask, consistent with your records", "The editable file, with a 30-minute rehearsal call"],
-    price: { kind: "fixed", amount: 3e5 },
-    delivery: "Seven working days from complete records.",
-    workingDays: 7,
-    buy: "self",
-    intake: {
-      records: [SALES_RECORDS, COSTS, { id: "existing_plans", label: "Any plan, deck or notes", detail: "Your logo and brand colours too, if you have them.", required: false }],
-      questions: [GOAL, { id: "audience", label: "Who will you present to, and what do you want them to do?", kind: "textarea", required: true, hint: "For example: an investor to put in \u20A620 million, or a buyer to stock your product." }, { id: "ask", label: "What are you asking for, and what will you do with it?", kind: "textarea", required: true }]
-    },
-    next: "financial_model"
-  },
-  {
-    id: "pricing_unit_cost_review",
-    slug: "pricing-and-unit-cost-review",
-    name: "Pricing and Unit Cost Review",
-    way: "done_for_you",
-    needs: ["pricing"],
-    short: "What each product really costs you, what it earns, and what to charge.",
-    forWhom: "Owners whose prices are guesses, or whose margins are unclear.",
-    youGet: ["The true cost of each product or service", "Margin by line: what makes money and what loses it", "New prices to test, with what each change is worth", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 4e5 },
-    fallbackPrice: 45e4,
-    delivery: "Seven working days from complete records.",
-    workingDays: 7,
-    buy: "after_call",
-    intake: {
-      records: [STATEMENTS("the last six months"), SALES_RECORDS, COSTS, { id: "price_list", label: "Your current price list", detail: "With what competitors charge, if you know.", required: true }],
-      questions: [GOAL, { id: "lines", label: "Which products or services sell most?", kind: "textarea", required: true }]
-    },
-    next: "six_week_fix",
-    nextVariant: "margin"
-  },
-  {
-    id: "bookkeeping_catch_up",
-    slug: "bookkeeping-catch-up",
-    name: "Bookkeeping Catch-Up",
-    way: "done_for_you",
-    needs: ["finance"],
-    short: "Your books brought up to date: every transaction sorted, and management accounts you can use.",
-    forWhom: "Owners with no records, or numbers they cannot trust.",
-    youGet: ["Every transaction categorised and reconciled to your bank statements", "Management accounts for each month: income, costs and profit", "Business and personal money separated", "A 30-minute handover call"],
-    price: { kind: "per_month", perMonth: 1e5, minMonths: 3, maxMonths: 12 },
-    fallbackPrice: 75e3,
-    delivery: "Five working days for three months of complete records.",
-    workingDays: 5,
-    buy: "self",
-    intake: {
-      records: [STATEMENTS("the months you are buying"), SALES_RECORDS, { id: "receipts", label: "Receipts and supplier invoices", detail: "Photos are fine.", required: false }],
-      questions: [{ id: "accounts", label: "Which bank accounts does the business use?", kind: "textarea", required: true }]
-    },
-    next: "monthly_accounts",
-    boundary: "Management accounts only. We do not prepare statutory accounts or file tax returns."
-  },
-  {
-    id: "cash_flow_forecast",
-    slug: "13-week-cash-flow-forecast",
-    name: "13-Week Cash Flow Forecast",
-    way: "done_for_you",
-    needs: ["finance"],
-    short: "Week by week for the next 13 weeks: what comes in, what goes out, and when cash runs short.",
-    forWhom: "Owners whose cash is always tight.",
-    youGet: ["A 13-week forecast built from your own records", "The weeks when cash runs short, and by how much", "What to do about each: collect, delay, cut or fund", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 3e5 },
-    fallbackPrice: 2e5,
-    delivery: "Five working days from complete records.",
-    workingDays: 5,
-    buy: "self",
-    intake: {
-      records: [STATEMENTS("the last three months"), COSTS, { id: "debtors", label: "Who owes you money, and who you owe", detail: "A list with amounts and due dates.", required: true }],
-      questions: [GOAL]
-    },
-    next: "six_week_fix",
-    nextVariant: "cash_pricing"
-  },
-  {
-    id: "funding_application_pack",
-    slug: "funding-application-pack",
-    name: "Funding Application Pack",
-    way: "done_for_you",
-    needs: ["funding"],
-    short: "The plan, forecasts and documents your lender asks for, checked against their list.",
-    forWhom: "Owners applying for a loan or grant, ideally after a Funding Readiness Assessment.",
-    youGet: ["The business plan in the format the lender asks for", "Financial forecasts built from your records", "The lender's checklist ticked item by item", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 9e5 },
-    fallbackPrice: 4e5,
-    delivery: "Ten working days from complete records.",
-    workingDays: 10,
-    buy: "after_call",
-    intake: {
-      records: [STATEMENTS("the last twelve months"), { id: "registration", label: "Business registration documents", detail: "CAC certificate and status report, and your TIN.", required: true }, { id: "lender_form", label: "The lender's application form and checklist", detail: "We build the pack to it.", required: true }, COSTS],
-      questions: [{ id: "lender", label: "Which lender or programme, and when does the window close?", kind: "text", required: true }, { id: "amount", label: "How much do you want, and what will you spend it on?", kind: "textarea", required: true }]
-    },
-    next: "monthly_accounts"
-  },
-  {
-    id: "hiring_toolkit",
-    slug: "hiring-toolkit",
-    name: "Hiring Toolkit",
-    way: "done_for_you",
-    needs: ["people"],
-    short: "Everything you need to hire right the first time: the role, the interview, the offer and the first 90 days.",
-    forWhom: "Owners about to hire.",
-    youGet: ["A job description and what good looks like in the role", "An interview guide and scorecard", "Offer terms and a first-90-days plan for the new hire", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 3e5 },
-    fallbackPrice: 2e5,
-    delivery: "Five working days from complete answers.",
-    workingDays: 5,
-    buy: "self",
-    intake: {
-      records: [{ id: "current_roles", label: "Your current team: roles and what each person does", detail: "A short list is enough.", required: false }],
-      questions: [{ id: "role", label: "Which role are you hiring for, and why now?", kind: "textarea", required: true }, { id: "budget", label: "What can you pay for the role each month?", kind: "text", required: true }]
-    },
-    next: "six_week_fix",
-    nextVariant: "delegation_structure"
-  },
-  {
-    id: "six_week_fix",
-    slug: "six-week-fix",
-    name: "Six-Week Fix",
-    way: "six_week_fix",
-    needs: ["pricing", "sales", "finance", "people"],
-    short: "Six weeks on one problem: we prescribe and equip, your team does the work, and we review it with you every week.",
-    forWhom: "Owners who know the problem and want it fixed, with someone checking every week.",
-    youGet: ["The Prescription: what to do, the tools and who owns each step", "A Weekly Check-in for six weeks", "One Measure of Success, tracked every week", "A Day-30 Review after the six weeks"],
-    price: { kind: "milestones", total: 15e5, stages: [{ name: "At the start", percent: 50 }, { name: "At the mid-point", percent: 25 }, { name: "At the result", percent: 25 }], payInFullDiscountPercent: 5 },
-    fallbackPrice: 12e5,
-    delivery: "Six weeks from your first Session.",
-    buy: "after_call",
-    variants: [
-      { id: "margin", name: "Margin", problem: "Money comes in, but the business does not make money." },
-      { id: "sales", name: "Sales", problem: "Sales are flat and customers do not come consistently." },
-      { id: "cash_pricing", name: "Cash and Pricing", problem: "Cash is always tight and prices are guesses." },
-      { id: "delegation_structure", name: "Delegation and Structure", problem: "Nothing moves unless you are there." }
-    ],
-    variantForNeed: { pricing: "margin", sales: "sales", finance: "cash_pricing", people: "delegation_structure" },
-    intake: { records: [], questions: [] },
-    next: "monthly_adviser_review"
-  },
-  {
-    id: "monthly_accounts",
-    slug: "monthly-accounts-and-cash-report",
-    name: "Monthly Accounts and Cash Report",
-    way: "monthly_service",
-    needs: ["finance"],
-    short: "Know your profit and cash by the 10th of every month.",
-    forWhom: "Owners who want their numbers every month without keeping the books themselves.",
-    youGet: ["Monthly management accounts by the 10th", "Your cash position and the month ahead", "A note on whether your records are ready for tax", "A short call to walk you through it"],
-    price: { kind: "quarterly", perMonth: 2e5 },
-    fallbackPrice: 15e4,
-    delivery: "By the 10th of each month.",
-    buy: "after_call",
-    intake: { records: [], questions: [] },
-    boundary: "Management accounts only. The tax note says whether your records are ready; it is not tax advice."
-  },
-  {
-    id: "monthly_adviser_review",
-    slug: "monthly-adviser-review",
-    name: "Monthly Adviser Review",
-    way: "monthly_service",
-    needs: ["strategy"],
-    short: "One Session a month with an adviser: your numbers, your priorities and the decisions in front of you.",
-    forWhom: "Owners who want someone experienced to check their thinking every month.",
-    youGet: ["One Session a month with an IP Factory adviser", "Your numbers and priorities reviewed before each Session", "Agreed actions in writing after each Session"],
-    price: { kind: "quarterly", perMonth: 15e4 },
-    fallbackPrice: 1e5,
-    delivery: "One Session a month.",
-    buy: "after_call",
-    intake: { records: [], questions: [] }
-  }
-];
-var productById = (id3) => PRODUCTS.find((product2) => product2.id === id3);
-var MENU_PRODUCTS = PRODUCTS.filter((product2) => product2.buy !== "check");
-var servicePath = (product2) => `/services/${product2.slug}`;
-function priceLabel(price) {
-  switch (price.kind) {
-    case "free":
-      return "Free";
-    case "fixed":
-      return formatNaira(price.amount);
-    case "per_month":
-      return `${formatNaira(price.perMonth)} a month of records`;
-    case "milestones":
-      return formatNaira(price.total);
-    // Paid a quarter at a time, so the quarter is the price; the month is shown beside it.
-    case "quarterly":
-      return `${formatNaira(quarterAmount(price))} a quarter`;
-  }
-}
-var quarterAmount = (price) => price.perMonth * 3;
-var perMonthAmount = (price, months) => price.perMonth * months;
-function startingAmount(price) {
-  switch (price.kind) {
-    case "free":
-      return 0;
-    case "fixed":
-      return price.amount;
-    case "per_month":
-      return perMonthAmount(price, price.minMonths);
-    case "milestones":
-      return price.total;
-    case "quarterly":
-      return quarterAmount(price);
-  }
-}
-
 // shared/businessCheck/routing.ts
 var has = (answers, id3, ...values2) => {
   const value = answers[id3];
@@ -12920,35 +12976,66 @@ var addDays = (day, days) => {
 };
 async function createDirectEngagement(db, actor, input) {
   requireStart(actor);
-  const email = input.contactEmail.trim().toLowerCase();
+  const service = input.type === "six_week_fix" ? "six_week_fix" : SERVICE_TYPES[input.type] ? input.service ?? null : null;
+  const product2 = service ? PRODUCTS.find((item2) => item2.id === service) : void 0;
+  if (SERVICE_TYPES[input.type] && (!product2 || input.type !== "six_week_fix" && !servicesFor(input.type).some((item2) => item2.id === product2.id))) {
+    throw new TRPCError17({ code: "BAD_REQUEST", message: "Choose the service this engagement is for." });
+  }
+  const dated = DATED_TYPES[input.type];
+  const starter = dated ?? (product2 ? serviceStarter(product2) : null);
+  const dueFor = (week) => addDays(input.startedOn, (week - 1) * 7 + 3);
+  if (input.businessId) {
+    const business = (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq19(businesses.id, input.businessId)).limit(1))[0];
+    if (!business) throw notFound();
+    const owner = (await db.select({ email: users.email }).from(businessMemberships).innerJoin(users, eq19(businessMemberships.userId, users.id)).where(and13(eq19(businessMemberships.businessId, business.id), eq19(businessMemberships.role, "owner"))).limit(1))[0];
+    const engagementId2 = await db.transaction(async (tx) => insertDirect(tx, actor, input, { businessId: business.id, service, starter, dueFor, contactName: null, contactEmail: owner?.email ?? null }));
+    return { engagementId: engagementId2, invitationUrl: null, deliveryStatus: null, hasAccount: true };
+  }
+  const businessName = input.businessName?.trim() ?? "";
+  const contactName = input.contactName?.trim() ?? "";
+  const email = input.contactEmail?.trim().toLowerCase() ?? "";
+  if (businessName.length < 2 || contactName.length < 2 || !email.includes("@")) throw new TRPCError17({ code: "BAD_REQUEST", message: "Name the business and the client, and give the client's email." });
   const existing = (await db.select({ id: users.id, status: users.status }).from(users).where(sql8`lower(${users.email}) = ${email}`).limit(1))[0];
   if (existing) {
     const staff2 = (await db.select({ id: userPlatformRoles.id }).from(userPlatformRoles).where(eq19(userPlatformRoles.userId, existing.id)).limit(1)).length > 0;
     if (staff2) throw new TRPCError17({ code: "BAD_REQUEST", message: "This email belongs to a staff account. Use the client's own email." });
   }
-  const dated = DATED_TYPES[input.type];
-  const dueFor = (week) => addDays(input.startedOn, (week - 1) * 7 + 3);
   const { engagementId, businessId } = await db.transaction(async (tx) => {
-    const [business] = await tx.insert(businesses).values({ name: input.businessName.trim(), slug: slugify(input.businessName), createdByUserId: existing?.id ?? actor.id }).returning({ id: businesses.id });
+    const [business] = await tx.insert(businesses).values({ name: businessName, slug: slugify(businessName), createdByUserId: existing?.id ?? actor.id }).returning({ id: businesses.id });
     if (existing) await tx.insert(businessMemberships).values({ businessId: business.id, userId: existing.id, role: "owner", status: "active" });
-    const [created] = await tx.insert(engagements).values({ businessId: business.id, type: input.type, startedOn: input.startedOn, contactName: input.contactName.trim(), contactEmail: email }).returning({ id: engagements.id });
-    const tasks = dated ? [
-      ...dated.dataRequests.map((item2) => ({ kind: "data_request", side: "client", ...item2 })),
-      ...dated.clientActions.map((item2) => ({ kind: "action", side: "client", ...item2 })),
-      ...dated.teamActions.map((item2) => ({ kind: "action", side: "ipf", ...item2 }))
-    ].map(({ week, order, ...item2 }) => ({ engagementId: created.id, kind: item2.kind, side: item2.side, title: item2.title, detail: item2.detail, dueOn: dueFor(week), weekNumber: week, sortOrder: order, section: item2.section ?? null, ref: item2.ref ?? null, informs: item2.informs ?? null, format: item2.format ?? null, priority: item2.priority ?? null, createdByUserId: actor.id })) : [
-      ...ASSESSMENT_TEMPLATE.dataRequests.map((item2) => ({ engagementId: created.id, kind: "data_request", side: "client", title: item2.title, detail: item2.detail, dueOn: dueFor(item2.week), weekNumber: item2.week, sortOrder: item2.order, factor: item2.factor, createdByUserId: actor.id })),
-      ...ASSESSMENT_TEMPLATE.teamActions.map((item2) => ({ engagementId: created.id, kind: "action", side: "ipf", title: item2.title, detail: item2.detail, dueOn: dueFor(item2.week), weekNumber: item2.week, sortOrder: item2.order, factor: item2.factor, createdByUserId: actor.id }))
-    ];
-    if (tasks.length) await tx.insert(engagementTasks).values(tasks);
-    const sessions = dated ? dated.sessions : ASSESSMENT_TEMPLATE.sessions;
-    await tx.insert(engagementSessions).values(sessions.map((item2) => ({ engagementId: created.id, kind: item2.kind, title: item2.title, durationMinutes: item2.durationMinutes, agenda: item2.agenda, weekNumber: item2.week, sortOrder: item2.order, createdByUserId: actor.id })));
-    await recordAudit(tx, { action: "engagement_started", actorUserId: actor.id, targetEmail: email, details: { engagementId: created.id, type: input.type, direct: true, businessId: business.id } });
-    return { engagementId: created.id, businessId: business.id };
+    const id3 = await insertDirect(tx, actor, input, { businessId: business.id, service, starter, dueFor, contactName, contactEmail: email });
+    return { engagementId: id3, businessId: business.id };
   });
   if (existing) return { engagementId, invitationUrl: null, deliveryStatus: null, hasAccount: true };
-  const invitation = await inviteBusinessOwner(db, { email, fullName: input.contactName.trim(), businessId, businessName: input.businessName.trim(), actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName });
+  const invitation = await inviteBusinessOwner(db, { email, fullName: contactName, businessId, businessName, actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName });
   return { engagementId, invitationUrl: invitation.invitationUrl, deliveryStatus: invitation.deliveryStatus, hasAccount: false };
+}
+async function insertDirect(tx, actor, input, at) {
+  const [created] = await tx.insert(engagements).values({
+    businessId: at.businessId,
+    type: input.type,
+    service: at.service,
+    startedOn: input.startedOn,
+    contactName: at.contactName,
+    contactEmail: at.contactEmail,
+    // The Six-Week Fix starts in the fix; every other direct engagement is getting set up.
+    stage: input.type === "six_week_fix" ? "fix" : "setting_up",
+    fixStartedAt: input.type === "six_week_fix" ? /* @__PURE__ */ new Date() : null
+  }).returning({ id: engagements.id });
+  const starter = at.starter;
+  const tasks = starter ? [
+    ...starter.dataRequests.map((item2) => ({ kind: "data_request", side: "client", ...item2 })),
+    ...starter.clientActions.map((item2) => ({ kind: "action", side: "client", ...item2 })),
+    ...starter.teamActions.map((item2) => ({ kind: "action", side: "ipf", ...item2 }))
+  ].map(({ week, order, ...item2 }) => ({ engagementId: created.id, kind: item2.kind, side: item2.side, title: item2.title, detail: item2.detail, dueOn: at.dueFor(week), weekNumber: week, sortOrder: order, section: item2.section ?? null, ref: item2.ref ?? null, informs: item2.informs ?? null, format: item2.format ?? null, priority: item2.priority ?? null, createdByUserId: actor.id })) : [
+    ...ASSESSMENT_TEMPLATE.dataRequests.map((item2) => ({ engagementId: created.id, kind: "data_request", side: "client", title: item2.title, detail: item2.detail, dueOn: at.dueFor(item2.week), weekNumber: item2.week, sortOrder: item2.order, factor: item2.factor, createdByUserId: actor.id })),
+    ...ASSESSMENT_TEMPLATE.teamActions.map((item2) => ({ engagementId: created.id, kind: "action", side: "ipf", title: item2.title, detail: item2.detail, dueOn: at.dueFor(item2.week), weekNumber: item2.week, sortOrder: item2.order, factor: item2.factor, createdByUserId: actor.id }))
+  ];
+  if (tasks.length) await tx.insert(engagementTasks).values(tasks);
+  const sessions = starter ? starter.sessions : ASSESSMENT_TEMPLATE.sessions;
+  if (sessions.length) await tx.insert(engagementSessions).values(sessions.map((item2) => ({ engagementId: created.id, kind: item2.kind, title: item2.title, durationMinutes: item2.durationMinutes, agenda: item2.agenda, weekNumber: item2.week, sortOrder: item2.order, createdByUserId: actor.id })));
+  await recordAudit(tx, { action: "engagement_started", actorUserId: actor.id, targetEmail: at.contactEmail, details: { engagementId: created.id, type: input.type, service: at.service, direct: true, businessId: at.businessId } });
+  return created.id;
 }
 async function startEngagementSafely(db, input) {
   try {
@@ -13008,6 +13095,7 @@ function requirePermission(actor, permission, message) {
 }
 var requireManage = (actor) => requirePermission(actor, "manage_engagements", "Your role does not include working on engagements.");
 function engagementStageLabel(row, now) {
+  if (!STAGED_TYPES.includes(row.type) && !DATED_TYPES[row.type]) return row.stage === "closed" ? "Closed" : "Open";
   const dated = DATED_TYPES[row.type];
   if (!dated || !row.startedOn) return ENGAGEMENT_STAGE_LABELS[row.stage];
   const progress = datedProgress(dated, row.startedOn, now);
@@ -13024,6 +13112,7 @@ async function listStaffEngagements(db, actor) {
   const rows = await db.select({
     id: engagements.id,
     stage: engagements.stage,
+    service: engagements.service,
     businessId: engagements.businessId,
     businessCheckId: engagements.businessCheckId,
     createdAt: engagements.createdAt,
@@ -13056,7 +13145,8 @@ async function listStaffEngagements(db, actor) {
       stage: row.stage,
       stageLabel: engagementStageLabel(row, now),
       type: row.type,
-      typeLabel: ENGAGEMENT_TYPE_LABELS[row.type],
+      // The service for a service engagement ("Pitch Deck"), else the type.
+      typeLabel: engagementTitle(row.type, row.service),
       businessName: row.businessName ?? row.checkBusinessName ?? row.ownerName ?? row.contactName ?? "",
       ownerName: row.ownerName ?? row.contactName ?? "",
       ownerEmail: row.ownerEmail ?? row.contactEmail ?? "",
@@ -13097,7 +13187,7 @@ async function getStaffEngagement(db, actor, engagementId) {
   const filesFor = (where, id3) => files.filter((file) => file[where] === id3 || where === "taskId" && matches.some((match) => match.fileId === file.id && match.taskId === id3)).map(staffFile);
   return {
     uploadsEnabled: isFileStorageConfigured(),
-    engagement: { ...engagement, stageLabel: engagementStageLabel(engagement, Date.now()), typeLabel: ENGAGEMENT_TYPE_LABELS[engagement.type] },
+    engagement: { ...engagement, stageLabel: engagementStageLabel(engagement, Date.now()), typeLabel: engagementTitle(engagement.type, engagement.service) },
     owner: check ? { name: check.fullName, email: check.email, whatsapp: check.whatsapp } : null,
     businessName: business?.name ?? check?.businessName ?? check?.fullName ?? "",
     hasAccount: business !== null,
@@ -13199,7 +13289,7 @@ async function notifyAssigned(db, engagementId, userId, role, changed) {
   try {
     const person = (await db.select({ name: users.name, email: users.email }).from(users).where(eq19(users.id, userId)).limit(1))[0];
     if (!person?.email) return false;
-    const row = (await db.select({ businessName: businesses.name, checkBusiness: businessChecks.businessName, ownerName: businessChecks.fullName }).from(engagements).innerJoin(businessChecks, eq19(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq19(engagements.businessId, businesses.id)).where(eq19(engagements.id, engagementId)).limit(1))[0];
+    const row = (await db.select({ businessName: businesses.name, checkBusiness: businessChecks.businessName, ownerName: businessChecks.fullName }).from(engagements).leftJoin(businessChecks, eq19(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq19(engagements.businessId, businesses.id)).where(eq19(engagements.id, engagementId)).limit(1))[0];
     const businessName = row?.businessName ?? row?.checkBusiness ?? row?.ownerName ?? "a client";
     const message = assignedNoticeEmail({ fullName: person.name ?? "", businessName, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[role], changed, url: `${getTrustedApplicationOrigin()}/admin` });
     await deliverEmail({ to: person.email, subject: message.subject, body: message.body, sender: "business_support" });
@@ -13403,10 +13493,12 @@ function bookingFor(sessions, viewer, owner) {
   const url = nextToBook ? sessionBookingUrl({ name: owner.fullName, email: owner.email }) : null;
   return nextToBook && url ? { sessionId: nextToBook.id, title: nextToBook.title, url } : null;
 }
-async function getClientRoom(db, session) {
+async function getClientRoom(db, session, engagementId) {
   const business = session.activeBusiness;
   if (!business) return null;
-  const engagement = (await db.select().from(engagements).where(eq19(engagements.businessId, business.businessId)).orderBy(desc10(engagements.id)).limit(1))[0];
+  const all = await db.select().from(engagements).where(eq19(engagements.businessId, business.businessId)).orderBy(desc10(engagements.id));
+  if (engagementId && !all.some((row) => row.id === engagementId)) throw notFound();
+  const engagement = engagementId ? all.find((row) => row.id === engagementId) : all.find((row) => row.stage !== "closed") ?? all[0];
   if (!engagement) return null;
   const viewer = await clientViewerFor(db, session, business.businessId);
   return buildClientRoom(db, engagement, viewer, session.user.id, business.businessName);
@@ -13437,7 +13529,8 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
   const assigneeIds = Array.from(new Set(tasks.map((task) => task.assigneeUserId).filter((value) => value !== null)));
   const assigneeNames = new Map((assigneeIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray6(users.id, assigneeIds)) : []).map((row) => [row.id, row.name ?? ""]));
   const fullView = viewer.kind === "owner" || viewer.access === "full";
-  const checkId = engagement.businessCheckId;
+  const projects = engagement.businessId === null ? [engagement] : await db.select().from(engagements).where(eq19(engagements.businessId, engagement.businessId)).orderBy(desc10(engagements.id));
+  const checkId = engagement.businessCheckId ?? projects.find((row) => row.businessCheckId !== null)?.businessCheckId ?? null;
   const check = checkId === null ? void 0 : (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor }).from(businessChecks).where(eq19(businessChecks.id, checkId)).limit(1))[0];
   const report = checkId === null ? null : (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq19(fullReports.businessCheckId, checkId)).limit(1))[0] ?? null;
   const debrief = fullView && checkId !== null ? await sharedDebriefFor(db, checkId) : null;
@@ -13456,6 +13549,20 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
     contentTargets: DATED_TYPES[engagement.type]?.monthly ?? [],
     type: engagement.type,
     typeLabel: ENGAGEMENT_TYPE_LABELS[engagement.type],
+    /** The service bought, for a service engagement, and the engagement's name for people. */
+    service: engagement.service,
+    title: engagementTitle(engagement.type, engagement.service),
+    /** Where a service engagement stands, read from its work (1 to 4 of SERVICE_STEPS); null for the other types. */
+    serviceStep: SERVICE_TYPES[engagement.type] && !STAGED_TYPES.includes(engagement.type) ? serviceStep({
+      recordsOpen: tasks.filter((task) => task.side === "client" && task.kind === "data_request" && OPEN_TASK_STATUSES.includes(task.status)).length,
+      shared: visibleDeliverables.length,
+      accepted: visibleDeliverables.filter((item2) => item2.clientAcceptedAt !== null).length,
+      closed: engagement.stage === "closed"
+    }) : null,
+    /** Every engagement of the business, newest first, to move between them. */
+    projects: projects.map((row) => ({ id: row.id, title: engagementTitle(row.type, row.service), stageLabel: engagementStageLabel(row, now), closed: row.stage === "closed", current: row.id === engagement.id })),
+    /** "Fix the next problem": what the business has asked for that the desk has not handled yet. */
+    requests: engagement.businessId === null ? [] : (await db.select({ id: serviceRequests.id, service: serviceRequests.service, createdAt: serviceRequests.createdAt }).from(serviceRequests).where(and13(eq19(serviceRequests.businessId, engagement.businessId), eq19(serviceRequests.status, "open"))).orderBy(desc10(serviceRequests.id))).map((row) => ({ ...row, serviceName: PRODUCTS.find((product2) => product2.id === row.service)?.name ?? row.service })),
     startedOn: engagement.startedOn,
     uploadsEnabled: isFileStorageConfigured(),
     businessName,
@@ -13754,17 +13861,17 @@ var dropPrefix = (engagementId) => `engagements/${engagementId}/inbox/`;
 async function matchesOf(db, engagementId) {
   return db.select({ fileId: engagementFileMatches.fileId, taskId: engagementFileMatches.taskId }).from(engagementFileMatches).innerJoin(engagementFiles, eq19(engagementFileMatches.fileId, engagementFiles.id)).where(eq19(engagementFiles.engagementId, engagementId));
 }
-async function requireClientRoomEngagement(db, session) {
+async function requireClientRoomEngagement(db, session, engagementId) {
   const business = session.activeBusiness;
   if (!business) throw notFound();
-  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq19(engagements.businessId, business.businessId)).orderBy(desc10(engagements.id)).limit(1))[0];
+  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(engagementId ? and13(eq19(engagements.businessId, business.businessId), eq19(engagements.id, engagementId)) : eq19(engagements.businessId, business.businessId)).orderBy(desc10(engagements.id)).limit(1))[0];
   if (!engagement) throw notFound();
   return engagement;
 }
 async function clientRequestDrop(db, session, input) {
   requireUploads();
   validateUpload(input);
-  const engagement = await requireClientRoomEngagement(db, session);
+  const engagement = await requireClientRoomEngagement(db, session, input.engagementId);
   const storageKey2 = `${dropPrefix(engagement.id)}${randomUUID2()}-${safeFileName(input.fileName)}`;
   const upload2 = await createSignedUpload(storageKey2, input.contentType);
   return { storageKey: storageKey2, uploadUrl: upload2.url, headers: upload2.headers };
@@ -13772,7 +13879,7 @@ async function clientRequestDrop(db, session, input) {
 async function clientConfirmDrop(db, session, input) {
   requireUploads();
   validateUpload(input);
-  const engagement = await requireClientRoomEngagement(db, session);
+  const engagement = await requireClientRoomEngagement(db, session, input.engagementId);
   if (!isTargetStorageKey(input.storageKey, dropPrefix(engagement.id))) throw notFound();
   if (!await objectExists(input.storageKey)) throw new TRPCError17({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
   return db.transaction(async (tx) => {
@@ -13915,6 +14022,53 @@ async function saveCheckin(db, actor, input) {
     await recordAudit(tx, { action: "engagement_checkin_recorded", actorUserId: actor.id, details: { engagementId: input.engagementId, weekNumber: input.weekNumber } });
   });
   return { success: true };
+}
+async function requestService(db, session, input) {
+  const business = session.activeBusiness;
+  if (!business) throw notFound();
+  const product2 = PRODUCTS.find((item2) => item2.id === input.service && item2.id !== "business_health_check");
+  if (!product2) throw new TRPCError17({ code: "BAD_REQUEST", message: "Choose a service." });
+  if (input.engagementId) await requireClientRoomEngagement(db, session, input.engagementId);
+  const open = (await db.select({ id: serviceRequests.id }).from(serviceRequests).where(and13(eq19(serviceRequests.businessId, business.businessId), eq19(serviceRequests.service, product2.id), eq19(serviceRequests.status, "open"))).limit(1))[0];
+  if (open) return { success: true, requestId: open.id, already: true };
+  const [created] = await db.insert(serviceRequests).values({ businessId: business.businessId, engagementId: input.engagementId ?? null, requestedByUserId: session.user.id, service: product2.id, note: input.note?.trim() || null }).returning({ id: serviceRequests.id });
+  await recordAudit(db, { action: "service_requested", actorUserId: session.user.id, details: { requestId: created.id, businessId: business.businessId, service: product2.id } });
+  try {
+    await deliverEmail({
+      to: BRAND.businessSupportMailbox,
+      sender: "business_support",
+      subject: `${business.businessName} asked for the ${product2.name}`,
+      body: `${session.user.fullName || "A client"} at ${business.businessName} asked for the ${product2.name} from their client room.${input.note?.trim() ? `
+
+Their note: ${input.note.trim()}` : ""}
+
+Confirm it with them, send the payment link, then open the engagement from the request in Engagements: ${getTrustedApplicationOrigin()}/admin`
+    });
+  } catch (error) {
+    console.error("[Engagements] Service requested, but the desk could not be emailed:", error instanceof Error ? error.message : error);
+  }
+  return { success: true, requestId: created.id, already: false };
+}
+async function listServiceRequests(db, actor) {
+  if (!canStart(actor)) return [];
+  const rows = await db.select({ id: serviceRequests.id, businessId: serviceRequests.businessId, businessName: businesses.name, service: serviceRequests.service, note: serviceRequests.note, createdAt: serviceRequests.createdAt, requestedBy: users.name }).from(serviceRequests).innerJoin(businesses, eq19(serviceRequests.businessId, businesses.id)).innerJoin(users, eq19(serviceRequests.requestedByUserId, users.id)).where(eq19(serviceRequests.status, "open")).orderBy(asc(serviceRequests.id));
+  return rows.map((row) => {
+    const product2 = PRODUCTS.find((item2) => item2.id === row.service);
+    const type = row.service === "six_week_fix" ? "six_week_fix" : row.service === "business_review" ? "business_review" : product2?.way === "assessment" ? "assessment" : product2?.way === "monthly_service" ? "monthly_service" : "done_for_you";
+    return { ...row, serviceName: product2?.name ?? row.service, type };
+  });
+}
+async function handleServiceRequest(db, actor, input) {
+  requireStart(actor);
+  const updated = await db.update(serviceRequests).set({ status: input.status, handledByUserId: actor.id, handledAt: /* @__PURE__ */ new Date() }).where(and13(eq19(serviceRequests.id, input.requestId), eq19(serviceRequests.status, "open"))).returning({ id: serviceRequests.id });
+  if (!updated.length) throw notFound();
+  await recordAudit(db, { action: "service_request_handled", actorUserId: actor.id, details: { requestId: input.requestId, status: input.status } });
+  return { success: true };
+}
+async function listClientBusinesses(db, actor) {
+  if (!canStart(actor)) return [];
+  const rows = await db.selectDistinct({ id: businesses.id, name: businesses.name }).from(businesses).innerJoin(engagements, eq19(engagements.businessId, businesses.id)).orderBy(asc(businesses.name));
+  return rows;
 }
 
 // server/clientOnboarding.ts
@@ -15245,13 +15399,22 @@ var staffRouter = router({
   }),
   confirmUpload: staff.input(z24.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z24.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
+  /** "Fix the next problem": the clients' requests for another service, and handling one. Desk only. */
+  serviceRequests: staff.query(async ({ ctx }) => listServiceRequests(await engagementDb(), ctx.actor)),
+  handleRequest: staff.input(z24.object({ requestId: id, status: z24.enum(["done", "declined"]) })).mutation(async ({ ctx, input }) => guarded(async () => handleServiceRequest(await engagementDb(), ctx.actor, input))),
+  /** The businesses that already have an engagement, to open another for. Desk only. */
+  clientBusinesses: staff.query(async ({ ctx }) => listClientBusinesses(await engagementDb(), ctx.actor)),
   /** Open an engagement directly, for a client who did not come through the Business Health Check. */
   createDirect: staff.input(z24.object({
     type: z24.enum(ENGAGEMENT_TYPES),
-    businessName: text3(255).min(2, "Name the business."),
-    contactName: text3(200).min(2, "Name the client."),
-    contactEmail: z24.string().trim().email("Enter the client's email address.").max(320),
-    startedOn: z24.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the start date.")
+    startedOn: z24.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the start date."),
+    /** The service bought, for an Assessment, Done for You or Monthly Service. */
+    service: z24.string().max(64).nullish(),
+    /** An existing client's business: the project joins their account and nobody is invited. */
+    businessId: id.nullish(),
+    businessName: text3(255).nullish(),
+    contactName: text3(200).nullish(),
+    contactEmail: z24.string().trim().email("Enter the client's email address.").max(320).nullish()
   })).mutation(async ({ ctx, input }) => guarded(async () => createDirectEngagement(await engagementDb(), { ...ctx.actor, name: ctx.user?.name ?? null }, input))),
   /** The content board: add or update a reel, post or story; remove one. */
   saveContent: staff.input(z24.object({
@@ -15285,9 +15448,9 @@ var staffRouter = router({
 });
 var clientRouter = router({
   /** Null when the business has no engagement yet, or the room is not set up in the database yet. */
-  room: accountProcedure.query(async ({ ctx }) => {
+  room: accountProcedure.input(z24.object({ engagementId: id.nullish() }).optional()).query(async ({ ctx, input }) => {
     try {
-      return await getClientRoom(await engagementDb(), ctx.account);
+      return await getClientRoom(await engagementDb(), ctx.account, input?.engagementId);
     } catch (error) {
       if (isMissingEngagementTable(error)) return null;
       throw error;
@@ -15307,11 +15470,16 @@ var clientRouter = router({
   confirmUpload: accountProcedure.input(z24.object({ taskId: id, storageKey, note: optionalText2(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmUpload(await engagementDb(), ctx.account, input))),
   fileLink: accountProcedure.input(z24.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => clientFileLink(await engagementDb(), ctx.account, input))),
   /** The drop box: send any file without saying which request it answers; the team sorts it. */
-  requestDrop: accountProcedure.input(z24.object(upload)).mutation(async ({ ctx, input }) => {
+  requestDrop: accountProcedure.input(z24.object({ ...upload, engagementId: id.nullish() })).mutation(async ({ ctx, input }) => {
     await enforceLimit(LIMITS.fileDrop, `account:${ctx.account.user.id}`);
     return guarded(async () => clientRequestDrop(await engagementDb(), ctx.account, input));
   }),
-  confirmDrop: accountProcedure.input(z24.object({ storageKey, note: optionalText2(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmDrop(await engagementDb(), ctx.account, input))),
+  confirmDrop: accountProcedure.input(z24.object({ storageKey, note: optionalText2(500), ...upload, engagementId: id.nullish() })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmDrop(await engagementDb(), ctx.account, input))),
+  /** "Fix the next problem": ask for another service; the desk confirms it. */
+  requestService: accountProcedure.input(z24.object({ service: z24.string().min(1).max(64), note: optionalText2(1e3), engagementId: id.nullish() })).mutation(async ({ ctx, input }) => {
+    await enforceLimit(LIMITS.engagementComment, `account:${ctx.account.user.id}`);
+    return guarded(async () => requestService(await engagementDb(), ctx.account, input));
+  }),
   /** Approve a reel, post or story, or ask for changes with a note. */
   respondToContent: accountProcedure.input(z24.object({ itemId: id, approve: z24.boolean(), note: optionalText2(1e3) })).mutation(async ({ ctx, input }) => guarded(async () => respondToContent(await engagementDb(), ctx.account, input))),
   /** "We don't have this", or take it back. */

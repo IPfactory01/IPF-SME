@@ -11,6 +11,7 @@ const api = vi.hoisted(() => ({
   awaiting: [] as unknown[],
   storageError: null as { message: string } | null,
   storage: { configured: true, missing: [] as string[], bucket: "engagement-files", bucketFound: true as boolean | null, bucketPublic: false as boolean | null, problem: null as string | null },
+  requests: [] as unknown[],
   calls: {} as Record<string, unknown[]>,
 }));
 const replies: Record<string, unknown> = { createDirect: { engagementId: 9, invitationUrl: "https://ipf-sme.example.test/join/OWNER", deliveryStatus: "Simulated", hasAccount: false }, sendSignInLink: { kind: "reset", email: "ada@example.test", url: "https://ipf-sme.example.test/reset/abc", deliveryStatus: "Simulated" }, start: { engagementId: 4, created: true }, fileLink: { url: "https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf" } };
@@ -22,7 +23,7 @@ const mutation = (name: string) => (options?: { onSuccess?: (value: never) => vo
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, list: { invalidate: () => undefined }, awaitingStart: { invalidate: () => undefined } } } }),
+    useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, list: { invalidate: () => undefined }, awaitingStart: { invalidate: () => undefined }, serviceRequests: { invalidate: () => undefined } } } }),
     onboarding: { sendSignInLink: { useMutation: mutation("sendSignInLink") } },
     engagement: {
       staff: {
@@ -31,7 +32,9 @@ vi.mock("@/lib/trpc", () => ({
         storageStatus: { useQuery: () => ({ data: api.storageError ? undefined : api.storage, error: api.storageError, refetch: () => undefined }) },
         detail: { useQuery: () => ({ data: api.detail, isLoading: false, error: null }) },
         assignableStaff: { useQuery: () => ({ data: [{ userId: 9, name: "Ola Analyst", email: "ola@example.test", roles: ["analyst"] }] }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        serviceRequests: { useQuery: () => ({ data: api.requests }) },
+        clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "handleRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -419,3 +422,38 @@ describe("the content board on the team's side", () => {
   });
 });
 
+
+describe("another project for an existing client, and the clients' requests", () => {
+  it("opens a Done for You for an existing client: the business and the service, nobody invited", () => {
+    api.list = { setUp: true, items: [row], canStart: true, seesAll: true } as never;
+    api.calls = {};
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "New engagement" }));
+    const form = within(screen.getByRole("region", { name: "New engagement" }));
+    fireEvent.change(form.getByLabelText("Client"), { target: { value: "existing" } });
+    fireEvent.change(form.getByLabelText("Type"), { target: { value: "done_for_you" } });
+    expect(form.getByRole("button", { name: "Open the engagement" }).hasAttribute("disabled")).toBe(true);
+    fireEvent.change(form.getByLabelText("Service"), { target: { value: "pitch_deck" } });
+    fireEvent.change(form.getByLabelText("Business"), { target: { value: "31" } });
+    fireEvent.change(form.getByLabelText("Start date"), { target: { value: "2026-11-09" } });
+    expect(form.queryByLabelText("Client email")).toBeNull();
+    fireEvent.click(form.getByRole("button", { name: "Open the engagement" }));
+    expect(api.calls.createDirect).toEqual([{ type: "done_for_you", startedOn: "2026-11-09", service: "pitch_deck", businessId: 31 }]);
+  });
+
+  it("lists the clients' requests and opens the engagement from one, filled in, or declines it", () => {
+    api.list = { setUp: true, items: [row], canStart: true, seesAll: true } as never;
+    api.requests = [{ id: 7, businessId: 31, businessName: "Ada Foods", service: "pitch_deck", serviceName: "Pitch Deck", type: "done_for_you", note: "Investor in December", requestedBy: "Ada Okafor", createdAt: new Date("2026-11-06T10:00:00Z") }];
+    api.calls = {};
+    render(<EngagementsView />);
+    const inbox = within(screen.getByRole("region", { name: /Clients asking for another service/ }));
+    expect(inbox.getByText(/Investor in December/)).toBeTruthy();
+    fireEvent.click(inbox.getByRole("button", { name: "Decline" }));
+    expect(api.calls.handleRequest).toEqual([{ requestId: 7, status: "declined" }]);
+    fireEvent.click(inbox.getByRole("button", { name: "Open the engagement" }));
+    const form = within(screen.getByRole("region", { name: "New engagement" }));
+    expect((form.getByLabelText("Service") as HTMLSelectElement).value).toBe("pitch_deck");
+    expect((form.getByLabelText("Business") as HTMLSelectElement).value).toBe("31");
+    api.requests = [];
+  });
+});

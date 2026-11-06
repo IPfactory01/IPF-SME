@@ -54,7 +54,7 @@ vi.mock("@/lib/trpc", () => ({
     },
     useUtils: () => ({ account: { me: { setData: (_: unknown, value: unknown) => api.state.setData.push(value), invalidate: () => undefined }, business: { invalidate: () => undefined } } }),
     // The room has its own tests; here it is null (no engagement yet) unless a test sets one.
-    engagement: { client: { room: { useQuery: () => ({ data: api.state.room ?? null, isLoading: false }) } } },
+    engagement: { client: { room: { useQuery: () => ({ data: api.state.room ?? null, isLoading: false }) }, requestService: { useMutation: () => ({ isPending: false, mutate: () => undefined }) } } },
     account: {
       me: { useQuery: () => ({ data: api.state.me, isLoading: api.state.loading, refetch: () => undefined }) },
       requestReset: {
@@ -404,7 +404,7 @@ describe("account dashboard", () => {
 
   it("is the room itself once the engagement exists: no profile card, no account card", () => {
     api.state.me = SESSION;
-    api.state.room = { engagementId: 4, content: [], contentTargets: [], type: "business_review", typeLabel: "Business Review", startedOn: null, uploadsEnabled: false, businessName: "Richie Tech", viewer: { kind: "member", access: "full" }, stage: "assessment", stageLabel: "Business Review", journey: journeyOf("assessment"), problemStatement: null, measure: null, team: [], people: [], sentFiles: [], nextSession: null, sessions: [], tasks: [], deliverables: [] };
+    api.state.room = { engagementId: 4, content: [], contentTargets: [], type: "business_review", typeLabel: "Business Review", service: null, title: "Business Review", serviceStep: null, projects: [{ id: 4, title: "Business Review", stageLabel: "Business Review", closed: false, current: true }], requests: [], startedOn: null, uploadsEnabled: false, businessName: "Richie Tech", viewer: { kind: "member", access: "full" }, stage: "assessment", stageLabel: "Business Review", journey: journeyOf("assessment"), problemStatement: null, measure: null, team: [], people: [], sentFiles: [], nextSession: null, sessions: [], tasks: [], deliverables: [] };
     renderAt("/dashboard", <AccountDashboard />);
     expect(screen.getAllByText("Richie Tech").length).toBeGreaterThan(0);
     expect(screen.queryByText(/Welcome back/)).toBeNull();

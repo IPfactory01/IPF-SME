@@ -9,7 +9,9 @@ import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlas
 import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
-import { DATED_TYPES, datedProgress, monthOfDay } from "@shared/engagementTypes";
+import { DATED_TYPES, datedProgress, monthOfDay, SERVICE_STEPS } from "@shared/engagementTypes";
+import { MENU_PRODUCTS } from "@shared/products";
+import { useRoomProject } from "@/lib/roomProject";
 import ContentBoard from "./room/ContentBoard";
 import { toast } from "sonner";
 import { useWide } from "@/hooks/useWide";
@@ -181,6 +183,7 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
 
   const overview = (
     <div className="space-y-5">
+      <ProjectSwitcher room={room} />
       <RoomDashboard room={room} steps={steps} now={now} contentMonth={contentMonth?.month ?? null} />
       <div className="grid gap-5 lg:grid-cols-3">{nextAction}{nextMeeting}</div>
       <div className="grid items-start gap-5 lg:grid-cols-3">
@@ -192,6 +195,7 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
           {aside}
         </aside>
       </div>
+      <NextProblem room={room} />
     </div>
   );
 
@@ -260,6 +264,10 @@ const stuckCount = (insight: NonNullable<Room["insight"]>) => {
 // ---- What the page says now ------------------------------------------------------------------------------------------
 
 function nowOf(room: Room, now: number): { title: string; line: string; progress: { label: string; done: number; total: number } | null } {
+  if (room.serviceStep !== null) {
+    const lines = [`Send the records on the ${METHOD.dataRequest}; the work starts once they are complete.`, "We are doing the work. A consultant checks it before you see it.", `Your ${room.title} is ready. Read it and give your ${METHOD.signOff}.`, room.stage === "closed" ? "Done. Thank you." : `Signed off. We check in after thirty days.`];
+    return { title: `${room.title}: ${SERVICE_STEPS[room.serviceStep - 1]}`, line: lines[room.serviceStep - 1]!, progress: { label: `Step ${room.serviceStep} of ${SERVICE_STEPS.length}`, done: room.serviceStep, total: SERVICE_STEPS.length } };
+  }
   // A dated engagement (Digital marketing) reads its stage and day from its start date.
   const dated = DATED_TYPES[room.type];
   if (dated && room.startedOn) {
@@ -387,6 +395,16 @@ function DeliverablesCard({ room, isOwner, onOpen }: { room: Room; isOwner: bool
 type Step = { n: number; title: string; state: StepState; when: string; summary: string; body?: React.ReactNode };
 
 function stepsOf(room: Room, now: number): Step[] {
+  // A service engagement (a Pitch Deck, Monthly Accounts): the records, the work, the Deliverable, the Sign-off.
+  if (room.serviceStep !== null) {
+    const summaries = [`The records and answers on the ${METHOD.dataRequest}.`, `We do the work; a consultant checks it before you see it.`, `Your ${room.title} is shared here, with a Handover call.`, `You read it and give your ${METHOD.signOff}.`];
+    const at = room.serviceStep;
+    return SERVICE_STEPS.map((title, index) => ({
+      n: index + 1, title, summary: summaries[index]!, when: "",
+      state: index + 1 < at ? "done" : index + 1 === at ? (at === 4 && room.stage === "closed" ? "done" : "now") : "next",
+      body: index + 1 === at ? <WorkPlan room={room} isOwner={room.viewer.kind === "owner"} /> : null,
+    }));
+  }
   // A dated engagement's timeline is its type's stages, dated from its start; the current stage holds the Work Plan.
   const dated = DATED_TYPES[room.type];
   if (dated && room.startedOn) {
@@ -594,7 +612,7 @@ function useRoomRefresh() {
 type DropItem = { key: string; name: string; state: "sending" | "sent" | "failed"; error?: string };
 
 /** The drop box: each file goes straight to private storage, then is recorded unsorted for the team to match. */
-function useDropUpload() {
+function useDropUpload(engagementId: number) {
   const refresh = useRoomRefresh();
   const request = trpc.engagement.client.requestDrop.useMutation();
   const confirm = trpc.engagement.client.confirmDrop.useMutation();
@@ -608,10 +626,10 @@ function useDropUpload() {
     for (const { file, key } of batch) {
       try {
         const meta = { fileName: file.name, contentType: file.type, sizeBytes: file.size };
-        const ticket = await request.mutateAsync(meta);
+        const ticket = await request.mutateAsync({ ...meta, engagementId });
         const put = await fetch(ticket.uploadUrl, { method: "PUT", headers: ticket.headers, body: file });
         if (!put.ok) throw new Error("The upload did not finish. Check your connection and try again.");
-        await confirm.mutateAsync({ storageKey: ticket.storageKey, note: note || null, ...meta });
+        await confirm.mutateAsync({ storageKey: ticket.storageKey, note: note || null, ...meta, engagementId });
         update(key, { state: "sent" });
         sent += 1;
       } catch (error) {
@@ -984,9 +1002,9 @@ function RequestSummary({ items, now }: { items: Task[]; now: number }) {
 }
 
 /** Drag everything in, or choose many files at once. No need to say which file is which: the team sorts them. */
-function DropBox({ uploadsEnabled }: { uploadsEnabled: boolean }) {
+function DropBox({ uploadsEnabled, engagementId }: { uploadsEnabled: boolean; engagementId: number }) {
   const preview = useRoomPreview();
-  const drop = useDropUpload();
+  const drop = useDropUpload(engagementId);
   const [over, setOver] = useState(false);
   const take = (list: FileList | null) => { const files = list ? Array.from(list) : []; if (files.length) void drop.send(files, ""); };
   return (
@@ -1123,7 +1141,7 @@ function DataRequestsView({ room, now }: { room: Room; now: number }) {
           })}
         </section>
         <div className="space-y-5 lg:sticky lg:top-16">
-          <DropBox uploadsEnabled={room.uploadsEnabled} />
+          <DropBox uploadsEnabled={room.uploadsEnabled} engagementId={room.engagementId} />
           <SentFiles files={room.sentFiles} />
         </div>
       </div>
@@ -1188,5 +1206,63 @@ function DeliverablesView({ room, isOwner }: { room: Room; isOwner: boolean }) {
       )}
       <ul className="space-y-3" aria-label={METHOD.deliverables}>{room.deliverables.map(item => <DeliverableItem key={item.id} item={item} isOwner={isOwner} />)}</ul>
     </div>
+  );
+}
+
+// ---- Many projects, and the next problem ------------------------------------------------------------------------------
+
+/** A client with more than one engagement moves between them here; each keeps its own Work Plan and Deliverables. */
+function ProjectSwitcher({ room }: { room: Room }) {
+  const { choose } = useRoomProject();
+  const preview = useRoomPreview();
+  if (room.projects.length < 2) return null;
+  return (
+    <nav aria-label="Your projects" className="flex flex-wrap items-center gap-2">
+      <span className="text-xs font-medium text-ink-muted">Your projects</span>
+      {room.projects.map(project => (
+        <button key={project.id} type="button" disabled={preview} aria-current={project.current ? "page" : undefined} onClick={() => choose(project.id)}
+          className={`rounded-full border px-3 py-1 text-sm transition-colors ${project.current ? "border-brand bg-brand text-white" : "border-line-soft bg-white text-ink-600 hover:border-brand"}`}>
+          {project.title}<span className={`ml-1.5 text-xs ${project.current ? "text-white/80" : "text-ink-muted"}`}>{project.stageLabel}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/**
+ * "Fix the next problem": once one problem is in hand, the client asks for the next service from here, or browses the
+ * services on the site. The request goes to the desk, who confirm it and send the payment link; nothing is charged here.
+ */
+function NextProblem({ room }: { room: Room }) {
+  const preview = useRoomPreview();
+  const utils = trpc.useUtils();
+  const [service, setService] = useState("");
+  const [note, setNote] = useState("");
+  const ask = trpc.engagement.client.requestService.useMutation({
+    onSuccess: result => { void utils.engagement.client.room.invalidate(); setService(""); setNote(""); toast.success(result.already ? "You have already asked for this. Your team will be in touch." : "Sent. Your team will confirm it and send the payment link."); },
+    onError: error => toast.error(error.message),
+  });
+  const options = MENU_PRODUCTS.filter(product => product.id !== "business_health_check" && product.id !== room.service);
+  return (
+    <section aria-labelledby="next-problem" className="rounded-xl border border-brand-line bg-brand-tint p-5">
+      <h2 id="next-problem" className="font-sans text-base font-semibold text-ink">Fix the next problem</h2>
+      <p className="mt-1 text-sm text-ink-600">Another problem in the business? Ask your team for the service that fixes it, or see every service with its price.</p>
+      {room.requests.length > 0 && (
+        <ul aria-label="Your requests" className="mt-3 space-y-1 text-sm">
+          {room.requests.map(request => <li key={request.id} className="text-ink-600"><span className="font-medium text-ink">{request.serviceName}</span> · asked {lagos(request.createdAt, false)}. Your team will confirm it and send the payment link.</li>)}
+        </ul>
+      )}
+      {!preview && (
+        <div className="mt-4 flex flex-col gap-2 lg:flex-row">
+          <select aria-label="The service you need" className="rounded-lg border border-line bg-white px-3 py-2 text-sm" value={service} onChange={event => setService(event.target.value)}>
+            <option value="">Choose a service</option>
+            {options.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}
+          </select>
+          <input aria-label="What is the problem? (optional)" className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-2 text-sm" placeholder="What is the problem? (optional)" maxLength={1000} value={note} onChange={event => setNote(event.target.value)} />
+          <Button type="button" className="rounded-lg bg-brand text-white" disabled={!service || ask.isPending} onClick={() => ask.mutate({ service, note: note || null, engagementId: room.engagementId })}>Ask your team</Button>
+        </div>
+      )}
+      <a href="/services" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand underline underline-offset-2">See every service and its price<ArrowRight className="h-3.5 w-3.5" aria-hidden /></a>
+    </section>
   );
 }

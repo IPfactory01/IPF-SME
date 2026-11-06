@@ -20,6 +20,8 @@ import {
   UPLOAD_MAX_BYTES,
 } from "../../shared/engagement";
 import { authorityAllows } from "../../shared/platformPermissions";
+import { AGREEMENT_LIMITS } from "../../shared/agreement";
+import { acceptAgreement, reviseAgreement, saveAgreement, sendAgreement, setFeePaid, staffAgreement } from "../agreements";
 import {
   acceptDeliverable,
   approveDeliverable,
@@ -187,6 +189,19 @@ const staffRouter = router({
   requestUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, ...upload })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileUpload, `staff:${ctx.actor.id}`); return guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input)); }),
   confirmUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
+  /** The agreement and fees: draft, save, send, revise, record payments. */
+  agreement: staff.input(z.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => staffAgreement(await engagementDb(), ctx.actor, input.engagementId))),
+  saveAgreement: staff.input(z.object({
+    engagementId: id,
+    scope: text(AGREEMENT_LIMITS.text),
+    outOfScope: text(AGREEMENT_LIMITS.text),
+    clientCommitments: text(AGREEMENT_LIMITS.text),
+    terms: text(AGREEMENT_LIMITS.text),
+    feeLines: z.array(z.object({ label: text(AGREEMENT_LIMITS.label), amount: z.number().int().positive().max(AGREEMENT_LIMITS.amount), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable() })).max(AGREEMENT_LIMITS.feeLines),
+  })).mutation(async ({ ctx, input }) => guarded(async () => saveAgreement(await engagementDb(), ctx.actor, input))),
+  sendAgreement: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => sendAgreement(await engagementDb(), ctx.actor, input))),
+  reviseAgreement: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => reviseAgreement(await engagementDb(), ctx.actor, input))),
+  setFeePaid: staff.input(z.object({ feeLineId: id, paid: z.boolean() })).mutation(async ({ ctx, input }) => guarded(async () => setFeePaid(await engagementDb(), ctx.actor, input))),
   /** "Fix the next problem": the clients' requests for another service, and handling one. Desk only. */
   serviceRequests: staff.query(async ({ ctx }) => listServiceRequests(await engagementDb(), ctx.actor)),
   handleRequest: staff.input(z.object({ requestId: id, status: z.enum(["done", "declined"]) })).mutation(async ({ ctx, input }) => guarded(async () => handleServiceRequest(await engagementDb(), ctx.actor, input))),
@@ -244,6 +259,8 @@ const clientRouter = router({
   /** The drop box: send any file without saying which request it answers; the team sorts it. */
   requestDrop: accountProcedure.input(z.object({ ...upload, engagementId: id.nullish() })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileDrop, `account:${ctx.account.user.id}`); return guarded(async () => clientRequestDrop(await engagementDb(), ctx.account, input)); }),
   confirmDrop: accountProcedure.input(z.object({ storageKey, note: optionalText(500), ...upload, engagementId: id.nullish() })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmDrop(await engagementDb(), ctx.account, input))),
+  /** The owner accepts the agreement by typing their name. */
+  acceptAgreement: accountProcedure.input(z.object({ engagementId: id, name: text(200) })).mutation(async ({ ctx, input }) => guarded(async () => acceptAgreement(await engagementDb(), ctx.account, input))),
   /** "Fix the next problem": ask for another service; the desk confirms it. */
   requestService: accountProcedure.input(z.object({ service: z.string().min(1).max(64), note: optionalText(1000), engagementId: id.nullish() }))
     .mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.engagementComment, `account:${ctx.account.user.id}`); return guarded(async () => requestService(await engagementDb(), ctx.account, input)); }),

@@ -11,6 +11,8 @@ import { useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
 import { DATED_TYPES, datedProgress, monthOfDay, SERVICE_STEPS } from "@shared/engagementTypes";
 import { MENU_PRODUCTS } from "@shared/products";
+import { formatNaira } from "@shared/businessSupport";
+import { TERMS_PATH } from "./LegalLinks";
 import { useRoomProject } from "@/lib/roomProject";
 import ContentBoard from "./room/ContentBoard";
 import { toast } from "sonner";
@@ -133,6 +135,13 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
           <a href={`#step-${action.step}`} onClick={() => setOpen(action.step)} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand underline underline-offset-2">Open the {action.deliverable.kindLabel} <ArrowRight className="h-3.5 w-3.5" aria-hidden /></a>
         </>
       )}
+      {action.kind === "agreement" && (
+        <>
+          <p className="mt-2 text-lg font-semibold tracking-tight">Read and accept your agreement</p>
+          <p className="mt-1 text-sm text-ink-600">What we will do, what you do, the terms and the fees{room.agreement ? `: ${formatNaira(room.agreement.total)} in all` : ""}.</p>
+          <a href="#agreement" className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-deep-hover">Open the agreement<ArrowRight className="h-4 w-4" aria-hidden /></a>
+        </>
+      )}
       {action.kind === "none" && <p className="mt-2 text-sm text-ink-600">Nothing outstanding. We will tell you here when there is.</p>}
     </section>
   );
@@ -214,6 +223,7 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
       { id: "founder", label: "Founder", group: "What we found", content: <FounderPanel insight={room.insight} /> },
     ] : []),
     { id: "deliverables", label: METHOD.deliverables, group: "What you receive", content: <DeliverablesView room={room} isOwner={isOwner} /> },
+    ...(room.agreement ? [{ id: "agreement", label: "Agreement", group: "What you receive", count: room.agreement.canAccept ? { value: 1, label: "waiting for you to accept" } : undefined, content: <AgreementView room={room} /> }] : []),
   ];
 
   const header = (
@@ -297,10 +307,11 @@ function nowOf(room: Room, now: number): { title: string; line: string; progress
 /** The Findings are out and the owner has not signed everything off yet: that, not the Work Plan, is where we are. */
 const findingsAwaiting = (room: Room) => room.deliverables.some(item => ["findings", "problem_statement"].includes(item.kind) && !item.accepted);
 
-type NextAction = { kind: "task"; task: Task; label: string } | { kind: "signoff"; deliverable: Deliverable; step: number } | { kind: "none" };
+type NextAction = { kind: "agreement" } | { kind: "task"; task: Task; label: string } | { kind: "signoff"; deliverable: Deliverable; step: number } | { kind: "none" };
 
 /** One thing at a time: the client's earliest open Data Request or action, else a Deliverable waiting for Sign-off. */
 function nextActionOf(room: Room, isOwner: boolean): NextAction {
+  if (room.agreement?.canAccept) return { kind: "agreement" };
   const mine = room.tasks.filter(task => task.side === "client");
   const open = mine.filter(isOpen).sort((a, b) => (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999") || (a.weekNumber ?? 99) - (b.weekNumber ?? 99) || a.sortOrder - b.sortOrder || a.id - b.id);
   if (open[0]) {
@@ -1264,5 +1275,60 @@ function NextProblem({ room }: { room: Room }) {
       )}
       <a href="/services" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand underline underline-offset-2">See every service and its price<ArrowRight className="h-3.5 w-3.5" aria-hidden /></a>
     </section>
+  );
+}
+
+// ---- The agreement and fees -------------------------------------------------------------------------------------------
+
+/**
+ * The agreement as the client reads it: what we will do, what is not included, what they do, the terms and the fees
+ * with when each is due and whether it is paid. The owner accepts it by typing their name; full-access staff only read.
+ */
+function AgreementView({ room }: { room: Room }) {
+  const agreement = room.agreement!;
+  const preview = useRoomPreview();
+  const refresh = useRoomRefresh();
+  const [name, setName] = useState("");
+  const [agree, setAgree] = useState(false);
+  const accept = trpc.engagement.client.acceptAgreement.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Accepted. Thank you."); } });
+  if (agreement.status === "revising") return <p className={`${CARD} text-sm text-ink-600`}>Your team is updating the agreement. It will be back here for you to read and accept.</p>;
+  const block = (title: string, body: string | null) => body ? (
+    <section aria-label={title}><h3 className="font-sans text-sm font-semibold text-ink">{title}</h3><p className="mt-1 whitespace-pre-line text-sm text-ink-600">{body}</p></section>
+  ) : null;
+  return (
+    <div className="grid items-start gap-5 lg:grid-cols-3">
+      <article aria-label="Agreement" className={`${CARD} space-y-5 lg:col-span-2`}>
+        <p className={`rounded-lg p-3 text-sm ${agreement.status === "accepted" ? "bg-health-clear-tint text-health-clear-strong" : "bg-brand-tint text-ink"}`}>
+          {agreement.status === "accepted" ? `Accepted by ${agreement.acceptedName} on ${lagos(agreement.acceptedAt, false)}${agreement.version > 1 ? ` (version ${agreement.version})` : ""}.` : `Sent on ${lagos(agreement.sentAt, false)}. ${agreement.canAccept ? "Read it, then accept it below." : "The owner accepts it."}`}
+        </p>
+        {block("What we will do", agreement.scope)}
+        {block("Not included", agreement.outOfScope)}
+        {block("What you do", agreement.clientCommitments)}
+        {block("Terms", agreement.terms)}
+        <p className="text-sm"><a href={TERMS_PATH} target="_blank" rel="noreferrer" className="font-medium text-brand underline underline-offset-2">Terms & Conditions</a></p>
+      </article>
+      <aside className="space-y-5">
+        <section aria-labelledby="fees-title" className={CARD}>
+          <h3 id="fees-title" className="font-sans text-sm font-semibold text-ink">Fees</h3>
+          <ul className="mt-3 divide-y divide-line-soft text-sm">
+            {agreement.feeLines.map(line => (
+              <li key={line.id} className="flex items-start justify-between gap-3 py-2">
+                <span className="min-w-0"><span className="block text-ink">{line.label}</span><span className="block text-xs text-ink-muted">{line.dueOn ? `Due ${dateOnly(line.dueOn)}` : "Due as agreed"}</span></span>
+                <span className="shrink-0 text-right"><span className="block font-medium tabular-nums text-ink">{formatNaira(line.amount)}</span><span className={`block text-xs ${line.paid ? "text-health-clear" : "text-ink-muted"}`}>{line.paid ? "Paid" : "To pay"}</span></span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 flex justify-between border-t border-line pt-2 text-sm font-semibold"><span>Total</span><span className="tabular-nums">{formatNaira(agreement.total)}</span></p>
+        </section>
+        {agreement.canAccept && !preview && (
+          <form aria-label="Accept the agreement" className={`${CARD} space-y-3`} onSubmit={event => { event.preventDefault(); accept.mutate({ engagementId: room.engagementId, name }); }}>
+            <label className="block text-sm font-medium text-ink" htmlFor="agreement-name">Type your full name to accept</label>
+            <input id="agreement-name" className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm" value={name} maxLength={200} onChange={event => setName(event.target.value)} autoComplete="name" />
+            <label className="flex items-start gap-2 text-sm text-ink-600"><input type="checkbox" className="mt-1" checked={agree} onChange={event => setAgree(event.target.checked)} />I have read this agreement and the Terms & Conditions, and I accept them for {room.businessName}.</label>
+            <Button type="submit" className="w-full rounded-lg bg-brand text-white" disabled={!agree || name.trim().length < 2 || accept.isPending}>Accept the agreement</Button>
+          </form>
+        )}
+      </aside>
+    </div>
   );
 }

@@ -1,3 +1,4 @@
+import { AGREEMENT_STATUSES } from "../shared/agreement";
 import { sql } from "drizzle-orm";
 import { type AnyPgColumn, boolean, date, index, integer, numeric, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { PIPELINE_STAGES } from "../shared/businessCheck/pipeline";
@@ -1091,6 +1092,45 @@ export const engagementContentItems = pgTable("engagement_content_items", {
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
 }, table => [index("engagement_content_items_engagement_idx").on(table.engagementId)]);
+
+export const engagementAgreementStatusEnum = pgEnum("engagement_agreements_status", AGREEMENT_STATUSES);
+
+/**
+ * The engagement agreement (0019): what we do, what is not included, what the client does, the terms; drafted by the
+ * team, sent, and accepted by the owner in their room with their typed name. One per engagement.
+ */
+export const engagementAgreements = pgTable("engagement_agreements", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().unique().references(() => engagements.id, { onDelete: "cascade" }),
+  status: engagementAgreementStatusEnum("status").default("draft").notNull(),
+  scope: text("scope").notNull(),
+  outOfScope: text("outOfScope"),
+  clientCommitments: text("clientCommitments"),
+  terms: text("terms"),
+  /** How many times it was sent; a revision after acceptance is a new version the owner accepts again. */
+  version: integer("version").default(0).notNull(),
+  sentAt: timestamp("sentAt", { withTimezone: true }),
+  sentByUserId: integer("sentByUserId").references(() => users.id),
+  acceptedAt: timestamp("acceptedAt", { withTimezone: true }),
+  acceptedByUserId: integer("acceptedByUserId").references(() => users.id),
+  /** The name the owner typed to accept. */
+  acceptedName: varchar("acceptedName", { length: 200 }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+});
+
+/** The fees of an engagement (0019), in whole naira, each with when it is due and when it was paid. */
+export const engagementFeeLines = pgTable("engagement_fee_lines", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  label: varchar("label", { length: 200 }).notNull(),
+  amount: integer("amount").notNull(),
+  dueOn: date("dueOn"),
+  paidAt: timestamp("paidAt", { withTimezone: true }),
+  sortOrder: integer("sortOrder").default(0).notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [index("engagement_fee_lines_engagement_idx").on(table.engagementId)]);
 
 export const SERVICE_REQUEST_STATUSES = ["open", "done", "declined"] as const;
 export const serviceRequestsStatusEnum = pgEnum("service_requests_status", SERVICE_REQUEST_STATUSES);

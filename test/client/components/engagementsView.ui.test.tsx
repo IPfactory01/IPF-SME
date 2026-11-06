@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   storageError: null as { message: string } | null,
   storage: { configured: true, missing: [] as string[], bucket: "engagement-files", bucketFound: true as boolean | null, bucketPublic: false as boolean | null, problem: null as string | null },
   requests: [] as unknown[],
+  agreement: { agreement: null, feeLines: [], total: 0, suggested: { scope: "Two weeks and two Sessions.", outOfScope: "Anything not listed above.", clientCommitments: "Send the records.", terms: "Our Terms apply.", feeLines: [{ label: "Business Review", amount: 600000, dueOn: null }] }, can: { edit: true, send: true } } as unknown,
   calls: {} as Record<string, unknown[]>,
 }));
 const replies: Record<string, unknown> = { createDirect: { engagementId: 9, invitationUrl: "https://ipf-sme.example.test/join/OWNER", deliveryStatus: "Simulated", hasAccount: false }, sendSignInLink: { kind: "reset", email: "ada@example.test", url: "https://ipf-sme.example.test/reset/abc", deliveryStatus: "Simulated" }, start: { engagementId: 4, created: true }, fileLink: { url: "https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf" } };
@@ -23,7 +24,7 @@ const mutation = (name: string) => (options?: { onSuccess?: (value: never) => vo
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, list: { invalidate: () => undefined }, awaitingStart: { invalidate: () => undefined }, serviceRequests: { invalidate: () => undefined } } } }),
+    useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, list: { invalidate: () => undefined }, awaitingStart: { invalidate: () => undefined }, serviceRequests: { invalidate: () => undefined }, agreement: { invalidate: () => undefined } } } }),
     onboarding: { sendSignInLink: { useMutation: mutation("sendSignInLink") } },
     engagement: {
       staff: {
@@ -34,7 +35,8 @@ vi.mock("@/lib/trpc", () => ({
         assignableStaff: { useQuery: () => ({ data: [{ userId: 9, name: "Ola Analyst", email: "ola@example.test", roles: ["analyst"] }] }) },
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "handleRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        agreement: { useQuery: () => ({ data: api.agreement, error: null }) },
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "handleRequest", "saveAgreement", "sendAgreement", "reviseAgreement", "setFeePaid", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -455,5 +457,24 @@ describe("another project for an existing client, and the clients' requests", ()
     expect((form.getByLabelText("Service") as HTMLSelectElement).value).toBe("pitch_deck");
     expect((form.getByLabelText("Business") as HTMLSelectElement).value).toBe("31");
     api.requests = [];
+  });
+});
+
+describe("the agreement on the team's side", () => {
+  it("starts from what the service suggests, saves the fees in naira, and sends it once saved", () => {
+    api.list = { setUp: true, items: [row], canStart: true, seesAll: true } as never;
+    api.calls = {};
+    api.detail = detail({ manage: true, assign: true, review: true });
+    render(<EngagementsView />);
+    fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
+    const section = within(within(screen.getByRole("dialog")).getByText("Agreement and fees").closest("section")!);
+    expect((section.getByLabelText("What we will do") as HTMLTextAreaElement).value).toBe("Two weeks and two Sessions.");
+    expect((section.getByLabelText("Amount 1") as HTMLInputElement).value).toBe("600000");
+    fireEvent.click(section.getByRole("button", { name: "Add a fee" }));
+    fireEvent.change(section.getByLabelText("Fee 2"), { target: { value: "Travel to Abuja" } });
+    fireEvent.change(section.getByLabelText("Amount 2"), { target: { value: "50000" } });
+    expect(section.getByText("Total ₦650,000")).toBeTruthy();
+    fireEvent.click(section.getByRole("button", { name: "Save" }));
+    expect(api.calls.saveAgreement).toEqual([{ engagementId: row.id, scope: "Two weeks and two Sessions.", outOfScope: "Anything not listed above.", clientCommitments: "Send the records.", terms: "Our Terms apply.", feeLines: [{ label: "Business Review", amount: 600000, dueOn: null }, { label: "Travel to Abuja", amount: 50000, dueOn: null }] }]);
   });
 });

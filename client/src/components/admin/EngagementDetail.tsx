@@ -1,4 +1,6 @@
 import { STAGED_TYPES } from "@shared/engagementTypes";
+import { feeTotal, type AgreementDraft } from "@shared/agreement";
+import { formatNaira } from "@shared/businessSupport";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import PreviewAsClient from "./PreviewAsClient";
@@ -93,6 +95,7 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
         <div className="border-t border-line-soft pt-2"><PreviewAsClient engagementId={engagementId} /></div>
       </DetailSection>
       <StageAndTeam data={data} engagementId={engagementId} />
+      <AgreementAdmin engagementId={engagementId} />
       <Problem data={data} engagementId={engagementId} />
       <Sessions data={data} engagementId={engagementId} />
       {data.engagement.type === "digital_marketing" && <ContentAdmin data={data} engagementId={engagementId} />}
@@ -680,5 +683,70 @@ function CheckinCard({ checkin, weekNumber, engagementId, canManage, unit, onDon
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The agreement and fees: drafted from the service, saved, sent by the lead, accepted by the owner in their room. Once
+ * accepted it is locked; Revise reopens it and the owner accepts the new version. Payments are recorded line by line.
+ */
+function AgreementAdmin({ engagementId }: { engagementId: number }) {
+  const utils = trpc.useUtils();
+  const query = trpc.engagement.staff.agreement.useQuery({ engagementId }, { retry: false });
+  const [draft, setDraft] = useState<(AgreementDraft & { loadedFor: number }) | null>(null);
+  const done = (message: string) => ({ onSuccess: () => { void utils.engagement.staff.agreement.invalidate({ engagementId }); toast.success(message); }, onError: (error: { message: string }) => toast.error(error.message) });
+  const save = trpc.engagement.staff.saveAgreement.useMutation(done("Agreement saved."));
+  const send = trpc.engagement.staff.sendAgreement.useMutation(done("Sent to the owner. It is in their room to accept."));
+  const revise = trpc.engagement.staff.reviseAgreement.useMutation({ ...done("Reopened. Send it again when it is ready; the owner accepts the new version."), onSettled: () => setDraft(null) });
+  const paid = trpc.engagement.staff.setFeePaid.useMutation(done("Payment recorded."));
+  if (query.error) return <DetailSection title="Agreement and fees"><p role="alert" className="text-sm text-danger">{query.error.message}</p></DetailSection>;
+  const data = query.data;
+  if (!data) return <DetailSection title="Agreement and fees"><p className="text-sm text-ink-muted">Loading…</p></DetailSection>;
+  const agreement = data.agreement;
+  const locked = agreement?.status === "accepted" || agreement?.status === "sent";
+  // The form starts from what is saved, or from what the service suggests.
+  const current: AgreementDraft = draft && draft.loadedFor === (agreement?.updatedAt ? new Date(agreement.updatedAt).getTime() : 0) ? draft : agreement
+    ? { scope: agreement.scope, outOfScope: agreement.outOfScope ?? "", clientCommitments: agreement.clientCommitments ?? "", terms: agreement.terms ?? "", feeLines: data.feeLines.map(line => ({ label: line.label, amount: line.amount, dueOn: line.dueOn })) }
+    : data.suggested!;
+  const edit = (patch: Partial<AgreementDraft>) => setDraft({ ...current, ...patch, loadedFor: agreement?.updatedAt ? new Date(agreement.updatedAt).getTime() : 0 });
+  const setLine = (index: number, patch: Partial<AgreementDraft["feeLines"][number]>) => edit({ feeLines: current.feeLines.map((line, at) => (at === index ? { ...line, ...patch } : line)) });
+  const area = (key: "scope" | "outOfScope" | "clientCommitments" | "terms", label: string, rows: number) => (
+    <div className="space-y-1">
+      <label className={LABEL} htmlFor={`agreement-${key}`}>{label}</label>
+      <textarea id={`agreement-${key}`} rows={rows} className={FIELD} disabled={locked || !data.can.edit} value={current[key]} onChange={event => edit({ [key]: event.target.value })} />
+    </div>
+  );
+  return (
+    <DetailSection title="Agreement and fees">
+      <p className="text-xs text-ink-muted">{agreement ? `${agreement.statusLabel}${agreement.version ? ` · version ${agreement.version}` : ""}${agreement.status === "accepted" && agreement.acceptedName ? ` · accepted by ${agreement.acceptedName} on ${formatDate(agreement.acceptedAt)}` : ""}` : "Not drafted yet: this is what the service suggests. Change anything, then save."}</p>
+      {area("scope", "What we will do", 6)}
+      {area("outOfScope", "Not included", 2)}
+      {area("clientCommitments", "What the client does", 2)}
+      {area("terms", "Terms", 3)}
+      <div className="space-y-1">
+        <p className={LABEL}>Fees (naira)</p>
+        <ul aria-label="Fee lines" className="space-y-1">
+          {(locked ? data.feeLines.map(line => ({ label: line.label, amount: line.amount, dueOn: line.dueOn, id: line.id, paidAt: line.paidAt })) : current.feeLines.map(line => ({ ...line, id: null as number | null, paidAt: null as Date | string | null }))).map((line, index) => (
+            <li key={line.id ?? `new-${index}`} className="grid grid-cols-[minmax(0,1fr)_7rem_8.5rem_auto] items-center gap-1">
+              <input aria-label={`Fee ${index + 1}`} className={FIELD} disabled={locked} value={line.label} onChange={event => setLine(index, { label: event.target.value })} />
+              <input aria-label={`Amount ${index + 1}`} type="number" min={1} className={FIELD} disabled={locked} value={line.amount || ""} onChange={event => setLine(index, { amount: Math.round(Number(event.target.value) || 0) })} />
+              <input aria-label={`Due ${index + 1}`} type="date" className={FIELD} disabled={locked} value={line.dueOn ?? ""} onChange={event => setLine(index, { dueOn: event.target.value || null })} />
+              {locked && line.id !== null ? (
+                <label className="flex items-center gap-1 text-xs text-ink-muted"><input type="checkbox" checked={Boolean(line.paidAt)} disabled={!data.can.edit || paid.isPending} onChange={event => paid.mutate({ feeLineId: line.id!, paid: event.target.checked })} />Paid</label>
+              ) : !locked ? (
+                <button type="button" className="text-xs text-danger underline" aria-label={`Remove fee ${index + 1}`} onClick={() => edit({ feeLines: current.feeLines.filter((_, at) => at !== index) })}>Remove</button>
+              ) : <span />}
+            </li>
+          ))}
+        </ul>
+        {!locked && <button type="button" className="text-xs font-semibold text-brand underline" onClick={() => edit({ feeLines: [...current.feeLines, { label: "", amount: 0, dueOn: null }] })}>Add a fee</button>}
+        <p className="text-sm font-semibold">Total {formatNaira(locked ? data.total : feeTotal(current.feeLines))}</p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {!locked && data.can.edit && <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !current.scope.trim()} onClick={() => save.mutate({ engagementId, scope: current.scope, outOfScope: current.outOfScope, clientCommitments: current.clientCommitments, terms: current.terms, feeLines: current.feeLines.filter(line => line.label.trim() && line.amount > 0) }, { onSuccess: () => setDraft(null) })}>Save</Button>}
+        {agreement?.status === "draft" && data.can.send && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={send.isPending || draft !== null} title={draft ? "Save your changes first" : undefined} onClick={() => send.mutate({ engagementId })}>Send to the owner</Button>}
+        {locked && data.can.send && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={revise.isPending} onClick={() => revise.mutate({ engagementId })}>Revise</Button>}
+      </div>
+    </DetailSection>
   );
 }

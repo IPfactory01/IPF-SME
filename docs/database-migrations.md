@@ -128,3 +128,9 @@ Editor and press Run; it stops, changing nothing, unless exactly `0000` to `0016
 Additive. **Apply it before deploying.** Paste `drizzle/supabase/apply-0018-many-engagements-and-requests.sql` into the
 Supabase SQL Editor and press Run; it stops, changing nothing, unless exactly `0000` to `0017` are recorded.
 
+**`0019` and deployment order.** The engagement agreement: `engagement_agreements` (what we do, what is not included,
+what the client does, the terms; draft, sent or accepted, with the version and the owner's typed name) and
+`engagement_fee_lines` (each fee in naira, when it is due, when it was paid). Additive. **Apply it before deploying.**
+Paste `drizzle/supabase/apply-0019-engagement-agreements.sql` into the Supabase SQL Editor and press Run; it stops,
+changing nothing, unless exactly `0000` to `0018` are recorded.
+

@@ -63,6 +63,7 @@ import { PRODUCTS } from "../shared/products";
 import { inviteBusinessOwner } from "./accountInvitations";
 import { slugify } from "./accountAuth";
 import { recordAudit } from "./audit";
+import { clientAgreement } from "./agreements";
 import { sharedDebriefFor } from "./debriefs";
 import { getDb } from "./db";
 import { deliverEmail } from "./email";
@@ -703,7 +704,7 @@ async function requireStaffDeliverable(db: Pick<Database, "select">, actor: Staf
 }
 
 /** Approval on one engagement: review_engagements across the firm, or leading this engagement (ENGAGEMENT_REVIEW_ROLES). */
-async function canReviewEngagement(db: Pick<Database, "select">, actor: StaffActor, engagementId: number) {
+export async function canReviewEngagement(db: Pick<Database, "select">, actor: StaffActor, engagementId: number) {
   if (authorityAllows(actor.authority, "review_engagements")) return true;
   const mine = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and(eq(engagementTeam.engagementId, engagementId), eq(engagementTeam.userId, actor.id))).limit(1))[0];
   return Boolean(mine && ENGAGEMENT_REVIEW_ROLES.includes(mine.role));
@@ -918,6 +919,8 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
       recordsOpen: tasks.filter(task => task.side === "client" && task.kind === "data_request" && OPEN_TASK_STATUSES.includes(task.status)).length,
       shared: visibleDeliverables.length, accepted: visibleDeliverables.filter(item => item.clientAcceptedAt !== null).length, closed: engagement.stage === "closed",
     }) : null,
+    /** The agreement and fees, once sent: for the owner and full-access staff only (null otherwise). */
+    agreement: await clientAgreement(db, engagement.id, viewer),
     /** Every engagement of the business, newest first, to move between them. */
     projects: projects.map(row => ({ id: row.id, title: engagementTitle(row.type, row.service), stageLabel: engagementStageLabel(row, now), closed: row.stage === "closed", current: row.id === engagement.id })),
     /** "Fix the next problem": what the business has asked for that the desk has not handled yet. */

@@ -13,7 +13,7 @@ import { WIDE_QUERY } from "@/hooks/useWide";
 import { businessCheckProfiles } from "../../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../../fixtures/reportIntake";
 
-const api = vi.hoisted(() => ({ calls: { respond: [] as unknown[], comment: [] as unknown[], accept: [] as unknown[], audience: [] as unknown[], requestUpload: [] as unknown[], confirmUpload: [] as unknown[], fileLink: [] as unknown[], requestDrop: [] as unknown[], confirmDrop: [] as unknown[], setNotAvailable: [] as unknown[], respondToContent: [] as unknown[], requestService: [] as unknown[] } }));
+const api = vi.hoisted(() => ({ calls: { respond: [] as unknown[], comment: [] as unknown[], accept: [] as unknown[], audience: [] as unknown[], requestUpload: [] as unknown[], confirmUpload: [] as unknown[], fileLink: [] as unknown[], requestDrop: [] as unknown[], confirmDrop: [] as unknown[], setNotAvailable: [] as unknown[], respondToContent: [] as unknown[], requestService: [] as unknown[], acceptAgreement: [] as unknown[] } }));
 const replies: Record<string, unknown> = {
   requestUpload: { storageKey: "engagements/4/tasks/11/abc-sales.pdf", uploadUrl: "https://example-project.supabase.co/storage/v1/object/upload/sign/engagement-files/engagements/4/tasks/11/abc-sales.pdf?token=up", headers: { "content-type": "application/pdf", "x-upsert": "false" } },
   confirmUpload: { success: true, fileId: 99, status: "received" },
@@ -46,6 +46,7 @@ vi.mock("@/lib/trpc", () => ({
         setNotAvailable: { useMutation: mutation("setNotAvailable") },
         respondToContent: { useMutation: mutation("respondToContent") },
         requestService: { useMutation: mutation("requestService") },
+        acceptAgreement: { useMutation: mutation("acceptAgreement") },
       },
     },
   },
@@ -62,6 +63,7 @@ const room = (over: Record<string, unknown> = {}) => ({
   serviceStep: null as number | null,
   projects: [{ id: 4, title: "Business Review", stageLabel: "Business Review", closed: false, current: true }] as { id: number; title: string; stageLabel: string; closed: boolean; current: boolean }[],
   requests: [] as { id: number; service: string; serviceName: string; createdAt: Date }[],
+  agreement: null as null | { status: "sent" | "accepted" | "revising"; version: number; scope: string; outOfScope: string | null; clientCommitments: string | null; terms: string | null; sentAt: Date | null; acceptedAt: Date | null; acceptedName: string | null; feeLines: { id: number; label: string; amount: number; dueOn: string | null; paid: boolean }[]; total: number; canAccept: boolean },
   type: "business_review" as "business_review" | "digital_marketing",
   typeLabel: "Business Review",
   startedOn: null as string | null,
@@ -103,7 +105,7 @@ const room = (over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
-  api.calls = { respond: [], comment: [], accept: [], audience: [], requestUpload: [], confirmUpload: [], fileLink: [], requestDrop: [], confirmDrop: [], setNotAvailable: [], respondToContent: [], requestService: [] };
+  api.calls = { respond: [], comment: [], accept: [], audience: [], requestUpload: [], confirmUpload: [], fileLink: [], requestDrop: [], confirmDrop: [], setNotAvailable: [], respondToContent: [], requestService: [], acceptAgreement: [] };
 });
 afterEach(() => {
   cleanup();
@@ -796,5 +798,40 @@ describe("Fix the next problem", () => {
   it("shows what the client has already asked for", () => {
     render(<EngagementRoom room={room({ requests: [{ id: 1, service: "pitch_deck", serviceName: "Pitch Deck", createdAt: new Date("2026-11-06T10:00:00Z") }] })} />);
     expect(within(screen.getByRole("list", { name: "Your requests" })).getByText("Pitch Deck")).toBeTruthy();
+  });
+});
+
+describe("the agreement and fees", () => {
+  const sent = { status: "sent" as const, version: 1, scope: "Two weeks and two Sessions.", outOfScope: "Anything not listed above.", clientCommitments: "Send the records.", terms: "Our Terms apply.", sentAt: new Date("2026-11-06T10:00:00Z"), acceptedAt: null, acceptedName: null, feeLines: [{ id: 1, label: "To start", amount: 300000, dueOn: "2026-11-10", paid: true }, { id: 2, label: "With the Findings", amount: 300000, dueOn: null, paid: false }], total: 600000, canAccept: true };
+
+  it("puts the agreement first in Next action, and the owner accepts it with their name once they tick that they read it", () => {
+    render(<EngagementRoom room={room({ agreement: sent })} />);
+    const next = within(screen.getByRole("region", { name: /Next action/ }));
+    expect(next.getByText("Read and accept your agreement")).toBeTruthy();
+    expect(next.getByRole("link", { name: /Open the agreement/ }).getAttribute("href")).toBe("#agreement");
+    fireEvent.click(screen.getByRole("tab", { name: /^Agreement/ }));
+    const fees = within(screen.getByRole("region", { name: "Fees" }));
+    expect(fees.getAllByText("₦300,000")).toHaveLength(2);
+    expect(fees.getByText("₦600,000")).toBeTruthy();
+    expect(fees.getByText("Paid")).toBeTruthy();
+    expect(within(screen.getByRole("article", { name: "Agreement" })).getByText("Two weeks and two Sessions.")).toBeTruthy();
+    const form = within(screen.getByRole("form", { name: "Accept the agreement" }));
+    fireEvent.change(form.getByLabelText("Type your full name to accept"), { target: { value: "Ada Okafor" } });
+    expect(form.getByRole("button", { name: "Accept the agreement" }).hasAttribute("disabled")).toBe(true);
+    fireEvent.click(form.getByRole("checkbox"));
+    fireEvent.click(form.getByRole("button", { name: "Accept the agreement" }));
+    expect(api.calls.acceptAgreement).toEqual([{ engagementId: 4, name: "Ada Okafor" }]);
+  });
+
+  it("shows who accepted it and when, with no form", () => {
+    render(<EngagementRoom room={room({ agreement: { ...sent, status: "accepted", acceptedName: "Ada Okafor", acceptedAt: new Date("2026-11-07T10:00:00Z"), canAccept: false } })} />);
+    fireEvent.click(screen.getByRole("tab", { name: /^Agreement/ }));
+    expect(screen.getByText(/Accepted by Ada Okafor/)).toBeTruthy();
+    expect(screen.queryByRole("form", { name: "Accept the agreement" })).toBeNull();
+  });
+
+  it("has no Agreement tab before one is sent", () => {
+    render(<EngagementRoom room={room()} />);
+    expect(screen.queryByRole("tab", { name: /^Agreement/ })).toBeNull();
   });
 });

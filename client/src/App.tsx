@@ -24,9 +24,7 @@ import Home from "./pages/Home";
  */
 const Admin = lazy(() => import("./pages/Admin"));
 const AdminLoginPage = lazy(() => import("./pages/AdminLoginPage"));
-const AdminLegacyLoginPage = lazy(() => import("./pages/AdminLegacyLoginPage"));
 const AdminPasswordResetPage = lazy(() => import("./pages/AdminPasswordResetPage"));
-const AdminInvitationPage = lazy(() => import("./pages/AdminInvitationPage"));
 const OnboardingPage = lazy(() => import("./pages/OnboardingPage"));
 const JoinPage = lazy(() => import("./pages/JoinPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
@@ -37,9 +35,6 @@ const LoginPage = lazy(() => import("./pages/LoginPage"));
 const AccountDashboard = lazy(() => import("./pages/AccountDashboard"));
 const AccountSettingsPage = lazy(() => import("./pages/AccountSettingsPage"));
 const BusinessSettingsPage = lazy(() => import("./pages/BusinessSettingsPage"));
-const Schedule = lazy(() => import("./pages/Schedule"));
-const ParticipantDashboard = lazy(() => import("./pages/ParticipantDashboard"));
-const ParticipantPasswordPage = lazy(() => import("./pages/ParticipantPasswordPage"));
 
 /** What shows for the moment a page's code is loading: the page background, nothing that jumps. */
 function PageLoading() {
@@ -76,14 +71,9 @@ function Router() {
       <Route path="/dashboard" component={AccountDashboard} />
       <Route path="/settings/business" component={BusinessSettingsPage} />
       <Route path="/settings/account" component={AccountSettingsPage} />
-      <Route path="/admin/login/legacy" component={AdminLegacyLoginPage} />
       <Route path="/admin/login" component={AdminLoginPage} />
       <Route path="/admin/reset" component={AdminPasswordResetPage} />
-      <Route path="/admin/invite" component={AdminInvitationPage} />
       <Route path="/admin" component={Admin} />
-      <Route path="/schedule" component={Schedule} />
-      <Route path="/portal/password" component={ParticipantPasswordPage} />
-      <Route path="/portal" component={ParticipantDashboard} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

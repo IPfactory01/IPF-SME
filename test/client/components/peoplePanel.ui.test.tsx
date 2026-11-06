@@ -43,6 +43,9 @@ const kemi = { id: 3, name: "Kemi Contractor", email: "kemi@example.test", statu
 const owner = { id: 4, name: "Owner Person", email: "owner@example.test", status: "active", lastSignedIn: new Date("2026-11-20T10:00:00Z"), roles: ["super_admin"], businesses: 0, superAdmin: true, twoStep: true, accessEndsAt: null };
 const rowOf = (name: string) => within(screen.getByText(name).closest("tr")!);
 
+/** Team and Clients each render their own list; most checks here read both, as the two tabs together. */
+const Both = () => <><PeoplePanel scope="team" /><PeoplePanel scope="clients" /></>;
+
 describe("the People panel", () => {
   beforeEach(() => {
     api.people = [ada, lewis];
@@ -52,8 +55,8 @@ describe("the People panel", () => {
   afterEach(cleanup);
 
   it("lists everyone with a password account, their roles, status and last sign-in", () => {
-    render(<PeoplePanel />);
-    expect(screen.getByRole("heading", { name: "People" })).toBeTruthy();
+    render(<Both />);
+    expect(screen.getByRole("heading", { name: "IP Factory team" })).toBeTruthy();
     expect(rowOf("Ada Okafor").getByText("ada@example.test")).toBeTruthy();
     expect(rowOf("Ada Okafor").getByText("Client")).toBeTruthy();
     expect(rowOf("Ada Okafor").getByText("Active")).toBeTruthy();
@@ -62,8 +65,19 @@ describe("the People panel", () => {
     expect(rowOf("Lewis Desk").getByRole("button", { name: "Reinstate" })).toBeTruthy();
   });
 
+  it("puts the IP Factory team under Team and client accounts under Clients, each person once", () => {
+    const team = render(<PeoplePanel scope="team" />);
+    expect(team.queryByRole("region", { name: "Clients" })).toBeNull();
+    expect(team.getByRole("heading", { level: 2 }).textContent).toBe("IP Factory team");
+    team.unmount();
+    const clients = render(<PeoplePanel scope="clients" />);
+    expect(clients.queryByRole("region", { name: "IP Factory team" })).toBeNull();
+    expect(clients.getByRole("heading", { level: 2 }).textContent).toBe("Client accounts");
+    clients.unmount();
+  });
+
   it("keeps the IP Factory team and clients in separate tables", () => {
-    render(<PeoplePanel />);
+    render(<Both />);
     expect(within(screen.getByRole("region", { name: "IP Factory team" })).getByText("Lewis Desk")).toBeTruthy();
     expect(within(screen.getByRole("region", { name: "IP Factory team" })).queryByText("Ada Okafor")).toBeNull();
     expect(within(screen.getByRole("region", { name: "Clients" })).getByText("Ada Okafor")).toBeTruthy();
@@ -72,7 +86,7 @@ describe("the People panel", () => {
   it("keeps a staff member whose access was removed under the IP Factory team, without a level, ready to be given one", () => {
     const removed = { id: 5, name: "Lewis Reinstated", email: "lewis.r@example.test", status: "active", lastSignedIn: null, roles: [], businesses: 0, superAdmin: false, twoStep: false, accessEndsAt: null, jobTitle: "Senior Associate" };
     api.people = [ada, removed];
-    render(<PeoplePanel />);
+    render(<Both />);
     const team = within(screen.getByRole("region", { name: "IP Factory team" }));
     expect(team.getByText("Lewis Reinstated")).toBeTruthy();
     expect(within(screen.getByRole("region", { name: "Clients" })).queryByText("Lewis Reinstated")).toBeNull();
@@ -82,7 +96,7 @@ describe("the People panel", () => {
   });
 
   it("sets a staff member's level, which sets their access, and asks a Specialist's end date first", () => {
-    render(<PeoplePanel />);
+    render(<Both />);
     const row = rowOf("Lewis Desk");
     fireEvent.change(row.getByLabelText("Level of Lewis Desk"), { target: { value: "Senior Associate" } });
     expect(api.calls.setLevel).toEqual([{ userId: 2, level: "Senior Associate", expiresOn: null }]);
@@ -94,7 +108,7 @@ describe("the People panel", () => {
   });
 
   it("issues a reset link and shows it once, saying to send it by hand when no email went out", () => {
-    render(<PeoplePanel />);
+    render(<Both />);
     fireEvent.click(rowOf("Ada Okafor").getByRole("button", { name: "Reset link" }));
     expect(api.calls.issue).toEqual([{ userId: 1 }]);
     const status = screen.getByRole("status");
@@ -106,7 +120,7 @@ describe("the People panel", () => {
   });
 
   it("asks for a reason before suspending, records it, and reinstates with one click", () => {
-    render(<PeoplePanel />);
+    render(<Both />);
     fireEvent.click(rowOf("Ada Okafor").getByRole("button", { name: "Suspend" }));
     const form = within(screen.getByRole("form", { name: "Suspend account" }));
     expect(form.getByText("Suspend Ada Okafor?")).toBeTruthy();
@@ -122,7 +136,7 @@ describe("the People panel", () => {
 
   it("shows two-step status and when access ends, and flags staff who have not set up two-step", () => {
     api.people = [lewis, kemi];
-    render(<PeoplePanel />);
+    render(<Both />);
     expect(rowOf("Lewis Desk").getByText("On")).toBeTruthy();
     expect(rowOf("Kemi Contractor").getByText("Not set up")).toBeTruthy();
     expect(rowOf("Kemi Contractor").getByText(/2027/)).toBeTruthy();
@@ -130,7 +144,7 @@ describe("the People panel", () => {
 
   it("removes access only with a reason, and never offers it for a Super Admin", () => {
     api.people = [kemi, owner];
-    render(<PeoplePanel />);
+    render(<Both />);
     expect(rowOf("Owner Person").queryByRole("button", { name: "Remove access" })).toBeNull();
     fireEvent.click(rowOf("Kemi Contractor").getByRole("button", { name: "Remove access" }));
     const form = within(screen.getByRole("form", { name: "Remove access" }));
@@ -145,14 +159,14 @@ describe("the People panel", () => {
 
   it("offers a level only for staff, never for a client, and shows what the level gives", () => {
     api.people = [ada, { ...lewis, jobTitle: "Senior Associate" }];
-    render(<PeoplePanel />);
+    render(<Both />);
     expect(rowOf("Ada Okafor").queryByRole("combobox")).toBeNull();
     expect((rowOf("Lewis Desk").getByLabelText("Level of Lewis Desk") as HTMLSelectElement).value).toBe("Senior Associate");
     expect(rowOf("Lewis Desk").getByText("Every engagement; assigns people and approves")).toBeTruthy();
   });
 
   it("resets two-step sign-in for a lost phone", () => {
-    render(<PeoplePanel />);
+    render(<Both />);
     expect(rowOf("Ada Okafor").queryByRole("button", { name: "Reset two-step" })).toBeNull();
     fireEvent.click(rowOf("Lewis Desk").getByRole("button", { name: "Reset two-step" }));
     expect(api.calls.resetTwoStep).toEqual([{ userId: 2 }]);
@@ -160,7 +174,7 @@ describe("the People panel", () => {
 
   it("shows nothing to someone the server refuses", () => {
     api.error = { message: "Your IPF administrator role does not include this responsibility." };
-    const { container } = render(<PeoplePanel />);
+    const { container } = render(<Both />);
     expect(container.textContent).toBe("");
   });
 });

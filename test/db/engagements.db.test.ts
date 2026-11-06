@@ -281,6 +281,29 @@ for (const target of targets) {
       });
     });
 
+    describe("Finance: money across every client", () => {
+      it("lists payment requests and agreement fees, counts a fee as owed only once its agreement is accepted, and is for finance only", async () => {
+        const { owner, engagementId } = await client("finance");
+        const desk = await superAdmin.call();
+        await desk.engagement.staff.saveAgreement({ engagementId, scope: "Two weeks.", outOfScope: "", clientCommitments: "", terms: "", feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-01-05" }, { label: "With the Findings", amount: 300000, dueOn: null }] });
+        let finance = await desk.engagement.finance.list();
+        // The Business Review was paid through a payment request when the client was set up.
+        expect(finance.requests.some(row => row.title === "Business Review" && row.paid)).toBe(true);
+        expect(finance.fees.filter(row => row.engagementId === engagementId).map(row => [row.label, row.agreed, row.late])).toEqual([["To start", false, false], ["With the Findings", false, false]]);
+        await desk.engagement.staff.sendAgreement({ engagementId });
+        await (await owner.call()).engagement.client.acceptAgreement({ engagementId, name: "Ada Okafor" });
+        finance = await desk.engagement.finance.list();
+        const mine = finance.fees.filter(row => row.engagementId === engagementId);
+        expect(mine.map(row => [row.label, row.agreed, row.late, row.engagement])).toEqual([["To start", true, true, "Business Review"], ["With the Findings", true, false, "Business Review"]]);
+        expect(finance.totals.late).toBeGreaterThanOrEqual(300000);
+        // Finance may see it; an analyst or a desk lead without view_financials may not.
+        const financeUser = await signIn(await person(["finance"]), true);
+        expect((await (await financeUser.call()).engagement.finance.list()).fees.some(row => row.engagementId === engagementId)).toBe(true);
+        const deskLead = await signIn(await person(["desk_lead"]), true);
+        await expect((await deskLead.call()).engagement.finance.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
+      });
+    });
+
     describe("one client, many projects, and the next problem", () => {
       it("adds a Pitch Deck for an existing client: no new invitation, its Data Request from the service, both projects in the room", async () => {
         const { owner, engagementId: review, businessId } = await client("two-projects");

@@ -277,7 +277,6 @@ for (const target of targets) {
         const view = (await owner.session.call().account.me())!;
         expect(view.platformRoles).toEqual([]);
         expect(view.permissions).toEqual([]);
-        await expect(owner.session.call().scheduling.adminList({})).rejects.toMatchObject({ code: "FORBIDDEN" });
         await expect(owner.session.call().platformRoles.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
         await expect(owner.session.call().onboarding.candidates()).rejects.toMatchObject({ code: "FORBIDDEN" });
         expect((await loadAuthority(db, { ...owner.user, status: "active", role: "user" } as never)).roles).toEqual([]);
@@ -401,14 +400,6 @@ for (const target of targets) {
         // The permanent (owner-email) Super Admin can never be removed through roles.
         await db.insert(schema.userPlatformRoles).values({ userId: superAdminUser.id, role: "super_admin" });
         await expect(superAdmin.call().platformRoles.revoke({ userId: superAdminUser.id, role: "super_admin" })).rejects.toMatchObject({ code: "CONFLICT", message: "The permanent Super Admin cannot be removed." });
-      });
-
-      it("will not demote the permanent Super Admin through the legacy role switch", async () => {
-        await expect(superAdmin.call().registration.setUserRole({ userId: String(superAdminUser.id), role: "user" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-        expect((await db.select().from(schema.users).where(eq(schema.users.id, superAdminUser.id)))[0].role).toBe("admin");
-        const other = await makeUser();
-        await superAdmin.call().registration.setUserRole({ userId: String(other.id), role: "admin" });
-        await superAdmin.call().registration.setUserRole({ userId: String(other.id), role: "user" });
       });
 
       it("rejects duplicate and unknown platform role assignments in the database", async () => {

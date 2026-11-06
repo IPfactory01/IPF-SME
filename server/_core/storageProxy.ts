@@ -1,18 +1,11 @@
 import type { Express, Request, Response } from "express";
 import { ENV } from "./env";
-import { getAuthenticatedParticipant } from "../participantAuth";
 import { hasVerifiedAdminAccess } from "../adminSecurity";
 import { sdk } from "./sdk";
-import { isPrivateParticipantStorageKey, normalizeStorageProxyKey, participantCanReadPrivateStorageKey } from "../security";
+import { isPrivateParticipantStorageKey, normalizeStorageProxyKey } from "../security";
 
-async function canReadPrivateParticipantFile(key: string, req: Request, res: Response) {
-  try {
-    const participant = await getAuthenticatedParticipant({ req, res, user: null });
-    if (participantCanReadPrivateStorageKey(key, participant.id)) return true;
-  } catch {
-    // A request may instead carry an authenticated administrator session.
-  }
-
+/** A former JUMP participant's private file: with the programme removed, only a verified administrator may read one. */
+async function canReadPrivateParticipantFile(req: Request) {
   try {
     const user = await sdk.authenticateRequest(req);
     return user.role === "admin" && await hasVerifiedAdminAccess(req, user.id);
@@ -32,7 +25,7 @@ export function registerStorageProxy(app: Express) {
     }
 
     if (isPrivateParticipantStorageKey(key)) {
-      const authorised = await canReadPrivateParticipantFile(key, req, res);
+      const authorised = await canReadPrivateParticipantFile(req);
       if (!authorised) {
         res.status(403).send("Private participant file access is not authorised");
         return;

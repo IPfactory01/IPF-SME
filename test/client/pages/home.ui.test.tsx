@@ -53,11 +53,10 @@ describe("home page sign-in", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("still opens the JUMP participant sign-in for participants sent from their portal", () => {
+  it("opens no participant sign-in, even from an old portal link: JUMP is gone", () => {
     renderHome("/?participant_signin=1");
-    const dialog = screen.getByRole("dialog");
-    expect(dialog.textContent).toContain("JUMP participant sign in");
-    expect(dialog.querySelector('a[href="/login"]')).toBeTruthy();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.body.textContent).not.toMatch(/JUMP|participant/i);
   });
 });
 

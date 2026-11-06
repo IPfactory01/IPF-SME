@@ -302,10 +302,10 @@ describe("no public registration", () => {
     expect(screen.getByRole("status").textContent).toMatch(/^If an account uses that email/);
   });
 
-  it("points programme participants to their own portal, without naming another programme to clients", () => {
+  it("has no participant portal link: JUMP is gone", () => {
     renderAt("/login", <LoginPage />);
-    expect(screen.getByRole("link", { name: "Go to the participant portal" }).getAttribute("href")).toBe("/portal");
-    expect(document.body.textContent).not.toMatch(/JUMP/);
+    expect(screen.queryByRole("link", { name: "Go to the participant portal" })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/JUMP|participant/i);
   });
 
   it("is not a dead end: the brand and a way back to the site, the free check and the services for visitors who are not clients", () => {

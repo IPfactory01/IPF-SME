@@ -23,7 +23,7 @@ const mutation = (name: string, reply?: () => unknown) => (options?: { onSuccess
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    useUtils: () => ({ account: { me: { setData: () => undefined } }, invitations: { seats: { list: { invalidate: () => undefined } }, staff: { list: { invalidate: () => undefined }, team: { invalidate: () => undefined } } } }),
+    useUtils: () => ({ people: { list: { invalidate: () => undefined } }, account: { me: { setData: () => undefined } }, invitations: { seats: { list: { invalidate: () => undefined } }, staff: { list: { invalidate: () => undefined }, team: { invalidate: () => undefined } } } }),
     account: { me: { useQuery: () => ({ data: api.me, isLoading: false, refetch: () => undefined }) }, signOut: { useMutation: mutation("signOut") } },
     platformRoles: { setLevel: { useMutation: mutation("setLevel") } },
     invitations: {
@@ -131,11 +131,10 @@ describe("the owner's team card", () => {
 });
 
 describe("the staff panel", () => {
-  it("lists staff by level, invites by level and shows the link once when email is not set up", () => {
+  it("invites by level and shows the link once when email is not set up; the team itself is listed once, under Team", () => {
     api.team = [{ userId: 2, name: "Lewis Osako", email: "lewis@example.com", status: "active", level: null, roles: ["super_admin", "desk_lead"], accessEndsAt: null, lapsed: [] }];
     api.staffInvitations = [{ id: 9, email: "pending@example.com", fullName: "Pending Person", role: "analyst", status: "pending", expiresAt: new Date("2026-10-16T12:00:00Z"), deliveryStatus: "Simulated", createdAt: new Date() }];
     render(<StaffPanel />);
-    expect(screen.getByText("Lewis Osako").closest("tr")!.textContent).toContain("Super Admin");
     expect(within(screen.getByRole("list", { name: "Staff invitations" })).getByText(/Pending Person/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Ola Analyst" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "ola@example.com" } });
@@ -147,32 +146,11 @@ describe("the staff panel", () => {
     expect(api.calls.staffRevoke).toEqual([{ invitationId: 9 }]);
   });
 
-  it("shows each person's level, never the system role behind it, and sets a missing level in place", () => {
-    api.calls = {};
-    api.team = [
-      { userId: 4, name: "Lewis Osako", email: "lewis@example.com", status: "active", level: null, roles: ["desk_lead"], accessEndsAt: null, lapsed: [] },
-      { userId: 5, name: "Richard Kehinde", email: "richard@example.com", status: "active", level: "Business Analyst", roles: ["analyst"], accessEndsAt: null, lapsed: [] },
-    ];
-    api.staffInvitations = [];
-    render(<StaffPanel />);
-    expect(screen.getByRole("columnheader", { name: "Level" })).toBeTruthy();
-    expect(screen.queryByRole("columnheader", { name: "Roles" })).toBeNull();
-    const lewis = screen.getByText("Lewis Osako").closest("tr")!;
-    expect(lewis.textContent).not.toMatch(/Desk Lead/);
-    expect(lewis.textContent).toContain("Level not set yet: choose one");
-    expect((within(screen.getByText("Richard Kehinde").closest("tr")!).getByLabelText("Level of Richard Kehinde") as HTMLSelectElement).value).toBe("Business Analyst");
-    fireEvent.change(within(lewis).getByLabelText("Level of Lewis Osako"), { target: { value: "Senior Associate" } });
-    expect(api.calls.setLevel).toEqual([{ userId: 4, level: "Senior Associate", expiresOn: null }]);
-  });
-
-  it("needs an end date to invite a specialist, and shows when each person's access ends", () => {
+  it("needs an end date to invite a specialist", () => {
     api.calls = {};
     api.team = [{ userId: 3, name: "Kemi Contractor", email: "kemi@example.com", status: "active", level: "Specialist", roles: ["subject_matter_expert"], accessEndsAt: new Date("2027-03-09T22:59:59Z"), lapsed: ["analyst"] }];
     api.staffInvitations = [];
     render(<StaffPanel />);
-    const row = screen.getByText("Kemi Contractor").closest("tr")!;
-    expect(row.textContent).toContain("2027");
-    expect(row.textContent).toContain("Ended: Analyst");
     fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Tunde Editor" } });
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "tunde@example.com" } });
     fireEvent.change(screen.getByLabelText("Level"), { target: { value: "Specialist" } });

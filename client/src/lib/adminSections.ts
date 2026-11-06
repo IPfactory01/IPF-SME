@@ -18,25 +18,35 @@ export function adminCan(access: AdminAccessView | undefined, permission: string
   return access.permissions.includes(permission) || (access.platformPermissions ?? []).includes(permission);
 }
 
+/**
+ * Five sections, one job each, in the order work flows (ET, 6 November 2026): prospects, delivery, clients, money, our
+ * own people. Nothing appears in two of them.
+ */
 export const ADMIN_SECTIONS = [
-  { id: "checks", label: "Business Health Checks" },
-  { id: "calls", label: "Discovery Calls" },
-  { id: "onboarding", label: "Client Onboarding" },
+  { id: "pipeline", label: "Pipeline" },
   { id: "engagements", label: "Engagements" },
   { id: "clients", label: "Clients" },
-  { id: "team", label: "Admin Team" },
-  { id: "jump", label: "JUMP Programme (Legacy)" },
+  { id: "finance", label: "Finance" },
+  { id: "team", label: "Team" },
 ] as const;
 export type AdminSectionId = (typeof ADMIN_SECTIONS)[number]["id"];
 
+/** The stages inside Pipeline: the Business Health Check, the Discovery Call, then onboarding the client. */
+export const PIPELINE_STAGES = [
+  { id: "checks", label: "Business Health Checks" },
+  { id: "calls", label: "Discovery Calls" },
+  { id: "onboarding", label: "Client Onboarding" },
+] as const;
+export type PipelineStage = (typeof PIPELINE_STAGES)[number]["id"];
+/** Where a record's "next step" button can send the person: a section, or a stage of Pipeline. */
+export type ConsoleTarget = AdminSectionId | PipelineStage;
+
 const REQUIRED: Record<AdminSectionId, (access: AdminAccessView) => boolean> = {
-  checks: access => adminCan(access, "manage_client_onboarding"),
-  calls: access => adminCan(access, "manage_client_onboarding"),
-  onboarding: access => adminCan(access, "manage_client_onboarding"),
+  pipeline: access => adminCan(access, "manage_client_onboarding"),
   engagements: access => adminCan(access, "view_all_businesses") || adminCan(access, "view_assigned_businesses"),
   clients: access => adminCan(access, "view_all_businesses"),
+  finance: access => adminCan(access, "view_financials"),
   team: access => access.isSuperAdmin === true || access.isOwner === true,
-  jump: access => adminCan(access, "view_participants"),
 };
 
 /** The sections this person can use, in display order. The first is where the console opens. */

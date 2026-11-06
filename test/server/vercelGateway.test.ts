@@ -164,9 +164,8 @@ describe("createApp and the Vercel gateway", () => {
     const gateway = createVercelGateway(createApp());
     const health = await request(gateway, "/api/index?__prefix=api&__path=health");
     expect(JSON.parse(health.body)).toEqual({ ok: true, service: "ipfactory-sme", build: null, database: { ok: true } });
-    const portal = await request(gateway, "/api/index?__prefix=portal&__path=authenticate");
-    expect(portal.status).toBe(302);
-    expect(portal.location).toBe("/?participant_signin=1");
+    // The JUMP portal's sign-in redirect is gone with JUMP (6 November 2026).
+    expect((await request(gateway, "/api/index?__prefix=portal&__path=authenticate")).status).toBe(404);
     expect((await request(gateway, "/api/index?__prefix=nope&__path=x")).status).toBe(404);
   });
 });

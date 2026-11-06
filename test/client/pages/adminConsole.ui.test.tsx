@@ -39,6 +39,7 @@ vi.mock("@/lib/trpc", () => ({
     useUtils: () => ({
       businessSupport: { discoveryCalls: hoisted.invalidate, checks: hoisted.invalidate, checkDetail: hoisted.invalidate, debrief: hoisted.invalidate },
       onboarding: { candidates: hoisted.invalidate, invitations: hoisted.invalidate, metrics: hoisted.invalidate },
+      people: { list: hoisted.invalidate },
     }),
     businessCheck: { prices: { useQuery: () => ({ data: { fullReport: 100_000, currentState: 500_000 } }) } },
     businessSupport: {
@@ -59,6 +60,7 @@ vi.mock("@/lib/trpc", () => ({
       resendReportLink: { useMutation: hoisted.mutation("resendReportLink", () => ({ success: true, deliveryStatus: "Simulated" })) },
       resendPaymentConfirmation: { useMutation: hoisted.mutation("resendConfirmation", () => ({ success: true, deliveryStatus: "Simulated" })) },
     },
+    people: { list: { useQuery: () => ({ data: [], error: null }) }, issuePasswordReset: { useMutation: () => ({ isPending: false, mutate: () => undefined }) }, setStatus: { useMutation: () => ({ isPending: false, mutate: () => undefined }) }, removeAccess: { useMutation: () => ({ isPending: false, mutate: () => undefined }) }, resetTwoStep: { useMutation: () => ({ isPending: false, mutate: () => undefined }) } },
     onboarding: {
       candidates: { useQuery: hoisted.query("candidates") },
       invitations: { useQuery: hoisted.query("invitations") },
@@ -72,7 +74,7 @@ vi.mock("@/lib/trpc", () => ({
 import BusinessSupportConsole from "@/components/admin/BusinessSupportConsole";
 
 const SUPER = {
-  isSuperAdmin: true, isOwner: true, permissions: ["manage_client_onboarding", "view_participants"], platformPermissions: ["manage_client_onboarding", "view_all_businesses"],
+  isSuperAdmin: true, isOwner: true, permissions: ["manage_client_onboarding"], platformPermissions: ["manage_client_onboarding", "view_all_businesses"],
   email: "owner@example.test", name: "Emmanuel Tarfa", platformRoles: ["super_admin", "admin"],
 };
 const check = (over: Record<string, unknown> = {}) => ({
@@ -102,7 +104,7 @@ const detailFor = (over: Record<string, unknown> = {}) => ({
 });
 const renderConsole = (access: Record<string, unknown> = SUPER, onSection?: (id: string) => void) => {
   void onSection;
-  return render(<BusinessSupportConsole access={access as never} team={<div>TEAM PANEL</div>} jump={<div>JUMP REGISTRATION DESK</div>} />);
+  return render(<BusinessSupportConsole access={access as never} />);
 };
 const tabs = () => within(screen.getByRole("navigation", { name: "Admin sections" })).getAllByRole("button").map(button => button.textContent);
 const headers = () => screen.getAllByRole("columnheader").map(header => header.textContent);
@@ -126,65 +128,52 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("which sections each person sees (decided from what the server resolved)", () => {
-  it("shows the Super Admin every section, in funnel order, opening on Business Health Checks", () => {
-    expect(visibleAdminSections(SUPER).map(section => section.id)).toEqual(["checks", "calls", "onboarding", "engagements", "clients", "team", "jump"]);
+  it("shows the Super Admin five sections, one job each, in the order work flows, opening on the Pipeline's Business Health Checks", () => {
+    expect(visibleAdminSections(SUPER).map(section => section.id)).toEqual(["pipeline", "engagements", "clients", "finance", "team"]);
     renderConsole();
-    expect(tabs()).toEqual(["Business Health Checks", "Discovery Calls", "Client Onboarding", "Engagements", "Clients", "Admin Team", "JUMP Programme (Legacy)"]);
-    expect(screen.getByRole("button", { name: "Business Health Checks" }).getAttribute("aria-current")).toBe("page");
-    expect(screen.getByRole("heading", { name: "Business Health Checks" })).toBeTruthy();
-    expect(screen.queryByText("JUMP REGISTRATION DESK")).toBeNull();
+    expect(tabs()).toEqual(["Pipeline", "Engagements", "Clients", "Finance", "Team"]);
+    expect(screen.getByRole("button", { name: "Pipeline" }).getAttribute("aria-current")).toBe("page");
+    expect(within(screen.getByRole("group", { name: "Pipeline stage" })).getAllByRole("button").map(button => button.textContent)).toEqual(["Business Health Checks", "Discovery Calls", "Client Onboarding"]);
+    expect(screen.getByRole("button", { name: "Business Health Checks" }).getAttribute("aria-pressed")).toBe("true");
+    // JUMP is gone (6 November 2026), and nothing about it remains in the console.
+    expect(document.body.textContent).not.toMatch(/JUMP|participant/i);
   });
 
-  it("keeps the JUMP desk, unmixed, in its own legacy section", () => {
-    renderConsole();
-    expect(screen.queryByText("JUMP REGISTRATION DESK")).toBeNull();
-    openSection("JUMP Programme (Legacy)");
-    expect(screen.getByText("JUMP REGISTRATION DESK")).toBeTruthy();
-    expect(screen.queryByText("Ada Okafor")).toBeNull();
-  });
-
-  it("keeps Client Onboarding reachable for the Super Admin, from the server's answer alone", () => {
+  it("keeps Client Onboarding reachable for the Super Admin, as a stage of the Pipeline", () => {
     renderConsole();
     openSection("Client Onboarding");
-    expect(screen.getByRole("heading", { name: "Client Onboarding" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Client Onboarding" }).getAttribute("aria-pressed")).toBe("true");
     expect(adminCan({ isSuperAdmin: true, permissions: [] }, "manage_client_onboarding")).toBe(true);
-    expect(visibleAdminSections({ isSuperAdmin: true, permissions: [] }).map(section => section.id)).toContain("onboarding");
+    expect(visibleAdminSections({ isSuperAdmin: true, permissions: [] }).map(section => section.id)).toContain("pipeline");
   });
 
   it("shows an administrator only what they were granted", () => {
     const onboarding = { permissions: ["manage_client_onboarding"], platformPermissions: ["manage_client_onboarding"] };
-    expect(visibleAdminSections(onboarding).map(section => section.id)).toEqual(["checks", "calls", "onboarding"]);
+    expect(visibleAdminSections(onboarding).map(section => section.id)).toEqual(["pipeline"]);
     expect(visibleAdminSections({ permissions: [], platformPermissions: ["view_all_businesses"] }).map(section => section.id)).toEqual(["engagements", "clients"]);
-    // An analyst sees the engagements they are on, and nothing of the funnel or the client list.
+    // An analyst sees the engagements they are on, and nothing of the funnel, the client list or the money.
     expect(visibleAdminSections({ permissions: [], platformPermissions: ["view_assigned_businesses", "manage_engagements"] }).map(section => section.id)).toEqual(["engagements"]);
-    expect(visibleAdminSections({ permissions: ["view_participants"] }).map(section => section.id)).toEqual(["jump"]);
+    // Finance sees the money, and nothing else.
+    expect(visibleAdminSections({ permissions: [], platformPermissions: ["manage_payments", "view_financials"] }).map(section => section.id)).toEqual(["finance"]);
     expect(visibleAdminSections({ permissions: [] })).toEqual([]);
     expect(visibleAdminSections(undefined)).toEqual([]);
     expect(adminCan({ permissions: [], isOwner: false }, "manage_client_onboarding")).toBe(false);
   });
 
-  it("says plainly when an account has no responsibilities yet, instead of showing an empty console", () => {
-    renderConsole({ permissions: [], platformPermissions: [], email: "analyst@example.test", name: "Ayo Analyst", platformRoles: ["analyst"] });
-    expect(screen.getByRole("note").textContent).toMatch(/its role gives it nothing to do here yet/);
+  it("says plainly when an account has no level yet, instead of showing an empty console", () => {
+    renderConsole({ permissions: [], platformPermissions: [], email: "analyst@example.test", name: "Ayo Analyst", level: null });
+    expect(screen.getByRole("note").textContent).toMatch(/it has no level yet/);
     expect(screen.queryByRole("navigation", { name: "Admin sections" })).toBeNull();
     expect(screen.getByText("Ayo Analyst")).toBeTruthy();
-    expect(screen.getByText("Analyst")).toBeTruthy();
   });
 
-  it("shows who is signed in as a name and a role, with the address underneath, not one noisy line", () => {
-    renderConsole();
+  it("shows who is signed in as a name and their level, never the roles behind it, with the address underneath", () => {
+    renderConsole({ ...SUPER, level: "Senior Associate", platformRoles: ["desk_lead"] });
     const who = screen.getByLabelText("Signed in");
     expect(within(who).getByText("Emmanuel Tarfa")).toBeTruthy();
-    expect(within(who).getByText("Super Admin")).toBeTruthy();
+    expect(within(who).getByText("Senior Associate")).toBeTruthy();
     expect(within(who).getByText("owner@example.test")).toBeTruthy();
-    expect(document.body.textContent).not.toMatch(/Signed in as|super admin, admin/);
-  });
-
-  it("falls back to the email when no name is known, and lists several roles without repeating Admin", () => {
-    renderConsole({ ...SUPER, name: null, platformRoles: ["super_admin", "admin", "desk_lead"] });
-    const who = screen.getByLabelText("Signed in");
-    expect(within(who).getByText("owner@example.test")).toBeTruthy();
-    expect(within(who).getByText("Super Admin · Desk Lead")).toBeTruthy();
+    expect(who.textContent).not.toMatch(/Desk Lead|Signed in as/);
   });
 });
 
@@ -343,7 +332,8 @@ describe("Business Health Check record drawer", () => {
     expect(drawer().queryByRole("button", { name: "Continue to Client Onboarding" })).toBeNull();
     fireEvent.click(drawer().getByRole("button", { name: "Go to the Discovery Call" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Discovery Calls" })).toBeTruthy();
+    // The stage now opens inside the Pipeline.
+    expect(screen.getByRole("button", { name: "Discovery Calls" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("offers Client Onboarding for a fit, and nothing for a check with no next step", () => {
@@ -356,7 +346,8 @@ describe("Business Health Check record drawer", () => {
     openRow("Ada Okafor");
     fireEvent.click(drawer().getByRole("button", { name: "Continue to Client Onboarding" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Client Onboarding" })).toBeTruthy();
+    // The stage now opens inside the Pipeline.
+    expect(screen.getByRole("button", { name: "Client Onboarding" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("copes with a check that was never finished", () => {
@@ -530,7 +521,8 @@ describe("Discovery Call record drawer", () => {
     fireEvent.click(within(card).getByRole("button", { name: "Continue to Client Onboarding" }));
     expect(api.mutations.invite).toEqual([]);
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Client Onboarding" })).toBeTruthy();
+    // The stage now opens inside the Pipeline.
+    expect(screen.getByRole("button", { name: "Client Onboarding" }).getAttribute("aria-pressed")).toBe("true");
   });
 
   it("does not offer the suitable-to-proceed card, or the outcome buttons, at the wrong time", () => {
@@ -547,7 +539,8 @@ describe("Discovery Call record drawer", () => {
     open();
     fireEvent.click(drawer().getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("heading", { name: "Discovery Calls" })).toBeTruthy();
+    // The stage now opens inside the Pipeline.
+    expect(screen.getByRole("button", { name: "Discovery Calls" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText("Ada Okafor")).toBeTruthy();
   });
 });

@@ -118,7 +118,6 @@ for (const target of targets) {
         expect(status.permissions.length).toBeGreaterThanOrEqual(10);
         await expect((await b.call()).platformRoles.list()).resolves.toBeDefined();
         await expect((await b.call()).onboarding.metrics()).resolves.toBeDefined();
-        await expect((await b.call()).inboundReplies.list()).resolves.toBeDefined();
       });
 
       it("lets an administrator in, with only the responsibilities granted to them", async () => {
@@ -129,7 +128,6 @@ for (const target of targets) {
         expect(status).toMatchObject({ passwordVerified: true, isAdmin: true, isOwner: false, platformRoles: ["admin"] });
         expect(status.permissions).toEqual(["manage_client_onboarding"]);
         await expect((await b.call()).onboarding.candidates()).resolves.toBeDefined();
-        await expect((await b.call()).inboundReplies.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
         await expect((await b.call()).platformRoles.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
       });
 
@@ -141,19 +139,6 @@ for (const target of targets) {
         // Every internal role can enter; none can do everything.
         await expect((await b.call()).platformRoles.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
         await expect((await b.call()).onboarding.candidates()).rejects.toMatchObject({ code: "FORBIDDEN" });
-        const canReadCommunications = role === "desk_lead";
-        const attempt = (await b.call()).inboundReplies.list();
-        if (canReadCommunications) await expect(attempt).resolves.toBeDefined();
-        else await expect(attempt).rejects.toMatchObject({ code: "FORBIDDEN" });
-      });
-
-      it("treats a platform role and the equivalent legacy profile the same", async () => {
-        const viaRole = await staffSession(await person({}, ["desk_lead"]));
-        const admin = await person({ role: "admin" });
-        await db.insert(schema.adminPermissionProfiles).values({ userId: admin.id, permissionsJson: JSON.stringify(["view_communications"]) });
-        const viaProfile = await staffSession(admin);
-        await expect((await viaRole.call()).inboundReplies.list()).resolves.toBeDefined();
-        await expect((await viaProfile.call()).inboundReplies.list()).resolves.toBeDefined();
       });
 
       it("keeps a staff session across requests and ends it on sign-out, through the shared sign-out", async () => {
@@ -194,8 +179,6 @@ for (const target of targets) {
         await expect((await b.call()).adminAccess.status()).rejects.toMatchObject({ code: "UNAUTHORIZED" });
         await expect((await b.call()).onboarding.candidates()).rejects.toMatchObject({ code: "FORBIDDEN" });
         await expect((await b.call()).platformRoles.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
-        await expect((await b.call()).inboundReplies.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
-        await expect((await b.call()).registration.listUsers()).rejects.toMatchObject({ code: "FORBIDDEN" });
         expect((await (await b.call()).account.me())!.platformRoles).toEqual([]);
       });
 

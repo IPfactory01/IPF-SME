@@ -10,12 +10,10 @@ import {
   participantCanReadPrivateStorageKey,
 } from "@server/security";
 
-const participantRouterSource = readFileSync(resolve(process.cwd(), "server/routers/participant.ts"), "utf8");
-const registrationRouterSource = readFileSync(resolve(process.cwd(), "server/routers/registration.ts"), "utf8");
 const adminRouterSource = readFileSync(resolve(process.cwd(), "server/routers/adminAccess.ts"), "utf8");
-const scheduledReminderSource = readFileSync(resolve(process.cwd(), "server/scheduledReminder.ts"), "utf8");
+const storageProxySource = readFileSync(resolve(process.cwd(), "server/_core/storageProxy.ts"), "utf8");
 
-describe("JUMP defensive security controls", () => {
+describe("defensive security controls", () => {
   it("uses an allowlisted production origin rather than a request-controlled host", () => {
     // Nothing is configured in the test process: the origin comes from the environment, never from a built-in domain.
     expect(getTrustedApplicationOrigin("production")).toBe("http://localhost:3000");
@@ -45,24 +43,8 @@ describe("JUMP defensive security controls", () => {
     expect(participantCanReadPrivateStorageKey("payment-receipts/10/receipt.pdf", 11)).toBe(false);
   });
 
-  it("binds the legacy consulting endpoints to the authenticated participant, not an input booking token", () => {
-    const consultingSection = participantRouterSource.slice(participantRouterSource.indexOf("getConsultingChat:"));
-    expect(consultingSection).toContain("const applicant = ctx.participant;");
-    expect(consultingSection).not.toContain("eq(registrations.bookingToken, input.token)");
-  });
-
-  it("does not mark a payment paid from a simulated or unverified reference", () => {
-    const paystackSection = registrationRouterSource.slice(registrationRouterSource.indexOf("initializePaystack:"));
-    expect(paystackSection).toContain("PAYSTACK_COMMITMENT_AMOUNTS");
-    expect(paystackSection).toContain("data.data?.amount === expectedAmount");
-    expect(paystackSection).toContain("providerRegistrationId === input.registrationId");
-    expect(paystackSection).not.toContain("input.reference.startsWith(\"jump_sim_\")");
-  });
-
-  it("does not expose callback stack traces to the caller", () => {
-    const errorSection = scheduledReminderSource.slice(scheduledReminderSource.lastIndexOf("} catch (error)"));
-    expect(errorSection).toContain("[Scheduled reminder] Callback failed");
-    expect(errorSection).not.toContain("stack:");
-    expect(errorSection).not.toContain("String(error)");
+  it("lets no one but a verified administrator read a former JUMP participant's private file, now that the portal is gone", () => {
+    expect(storageProxySource).not.toContain("getAuthenticatedParticipant");
+    expect(storageProxySource).toContain("hasVerifiedAdminAccess");
   });
 });

@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
-import type { AdminSectionId } from "@/lib/adminSections";
+import type { ConsoleTarget } from "@/lib/adminSections";
 import { READINESS_LABELS } from "@shared/businessCheck/engine";
 import { CURRENT_STATE, formatNaira } from "@shared/businessSupport";
 import { funnelStatus, isReadyToOnboard, stageDisplayName } from "@shared/businessCheck/funnelStatus";
@@ -127,7 +127,7 @@ function MoveStage({ businessCheckId, current }: { businessCheckId: number; curr
   );
 }
 
-export default function BusinessCheckDetail({ businessCheckId, onOpenSection, onClose }: { businessCheckId: number; onOpenSection: (section: AdminSectionId) => void; onClose: () => void }) {
+export default function BusinessCheckDetail({ businessCheckId, onOpenSection, onClose }: { businessCheckId: number; onOpenSection: (section: ConsoleTarget) => void; onClose: () => void }) {
   const detail = trpc.businessSupport.checkDetail.useQuery({ businessCheckId }, { retry: false, refetchOnWindowFocus: false });
   const prices = useServicePrices();
   if (detail.isLoading) return <p className="text-sm text-ink-muted">Loading the record…</p>;
@@ -136,12 +136,12 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
   const check = detail.data;
   const status = funnelStatus(check);
   const mainArea = check.primaryAreaNumber !== null ? AREA_NAMES[check.primaryAreaNumber] ?? `Area ${check.primaryAreaNumber}` : null;
-  const nextStep: { label: string; section: AdminSectionId; primary: boolean } | null =
+  const nextStep: { label: string; section: ConsoleTarget; primary: boolean } | null =
     isReadyToOnboard(status) ? { label: "Continue to Client Onboarding", section: "onboarding", primary: true }
     : status === "onboarding" ? { label: "View the onboarding link", section: "onboarding", primary: false }
     : status === "call_requested" || status === "call_scheduled" ? { label: "Go to the Discovery Call", section: "calls", primary: false }
     : null;
-  const go = (section: AdminSectionId) => {
+  const go = (section: ConsoleTarget) => {
     onClose();
     onOpenSection(section);
   };

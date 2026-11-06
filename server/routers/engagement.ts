@@ -21,6 +21,7 @@ import {
 } from "../../shared/engagement";
 import { authorityAllows } from "../../shared/platformPermissions";
 import { AGREEMENT_LIMITS } from "../../shared/agreement";
+import { listFinance } from "../finance";
 import { acceptAgreement, reviseAgreement, saveAgreement, sendAgreement, setFeePaid, staffAgreement } from "../agreements";
 import {
   acceptDeliverable,
@@ -270,4 +271,9 @@ const clientRouter = router({
   setNotAvailable: accountProcedure.input(z.object({ taskId: id, unavailable: z.boolean(), note: optionalText(500) })).mutation(async ({ ctx, input }) => guarded(async () => setNotAvailable(await engagementDb(), ctx.account, input))),
 });
 
-export const engagementRouter = router({ staff: staffRouter, client: clientRouter });
+/** Finance: money across every client (payment requests and agreement fees). view_financials only; read only. */
+const financeRouter = router({
+  list: adminProcedure.query(async ({ ctx }) => guarded(async () => listFinance(await engagementDb(), { authority: await loadAuthority(await engagementDb(), ctx.user!) }))),
+});
+
+export const engagementRouter = router({ staff: staffRouter, client: clientRouter, finance: financeRouter });

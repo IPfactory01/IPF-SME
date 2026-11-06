@@ -26,6 +26,7 @@ vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, list: { invalidate: () => undefined }, awaitingStart: { invalidate: () => undefined }, serviceRequests: { invalidate: () => undefined }, agreement: { invalidate: () => undefined } } } }),
     onboarding: { sendSignInLink: { useMutation: mutation("sendSignInLink") } },
+    businessSupport: { emailDeliveryStatus: { useQuery: () => ({ data: [], isLoading: false, error: undefined }) } },
     engagement: {
       staff: {
         list: { useQuery: () => ({ data: api.list, isLoading: false, error: null }) },
@@ -42,6 +43,7 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
+const { default: SystemStatus } = await import("@/components/admin/SystemStatus");
 const { default: EngagementsView } = await import("@/components/admin/EngagementsView");
 
 const row = { id: 4, stage: "setting_up", stageLabel: "Getting set up", businessName: "Ada Foods", ownerName: "Ada Okafor", ownerEmail: "ada@example.test", hasAccount: true, createdAt: new Date(), team: [], openClientRequests: 5, overdueClientRequests: 2, unscheduledSessions: 2, nextSession: null, myRole: null as string | null, unsortedFiles: 0 };
@@ -107,13 +109,19 @@ describe("the team's engagements", () => {
     for (const text of ["Getting set up", "No one yet", "5 outstanding", "2 overdue", "2 not booked"]) expect(tableRow.textContent).toContain(text);
   });
 
-  it("says whether file uploads are on, and if not exactly which setting or bucket is still missing", () => {
+  it("shows file uploads in System status (Team), not on the Engagements list", () => {
     api.detail = detail({ manage: true, assign: true, review: true });
     render(<EngagementsView />);
+    expect(screen.queryByRole("status", { name: "File uploads" })).toBeNull();
+  });
+
+  it("says whether file uploads are on, and if not exactly which setting or bucket is still missing", () => {
+    api.detail = detail({ manage: true, assign: true, review: true });
+    render(<SystemStatus />);
     expect(screen.getByRole("status", { name: "File uploads" }).textContent).toContain("File uploads: on.");
     cleanup();
     api.storage = { ...api.storage, configured: false, missing: ["SUPABASE_URL"], bucketFound: null, bucketPublic: null };
-    render(<EngagementsView />);
+    render(<SystemStatus />);
     let line = screen.getByRole("status", { name: "File uploads" }).textContent ?? "";
     expect(line).toContain("File uploads: off.");
     expect(line).toContain("SUPABASE_URL: the project URL from Supabase → Project Settings → API");
@@ -121,18 +129,18 @@ describe("the team's engagements", () => {
     expect(line).toContain("then redeploy");
     cleanup();
     api.storage = { ...api.storage, configured: true, missing: [], bucketFound: false, bucketPublic: null };
-    render(<EngagementsView />);
+    render(<SystemStatus />);
     line = screen.getByRole("status", { name: "File uploads" }).textContent ?? "";
     expect(line).toContain("there is no bucket named engagement-files");
     cleanup();
     api.storage = { ...api.storage, bucketFound: true, bucketPublic: true };
-    render(<EngagementsView />);
+    render(<SystemStatus />);
     line = screen.getByRole("status", { name: "File uploads" }).textContent ?? "";
     expect(line).toContain("the bucket is public");
     expect(line).toContain('switch "Public bucket" off');
     cleanup();
     api.storage = { ...api.storage, bucketFound: null, bucketPublic: null, problem: "Storage refused the service key. Check SUPABASE_SERVICE_ROLE_KEY is the service_role key, not the anon key." };
-    render(<EngagementsView />);
+    render(<SystemStatus />);
     expect(screen.getByRole("status", { name: "File uploads" }).textContent).toContain("not the anon key");
     expect(screen.getByRole("button", { name: "Check again" })).toBeTruthy();
   });
@@ -140,7 +148,7 @@ describe("the team's engagements", () => {
   it("says so when the storage check itself fails, rather than showing nothing", () => {
     api.detail = detail({ manage: true, assign: true, review: true });
     api.storageError = { message: "Your role does not include engagements." };
-    render(<EngagementsView />);
+    render(<SystemStatus />);
     expect(screen.getByRole("status", { name: "File uploads" }).textContent).toBe("Could not check file storage: Your role does not include engagements.");
   });
 

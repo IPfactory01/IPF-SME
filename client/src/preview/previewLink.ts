@@ -157,19 +157,6 @@ const responders: Record<string, Responder> = {
   "account.business": () => ({ ...SAMPLE_BUSINESS }),
   "engagement.client.room": () => (previewSession.signedIn ? { ...SAMPLE_ROOM, insight: previewInsight() } : null),
   "invitations.seats.list": () => SAMPLE_SEATS,
-  "registration.capacity": () => ({ boardroomCount: 0 }),
-  "registration.submit": (input) => {
-    const diagnostic = (input as { diagnostic?: DiagnosticInput }).diagnostic;
-    return {
-      success: true,
-      status: "Pending",
-      bookingToken: "preview",
-      diagnostic: diagnostic ? deriveDiagnostic(diagnostic) : undefined,
-      emailStatus: "Simulated",
-      message: `Your answers were received. ${PREVIEW_NOTICE}`,
-    };
-  },
-  "registration.requestPortalLink": () => ({ success: true }),
   "businessCheck.prices": () => PRICES,
   "businessCheck.start": () => ({ token: "preview-token-0000000000" }),
   "businessCheck.saveProgress": () => ({ saved: true }),
@@ -200,7 +187,6 @@ const refusals: Record<string, string> = {
   "engagement.client.requestService": `On the live site this asks your team for the service; they confirm it and send the payment link. ${PREVIEW_NOTICE}`,
   "invitations.seats.invite": `On the live site this emails them a link to join. ${PREVIEW_NOTICE}`,
   "fullReport.submit": `Your answers are complete. On the live site your report is built now and emailed to you. ${PREVIEW_NOTICE}`,
-  "participant.signIn": `Client sign-in works on the live site. ${PREVIEW_NOTICE}`,
 };
 
 export const previewLink: TRPCLink<AppRouter> = () => ({ op }) =>

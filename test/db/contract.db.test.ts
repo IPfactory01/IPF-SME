@@ -5,13 +5,9 @@
  * a real database when TEST_DATABASE_URL is set (`pnpm test:db`). The remote run builds a throwaway schema.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-// These tests exercise the JUMP programme's own forms, which are closed unless the flag is on.
-vi.hoisted(() => { process.env.LEGACY_JUMP_ENABLED = "1"; });
 import { and, eq, sql } from "drizzle-orm";
 import { getTableConfig, isPgEnum, type PgEnumColumn, type PgTable } from "drizzle-orm/pg-core";
-import { TRPCError } from "@trpc/server";
 import * as schema from "../../drizzle/schema";
-import { registerSchedulingCapacityTests } from "./schedulingCapacity";
 import { pgIdentifier } from "../../scripts/pgIdentifier.mjs";
 import { allTables, createPgliteHarness, createRemoteHarness, fixtureRow, insertFixture, pgErrorCode, type DbHarness } from "./harness";
 
@@ -23,7 +19,6 @@ const mocked = vi.hoisted(() => ({
   deliverEmail: vi.fn(),
   notifyOwner: vi.fn(),
   createCalendarEvent: vi.fn(),
-  participant: { current: null as unknown as Record<string, unknown> },
 }));
 
 // Route the application's own getDb() to whichever harness is active, so real production code runs.
@@ -44,20 +39,10 @@ vi.mock("@server/calendar", () => ({
   getBusyRanges: vi.fn().mockResolvedValue([]),
   isCalendarConfigured: () => false,
 }));
-vi.mock("@server/participantAuth", async importOriginal => ({
-  ...(await importOriginal<typeof import("@server/participantAuth")>()),
-  getAuthenticatedParticipant: async () => mocked.participant.current,
-}));
 
 import { upsertUser } from "@server/db";
 import { setAdminPassword } from "@server/adminSecurity";
-import { databaseNow, emailEquals } from "@server/dbHelpers";
-import { isDuplicateReminderError } from "@server/scheduledReminder";
-import { createParticipantPasswordLink, completeParticipantPassword, signInParticipantWithPassword } from "@server/participantAuth";
-import { registrationRouter } from "@server/routers/registration";
-import { schedulingRouter } from "@server/routers/scheduling";
-import { ENGAGEMENT_BRIEF_VERSION } from "@shared/engagementBrief";
-import type { TrpcContext } from "@server/_core/context";
+import { emailEquals } from "@server/dbHelpers";
 
 // A real remote database costs one network round trip (~150 ms) per statement, so application-flow tests need a
 // realistic ceiling there. Local targets keep the default 5 s so slowness is still caught; a genuine hang still fails.
@@ -271,19 +256,12 @@ for (const target of targets) {
     });
 
     describe("unique constraints and error codes", () => {
-      it("raises 23505 for a duplicate and the reminder code recognises it", async () => {
+      it("raises 23505 for a duplicate", async () => {
         const values = fixtureRow(schema.scheduledReminderDeliveries, { deliveryKey: "booking:1:24h" });
         await db.insert(schema.scheduledReminderDeliveries).values(values);
         const failure = await db.insert(schema.scheduledReminderDeliveries).values({ ...values }).then(() => null, (error: unknown) => error);
         expect(failure).not.toBeNull();
         expect(pgErrorCode(failure)).toBe("23505");
-        expect(isDuplicateReminderError(failure)).toBe(true);
-      });
-
-      it("does not treat other failures as duplicates", () => {
-        expect(isDuplicateReminderError(new Error("boom"))).toBe(false);
-        expect(isDuplicateReminderError({ code: "ER_DUP_ENTRY", errno: 1062 })).toBe(false);
-        expect(isDuplicateReminderError({ cause: { code: "23505" } })).toBe(true);
       });
     });
 
@@ -330,21 +308,6 @@ for (const target of targets) {
         expect(rows[0].updatedAt.getTime()).toBeGreaterThan(first.updatedAt.getTime());
       });
 
-      it("the inbound reply upsert keys on mailboxMessageId and refreshes updatedAt", async () => {
-        const [registration] = await db.insert(schema.registrations).values(fixtureRow(schema.registrations)).returning();
-        const reply = fixtureRow(schema.inboundEmailReplies, { registrationId: registration.id, mailboxMessageId: "message-1", preview: "one" });
-        await db.insert(schema.inboundEmailReplies).values(reply);
-        const [before] = await db.select().from(schema.inboundEmailReplies).where(eq(schema.inboundEmailReplies.mailboxMessageId, "message-1"));
-        await new Promise(resolve => setTimeout(resolve, 15));
-        await db.insert(schema.inboundEmailReplies).values({ ...reply, preview: "two" }).onConflictDoUpdate({
-          target: schema.inboundEmailReplies.mailboxMessageId,
-          set: { updatedAt: databaseNow(), preview: "two" },
-        });
-        const rows = await db.select().from(schema.inboundEmailReplies).where(eq(schema.inboundEmailReplies.mailboxMessageId, "message-1"));
-        expect(rows).toHaveLength(1);
-        expect(rows[0].preview).toBe("two");
-        expect(rows[0].updatedAt.getTime()).toBeGreaterThan(before.updatedAt.getTime());
-      });
     });
 
     describe("case sensitivity and updatedAt", () => {
@@ -377,101 +340,6 @@ for (const target of targets) {
         await new Promise(resolve => setTimeout(resolve, 15));
         const [updated] = await db.update(schema.users).set({ name: "Changed" }).where(eq(schema.users.id, row.id)).returning();
         expect(updated.updatedAt.getTime()).toBeGreaterThan(row.updatedAt.getTime());
-      });
-    });
-
-    describe("participant password flow", () => {
-      it("sets a password with RETURNING-based token ids, signs in case-insensitively and upserts on reset", async () => {
-        const [registration] = await db.insert(schema.registrations).values(fixtureRow(schema.registrations, { email: "Person@Example.test", status: "Accepted" })).returning();
-        const req = { protocol: "https", headers: {} } as TrpcContext["req"];
-        const cookies: string[] = [];
-        const ctx = { req, res: { cookie: (name: string) => cookies.push(name) }, user: null } as unknown as TrpcContext;
-
-        const setup = await createParticipantPasswordLink(registration.id, req);
-        expect(setup.purpose).toBe("setup");
-        expect(setup.tokenId).toEqual(expect.any(Number));
-        const token = new URL(setup.passwordUrl).searchParams.get("token") ?? setup.passwordUrl.split("/").pop()!;
-        await completeParticipantPassword(ctx, { token, password: "first-password", confirmPassword: "first-password" });
-
-        await signInParticipantWithPassword(ctx, "  person@EXAMPLE.test ", "first-password");
-        expect(cookies.length).toBeGreaterThanOrEqual(2);
-
-        const reset = await createParticipantPasswordLink(registration.id, req);
-        expect(reset.purpose).toBe("reset");
-        const resetToken = new URL(reset.passwordUrl).searchParams.get("token") ?? reset.passwordUrl.split("/").pop()!;
-        await completeParticipantPassword(ctx, { token: resetToken, password: "second-password", confirmPassword: "second-password" });
-        const credentials = await db.select().from(schema.participantCredentials).where(eq(schema.participantCredentials.registrationId, registration.id));
-        expect(credentials).toHaveLength(1);
-        await expect(signInParticipantWithPassword(ctx, "person@example.test", "first-password")).rejects.toBeInstanceOf(TRPCError);
-        await signInParticipantWithPassword(ctx, "person@example.test", "second-password");
-      });
-    });
-
-    describe("registration.submit", () => {
-      it("stores one registration and links its email audit entry using the returned id", async () => {
-        const caller = registrationRouter.createCaller({ req: { protocol: "https", headers: {} }, res: {}, user: null } as unknown as TrpcContext);
-        await caller.submit({
-          fullName: "Contract Test", email: "contract@example.test", phone: "+234 800 000 0000", businessName: "Contract Business",
-          businessDescription: "A controlled test of registration persistence on PostgreSQL.", businessModel: "Expert", package: "Foundation",
-          question: "Does registration persist?",
-        });
-        const rows = await db.select().from(schema.registrations).where(eq(schema.registrations.email, "contract@example.test"));
-        expect(rows).toHaveLength(1);
-        expect(rows[0].status).toBe("Pending");
-        const logs = await db.select().from(schema.emailLogs).where(eq(schema.emailLogs.registrationId, rows[0].id));
-        expect(logs).toHaveLength(1);
-      });
-    });
-
-    describe("scheduling.book", () => {
-      async function bookingSetup(capacity: number, suffix: string) {
-        const [registration] = await db.insert(schema.registrations).values(fixtureRow(schema.registrations, {
-          email: `booker-${suffix}@example.test`, status: "Accepted", depositPaid: "Paid", package: "Foundation",
-        })).returning();
-        await db.insert(schema.participantEngagementConsents).values(fixtureRow(schema.participantEngagementConsents, {
-          registrationId: registration.id, briefVersion: ENGAGEMENT_BRIEF_VERSION,
-        }));
-        const [slot] = await db.insert(schema.scheduleSlots).values(fixtureRow(schema.scheduleSlots, {
-          kind: "Learn", capacity, bookedCount: 0, status: "Open", startAt: new Date("2030-01-01T10:00:00Z"), endAt: new Date("2030-01-01T11:00:00Z"),
-        })).returning();
-        return { registration, slot };
-      }
-      const callerFor = (registration: Record<string, unknown>) => {
-        mocked.participant.current = registration;
-        return schedulingRouter.createCaller({ req: { protocol: "https", headers: {} }, res: {}, user: null } as unknown as TrpcContext);
-      };
-
-      it("claims the slot atomically, returns the booking id and fills a capacity-1 slot", async () => {
-        const { registration, slot } = await bookingSetup(1, "full");
-        const result = await callerFor(registration).book({ slotId: slot.id });
-        expect(result.success).toBe(true);
-        const [booking] = await db.select().from(schema.scheduleBookings).where(eq(schema.scheduleBookings.id, result.bookingId));
-        expect(booking).toMatchObject({ registrationId: registration.id, slotId: slot.id, status: "Confirmed" });
-        const [after] = await db.select().from(schema.scheduleSlots).where(eq(schema.scheduleSlots.id, slot.id));
-        expect(after).toMatchObject({ bookedCount: 1, status: "Booked" });
-
-        const other = await bookingSetup(1, "second");
-        await expect(callerFor(other.registration).book({ slotId: slot.id })).rejects.toMatchObject({ code: "CONFLICT" });
-      });
-
-      it("keeps a capacity-2 slot open after its first booking", async () => {
-        const { registration, slot } = await bookingSetup(2, "open");
-        await callerFor(registration).book({ slotId: slot.id });
-        const [after] = await db.select().from(schema.scheduleSlots).where(eq(schema.scheduleSlots.id, slot.id));
-        expect(after).toMatchObject({ bookedCount: 1, status: "Open" });
-      });
-
-      registerSchedulingCapacityTests({
-        getDb: () => db,
-        book: async (registration, slotId) => callerFor(registration).book({ slotId }),
-      });
-
-      it("rolls back the booking transaction when the slot can no longer be claimed", async () => {
-        const { registration, slot } = await bookingSetup(1, "race");
-        // Simulate a competing claim between the read and the guarded update.
-        await db.update(schema.scheduleSlots).set({ bookedCount: 1 }).where(and(eq(schema.scheduleSlots.id, slot.id)));
-        await expect(callerFor(registration).book({ slotId: slot.id })).rejects.toMatchObject({ code: "CONFLICT" });
-        expect(await db.select().from(schema.scheduleBookings).where(eq(schema.scheduleBookings.slotId, slot.id))).toHaveLength(0);
       });
     });
   });

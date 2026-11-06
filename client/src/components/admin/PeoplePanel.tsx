@@ -13,7 +13,11 @@ const STATUS: Record<string, string> = { active: "Active", suspended: "Suspended
  * default): issue a password reset link, suspend an account or reinstate it. Shows nothing to anyone else; the server
  * checks again.
  */
-export default function PeoplePanel() {
+/**
+ * One table per audience: `team` (IP Factory people, in Admin › Team) or `clients` (client accounts, in Admin › Clients).
+ * Each person is listed once, with their account actions beside them.
+ */
+export default function PeoplePanel({ scope }: { scope: "team" | "clients" }) {
   const utils = trpc.useUtils();
   const people = trpc.people.list.useQuery(undefined, { retry: false });
   const [issued, setIssued] = useState<{ email: string; url: string; sent: boolean } | null>(null);
@@ -67,8 +71,8 @@ export default function PeoplePanel() {
   return (
     <div className="space-y-5 border-b border-line p-6">
       <div>
-        <h2 className="font-serif text-xl font-normal">People</h2>
-        <p className="text-sm text-ink-muted">Everyone who signs in with a password, clients and staff. A reset link is emailed to the person and shown once here; it works once, for 20 minutes, and signs them out everywhere. Suspending an account signs the person out at once and refuses their sign-in until it is reinstated. Remove access takes away every role and engagement as well, for someone leaving or a contractor whose work has ended. Everyone with a role signs in with a code from their phone; reset it if they lose the phone.</p>
+        <h2 className="font-serif text-xl font-normal">{scope === "team" ? "IP Factory team" : "Client accounts"}</h2>
+        <p className="text-sm text-ink-muted">{scope === "team" ? "Everyone at IP Factory, with their level. The level sets what they can open; their function on each project is set in Engagements." : "Business owners and their people who sign in. Clients never hold a level."} A reset link is emailed to the person and shown once here; it works once, for 20 minutes, and signs them out everywhere. Suspending an account signs the person out at once and refuses their sign-in until it is reinstated. Remove access takes away every role and engagement as well, for someone leaving or a contractor whose work has ended. Everyone with a role signs in with a code from their phone; reset it if they lose the phone.</p>
       </div>
       {issued && (
         <div role="status" className="space-y-2 border border-brand-line bg-brand-tint p-3 text-sm">
@@ -108,12 +112,12 @@ export default function PeoplePanel() {
       {[
         { staff: true, title: "IP Factory team", note: "Everyone with a level. The level sets their access; their function on a project is set in Engagements. Someone whose access was removed stays here without a level until given one.", rows: people.data.filter(person => person.roles.length > 0 || !person.businesses) },
         { staff: false, title: "Clients", note: "Business owners and their people. Clients never hold a role.", rows: people.data.filter(person => person.roles.length === 0 && person.businesses) },
-      ].map(({ staff, title, note, rows }) => (
+      ].filter(section => section.staff === (scope === "team")).map(({ staff, title, note, rows }) => (
         <section key={title} aria-label={title} className="space-y-2">
           <div><h3 className="text-sm font-semibold text-ink">{title} <span className="font-normal text-ink-muted">({rows.length})</span></h3><p className="text-xs text-ink-muted">{note}</p></div>
         <div className="overflow-x-auto border border-line bg-white">
           <table className="w-full">
-            <thead><tr className="border-b border-line"><th className={TH}>Person</th><th className={TH}>{staff ? "Roles and title" : "Account"}</th><th className={TH}>Status</th><th className={TH}>Two-step</th><th className={TH}>Access ends</th><th className={TH}>Last signed in</th><th className={TH} /></tr></thead>
+            <thead><tr className="border-b border-line"><th className={TH}>Person</th><th className={TH}>{staff ? "Level" : "Account"}</th><th className={TH}>Status</th><th className={TH}>Two-step</th><th className={TH}>Access ends</th><th className={TH}>Last signed in</th><th className={TH} /></tr></thead>
             <tbody>
               {rows.map(person => (
                 <tr key={person.id} className="border-b border-line-soft">

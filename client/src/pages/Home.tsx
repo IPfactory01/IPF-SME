@@ -6,7 +6,6 @@
  */
 import { TheProblem, WhyUs } from "@/components/home/Experience";
 import { CheckCta, FeaturedServices, Hero, HowWeWorkTeaser, ProblemsToServices, useStartCheck } from "@/components/home/HomeSections";
-import { ParticipantSignIn } from "@/components/home/ParticipantSignIn";
 import { ScrollProgress } from "@/components/motion";
 import { SiteShell } from "@/components/SiteShell";
 import React from "react";
@@ -24,7 +23,6 @@ export default function Home() {
       <WhyUs />
       <FeaturedServices />
       <CheckCta onStart={startCheck} />
-      <ParticipantSignIn onStartCheck={startCheck} />
     </SiteShell>
   );
 }

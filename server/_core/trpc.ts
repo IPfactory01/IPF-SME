@@ -2,7 +2,6 @@ import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '../../shared/const';
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
-import { getAuthenticatedParticipant } from "../participantAuth";
 import { resolveAccountSession } from "../accountAuth";
 import { loadAuthority } from "../platformAccess";
 import { authorityAllows, type AnyAuthorityPermission, type PlatformPermission } from "../../shared/platformPermissions";
@@ -50,18 +49,6 @@ const requireUser = t.middleware(async opts => {
 });
 
 export const protectedProcedure = t.procedure.use(requireUser);
-
-export const participantProcedure = t.procedure.use(
-  t.middleware(async ({ ctx, input, next }) => {
-    const participant = await getAuthenticatedParticipant(ctx);
-    return next({
-      ctx: { ...ctx, participant },
-      input: typeof input === "object" && input !== null
-        ? { ...input, token: participant.bookingToken, bookingToken: participant.bookingToken }
-        : input,
-    });
-  }),
-);
 
 /**
  * Requires a universal-account session (cookie checked against user_sessions). Independent of the legacy

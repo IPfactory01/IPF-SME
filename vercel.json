@@ -15,7 +15,7 @@
   },
   "headers": [
     {
-      "source": "/((?!api/|manus-storage/|portal/authenticate|portal/access).*)",
+      "source": "/((?!api/|manus-storage/).*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
@@ -52,14 +52,6 @@
     {
       "source": "/api/:path*",
       "destination": "/api/index?__prefix=api&__path=:path*"
-    },
-    {
-      "source": "/portal/authenticate",
-      "destination": "/api/index?__prefix=portal&__path=authenticate"
-    },
-    {
-      "source": "/portal/access",
-      "destination": "/api/index?__prefix=portal&__path=access"
     },
     {
       "source": "/manus-storage/:path*",

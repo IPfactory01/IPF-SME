@@ -2,35 +2,11 @@
  * The production database driver path: node-postgres Pool + drizzle-orm/node-postgres (as on Vercel), connected
  * over a loopback socket to an in-process PostgreSQL (PGlite). Nothing here is mocked in the driver stack.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import * as schema from "../../drizzle/schema";
 import { createDriverHarness, fixtureRow, pgErrorCode, recoverDriverConnection, type DbHarness } from "./harness";
-import { registerSchedulingCapacityTests } from "./schedulingCapacity";
-
-const mocked = vi.hoisted(() => ({
-  deliverEmail: vi.fn(),
-  notifyOwner: vi.fn(),
-  createCalendarEvent: vi.fn(),
-  participant: { current: null as unknown as Record<string, unknown> },
-}));
-
-vi.mock("@server/email", async importOriginal => ({ ...(await importOriginal<typeof import("@server/email")>()), deliverEmail: mocked.deliverEmail }));
-vi.mock("@server/_core/notification", () => ({ notifyOwner: mocked.notifyOwner }));
-vi.mock("@server/calendar", () => ({
-  createCalendarEvent: mocked.createCalendarEvent,
-  getBusyRanges: vi.fn().mockResolvedValue([]),
-  isCalendarConfigured: () => false,
-}));
-vi.mock("@server/participantAuth", async importOriginal => ({
-  ...(await importOriginal<typeof import("@server/participantAuth")>()),
-  getAuthenticatedParticipant: async () => mocked.participant.current,
-}));
-
 import { getDb, upsertUser } from "@server/db";
-import { isDuplicateReminderError } from "@server/scheduledReminder";
-import { schedulingRouter } from "@server/routers/scheduling";
-import type { TrpcContext } from "@server/_core/context";
 
 describe("production node-postgres driver (single-connection pool)", () => {
   let harness: DbHarness;
@@ -43,10 +19,6 @@ describe("production node-postgres driver (single-connection pool)", () => {
   }, 60_000);
   afterAll(async () => {
     await harness?.close();
-  });
-  beforeEach(() => {
-    mocked.deliverEmail.mockResolvedValue({ status: "Simulated", reason: "test_sender" });
-    mocked.createCalendarEvent.mockResolvedValue({ status: "Created", eventId: "evt-1" });
   });
 
   it("returns the cached Drizzle instance from getDb()", async () => {
@@ -83,12 +55,11 @@ describe("production node-postgres driver (single-connection pool)", () => {
     expect(await outside).toHaveLength(1);
   });
 
-  it("surfaces unique violations with SQLSTATE 23505, recognised by the reminder code", async () => {
+  it("surfaces unique violations with SQLSTATE 23505", async () => {
     const values = fixtureRow(schema.scheduledReminderDeliveries, { deliveryKey: "driver:1:24h" });
     await db.insert(schema.scheduledReminderDeliveries).values(values);
     const failure = await db.insert(schema.scheduledReminderDeliveries).values({ ...values }).then(() => null, (error: unknown) => error);
     expect(pgErrorCode(failure)).toBe("23505");
-    expect(isDuplicateReminderError(failure)).toBe(true);
     await recoverDriverConnection(db);
   });
 
@@ -98,17 +69,5 @@ describe("production node-postgres driver (single-connection pool)", () => {
     const rows = await db.select().from(schema.users).where(eq(schema.users.openId, "driver-upsert"));
     expect(rows).toHaveLength(1);
     expect(rows[0].name).toBe("Two");
-  });
-
-  describe("scheduling.book through db.transaction()", () => {
-    registerSchedulingCapacityTests({
-      getDb: () => db,
-      afterServerError: () => recoverDriverConnection(db),
-      book: async (registration, slotId) => {
-        mocked.participant.current = registration;
-        const caller = schedulingRouter.createCaller({ req: { protocol: "https", headers: {} }, res: {}, user: null } as unknown as TrpcContext);
-        return caller.book({ slotId });
-      },
-    });
   });
 });

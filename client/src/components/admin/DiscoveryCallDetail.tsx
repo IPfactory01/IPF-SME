@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { AdminSectionId } from "@/lib/adminSections";
+import type { ConsoleTarget } from "@/lib/adminSections";
 import { trpc } from "@/lib/trpc";
 import type { FunnelStatus } from "@shared/businessCheck/funnelStatus";
 import { AREA_NAMES } from "@shared/businessCheck/questions";
@@ -31,7 +31,7 @@ const OUTCOME_NAME = { fit: "Opportunity", refer: "Referred", decline: "Lost" } 
  * One discovery call: who to contact, when it is, and what came of it. Scheduling and the outcome use the existing
  * mutations unchanged; "Opportunity" (fit) does not create an account, it points to Client Onboarding as a separate, deliberate step.
  */
-export default function DiscoveryCallDetail({ row, onOpenSection, onClose }: { row: Row; onOpenSection: (section: AdminSectionId) => void; onClose: () => void }) {
+export default function DiscoveryCallDetail({ row, onOpenSection, onClose }: { row: Row; onOpenSection: (section: ConsoleTarget) => void; onClose: () => void }) {
   const utils = trpc.useUtils();
   const refresh = () => {
     void utils.businessSupport.discoveryCalls.invalidate();
@@ -50,7 +50,7 @@ export default function DiscoveryCallDetail({ row, onOpenSection, onClose }: { r
   const undecided = status === "call_requested" || status === "call_scheduled";
   const decided = OUTCOME_FOR_STATUS[status];
   const afterOnboarding = status === "onboarding" || status === "onboarded" || status === "won";
-  const go = (section: AdminSectionId) => {
+  const go = (section: ConsoleTarget) => {
     onClose();
     onOpenSection(section);
   };

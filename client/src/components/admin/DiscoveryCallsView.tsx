@@ -1,5 +1,5 @@
 import { Input } from "@/components/ui/input";
-import type { AdminSectionId } from "@/lib/adminSections";
+import type { ConsoleTarget } from "@/lib/adminSections";
 import { trpc } from "@/lib/trpc";
 import { FUNNEL_STATUS_LABELS, funnelStatus } from "@shared/businessCheck/funnelStatus";
 import React, { useMemo, useState } from "react";
@@ -13,7 +13,7 @@ const STATUS_FILTERS = ["call_requested", "call_scheduled", "fit", "referred", "
  * People who asked for the free discovery call, as a compact list. Scheduling the call and recording its outcome happen
  * in the record drawer, so the table stays readable.
  */
-export default function DiscoveryCallsView({ onOpenSection }: { onOpenSection: (section: AdminSectionId) => void }) {
+export default function DiscoveryCallsView({ onOpenSection }: { onOpenSection: (section: ConsoleTarget) => void }) {
   const calls = trpc.businessSupport.discoveryCalls.useQuery(undefined, { retry: false });
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");

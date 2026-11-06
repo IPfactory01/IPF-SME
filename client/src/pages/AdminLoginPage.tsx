@@ -78,11 +78,6 @@ export default function AdminLoginPage() {
                 <button type="button" onClick={() => setForgot(true)} className="text-sm font-semibold text-brand underline underline-offset-2">Forgot your password?</button>
               </form>
             )}
-            {isOAuthLoginConfigured() && (
-              <p className="border-t border-line-soft pt-4 text-center text-xs text-ink-muted">
-                Still using the earlier Google sign-in? <Link href="/admin/login/legacy" className="underline">Legacy Google sign-in</Link>
-              </p>
-            )}
           </CardContent>
         </Card>
         <LegalFooterLinks />

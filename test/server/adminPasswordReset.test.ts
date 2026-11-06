@@ -3,8 +3,6 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const routerSource = readFileSync(resolve(process.cwd(), "server/routers/adminAccess.ts"), "utf8");
-// The Google + administrator-password flow moved, unchanged, to the legacy page when email-and-password staff sign-in took over /admin/login.
-const loginPageSource = readFileSync(resolve(process.cwd(), "client/src/pages/AdminLegacyLoginPage.tsx"), "utf8");
 
 describe("JUMP administrator password reset safeguards", () => {
   it("requires an authenticated authorised administrator to request an email-delivered recovery link", () => {
@@ -35,13 +33,5 @@ describe("JUMP administrator password reset safeguards", () => {
     expect(completionSection).toContain("clearAdminAccessSession(ctx.req, ctx.res)");
     expect(completionSection).toContain('action: "admin_password_reset_completed"');
     expect(completionSection).not.toContain("issueAdminAccessSession");
-  });
-
-  it("offers email-reset request only after the recognised Gmail account is established as an authorised administrator", () => {
-    expect(loginPageSource).toContain("access.data?.isAdmin && access.data.hasPassword");
-    expect(loginPageSource).toContain("requestPasswordReset");
-    expect(loginPageSource).toContain("Email me a secure reset link.");
-    expect(loginPageSource).toContain("single-use reset link");
-    expect(loginPageSource).not.toContain("resetPassword.useMutation");
   });
 });

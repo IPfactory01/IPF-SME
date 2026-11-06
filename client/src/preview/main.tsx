@@ -46,7 +46,6 @@ const PAGES = [
   { path: "/report/preview", label: "Report form" },
   { path: "/admin/login", label: "Admin sign-in" },
   { path: "/dashboard", label: "Client room" },
-  { path: "/portal", label: "JUMP portal" },
 ];
 
 function PreviewBar() {

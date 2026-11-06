@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
-import { LevelEditor } from "./PeoplePanel";
 import { FIRM_LEVELS, LEVEL_ACCESS, type FirmLevel } from "@shared/platformPermissions";
 import React, { useState } from "react";
 import { toast } from "sonner";
@@ -15,7 +14,6 @@ const STATUS: Record<string, string> = { pending: "Link sent, waiting", accepted
  */
 export default function StaffPanel() {
   const utils = trpc.useUtils();
-  const team = trpc.invitations.staff.team.useQuery(undefined, { retry: false });
   const invitations = trpc.invitations.staff.list.useQuery(undefined, { retry: false });
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -25,7 +23,7 @@ export default function StaffPanel() {
   const [issued, setIssued] = useState<{ email: string; url: string; sent: boolean } | null>(null);
   const refresh = () => {
     void utils.invitations.staff.list.invalidate();
-    void utils.invitations.staff.team.invalidate();
+    void utils.people.list.invalidate();
   };
   const invite = trpc.invitations.staff.invite.useMutation({
     onSuccess: result => {
@@ -39,21 +37,11 @@ export default function StaffPanel() {
   });
   const revoke = trpc.invitations.staff.revoke.useMutation({ onSuccess: refresh, onError: error => toast.error(error.message) });
 
-  if (team.error) return <p role="alert" className="border-b border-line p-6 text-sm text-danger">{team.error.message}</p>;
   return (
     <div className="space-y-5 border-b border-line p-6">
       <div>
-        <h2 className="font-serif text-xl font-normal">Staff</h2>
-        <p className="text-sm text-ink-muted">Everyone at IP Factory who signs in. Each person has a level, which decides what they can open; their function on each project (Engagement Manager, Lead Consultant, Analyst, Specialist) is set in Engagements. Invite by level: they set their own password from the link, then two-step sign-in on their phone. A specialist's access ends on the date you choose.</p>
-      </div>
-      <div className="overflow-x-auto border border-line bg-white">
-        <table className="w-full">
-          <thead><tr className="border-b border-line"><th className={TH}>Person</th><th className={TH}>Level</th><th className={TH}>Access ends</th></tr></thead>
-          <tbody>
-            {team.data?.map(member => <tr key={member.userId} className="border-b border-line-soft"><td className={TD}><span className="block font-medium">{member.name || "-"}</span><span className="block text-xs text-ink-muted">{member.email}</span></td><td className={TD}>{member.roles.includes("super_admin") ? "Super Admin" : <LevelEditor userId={member.userId} name={member.name || member.email} level={member.level} roles={member.roles} onChanged={() => void team.refetch()} />}{member.lapsed.length > 0 && <span className="block text-xs text-danger">Ended: {roleDisplay(member.lapsed)}</span>}</td><td className={TD}>{member.accessEndsAt ? formatDate(member.accessEndsAt) : "No end date"}</td></tr>)}
-            {team.data?.length === 0 && <tr><td colSpan={3} className={TD}>No staff yet.</td></tr>}
-          </tbody>
-        </table>
+        <h2 className="font-serif text-xl font-normal">Invite someone</h2>
+        <p className="text-sm text-ink-muted">Invite by level: the level decides what they can open, and their function on each project is set in Engagements. They set their own password from the link, then two-step sign-in on their phone. A specialist's access ends on the date you choose.</p>
       </div>
       <form className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto_auto] sm:items-end" onSubmit={event => { event.preventDefault(); invite.mutate({ fullName, email, level, expiresOn: expiresOn || null }); }}>
         <div><label className="block text-xs font-semibold text-ink-muted" htmlFor="staff-name">Full name</label><input id="staff-name" className="w-full border border-line bg-white px-2 py-1.5 text-sm" value={fullName} onChange={event => setFullName(event.target.value)} /></div>

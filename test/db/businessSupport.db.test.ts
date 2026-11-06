@@ -40,7 +40,7 @@ import { createContext } from "@server/_core/context";
 import { resetBusinessCheckRateLimitsForTests } from "@server/routers/businessCheck";
 import { hashAdminPassword, OWNER_ADMIN_EMAIL } from "@server/adminSecurity";
 import { ensureOwnerSuperAdminRole, bootstrapOwnerCredential } from "@server/ownerBootstrap";
-import { visibleAdminSections } from "@/lib/adminSections";
+import { PIPELINE_STAGES, visibleAdminSections } from "@/lib/adminSections";
 import { ACCOUNT_SESSION_COOKIE, ONBOARDING_ERRORS, type PlatformRole } from "@shared/auth";
 import { cleanAnswers } from "@shared/businessCheck/engine";
 import type { TrpcContext } from "@server/_core/context";
@@ -127,15 +127,16 @@ for (const target of targets) {
     });
 
     describe("the Super Admin sees the onboarding area", () => {
-      it("resolves every funnel permission centrally and shows Client Onboarding, opening on Business Health Checks, not the JUMP desk", async () => {
+      it("resolves every funnel permission centrally and shows the Pipeline (with Client Onboarding), opening on Business Health Checks", async () => {
         const status = await (await superAdmin.call()).adminAccess.status();
         expect(status).toMatchObject({ isSuperAdmin: true, isOwner: true, passwordVerified: true, signedInVia: "account" });
         expect(status.permissions).toContain("manage_client_onboarding");
         expect(status.platformPermissions).toEqual(expect.arrayContaining(["manage_client_onboarding", "view_all_businesses", "manage_roles"]));
         // The real server answer is what the page uses to choose its sections.
         const sections = visibleAdminSections(status).map(section => section.id);
-        expect(sections).toEqual(["checks", "calls", "onboarding", "engagements", "clients", "team", "jump"]);
-        expect(sections[0]).toBe("checks");
+        expect(sections).toEqual(["pipeline", "engagements", "clients", "finance", "team"]);
+        expect(sections[0]).toBe("pipeline");
+        expect(PIPELINE_STAGES.map(stage => stage.id)).toEqual(["checks", "calls", "onboarding"]);
       });
 
       it("recognises a stored Super Admin role even when the person's email is not the configured owner email", async () => {
@@ -144,20 +145,18 @@ for (const target of targets) {
         const session = await signInStaff(other);
         const status = await (await session.call()).adminAccess.status();
         expect(status).toMatchObject({ isSuperAdmin: true, isOwner: true });
-        expect(visibleAdminSections(status).map(section => section.id)).toContain("onboarding");
-        // Owner-only actions follow the same decision.
-        await expect((await session.call()).adminAccess.listTeam()).resolves.toBeDefined();
+        expect(visibleAdminSections(status).map(section => section.id)).toContain("pipeline");
       });
 
       it("explains the production failure: an owner whose email does not match and who has no stored role is only an admin", async () => {
         const unmatched = await person({ role: "admin" });
         const status = await (await (await signInStaff(unmatched)).call()).adminAccess.status();
         expect(status).toMatchObject({ isSuperAdmin: false, isOwner: false });
-        expect(visibleAdminSections(status).map(section => section.id)).not.toContain("onboarding");
+        expect(visibleAdminSections(status).map(section => section.id)).not.toContain("pipeline");
         // ...and storing the role (what `pnpm owner:bootstrap` now does) is the fix, independent of any environment variable.
         await db.insert(schema.userPlatformRoles).values({ userId: unmatched.id, role: "super_admin" });
         const fixed = await (await (await signInStaff(unmatched)).call()).adminAccess.status();
-        expect(visibleAdminSections(fixed).map(section => section.id)).toEqual(["checks", "calls", "onboarding", "engagements", "clients", "team", "jump"]);
+        expect(visibleAdminSections(fixed).map(section => section.id)).toEqual(["pipeline", "engagements", "clients", "finance", "team"]);
       });
 
       it("stores the role for the real owner idempotently, and bootstrap does so too", async () => {
@@ -617,15 +616,9 @@ for (const target of targets) {
         await expect(d.businessSupport.clients()).resolves.toBeDefined();
         await expect(d.businessSupport.checks()).rejects.toMatchObject({ code: "FORBIDDEN" });
         expect(visibleAdminSections(await d.adminAccess.status()).map(section => section.id)).toEqual(["engagements", "clients"]);
-        expect(visibleAdminSections(await a.adminAccess.status()).map(section => section.id)).toEqual(["checks", "calls", "onboarding"]);
+        expect(visibleAdminSections(await a.adminAccess.status()).map(section => section.id)).toEqual(["pipeline"]);
       });
 
-      it("keeps the legacy JUMP desk working for the Super Admin", async () => {
-        const caller = await superAdmin.call();
-        await expect(caller.registration.list({})).resolves.toBeDefined();
-        await expect(caller.informationSession.attendance()).resolves.toBeDefined();
-        await expect(caller.paymentInstructions.templateLibrary()).resolves.toBeDefined();
-      });
     });
 
     describe("an email problem never blocks the Business Health Check", () => {

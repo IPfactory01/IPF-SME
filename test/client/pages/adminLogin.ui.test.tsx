@@ -145,21 +145,20 @@ describe("admin sign-in page", () => {
     await waitFor(() => expect(location.history.at(-1)).toBe("/admin"));
   });
 
-  it("offers the legacy Google sign-in only where it is configured, and only as a small secondary link", () => {
-    renderPage();
-    expect(screen.queryByText("Legacy Google sign-in")).toBeNull();
-    cleanup();
+  it("offers no legacy Google sign-in, even where it was configured (removed with JUMP, 6 November 2026)", () => {
     api.oauthConfigured = true;
     renderPage();
-    expect(screen.getByText("Legacy Google sign-in").closest("a")?.getAttribute("href")).toBe("/admin/login/legacy");
+    expect(screen.queryByText("Legacy Google sign-in")).toBeNull();
   });
 });
 
-describe("legacy sign-in stays available, not deleted", () => {
-  it("keeps the legacy page and its route", () => {
-    expect(existsSync(resolve(process.cwd(), "client/src/pages/AdminLegacyLoginPage.tsx"))).toBe(true);
+describe("JUMP and its separate administrator system are gone", () => {
+  it("has no legacy sign-in, administrator invitation, participant portal or scheduling page, and keeps the one admin sign-in", () => {
+    for (const page of ["AdminLegacyLoginPage", "AdminInvitationPage", "ParticipantDashboard", "ParticipantPasswordPage", "Schedule"]) {
+      expect(existsSync(resolve(process.cwd(), `client/src/pages/${page}.tsx`)), page).toBe(false);
+    }
     const app = readFileSync(resolve(process.cwd(), "client/src/App.tsx"), "utf8");
-    expect(app).toMatch(/<Route path="\/admin\/login\/legacy" component=\{AdminLegacyLoginPage\} \/>/);
+    expect(app).not.toMatch(/\/admin\/login\/legacy|\/admin\/invite|\/portal|\/schedule/);
     expect(app).toMatch(/<Route path="\/admin\/login" component=\{AdminLoginPage\} \/>/);
   });
 });

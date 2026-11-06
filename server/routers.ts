@@ -3,15 +3,7 @@ import { hasAccountSessionCookie, signOutAccount } from "./accountAuth";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
-import { registrationRouter } from "./routers/registration";
-import { schedulingRouter } from "./routers/scheduling";
-import { participantRouter } from "./routers/participant";
 import { adminAccessRouter } from "./routers/adminAccess";
-import { referralsRouter } from "./routers/referrals";
-import { informationSessionRouter } from "./routers/informationSession";
-import { paymentInstructionsRouter } from "./routers/paymentInstructions";
-import { inboundRepliesRouter } from "./routers/inboundReplies";
-import { pricingRequestsRouter } from "./routers/pricingRequests";
 import { businessCheckRouter } from "./routers/businessCheck";
 import { accountRouter } from "./routers/account";
 import { clientOnboardingRouter } from "./routers/clientOnboarding";
@@ -39,15 +31,7 @@ export const appRouter = router({
     }),
   }),
 
-  registration: registrationRouter,
   adminAccess: adminAccessRouter,
-  scheduling: schedulingRouter,
-  participant: participantRouter,
-  referrals: referralsRouter,
-  informationSession: informationSessionRouter,
-  paymentInstructions: paymentInstructionsRouter,
-  inboundReplies: inboundRepliesRouter,
-  pricingRequests: pricingRequestsRouter,
   businessCheck: businessCheckRouter,
   account: accountRouter,
   onboarding: clientOnboardingRouter,

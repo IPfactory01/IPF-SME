@@ -10,7 +10,7 @@ import EngagementDetail from "./EngagementDetail";
 import { formatDate, formatDateTime } from "./format";
 
 type Row = inferRouterOutputs<AppRouter>["engagement"]["staff"]["list"]["items"][number];
-type StorageStatus = inferRouterOutputs<AppRouter>["engagement"]["staff"]["storageStatus"];
+export type StorageStatus = inferRouterOutputs<AppRouter>["engagement"]["staff"]["storageStatus"];
 
 /**
  * Every engagement this person may see: the desk lead and the Super Admin see all; analysts, partners and specialists
@@ -19,7 +19,6 @@ type StorageStatus = inferRouterOutputs<AppRouter>["engagement"]["staff"]["stora
 export default function EngagementsView() {
   const list = trpc.engagement.staff.list.useQuery(undefined, { retry: false });
   const awaiting = trpc.engagement.staff.awaitingStart.useQuery(undefined, { retry: false });
-  const storage = trpc.engagement.staff.storageStatus.useQuery(undefined, { retry: false });
   const utils = trpc.useUtils();
   const start = trpc.engagement.staff.start.useMutation({
     onSuccess: result => {
@@ -47,8 +46,6 @@ export default function EngagementsView() {
       <p className="text-sm text-ink-muted">{seesAll
         ? `Every engagement, of every type. A Business Review starts when it is paid${canOpen ? "; open any other, such as Digital marketing, with New engagement" : ""}. Open one to name the team, book the Sessions, send the Data Requests and share the Deliverables.`
         : "The projects you are on, of every type. Open one to see its Work Plan, Sessions, Data Requests and Deliverables."}</p>
-      {storage.data && <StorageLine status={storage.data} onCheck={() => void storage.refetch()} />}
-      {storage.error && <p role="status" aria-label="File uploads" className="border border-health-watch bg-health-watch-tint p-3 text-sm text-health-watch">Could not check file storage: {storage.error.message}</p>}
       {awaiting.data && awaiting.data.length > 0 && (
         <section aria-labelledby="awaiting-start" className="space-y-2 border border-danger-line bg-danger-tint p-4">
           <h2 id="awaiting-start" className="text-sm font-semibold text-danger">Paid, but no engagement yet</h2>
@@ -111,7 +108,7 @@ const SETTING_HELP: Record<StorageStatus["missing"][number], string> = {
 };
 
 /** Whether clients can upload files, and if not the one thing to do next. Checked live, so it is right after a redeploy. */
-function StorageLine({ status, onCheck }: { status: StorageStatus; onCheck: () => void }) {
+export function StorageLine({ status, onCheck }: { status: StorageStatus; onCheck: () => void }) {
   const on = status.configured && status.bucketFound === true && status.bucketPublic === false;
   const tone = on ? "border-health-clear bg-health-clear-tint text-health-clear" : status.bucketPublic ? "border-danger-line bg-danger-tint text-danger" : "border-health-watch bg-health-watch-tint text-health-watch";
   return (

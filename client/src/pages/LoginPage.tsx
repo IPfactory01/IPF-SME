@@ -103,7 +103,6 @@ export default function LoginPage() {
           <p className="mt-1">Your account is created when you start working with us. Start with the <Link href="/check" className="font-semibold text-brand underline underline-offset-2">free Business Health Check</Link>, or <Link href="/services" className="font-semibold text-brand underline underline-offset-2">see our services</Link>.</p>
         </div>
         <LegalFooterLinks />
-        <p className="text-center text-xs text-ink-muted">Programme participant? <a href="/portal" className="font-semibold text-brand underline underline-offset-2">Go to the participant portal</a>.</p>
       </div>
       </div>
     </main>

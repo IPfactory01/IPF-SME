@@ -448,7 +448,7 @@ for (const target of targets) {
       it("does not turn an account session into administrator access", async () => {
         const b = browser();
         await onboard(b, signUpInput(uniqueEmail("notadmin")));
-        await expect(b.call().scheduling.adminList({})).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await expect(b.call().platformRoles.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
       });
 
       it("leaves the legacy users.role gate as user for new accounts", async () => {

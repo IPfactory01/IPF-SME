@@ -130,6 +130,15 @@ describe("the free check comes first", () => {
     expect(hero.textContent).not.toContain("Some owners know exactly what their business needs");
   });
 
+  it("fits the header on a zoomed-in laptop: the full menu only from 1,280 pixels, the long button only from 1,536", () => {
+    renderHome();
+    // jsdom has no layout, so this pins the breakpoints that keep the header on one line (ET, 6 November 2026).
+    expect(screen.getByRole("navigation", { name: "Site" }).className).toMatch(/\bhidden\b.*\bxl:flex\b/);
+    expect(within(document.querySelector("header")!).getByRole("link", { name: /^Free Business Health Check/ }).className).toMatch(/\bhidden\b.*\b2xl:inline-flex\b/);
+    expect(screen.getByRole("link", { name: "Free check" }).className).toContain("2xl:hidden");
+    expect(screen.getByRole("button", { name: "Menu" }).className).toContain("xl:hidden");
+  });
+
   it("keeps a free check button in the header on a phone, on every page", () => {
     renderHome();
     expect(screen.getByRole("link", { name: "Free check" }).getAttribute("href")).toBe("/check");

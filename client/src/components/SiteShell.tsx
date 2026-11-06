@@ -82,9 +82,9 @@ export function SiteHeader({ cta = true }: { cta?: boolean }) {
       <div className="container flex h-[60px] items-center justify-between gap-4">
         <Link href="/" className="flex shrink-0 items-center gap-3" aria-label={`${BRAND.productEndorsement}: home`}>
           <img src={BRAND.markUrl} alt="" className="h-9 w-auto" />
-          <span className="hidden whitespace-nowrap border-l border-line pl-3 text-sm font-semibold text-ink-muted sm:inline">{BRAND.productName}</span>
+          <span className="hidden whitespace-nowrap border-l border-line pl-3 text-sm font-semibold text-ink-muted sm:inline xl:hidden 2xl:inline">{BRAND.productName}</span>
         </Link>
-        <nav aria-label="Site" className="hidden items-center gap-6 text-sm font-medium text-ink-600 lg:flex">
+        <nav aria-label="Site" className="hidden items-center gap-5 text-sm font-medium text-ink-600 xl:flex">
           {SITE_PAGES.map((page) => (
             <Link key={page.href} href={page.href} aria-current={current(page.href) ? "page" : undefined} className={`relative whitespace-nowrap py-1 transition-colors hover:text-brand ${current(page.href) ? "text-brand" : ""}`}>
               {page.label}
@@ -96,21 +96,21 @@ export function SiteHeader({ cta = true }: { cta?: boolean }) {
           <Link href="/login" className="hidden whitespace-nowrap border border-brand-line px-3 py-2 text-sm font-semibold text-brand transition-colors hover:bg-brand-tint sm:inline-flex">Client sign in</Link>
           {cta && (
             <>
-              <Link href="/check" className="group hidden items-center whitespace-nowrap rounded-lg bg-gradient-to-r from-brand-plum to-highlight-ink px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:brightness-110 md:inline-flex">
+              <Link href="/check" className="group hidden items-center whitespace-nowrap rounded-lg bg-gradient-to-r from-brand-plum to-highlight-ink px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:brightness-110 2xl:inline-flex">
                 Free Business Health Check <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
               </Link>
               {/* On a phone the header keeps the free check in reach on every page, however far down the visitor is. */}
-              <Link href="/check" className="inline-flex items-center whitespace-nowrap rounded-lg bg-gradient-to-r from-brand-plum to-highlight-ink px-3 py-2 text-sm font-semibold text-white transition-colors hover:brightness-110 md:hidden">Free check</Link>
+              <Link href="/check" className="inline-flex items-center whitespace-nowrap rounded-lg bg-gradient-to-r from-brand-plum to-highlight-ink px-3 py-2 text-sm font-semibold text-white transition-colors hover:brightness-110 2xl:hidden">Free check</Link>
             </>
           )}
-          <button type="button" aria-expanded={open} aria-controls="site-menu" onClick={() => setOpen((value) => !value)} className="inline-flex h-10 w-10 items-center justify-center text-ink lg:hidden">
+          <button type="button" aria-expanded={open} aria-controls="site-menu" onClick={() => setOpen((value) => !value)} className="inline-flex h-10 w-10 items-center justify-center text-ink xl:hidden">
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             <span className="sr-only">{open ? "Close menu" : "Menu"}</span>
           </button>
         </div>
       </div>
       {open && (
-        <nav id="site-menu" aria-label="Site menu" className="border-t border-line bg-paper lg:hidden">
+        <nav id="site-menu" aria-label="Site menu" className="border-t border-line bg-paper xl:hidden">
           <ul className="container grid py-2">
             {SITE_PAGES.map((page) => (
               <li key={page.href}><Link href={page.href} aria-current={current(page.href) ? "page" : undefined} className={`block border-b border-line-soft py-3.5 text-lg font-semibold ${current(page.href) ? "text-brand" : "text-ink"}`}>{page.label}</Link></li>

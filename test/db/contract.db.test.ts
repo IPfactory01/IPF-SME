@@ -232,10 +232,10 @@ for (const target of targets) {
         expect(await db.select().from(schema.businessMemberships).where(eq(schema.businessMemberships.userId, user.id))).toHaveLength(0);
       });
 
-      it("creates all 72 enum types with their exact labels in order", async () => {
+      it("creates all 73 enum types with their exact labels in order", async () => {
         const rows = await harness.query(sql`select t.typname, array_agg(e.enumlabel::text order by e.enumsortorder) as labels from pg_type t join pg_enum e on e.enumtypid = t.oid join pg_namespace n on n.oid = t.typnamespace where n.nspname = current_schema() group by t.typname`);
         const actual = new Map(rows.map(row => [String(row.typname), row.labels as string[]]));
-        expect(enums).toHaveLength(72);
+        expect(enums).toHaveLength(73);
         for (const definition of enums) expect(actual.get(definition.enumName), definition.enumName).toEqual([...definition.enumValues]);
         expect(actual.size).toBe(enums.length);
       });

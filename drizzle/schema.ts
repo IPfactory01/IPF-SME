@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { type AnyPgColumn, boolean, date, index, integer, numeric, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { PIPELINE_STAGES } from "../shared/businessCheck/pipeline";
 import { PAYMENT_ITEMS, PAYMENT_STATUSES } from "../shared/payments";
+import { ENGAGEMENT_TYPES } from "../shared/engagementTypes";
 import {
   CLIENT_ACCESS_LEVELS,
   ENGAGEMENT_AUDIENCES,
@@ -910,10 +911,20 @@ export const clientAccessLevelEnum = pgEnum("client_access_level", CLIENT_ACCESS
  * One engagement per paying client: created when the Current State Assessment payment is confirmed, linked to the
  * client's business when the owner accepts the account invitation (whichever happens second does the linking).
  */
+export const engagementsTypeEnum = pgEnum("engagements_type", ENGAGEMENT_TYPES);
+
 export const engagements = pgTable("engagements", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
-  businessCheckId: integer("businessCheckId").notNull().unique().references(() => businessChecks.id),
+  /** The paid Business Health Check behind it; null for an engagement opened directly (0016). */
+  businessCheckId: integer("businessCheckId").unique().references(() => businessChecks.id),
   businessId: integer("businessId").references(() => businesses.id),
+  /** What kind of engagement it is (0016): it decides the timeline and the starting content (shared/engagementTypes.ts). */
+  type: engagementsTypeEnum("type").default("business_review").notNull(),
+  /** Day 0 of a dated engagement (Digital marketing). */
+  startedOn: date("startedOn"),
+  /** The client contact for an engagement opened directly, when there is no Business Health Check to name them. */
+  contactName: varchar("contactName", { length: 200 }),
+  contactEmail: varchar("contactEmail", { length: 320 }),
   /** The confirmed Current State Assessment payment that started it. */
   paymentRequestId: integer("paymentRequestId").references(() => paymentRequests.id),
   stage: engagementsStageEnum("stage").default("setting_up").notNull(),
@@ -1107,7 +1118,7 @@ export const businessMemberAccess = pgTable("business_member_access", {
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
 });
 
-export const accountInvitationsKindEnum = pgEnum("account_invitations_kind", ["staff", "business_member"]);
+export const accountInvitationsKindEnum = pgEnum("account_invitations_kind", ["staff", "business_member", "business_owner"]);
 export const accountInvitationsStatusEnum = pgEnum("account_invitations_status", ["pending", "accepted", "revoked", "expired"]);
 export const accountInvitationsDeliveryStatusEnum = pgEnum("account_invitations_delivery_status", ["Sent", "Failed", "Simulated"]);
 

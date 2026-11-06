@@ -4,7 +4,8 @@ import type { inferRouterOutputs } from "@trpc/server";
 import React, { useState } from "react";
 import { toast } from "sonner";
 import type { AppRouter } from "../../../../server/routers";
-import { ClickableRow, RecordDrawer, TD, TH } from "./AdminPrimitives";
+import { ClickableRow, CopyButton, RecordDrawer, TD, TH } from "./AdminPrimitives";
+import { ENGAGEMENT_TYPE_LABELS, ENGAGEMENT_TYPES, type EngagementType } from "@shared/engagementTypes";
 import EngagementDetail from "./EngagementDetail";
 import { formatDate, formatDateTime } from "./format";
 
@@ -38,7 +39,7 @@ export default function EngagementsView() {
   }
   return (
     <div className="space-y-4 p-6">
-      <p className="text-sm text-ink-muted">An engagement starts when the Business Review is paid. Open one to name the team, book the Sessions, send the Data Requests and share the Findings.</p>
+      <p className="text-sm text-ink-muted">A Business Review engagement starts when it is paid; open any other directly with New engagement. Open one to name the team, book the Sessions, send the Data Requests and share the Deliverables.</p>
       {storage.data && <StorageLine status={storage.data} onCheck={() => void storage.refetch()} />}
       {storage.error && <p role="status" aria-label="File uploads" className="border border-health-watch bg-health-watch-tint p-3 text-sm text-health-watch">Could not check file storage: {storage.error.message}</p>}
       {awaiting.data && awaiting.data.length > 0 && (
@@ -55,6 +56,7 @@ export default function EngagementsView() {
           </ul>
         </section>
       )}
+      {list.data && "canStart" in list.data && list.data.canStart && <NewEngagement onCreated={setOpenId} />}
       <MyProjects items={list.data?.items ?? []} onOpen={setOpenId} />
       {list.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
         <div className="overflow-x-auto border border-line bg-white">
@@ -64,7 +66,7 @@ export default function EngagementsView() {
               {list.data?.items.map(row => (
                 <ClickableRow key={row.id} onOpen={() => setOpenId(row.id)} selected={row.id === openId}>
                   <td className={TD}><span className="block font-medium">{row.businessName}</span><span className="block text-xs text-ink-muted">{row.ownerName}{row.hasAccount ? "" : " · no account yet"}</span></td>
-                  <td className={TD}>{row.stageLabel}</td>
+                  <td className={TD}><span className="block">{row.stageLabel}</span><span className="block text-xs text-ink-muted">{row.typeLabel}</span></td>
                   <td className={TD}>{row.team.length ? row.team.map(member => `${member.name} (${member.roleLabel})`).join(", ") : <span className="text-danger">No one yet</span>}</td>
                   <td className={TD}>{waitingOn(row)}</td>
                   <td className={TD}>{row.nextSession ? <><span className="block">{row.nextSession.title}</span><span className="block text-xs text-ink-muted">{formatDateTime(row.nextSession.scheduledFor)}</span></> : row.unscheduledSessions ? <span className="text-danger">{row.unscheduledSessions} not booked</span> : "-"}</td>
@@ -153,3 +155,60 @@ function MyProjects({ items, onOpen }: { items: Row[]; onOpen: (id: number) => v
     </section>
   );
 }
+
+/**
+ * New engagement: for a client who did not come through the Business Health Check (Crown Studio, from JUMP). The type
+ * decides the timeline and the starting content; the client's invitation link is shown once to send by hand.
+ */
+function NewEngagement({ onCreated }: { onCreated: (id: number) => void }) {
+  const utils = trpc.useUtils();
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({ type: "digital_marketing" as EngagementType, businessName: "", contactName: "", contactEmail: "", startedOn: new Date().toISOString().slice(0, 10) });
+  const [issued, setIssued] = useState<{ url: string | null; sent: boolean; engagementId: number } | null>(null);
+  const create = trpc.engagement.staff.createDirect.useMutation({
+    onSuccess: result => {
+      void utils.engagement.staff.list.invalidate();
+      setIssued({ url: result.invitationUrl, sent: result.deliveryStatus === "Sent", engagementId: result.engagementId });
+      toast.success("Engagement opened.");
+    },
+    onError: error => toast.error(error.message),
+  });
+  const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [key]: event.target.value });
+  const field = "w-full border border-line bg-white px-2 py-1.5 text-sm";
+  const label = "block text-xs font-semibold text-ink-muted";
+  if (!open) return <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => setOpen(true)}>New engagement</Button>;
+  return (
+    <section aria-labelledby="new-engagement" className="space-y-3 border border-line bg-white p-4">
+      <h2 id="new-engagement" className="text-sm font-semibold text-ink">New engagement</h2>
+      <p className="text-xs text-ink-muted">For a client who did not come through the Business Health Check. The type sets the timeline and the starting Work Plan, Data Request and Sessions; the team can change all of it after.</p>
+      {issued ? (
+        <div role="status" className="space-y-2 border border-brand-line bg-brand-tint p-3 text-sm">
+          <p className="font-semibold">{form.businessName} is open.</p>
+          {issued.url ? (
+            <>
+              <p className="text-ink-muted">{issued.sent ? "The invitation was emailed. The link is shown once here as well." : "Email is not set up yet: copy this link and send it to the client yourself. It is shown once."}</p>
+              <div className="flex items-center gap-2"><input readOnly aria-label="Client invitation link" className={`${field} text-xs`} value={issued.url} /><CopyButton value={issued.url} label="Copy the client invitation link" /></div>
+            </>
+          ) : <p className="text-ink-muted">The client already has an account; the room is in it now.</p>}
+          <div className="flex gap-2">
+            <Button type="button" size="sm" className="rounded-none bg-brand text-xs text-white" onClick={() => onCreated(issued.engagementId)}>Open the engagement</Button>
+            <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => { setOpen(false); setIssued(null); }}>Close</Button>
+          </div>
+        </div>
+      ) : (
+        <form className="grid gap-2 sm:grid-cols-2" onSubmit={event => { event.preventDefault(); create.mutate(form); }}>
+          <div><label className={label} htmlFor="new-type">Type</label><select id="new-type" className={field} value={form.type} onChange={set("type")}>{ENGAGEMENT_TYPES.map(type => <option key={type} value={type}>{ENGAGEMENT_TYPE_LABELS[type]}</option>)}</select></div>
+          <div><label className={label} htmlFor="new-start">Start date</label><input id="new-start" type="date" className={field} value={form.startedOn} onChange={set("startedOn")} /></div>
+          <div><label className={label} htmlFor="new-business">Business name</label><input id="new-business" className={field} value={form.businessName} onChange={set("businessName")} /></div>
+          <div><label className={label} htmlFor="new-contact">Client name</label><input id="new-contact" className={field} value={form.contactName} onChange={set("contactName")} /></div>
+          <div className="sm:col-span-2"><label className={label} htmlFor="new-email">Client email</label><input id="new-email" type="email" className={field} value={form.contactEmail} onChange={set("contactEmail")} /></div>
+          <div className="flex gap-2 sm:col-span-2">
+            <Button type="submit" size="sm" className="rounded-none bg-brand text-xs text-white" disabled={create.isPending || !form.businessName.trim() || !form.contactName.trim() || !form.contactEmail.trim() || !form.startedOn}>Open the engagement</Button>
+            <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => setOpen(false)}>Cancel</Button>
+          </div>
+        </form>
+      )}
+    </section>
+  );
+}
+

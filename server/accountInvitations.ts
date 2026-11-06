@@ -72,17 +72,19 @@ async function identityTaken(db: Pick<Database, "select">, email: string) {
   return (await db.select({ id: users.id }).from(users).where(emailEquals(users.email, email)).limit(1)).length > 0 || (await emailIsReserved(db, email));
 }
 
-export function buildInvitationEmail(input: { kind: "staff" | "business_member"; fullName: string; url: string; inviterName: string; businessName?: string | null; access?: ClientAccessLevel | null }) {
+export function buildInvitationEmail(input: { kind: "staff" | "business_member" | "business_owner"; fullName: string; url: string; inviterName: string; businessName?: string | null; access?: ClientAccessLevel | null }) {
   const name = input.fullName.split(" ")[0] || "there";
   const staff = input.kind === "staff";
   return {
-    subject: staff ? `Join the ${BRAND.organisationName} team on ${BRAND.productName}` : `${input.inviterName} invited you to ${input.businessName ?? "their business"} on ${BRAND.productName}`,
+    subject: staff ? `Join the ${BRAND.organisationName} team on ${BRAND.productName}` : input.kind === "business_owner" ? `Your ${BRAND.productName} room for ${input.businessName ?? "your business"}` : `${input.inviterName} invited you to ${input.businessName ?? "their business"} on ${BRAND.productName}`,
     body: [
       `Dear ${name},`,
       "",
       staff
         ? `${input.inviterName} has invited you to the ${BRAND.organisationName} team on ${BRAND.productName}, where we run our client engagements.`
-        : `${input.inviterName} has invited you to work with them and ${BRAND.organisationName} on ${input.businessName ?? "their business"}. ${input.access ? CLIENT_ACCESS_LABELS[input.access].detail : ""}`.trim(),
+        : input.kind === "business_owner"
+          ? `Your room for ${input.businessName ?? "your business"} on ${BRAND.productName} is ready: your engagement with ${BRAND.organisationName}, what we need from you, your Sessions and what we hand over, in one place.`
+          : `${input.inviterName} has invited you to work with them and ${BRAND.organisationName} on ${input.businessName ?? "their business"}. ${input.access ? CLIENT_ACCESS_LABELS[input.access].detail : ""}`.trim(),
       "Use the secure link below to set your password. It works once and expires in seven days.",
       "",
       `Create your account: ${input.url}`,
@@ -94,7 +96,7 @@ export function buildInvitationEmail(input: { kind: "staff" | "business_member";
   };
 }
 
-async function issue(db: Database, input: { kind: "staff" | "business_member"; email: string; fullName: string; platformRole?: PlatformRole; roleExpiresAt?: Date | null; jobTitle?: string | null; businessId?: number; access?: ClientAccessLevel; actorUserId: number; inviterName: string; businessName?: string }) {
+async function issue(db: Database, input: { kind: "staff" | "business_member" | "business_owner"; email: string; fullName: string; platformRole?: PlatformRole; roleExpiresAt?: Date | null; jobTitle?: string | null; businessId?: number; access?: ClientAccessLevel; actorUserId: number; inviterName: string; businessName?: string }) {
   const token = randomBytes(32).toString("base64url");
   let invitation: { id: number };
   try {
@@ -306,8 +308,13 @@ export async function acceptAccountInvitation(db: Database, req: Request, res: R
       } else {
         const business = invitation.businessId ? (await tx.select({ id: businesses.id, status: businesses.status }).from(businesses).where(eq(businesses.id, invitation.businessId)).limit(1))[0] : undefined;
         if (!business || business.status !== "active") throw unavailable();
-        const [membership] = await tx.insert(businessMemberships).values({ businessId: business.id, userId: user.id, role: "member", status: "active" }).returning({ id: businessMemberships.id });
-        await tx.insert(businessMemberAccess).values({ membershipId: membership.id, access: invitation.access ?? "contributor", grantedByUserId: invitation.createdByUserId });
+        if (invitation.kind === "business_owner") {
+          // A direct engagement's client: the owner of the business the team opened for them.
+          await tx.insert(businessMemberships).values({ businessId: business.id, userId: user.id, role: "owner", status: "active" });
+        } else {
+          const [membership] = await tx.insert(businessMemberships).values({ businessId: business.id, userId: user.id, role: "member", status: "active" }).returning({ id: businessMemberships.id });
+          await tx.insert(businessMemberAccess).values({ membershipId: membership.id, access: invitation.access ?? "contributor", grantedByUserId: invitation.createdByUserId });
+        }
         businessId = business.id;
       }
       const session = await createSession(tx, user.id, businessId);
@@ -330,3 +337,14 @@ export async function acceptAccountInvitation(db: Database, req: Request, res: R
     : [];
   return buildView({ id: created.userId, name: input.fullName, email: created.email }, authority, memberships, created.businessId);
 }
+
+/**
+ * The owner of a business the team opened directly (an engagement that did not start from a Business Health Check):
+ * the invitation makes them the owner when they accept. The link is returned once, as for staff.
+ */
+export async function inviteBusinessOwner(db: Database, input: { email: string; fullName: string; businessId: number; businessName: string; actorUserId: number; inviterName: string }) {
+  return issue(db, { kind: "business_owner", email: input.email, fullName: input.fullName, businessId: input.businessId, businessName: input.businessName, actorUserId: input.actorUserId, inviterName: input.inviterName });
+}
+
+export { identityTaken as accountExistsFor };
+

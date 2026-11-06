@@ -51,6 +51,9 @@ const { default: EngagementRoom, dueFlag } = await import("@/components/Engageme
 
 const room = (over: Record<string, unknown> = {}) => ({
   engagementId: 4,
+  type: "business_review" as "business_review" | "digital_marketing",
+  typeLabel: "Business Review",
+  startedOn: null as string | null,
   uploadsEnabled: false,
   businessName: "Ada Foods",
   viewer: { kind: "owner" as const },
@@ -619,6 +622,27 @@ describe("the Plan, Meetings and Data requests views", () => {
     const rows = within(screen.getByRole("region", { name: "Data Request" })).getAllByRole("listitem").map(item => item.getAttribute("aria-label"));
     expect(rows).toEqual(["Your last 12 months of sales", "Your price list", "Who works in the business"]);
     expect(screen.getByRole("listitem", { name: "Your price list" }).textContent).toContain("We need a bit more");
+  });
+});
+
+describe("a Digital marketing room", () => {
+  it("dates its own stages from the start, shows the day of 90, and holds the Work Plan in the current stage", () => {
+    const now = new Date("2026-11-20T10:00:00Z").getTime(); // day 19 from 2 November
+    render(<EngagementRoom room={room({ type: "digital_marketing", typeLabel: "Digital marketing", startedOn: "2026-11-02", check: null, deliverables: [] })} now={now} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Month 1" })).toBeTruthy();
+    expect(screen.getByRole("progressbar", { name: "Day 19 of 90" })).toBeTruthy();
+    const timeline = screen.getByRole("list", { name: "Engagement timeline" });
+    const titles = within(timeline).getAllByRole("listitem").filter(item => item.id.startsWith("step-")).map(item => item.querySelector("button")!.textContent);
+    expect(titles).toEqual(["OnboardingMon 2 Nov to Sun 8 Nov", "Month 1NowMon 9 Nov to Tue 1 Dec", "Month 1 reviewWed 2 Dec", "Month 2Thu 3 Dec to Thu 31 Dec", "Month 3Fri 1 Jan to Sat 30 Jan", "Quarter reviewSun 31 Jan"]);
+    expect(within(screen.getByRole("region", { name: "Step 2: Month 1" })).getByRole("list", { name: "Week 1" })).toBeTruthy();
+    // No Business Health Check behind it: no Founder or Business views.
+    expect(screen.queryByRole("tab", { name: "Founder" })).toBeNull();
+  });
+
+  it("says when the programme starts before its first day", () => {
+    render(<EngagementRoom room={room({ type: "digital_marketing", typeLabel: "Digital marketing", startedOn: "2026-12-01", check: null })} now={new Date("2026-11-20T10:00:00Z").getTime()} />);
+    expect(screen.getByRole("heading", { level: 1, name: "Starting soon" })).toBeTruthy();
+    expect(screen.getByText(/starts on Tue 1 Dec/)).toBeTruthy();
   });
 });
 

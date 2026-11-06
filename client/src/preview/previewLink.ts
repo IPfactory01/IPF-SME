@@ -93,6 +93,9 @@ function previewInsight() {
 /** A client on day four of the Business Review: what an owner sees in their room. Sample data only. */
 const SAMPLE_ROOM = {
   engagementId: 1,
+  type: "business_review",
+  typeLabel: "Business Review",
+  startedOn: null,
   uploadsEnabled: true,
   businessName: "Ada Foods",
   viewer: { kind: "owner" },

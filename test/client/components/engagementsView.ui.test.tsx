@@ -13,7 +13,7 @@ const api = vi.hoisted(() => ({
   storage: { configured: true, missing: [] as string[], bucket: "engagement-files", bucketFound: true as boolean | null, bucketPublic: false as boolean | null, problem: null as string | null },
   calls: {} as Record<string, unknown[]>,
 }));
-const replies: Record<string, unknown> = { sendSignInLink: { kind: "reset", email: "ada@example.test", url: "https://ipf-sme.example.test/reset/abc", deliveryStatus: "Simulated" }, start: { engagementId: 4, created: true }, fileLink: { url: "https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf" } };
+const replies: Record<string, unknown> = { createDirect: { engagementId: 9, invitationUrl: "https://ipf-sme.example.test/join/OWNER", deliveryStatus: "Simulated", hasAccount: false }, sendSignInLink: { kind: "reset", email: "ada@example.test", url: "https://ipf-sme.example.test/reset/abc", deliveryStatus: "Simulated" }, start: { engagementId: 4, created: true }, fileLink: { url: "https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf" } };
 const mutation = (name: string) => (options?: { onSuccess?: (value: never) => void }) => ({
   isPending: false,
   mutate: (input: unknown) => { (api.calls[name] ??= []).push(input); options?.onSuccess?.((replies[name] ?? { success: true }) as never); },
@@ -31,7 +31,7 @@ vi.mock("@/lib/trpc", () => ({
         storageStatus: { useQuery: () => ({ data: api.storageError ? undefined : api.storage, error: api.storageError, refetch: () => undefined }) },
         detail: { useQuery: () => ({ data: api.detail, isLoading: false, error: null }) },
         assignableStaff: { useQuery: () => ({ data: [{ userId: 9, name: "Ola Analyst", email: "ola@example.test", roles: ["analyst"] }] }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -353,6 +353,27 @@ describe("my projects", () => {
     api.list = { setUp: true, items: [row] };
     render(<EngagementsView />);
     expect(screen.queryByRole("region", { name: /My projects/ })).toBeNull();
+  });
+});
+
+describe("a new engagement opened directly", () => {
+  it("is offered to the desk only, opens with the chosen type, and shows the client's link once to send by hand", () => {
+    api.list = { setUp: true, items: [row], canStart: false } as never;
+    render(<EngagementsView />);
+    expect(screen.queryByRole("button", { name: "New engagement" })).toBeNull();
+    cleanup();
+    api.list = { setUp: true, items: [row], canStart: true } as never;
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "New engagement" }));
+    const form = within(screen.getByRole("region", { name: "New engagement" }));
+    fireEvent.change(form.getByLabelText("Type"), { target: { value: "digital_marketing" } });
+    fireEvent.change(form.getByLabelText("Start date"), { target: { value: "2026-11-09" } });
+    fireEvent.change(form.getByLabelText("Business name"), { target: { value: "Crown Studio" } });
+    fireEvent.change(form.getByLabelText("Client name"), { target: { value: "Marie Tiogo" } });
+    fireEvent.change(form.getByLabelText("Client email"), { target: { value: "marie@example.com" } });
+    fireEvent.click(form.getByRole("button", { name: "Open the engagement" }));
+    expect(api.calls.createDirect).toEqual([{ type: "digital_marketing", startedOn: "2026-11-09", businessName: "Crown Studio", contactName: "Marie Tiogo", contactEmail: "marie@example.com" }]);
+    expect((form.getByLabelText("Client invitation link") as HTMLInputElement).value).toBe("https://ipf-sme.example.test/join/OWNER");
   });
 });
 

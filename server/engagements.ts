@@ -55,6 +55,9 @@ import {
   type ClientAccessLevel,
 } from "../shared/engagement";
 import type { AccountSession, Database } from "./accountAuth";
+import { DATED_TYPES, datedProgress, ENGAGEMENT_TYPE_LABELS, type EngagementType } from "../shared/engagementTypes";
+import { inviteBusinessOwner } from "./accountInvitations";
+import { slugify } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { sharedDebriefFor } from "./debriefs";
 import { getDb } from "./db";
@@ -141,6 +144,51 @@ export async function startEngagement(db: Database, input: { businessCheckId: nu
   });
 }
 
+export type DirectEngagementInput = { type: EngagementType; businessName: string; contactName: string; contactEmail: string; startedOn: string };
+
+const addDays = (day: string, days: number) => { const date = new Date(`${day}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); };
+
+/**
+ * An engagement opened directly by the desk (ET, 6 November 2026), for a client who did not come through the Business
+ * Health Check (Crown Studio came from the JUMP programme). It creates the business, the engagement of the chosen type
+ * with that type's starting Work Plan, Data Request and Sessions, and invites the contact as the owner; someone who
+ * already has an account becomes the owner straight away. The invitation link is returned once, to send by hand.
+ */
+export async function createDirectEngagement(db: Database, actor: StaffActor & { name?: string | null }, input: DirectEngagementInput) {
+  requireStart(actor);
+  const email = input.contactEmail.trim().toLowerCase();
+  const existing = (await db.select({ id: users.id, status: users.status }).from(users).where(sql`lower(${users.email}) = ${email}`).limit(1))[0];
+  if (existing) {
+    const staff = (await db.select({ id: userPlatformRoles.id }).from(userPlatformRoles).where(eq(userPlatformRoles.userId, existing.id)).limit(1)).length > 0;
+    if (staff) throw new TRPCError({ code: "BAD_REQUEST", message: "This email belongs to a staff account. Use the client's own email." });
+  }
+  const dated = DATED_TYPES[input.type];
+  const dueFor = (week: number) => addDays(input.startedOn, (week - 1) * 7 + 3);
+  const { engagementId, businessId } = await db.transaction(async tx => {
+    const [business] = await tx.insert(businesses).values({ name: input.businessName.trim(), slug: slugify(input.businessName), createdByUserId: existing?.id ?? actor.id }).returning({ id: businesses.id });
+    if (existing) await tx.insert(businessMemberships).values({ businessId: business.id, userId: existing.id, role: "owner", status: "active" });
+    const [created] = await tx.insert(engagements).values({ businessId: business.id, type: input.type, startedOn: input.startedOn, contactName: input.contactName.trim(), contactEmail: email }).returning({ id: engagements.id });
+    const tasks = dated
+      ? [
+        ...dated.dataRequests.map(item => ({ kind: "data_request" as const, side: "client" as const, ...item })),
+        ...dated.clientActions.map(item => ({ kind: "action" as const, side: "client" as const, ...item })),
+        ...dated.teamActions.map(item => ({ kind: "action" as const, side: "ipf" as const, ...item })),
+      ].map(({ week, order, ...item }) => ({ engagementId: created.id, kind: item.kind, side: item.side, title: item.title, detail: item.detail, dueOn: dueFor(week), weekNumber: week, sortOrder: order, section: item.section ?? null, ref: item.ref ?? null, informs: item.informs ?? null, format: item.format ?? null, priority: item.priority ?? null, createdByUserId: actor.id }))
+      : [
+        ...ASSESSMENT_TEMPLATE.dataRequests.map(item => ({ engagementId: created.id, kind: "data_request" as const, side: "client" as const, title: item.title, detail: item.detail, dueOn: dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: actor.id })),
+        ...ASSESSMENT_TEMPLATE.teamActions.map(item => ({ engagementId: created.id, kind: "action" as const, side: "ipf" as const, title: item.title, detail: item.detail, dueOn: dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: actor.id })),
+      ];
+    if (tasks.length) await tx.insert(engagementTasks).values(tasks);
+    const sessions = dated ? dated.sessions : ASSESSMENT_TEMPLATE.sessions;
+    await tx.insert(engagementSessions).values(sessions.map(item => ({ engagementId: created.id, kind: item.kind, title: item.title, durationMinutes: item.durationMinutes, agenda: item.agenda, weekNumber: item.week, sortOrder: item.order, createdByUserId: actor.id })));
+    await recordAudit(tx, { action: "engagement_started", actorUserId: actor.id, targetEmail: email, details: { engagementId: created.id, type: input.type, direct: true, businessId: business.id } });
+    return { engagementId: created.id, businessId: business.id };
+  });
+  if (existing) return { engagementId, invitationUrl: null, deliveryStatus: null, hasAccount: true } as const;
+  const invitation = await inviteBusinessOwner(db, { email, fullName: input.contactName.trim(), businessId, businessName: input.businessName.trim(), actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName });
+  return { engagementId, invitationUrl: invitation.invitationUrl, deliveryStatus: invitation.deliveryStatus, hasAccount: false } as const;
+}
+
 export type EngagementStart = "started" | "exists" | "not_set_up" | "failed";
 
 /** startEngagement for the payment flow: a missing table or any failure is logged and never undoes the payment. */
@@ -158,7 +206,7 @@ export async function startEngagementSafely(db: Database, input: { businessCheck
 }
 
 /** Starting an engagement by hand is the desk's call: it needs every engagement in view and the right to work on them. */
-const canStart = (actor: StaffActor) => canSeeAll(actor) && authorityAllows(actor.authority, "manage_engagements");
+export const canStart = (actor: StaffActor) => canSeeAll(actor) && authorityAllows(actor.authority, "manage_engagements");
 function requireStart(actor: StaffActor) {
   if (!canStart(actor)) {
     throw new TRPCError({ code: "FORBIDDEN", message: "Only the desk lead can start an engagement by hand." });
@@ -232,6 +280,15 @@ function requirePermission(actor: StaffActor, permission: Parameters<typeof auth
 const requireManage = (actor: StaffActor) => requirePermission(actor, "manage_engagements", "Your role does not include working on engagements.");
 
 /** The engagements this person may see, newest first, with what the desk needs at a glance. */
+/** The stage in words: a dated engagement's current stage from its start date, else the stored stage. */
+export function engagementStageLabel(row: { type: EngagementType; stage: EngagementStage; startedOn: string | null }, now: number) {
+  const dated = DATED_TYPES[row.type];
+  if (!dated || !row.startedOn) return ENGAGEMENT_STAGE_LABELS[row.stage];
+  const progress = datedProgress(dated, row.startedOn, now);
+  if (!progress.started) return "Starting soon";
+  return progress.stages.find(stage => stage.state === "now")?.title ?? "Complete";
+}
+
 export async function listStaffEngagements(db: Database, actor: StaffActor) {
   let scope: number[] | null = null;
   if (!canSeeAll(actor)) {
@@ -249,8 +306,12 @@ export async function listStaffEngagements(db: Database, actor: StaffActor) {
     ownerEmail: businessChecks.email,
     checkBusinessName: businessChecks.businessName,
     businessName: businesses.name,
+    type: engagements.type,
+    startedOn: engagements.startedOn,
+    contactName: engagements.contactName,
+    contactEmail: engagements.contactEmail,
   }).from(engagements)
-    .innerJoin(businessChecks, eq(engagements.businessCheckId, businessChecks.id))
+    .leftJoin(businessChecks, eq(engagements.businessCheckId, businessChecks.id))
     .leftJoin(businesses, eq(engagements.businessId, businesses.id))
     .where(scope ? inArray(engagements.id, scope) : undefined)
     .orderBy(desc(engagements.id));
@@ -273,10 +334,12 @@ export async function listStaffEngagements(db: Database, actor: StaffActor) {
     return {
       id: row.id,
       stage: row.stage,
-      stageLabel: ENGAGEMENT_STAGE_LABELS[row.stage],
-      businessName: row.businessName ?? row.checkBusinessName ?? row.ownerName,
-      ownerName: row.ownerName,
-      ownerEmail: row.ownerEmail,
+      stageLabel: engagementStageLabel(row, now),
+      type: row.type,
+      typeLabel: ENGAGEMENT_TYPE_LABELS[row.type],
+      businessName: row.businessName ?? row.checkBusinessName ?? row.ownerName ?? row.contactName ?? "",
+      ownerName: row.ownerName ?? row.contactName ?? "",
+      ownerEmail: row.ownerEmail ?? row.contactEmail ?? "",
       hasAccount: row.businessId !== null,
       createdAt: row.createdAt,
       team: team.filter(member => member.engagementId === row.id).map(member => ({ name: member.name ?? "", role: member.role, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
@@ -294,8 +357,11 @@ export async function listStaffEngagements(db: Database, actor: StaffActor) {
 /** Everything about one engagement, for the team. Internal notes included: this never reaches a client. */
 export async function getStaffEngagement(db: Database, actor: StaffActor, engagementId: number) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
-  const check = (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName })
-    .from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  // A direct engagement (no Business Health Check) names its contact on the engagement itself.
+  const check = engagement.businessCheckId !== null
+    ? (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName })
+      .from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0]
+    : engagement.contactEmail ? { id: null, fullName: engagement.contactName ?? "", email: engagement.contactEmail, whatsapp: null, businessName: null } : undefined;
   // The team sees a Session the owner booked on Calendly without typing it in.
   if (check) await syncSessionBookings(db, engagement, check.email);
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
@@ -316,7 +382,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
   const filesFor = (where: "taskId" | "deliverableId", id: number) => files.filter(file => file[where] === id || (where === "taskId" && matches.some(match => match.fileId === file.id && match.taskId === id))).map(staffFile);
   return {
     uploadsEnabled: isFileStorageConfigured(),
-    engagement: { ...engagement, stageLabel: ENGAGEMENT_STAGE_LABELS[engagement.stage] },
+    engagement: { ...engagement, stageLabel: engagementStageLabel(engagement, Date.now()), typeLabel: ENGAGEMENT_TYPE_LABELS[engagement.type] },
     owner: check ? { name: check.fullName, email: check.email, whatsapp: check.whatsapp } : null,
     businessName: business?.name ?? check?.businessName ?? check?.fullName ?? "",
     hasAccount: business !== null,
@@ -727,7 +793,9 @@ export async function getClientRoom(db: Database, session: AccountSession) {
   if (!engagement) return null;
   const viewer = await clientViewerFor(db, session, business.businessId);
   // Sessions the owner booked on Calendly since the last visit appear with their time before anything is read.
-  const owner = (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  const owner = engagement.businessCheckId !== null
+    ? (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0]
+    : engagement.contactEmail ? { email: engagement.contactEmail, fullName: engagement.contactName ?? "" } : undefined;
   if (owner) await syncSessionBookings(db, engagement, owner.email);
   const [team, sessions, tasks, deliverables, comments, files, measure, checkins, matches] = await Promise.all([
     db.select({ name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
@@ -745,12 +813,13 @@ export async function getClientRoom(db: Database, session: AccountSession) {
   const assigneeNames = new Map((assigneeIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, assigneeIds)) : []).map(row => [row.id, row.name ?? ""]));
   const fullView = viewer.kind === "owner" || viewer.access === "full";
   // Where the engagement came from: the check's main finding and readiness, and the Discovery Call once the team shares it.
-  const check = (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor })
-    .from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
-  const report = (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq(fullReports.businessCheckId, engagement.businessCheckId)).limit(1))[0] ?? null;
-  const debrief = fullView ? await sharedDebriefFor(db, engagement.businessCheckId) : null;
+  const checkId = engagement.businessCheckId;
+  const check = checkId === null ? undefined : (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor })
+    .from(businessChecks).where(eq(businessChecks.id, checkId)).limit(1))[0];
+  const report = checkId === null ? null : (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq(fullReports.businessCheckId, checkId)).limit(1))[0] ?? null;
+  const debrief = fullView && checkId !== null ? await sharedDebriefFor(db, checkId) : null;
   // The Founder and Business tabs: the owner's own Full Report or Business Health Check, never shown to limited-access staff.
-  const insight = fullView ? await insightFor(db, engagement.businessCheckId, Boolean(report?.deliveredAt)) : null;
+  const insight = fullView && checkId !== null ? await insightFor(db, checkId, Boolean(report?.deliveredAt)) : null;
   const visibleDeliverables = deliverables.filter(item => clientCanSee(item.audience, viewer));
   const matchedTo = (fileId: number) => matches.filter(match => match.fileId === fileId).map(match => match.taskId);
   const clientFiles = (where: "taskId" | "deliverableId", id: number) => files
@@ -762,11 +831,14 @@ export async function getClientRoom(db: Database, session: AccountSession) {
   const notesVisible = (item: (typeof sessions)[number]) => Boolean(item.notesSharedAt && item.clientNotes && clientCanSee(item.notesAudience, viewer));
   return {
     engagementId: engagement.id,
+    type: engagement.type,
+    typeLabel: ENGAGEMENT_TYPE_LABELS[engagement.type],
+    startedOn: engagement.startedOn,
     uploadsEnabled: isFileStorageConfigured(),
     businessName: business.businessName,
     viewer: viewer.kind === "owner" ? { kind: "owner" as const } : { kind: "member" as const, access: viewer.access },
     stage: engagement.stage,
-    stageLabel: ENGAGEMENT_STAGE_LABELS[engagement.stage],
+    stageLabel: engagementStageLabel(engagement, Date.now()),
     journey: journeyOf(engagement.stage),
     assessmentStartedAt: engagement.assessmentStartedAt,
     fixStartedAt: engagement.fixStartedAt,

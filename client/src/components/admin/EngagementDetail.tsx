@@ -86,7 +86,7 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
         <DetailField label="Email">{data.owner?.email ?? "-"}</DetailField>
         <DetailField label="WhatsApp">{data.owner?.whatsapp ? <a className="text-brand underline" href={whatsappLink(data.owner.whatsapp) ?? undefined} target="_blank" rel="noreferrer">{data.owner.whatsapp}</a> : "-"}</DetailField>
         <DetailField label="Client account">{data.hasAccount ? `Yes${data.clientPeople.length > 1 ? `, ${data.clientPeople.length} people` : ""}` : "Not yet: the invitation is out"}</DetailField>
-        {data.can.sendSignIn && <SendSignInLink businessCheckId={data.engagement.businessCheckId} hasAccount={data.hasAccount} />}
+        {data.can.sendSignIn && data.engagement.businessCheckId !== null && <SendSignInLink businessCheckId={data.engagement.businessCheckId} hasAccount={data.hasAccount} />}
       </DetailSection>
       <StageAndTeam data={data} engagementId={engagementId} />
       <Problem data={data} engagementId={engagementId} />

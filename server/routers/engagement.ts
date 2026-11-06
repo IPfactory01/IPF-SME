@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { ENGAGEMENT_TYPES } from "../../shared/engagementTypes";
 import {
   ENGAGEMENT_DELIVERABLE_KINDS,
   ENGAGEMENT_SESSION_KINDS,
@@ -44,6 +45,8 @@ import {
   saveSession,
   saveSessionNotes,
   saveTask,
+  createDirectEngagement,
+  canStart,
   clientRequestDrop,
   clientConfirmDrop,
   setNotAvailable,
@@ -104,7 +107,7 @@ const staff = adminProcedure.use(async ({ ctx, next }) => {
 const staffRouter = router({
   list: staff.query(async ({ ctx }) => {
     try {
-      return { setUp: true, items: await listStaffEngagements(await engagementDb(), ctx.actor) };
+      return { setUp: true, items: await listStaffEngagements(await engagementDb(), ctx.actor), canStart: canStart(ctx.actor) };
     } catch (error) {
       if (!isMissingEngagementTable(error)) throw error;
       return { setUp: false, items: [] };
@@ -173,6 +176,14 @@ const staffRouter = router({
   requestUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, ...upload })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileUpload, `staff:${ctx.actor.id}`); return guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input)); }),
   confirmUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
+  /** Open an engagement directly, for a client who did not come through the Business Health Check. */
+  createDirect: staff.input(z.object({
+    type: z.enum(ENGAGEMENT_TYPES),
+    businessName: text(255).min(2, "Name the business."),
+    contactName: text(200).min(2, "Name the client."),
+    contactEmail: z.string().trim().email("Enter the client's email address.").max(320),
+    startedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the start date."),
+  })).mutation(async ({ ctx, input }) => guarded(async () => createDirectEngagement(await engagementDb(), { ...ctx.actor, name: ctx.user?.name ?? null }, input))),
   /** Sort a file the client dropped: the Data Requests it answers (an empty list clears the match). */
   matchFile: staff.input(z.object({ fileId: id, taskIds: z.array(id).max(50) })).mutation(async ({ ctx, input }) => guarded(async () => matchFile(await engagementDb(), ctx.actor, input))),
   saveMeasure: staff.input(z.object({ engagementId: id, name: text(160).min(1, "Name the number."), definition: optionalText(2000), unit: optionalText(32), baselineValue: reading, targetValue: reading }))

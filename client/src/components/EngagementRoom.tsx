@@ -9,6 +9,7 @@ import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlas
 import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
+import { DATED_TYPES, datedProgress } from "@shared/engagementTypes";
 import { toast } from "sonner";
 import { useWide } from "@/hooks/useWide";
 import { BusinessPanel, FounderPanel } from "./room/RoomInsight";
@@ -250,6 +251,14 @@ const stuckCount = (insight: NonNullable<Room["insight"]>) => {
 // ---- What the page says now ------------------------------------------------------------------------------------------
 
 function nowOf(room: Room, now: number): { title: string; line: string; progress: { label: string; done: number; total: number } | null } {
+  // A dated engagement (Digital marketing) reads its stage and day from its start date.
+  const dated = DATED_TYPES[room.type];
+  if (dated && room.startedOn) {
+    const progress = datedProgress(dated, room.startedOn, now);
+    if (!progress.started) return { title: "Starting soon", line: `Your ${room.typeLabel.toLowerCase()} programme starts on ${dateOnly(room.startedOn)}.`, progress: null };
+    const stage = progress.stages.find(item => item.state === "now");
+    return { title: stage ? stage.title : `${room.typeLabel} complete`, line: stage?.summary ?? "", progress: { label: `Day ${progress.day} of ${dated.durationDays}`, done: progress.day, total: dated.durationDays } };
+  }
   const current = room.journey.find(step => step.state === "current");
   const line = current?.summary ?? "";
   if (room.stage === "assessment" && findingsAwaiting(room)) return { title: METHOD.findings, line: METHOD_MEANING.findings, progress: null };
@@ -369,6 +378,18 @@ function DeliverablesCard({ room, isOwner, onOpen }: { room: Room; isOwner: bool
 type Step = { n: number; title: string; state: StepState; when: string; summary: string; body?: React.ReactNode };
 
 function stepsOf(room: Room, now: number): Step[] {
+  // A dated engagement's timeline is its type's stages, dated from its start; the current stage holds the Work Plan.
+  const dated = DATED_TYPES[room.type];
+  if (dated && room.startedOn) {
+    const progress = datedProgress(dated, room.startedOn, now);
+    const startDay = (offset: number) => { const date = new Date(`${room.startedOn}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + offset); return dateOnly(date.toISOString().slice(0, 10)); };
+    const current = progress.stages.findIndex(stage => stage.state === "now");
+    return progress.stages.map((stage, index) => ({
+      n: index + 1, title: stage.title, state: progress.started ? stage.state : (index === 0 ? "now" : "next"), summary: stage.summary,
+      when: stage.from === stage.to ? startDay(stage.from) : `${startDay(stage.from)} to ${startDay(stage.to)}`,
+      body: index === (current === -1 ? 0 : current) ? <WorkPlan room={room} isOwner={room.viewer.kind === "owner"} /> : null,
+    }));
+  }
   const check = room.check;
   const isOwner = room.viewer.kind === "owner";
   const stageAt = ["setting_up", "assessment", "fix", "plan", "closed"].indexOf(room.stage);

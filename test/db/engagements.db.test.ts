@@ -226,6 +226,47 @@ for (const target of targets) {
       });
     });
 
+    describe("engagements opened directly, by type", () => {
+      it("opens a Digital marketing engagement: the business, the type's starting content, and the owner's invitation", async () => {
+        const email = uniqueEmail("crown");
+        const opened = await (await superAdmin.call()).engagement.staff.createDirect({ type: "digital_marketing", businessName: "Crown Studio", contactName: "Marie Tiogo", contactEmail: email, startedOn: "2026-11-02" });
+        expect(opened).toMatchObject({ hasAccount: false, invitationUrl: expect.stringContaining("/join/") });
+        expect(emails().find(sent => sent.to === email)!.subject).toBe("Your The Shift room for Crown Studio");
+
+        const listed = (await (await superAdmin.call()).engagement.staff.list()).items.find(item => item.id === opened.engagementId)!;
+        expect(listed).toMatchObject({ businessName: "Crown Studio", ownerName: "Marie Tiogo", ownerEmail: email, type: "digital_marketing", typeLabel: "Digital marketing", hasAccount: true });
+
+        // The client accepts and lands in the room as its owner, with the type's starting content.
+        const token = decodeURIComponent(emails().filter(sent => sent.to === email).at(-1)!.body.match(/Create your account: (\S+)/)![1].split("/join/")[1]);
+        const owner = browser();
+        await (await owner.call()).invitations.accept({ token, email, fullName: "Marie Tiogo", password: PASSWORD, confirmPassword: PASSWORD });
+        const room = (await (await owner.call()).engagement.client.room())!;
+        expect(room).toMatchObject({ type: "digital_marketing", typeLabel: "Digital marketing", startedOn: "2026-11-02", businessName: "Crown Studio", viewer: { kind: "owner" }, check: null, insight: null });
+        expect(room.tasks.filter(task => task.kind === "data_request").map(task => task.ref)).toEqual(["A1", "A2", "B1", "C1", "C2"]);
+        expect(room.tasks.find(task => task.ref === "B1")).toMatchObject({ section: "B Accounts", priority: "high", dueOn: "2026-11-05" });
+        expect(room.sessions.map(item => item.title)).toEqual(["Kick-off", "Weekly check-in", "Month 1 review"]);
+        expect(room.people).toEqual([expect.objectContaining({ name: "Marie Tiogo", label: "Owner", you: true })]);
+
+        // The team's record has no Business Health Check behind it, and names the contact.
+        const detail = await (await superAdmin.call()).engagement.staff.detail({ engagementId: opened.engagementId });
+        expect(detail.engagement).toMatchObject({ businessCheckId: null, typeLabel: "Digital marketing" });
+        expect(detail.owner).toMatchObject({ name: "Marie Tiogo", email });
+      });
+
+      it("puts an existing client account straight in as owner, refuses a staff email, and is the desk's call only", async () => {
+        const { email } = await client("direct-existing");
+        const opened = await (await superAdmin.call()).engagement.staff.createDirect({ type: "business_review", businessName: "Second Venture", contactName: "Existing Owner", contactEmail: email, startedOn: "2026-11-09" });
+        expect(opened).toMatchObject({ hasAccount: true, invitationUrl: null });
+        const staffUser = await person(["analyst"]);
+        await expect((await superAdmin.call()).engagement.staff.createDirect({ type: "digital_marketing", businessName: "Nope", contactName: "Staff", contactEmail: staffUser.email, startedOn: "2026-11-09" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        const analyst = await signIn(staffUser, true);
+        await expect((await analyst.call()).engagement.staff.createDirect({ type: "digital_marketing", businessName: "Nope", contactName: "Someone", contactEmail: uniqueEmail("nope"), startedOn: "2026-11-09" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        // A direct Business Review starts with the standard Work Plan.
+        const tasks = await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.engagementId, opened.engagementId));
+        expect(tasks.filter((task: { kind: string }) => task.kind === "data_request").length).toBeGreaterThan(5);
+      });
+    });
+
     describe("the team's side: permission and assignment", () => {
       it("shows the desk lead every engagement, an analyst only the ones they are on, and finance none", async () => {
         const { engagementId } = await client("scope");

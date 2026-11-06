@@ -109,3 +109,11 @@ Senior Business Analyst, Business Analyst, Specialist, Finance), and the level d
 **Apply it before deploying.** Paste `drizzle/supabase/apply-0015-staff-invitation-level.sql` into the Supabase SQL
 Editor and press Run; it stops, changing nothing, unless exactly `0000` to `0014` are recorded.
 
+**`0016` and deployment order.** Engagement types: every engagement has a type (`business_review`, the default for
+every existing one, or `digital_marketing`), which sets its timeline and starting content (`shared/engagementTypes.ts`).
+An engagement can now be opened directly, without a Business Health Check (`businessCheckId` nullable, with
+`startedOn`, `contactName` and `contactEmail`), and its client is invited as the owner (`account_invitations_kind`
+gains `business_owner`). Additive. **Apply it before deploying.** Paste
+`drizzle/supabase/apply-0016-engagement-types.sql` into the Supabase SQL Editor and press Run; it stops, changing
+nothing, unless exactly `0000` to `0015` are recorded.
+

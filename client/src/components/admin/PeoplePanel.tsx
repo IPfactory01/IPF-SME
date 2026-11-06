@@ -150,7 +150,7 @@ export default function PeoplePanel() {
  * A staff member's level, which sets their firm title and their access in one step (LEVEL_ROLES). A Specialist needs
  * the date their access ends. The access it gives is shown under it; Super Admin stays as it is.
  */
-function LevelEditor({ userId, name, level, roles, onChanged }: { userId: number; name: string; level: string | null; roles: string[]; onChanged: () => void }) {
+export function LevelEditor({ userId, name, level, roles, onChanged }: { userId: number; name: string; level: string | null; roles: string[]; onChanged: () => void }) {
   const [choice, setChoice] = useState<string>(isFirmLevel(level) ? level : "");
   const [endsOn, setEndsOn] = useState("");
   const save = trpc.platformRoles.setLevel.useMutation({ onSuccess: result => { toast.success(`Level set: ${result.level}.`); setEndsOn(""); onChanged(); }, onError: error => toast.error(error.message) });
@@ -171,7 +171,7 @@ function LevelEditor({ userId, name, level, roles, onChanged }: { userId: number
           <Button type="button" size="sm" className="h-6 rounded-none bg-brand px-2 text-xs text-white" disabled={save.isPending || !endsOn} onClick={() => save.mutate({ userId, level: "Specialist", expiresOn: endsOn })}>Save</Button>
         </span>
       )}
-      <span className="block text-xs text-ink-muted">{!roles.length ? "No access: choose a level" : isFirmLevel(level) ? LEVEL_ACCESS[level] : `Access: ${roleDisplay(roles)}`}</span>
+      <span className="block text-xs text-ink-muted">{!roles.length ? "No access: choose a level" : isFirmLevel(level) ? LEVEL_ACCESS[level] : "Level not set yet: choose one"}</span>
     </div>
   );
 }

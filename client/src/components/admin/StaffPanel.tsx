@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import { LevelEditor } from "./PeoplePanel";
 import { FIRM_LEVELS, LEVEL_ACCESS, type FirmLevel } from "@shared/platformPermissions";
 import React, { useState } from "react";
 import { toast } from "sonner";
@@ -43,13 +44,13 @@ export default function StaffPanel() {
     <div className="space-y-5 border-b border-line p-6">
       <div>
         <h2 className="font-serif text-xl font-normal">Staff</h2>
-        <p className="text-sm text-ink-muted">Everyone who signs in with email and password and holds a role. Invite a new person with one role below your own; they set their own password from the link, then set up two-step sign-in on their phone at their first sign-in. A specialist's access ends on the date you choose.</p>
+        <p className="text-sm text-ink-muted">Everyone at IP Factory who signs in. Each person has a level, which decides what they can open; their function on each project (Engagement Manager, Lead Consultant, Analyst, Specialist) is set in Engagements. Invite by level: they set their own password from the link, then two-step sign-in on their phone. A specialist's access ends on the date you choose.</p>
       </div>
       <div className="overflow-x-auto border border-line bg-white">
         <table className="w-full">
-          <thead><tr className="border-b border-line"><th className={TH}>Person</th><th className={TH}>Roles</th><th className={TH}>Access ends</th></tr></thead>
+          <thead><tr className="border-b border-line"><th className={TH}>Person</th><th className={TH}>Level</th><th className={TH}>Access ends</th></tr></thead>
           <tbody>
-            {team.data?.map(member => <tr key={member.userId} className="border-b border-line-soft"><td className={TD}><span className="block font-medium">{member.name || "-"}</span><span className="block text-xs text-ink-muted">{member.email}</span></td><td className={TD}>{roleDisplay(member.roles)}{member.lapsed.length > 0 && <span className="block text-xs text-danger">Ended: {roleDisplay(member.lapsed)}</span>}</td><td className={TD}>{member.accessEndsAt ? formatDate(member.accessEndsAt) : "No end date"}</td></tr>)}
+            {team.data?.map(member => <tr key={member.userId} className="border-b border-line-soft"><td className={TD}><span className="block font-medium">{member.name || "-"}</span><span className="block text-xs text-ink-muted">{member.email}</span></td><td className={TD}>{member.roles.includes("super_admin") ? "Super Admin" : <LevelEditor userId={member.userId} name={member.name || member.email} level={member.level} roles={member.roles} onChanged={() => void team.refetch()} />}{member.lapsed.length > 0 && <span className="block text-xs text-danger">Ended: {roleDisplay(member.lapsed)}</span>}</td><td className={TD}>{member.accessEndsAt ? formatDate(member.accessEndsAt) : "No end date"}</td></tr>)}
             {team.data?.length === 0 && <tr><td colSpan={3} className={TD}>No staff yet.</td></tr>}
           </tbody>
         </table>

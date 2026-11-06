@@ -172,11 +172,12 @@ export async function listStaffInvitations(db: Database, actor: StaffActor) {
 /** Everyone with an internal role, for the Admin Team screen (the legacy list shows only legacy administrators). */
 export async function listStaff(db: Database, actor: StaffActor) {
   if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError({ code: "FORBIDDEN", message: "Only someone who manages roles can see the team." });
-  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, status: users.status, role: userPlatformRoles.role, expiresAt: userPlatformRoles.expiresAt })
+  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, status: users.status, jobTitle: users.jobTitle, role: userPlatformRoles.role, expiresAt: userPlatformRoles.expiresAt })
     .from(userPlatformRoles).innerJoin(users, eq(userPlatformRoles.userId, users.id)).orderBy(users.name);
-  const people = new Map<number, { userId: number; name: string; email: string; status: string; roles: string[]; accessEndsAt: Date | null; lapsed: string[] }>();
+  // The level (Partner, Senior Associate, ...) is what the team reads; the roles it gives stay underneath.
+  const people = new Map<number, { userId: number; name: string; email: string; status: string; level: string | null; roles: string[]; accessEndsAt: Date | null; lapsed: string[] }>();
   for (const row of rows) {
-    const person = people.get(row.userId) ?? { userId: row.userId, name: row.name ?? "", email: row.email ?? "", status: row.status, roles: [], accessEndsAt: null, lapsed: [] };
+    const person = people.get(row.userId) ?? { userId: row.userId, name: row.name ?? "", email: row.email ?? "", status: row.status, level: isFirmLevel(row.jobTitle) ? row.jobTitle : null, roles: [], accessEndsAt: null, lapsed: [] };
     // A role past its end date gives nothing; it is listed apart so it can be renewed or removed.
     if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) person.lapsed.push(row.role);
     else person.roles.push(row.role);

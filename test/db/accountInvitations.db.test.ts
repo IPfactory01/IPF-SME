@@ -164,6 +164,8 @@ for (const target of targets) {
         await accept(email, "Mo Mover");
         const userId = (await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email)))[0]!.id;
         await (await superAdmin.call()).platformRoles.setLevel({ userId, level: "Senior Associate" });
+        // The Admin Team list reads the level, not the system role behind it.
+        expect((await (await superAdmin.call()).invitations.staff.team()).find(person => person.userId === userId)).toMatchObject({ level: "Senior Associate", roles: ["desk_lead"] });
         let team = (await (await superAdmin.call()).invitations.staff.team()).find(member => member.email === email)!;
         expect(team.roles).toEqual(["desk_lead"]);
         await (await superAdmin.call()).platformRoles.setLevel({ userId, level: "Business Analyst" });

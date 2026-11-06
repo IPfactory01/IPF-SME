@@ -10321,10 +10321,10 @@ async function listStaffInvitations(db, actor) {
 }
 async function listStaff(db, actor) {
   if (!authorityAllows(actor.authority, "manage_roles")) throw new TRPCError14({ code: "FORBIDDEN", message: "Only someone who manages roles can see the team." });
-  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, status: users.status, role: userPlatformRoles.role, expiresAt: userPlatformRoles.expiresAt }).from(userPlatformRoles).innerJoin(users, eq16(userPlatformRoles.userId, users.id)).orderBy(users.name);
+  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, status: users.status, jobTitle: users.jobTitle, role: userPlatformRoles.role, expiresAt: userPlatformRoles.expiresAt }).from(userPlatformRoles).innerJoin(users, eq16(userPlatformRoles.userId, users.id)).orderBy(users.name);
   const people = /* @__PURE__ */ new Map();
   for (const row of rows) {
-    const person = people.get(row.userId) ?? { userId: row.userId, name: row.name ?? "", email: row.email ?? "", status: row.status, roles: [], accessEndsAt: null, lapsed: [] };
+    const person = people.get(row.userId) ?? { userId: row.userId, name: row.name ?? "", email: row.email ?? "", status: row.status, level: isFirmLevel(row.jobTitle) ? row.jobTitle : null, roles: [], accessEndsAt: null, lapsed: [] };
     if (row.expiresAt && row.expiresAt.getTime() <= Date.now()) person.lapsed.push(row.role);
     else person.roles.push(row.role);
     if (row.expiresAt && (!person.accessEndsAt || row.expiresAt < person.accessEndsAt)) person.accessEndsAt = row.expiresAt;

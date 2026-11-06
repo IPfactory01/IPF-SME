@@ -3,7 +3,7 @@
  * we need from the owner. Source: IPF The Shift Operational Business Plan (22 October 2026), pages 10, 11, 15, 17, 18
  * and 24, with the prices ET set on 21 October and the refund promise adopted on 22 October.
  *
- * This is the first piece of the universal engagement model (docs/product/01-prd.md §11): a product is data, not code.
+ * This is the first piece of the universal engagement model (docs/product/08-decision-log.md §4): a product is data, not code.
  * The site's menu and product pages, the Business Health Check's routing, the order flow, the intake form and the
  * payment plan all read from here, so a new product is a new entry. Product ids are stable identifiers stored on
  * orders; names and copy can change.

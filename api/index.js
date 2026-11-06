@@ -465,6 +465,8 @@ var DIGITAL_MARKETING = {
     { title: "Quarter review", summary: "The 90 days in numbers, and what support looks like from here.", from: 90, to: 90 }
   ],
   monthly: [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }],
+  /** The monthly service fee (ET, 6 November 2026), in whole naira: paid for each month before it starts, the first at signing. */
+  monthlyFee: 47e4,
   dataRequests: [
     { week: 1, order: 1, section: "A Brand", ref: "A1", priority: "high", title: "Logo, colours and fonts", detail: "Whatever you use today: the logo files, and the colours and fonts if you have them.", informs: "So every reel and post looks like your business", format: "Any" },
     { week: 1, order: 2, section: "A Brand", ref: "A2", priority: "medium", title: "Past content that worked", detail: "Five to ten posts or videos you liked, yours or anyone's.", informs: "The style to build on", format: "Links or screenshots" },
@@ -529,10 +531,11 @@ function serviceStarter(product2) {
 
 // shared/agreement.ts
 var AGREEMENT_STATUSES = ["draft", "sent", "accepted"];
-var AGREEMENT_STATUS_LABELS = { draft: "Draft", sent: "Sent, waiting for the owner", accepted: "Accepted" };
+var AGREEMENT_STATUS_LABELS = { draft: "Draft", sent: "Sent, waiting for the owner to sign", accepted: "Signed" };
 var AGREEMENT_LIMITS = { text: 8e3, label: 200, feeLines: 24, amount: 1e8 };
-var STANDARD_TERMS = `${DELIVERY_PROMISE} Our Terms & Conditions apply. Prices are in naira and include no VAT unless shown. Work starts once the first payment and the records we ask for are in.`;
-var STANDARD_COMMITMENTS = "Send the records on the Data Request, join the Sessions, and tell us early if anything changes.";
+var STANDARD_TERMS = "IP Factory confirms the delivery date once the client's records are complete. Where IP Factory cannot deliver as agreed, it provides a remedy in line with its Terms and Conditions: a refund, a service credit or an agreed alternative. Fees are stated in naira and exclude VAT unless shown. Work begins once the first payment and the requested records are received.";
+var STANDARD_COMMITMENTS = "The client provides the records listed in the Data Request by the dates shown, attends the scheduled Sessions, and informs IP Factory promptly of any change that affects the work.";
+var STANDARD_EXCLUSIONS = "Work outside the scope above. Any additional work is scoped and priced separately before it starts.";
 var bullets = (lines) => lines.map((line) => `- ${line}`).join("\n");
 function feeLinesFor(product2) {
   const price = product2.price;
@@ -540,44 +543,63 @@ function feeLinesFor(product2) {
     case "free":
       return [];
     case "fixed":
-      return [{ label: product2.name, amount: price.amount, dueOn: null }];
+      return [{ label: `${product2.name}, payable before work begins`, amount: price.amount, dueOn: null }];
     case "milestones":
       return price.stages.map((stage) => ({ label: `${product2.name}: ${stage.name.toLowerCase()} (${stage.percent}%)`, amount: stageAmount(price, stage.percent), dueOn: null }));
     case "per_month":
       return [{ label: `${product2.name}: ${price.minMonths} months of records`, amount: perMonthAmount(price, price.minMonths), dueOn: null }];
     case "quarterly":
-      return [{ label: `${product2.name}: first quarter`, amount: quarterAmount(price), dueOn: null }];
+      return [{ label: `${product2.name}: first quarter, payable before it starts`, amount: quarterAmount(price), dueOn: null }];
   }
 }
+var DIGITAL_MARKETING_MILESTONES = [
+  "Onboarding (days 1 to 7): brand assets collected, account access granted and the month 1 content plan agreed",
+  "Month 1 (days 8 to 30): content produced and published each week, each piece approved by the client before publication",
+  "Month 1 review (day 31): reach, engagement and enquiries against the baseline, and the changes for month 2",
+  "Month 2 (days 32 to 60): content shaped by the month 1 results",
+  "Month 3 (days 61 to 89): content for the final month and the plan for the following quarter",
+  "Quarter review (day 90): results for the quarter and a recommendation on continued support"
+];
 function defaultAgreement(type, service) {
   const product2 = PRODUCTS.find((item2) => item2.id === (service ?? (type === "business_review" ? "business_review" : type === "six_week_fix" ? "six_week_fix" : "")));
   if (product2) {
     return {
       scope: `${product2.short}
 
-You get:
+Deliverables:
 ${bullets(product2.youGet)}
 
-Delivery: ${product2.delivery}`,
-      outOfScope: "Anything not listed above. Work beyond it is agreed and priced separately before it starts.",
+Delivery:
+${product2.delivery}`,
+      outOfScope: STANDARD_EXCLUSIONS,
       clientCommitments: STANDARD_COMMITMENTS,
       terms: STANDARD_TERMS,
       feeLines: feeLinesFor(product2)
     };
   }
   if (type === "digital_marketing") {
+    const fee = DIGITAL_MARKETING.monthlyFee ?? 0;
     return {
-      scope: `A ${DIGITAL_MARKETING.durationDays}-day content programme:
-${bullets(DIGITAL_MARKETING.monthly.map((item2) => `${item2.count} ${item2.label.toLowerCase()} a month`))}
-- A Weekly Check-in and a review each month
-- Nothing is published without your approval`,
-      outOfScope: "Paid advertising spend, photography or filming days, and accounts we have no access to.",
-      clientCommitments: "Send footage and approvals on time, give us partner access to your accounts, and tell us early about offers and events.",
-      terms: STANDARD_TERMS,
-      feeLines: []
+      scope: [
+        `IP Factory plans, produces and publishes the client's social media content for ${DIGITAL_MARKETING.durationDays} days. No content is published without the client's approval.`,
+        "Monthly deliverables:",
+        bullets(DIGITAL_MARKETING.monthly.map((item2) => `${item2.label}: ${item2.count} a month`)),
+        "Reporting and reviews:",
+        bullets(["Weekly check-in: progress, the content schedule and items awaiting approval", "Month 1 review: performance against the baseline and changes for month 2", "Quarter review: results for the 90 days and a recommendation on continued support"]),
+        "Milestones:",
+        bullets(DIGITAL_MARKETING_MILESTONES)
+      ].join("\n\n"),
+      outOfScope: "Paid advertising spend, photography or filming days, and the management of accounts to which IP Factory has not been given access. Any additional work is scoped and priced separately before it starts.",
+      clientCommitments: "The client provides raw footage each week, reviews and approves content within the turnaround agreed at onboarding, grants IP Factory partner access to its Instagram and Facebook accounts through Meta Business Suite, and informs IP Factory of offers and events in advance.",
+      terms: `${STANDARD_TERMS} The service fee is payable monthly in advance: the first month on signing, and each later month before it begins.`,
+      feeLines: [
+        { label: "Month 1 service fee, payable on signing", amount: fee, dueOn: null },
+        { label: "Month 2 service fee, payable before day 31", amount: fee, dueOn: null },
+        { label: "Month 3 service fee, payable before day 61", amount: fee, dueOn: null }
+      ]
     };
   }
-  return { scope: "", outOfScope: "", clientCommitments: STANDARD_COMMITMENTS, terms: STANDARD_TERMS, feeLines: [] };
+  return { scope: "", outOfScope: STANDARD_EXCLUSIONS, clientCommitments: STANDARD_COMMITMENTS, terms: STANDARD_TERMS, feeLines: [] };
 }
 var feeTotal = (lines) => lines.reduce((sum, line) => sum + line.amount, 0);
 
@@ -6533,7 +6555,7 @@ var requireManage = (actor) => {
   if (!authorityAllows(actor.authority, "manage_engagements")) throw new TRPCError8({ code: "FORBIDDEN", message: "Your role does not include working on engagements." });
 };
 var requireLead = async (db, actor, engagementId) => {
-  if (!await canReviewEngagement(db, actor, engagementId)) throw new TRPCError8({ code: "FORBIDDEN", message: "Only the engagement's lead or the desk sends or revises the agreement." });
+  if (!await canReviewEngagement(db, actor, engagementId)) throw new TRPCError8({ code: "FORBIDDEN", message: "Only the engagement's lead or the desk sends or revises the proposal." });
 };
 async function agreementRows(db, engagementId) {
   const [agreement] = await db.select().from(engagementAgreements).where(eq9(engagementAgreements.engagementId, engagementId)).limit(1);
@@ -6542,7 +6564,7 @@ async function agreementRows(db, engagementId) {
 }
 async function staffAgreement(db, actor, engagementId) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
-  if (!canSeeAgreement(actor)) throw new TRPCError8({ code: "FORBIDDEN", message: "The agreement and fees are for the lead, the desk and Finance." });
+  if (!canSeeAgreement(actor)) throw new TRPCError8({ code: "FORBIDDEN", message: "The proposal and fees are for the lead, the desk and Finance." });
   const { agreement, feeLines } = await agreementRows(db, engagementId);
   return {
     agreement: agreement ? { ...agreement, statusLabel: AGREEMENT_STATUS_LABELS[agreement.status] } : null,
@@ -6565,7 +6587,7 @@ async function saveAgreement(db, actor, input) {
   await requireStaffEngagement(db, actor, input.engagementId);
   validate(input);
   const { agreement, feeLines } = await agreementRows(db, input.engagementId);
-  if (agreement?.status === "accepted") throw new TRPCError8({ code: "BAD_REQUEST", message: "The owner accepted this agreement. Revise it first; they accept the new version." });
+  if (agreement?.status === "accepted") throw new TRPCError8({ code: "BAD_REQUEST", message: "The owner signed this proposal. Revise it first; they sign the new version." });
   const values2 = { scope: input.scope.trim(), outOfScope: input.outOfScope.trim() || null, clientCommitments: input.clientCommitments.trim() || null, terms: input.terms.trim() || null };
   await db.transaction(async (tx) => {
     if (agreement) await tx.update(engagementAgreements).set({ ...values2, status: "draft" }).where(eq9(engagementAgreements.id, agreement.id));
@@ -6589,8 +6611,8 @@ async function sendAgreement(db, actor, input) {
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   await requireLead(db, actor, input.engagementId);
   const { agreement, feeLines } = await agreementRows(db, input.engagementId);
-  if (!agreement) throw new TRPCError8({ code: "BAD_REQUEST", message: "Save the agreement first." });
-  if (agreement.status !== "draft") throw new TRPCError8({ code: "BAD_REQUEST", message: agreement.status === "accepted" ? "Already accepted." : "Already sent." });
+  if (!agreement) throw new TRPCError8({ code: "BAD_REQUEST", message: "Save the proposal first." });
+  if (agreement.status !== "draft") throw new TRPCError8({ code: "BAD_REQUEST", message: agreement.status === "accepted" ? "Already signed." : "Already sent." });
   if (!feeLines.length) throw new TRPCError8({ code: "BAD_REQUEST", message: "Add the fees before sending." });
   await db.update(engagementAgreements).set({ status: "sent", sentAt: /* @__PURE__ */ new Date(), sentByUserId: actor.id, version: agreement.version + 1, acceptedAt: null, acceptedByUserId: null, acceptedName: null }).where(eq9(engagementAgreements.id, agreement.id));
   await recordAudit(db, { action: "engagement_agreement_sent", actorUserId: actor.id, details: { engagementId: input.engagementId, version: agreement.version + 1 } });
@@ -6602,10 +6624,10 @@ async function sendAgreement(db, actor, input) {
       await deliverEmail({
         to: owner.email,
         sender: "business_support",
-        subject: `Your agreement for the ${title} is ready to read`,
+        subject: `Your proposal for the ${title} is ready to sign`,
         body: `Hello ${owner.name?.split(" ")[0] ?? ""},
 
-Your agreement for the ${title} is in your room: what we will do, what you do, the terms and the fees. Read it and accept it there when you are happy: ${getTrustedApplicationOrigin()}/dashboard#agreement
+Your proposal for the ${title} is in your room: what we will do, what you do, the terms and the fees. Read it and sign it there when you are happy: ${getTrustedApplicationOrigin()}/dashboard#agreement
 
 Any questions, reply to this email.
 
@@ -6662,14 +6684,14 @@ async function acceptAgreement(db, session, input) {
   const [engagement] = await db.select({ id: engagements.id, businessId: engagements.businessId, type: engagements.type, service: engagements.service }).from(engagements).where(and6(eq9(engagements.id, input.engagementId), eq9(engagements.businessId, business.businessId))).limit(1);
   if (!engagement) throw notFound();
   const viewer = await clientViewerFor(db, session, business.businessId);
-  if (viewer.kind !== "owner") throw new TRPCError8({ code: "FORBIDDEN", message: "Only the owner can accept the agreement." });
+  if (viewer.kind !== "owner") throw new TRPCError8({ code: "FORBIDDEN", message: "Only the owner can sign the proposal." });
   const name = input.name.trim();
   if (name.length < 2) throw new TRPCError8({ code: "BAD_REQUEST", message: "Type your full name to accept." });
   const updated = await db.update(engagementAgreements).set({ status: "accepted", acceptedAt: /* @__PURE__ */ new Date(), acceptedByUserId: session.user.id, acceptedName: name.slice(0, 200) }).where(and6(eq9(engagementAgreements.engagementId, engagement.id), eq9(engagementAgreements.status, "sent"))).returning({ id: engagementAgreements.id, version: engagementAgreements.version });
-  if (!updated.length) throw new TRPCError8({ code: "BAD_REQUEST", message: "There is no agreement waiting for you to accept." });
+  if (!updated.length) throw new TRPCError8({ code: "BAD_REQUEST", message: "There is no proposal waiting for you to sign." });
   await recordAudit(db, { action: "engagement_agreement_accepted", actorUserId: session.user.id, details: { engagementId: engagement.id, version: updated[0].version, name } });
   try {
-    await deliverEmail({ to: BRAND.businessSupportMailbox, sender: "business_support", subject: `${business.businessName} accepted the ${engagementTitle(engagement.type, engagement.service)} agreement`, body: `${name} accepted version ${updated[0].version} of the agreement for ${business.businessName}. ${getTrustedApplicationOrigin()}/admin` });
+    await deliverEmail({ to: BRAND.businessSupportMailbox, sender: "business_support", subject: `${business.businessName} signed the ${engagementTitle(engagement.type, engagement.service)} proposal`, body: `${name} signed version ${updated[0].version} of the proposal for ${business.businessName}. ${getTrustedApplicationOrigin()}/admin` });
   } catch (error) {
     console.error("[Agreements] Accepted, but the desk could not be emailed:", error instanceof Error ? error.message : error);
   }

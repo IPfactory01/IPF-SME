@@ -475,8 +475,8 @@ describe("the agreement on the team's side", () => {
     api.detail = detail({ manage: true, assign: true, review: true });
     render(<EngagementsView />);
     fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
-    const section = within(within(screen.getByRole("dialog")).getByText("Agreement and fees").closest("section")!);
-    expect((section.getByLabelText("What we will do") as HTMLTextAreaElement).value).toBe("Two weeks and two Sessions.");
+    const section = within(within(screen.getByRole("dialog")).getByText("Proposal and fees").closest("section")!);
+    expect((section.getByLabelText("Scope of Work") as HTMLTextAreaElement).value).toBe("Two weeks and two Sessions.");
     expect((section.getByLabelText("Amount 1") as HTMLInputElement).value).toBe("600000");
     fireEvent.click(section.getByRole("button", { name: "Add a fee" }));
     fireEvent.change(section.getByLabelText("Fee 2"), { target: { value: "Travel to Abuja" } });
@@ -492,7 +492,7 @@ describe("the agreement on the team's side", () => {
     api.detail = detail({ manage: true, assign: true, review: true });
     render(<EngagementsView />);
     fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
-    const section = within(within(screen.getByRole("dialog")).getByText("Agreement and fees").closest("section")!);
+    const section = within(within(screen.getByRole("dialog")).getByText("Proposal and fees").closest("section")!);
     fireEvent.click(section.getByRole("button", { name: "Send to the owner" }));
     await waitFor(() => expect(api.calls.sendAgreement).toEqual([{ engagementId: row.id }]));
     expect(api.calls.saveAgreement).toEqual([expect.objectContaining({ engagementId: row.id, feeLines: [{ label: "Business Review", amount: 600000, dueOn: null }] })]);
@@ -505,7 +505,7 @@ describe("the agreement on the team's side", () => {
     api.detail = detail({ manage: true, assign: true, review: true });
     render(<EngagementsView />);
     fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
-    const section = within(within(screen.getByRole("dialog")).getByText("Agreement and fees").closest("section")!);
+    const section = within(within(screen.getByRole("dialog")).getByText("Proposal and fees").closest("section")!);
     expect((section.getByRole("button", { name: "Send to the owner" }) as HTMLButtonElement).disabled).toBe(true);
     expect(section.getByText("Add the fees to send it.")).toBeTruthy();
     api.agreement = saved;
@@ -519,7 +519,7 @@ describe("a Specialist on the engagement", () => {
     render(<EngagementsView />);
     fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
     const drawer = within(screen.getByRole("dialog"));
-    expect(drawer.queryByText("Agreement and fees")).toBeNull();
+    expect(drawer.queryByText("Proposal and fees")).toBeNull();
     expect(drawer.queryByLabelText(/Internal notes/)).toBeNull();
     expect(drawer.getByText("IP Factory only: the lead shares it with the client")).toBeTruthy();
     expect(drawer.queryByLabelText("Who sees the file")).toBeNull();

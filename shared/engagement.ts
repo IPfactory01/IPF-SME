@@ -6,7 +6,7 @@ import { METHOD } from "./method";
  * PRD F7 and F8). One source of truth for its vocabulary, the stage templates and who sees what. The database stores
  * the identifiers below; people only ever see the labels.
  *
- * Principles agreed on 9 October 2026 (PRD §9):
+ * Principles agreed on 9 October 2026 (docs/product/08-decision-log.md §2):
  *  1. The fix is one problem with one measure; a second problem is the next fix, not a second workstream.
  *  2. Show the client only what the team will keep current: where we are, what we need, what we found.
  *  3. Session notes and findings are for the owner by default; the owner decides what their staff see.

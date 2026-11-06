@@ -712,20 +712,20 @@ function CheckinCard({ checkin, weekNumber, engagementId, canManage, unit, onDon
 
 /**
  * The agreement and fees: drafted from the service, saved, sent by the lead, accepted by the owner in their room. Once
- * accepted it is locked; Revise reopens it and the owner accepts the new version. Payments are recorded line by line.
+ * accepted it is locked; Revise reopens it and the owner signs the new version. Payments are recorded line by line.
  */
 function AgreementAdmin({ engagementId }: { engagementId: number }) {
   const utils = trpc.useUtils();
   const query = trpc.engagement.staff.agreement.useQuery({ engagementId }, { retry: false });
   const [draft, setDraft] = useState<(AgreementDraft & { loadedFor: number }) | null>(null);
   const done = (message: string) => ({ onSuccess: () => { void utils.engagement.staff.agreement.invalidate({ engagementId }); toast.success(message); }, onError: (error: { message: string }) => toast.error(error.message) });
-  const save = trpc.engagement.staff.saveAgreement.useMutation(done("Agreement saved."));
-  const send = trpc.engagement.staff.sendAgreement.useMutation(done("Sent to the owner. It is in their room to accept."));
-  const revise = trpc.engagement.staff.reviseAgreement.useMutation({ ...done("Reopened. Send it again when it is ready; the owner accepts the new version."), onSettled: () => setDraft(null) });
+  const save = trpc.engagement.staff.saveAgreement.useMutation(done("Proposal saved."));
+  const send = trpc.engagement.staff.sendAgreement.useMutation(done("Sent to the owner. It is in their room to sign."));
+  const revise = trpc.engagement.staff.reviseAgreement.useMutation({ ...done("Reopened. Send it again when it is ready; the owner signs the new version."), onSettled: () => setDraft(null) });
   const paid = trpc.engagement.staff.setFeePaid.useMutation(done("Payment recorded."));
-  if (query.error) return <DetailSection title="Agreement and fees"><p role="alert" className="text-sm text-danger">{query.error.message}</p></DetailSection>;
+  if (query.error) return <DetailSection title="Proposal and fees"><p role="alert" className="text-sm text-danger">{query.error.message}</p></DetailSection>;
   const data = query.data;
-  if (!data) return <DetailSection title="Agreement and fees"><p className="text-sm text-ink-muted">Loading…</p></DetailSection>;
+  if (!data) return <DetailSection title="Proposal and fees"><p className="text-sm text-ink-muted">Loading…</p></DetailSection>;
   const agreement = data.agreement;
   const locked = agreement?.status === "accepted" || agreement?.status === "sent";
   // The form starts from what is saved, or from what the service suggests.
@@ -752,11 +752,12 @@ function AgreementAdmin({ engagementId }: { engagementId: number }) {
     </div>
   );
   return (
-    <DetailSection title="Agreement and fees">
-      <p className="text-xs text-ink-muted">{agreement ? `${agreement.statusLabel}${agreement.version ? ` · version ${agreement.version}` : ""}${agreement.status === "accepted" && agreement.acceptedName ? ` · accepted by ${agreement.acceptedName} on ${formatDate(agreement.acceptedAt)}` : ""}` : "Drafted from the service and its price on the website. Check it, change anything, then send."}</p>
-      {area("scope", "What we will do", 6)}
-      {area("outOfScope", "Not included", 2)}
-      {area("clientCommitments", "What the client does", 2)}
+    <DetailSection title="Proposal and fees">
+      <p className="text-xs text-ink-muted">{agreement ? `${agreement.statusLabel}${agreement.version ? ` · version ${agreement.version}` : ""}${agreement.status === "accepted" && agreement.acceptedName ? ` · signed by ${agreement.acceptedName} on ${formatDate(agreement.acceptedAt)}` : ""}` : "Drafted from the service and its price on the website. Check it, change anything, then send."}</p>
+      {area("scope", "Scope of Work", 8)}
+      <p className="text-xs text-ink-muted">Set as a document for the client: a line ending in a colon is a subheading; lines starting "- Item: detail" form a table.</p>
+      {area("outOfScope", "Exclusions", 2)}
+      {area("clientCommitments", "Client Responsibilities", 2)}
       {area("terms", "Terms", 3)}
       <div className="space-y-1">
         <p className={LABEL}>Fees (naira)</p>

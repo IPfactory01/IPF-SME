@@ -804,30 +804,30 @@ describe("Fix the next problem", () => {
 describe("the agreement and fees", () => {
   const sent = { status: "sent" as const, version: 1, scope: "Two weeks and two Sessions.", outOfScope: "Anything not listed above.", clientCommitments: "Send the records.", terms: "Our Terms apply.", sentAt: new Date("2026-11-06T10:00:00Z"), acceptedAt: null, acceptedName: null, feeLines: [{ id: 1, label: "To start", amount: 300000, dueOn: "2026-11-10", paid: true }, { id: 2, label: "With the Findings", amount: 300000, dueOn: null, paid: false }], total: 600000, canAccept: true };
 
-  it("puts the agreement first in Next action, and the owner accepts it with their name once they tick that they read it", () => {
+  it("puts the proposal first in Next action, and the owner signs it with their name once they tick that they read it", () => {
     render(<EngagementRoom room={room({ agreement: sent })} />);
     const next = within(screen.getByRole("region", { name: /Next action/ }));
-    expect(next.getByText("Read and accept your agreement")).toBeTruthy();
-    expect(next.getByRole("link", { name: /Open the agreement/ }).getAttribute("href")).toBe("#agreement");
-    fireEvent.click(screen.getByRole("tab", { name: /^Agreement/ }));
+    expect(next.getByText("Review and sign the proposal")).toBeTruthy();
+    expect(next.getByRole("link", { name: /Open the proposal/ }).getAttribute("href")).toBe("#agreement");
+    fireEvent.click(screen.getByRole("tab", { name: /^Proposal/ }));
     const fees = within(screen.getByRole("region", { name: "Fees" }));
     expect(fees.getAllByText("₦300,000")).toHaveLength(2);
     expect(fees.getByText("₦600,000")).toBeTruthy();
     expect(fees.getByText("Paid")).toBeTruthy();
-    expect(within(screen.getByRole("article", { name: "Agreement" })).getByText("Two weeks and two Sessions.")).toBeTruthy();
-    const form = within(screen.getByRole("form", { name: "Accept the agreement" }));
-    fireEvent.change(form.getByLabelText("Type your full name to accept"), { target: { value: "Ada Okafor" } });
-    expect(form.getByRole("button", { name: "Accept the agreement" }).hasAttribute("disabled")).toBe(true);
+    expect(within(screen.getByRole("article", { name: "Proposal" })).getByText("Two weeks and two Sessions.")).toBeTruthy();
+    const form = within(screen.getByRole("form", { name: "Sign the proposal" }));
+    fireEvent.change(form.getByLabelText("Full name"), { target: { value: "Ada Okafor" } });
+    expect(form.getByRole("button", { name: "Sign the proposal" }).hasAttribute("disabled")).toBe(true);
     fireEvent.click(form.getByRole("checkbox"));
-    fireEvent.click(form.getByRole("button", { name: "Accept the agreement" }));
+    fireEvent.click(form.getByRole("button", { name: "Sign the proposal" }));
     expect(api.calls.acceptAgreement).toEqual([{ engagementId: 4, name: "Ada Okafor" }]);
   });
 
-  it("shows who accepted it and when, with no form", () => {
+  it("shows who signed it and when, with no form", () => {
     render(<EngagementRoom room={room({ agreement: { ...sent, status: "accepted", acceptedName: "Ada Okafor", acceptedAt: new Date("2026-11-07T10:00:00Z"), canAccept: false } })} />);
-    fireEvent.click(screen.getByRole("tab", { name: /^Agreement/ }));
-    expect(screen.getByText(/Accepted by Ada Okafor/)).toBeTruthy();
-    expect(screen.queryByRole("form", { name: "Accept the agreement" })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: /^Proposal/ }));
+    expect(within(screen.getByRole("region", { name: "Summary" })).getByText(/Ada Okafor, 7 November 2026/)).toBeTruthy();
+    expect(screen.queryByRole("form", { name: "Sign the proposal" })).toBeNull();
   });
 
   it("has no Agreement tab before one is sent", () => {

@@ -39,8 +39,8 @@ export default function FinanceView() {
           <button key={value} type="button" aria-pressed={show === value} onClick={() => setShow(value)} className={`px-3 py-1 ${show === value ? "bg-brand text-white" : "text-ink-600"}`}>{value === "owed" ? "Not yet paid" : "Everything"}</button>
         ))}
       </div>
-      <section aria-label="Agreement fees" className="space-y-2">
-        <h2 className="text-sm font-semibold text-ink">Agreement fees</h2>
+      <section aria-label="Proposal fees" className="space-y-2">
+        <h2 className="text-sm font-semibold text-ink">Proposal fees</h2>
         <div className="overflow-x-auto border border-line bg-white">
           <table className="w-full">
             <thead><tr className="border-b border-line"><th className={TH}>Client</th><th className={TH}>Engagement</th><th className={TH}>Fee</th><th className={TH}>Due</th><th className={`${TH} text-right`}>Amount</th><th className={TH}>Status</th></tr></thead>
@@ -76,7 +76,7 @@ export default function FinanceView() {
           </table>
         </div>
       </section>
-      <p className="text-xs text-ink-muted">To record a payment: a payment request in the client's record under Pipeline; an agreement fee by ticking Paid in the engagement's Agreement and fees.</p>
+      <p className="text-xs text-ink-muted">To record a payment: a payment request in the client's record under Pipeline; a proposal fee by ticking Paid in the engagement's Proposat and fees.</p>
     </div>
   );
 }

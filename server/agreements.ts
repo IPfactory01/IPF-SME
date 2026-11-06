@@ -22,7 +22,7 @@ const requireManage = (actor: StaffActor) => {
   if (!authorityAllows(actor.authority, "manage_engagements")) throw new TRPCError({ code: "FORBIDDEN", message: "Your role does not include working on engagements." });
 };
 const requireLead = async (db: Database, actor: StaffActor, engagementId: number) => {
-  if (!(await canReviewEngagement(db, actor, engagementId))) throw new TRPCError({ code: "FORBIDDEN", message: "Only the engagement's lead or the desk sends or revises the agreement." });
+  if (!(await canReviewEngagement(db, actor, engagementId))) throw new TRPCError({ code: "FORBIDDEN", message: "Only the engagement's lead or the desk sends or revises the proposal." });
 };
 
 async function agreementRows(db: Pick<Database, "select">, engagementId: number) {
@@ -34,7 +34,7 @@ async function agreementRows(db: Pick<Database, "select">, engagementId: number)
 /** The team's view: the agreement and fees, or, before the first save, the draft the service suggests. */
 export async function staffAgreement(db: Database, actor: StaffActor, engagementId: number) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
-  if (!canSeeAgreement(actor)) throw new TRPCError({ code: "FORBIDDEN", message: "The agreement and fees are for the lead, the desk and Finance." });
+  if (!canSeeAgreement(actor)) throw new TRPCError({ code: "FORBIDDEN", message: "The proposal and fees are for the lead, the desk and Finance." });
   const { agreement, feeLines } = await agreementRows(db, engagementId);
   return {
     agreement: agreement ? { ...agreement, statusLabel: AGREEMENT_STATUS_LABELS[agreement.status] } : null,
@@ -63,7 +63,7 @@ export async function saveAgreement(db: Database, actor: StaffActor, input: Agre
   await requireStaffEngagement(db, actor, input.engagementId);
   validate(input);
   const { agreement, feeLines } = await agreementRows(db, input.engagementId);
-  if (agreement?.status === "accepted") throw new TRPCError({ code: "BAD_REQUEST", message: "The owner accepted this agreement. Revise it first; they accept the new version." });
+  if (agreement?.status === "accepted") throw new TRPCError({ code: "BAD_REQUEST", message: "The owner signed this proposal. Revise it first; they sign the new version." });
   const values = { scope: input.scope.trim(), outOfScope: input.outOfScope.trim() || null, clientCommitments: input.clientCommitments.trim() || null, terms: input.terms.trim() || null };
   await db.transaction(async tx => {
     if (agreement) await tx.update(engagementAgreements).set({ ...values, status: "draft" }).where(eq(engagementAgreements.id, agreement.id));
@@ -86,8 +86,8 @@ export async function sendAgreement(db: Database, actor: StaffActor, input: { en
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   await requireLead(db, actor, input.engagementId);
   const { agreement, feeLines } = await agreementRows(db, input.engagementId);
-  if (!agreement) throw new TRPCError({ code: "BAD_REQUEST", message: "Save the agreement first." });
-  if (agreement.status !== "draft") throw new TRPCError({ code: "BAD_REQUEST", message: agreement.status === "accepted" ? "Already accepted." : "Already sent." });
+  if (!agreement) throw new TRPCError({ code: "BAD_REQUEST", message: "Save the proposal first." });
+  if (agreement.status !== "draft") throw new TRPCError({ code: "BAD_REQUEST", message: agreement.status === "accepted" ? "Already signed." : "Already sent." });
   if (!feeLines.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Add the fees before sending." });
   await db.update(engagementAgreements).set({ status: "sent", sentAt: new Date(), sentByUserId: actor.id, version: agreement.version + 1, acceptedAt: null, acceptedByUserId: null, acceptedName: null }).where(eq(engagementAgreements.id, agreement.id));
   await recordAudit(db, { action: "engagement_agreement_sent", actorUserId: actor.id, details: { engagementId: input.engagementId, version: agreement.version + 1 } });
@@ -99,8 +99,8 @@ export async function sendAgreement(db: Database, actor: StaffActor, input: { en
       const title = engagementTitle(engagement.type, engagement.service);
       await deliverEmail({
         to: owner.email, sender: "business_support",
-        subject: `Your agreement for the ${title} is ready to read`,
-        body: `Hello ${owner.name?.split(" ")[0] ?? ""},\n\nYour agreement for the ${title} is in your room: what we will do, what you do, the terms and the fees. Read it and accept it there when you are happy: ${getTrustedApplicationOrigin()}/dashboard#agreement\n\nAny questions, reply to this email.\n\n${BRAND.organisationName}`,
+        subject: `Your proposal for the ${title} is ready to sign`,
+        body: `Hello ${owner.name?.split(" ")[0] ?? ""},\n\nYour proposal for the ${title} is in your room: what we will do, what you do, the terms and the fees. Read it and sign it there when you are happy: ${getTrustedApplicationOrigin()}/dashboard#agreement\n\nAny questions, reply to this email.\n\n${BRAND.organisationName}`,
       });
       notified = true;
     } catch (error) {
@@ -164,15 +164,15 @@ export async function acceptAgreement(db: Database, session: AccountSession, inp
     .where(and(eq(engagements.id, input.engagementId), eq(engagements.businessId, business.businessId))).limit(1);
   if (!engagement) throw notFound();
   const viewer = await clientViewerFor(db, session, business.businessId);
-  if (viewer.kind !== "owner") throw new TRPCError({ code: "FORBIDDEN", message: "Only the owner can accept the agreement." });
+  if (viewer.kind !== "owner") throw new TRPCError({ code: "FORBIDDEN", message: "Only the owner can sign the proposal." });
   const name = input.name.trim();
   if (name.length < 2) throw new TRPCError({ code: "BAD_REQUEST", message: "Type your full name to accept." });
   const updated = await db.update(engagementAgreements).set({ status: "accepted", acceptedAt: new Date(), acceptedByUserId: session.user.id, acceptedName: name.slice(0, 200) })
     .where(and(eq(engagementAgreements.engagementId, engagement.id), eq(engagementAgreements.status, "sent"))).returning({ id: engagementAgreements.id, version: engagementAgreements.version });
-  if (!updated.length) throw new TRPCError({ code: "BAD_REQUEST", message: "There is no agreement waiting for you to accept." });
+  if (!updated.length) throw new TRPCError({ code: "BAD_REQUEST", message: "There is no proposal waiting for you to sign." });
   await recordAudit(db, { action: "engagement_agreement_accepted", actorUserId: session.user.id, details: { engagementId: engagement.id, version: updated[0]!.version, name } });
   try {
-    await deliverEmail({ to: BRAND.businessSupportMailbox, sender: "business_support", subject: `${business.businessName} accepted the ${engagementTitle(engagement.type, engagement.service)} agreement`, body: `${name} accepted version ${updated[0]!.version} of the agreement for ${business.businessName}. ${getTrustedApplicationOrigin()}/admin` });
+    await deliverEmail({ to: BRAND.businessSupportMailbox, sender: "business_support", subject: `${business.businessName} signed the ${engagementTitle(engagement.type, engagement.service)} proposal`, body: `${name} signed version ${updated[0]!.version} of the proposal for ${business.businessName}. ${getTrustedApplicationOrigin()}/admin` });
   } catch (error) {
     console.error("[Agreements] Accepted, but the desk could not be emailed:", error instanceof Error ? error.message : error);
   }

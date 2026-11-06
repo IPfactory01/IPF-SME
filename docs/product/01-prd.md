@@ -1,429 +1,287 @@
 # 1. Product requirements (PRD)
 
 **Product:** The Shift, by IP Factory (`BRAND.productEndorsement` in `shared/brand.ts`)
-**Promise:** Find it. Fix it. See the results.
-**Status:** v0.1 live at https://www.ipfactory.co. The launch menu of 22 October 2026 is on the site (section 3); online ordering of Done for You products follows. Last reviewed 22 October 2026.
-**Source:** *Business Support Concept Note and Launch Blueprint v0.8.1* (6 October 2026), referred to below as "the concept note" with its section numbers; the *IPF The Shift Operational Business Plan* (22 October 2026), "the operational plan", for the launch menu, prices and ways to buy; and the decisions taken while building (section 9).
+**Promise:** Find it. Fix it. See the shift.
+**Status:** live at https://www.ipfactory.co with paying clients. Rewritten from scratch on 6 November 2026 (ET); the
+history of how we got here is in the [decision log](08-decision-log.md).
+**Sources:** *Business Support Concept Note and Launch Blueprint v0.8.1* (6 October 2026), "the concept note"; the *IPF
+The Shift Operational Business Plan* (22 October 2026), "the operational plan"; ET's decisions since.
 
-This document says what the product does, feature by feature, and the status of each feature. How it is built is in
-[2. Technical requirements](02-technical-requirements.md); what happens on each click is in [3. App flow](03-app-flow.md).
+This document says what the product must do, for whom, and how we know it works. It states what is true now and what
+is required next; it is not a history. How it is built is in [2. Technical requirements](02-technical-requirements.md);
+what happens on each click is in [3. App flow](03-app-flow.md); who sees what is in [5. Backend schema](05-backend-schema.md).
 
 ---
 
-## 1. The product in one page
+## 1. The problem
 
-Business owners at this size know roughly what to do and cannot get it done (concept note §2). The Shift gets into the
-business with the owner, names the problem, tells them what to do, hands over the tools and checks the work every week
-until one agreed number moves, or delivers finished work itself. **Done for You: we deliver finished work, AI-assisted and
-checked by a consultant. Six-Week Fix: the owner's team does the work; IP Factory prescribes, equips, reviews and tracks**
-(rule D1 retired by ET on 21 October 2026).
-Analysts and AI do most of the analysis under a named IP Factory consultant, and we say so.
+Owner-run Nigerian businesses that already trade know roughly what is wrong and cannot get it fixed (concept note §2–3).
+Four things stand in the way, and the product answers each:
 
-| | |
-|---|---|
-| **Who it is for** | Nigerian business owners who already trade, anywhere in Nigeria (ET, 22 October 2026; the plan started in Lagos and Abuja, and most of the work is online): growth-stuck operators first, funding-ready founders second (operational plan, page 14). Smaller owners start with a Done for You product; larger ones with several connected problems start with a Business Review |
-| **Not for** | Work that needs a project team across several functions of a larger business: referred to Enzo Krypton & Co. and quoted per project. Training is not a core product (ET, 5 October) |
-| **The pilot** | 20 paying clients between 9 October and 10 December 2026; about ₦34,000,000 at list by 31 December (§9, §11) |
-| **Second job of the pilot** | Build the working parts (problem taxonomy, business check, method per problem area, check-in template, engagement record) that become the "Strategy in a Box" portal in January 2027 (§8) |
-
-## 2. Users
-
-One person has one identity; roles and assignments are added to it (see `AGENTS.md` and [5. Backend schema](05-backend-schema.md)).
-
-| User | Who | What they need from the product |
+| What stands in the way | What it looks like in Nigeria | What The Shift does |
 |---|---|---|
-| **Visitor / prospect** | A business owner who has not paid. Not signed in | A free business check that names their gap, a way to book a call, and the option to buy the full report |
-| **Client (business owner)** | A paying owner with a client account | One place to see where the engagement is, what we need from them, what was agreed and what they have received |
-| **Desk lead** | Lewis Osako | Run the desk: every lead, call, payment, engagement and sign-off |
-| **Analyst** | Richard Kehinde, Collins Tobenna, Olamide Akin-Alamu, Lovelyn Nzubechukwu | Their assigned clients only: preparation, check-ins, the record |
-| **Partner** | Mr Tarfa (ET), Victor Anagor | Current State Assessment calls and key reviews for clients above ₦10,000,000 a month |
-| **Subject-matter expert** | Group co-founders and partners | Access to one engagement or problem area when invited |
-| **Finance** | To be named | Payment links, Paystack reconciliation and the confirm-by-hand fallback, without the diagnostic detail |
-| **Admin / Super Admin** | Lewis (Super Admin), Richard (admin) per D5 | Staff, roles, permissions and platform settings |
-| **System actors** | The AI summary, the report builder, scheduled reminders, Paystack (confirming online payments) | Server-controlled and audited; never an interactive account |
+| **No clear diagnosis** | The owner is busy every day and cannot say which problem costs the most | A free Business Health Check names the problem area and the gap, in the owner's words |
+| **Help that does not fit** | Consultants priced and staffed for corporates; generic courses; advice that ends at a report | Fixed-price products sized for the business, delivered by a named expert, ending in work that is used |
+| **Records that are not ready** | Sales in a notebook, POS slips, bank-app PDFs, money through a personal account, esusu and ajo | We ask only for what such a business has, in forms it can send: photos, voice notes, WhatsApp exports |
+| **No one checking the work** | Plans that are never carried out | One agreed number, watched every week until it moves |
 
-## 3. The launch menu and the prices
+**The direction (ET, 6 November 2026).** The Shift is a **service business today and a self-serve platform over time**.
+Clients keep their access throughout. Each release moves routine work from people to the platform, so the team spends
+its time on judgement: the diagnosis, the price, the approval. This is the test every requirement below is held to.
 
-The menu went on sale on 22 October 2026 at the prices ET set on 21 October, each at the top of its range (operational
-plan, pages 11 and 15). Every product, its price, delivery, payment terms, intake and next product live in one file,
-`shared/products.ts`; the site's menu (`/services`), product pages (`/services/:slug`), the Business Health Check's routing
-and the order flow read from it. The three prices the existing payment code charges are in `shared/businessSupport.ts`
-(`PRICES`), and a test keeps the two in step. The Full Report and Business Review prices can be overridden on the server
-(`FULL_REPORT_PRICE_NGN`, `CURRENT_STATE_PRICE_NGN`).
+## 2. Product principles
 
-**Four ways to buy** (ET, 21 October): Assessment (free, or paid before work); Done for You (a fixed price, paid before
-work); Six-Week Fix (50% at the start, 25% at the mid-point, 25% at the result, or in full at 5% off); Monthly Service
-(paid a quarter at a time, price held for twelve months, stop at any quarter end).
+1. **The platform does the routine work; people make the judgements.** Anything that follows from a choice already
+   made (the type of engagement, the service bought, a date, a priority) happens without a click. A person decides the
+   diagnosis, the price, and what reaches the client.
+2. **Nothing reaches a client until a named person releases it.** Every prescription and plan is approved by a lead.
+3. **Deterministic where it matters.** Routes, scores, colours and the Full Report come from fixed rules; AI writes
+   words around them and never changes them. We tell owners that analysts and AI do the analysis under a named expert.
+4. **One client, one place.** Every project, file, proposal and decision for a business is in its room.
+5. **Built for how Nigerian owners work.** Phone first, low data, WhatsApp for conversation, naira in full, day-first
+   dates, plain English, records accepted as they are.
+6. **Each person sees what their job needs, and no more.** Enforced on the server by named permissions, never by
+   hiding a button.
 
-| Product | Way to buy | Price | Delivery | How it starts | Status |
-|---|---|---|---|---|---|
-| Free Business Health Check | Assessment | Free | At once | `/check` | **Built** |
-| Full Report | Assessment | ₦100,000 | Emailed when the Report Intake is finished | Offered at the end of the check | **Built** |
-| Funding Readiness Assessment | Assessment | ₦150,000 | 3 working days from complete records | Buy online | Page live; online order **to build** |
-| Business Review (two weeks; was the Current State Assessment) | Assessment | ₦600,000 | Two weeks, two Sessions | After the Discovery Call | **Built** (Paystack) |
-| Strategy and 90-Day Plan | Done for You | ₦450,000 | 7 working days | Buy online | Page live; online order **to build** |
-| Pricing and Unit Cost Review (₦400,000 from 28 October; was ₦750,000) | Done for You | ₦400,000 | 7 working days | After a 20-minute call | Page live; payment link **to build** |
-| Bookkeeping Catch-Up | Done for You | ₦100,000 a month of records (at least three months, ₦300,000) | 5 working days for three months | Buy online | Page live; online order **to build** |
-| 13-Week Cash Flow Forecast | Done for You | ₦300,000 | 5 working days | Buy online | Page live; online order **to build** |
-| Funding Application Pack (₦900,000 from 28 October; was ₦600,000) | Done for You | ₦900,000 | 10 working days of complete records | After a 20-minute call | Page live; payment link **to build** |
-| Hiring Toolkit | Done for You | ₦300,000 | 5 working days | Buy online | Page live; online order **to build** |
-| Business Model (added 28 October) | Done for You | ₦300,000 | 7 working days | Buy online | Page live; online order **to build** |
-| Financial Model (added 28 October) | Done for You | ₦350,000 | 7 working days | Buy online | Page live; online order **to build** |
-| Business Plan (added 28 October; includes the Business Model and the Financial Model) | Done for You | ₦750,000 | 15 working days | After a 20-minute call | Page live; payment link **to build** |
-| Pitch Deck (added 28 October) | Done for You | ₦300,000 | 7 working days | Buy online | Page live; online order **to build** |
-| Six-Week Fix (Margin, Sales, Cash and Pricing, Delegation and Structure) | Six-Week Fix | ₦1,500,000 | Six weeks | After the Discovery Call | Engagement **built**; instalments **to build** |
-| Monthly Accounts and Cash Report | Monthly Service | ₦600,000 a quarter (₦200,000 a month); shown by the quarter from 28 October | By the 10th of each month | After a call | Page live; quarterly billing **to build** |
-| Monthly Adviser Review | Monthly Service | ₦450,000 a quarter (₦150,000 a month); shown by the quarter from 28 October | One Session a month | After a call | Page live; quarterly billing **to build** |
+## 3. Users and their jobs
 
-Fallback prices are kept in the catalogue (`fallbackPrice`) for the 15 December test: a product below 5% of routed checks,
-or the Business Review below 20% of calls, steps down in January (operational plan, page 15).
+One person has one identity; levels, roles and project assignments are added to it.
 
-**Delivery promise** (ET, 22 October; wording aligned to the Terms on 22 October): we confirm the delivery date once the
-records are complete; if we cannot deliver as agreed, the owner contacts us and we make it right in line with the Terms
-(§8: a refund, a service credit or an agreed alternative, as the circumstances call for). The site never promises an
-automatic full refund. **Boundaries** until counsel answers: management accounts only, and the monthly tax note
-states record readiness only, not tax advice.
+### The public
 
-**How a sale runs** (operational plan, page 18; `JOURNEY` in `shared/businessSupport.ts`): free check → the check names
-the first product and the next one → pay by link (the review, the fixes, the monthly services and the two products above
-₦500,000 start with a call) → send records through a secure form → finished work checked by a consultant who did not
-prepare it, with a 30-minute handover → at day 30, the next product or a Monthly Service.
-
-**Until online ordering opens** (`ONLINE_ORDERS_OPEN` in `shared/products.ts`), every product starts with the free call
-or the check, so no page offers a dead link.
-
-## 4. Features
-
-Each feature lists what it must do, the rules it follows and its status. "Built" means it is live, tested and on `main`
-(or on the working branch awaiting "push to main", marked *branch*).
-
-### F1. Public site
-
-- A website of several pages, not one long landing page (ET, 22 October 2026): Home, Services, a page per service, How
-  we work, About, Questions and Contact, with one menu on every page. The home page is short and in the owner's words
-  (concept note §16): the hero, the track record, owners' problems each leading to the service that answers it, where
-  most owners start, how we work in three steps, the evidence and the free check. Each block links on to its page: the
-  journey, ways to buy and the ten problem areas live on How we work; the firm, who it is for and who you work with on
-  About; every question on Questions.
-- Trust without names (ET, 13 October 2026): a track record strip under the hero (250+ clients, 50+ years of partner
-  experience, since 2011, the number of sectors; `BRAND.trackRecord`), sourced figures under the problem ("They fail
-  between knowing and doing", concept note §2–3), and **The experience behind The Shift**: IP Factory as the delivery
-  and method arm of Enzo Krypton & Co. (named from 14 October; linked when `trackRecord.groupUrl` is set), the sectors
-  as a list, "The same method we use with larger clients. Run at the size and the price that fits your business.", and
-  **Clients**, named once, as logos in a strip under the track record figures, "The team behind The Shift has worked with", in equal tiles, in ink until a mouse points at one (`trackRecord.clientLogos`, files in `client/public/clients`): LSETF, Bank of Industry, FSDH, Helium Health, MAX, Ruff 'n' Tumble and SKLD, confirmed by ET on 16 October from the Enzo Krypton company profile; worded as work done, never an endorsement, and never a government crest or a multilateral's mark. Partners are not
-  named; every figure must stay defensible.
-- Copy rules: second person, short sentences, naira in full, no consulting words, never "door", "sprint", "playbook"
-  or "retainer" (§3 front matter; `AGENTS.md`).
-- No "book a Current State Assessment" button: the call comes first and the payment request follows it.
-- **Status: Built** (`client/src/pages/Home.tsx`, content from `shared/businessSupport.ts`). Gap: the "Client sign in"
-  link still opens the JUMP participant sign-in instead of `/login` ([App flow §10](03-app-flow.md)).
-
-### F2. Free business check
-
-- Asks who the owner is first (name, email, WhatsApp with a country code, how they heard), then saves a lead before any
-  business question.
-- A decision tree, not a questionnaire (§15): profile (stage, business name and one-line description, both required,
-  age, kind of business, sector from twelve options, staff, revenue, trend), founder readiness (hours, team, education,
-  money basics, DISC-style read of how they lead under pressure and how others see them), then only the problem areas
-  that apply to the stage and age. No path is longer than about 30 questions.
-- Routing: idea stage → founder readiness and the idea; side business → areas 1, 3, 5, 7 (and 6 with three or more
-  staff); full-time under 5 years → areas 1 to 8; 5 to 10 years → adds 9; over 10 years → all ten, business model first;
-  over ₦25,000,000 a month or 50+ staff → stops after the profile and goes to an adviser; under ₦1,000,000 a month with no
-  staff → founder readiness only.
-- Examples under each area match the owner's sector; "Other" falls back to examples by kind of business.
-- Result: a colour-coded outline (clear, watch, stuck) with a "Start here" area, one of four gaps (clarity, know-how,
-  resources, strategy), founder readiness in words, up to three services from the catalogue that fit, the full report
-  offer, and the call booking. Areas the check did not ask about are shown greyed as "Not assessed" with the reason,
-  and "The Current State Assessment looks at all ten" (*branch*).
-- The summary is AI-written and checked against the service catalogue; if the AI fails, a rules summary is used. The
-  owner's description is the main source for tailoring; when it is unclear or does not fit the sector, the sector wins
-  (*branch*). Scoring, routes and colours are deterministic and never changed by the AI.
-- Trading businesses end with **the problem to fix** (concept note §15, block 3): what they have already tried
-  (optional), roughly what the problem costs each month, and who decides on spending to fix it. These prepare the
-  discovery call and never change the outline, the route or the score. Ideas, very small and very large businesses
-  skip it.
-- Progress is saved on the device and on the server; a returning owner resumes where they stopped.
-- Emails: the owner gets their summary; the office gets a notice with every answer.
-- **Status: Built** (`client/src/pages/BusinessCheck.tsx`, `shared/businessCheck/*`, `server/businessCheck.ts`,
-  golden snapshots in `test/server/businessCheck.profiles.golden.test.ts`).
-
-### F3. Full report (₦100,000)
-
-- Independent of Current State Assessment: it is simply the report, and it is never credited against later fees.
-- "Get my Full Report" on the result page, or "Pay for your Full Report" in the summary email → Paystack's checkout (card,
-  bank transfer or USSD), with a reference such as `TS-R-000123` → the payment confirms itself → the owner is emailed a
-  private link to a 17-question form.
-- The form is about 12 minutes. Question 3 asks how each product is charged: a set price, a percentage of the deal
-  (commission or success fee, with an optional typical deal size), or a price that varies. When any line is a percentage,
-  the money questions ask about fees, not deal money passed on. The owner can type a margin instead of choosing a band
-  (*branch*).
-- **Fully deterministic:** no AI and no analyst. The report is built by fixed rules and emailed as a branded PDF the moment
-  the form is submitted; the owner can also download it on the page. Same answers, same report, word for word.
-- Structure (version 4, 14 October 2026): the layout of IP Factory's partner-written strategic plans. Cover and
-  contents; a **Background** (where the business stands today, the scorecard, the two facts that frame the plan, the
-  question it answers: the gap to the owner's 12-month revenue target split into price, conversion and reach, and the
-  headline decision); then **Section One** Founder readiness, **Two** Strategic intent, **Three** Market and industry,
-  **Four** Offer and proposition, **Five** Operational plan (the six weekly numbers and the rhythm of reviews), **Six**
-  The financial case (the target bridge), **Seven** Risk, **Eight** The work plan (twelve months in three phases,
-  numbered actions with an owner and a month, a gate after Phase One) and **Nine** Outstanding items (every "I'm not
-  sure" as something we still need, open contradictions, how to use the document, the Current State Assessment), and
-  an appendix of every answer. Each section has an overview, a scope, numbered subsections and numbered
-  Recommendations that the work plan refers to.
-- Charts drawn from the answers, left out when the owner did not give the numbers: benchmark bars, last month as a
-  cash waterfall, the target bridge, the risk matrix and the scorecard.
-- The Report Intake asks for the monthly sales the owner wants in 12 months (optional); without it, Section Nine asks
-  for it.
-- The team can see the report status, resend the form link (the old link stops working) and download the report.
-- **Status: Built** (`shared/fullReport/*`, `server/fullReport/*`, `client/src/pages/FullReportPage.tsx`).
-
-### F4. Discovery call
-
-- From the result page the owner books a 20-minute call in the embedded Calendly calendar (name and email filled in).
-  The call counts as booked only when Calendly confirms. Without a booking page the button records a request and the
-  team emails.
-- The team records the outcome: **Opportunity** (we can help), **Refer** (to IP Factory Advisory or a specialist) or
-  **Lost**; "Move to" sets any other stage except **Won**, such as **Nurture** (pipeline stages in `shared/businessCheck/pipeline.ts`);
-  Won is set only by confirming the Current State Assessment payment.
-- **Status: Built.**
-
-### F5. Payments (Paystack only)
-
-- Items: full report (₦100,000) and Current State Assessment (₦500,000). References `TS-R-` and `TS-CS-` with a six-digit number.
-- **Paystack is the only way to pay** (ET, 12 October 2026). Its hosted checkout takes card, bank transfer or USSD, so
-  there are no bank details to send, no proof of payment and nothing for the team to check: the payment confirms itself.
-- The Full Report is paid straight from the result page or the summary email. The Current State Assessment link is sent
-  by the team after the Discovery Call ("Send the payment link"); only `manage_payments` (finance, Super Admin) can send it.
-- **The 48-hour window** (concept note §7): the Current State Assessment link holds for 48 hours, and the email says when
-  to pay by, in Lagos time. After that the team sees "48 hours passed" and either sends the link again (a new 48 hours)
-  or moves the business to Lost. The stage never moves on its own. The owner's own Full Report link opens again by itself.
-- Confirming Current State Assessment moves the business to Won and sends the client account invitation.
-- **How a payment confirms** (concept note §11): Paystack's signed webhook, or the owner's return page, asks Paystack
-  about the transaction again and, if the reference, status, currency and amount all match, confirms it: the same
-  emails, the Report Intake link, Won and the client account invitation. The owner is charged exactly the price
-  (₦100,000 or ₦500,000, read from the payment request, never from the browser); IP Factory absorbs Paystack's fee.
-  Paystack is a system actor: recorded with no person as the actor, the note "Paid online with Paystack, reference …"
-  and how the money arrived in the audit. The office is emailed when a payment confirms itself, and when money moved but
-  could not be confirmed (a wrong amount, or an item already paid).
-- **Confirm by hand** is a fallback only, for a payment Paystack shows as paid that has not confirmed itself here.
-- **Off, test, live.** `PAYSTACK_SECRET_KEY` is required in production (`/api/health` answers 503 without it); with
-  none, nothing can be paid and the emails say a link is coming. A test key: every pay page and payment email says
-  "TEST MODE: NO REAL MONEY MOVES", and the payment's note starts "TEST: ". A live key: real payments.
-- **Status: Built.** Live once the live keys are in Vercel and the live webhook is set in Paystack
-  ([implementation plan §4](06-implementation-plan.md)).
-
-### F6. Client account and onboarding
-
-- Invitation only: no public sign-up. The invitation is single-use, expires, and creates the person, the business, the
-  owner membership and the first session in one transaction.
-- One person, one identity: an existing account is never merged or given a new business here.
-- If a browser is signed in as someone else, the invitation page says so and offers "Sign out and continue" (*branch*).
-- **Status: Built** (`server/clientOnboarding.ts`, `client/src/pages/OnboardingPage.tsx`). The rest of onboarding
-  (welcome note, data request, analyst assigned, calls booked) is **not built**: see F7.
-
-### F7. Client dashboard: the engagement room
-
-What the client sees while the engagement runs, on `/dashboard`. Built around the questions an owner asks:
-
-| The owner asks | The room shows | Concept note |
+| User | Their job | Status |
 |---|---|---|
-| **Where are we?** | The journey (getting set up, Current State Assessment week 1 and 2, the fix week 1 to 6, the plan, day 30), the next session and its date, the named team | §7 |
-| **What do you need from me?** | Data requests with due dates, an upload against each (PDF, photos, spreadsheets, Word; up to 25 MB), and a status (to do, sent, received, needs more) | §7 onboarding: data request list |
-| **What did we agree?** | Each session with its notes, decisions and actions (who does what by when); in the fix, the measure with its baseline, target and weekly reading | §7: notes reach the owner the same day; §17 check-in rows |
-| **What have I got?** | Deliverables: the problem statement, Current State Assessment findings, the prescription and tools, the plan, the full report, invoices and receipts | §8, §17 |
+| **Website visitor** | Find out quickly whether IP Factory can fix their problem, and trust that it can | Built: problem-led home, Services, Experience, Contact ("Talk to an expert"), five guides, search-optimised titles |
+| **Business Health Check taker** | Learn what is holding the business back, free, in about 15 minutes | Built |
+| **Enquirer** | Reach an expert without committing to anything | Built (Contact) |
 
-Rules:
+### IP Factory
 
-- Nothing reaches the client until a team member shares it. Deliverables (prescriptions, plans) need the desk lead's
-  sign-off first (concept note: "Lewis signs off every prescription").
-- Session notes reach the owner the same day (ET's precision rule, §7).
-- A client sees only their own business. Staff see only the engagements they are on unless they hold
-  `view_all_businesses`.
-- Session notes and findings go to the owner by default; the owner decides what their staff see (decided 9 October:
-  owners speak frankly on our calls). One staff seat is included, as Full or Contributor (`shared/engagement.ts`).
-- Bookings stay on Calendly and are recorded in the room; conversation stays on WhatsApp; the team's internal tasks stay
-  in ClickUp.
-- AI-drafted notes and summaries are system output and are reviewed by a person before sharing.
-- **Status: Built (9 October), live once migration 0008 is applied:** where we are (journey, next call, team), what we
-  need from you (data requests from the template, "I have sent this"), what we have found (shared notes and
-  deliverables, comments, the owner's sign-off, the owner's share-with-my-team choice). **Built 10 October:** uploads against a
-  data request and files on deliverables, straight from the browser to a private bucket, opened only through short-lived
-  links the server issues after checking who is asking; switched on by the storage settings in Vercel. **Built 10
-  October:** the one number we watch (where it started, this week, where it is going, week by week with the next step),
-  shown to the owner and their full-access staff once the team sets it. The owner's **Your team** card
-  invites one person as Full or Contributor, changes their access or removes them. **Designed 10 October:** the room in the
-  site's dress (design brief §9): the business, the stage, the next call and what to send first at the top, the journey bar,
-  two columns on a desktop; account details moved to the settings pages. **Built 10 October (migration 0009):** the Discovery Call
-  record (written up in the admin, shared to the owner as a separate step) and the Work Plan (every request, action and call
-  placed in a week, in order, tagged internal or external), the two things the room brief (document 07) needs. **Rebuilt 10 October to the room brief:** now, the next
-  action, the next Session, the Engagement timeline 1 to 7 with the Work Plan by week, in the method's vocabulary.
-  **Built 14 October: three tabs, Founder · Business · Plan,** under the Now panel, on the site's plain background.
-  **Founder** shows Sections One and Two of the owner's Full Report (founder readiness, the four money basics, strategic
-  intent, the 12-month target and how the gap closes); **Business** shows every other area with its health and finding,
-  and a tap opens the area's reading, its numbered Recommendation and its benchmarks; **Plan** is the timeline and team as
-  before, and the tab the room opens on. Without a delivered Full Report the two tabs show what the Business Check found.
-  The tabs are rebuilt from the stored answers (`shared/fullReport/insight.ts`), so they never say something the report
-  does not; only the owner and full-access staff receive them from the server, and a contributor sees the Plan alone. A
-  report buyer who never paid for the Current State Assessment has no account, so no room: the report is theirs by email.
-  **Built 14 October: the desktop layout.** On a laptop or desktop the room spreads like the site instead of showing a
-  phone-width column: where you are beside what to do next, the timeline beside a column that stays in view with what
-  is waiting on the client and the Deliverables, the Founder sections side by side and the business areas in a grid.
-
-### F8. Engagement record and check-ins (internal)
-
-One record per client from the free check to day 30 (concept note §17): identity, business check, funnel, onboarding and
-Current State Assessment (analyst, data request sent and received, calls, chosen problem area, sub-problem, problem statement,
-partner involved), fix (measure name and definition, baseline, target, method version, tools issued), one weekly
-check-in row (progress, blockers, next step, measure reading, questions asked, hours by role, AI used) and close (final
-value, moved, extension, plan delivered, next problem area, ongoing support defined, day-30 check).
-
-- The record is what the January portal is built on, and the evidence for the pilot's pass marks (§13).
-- **Status: Partly built (9 October).** The engagement starts with the template when the Current State Assessment is
-  paid; the admin Engagements section holds the stage, the team, the one problem, the calls with client and internal
-  notes, requests and actions, and deliverables with approval. The measure (set in fix week 1) and the weekly check-in (the five
-  questions, the reading, questions asked, hours by role, AI used) are recorded in the Engagements section, one week at a
-  time and in order (10 October). **Not built yet:** the close and the day-30 check, which need their own table
-  (migration 0009), planned for December when the first fixes close.
-
-### F9. Internal workspace (admin console)
-
-- Leads: every business check with stage, contact, answers, outline, the summary and history.
-- Pipeline: discovery call outcome (Opportunity, Refer, Lost), any stage except Won by "Move to", onboarding invitation, Won by a confirmed payment.
-- Payments panel and full report line on each check (F3, F5).
-- Staff sign-in with email and password; staff invitations; capability-based permissions; audit trail.
-- The JUMP-era views (registrations, participants, scheduling, receipts) remain for history and are not part of the new
-  flow.
-- **Status: Built** for leads, pipeline, payments, report, staff and engagements (F8, once migration 0008 is applied).
-
-### F10. Emails
-
-- Branded with the IP Factory logo and palette; plain-text content turned into headings, detail tables, bullets and one
-  button. Sent from `EMAIL_FROM` (default `IP Factory <info@ipfactory.co>`), replies to info@ipfactory.co.
-- Sent: business check summary (owner) and notice (office); payment details; payment confirmed; report form link;
-  report delivered with the PDF; client account invitation; staff and seat invitations (`/join`) and password reset;
-  "Engagement update" when Session notes or a Deliverable are shared (the title and a link only, to the people who can see it).
-- Delivery uses Resend. Until the `ipfactory.co` sending domain is verified, Resend refuses most outside addresses;
-  every failure is recorded and the office notice says so.
-- **Status: Built.** Domain verification is an operational task (DG).
-
-## 5. Rules that apply everywhere
-
-1. **Client isolation:** a client can never reach another client's records by changing a URL, id, token or payload.
-   Authorisation is on the server; hiding a button is never a control.
-2. **Deterministic where it matters:** routes, colours, gaps and the full report come from fixed rules. AI writes words
-   around them and can never change them.
-3. **Honest about AI:** the owner is told that analysts and AI do the analysis under a named consultant.
-4. **Phone first:** every owner-facing screen works at phone width.
-5. **Copy:** British English, second person, short sentences, naira in full (₦100,000).
-6. **No secrets and no real personal data in the repository.**
-7. **Every behaviour change ships with tests**, and `pnpm verify` passes before anything is pushed (`AGENTS.md`).
-
-## 6. Out of scope for v0.1 (parked for v0.2 or later)
-
-From concept note §15: subscription pricing for ongoing support; cohort pricing made cheaper by AI; a recruitment partner
-pool; head-of-operations placements; the AI tool as a separate product; internal AI workflow work; the training timetable
-on the site. Also not in v0.1: instalments, second-business creation, team members inside a client
-business, and an in-platform message thread (see section 10).
-
-## 7. What success looks like (the numbers the platform must report)
-
-From concept note §13. The platform must make these countable without a spreadsheet:
-
-| Measure | Pass mark | Where it will come from |
+| User (level) | Their job | Sees |
 |---|---|---|
-| Free business checks completed | 150 by 10 December | `business_checks` (available today) |
-| Discovery calls held | 60 over nine weeks | Pipeline stage and Calendly booking (available today) |
-| Paying clients | 20 by 10 December | `payment_requests` confirmed for the Current State Assessment (available today) |
-| Fixes whose measure moved by week 6 | 70% or more | Engagement record (F8, not built) |
-| Outputs still in use at day 30 | 80% or more | Engagement record (F8, not built) |
-| Engagements fully logged | 100% | Engagement record (F8, not built) |
-| IPF hours per fix, by problem area | Trending down | Check-in hours by role (F8, not built) |
+| **Super Admin** | Run the platform: people, levels, settings | Everything |
+| **Partner, Vice President, Senior Associate** | Win and lead engagements: open them, staff them, price them, approve the work | Every engagement, and Finance |
+| **Associate** | Deliver and, when leading an engagement, approve it | The engagements they are on |
+| **Senior Business Analyst, Business Analyst** | Prepare and deliver the work, keep the room current | The engagements they are on |
+| **Specialist** | Contribute expert work to one engagement for a set period | Their engagements until an end date; adds team items and drafts the lead shares; never internal notes or fees |
+| **Finance** | Know what is owed and paid, without the diagnostic detail | Payments and fees only |
 
-## 8. Glossary
+On each engagement a person also has a **project role** the client sees: Engagement Manager, Lead Consultant, Analyst,
+Partner or Specialist.
 
-| Term | Meaning |
-|---|---|
-| Problem area | One of the ten places a business gets stuck, numbered 0 to 10 (`PROBLEM_AREAS`). Never "door" on the site |
-| Gap | What is missing: clarity, know-how, resources or strategy |
-| Outline | The colour-coded list of problem areas on the result: clear, watch, stuck |
-| Current State Assessment | The paid two-week assessment that names the one problem to fix first |
-| Fix | Up to six weeks of weekly work on one problem, ending with a plan. Never "sprint" on the site |
-| Measure | The one number watched together |
-| Ongoing support | Help beyond the plan, defined per client. Never "retainer"; not priced |
-| Engagement record | One record per client from the check to day 30 (F8) |
-| Engagement room | The client's view of their engagement (F7) |
+### The client
 
-## 9. Decisions taken while building (8 and 9 October 2026)
+| User | Their job | Sees |
+|---|---|---|
+| **Business owner** | Know where the work stands, what is needed from them, what was agreed and what they have received; approve; buy the next fix | Everything the team shares; accepts the agreement |
+| **Owner's staff, full access** | Help run the engagement | What the owner shares with their team; reads the proposal, cannot sign it |
+| **Owner's staff, contributor** | Send the records assigned to them (a bookkeeper, a manager) | Only their own Data Requests and actions |
 
-| Decision | Taken by |
-|---|---|
-| The full report is a condensed business plan: twelve parts, delivered as a PDF | ET |
-| The full report is fully deterministic: no consultant or analyst reviews it; it goes out the moment the form is finished | ET |
-| The report form (intake) comes after payment; no five-day turnaround | ET |
-| The full report is independent of the Current State Assessment and is not credited against it | ET |
-| Manual payment confirmation (details by email, proof, the team confirms) was the interim method until Paystack; placeholder details until real ones are set | ET |
-| Both items can be paid online with Paystack; bank transfer with manual confirmation stays as the alternative (superseded 12 October: Paystack only) | ET |
-| Paystack is the only way to pay: no bank details, no proof of payment; Paystack's checkout covers card, bank transfer and USSD; "Get my Full Report" opens Paystack directly | ET, 12 October 2026 |
-| The owner pays exactly the price; IP Factory absorbs Paystack's fee | ET |
-| Paystack's hosted checkout, reached by redirect (no Paystack script on the site, so the security policy does not change) | ET |
-| Online payment is off, test or live by the Paystack secret key; test mode says "TEST MODE: NO REAL MONEY MOVES" on every pay page and payment email | ET |
-| An online payment confirms once, through the same confirmation the team uses, with Paystack recorded as a system actor | ET |
-| Built up to the start of the Current State Assessment; the engagement itself is the next phase | ET |
-| The business name and one-line description are required in the check | ET |
-| The twelve original sector options stay; Services examples are worded for any service firm | ET |
-| Areas the check leaves out are shown greyed as "Not assessed", with "The Current State Assessment looks at all ten" | ET |
-| The description is the main source for tailoring the AI summary; the sector wins when the description does not fit | ET |
-| The report form asks how each product is charged, so commission and margin businesses get a true report | ET |
-| The brand palette is fixed and enforced by tests; the IP Factory logo is on every email to clients | ET |
-| The Current State Assessment is ₦500,000, fixed: no price grades (closes the concept note's Open 1) | ET |
-| Payment details hold for 48 hours; the team sends fresh details or moves the business to Lost | ET |
-| The check asks trading businesses what they have tried, what the problem costs and who decides | ET |
-| The check stays rules-driven: fixed questions and scoring, with AI writing only the summary | ET |
-| Younger businesses are not asked about exit (under 5 years) or owner transition (under 10 years); those areas show as "Not assessed" | ET |
-| The client account invitation goes out when the Current State Assessment is paid; staff can invite by hand before payment only with a reason, which is recorded | ET |
-| The paid assessment is called "Current State Assessment" everywhere: site, emails, admin, the report and these documents | ET |
-| The engagement room follows five principles: the fix is one problem with one measure; show only what the team will keep current; notes and findings are for the owner by default; bookings on Calendly, conversation on WhatsApp, internal tasks in ClickUp; one free staff seat, no paid seats in the pilot | ET ("proceed", 9 October) |
-| Data requests and actions sit in one list; the client marks what they sent, the team marks it received or asks for more | Built as recommended |
-| New staff join by invitation with one role and set their own password; Super Admin is never granted by invitation; an existing account is never merged | Built as recommended |
+### System actors
 
-## 10. Open decisions
+The AI summary, the Full Report builder, Paystack (confirming payments) and Calendly (bookings): server-controlled,
+audited, never an interactive account.
+
+### Later (not in this release)
+
+Programme sponsors (a bank or funder following a group of businesses, never their private data), referral partners,
+and lenders or investors reading a business's results with the owner's consent.
+
+## 4. The journey
+
+The spine of the product. Every requirement in section 6 belongs to one stage.
+
+| # | Stage | The client | IP Factory | The platform does |
+|---|---|---|---|---|
+| 1 | **Find** | Searches Google or hears of us; reads a page or a guide | — | Ranks the pages; routes every page to the check or a call |
+| 2 | **Diagnose** | Takes the free Business Health Check | Reads the lead | Scores and routes by rule; emails the summary; suggests the first product |
+| 3 | **Talk** | Books the 20-minute Discovery Call | Holds the call; records the outcome | Books through Calendly; moves the pipeline stage |
+| 4 | **Agree** | Reads and signs the proposal in their room | Opens the engagement; checks the drafted proposal; sends it | Drafts the proposal from the service and its price; loads the Data Request, Work Plan and Sessions for the type |
+| 5 | **Pay** | Pays each fee | Records payments not made online | Paystack for the Full Report and the Business Review; tracks every fee |
+| 6 | **Onboard** | Accepts the account invitation; sends records | Staffs the engagement | Invites the owner; dates each request by priority |
+| 7 | **Deliver** | Uploads, comments, approves reels and Deliverables | Does the work; Specialists hand in drafts; the lead approves and shares | Keeps files private; tells the owner when something is shared |
+| 8 | **Measure** | Sees the one number each week | Records the weekly check-in | Shows where the number started, where it is and where it is going |
+| 9 | **Close and next** | Signs off; asks to fix the next problem | Closes; proposes the next product | Opens the next project in the same room |
+
+## 5. Products and how each is bought
+
+Every product, its price, delivery, payment terms, intake and next product live in `shared/products.ts`; the site and
+the order flow read from it. The prices the payment code charges are in `shared/businessSupport.ts` (`PRICES`):
+the Full Report ₦100,000, the Business Review ₦600,000, the Six-Week Fix ₦1,500,000. A test keeps this table, the
+catalogue and the code in step.
+
+**Ways to buy:** Assessment (free, or paid before work); Done for You (a fixed price, paid before work); Six-Week Fix
+(50% at the start, 25% at the mid-point, 25% at the result, or in full at 5% off); Monthly Service (paid a quarter at a
+time, the price held for twelve months, stop at any quarter end). **Online ordering is off** (`ONLINE_ORDERS_OPEN`):
+until it opens, every paid product starts with a call or the check.
+
+| Product | Way to buy | Price | Delivery |
+|---|---|---|---|
+| Free Business Health Check | Assessment | Free | At once |
+| Full Report | Assessment | ₦100,000 | When the Report Intake is finished |
+| Funding Readiness Assessment | Assessment | ₦150,000 | Three working days from complete records |
+| Business Review | Assessment | ₦600,000 | Two weeks, two Sessions |
+| Strategy and 90-Day Plan | Done for You | ₦450,000 | Seven working days |
+| Business Model | Done for You | ₦300,000 | Seven working days |
+| Financial Model | Done for You | ₦350,000 | Seven working days |
+| Business Plan | Done for You | ₦750,000 | Fifteen working days |
+| Pitch Deck | Done for You | ₦300,000 | Seven working days |
+| Pricing and Unit Cost Review | Done for You | ₦400,000 | Seven working days |
+| Bookkeeping Catch-Up | Done for You | ₦100,000 a month of records | Five working days for three months |
+| 13-Week Cash Flow Forecast | Done for You | ₦300,000 | Five working days |
+| Funding Application Pack | Done for You | ₦900,000 | Ten working days |
+| Hiring Toolkit | Done for You | ₦300,000 | Five working days |
+| Six-Week Fix (Margin, Sales, Cash and Pricing, Delegation and Structure) | Six-Week Fix | ₦1,500,000 | Six weeks |
+| Monthly Accounts and Cash Report | Monthly Service | ₦600,000 a quarter | By the 10th of each month |
+| Monthly Adviser Review | Monthly Service | ₦450,000 a quarter | One Session a month |
+| **Digital marketing** (ET, 6 November 2026; the structure of the first client's engagement) | Monthly service fee, for 90 days, with milestones and a quarter review | ₦470,000 a month, each month paid before it starts, the first at signing | 15 reels, 5 posts and 20 stories a month; nothing published without the owner's approval |
+
+**Delivery promise:** we confirm the delivery date once the records are complete; if we cannot deliver as agreed, we make
+it right in line with the Terms (a refund, a service credit or an agreed alternative). The site never promises an
+automatic refund. Management accounts only; the monthly tax note states record readiness, not tax advice.
+
+## 6. Requirements by stage
+
+**Priority:** **M** must (the product fails without it), **S** should (this release), **C** could (when there is room).
+**Status:** Built, Partly built, To build.
+
+### Stage 1–2: Find and Diagnose
+
+| # | Requirement | P | Acceptance | Status |
+|---|---|---|---|---|
+| R1 | A problem-led public site, in Nigerian plain English, with the free check one tap from every page | M | Every page leads to the check or a call; works at phone width | Built |
+| R2 | Pages and guides found on Google for the problems owners search | S | Titles and descriptions per page; sitemap submitted; guides indexed | Built; indexing being checked |
+| R3 | The Business Health Check: a decision tree of at most about 30 questions, saved on the device and the server | M | A returning owner resumes; scoring and routes never changed by AI | Built |
+| R4 | The result: the problem areas by colour, the gap, the first product and the next one, the call booking | M | Same answers, same result | Built |
+| R5 | The Full Report: paid, then a short intake, then a fixed-rule PDF the moment it is finished | M | Same answers, same report, word for word | Built |
+
+### Stage 3–4: Talk and Agree
+
+| # | Requirement | P | Acceptance | Status |
+|---|---|---|---|---|
+| R6 | Book the Discovery Call from the result; record the outcome on the pipeline | M | A booking counts only when Calendly confirms | Built |
+| R7 | Open an engagement of any type for a new or existing client; many projects per client | M | The type's Data Request, Work Plan and Sessions load without a click | Built |
+| R8 | The **proposal**, which doubles as the agreement: drafted from the service and its price; the lead checks it and sends it in one click; the owner signs it with their typed name | M | No proposal reaches the owner unsent; a change after sending is a new version they sign again | Built |
+| R9 | Who signs for IP Factory, and the Terms counsel approves, named on every proposal | M | The signing entity on each proposal | To build (decision D1) |
+
+### Stage 5–6: Pay and Onboard
+
+| # | Requirement | P | Acceptance | Status |
+|---|---|---|---|---|
+| R10 | Paystack for the Full Report and the Business Review; the payment confirms itself | M | The amount comes from the server, never the browser | Built; live keys to confirm (dependency) |
+| R11 | Every proposal fee payable online, with its own link, confirmed by Paystack | S | A fee is marked paid without the team touching it | To build |
+| R12 | Instalments: the Six-Week Fix stages and the Monthly Service quarters billed when due | S | The owner is emailed a link on each due date | To build |
+| R35 | Digital marketing on the public menu, with its own page (ET: yes, 6 November 2026) | S | Shown under the need it answers; previewed before it goes live | To build (next) |
+| R13 | Online ordering for the Done for You products that start without a call | C | Order, pay, then the intake, with no call | To build (`ONLINE_ORDERS_OPEN`) |
+| R14 | Invitation-only client accounts; the owner adds staff as full access or contributor | M | A client can never reach another business by changing an id | Built |
+| R15 | Data Requests dated by priority, loaded from the type or a template, or pasted from Excel | M | Each request shows why we ask and what format is fine | Built |
+| R16 | Reminders: the owner (and the assigned staff member) is reminded of a request before and after its due date | S | No request passes its date without a reminder | To build |
+
+### Stage 7–8: Deliver and Measure
+
+| # | Requirement | P | Acceptance | Status |
+|---|---|---|---|---|
+| R17 | The room: where we are, what we need, what we agreed, what you have received, for each project | M | The owner never asks "where are we?" | Built |
+| R18 | Private files: uploads against a request or into a drop box, matched by the team | M | Files open only through short-lived links after the server checks who is asking | Built |
+| R19 | Content approval for Digital marketing: reels, posts and stories approved or sent back by the owner | M | Nothing is published without the owner's yes | Built |
+| R20 | Session notes shared the same day; internal notes never reach the client or a Specialist | M | Server-enforced | Built |
+| R21 | Specialists hand in team items and drafts; the lead shares them | M | A Specialist's file reaches no client until the lead shares it | Built |
+| R22 | Deliverables approved by a lead before the client sees them; the owner signs off | M | Server-enforced | Built |
+| R23 | The one number and the weekly check-in (five questions, the reading, hours by role, AI used) | M | Recorded one week at a time, in order | Built |
+| R24 | The Digital marketing proposal drafts at ₦470,000 a month for three months, with the milestones and the quarter review | M | The lead only checks and sends | Built |
+| R25 | Preview as client: staff see the room exactly as the owner does, read only, logged | S | The preview equals the owner's view | Built |
+
+### Stage 9: Close and next
+
+| # | Requirement | P | Acceptance | Status |
+|---|---|---|---|---|
+| R26 | Close an engagement: final value, whether the number moved, the plan delivered, the next problem | M | The pass marks in section 7 come from the record | To build |
+| R27 | The day-30 check: are the outputs still in use | S | Recorded on the engagement | To build |
+| R28 | Fix the next problem: the owner asks from the room; the team opens the next project in the same room | M | One business, many projects, one history | Built |
+
+### Across the journey
+
+| # | Requirement | P | Acceptance | Status |
+|---|---|---|---|---|
+| R29 | The admin in five tabs with no overlap: Pipeline, Engagements, Clients, Finance, Team | M | Each task has one home | Built |
+| R30 | Finance: what is owed and paid across every client, for Finance and the senior levels | M | A fee counts as owed only once its proposal is signed | Built |
+| R31 | Team: invite by level; Specialists with an end date; two-step sign-in for everyone internal | M | A role is given only by someone ranked above it | Built |
+| R32 | Emails branded, from the verified domain, recorded when they fail | M | Every failure is visible to the office | Built; domain verification to confirm (dependency) |
+| R33 | Prices and copy changed without a developer | C | A settings screen | To build |
+| R34 | The measures in section 7 on one page, without a spreadsheet | S | Each measure computed from its source | To build |
+
+## 7. Measures
+
+**The one number:** **paying clients whose agreed measure moved.** It joins what we sell to what we deliver, and both
+halves are already recorded (confirmed payments or signed proposals; the measure and its weekly readings).
+
+| Measure | Target | Source |
+|---|---|---|
+| Free checks completed | 150 by 10 December 2026 (pilot) | `business_checks` |
+| Check → Discovery Call booked | Trending up | Pipeline stage, Calendly |
+| Call → proposal signed | 1 in 3 | `engagement_agreements` |
+| Paying clients | 20 by 10 December 2026 (pilot) | Payments and signed proposals |
+| Days from the proposal signed to the first records in | 3 or fewer | Proposal and files |
+| Data Requests in by their date | 80% or more | `engagement_tasks` |
+| Days from a Deliverable shared to the owner's sign-off | 5 or fewer | `engagement_deliverables` |
+| Fixes whose number moved by week 6 | 70% or more | The measure and check-ins |
+| Outputs still in use at day 30 | 80% or more | The close (R27) |
+| Clients who buy the next fix within 90 days | 30% or more | Projects per business |
+| IP Factory hours per engagement, by type | Falling, release on release | Check-in hours by role |
+
+The last measure is the self-serve direction made countable: each release should cut the hours the team spends per
+engagement without hurting the results above it.
+
+## 8. Rules that apply everywhere
+
+1. **Client isolation:** a client never reaches another client's records by changing a URL, id, token or payload.
+2. **Authorisation on the server**, by named permissions (`shared/platformPermissions.ts`), never by role names in screens.
+3. **Personal data** handled under the Nigeria Data Protection Act 2023: collected for a stated purpose, private by
+   default, never in the repository.
+4. **Phone first:** every owner-facing screen works at phone width on a slow connection.
+5. **Copy:** British English, Nigerian plain English, second person, short sentences, naira in full (₦100,000),
+   "expert" over "person", the problem stated before the fix.
+6. **Every change ships with tests and updated product documents**, and `pnpm verify` passes before any push (`AGENTS.md`).
+
+## 9. Assumptions, risks and dependencies
+
+| # | Item | Type | Owner | Status |
+|---|---|---|---|---|
+| A1 | Owners will send records as photos, voice notes and bank-app PDFs if we ask plainly | Assumption | Desk | Holding so far |
+| A2 | Owners will sign a proposal and pay online without a meeting | Assumption | ET | To test with the first Digital marketing client |
+| K1 | Paystack live keys and the live webhook in Vercel | Dependency | ET, Lewis | To confirm |
+| K2 | The sending domain verified in Resend, so emails reach outside inboxes | Dependency | DG, Lewis | To confirm |
+| K3 | Supabase on a paid plan with daily backups | Dependency | ET | To do |
+| K4 | The old Supabase project secured | Risk | ET | To do |
+| K5 | Counsel's view of the Terms and the signing entity (D1) | Dependency | ET | Open |
+| K6 | The desk depends on a few people; levels and assignments must be kept current | Risk | Partners | Ongoing |
+| K7 | A second owner on Google Search Console | Risk | ET | To do |
+
+## 10. Not in this release
+
+A self-serve portal with no expert involved (the direction, not this release); programme sponsors, referral partners
+and lender access; an in-platform message thread (conversation stays on WhatsApp); paid client seats; training as a
+product; the AI tool as a separate product.
+
+## 11. Open decisions
 
 | # | Decision | Recommendation | Owner |
 |---|---|---|---|
-| O1 | **Transcripts in the engagement room.** Notes reach the owner the same day (decided, §7). Should the full transcript also be visible? | Reviewed notes by default; the transcript on request. **Built that way (9 October); say if transcripts should show** | ET |
-| O3 | **Who releases what to the client.** | Analysts share notes and data requests; the desk lead approves every prescription and plan. **Built that way and enforced on the server (9 October)** | ET, Lewis |
-| O5 | Paystack go-live: who opens the business account, and by when | Built (12 October): put the test keys in Vercel and the webhook in Paystack, test, then the live keys (implementation plan §4) | ET, Lewis |
-| O6 | Ongoing support: content and price after the first fix | Define per client at fix close (D3) | ET |
-| O7 | Who signs client terms (IPF, KIP or the venture) and the P&L owner | — | ET |
-| O8 | File storage for the engagement room (concept note uses one Google Drive folder per client) | A private Supabase Storage bucket, so files sit behind the same access rules as the record. **Proceeding (ET, 9 October); needs the bucket and its keys in Vercel** | Lewis, Richard |
+| D1 | Who signs client proposals for IP Factory, and who owns the P&L | Name the entity once; print it on every proposal | ET |
+| D2 | Full Session transcripts in the room | Reviewed notes by default; the transcript on request (as built) | ET |
+| D3 | Ongoing support after a fix: content and price | Offer a Monthly Service at close | ET |
 
-O4 (one Current State Assessment price or two grades) was decided on 9 October: ₦500,000, fixed.
-O2 and O9 were decided on 9 October as recommended: conversation stays in the client's WhatsApp group, decisions and
-actions are recorded in the room, and the team's internal tasks stay in ClickUp.
+## 12. Glossary
 
-## 11. Where we depart from the concept note
-
-The concept note v0.8.1 stays the strategy. Where the built product differs from it, this is the record, with who
-decided. "Confirmed" means a change made while building and confirmed by ET on 9 October 2026.
-
-| Concept note v0.8.1 | What The Shift does | Status |
-|---|---|---|
-| Built on IP Factory's copy of Jump, on Manus (D5, D7, D8) | Vercel, Supabase and GitHub; Manus remains only for the AI summary and old file storage | Decided |
-| Product name "Operating Partner [working name]" | "The Shift, by IP Factory" | Decided (Lewis, 7 October) |
-| Hero: "You know what your business needs…" | Headline "Find it. Fix it. See the results." | Decided |
-| A Paystack link after the call | A "Pay online" button in the payment details email opens Paystack; Paystack is the only way to pay (12 October) | Built (12 October) |
-| Full report "by email", from the check | Paid, then a 17-question form; a deterministic PDF sent the moment it is finished | Decided (ET, 8 October) |
-| Discovery calls booked in two blocks a week on the platform | Calendly, embedded on the result | Decided |
-| Client area = the Jump portal (uploads, feedback, files) | Invitation-only client accounts; the engagement room is next. The Jump portal is legacy, so uploads wait for phase 3 | Decided |
-| Call outcome: fit, refer, decline | Pipeline stages: Lead, Qualified lead, Call booked, Opportunity, Won, Lost, Nurture, Referred | Decided |
-| Current State "from ₦500,000", grades to set (Open 1) | ₦500,000, fixed | Decided (ET, 9 October) |
-| The step is called "Current State" | "Current State Assessment" everywhere | Decided (ET, 9 October) |
-| An AI trained on ET's logic asks the next question (D8, D11) | A fixed decision tree with fixed scoring; AI writes only the summary, checked against the catalogue | Confirmed |
-| Owners trading 2 to 10 years are asked every area | Exit and value from 5 years, owner transition from 10 years; skipped areas show as "Not assessed" | Confirmed |
-| The problem block: in their words, tried, costing, who decides, hours, how they heard, referral code | All asked, except a referral code (referrals are not built in the new flow yet) | Built (9 October) |
-| Payment link with a 48-hour window | Payment details hold for 48 hours | Built (9 October) |
-| Lovelyn changes prices and copy without a developer | Prices and copy live in the code, so a change needs a developer; a settings screen is planned | Planned (phase 5) |
-| Crossing problems show as two colours on the outline | One colour per area and one main gap | Planned (phase 5) |
-| One Google Drive folder per client | A private Supabase Storage bucket | Proposed (O8) |
-| One place for actions: ClickUp | Client-facing actions in the engagement room; internal tasks in ClickUp | Proposed (O9) |
-| Richard's locked flow: Fit → onboarding invitation | Fit → Current State Assessment payment → invitation (the concept note's pay-then-set-up order); a manual invitation is still possible at Fit | Confirmed; `Instruction.md` to be updated by Richard |
-
+| Term | Meaning |
+|---|---|
+| Problem area | One of the ten places a business gets stuck (`PROBLEM_AREAS`) |
+| Gap | What is missing: clarity, know-how, resources or strategy |
+| Engagement | One project for one business, of one type |
+| Room | The client's view of all their engagements |
+| Data Request | A record we ask the client for, with why we ask, the format that is fine and a date |
+| Work Plan | Every request, action and Session, by week |
+| Deliverable | Finished work shared with the client: findings, the problem statement, the prescription, tools, the plan |
+| Measure | The one number watched together each week |
+| Proposal | What we will do, what is not included, what the client does, the terms and the fees. It doubles as the agreement: the owner signs it with their typed name. (`engagement_agreements` in the code) |
+| Fix | Up to six weeks of weekly work on one problem. Never "sprint" |

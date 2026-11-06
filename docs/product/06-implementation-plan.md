@@ -117,7 +117,7 @@ see where it stands.
 | 2.3 | ✅ **Built 9 October** (text; files wait for 1.1). **Deliverables**: upload, version, share; prescriptions and plans need desk lead approval before sharing | An unapproved prescription cannot be shared; every share is audited |
 | 2.4 | ✅ **Built 9 October.** **Email notices** to the client when something is shared with them | Branded email, link to the room, no content in the email body beyond the title |
 
-Built with O1, O2 and O3 as recommended (PRD §10), and the owner's seat invitation (one included seat, Full or Contributor). 2.4 email notices are built too.
+Built with O1, O2 and O3 as recommended (decision log §3), and the owner's seat invitation (one included seat, Full or Contributor). 2.4 email notices are built too.
 
 ## 7. Phase 3: data requests (needed by 23 October, getting set up)
 

@@ -42,6 +42,7 @@ type StarterItem = { title: string; detail: string; week: number; order: number;
 type StarterSession = { kind: EngagementSessionKind; title: string; week: number; order: number; durationMinutes: number; agenda: string };
 
 export type DatedEngagementType = {
+  monthlyFee?: number;
   /** Length in days; the room counts "Day N of M" against it. */
   durationDays: number;
   stages: TypeStage[];
@@ -64,6 +65,8 @@ export const DIGITAL_MARKETING: DatedEngagementType = {
     { title: "Quarter review", summary: "The 90 days in numbers, and what support looks like from here.", from: 90, to: 90 },
   ],
   monthly: [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }],
+  /** The monthly service fee (ET, 6 November 2026), in whole naira: paid for each month before it starts, the first at signing. */
+  monthlyFee: 470_000,
   dataRequests: [
     { week: 1, order: 1, section: "A Brand", ref: "A1", priority: "high", title: "Logo, colours and fonts", detail: "Whatever you use today: the logo files, and the colours and fonts if you have them.", informs: "So every reel and post looks like your business", format: "Any" },
     { week: 1, order: 2, section: "A Brand", ref: "A2", priority: "medium", title: "Past content that worked", detail: "Five to ten posts or videos you liked, yours or anyone's.", informs: "The style to build on", format: "Links or screenshots" },

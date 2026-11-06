@@ -233,8 +233,8 @@ for (const target of targets) {
         // Before the first save, the team sees what the service suggests: the Business Review's promise and price.
         const fresh = await desk.engagement.staff.agreement({ engagementId });
         expect(fresh.agreement).toBeNull();
-        expect(fresh.suggested).toMatchObject({ feeLines: [{ label: "Business Review", amount: 600000, dueOn: null }] });
-        expect(fresh.suggested!.scope).toContain("You get:");
+        expect(fresh.suggested).toMatchObject({ feeLines: [{ label: "Business Review, payable before work begins", amount: 600000, dueOn: null }] });
+        expect(fresh.suggested!.scope).toContain("Deliverables:");
         // Nothing reaches the client until it is sent.
         expect((await (await owner.call()).engagement.client.room())!.agreement).toBeNull();
         await expect(desk.engagement.staff.saveAgreement({ engagementId, scope: "", outOfScope: "", clientCommitments: "", terms: "", feeLines: [] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
@@ -248,7 +248,7 @@ for (const target of targets) {
         await expect((await analyst.call()).engagement.staff.sendAgreement({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });
         mocked.deliverEmail.mockClear();
         expect(await desk.engagement.staff.sendAgreement({ engagementId })).toMatchObject({ success: true, notified: true });
-        expect(emails()[0]).toMatchObject({ subject: "Your agreement for the Business Review is ready to read", body: expect.stringContaining("/dashboard#agreement") });
+        expect(emails()[0]).toMatchObject({ subject: "Your proposal for the Business Review is ready to sign", body: expect.stringContaining("/dashboard#agreement") });
 
         // The owner reads it with the fees, and accepts with their name; a member with limited access sees nothing.
         const room = (await (await owner.call()).engagement.client.room())!;

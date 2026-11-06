@@ -484,6 +484,17 @@ function datedProgress(type, startedOn, now) {
   const stages = type.stages.map((stage) => ({ ...stage, state: day > stage.to ? "done" : day >= stage.from ? "now" : "next" }));
   return { day: Math.min(day + 1, type.durationDays), started: now >= start, stages };
 }
+var CONTENT_KINDS = ["reel", "post", "story"];
+var CONTENT_KIND_LABELS = { reel: "Reel", post: "Post", story: "Story" };
+var CONTENT_STATUSES = ["planned", "in_edit", "for_approval", "changes_requested", "approved", "published"];
+var CONTENT_STATUS_LABELS = {
+  planned: "Planned",
+  in_edit: "In edit",
+  for_approval: "For your approval",
+  changes_requested: "Changes requested",
+  approved: "Approved",
+  published: "Published"
+};
 
 // shared/adminPermissions.ts
 init_brand();
@@ -1707,6 +1718,29 @@ var engagementFileMatches = pgTable("engagement_file_matches", {
   matchedByUserId: integer("matchedByUserId").notNull().references(() => users.id),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
 }, (table2) => [unique("engagement_file_matches_file_task_unique").on(table2.fileId, table2.taskId), index("engagement_file_matches_task_idx").on(table2.taskId)]);
+var engagementContentKindEnum = pgEnum("engagement_content_kind", CONTENT_KINDS);
+var engagementContentStatusEnum = pgEnum("engagement_content_status", CONTENT_STATUSES);
+var engagementContentItems = pgTable("engagement_content_items", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  kind: engagementContentKindEnum("kind").notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  /** Engagement month 1, 2 or 3. */
+  month: integer("month").notNull(),
+  status: engagementContentStatusEnum("status").default("planned").notNull(),
+  dueOn: date("dueOn"),
+  /** Where to see it: the draft or the published post. */
+  link: varchar("link", { length: 1024 }),
+  /** The client's note when they ask for changes. */
+  clientNote: varchar("clientNote", { length: 1e3 }),
+  approvedByUserId: integer("approvedByUserId").references(() => users.id),
+  approvedAt: timestamp("approvedAt", { withTimezone: true }),
+  publishedAt: timestamp("publishedAt", { withTimezone: true }),
+  sortOrder: integer("sortOrder").default(0).notNull(),
+  createdByUserId: integer("createdByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [index("engagement_content_items_engagement_idx").on(table2.engagementId)]);
 var engagementComments = pgTable("engagement_comments", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
@@ -13073,6 +13107,7 @@ async function getStaffEngagement(db, actor, engagementId) {
     tasks: tasks.map((task) => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id) })),
     // The drop box: every file the client sent without saying what it answers, with the requests it has been matched to.
     // Unsorted files come first.
+    content: (await contentOf(db, engagementId)).map((item2) => ({ ...item2, kindLabel: CONTENT_KIND_LABELS[item2.kind], statusLabel: CONTENT_STATUS_LABELS[item2.status] })),
     inbox: files.filter((file) => file.taskId === null && file.deliverableId === null && !file.fromTeam).map((file) => ({ ...staffFile(file), note: file.note, taskIds: matches.filter((match) => match.fileId === file.id).map((match) => match.taskId) })).sort((a, b) => Number(a.taskIds.length > 0) - Number(b.taskIds.length > 0) || b.id - a.id),
     deliverables: deliverables.map((item2) => ({ ...item2, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item2.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item2.kind), comments: comments.filter((comment) => comment.deliverableId === item2.id), files: filesFor("deliverableId", item2.id) })),
     measure,
@@ -13404,6 +13439,9 @@ async function getClientRoom(db, session) {
   const notesVisible = (item2) => Boolean(item2.notesSharedAt && item2.clientNotes && clientCanSee(item2.notesAudience, viewer));
   return {
     engagementId: engagement.id,
+    // The content board (Digital marketing): the owner and full-access staff see it and approve.
+    content: fullView ? (await contentOf(db, engagement.id)).map(clientContent) : [],
+    contentTargets: DATED_TYPES[engagement.type]?.monthly ?? [],
     type: engagement.type,
     typeLabel: ENGAGEMENT_TYPE_LABELS[engagement.type],
     startedOn: engagement.startedOn,
@@ -13643,6 +13681,62 @@ async function clientFileLink(db, session, input) {
     if (!deliverable || deliverable.status !== "shared" || !clientCanSee(deliverable.audience, viewer)) throw notFound();
   }
   return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+}
+async function contentOf(db, engagementId) {
+  return db.select().from(engagementContentItems).where(eq19(engagementContentItems.engagementId, engagementId)).orderBy(asc(engagementContentItems.month), asc(engagementContentItems.sortOrder), asc(engagementContentItems.id));
+}
+var clientContent = (item2) => ({
+  id: item2.id,
+  kind: item2.kind,
+  kindLabel: CONTENT_KIND_LABELS[item2.kind],
+  title: item2.title,
+  month: item2.month,
+  status: item2.status,
+  statusLabel: CONTENT_STATUS_LABELS[item2.status],
+  dueOn: item2.dueOn,
+  link: item2.link,
+  clientNote: item2.clientNote,
+  approvedAt: item2.approvedAt,
+  publishedAt: item2.publishedAt
+});
+async function saveContentItem(db, actor, input) {
+  requireManage(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  const values2 = { kind: input.kind, title: input.title.trim(), month: input.month, status: input.status, dueOn: input.dueOn, link: input.link, ...input.status === "published" ? { publishedAt: /* @__PURE__ */ new Date() } : {} };
+  if (input.itemId) {
+    const updated = await db.update(engagementContentItems).set(values2).where(and13(eq19(engagementContentItems.id, input.itemId), eq19(engagementContentItems.engagementId, engagement.id))).returning({ id: engagementContentItems.id });
+    if (!updated.length) throw notFound();
+    await recordAudit(db, { action: "engagement_content_saved", actorUserId: actor.id, details: { engagementId: engagement.id, itemId: input.itemId, status: input.status } });
+    return { itemId: input.itemId };
+  }
+  const [created] = await db.insert(engagementContentItems).values({ engagementId: engagement.id, ...values2, createdByUserId: actor.id }).returning({ id: engagementContentItems.id });
+  await recordAudit(db, { action: "engagement_content_saved", actorUserId: actor.id, details: { engagementId: engagement.id, itemId: created.id, status: input.status } });
+  return { itemId: created.id };
+}
+async function deleteContentItem(db, actor, input) {
+  requireManage(actor);
+  const item2 = (await db.select().from(engagementContentItems).where(eq19(engagementContentItems.id, input.itemId)).limit(1))[0];
+  if (!item2) throw notFound();
+  await requireStaffEngagement(db, actor, item2.engagementId);
+  await db.transaction(async (tx) => {
+    await tx.delete(engagementContentItems).where(eq19(engagementContentItems.id, item2.id));
+    await recordAudit(tx, { action: "engagement_content_deleted", actorUserId: actor.id, details: { engagementId: item2.engagementId, itemId: item2.id } });
+  });
+  return { success: true };
+}
+async function respondToContent(db, session, input) {
+  const item2 = (await db.select().from(engagementContentItems).where(eq19(engagementContentItems.id, input.itemId)).limit(1))[0];
+  if (!item2) throw notFound();
+  const { viewer } = await requireClientEngagement(db, session, item2.engagementId);
+  if (!(viewer.kind === "owner" || viewer.access === "full")) throw notFound();
+  if (item2.status !== "for_approval") throw new TRPCError17({ code: "CONFLICT", message: "This is not waiting for your approval." });
+  if (!input.approve && !input.note?.trim()) throw new TRPCError17({ code: "BAD_REQUEST", message: "Say what to change." });
+  const set = input.approve ? { status: "approved", approvedAt: /* @__PURE__ */ new Date(), approvedByUserId: session.user.id, clientNote: null } : { status: "changes_requested", clientNote: input.note.trim() };
+  await db.transaction(async (tx) => {
+    await tx.update(engagementContentItems).set(set).where(eq19(engagementContentItems.id, item2.id));
+    await recordAudit(tx, { action: input.approve ? "engagement_content_approved" : "engagement_content_changes_requested", actorUserId: session.user.id, details: { engagementId: item2.engagementId, itemId: item2.id } });
+  });
+  return { success: true, status: set.status };
 }
 var dropPrefix = (engagementId) => `engagements/${engagementId}/inbox/`;
 async function matchesOf(db, engagementId) {
@@ -15145,6 +15239,18 @@ var staffRouter = router({
     contactEmail: z24.string().trim().email("Enter the client's email address.").max(320),
     startedOn: z24.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the start date.")
   })).mutation(async ({ ctx, input }) => guarded(async () => createDirectEngagement(await engagementDb(), { ...ctx.actor, name: ctx.user?.name ?? null }, input))),
+  /** The content board: add or update a reel, post or story; remove one. */
+  saveContent: staff.input(z24.object({
+    engagementId: id,
+    itemId: id.optional(),
+    kind: z24.enum(CONTENT_KINDS),
+    title: text3(200).min(1, "Give it a title."),
+    month: z24.number().int().min(1).max(12),
+    status: z24.enum(CONTENT_STATUSES),
+    dueOn: z24.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+    link: z24.string().trim().url("Paste the full link, starting https://").max(1024).nullable().or(z24.literal("").transform(() => null))
+  })).mutation(async ({ ctx, input }) => guarded(async () => saveContentItem(await engagementDb(), ctx.actor, input))),
+  deleteContent: staff.input(z24.object({ itemId: id })).mutation(async ({ ctx, input }) => guarded(async () => deleteContentItem(await engagementDb(), ctx.actor, input))),
   /** Sort a file the client dropped: the Data Requests it answers (an empty list clears the match). */
   matchFile: staff.input(z24.object({ fileId: id, taskIds: z24.array(id).max(50) })).mutation(async ({ ctx, input }) => guarded(async () => matchFile(await engagementDb(), ctx.actor, input))),
   saveMeasure: staff.input(z24.object({ engagementId: id, name: text3(160).min(1, "Name the number."), definition: optionalText2(2e3), unit: optionalText2(32), baselineValue: reading3, targetValue: reading3 })).mutation(async ({ ctx, input }) => guarded(async () => saveMeasure(await engagementDb(), ctx.actor, input))),
@@ -15192,6 +15298,8 @@ var clientRouter = router({
     return guarded(async () => clientRequestDrop(await engagementDb(), ctx.account, input));
   }),
   confirmDrop: accountProcedure.input(z24.object({ storageKey, note: optionalText2(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmDrop(await engagementDb(), ctx.account, input))),
+  /** Approve a reel, post or story, or ask for changes with a note. */
+  respondToContent: accountProcedure.input(z24.object({ itemId: id, approve: z24.boolean(), note: optionalText2(1e3) })).mutation(async ({ ctx, input }) => guarded(async () => respondToContent(await engagementDb(), ctx.account, input))),
   /** "We don't have this", or take it back. */
   setNotAvailable: accountProcedure.input(z24.object({ taskId: id, unavailable: z24.boolean(), note: optionalText2(500) })).mutation(async ({ ctx, input }) => guarded(async () => setNotAvailable(await engagementDb(), ctx.account, input)))
 });

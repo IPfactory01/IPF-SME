@@ -19,12 +19,14 @@ const replies: Record<string, unknown> = {
   confirmUpload: { success: true, fileId: 99, status: "received" },
   requestDrop: { storageKey: "engagements/4/inbox/abc-sales.pdf", uploadUrl: "https://example-project.supabase.co/storage/v1/object/upload/sign/engagement-files/engagements/4/inbox/abc-sales.pdf?token=up", headers: { "content-type": "application/pdf", "x-upsert": "false" } },
   confirmDrop: { success: true, fileId: 99 },
+  respondToContent: { success: true, status: "approved" },
   fileLink: { url: "https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf" },
 };
-const mutation = (bucket: keyof typeof api.calls) => (options?: { onSuccess?: () => void }) => ({
+// Like the real server, a mutation hands its reply to onSuccess.
+const mutation = (bucket: keyof typeof api.calls) => (options?: { onSuccess?: (reply: never) => void }) => ({
   isPending: false,
-  mutate: (input: unknown) => { api.calls[bucket].push(input); options?.onSuccess?.(); },
-  mutateAsync: async (input: unknown) => { api.calls[bucket].push(input); options?.onSuccess?.(); return replies[bucket] ?? { success: true }; },
+  mutate: (input: unknown) => { api.calls[bucket].push(input); options?.onSuccess?.((replies[bucket] ?? { success: true }) as never); },
+  mutateAsync: async (input: unknown) => { api.calls[bucket].push(input); options?.onSuccess?.((replies[bucket] ?? { success: true }) as never); return replies[bucket] ?? { success: true }; },
 });
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock("@/lib/trpc", () => ({

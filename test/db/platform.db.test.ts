@@ -437,7 +437,7 @@ for (const target of targets) {
         expect(view).toEqual({
           user: { id: user.id, fullName: "Context Person", email: user.email, status: "active" },
           platformRoles: ["partner"],
-          permissions: ["view_assigned_businesses", "review_engagements"],
+          permissions: ["view_assigned_businesses", "review_engagements", "view_financials"],
           memberships: [{ businessId: business.id, businessName: "Context Co", role: "owner", status: "active", profileComplete: true, profilePercent: 100 }],
           activeBusiness: { businessId: business.id, businessName: "Context Co", role: "owner", status: "active", profileComplete: true, profilePercent: 100 },
           landingPath: "/dashboard",

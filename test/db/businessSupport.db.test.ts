@@ -615,7 +615,8 @@ for (const target of targets) {
         const d = await deskLead.call();
         await expect(d.businessSupport.clients()).resolves.toBeDefined();
         await expect(d.businessSupport.checks()).rejects.toMatchObject({ code: "FORBIDDEN" });
-        expect(visibleAdminSections(await d.adminAccess.status()).map(section => section.id)).toEqual(["engagements", "clients"]);
+        // The desk also sees Finance (read only) since 6 November 2026.
+        expect(visibleAdminSections(await d.adminAccess.status()).map(section => section.id)).toEqual(["engagements", "clients", "finance"]);
         expect(visibleAdminSections(await a.adminAccess.status()).map(section => section.id)).toEqual(["pipeline"]);
       });
 

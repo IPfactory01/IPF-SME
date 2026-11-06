@@ -1035,9 +1035,10 @@ var PLATFORM_PERMISSIONS = [
 var PLATFORM_ROLE_PERMISSIONS = {
   super_admin: PLATFORM_PERMISSIONS,
   admin: [],
-  desk_lead: ["view_all_businesses", "manage_engagements", "assign_engagements", "review_engagements", "manage_scheduling", "manage_communications"],
+  // The desk and partners see Finance (ET, 6 November 2026): read only; recording payments stays with manage_payments.
+  desk_lead: ["view_all_businesses", "manage_engagements", "assign_engagements", "review_engagements", "manage_scheduling", "manage_communications", "view_financials"],
   analyst: ["view_assigned_businesses", "manage_engagements"],
-  partner: ["view_assigned_businesses", "review_engagements"],
+  partner: ["view_assigned_businesses", "review_engagements", "view_financials"],
   subject_matter_expert: ["view_assigned_businesses"],
   finance: ["manage_payments", "view_financials"]
 };

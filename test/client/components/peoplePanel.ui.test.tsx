@@ -162,7 +162,7 @@ describe("the People panel", () => {
     render(<Both />);
     expect(rowOf("Ada Okafor").queryByRole("combobox")).toBeNull();
     expect((rowOf("Lewis Desk").getByLabelText("Level of Lewis Desk") as HTMLSelectElement).value).toBe("Senior Associate");
-    expect(rowOf("Lewis Desk").getByText("Every engagement; assigns people and approves")).toBeTruthy();
+    expect(rowOf("Lewis Desk").getByText("Every engagement; assigns people and approves; sees Finance")).toBeTruthy();
   });
 
   it("resets two-step sign-in for a lost phone", () => {

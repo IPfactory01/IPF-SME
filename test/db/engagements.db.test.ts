@@ -226,58 +226,39 @@ for (const target of targets) {
       });
     });
 
-    describe("the agreement and fees", () => {
-      it("is drafted from the service, sent by a lead, accepted by the owner with their typed name, and locked until revised", async () => {
-        const { owner, engagementId, businessId } = await client("agreement");
+    describe("fees (there are no proposals)", () => {
+      it("suggests the service's price, saves the schedule, records payments, and shows the client nothing to sign", async () => {
+        const { owner, engagementId } = await client("fees");
         const desk = await superAdmin.call();
-        // Before the first save, the team sees what the service suggests: the Business Review's promise and price.
-        const fresh = await desk.engagement.staff.agreement({ engagementId });
-        expect(fresh.agreement).toBeNull();
-        expect(fresh.suggested).toMatchObject({ feeLines: [{ label: "Business Review, payable before work begins", amount: 600000, dueOn: null }] });
-        expect(fresh.suggested!.scope).toContain("Deliverables:");
-        // Nothing reaches the client until it is sent.
-        expect((await (await owner.call()).engagement.client.room())!.agreement).toBeNull();
-        await expect(desk.engagement.staff.saveAgreement({ engagementId, scope: "", outOfScope: "", clientCommitments: "", terms: "", feeLines: [] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-        await desk.engagement.staff.saveAgreement({ engagementId, ...fresh.suggested!, feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-11-10" }, { label: "With the Findings", amount: 300000, dueOn: null }] });
-        expect((await (await owner.call()).engagement.client.room())!.agreement).toBeNull();
+        // A paid Business Review has no fee lines yet; the team sees what the service suggests.
+        const fresh = await desk.engagement.staff.fees({ engagementId });
+        expect(fresh).toMatchObject({ feeLines: [], suggested: [{ label: "Business Review, payable before work begins", amount: 600000, dueOn: null }], can: { edit: true } });
+        await expect(desk.engagement.staff.saveFees({ engagementId, feeLines: [{ label: " ", amount: 1000, dueOn: null }] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await desk.engagement.staff.saveFees({ engagementId, feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-11-10" }, { label: "With the Findings", amount: 300000, dueOn: null }] });
+        const saved = await desk.engagement.staff.fees({ engagementId });
+        expect(saved).toMatchObject({ total: 600000, suggested: null, feeLines: [{ label: "To start", paidAt: null }, { label: "With the Findings" }] });
 
-        // An analyst on the team may draft but not send; the desk sends and the owner is emailed.
+        // An analyst on the team records a payment; it survives a later change to another line.
         const analystUser = await person(["analyst"]);
         await desk.engagement.staff.assign({ engagementId, userId: analystUser.id, role: "analyst" });
         const analyst = await signIn(analystUser, true);
-        await expect((await analyst.call()).engagement.staff.sendAgreement({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });
-        mocked.deliverEmail.mockClear();
-        expect(await desk.engagement.staff.sendAgreement({ engagementId })).toMatchObject({ success: true, notified: true });
-        expect(emails()[0]).toMatchObject({ subject: "Your proposal for the Business Review is ready to sign", body: expect.stringContaining("/dashboard#agreement") });
+        await (await analyst.call()).engagement.staff.setFeePaid({ feeLineId: saved.feeLines[0]!.id, paid: true });
+        await desk.engagement.staff.saveFees({ engagementId, feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-11-10" }, { label: "With the Findings", amount: 350000, dueOn: null }] });
+        expect((await desk.engagement.staff.fees({ engagementId })).feeLines.map(line => [line.label, line.amount, line.paidAt !== null])).toEqual([["To start", 300000, true], ["With the Findings", 350000, false]]);
 
-        // The owner reads it with the fees, and accepts with their name; a member with limited access sees nothing.
-        const room = (await (await owner.call()).engagement.client.room())!;
-        expect(room.agreement).toMatchObject({ status: "sent", version: 1, total: 600000, canAccept: true, feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-11-10", paid: false }, { label: "With the Findings", amount: 300000, paid: false }] });
-        const contributor = await member(businessId, "contributor");
-        expect((await (await contributor.browser.call()).engagement.client.room())!.agreement).toBeNull();
-        const fullStaff = await member(businessId, "full");
-        expect((await (await fullStaff.browser.call()).engagement.client.room())!.agreement).toMatchObject({ canAccept: false });
-        await expect((await fullStaff.browser.call()).engagement.client.acceptAgreement({ engagementId, name: "Staff Member" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-        await expect((await owner.call()).engagement.client.acceptAgreement({ engagementId, name: "A" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-        await (await owner.call()).engagement.client.acceptAgreement({ engagementId, name: "Ada Okafor" });
-        expect((await (await owner.call()).engagement.client.room())!.agreement).toMatchObject({ status: "accepted", acceptedName: "Ada Okafor", canAccept: false });
+        // The client's room has nothing to sign, and the client cannot reach the team's fees.
+        expect(JSON.stringify(await (await owner.call()).engagement.client.room())).not.toContain("With the Findings");
+        await expect((await owner.call()).engagement.staff.fees({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        // Another engagement's team cannot read them.
+        const outsider = await signIn(await person(["analyst"]), true);
+        await expect((await outsider.call()).engagement.staff.fees({ engagementId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+      });
 
-        // Accepted means locked: no edits until a lead revises it; the payment is recorded and kept through a revision.
-        await expect(desk.engagement.staff.saveAgreement({ engagementId, ...fresh.suggested! })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-        const lines = (await desk.engagement.staff.agreement({ engagementId })).feeLines;
-        await desk.engagement.staff.setFeePaid({ feeLineId: lines[0]!.id, paid: true });
-        expect((await (await owner.call()).engagement.client.room())!.agreement!.feeLines[0]!.paid).toBe(true);
-        await desk.engagement.staff.reviseAgreement({ engagementId });
-        expect((await (await owner.call()).engagement.client.room())!.agreement).toMatchObject({ status: "revising", feeLines: [] });
-        await desk.engagement.staff.saveAgreement({ engagementId, ...fresh.suggested!, feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-11-10" }, { label: "With the Findings", amount: 350000, dueOn: null }] });
-        await desk.engagement.staff.sendAgreement({ engagementId });
-        expect((await (await owner.call()).engagement.client.room())!.agreement).toMatchObject({ status: "sent", version: 2, total: 650000, canAccept: true, feeLines: [{ paid: true }, { paid: false }] });
-
-        // Another business can never accept it by changing the id.
-        const other = await client("agreement-other");
-        await expect((await other.owner.call()).engagement.client.acceptAgreement({ engagementId, name: "Someone Else" })).rejects.toMatchObject({ code: "NOT_FOUND" });
-        const audits = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_agreement_accepted"));
-        expect(audits.map((row: { details: string | null }) => JSON.parse(row.details ?? "{}")).some((details: { engagementId: number; name: string }) => details.engagementId === engagementId && details.name === "Ada Okafor")).toBe(true);
+      it("fills in a new Digital marketing engagement's fees at ₦470,000 for each of three months", async () => {
+        const opened = await (await superAdmin.call()).engagement.staff.createDirect({ type: "digital_marketing", businessName: "Fee Studio", contactName: "Funmi Fee", contactEmail: uniqueEmail("fee-studio"), startedOn: "2026-11-09" });
+        const fees = await (await superAdmin.call()).engagement.staff.fees({ engagementId: opened.engagementId });
+        expect(fees).toMatchObject({ total: 1410000, suggested: null });
+        expect(fees.feeLines.map(line => [line.label, line.amount])).toEqual([["Month 1 service fee, payable on starting", 470000], ["Month 2 service fee, payable before day 31", 470000], ["Month 3 service fee, payable before day 61", 470000]]);
       });
     });
 
@@ -308,19 +289,16 @@ for (const target of targets) {
     });
 
     describe("Finance: money across every client", () => {
-      it("lists payment requests and agreement fees, counts a fee as owed only once its agreement is accepted, and is for finance only", async () => {
-        const { owner, engagementId } = await client("finance");
+      it("lists payment requests and engagement fees, counts a fee as owed once set and late once its date passes, and is for finance only", async () => {
+        const { engagementId } = await client("finance");
         const desk = await superAdmin.call();
-        await desk.engagement.staff.saveAgreement({ engagementId, scope: "Two weeks.", outOfScope: "", clientCommitments: "", terms: "", feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-01-05" }, { label: "With the Findings", amount: 300000, dueOn: null }] });
-        let finance = await desk.engagement.finance.list();
+        await desk.engagement.staff.saveFees({ engagementId, feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-01-05" }, { label: "With the Findings", amount: 300000, dueOn: null }] });
+        const finance = await desk.engagement.finance.list();
         // The Business Review was paid through a payment request when the client was set up.
         expect(finance.requests.some(row => row.title === "Business Review" && row.paid)).toBe(true);
-        expect(finance.fees.filter(row => row.engagementId === engagementId).map(row => [row.label, row.agreed, row.late])).toEqual([["To start", false, false], ["With the Findings", false, false]]);
-        await desk.engagement.staff.sendAgreement({ engagementId });
-        await (await owner.call()).engagement.client.acceptAgreement({ engagementId, name: "Ada Okafor" });
-        finance = await desk.engagement.finance.list();
         const mine = finance.fees.filter(row => row.engagementId === engagementId);
-        expect(mine.map(row => [row.label, row.agreed, row.late, row.engagement])).toEqual([["To start", true, true, "Business Review"], ["With the Findings", true, false, "Business Review"]]);
+        expect(mine.map(row => [row.label, row.paid, row.late, row.engagement])).toEqual([["To start", false, true, "Business Review"], ["With the Findings", false, false, "Business Review"]]);
+        expect(finance.totals.owed).toBeGreaterThanOrEqual(600000);
         expect(finance.totals.late).toBeGreaterThanOrEqual(300000);
         // Finance sees it, and so do the desk (Senior Associate, Vice President) and partners; an analyst does not.
         for (const roles of [["finance"], ["desk_lead"], ["partner"], ["desk_lead", "partner"]] as const) {
@@ -491,7 +469,7 @@ for (const target of targets) {
         expect((await (await analyst.call()).engagement.staff.list()).items.map(item => item.id)).toEqual([engagementId]);
         const detail = await (await analyst.call()).engagement.staff.detail({ engagementId });
         expect(detail.team).toEqual([expect.objectContaining({ name: "Ola Analyst", role: "analyst", roleLabel: "Analyst" })]);
-        expect(detail.can).toEqual({ manage: true, assign: false, review: false, sendSignIn: false, contribute: true, seeInternal: true, seeAgreement: true });
+        expect(detail.can).toEqual({ manage: true, assign: false, review: false, sendSignIn: false, contribute: true, seeInternal: true, seeFees: true });
       });
 
       it("lets only people with assign_engagements change the team, and only to IP Factory staff", async () => {
@@ -873,7 +851,7 @@ for (const target of targets) {
     });
 
     describe("Specialists: read less, hand in drafts", () => {
-      it("hides internal notes and the agreement from a Specialist, and lets them add team items only", async () => {
+      it("hides internal notes and fees from a Specialist, and lets them add team items only", async () => {
         const { engagementId } = await client("specialist-read");
         const desk = await superAdmin.call();
         const sessionId = (await desk.engagement.staff.detail({ engagementId })).sessions[0].id;
@@ -886,13 +864,13 @@ for (const target of targets) {
         const partner = await (await signIn(partnerUser, true)).call();
 
         const seen = await specialist.engagement.staff.detail({ engagementId });
-        expect(seen.can).toMatchObject({ manage: false, contribute: true, seeInternal: false, seeAgreement: false });
+        expect(seen.can).toMatchObject({ manage: false, contribute: true, seeInternal: false, seeFees: false });
         expect(seen.sessions.find(item => item.id === sessionId)).toMatchObject({ clientNotes: "Pricing first.", internalNotes: null });
         expect(JSON.stringify(seen)).not.toContain("under-reporting");
-        await expect(specialist.engagement.staff.agreement({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await expect(specialist.engagement.staff.fees({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });
         // A partner keeps both.
         expect((await partner.engagement.staff.detail({ engagementId })).sessions.find(item => item.id === sessionId)!.internalNotes).toContain("under-reporting");
-        expect((await partner.engagement.staff.agreement({ engagementId })).suggested).not.toBeNull();
+        expect((await partner.engagement.staff.fees({ engagementId })).suggested).not.toBeNull();
 
         const item = { engagementId, kind: "action" as const, title: "Draft the competitor scan", detail: null, assigneeUserId: null, dueOn: null, status: "open" as const, statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 9, factor: null };
         const { taskId } = await specialist.engagement.staff.saveTask({ ...item, side: "ipf" });

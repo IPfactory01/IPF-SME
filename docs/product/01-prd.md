@@ -37,7 +37,7 @@ its time on judgement: the diagnosis, the price, the approval. This is the test 
 2. **Nothing reaches a client until a named person releases it.** Every prescription and plan is approved by a lead.
 3. **Deterministic where it matters.** Routes, scores, colours and the Full Report come from fixed rules; AI writes
    words around them and never changes them. We tell owners that analysts and AI do the analysis under a named expert.
-4. **One client, one place.** Every project, file, proposal and decision for a business is in its room.
+4. **One client, one place.** Every project, file, fee and decision for a business is in its room.
 5. **Built for how Nigerian owners work.** Phone first, low data, WhatsApp for conversation, naira in full, day-first
    dates, plain English, records accepted as they are.
 6. **Each person sees what their job needs, and no more.** Enforced on the server by named permissions, never by
@@ -73,8 +73,8 @@ Partner or Specialist.
 
 | User | Their job | Sees |
 |---|---|---|
-| **Business owner** | Know where the work stands, what is needed from them, what was agreed and what they have received; approve; buy the next fix | Everything the team shares; accepts the agreement |
-| **Owner's staff, full access** | Help run the engagement | What the owner shares with their team; reads the proposal, cannot sign it |
+| **Business owner** | Know where the work stands, what is needed from them, what was agreed and what they have received; approve; buy the next fix | Everything the team shares |
+| **Owner's staff, full access** | Help run the engagement | What the owner shares with their team |
 | **Owner's staff, contributor** | Send the records assigned to them (a bookkeeper, a manager) | Only their own Data Requests and actions |
 
 ### System actors
@@ -96,7 +96,7 @@ The spine of the product. Every requirement in section 6 belongs to one stage.
 | 1 | **Find** | Searches Google or hears of us; reads a page or a guide | — | Ranks the pages; routes every page to the check or a call |
 | 2 | **Diagnose** | Takes the free Business Health Check | Reads the lead | Scores and routes by rule; emails the summary; suggests the first product |
 | 3 | **Talk** | Books the 20-minute Discovery Call | Holds the call; records the outcome | Books through Calendly; moves the pipeline stage |
-| 4 | **Agree** | Reads and signs the proposal in their room | Opens the engagement; checks the drafted proposal; sends it | Drafts the proposal from the service and its price; loads the Data Request, Work Plan and Sessions for the type |
+| 4 | **Agree** | Agrees on the Discovery Call, or by paying, under the Terms and Conditions | Opens the engagement | Loads the Data Request, Work Plan, Sessions and fee schedule for the type, without a click |
 | 5 | **Pay** | Pays each fee | Records payments not made online | Paystack for the Full Report and the Business Review; tracks every fee |
 | 6 | **Onboard** | Accepts the account invitation; sends records | Staffs the engagement | Invites the owner; dates each request by priority |
 | 7 | **Deliver** | Uploads, comments, approves reels and Deliverables | Does the work; Specialists hand in drafts; the lead approves and shares | Keeps files private; tells the owner when something is shared |
@@ -161,15 +161,15 @@ automatic refund. Management accounts only; the monthly tax note states record r
 |---|---|---|---|---|
 | R6 | Book the Discovery Call from the result; record the outcome on the pipeline | M | A booking counts only when Calendly confirms | Built |
 | R7 | Open an engagement of any type for a new or existing client; many projects per client | M | The type's Data Request, Work Plan and Sessions load without a click | Built |
-| R8 | The **proposal**, which doubles as the agreement: drafted from the service and its price; the lead checks it and sends it in one click; the owner signs it with their typed name | M | No proposal reaches the owner unsent; a change after sending is a new version they sign again | Built |
-| R9 | Who signs for IP Factory, and the Terms counsel approves, named on every proposal | M | The signing entity on each proposal | To build (decision D1) |
+| R8 | No proposals or agreements to sign (ET, 6 November 2026): a client agrees on the call or by paying, under the Terms and Conditions; each engagement keeps a fee schedule filled in from the service's price or the type's monthly fee | M | Nothing for the client to sign; the fees are set when the engagement opens | Built |
+| R9 | The legal entity that contracts with clients named in the Terms and Conditions and on invoices and receipts | M | One entity, stated once | To build (decision D1) |
 
 ### Stage 5–6: Pay and Onboard
 
 | # | Requirement | P | Acceptance | Status |
 |---|---|---|---|---|
 | R10 | Paystack for the Full Report and the Business Review; the payment confirms itself | M | The amount comes from the server, never the browser | Built; live keys to confirm (dependency) |
-| R11 | Every proposal fee payable online, with its own link, confirmed by Paystack | S | A fee is marked paid without the team touching it | To build |
+| R11 | Every engagement fee payable online, with its own Paystack link; the first payment opens the room, as the Business Review's does today | S | A fee is marked paid without the team touching it | To build (next) |
 | R12 | Instalments: the Six-Week Fix stages and the Monthly Service quarters billed when due | S | The owner is emailed a link on each due date | To build |
 | R35 | Digital marketing on the public menu, with its own page (ET: yes, 6 November 2026) | S | Shown under the need it answers; previewed before it goes live | To build (next) |
 | R13 | Online ordering for the Done for You products that start without a call | C | Order, pay, then the intake, with no call | To build (`ONLINE_ORDERS_OPEN`) |
@@ -188,7 +188,7 @@ automatic refund. Management accounts only; the monthly tax note states record r
 | R21 | Specialists hand in team items and drafts; the lead shares them | M | A Specialist's file reaches no client until the lead shares it | Built |
 | R22 | Deliverables approved by a lead before the client sees them; the owner signs off | M | Server-enforced | Built |
 | R23 | The one number and the weekly check-in (five questions, the reading, hours by role, AI used) | M | Recorded one week at a time, in order | Built |
-| R24 | The Digital marketing proposal drafts at ₦470,000 a month for three months, with the milestones and the quarter review | M | The lead only checks and sends | Built |
+| R24 | A new Digital marketing engagement's fees fill in at ₦470,000 for each of three months, each payable before it begins | M | The team only checks the dates | Built |
 | R25 | Preview as client: staff see the room exactly as the owner does, read only, logged | S | The preview equals the owner's view | Built |
 
 ### Stage 9: Close and next
@@ -204,7 +204,7 @@ automatic refund. Management accounts only; the monthly tax note states record r
 | # | Requirement | P | Acceptance | Status |
 |---|---|---|---|---|
 | R29 | The admin in five tabs with no overlap: Pipeline, Engagements, Clients, Finance, Team | M | Each task has one home | Built |
-| R30 | Finance: what is owed and paid across every client, for Finance and the senior levels | M | A fee counts as owed only once its proposal is signed | Built |
+| R30 | Finance: what is owed and paid across every client, for Finance and the senior levels | M | A fee counts as owed once it is set, and late once its date passes unpaid | Built |
 | R31 | Team: invite by level; Specialists with an end date; two-step sign-in for everyone internal | M | A role is given only by someone ranked above it | Built |
 | R32 | Emails branded, from the verified domain, recorded when they fail | M | Every failure is visible to the office | Built; domain verification to confirm (dependency) |
 | R33 | Prices and copy changed without a developer | C | A settings screen | To build |
@@ -213,15 +213,15 @@ automatic refund. Management accounts only; the monthly tax note states record r
 ## 7. Measures
 
 **The one number:** **paying clients whose agreed measure moved.** It joins what we sell to what we deliver, and both
-halves are already recorded (confirmed payments or signed proposals; the measure and its weekly readings).
+halves are already recorded (confirmed payments and paid fees; the measure and its weekly readings).
 
 | Measure | Target | Source |
 |---|---|---|
 | Free checks completed | 150 by 10 December 2026 (pilot) | `business_checks` |
 | Check → Discovery Call booked | Trending up | Pipeline stage, Calendly |
-| Call → proposal signed | 1 in 3 | `engagement_agreements` |
-| Paying clients | 20 by 10 December 2026 (pilot) | Payments and signed proposals |
-| Days from the proposal signed to the first records in | 3 or fewer | Proposal and files |
+| Call → first payment | 1 in 3 | Payments and `engagement_fee_lines` |
+| Paying clients | 20 by 10 December 2026 (pilot) | Confirmed payments and paid fees |
+| Days from the first payment to the first records in | 3 or fewer | Fees and files |
 | Data Requests in by their date | 80% or more | `engagement_tasks` |
 | Days from a Deliverable shared to the owner's sign-off | 5 or fewer | `engagement_deliverables` |
 | Fixes whose number moved by week 6 | 70% or more | The measure and check-ins |
@@ -248,7 +248,7 @@ engagement without hurting the results above it.
 | # | Item | Type | Owner | Status |
 |---|---|---|---|---|
 | A1 | Owners will send records as photos, voice notes and bank-app PDFs if we ask plainly | Assumption | Desk | Holding so far |
-| A2 | Owners will sign a proposal and pay online without a meeting | Assumption | ET | To test with the first Digital marketing client |
+| A2 | Business owners will pay online without a meeting once the call has set the work | Assumption | ET | To test with the first Digital marketing client |
 | K1 | Paystack live keys and the live webhook in Vercel | Dependency | ET, Lewis | To confirm |
 | K2 | The sending domain verified in Resend, so emails reach outside inboxes | Dependency | DG, Lewis | To confirm |
 | K3 | Supabase on a paid plan with daily backups | Dependency | ET | To do |
@@ -267,7 +267,7 @@ product; the AI tool as a separate product.
 
 | # | Decision | Recommendation | Owner |
 |---|---|---|---|
-| D1 | Who signs client proposals for IP Factory, and who owns the P&L | Name the entity once; print it on every proposal | ET |
+| D1 | Which legal entity contracts with clients, and who owns the P&L | Name the entity once, in the Terms and on invoices | ET |
 | D2 | Full Session transcripts in the room | Reviewed notes by default; the transcript on request (as built) | ET |
 | D3 | Ongoing support after a fix: content and price | Offer a Monthly Service at close | ET |
 
@@ -283,5 +283,5 @@ product; the AI tool as a separate product.
 | Work Plan | Every request, action and Session, by week |
 | Deliverable | Finished work shared with the client: findings, the problem statement, the prescription, tools, the plan |
 | Measure | The one number watched together each week |
-| Proposal | What we will do, what is not included, what the client does, the terms and the fees. It doubles as the agreement: the owner signs it with their typed name. (`engagement_agreements` in the code) |
+| Fees | An engagement's fee schedule: each fee, its amount, its due date and whether it is paid. Set when the engagement opens; Finance reads it |
 | Fix | Up to six weeks of weekly work on one problem. Never "sprint" |

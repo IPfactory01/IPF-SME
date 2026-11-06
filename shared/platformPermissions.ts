@@ -53,7 +53,7 @@ export const PLATFORM_ROLE_PERMISSIONS: Record<PlatformRole, readonly PlatformPe
   analyst: ["view_assigned_businesses", "manage_engagements"],
   partner: ["view_assigned_businesses", "review_engagements", "view_financials"],
   // Specialists hand in work on their own engagements (ET, 6 November 2026): team-side Work Plan items and draft files on
-  // a Deliverable, seen by IP Factory only until the lead shares them. They do not see internal notes or the agreement.
+  // a Deliverable, seen by IP Factory only until the lead shares them. They do not see internal notes or fees.
   subject_matter_expert: ["view_assigned_businesses", "contribute_engagements"],
   finance: ["manage_payments", "view_financials"],
 };

@@ -1,6 +1,6 @@
 import { STAGED_TYPES } from "@shared/engagementTypes";
 import { DATA_REQUEST_TEMPLATES, parsePastedDataRequest, templateById } from "@shared/dataRequestTemplates";
-import { feeTotal, type AgreementDraft } from "@shared/agreement";
+import { feeTotal, type FeeLineDraft } from "@shared/agreement";
 import { formatNaira } from "@shared/businessSupport";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
@@ -96,7 +96,7 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
         <div className="border-t border-line-soft pt-2"><PreviewAsClient engagementId={engagementId} /></div>
       </DetailSection>
       <StageAndTeam data={data} engagementId={engagementId} />
-      {data.can.seeAgreement && <AgreementAdmin engagementId={engagementId} />}
+      {data.can.seeFees && <FeesAdmin engagementId={engagementId} />}
       <Problem data={data} engagementId={engagementId} />
       <Sessions data={data} engagementId={engagementId} />
       {data.engagement.type === "digital_marketing" && <ContentAdmin data={data} engagementId={engagementId} />}
@@ -711,80 +711,54 @@ function CheckinCard({ checkin, weekNumber, engagementId, canManage, unit, onDon
 }
 
 /**
- * The agreement and fees: drafted from the service, saved, sent by the lead, accepted by the owner in their room. Once
- * accepted it is locked; Revise reopens it and the owner signs the new version. Payments are recorded line by line.
+ * The engagement's fees: filled in from the service's price or the type's monthly fee when it is opened, changed here,
+ * and each payment recorded with Paid. There is no proposal to send: a client agrees by paying, or on the call, under the
+ * Terms and Conditions (ET, 6 November 2026). Finance counts a fee as owed once it is saved here.
  */
-function AgreementAdmin({ engagementId }: { engagementId: number }) {
+function FeesAdmin({ engagementId }: { engagementId: number }) {
   const utils = trpc.useUtils();
-  const query = trpc.engagement.staff.agreement.useQuery({ engagementId }, { retry: false });
-  const [draft, setDraft] = useState<(AgreementDraft & { loadedFor: number }) | null>(null);
-  const done = (message: string) => ({ onSuccess: () => { void utils.engagement.staff.agreement.invalidate({ engagementId }); toast.success(message); }, onError: (error: { message: string }) => toast.error(error.message) });
-  const save = trpc.engagement.staff.saveAgreement.useMutation(done("Proposal saved."));
-  const send = trpc.engagement.staff.sendAgreement.useMutation(done("Sent to the owner. It is in their room to sign."));
-  const revise = trpc.engagement.staff.reviseAgreement.useMutation({ ...done("Reopened. Send it again when it is ready; the owner signs the new version."), onSettled: () => setDraft(null) });
+  const query = trpc.engagement.staff.fees.useQuery({ engagementId }, { retry: false });
+  const [draft, setDraft] = useState<FeeLineDraft[] | null>(null);
+  const done = (message: string) => ({ onSuccess: () => { void utils.engagement.staff.fees.invalidate({ engagementId }); toast.success(message); }, onError: (error: { message: string }) => toast.error(error.message) });
+  const save = trpc.engagement.staff.saveFees.useMutation(done("Fees saved."));
   const paid = trpc.engagement.staff.setFeePaid.useMutation(done("Payment recorded."));
-  if (query.error) return <DetailSection title="Proposal and fees"><p role="alert" className="text-sm text-danger">{query.error.message}</p></DetailSection>;
+  if (query.error) return <DetailSection title="Fees"><p role="alert" className="text-sm text-danger">{query.error.message}</p></DetailSection>;
   const data = query.data;
-  if (!data) return <DetailSection title="Proposal and fees"><p className="text-sm text-ink-muted">Loading…</p></DetailSection>;
-  const agreement = data.agreement;
-  const locked = agreement?.status === "accepted" || agreement?.status === "sent";
-  // The form starts from what is saved, or from what the service suggests.
-  const current: AgreementDraft = draft && draft.loadedFor === (agreement?.updatedAt ? new Date(agreement.updatedAt).getTime() : 0) ? draft : agreement
-    ? { scope: agreement.scope, outOfScope: agreement.outOfScope ?? "", clientCommitments: agreement.clientCommitments ?? "", terms: agreement.terms ?? "", feeLines: data.feeLines.map(line => ({ label: line.label, amount: line.amount, dueOn: line.dueOn })) }
-    : data.suggested!;
-  const edit = (patch: Partial<AgreementDraft>) => setDraft({ ...current, ...patch, loadedFor: agreement?.updatedAt ? new Date(agreement.updatedAt).getTime() : 0 });
-  const setLine = (index: number, patch: Partial<AgreementDraft["feeLines"][number]>) => edit({ feeLines: current.feeLines.map((line, at) => (at === index ? { ...line, ...patch } : line)) });
-  const fees = current.feeLines.filter(line => line.label.trim() && line.amount > 0);
-  const payload = { engagementId, scope: current.scope, outOfScope: current.outOfScope, clientCommitments: current.clientCommitments, terms: current.terms, feeLines: fees };
-  const sending = save.isPending || send.isPending;
-  const saveAndSend = async () => {
-    try {
-      // Unsaved changes, or the suggested draft never saved: save first, then send.
-      if (draft !== null || agreement === null) await save.mutateAsync(payload);
-      setDraft(null);
-      await send.mutateAsync({ engagementId });
-    } catch { /* each mutation shows its own error */ }
-  };
-  const area = (key: "scope" | "outOfScope" | "clientCommitments" | "terms", label: string, rows: number) => (
-    <div className="space-y-1">
-      <label className={LABEL} htmlFor={`agreement-${key}`}>{label}</label>
-      <textarea id={`agreement-${key}`} rows={rows} className={FIELD} disabled={locked || !data.can.edit} value={current[key]} onChange={event => edit({ [key]: event.target.value })} />
-    </div>
-  );
+  if (!data) return <DetailSection title="Fees"><p className="text-sm text-ink-muted">Loading…</p></DetailSection>;
+  const saved = data.feeLines.map(line => ({ label: line.label, amount: line.amount, dueOn: line.dueOn }));
+  // Unsaved: the suggestion from the service, until the team saves a schedule.
+  const current = draft ?? (data.suggested ?? saved);
+  const unsaved = draft !== null || data.suggested !== null;
+  const setLine = (index: number, patch: Partial<FeeLineDraft>) => setDraft(current.map((line, at) => (at === index ? { ...line, ...patch } : line)));
+  const fees = current.filter(line => line.label.trim() && line.amount > 0);
   return (
-    <DetailSection title="Proposal and fees">
-      <p className="text-xs text-ink-muted">{agreement ? `${agreement.statusLabel}${agreement.version ? ` · version ${agreement.version}` : ""}${agreement.status === "accepted" && agreement.acceptedName ? ` · signed by ${agreement.acceptedName} on ${formatDate(agreement.acceptedAt)}` : ""}` : "Drafted from the service and its price on the website. Check it, change anything, then send."}</p>
-      {area("scope", "Scope of Work", 8)}
-      <p className="text-xs text-ink-muted">Set as a document for the client: a line ending in a colon is a subheading; lines starting "- Item: detail" form a table.</p>
-      {area("outOfScope", "Exclusions", 2)}
-      {area("clientCommitments", "Client Responsibilities", 2)}
-      {area("terms", "Terms", 3)}
-      <div className="space-y-1">
-        <p className={LABEL}>Fees (naira)</p>
-        <ul aria-label="Fee lines" className="space-y-1">
-          {(locked ? data.feeLines.map(line => ({ label: line.label, amount: line.amount, dueOn: line.dueOn, id: line.id, paidAt: line.paidAt })) : current.feeLines.map(line => ({ ...line, id: null as number | null, paidAt: null as Date | string | null }))).map((line, index) => (
-            <li key={line.id ?? `new-${index}`} className="grid grid-cols-[minmax(0,1fr)_7rem_8.5rem_auto] items-center gap-1">
-              <input aria-label={`Fee ${index + 1}`} className={FIELD} disabled={locked} value={line.label} onChange={event => setLine(index, { label: event.target.value })} />
-              <input aria-label={`Amount ${index + 1}`} type="number" min={1} className={FIELD} disabled={locked} value={line.amount || ""} onChange={event => setLine(index, { amount: Math.round(Number(event.target.value) || 0) })} />
-              <input aria-label={`Due ${index + 1}`} type="date" className={FIELD} disabled={locked} value={line.dueOn ?? ""} onChange={event => setLine(index, { dueOn: event.target.value || null })} />
-              {locked && line.id !== null ? (
-                <label className="flex items-center gap-1 text-xs text-ink-muted"><input type="checkbox" checked={Boolean(line.paidAt)} disabled={!data.can.edit || paid.isPending} onChange={event => paid.mutate({ feeLineId: line.id!, paid: event.target.checked })} />Paid</label>
-              ) : !locked ? (
-                <button type="button" className="text-xs text-danger underline" aria-label={`Remove fee ${index + 1}`} onClick={() => edit({ feeLines: current.feeLines.filter((_, at) => at !== index) })}>Remove</button>
+    <DetailSection title="Fees">
+      <p className="text-xs text-ink-muted">{data.suggested ? "Filled in from the service's price. Check the amounts and dates, then save." : "Finance counts each fee as owed, and as late once its date passes. Tick Paid when the money arrives."}</p>
+      <ul aria-label="Fee lines" className="space-y-1">
+        {current.map((line, index) => {
+          const stored = !unsaved ? data.feeLines[index] : undefined;
+          return (
+            <li key={stored?.id ?? `new-${index}`} className="grid grid-cols-[minmax(0,1fr)_7rem_8.5rem_auto] items-center gap-1">
+              <input aria-label={`Fee ${index + 1}`} className={FIELD} disabled={!data.can.edit} value={line.label} onChange={event => setLine(index, { label: event.target.value })} />
+              <input aria-label={`Amount ${index + 1}`} type="number" min={1} className={FIELD} disabled={!data.can.edit} value={line.amount || ""} onChange={event => setLine(index, { amount: Math.round(Number(event.target.value) || 0) })} />
+              <input aria-label={`Due ${index + 1}`} type="date" className={FIELD} disabled={!data.can.edit} value={line.dueOn ?? ""} onChange={event => setLine(index, { dueOn: event.target.value || null })} />
+              {stored ? (
+                <label className="flex items-center gap-1 text-xs text-ink-muted"><input type="checkbox" checked={Boolean(stored.paidAt)} disabled={!data.can.edit || paid.isPending} onChange={event => paid.mutate({ feeLineId: stored.id, paid: event.target.checked })} />Paid</label>
+              ) : data.can.edit ? (
+                <button type="button" className="text-xs text-danger underline" aria-label={`Remove fee ${index + 1}`} onClick={() => setDraft(current.filter((_, at) => at !== index))}>Remove</button>
               ) : <span />}
             </li>
-          ))}
-        </ul>
-        {!locked && <button type="button" className="text-xs font-semibold text-brand underline" onClick={() => edit({ feeLines: [...current.feeLines, { label: "", amount: 0, dueOn: null }] })}>Add a fee</button>}
-        <p className="text-sm font-semibold">Total {formatNaira(locked ? data.total : feeTotal(current.feeLines))}</p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {/* One click: the draft is saved and sent together, so the lead checks it and sends; nothing to save first. */}
-        {!locked && data.can.send && data.can.edit && <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={sending || !current.scope.trim() || !fees.length} title={!fees.length ? "Add the fees first" : undefined} onClick={() => void saveAndSend()}>Send to the owner</Button>}
-        {!locked && data.can.edit && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={save.isPending || sending || !current.scope.trim() || (agreement !== null && draft === null)} onClick={() => save.mutate(payload, { onSuccess: () => setDraft(null) })}>Save the draft</Button>}
-        {!locked && data.can.send && !fees.length && <p className="w-full text-xs text-ink-muted">Add the fees to send it.</p>}
-        {locked && data.can.send && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={revise.isPending} onClick={() => revise.mutate({ engagementId })}>Revise</Button>}
-      </div>
+          );
+        })}
+      </ul>
+      {data.can.edit && <button type="button" className="text-xs font-semibold text-brand underline" onClick={() => setDraft([...current, { label: "", amount: 0, dueOn: null }])}>Add a fee</button>}
+      <p className="text-sm font-semibold">Total {formatNaira(feeTotal(unsaved ? fees : data.feeLines))}</p>
+      {data.can.edit && unsaved && (
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending} onClick={() => save.mutate({ engagementId, feeLines: fees }, { onSuccess: () => setDraft(null) })}>Save the fees</Button>
+          {draft !== null && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setDraft(null)}>Cancel</Button>}
+        </div>
+      )}
     </DetailSection>
   );
 }

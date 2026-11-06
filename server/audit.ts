@@ -46,6 +46,7 @@ export const AUDIT_ACTIONS = [
   "service_requested",
   "service_request_handled",
   "engagement_agreement_saved",
+  "engagement_fees_saved",
   "engagement_agreement_sent",
   "engagement_agreement_revised",
   "engagement_agreement_accepted",

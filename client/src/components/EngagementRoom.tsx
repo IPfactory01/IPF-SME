@@ -12,7 +12,6 @@ import { BRAND } from "@shared/brand";
 import { DATED_TYPES, datedProgress, monthOfDay, SERVICE_STEPS } from "@shared/engagementTypes";
 import { MENU_PRODUCTS } from "@shared/products";
 import { formatNaira } from "@shared/businessSupport";
-import { TERMS_PATH } from "./LegalLinks";
 import { useRoomProject } from "@/lib/roomProject";
 import ContentBoard from "./room/ContentBoard";
 import { toast } from "sonner";
@@ -135,13 +134,6 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
           <a href={`#step-${action.step}`} onClick={() => setOpen(action.step)} className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand underline underline-offset-2">Open the {action.deliverable.kindLabel} <ArrowRight className="h-3.5 w-3.5" aria-hidden /></a>
         </>
       )}
-      {action.kind === "agreement" && (
-        <>
-          <p className="mt-2 text-lg font-semibold tracking-tight">Review and sign the proposal</p>
-          <p className="mt-1 text-sm text-ink-600">Scope of work, milestones, fees and terms{room.agreement ? `, with fees of ${formatNaira(room.agreement.total)} in total` : ""}.</p>
-          <a href="#agreement" className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-deep-hover">Open the proposal<ArrowRight className="h-4 w-4" aria-hidden /></a>
-        </>
-      )}
       {action.kind === "none" && <p className="mt-2 text-sm text-ink-600">Nothing outstanding. We will tell you here when there is.</p>}
     </section>
   );
@@ -223,7 +215,6 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
       { id: "founder", label: "Founder", group: "What we found", content: <FounderPanel insight={room.insight} /> },
     ] : []),
     { id: "deliverables", label: METHOD.deliverables, group: "What you receive", content: <DeliverablesView room={room} isOwner={isOwner} /> },
-    ...(room.agreement ? [{ id: "agreement", label: "Proposal", group: "What you receive", count: room.agreement.canAccept ? { value: 1, label: "waiting for you to sign" } : undefined, content: <AgreementView room={room} /> }] : []),
   ];
 
   const header = (
@@ -307,11 +298,10 @@ function nowOf(room: Room, now: number): { title: string; line: string; progress
 /** The Findings are out and the owner has not signed everything off yet: that, not the Work Plan, is where we are. */
 const findingsAwaiting = (room: Room) => room.deliverables.some(item => ["findings", "problem_statement"].includes(item.kind) && !item.accepted);
 
-type NextAction = { kind: "agreement" } | { kind: "task"; task: Task; label: string } | { kind: "signoff"; deliverable: Deliverable; step: number } | { kind: "none" };
+type NextAction = { kind: "task"; task: Task; label: string } | { kind: "signoff"; deliverable: Deliverable; step: number } | { kind: "none" };
 
 /** One thing at a time: the client's earliest open Data Request or action, else a Deliverable waiting for Sign-off. */
 function nextActionOf(room: Room, isOwner: boolean): NextAction {
-  if (room.agreement?.canAccept) return { kind: "agreement" };
   const mine = room.tasks.filter(task => task.side === "client");
   const open = mine.filter(isOpen).sort((a, b) => (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999") || (a.weekNumber ?? 99) - (b.weekNumber ?? 99) || a.sortOrder - b.sortOrder || a.id - b.id);
   if (open[0]) {
@@ -1278,120 +1268,3 @@ function NextProblem({ room }: { room: Room }) {
   );
 }
 
-// ---- The proposal (it doubles as the agreement) -----------------------------------------------------------------------
-
-/**
- * The proposal text is stored as written by the team. It is set as a document: a line ending in a colon is a subheading,
- * "- Item: detail" lines are rows of a two-column table, other "- " lines are a list, and the rest are paragraphs.
- */
-function ProposalText({ text }: { text: string }) {
-  const blocks: React.ReactNode[] = [];
-  const lines = text.replace(/\r/g, "").split("\n");
-  let index = 0;
-  while (index < lines.length) {
-    const line = lines[index]!.trim();
-    if (!line) { index += 1; continue; }
-    if (line.startsWith("- ")) {
-      const items: string[] = [];
-      while (index < lines.length && lines[index]!.trim().startsWith("- ")) { items.push(lines[index]!.trim().slice(2)); index += 1; }
-      const pairs = items.map(item => /^([^:]{2,60}):\s+(.+)$/.exec(item));
-      if (pairs.every(Boolean)) {
-        blocks.push(
-          <dl key={blocks.length} className="divide-y divide-line-soft border-y border-line-soft text-sm">
-            {pairs.map((pair, at) => <div key={at} className="grid gap-1 py-2.5 sm:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] sm:gap-4"><dt className="font-medium text-ink">{pair![1]}</dt><dd className="text-ink-600">{pair![2]}</dd></div>)}
-          </dl>,
-        );
-      } else {
-        blocks.push(<ul key={blocks.length} className="list-disc space-y-1 pl-5 text-sm text-ink-600 marker:text-ink-muted">{items.map((item, at) => <li key={at}>{item}</li>)}</ul>);
-      }
-      continue;
-    }
-    if (line.endsWith(":") && line.length <= 60) { blocks.push(<h4 key={blocks.length} className="pt-1 text-xs font-semibold uppercase tracking-wider text-ink-muted">{line.slice(0, -1)}</h4>); index += 1; continue; }
-    blocks.push(<p key={blocks.length} className="text-sm leading-relaxed text-ink-600">{line}</p>);
-    index += 1;
-  }
-  return <div className="space-y-3">{blocks}</div>;
-}
-
-const longDate = (value: Date | string | null | undefined) => value ? new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "long", year: "numeric" }).format(new Date(value)) : "";
-
-/**
- * The proposal as the client reads it, set as a document: scope of work, exclusions, the client's responsibilities, fees
- * and the payment schedule, terms, and acceptance. The owner signs it by typing their name; full-access staff only read.
- */
-function AgreementView({ room }: { room: Room }) {
-  const agreement = room.agreement!;
-  const preview = useRoomPreview();
-  const refresh = useRoomRefresh();
-  const [name, setName] = useState("");
-  const [agree, setAgree] = useState(false);
-  const accept = trpc.engagement.client.acceptAgreement.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Proposal signed."); } });
-  if (agreement.status === "revising") return <p className={`${CARD} text-sm text-ink-600`}>IP Factory is revising this proposal. The new version will appear here for signature.</p>;
-  const signed = agreement.status === "accepted";
-  const sections = [
-    { title: "Scope of Work", body: agreement.scope },
-    { title: "Exclusions", body: agreement.outOfScope },
-    { title: "Client Responsibilities", body: agreement.clientCommitments },
-  ].filter(section => section.body);
-  const number = (offset: number) => sections.length + offset;
-  return (
-    <div className="grid items-start gap-5 lg:grid-cols-3">
-      <article aria-label="Proposal" className="overflow-hidden rounded-xl border border-line-soft bg-white lg:col-span-2">
-        <header className="border-b border-line-soft px-6 py-5 sm:px-8">
-          <p className="text-xs font-semibold uppercase tracking-wider text-brand">Proposal</p>
-          <h3 className="mt-1 text-xl font-semibold tracking-tight text-ink">{room.title} for {room.businessName}</h3>
-          <p className="mt-1 text-sm text-ink-muted">Prepared by IP Factory · Version {agreement.version} · Issued {longDate(agreement.sentAt)}</p>
-        </header>
-        <div className="space-y-7 px-6 py-6 sm:px-8">
-          {sections.map((section, at) => (
-            <section key={section.title} aria-label={section.title} className="space-y-3">
-              <h4 className="text-base font-semibold text-ink"><span className="mr-2 tabular-nums text-ink-muted">{at + 1}</span>{section.title}</h4>
-              <ProposalText text={section.body!} />
-            </section>
-          ))}
-          <section aria-label="Fees" className="space-y-3">
-            <h4 className="text-base font-semibold text-ink"><span className="mr-2 tabular-nums text-ink-muted">{number(1)}</span>Fees and Payment Schedule</h4>
-            <table className="w-full text-sm">
-              <thead><tr className="border-b border-line text-left text-xs uppercase tracking-wider text-ink-muted"><th className="py-2 font-semibold">Instalment</th><th className="py-2 font-semibold">Due</th><th className="py-2 text-right font-semibold">Amount</th></tr></thead>
-              <tbody className="divide-y divide-line-soft">
-                {agreement.feeLines.map(line => (
-                  <tr key={line.id}>
-                    <td className="py-2.5 pr-3 text-ink">{line.label}{line.paid && <span className="ml-2 rounded-full bg-health-clear-tint px-2 py-0.5 text-xs text-health-clear-strong">Paid</span>}</td>
-                    <td className="py-2.5 pr-3 text-ink-600">{line.dueOn ? dateOnly(line.dueOn) : "As stated"}</td>
-                    <td className="py-2.5 text-right font-medium tabular-nums text-ink">{formatNaira(line.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot><tr className="border-t border-line"><td className="pt-2.5 font-semibold text-ink" colSpan={2}>Total</td><td className="pt-2.5 text-right font-semibold tabular-nums text-ink">{formatNaira(agreement.total)}</td></tr></tfoot>
-            </table>
-          </section>
-          {agreement.terms && (
-            <section aria-label="Terms" className="space-y-3">
-              <h4 className="text-base font-semibold text-ink"><span className="mr-2 tabular-nums text-ink-muted">{number(2)}</span>Terms</h4>
-              <ProposalText text={agreement.terms} />
-              <p className="text-sm"><a href={TERMS_PATH} target="_blank" rel="noreferrer" className="font-medium text-brand underline underline-offset-2">IP Factory Terms and Conditions</a></p>
-            </section>
-          )}
-        </div>
-      </article>
-      <aside className="space-y-5 lg:sticky lg:top-4">
-        <section aria-label="Summary" className={CARD}>
-          <dl className="space-y-3 text-sm">
-            <div className="flex justify-between gap-3"><dt className="text-ink-muted">Status</dt><dd className={signed ? "font-medium text-health-clear-strong" : "font-medium text-ink"}>{signed ? "Signed" : "Awaiting signature"}</dd></div>
-            <div className="flex justify-between gap-3"><dt className="text-ink-muted">Total fees</dt><dd className="font-semibold tabular-nums text-ink">{formatNaira(agreement.total)}</dd></div>
-            {signed && <div className="flex justify-between gap-3"><dt className="text-ink-muted">Signed by</dt><dd className="text-right text-ink">{agreement.acceptedName}, {longDate(agreement.acceptedAt)}</dd></div>}
-          </dl>
-        </section>
-        {agreement.canAccept && !preview && (
-          <form aria-label="Sign the proposal" className={`${CARD} space-y-3`} onSubmit={event => { event.preventDefault(); accept.mutate({ engagementId: room.engagementId, name }); }}>
-            <h4 className="text-base font-semibold text-ink">Acceptance</h4>
-            <label className="block text-sm font-medium text-ink" htmlFor="agreement-name">Full name</label>
-            <input id="agreement-name" className="w-full rounded-lg border border-line bg-white px-3 py-2 text-sm" value={name} maxLength={200} onChange={event => setName(event.target.value)} autoComplete="name" />
-            <label className="flex items-start gap-2 text-sm text-ink-600"><input type="checkbox" className="mt-1" checked={agree} onChange={event => setAgree(event.target.checked)} />I have read this proposal and the Terms and Conditions, and accept them on behalf of {room.businessName}.</label>
-            <Button type="submit" className="w-full rounded-lg bg-brand text-white" disabled={!agree || name.trim().length < 2 || accept.isPending}>Sign the proposal</Button>
-          </form>
-        )}
-      </aside>
-    </div>
-  );
-}

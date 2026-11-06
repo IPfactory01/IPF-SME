@@ -22,7 +22,7 @@ import {
 import { authorityAllows } from "../../shared/platformPermissions";
 import { AGREEMENT_LIMITS } from "../../shared/agreement";
 import { listFinance } from "../finance";
-import { acceptAgreement, reviseAgreement, saveAgreement, sendAgreement, setFeePaid, staffAgreement } from "../agreements";
+import { saveFees, setFeePaid, staffFees } from "../agreements";
 import {
   acceptDeliverable,
   approveDeliverable,
@@ -201,18 +201,12 @@ const staffRouter = router({
       priority: z.enum(ENGAGEMENT_TASK_PRIORITIES).nullable(), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
     })).min(1).max(120),
   })).mutation(async ({ ctx, input }) => guarded(async () => loadDataRequest(await engagementDb(), ctx.actor, input))),
-  /** The agreement and fees: draft, save, send, revise, record payments. */
-  agreement: staff.input(z.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => staffAgreement(await engagementDb(), ctx.actor, input.engagementId))),
-  saveAgreement: staff.input(z.object({
+  /** The engagement's fee schedule, and recording each payment. */
+  fees: staff.input(z.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => staffFees(await engagementDb(), ctx.actor, input.engagementId))),
+  saveFees: staff.input(z.object({
     engagementId: id,
-    scope: text(AGREEMENT_LIMITS.text),
-    outOfScope: text(AGREEMENT_LIMITS.text),
-    clientCommitments: text(AGREEMENT_LIMITS.text),
-    terms: text(AGREEMENT_LIMITS.text),
     feeLines: z.array(z.object({ label: text(AGREEMENT_LIMITS.label), amount: z.number().int().positive().max(AGREEMENT_LIMITS.amount), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable() })).max(AGREEMENT_LIMITS.feeLines),
-  })).mutation(async ({ ctx, input }) => guarded(async () => saveAgreement(await engagementDb(), ctx.actor, input))),
-  sendAgreement: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => sendAgreement(await engagementDb(), ctx.actor, input))),
-  reviseAgreement: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => reviseAgreement(await engagementDb(), ctx.actor, input))),
+  })).mutation(async ({ ctx, input }) => guarded(async () => saveFees(await engagementDb(), ctx.actor, input))),
   setFeePaid: staff.input(z.object({ feeLineId: id, paid: z.boolean() })).mutation(async ({ ctx, input }) => guarded(async () => setFeePaid(await engagementDb(), ctx.actor, input))),
   /** "Fix the next problem": the clients' requests for another service, and handling one. Desk only. */
   serviceRequests: staff.query(async ({ ctx }) => listServiceRequests(await engagementDb(), ctx.actor)),
@@ -271,8 +265,6 @@ const clientRouter = router({
   /** The drop box: send any file without saying which request it answers; the team sorts it. */
   requestDrop: accountProcedure.input(z.object({ ...upload, engagementId: id.nullish() })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileDrop, `account:${ctx.account.user.id}`); return guarded(async () => clientRequestDrop(await engagementDb(), ctx.account, input)); }),
   confirmDrop: accountProcedure.input(z.object({ storageKey, note: optionalText(500), ...upload, engagementId: id.nullish() })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmDrop(await engagementDb(), ctx.account, input))),
-  /** The owner accepts the agreement by typing their name. */
-  acceptAgreement: accountProcedure.input(z.object({ engagementId: id, name: text(200) })).mutation(async ({ ctx, input }) => guarded(async () => acceptAgreement(await engagementDb(), ctx.account, input))),
   /** "Fix the next problem": ask for another service; the desk confirms it. */
   requestService: accountProcedure.input(z.object({ service: z.string().min(1).max(64), note: optionalText(1000), engagementId: id.nullish() }))
     .mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.engagementComment, `account:${ctx.account.user.id}`); return guarded(async () => requestService(await engagementDb(), ctx.account, input)); }),
@@ -282,7 +274,7 @@ const clientRouter = router({
   setNotAvailable: accountProcedure.input(z.object({ taskId: id, unavailable: z.boolean(), note: optionalText(500) })).mutation(async ({ ctx, input }) => guarded(async () => setNotAvailable(await engagementDb(), ctx.account, input))),
 });
 
-/** Finance: money across every client (payment requests and agreement fees). view_financials only; read only. */
+/** Finance: money across every client (payment requests and engagement fees). view_financials only; read only. */
 const financeRouter = router({
   list: adminProcedure.query(async ({ ctx }) => guarded(async () => listFinance(await engagementDb(), { authority: await loadAuthority(await engagementDb(), ctx.user!) }))),
 });

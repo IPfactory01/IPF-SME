@@ -100,7 +100,6 @@ const SAMPLE_ROOM = {
   serviceStep: null,
   projects: [{ id: 1, title: "Business Review", stageLabel: "Business Review", closed: false, current: true }],
   requests: [],
-  agreement: null,
   type: "business_review",
   typeLabel: "Business Review",
   startedOn: null,

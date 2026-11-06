@@ -22,6 +22,7 @@ import {
   engagementFileMatches,
   engagementContentItems,
   serviceRequests,
+  engagementFeeLines,
 } from "../drizzle/schema";
 import { authorityAllows, type Authority } from "../shared/platformPermissions";
 import {
@@ -64,7 +65,8 @@ import { inviteBusinessOwner } from "./accountInvitations";
 import { slugify } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { DUE_DAYS } from "../shared/dataRequestTemplates";
-import { clientAgreement } from "./agreements";
+import { initialFeeRows } from "./agreements";
+import { defaultFees } from "../shared/agreement";
 import { sharedDebriefFor } from "./debriefs";
 import { getDb } from "./db";
 import { deliverEmail } from "./email";
@@ -229,6 +231,9 @@ async function insertDirect(tx: Pick<Database, "insert">, actor: StaffActor, inp
   if (tasks.length) await tx.insert(engagementTasks).values(tasks);
   const sessions = starter ? starter.sessions : ASSESSMENT_TEMPLATE.sessions;
   if (sessions.length) await tx.insert(engagementSessions).values(sessions.map(item => ({ engagementId: created.id, kind: item.kind, title: item.title, durationMinutes: item.durationMinutes, agenda: item.agenda, weekNumber: item.week, sortOrder: item.order, createdByUserId: actor.id })));
+  // The fee schedule, from the service's price or the type's monthly fee; the team adjusts it on the engagement.
+  const fees = initialFeeRows(created.id, defaultFees(input.type, at.service));
+  if (fees.length) await tx.insert(engagementFeeLines).values(fees);
   await recordAudit(tx, { action: "engagement_started", actorUserId: actor.id, targetEmail: at.contactEmail, details: { engagementId: created.id, type: input.type, service: at.service, direct: true, businessId: at.businessId } });
   return created.id;
 }
@@ -326,8 +331,8 @@ const requireManage = (actor: StaffActor) => requirePermission(actor, "manage_en
 export const canContribute = (actor: StaffActor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "contribute_engagements");
 /** Internal Session notes: for whoever works on or approves engagements, never a Specialist. */
 export const canSeeInternal = (actor: StaffActor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "review_engagements");
-/** The agreement and fees: as for internal notes, plus Finance. */
-export const canSeeAgreement = (actor: StaffActor) => canSeeInternal(actor) || authorityAllows(actor.authority, "view_financials");
+/** An engagement's fees: as for internal notes, plus Finance. */
+export const canSeeFees = (actor: StaffActor) => canSeeInternal(actor) || authorityAllows(actor.authority, "view_financials");
 
 /** The engagements this person may see, newest first, with what the desk needs at a glance. */
 /** The stage in words: a dated engagement's current stage from its start date, else the stored stage. */
@@ -460,7 +465,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
       sendSignIn: authorityAllows(actor.authority, "manage_client_onboarding"),
       contribute: canContribute(actor),
       seeInternal: canSeeInternal(actor),
-      seeAgreement: canSeeAgreement(actor),
+      seeFees: canSeeFees(actor),
     },
   };
 }
@@ -971,8 +976,6 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
       recordsOpen: tasks.filter(task => task.side === "client" && task.kind === "data_request" && OPEN_TASK_STATUSES.includes(task.status)).length,
       shared: visibleDeliverables.length, accepted: visibleDeliverables.filter(item => item.clientAcceptedAt !== null).length, closed: engagement.stage === "closed",
     }) : null,
-    /** The agreement and fees, once sent: for the owner and full-access staff only (null otherwise). */
-    agreement: await clientAgreement(db, engagement.id, viewer),
     /** Every engagement of the business, newest first, to move between them. */
     projects: projects.map(row => ({ id: row.id, title: engagementTitle(row.type, row.service), stageLabel: engagementStageLabel(row, now), closed: row.stage === "closed", current: row.id === engagement.id })),
     /** "Fix the next problem": what the business has asked for that the desk has not handled yet. */

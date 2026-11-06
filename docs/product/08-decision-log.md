@@ -11,10 +11,9 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 | The PRD is rewritten from scratch around the journey, with priorities, acceptance and measures; this log holds the history | ET, 6 November 2026 |
 | The Shift is a service business today and a self-serve platform over time; clients keep their access throughout; the platform does the routine work | ET, 6 November 2026 |
 | Digital marketing is a Shift product: a monthly service fee of ₦470,000 for 90 days, each month paid before it starts, the first at signing, with milestones and a quarter review; it goes on the public menu | ET, 6 November 2026 |
-| There is no separate agreement: the proposal doubles as the agreement, signed by the owner. Every screen and email says "proposal" | ET, 6 November 2026 |
+| No proposals or agreements on the platform: a client agrees on the call or by paying, under the Terms and Conditions. The room's Proposal tab and signing are removed; each engagement keeps a fee schedule, filled in when it opens, and Finance counts a fee as owed once set. The 0019 agreement table is kept, unused (supersedes the same day's "the proposal doubles as the agreement") | ET, 6 November 2026 |
 | The one number: paying clients whose agreed measure moved | ET, 6 November 2026 |
 | Specialists hand in team items and drafts on their own engagements; they never see internal notes or fees | ET, 6 November 2026 |
-| The proposal is drafted from the service and its price and sends in one click | ET, 6 November 2026 |
 | Finance is visible to Partners, Vice Presidents and Senior Associates | ET, 6 November 2026 |
 | The admin is five tabs: Pipeline, Engagements, Clients, Finance, Team; JUMP is removed everywhere, its records kept in the database | ET, 6 November 2026 |
 | A one-step Data Request loader: the Small business baseline, or rows pasted from Excel | ET, 6 November 2026 |

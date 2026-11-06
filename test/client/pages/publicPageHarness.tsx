@@ -18,7 +18,7 @@ export const PRICES_MOCK = { trpc: { businessCheck: { prices: { useQuery: () => 
 
 /** Renders a page at a path; give the route's pattern (such as "/guides/:slug") for a page that reads its parameters. */
 export function renderAt(path: string, Page: React.ComponentType, pattern?: string) {
-  return render(<Router hook={memoryLocation({ path }).hook}>{pattern ? <Route path={pattern} component={Page} /> : <Page />}</Router>);
+  return render(<Router hook={memoryLocation({ path }).hook}>{pattern ? <Route path={pattern}><Page /></Route> : <Page />}</Router>);
 }
 
 /** Words the site never uses (AGENTS.md conventions). */

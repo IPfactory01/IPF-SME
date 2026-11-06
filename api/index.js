@@ -117,26 +117,26 @@ var init_brand = __esm({
        * Brand colours for email HTML and PDFs, which cannot read CSS variables.
        * Must match --color-brand / --color-brand-deep in client/src/index.css (enforced by brand.test.ts).
        */
-      colorBrand: "#174579",
-      colorBrandDeep: "#0F2E52",
+      colorBrand: "#1C4E7E",
+      colorBrandDeep: "#12324F",
       /**
        * The theme tokens email HTML uses, keyed by their name in client/src/index.css (--color-<name>). Email cannot read
        * CSS variables, so the values are copied here; brand.test.ts fails if any of them drifts from the stylesheet.
        */
       palette: {
-        "brand": "#174579",
-        "brand-deep": "#0F2E52",
-        "brand-plum": "#57C3BD",
-        "highlight": "#57C3BD",
-        "highlight-ink": "#174579",
-        "ink": "#0F2E52",
+        "brand": "#1C4E7E",
+        "brand-deep": "#12324F",
+        "brand-plum": "#6C335C",
+        "highlight": "#36B7E0",
+        "highlight-ink": "#CB3756",
+        "ink": "#12324F",
         "ink-soft": "#4F5A66",
         "ink-muted": "#5F6B77",
         "brand-slate": "#4A5E73",
-        "brand-tint-softer": "#F6FBFA",
-        "brand-line": "#CFE6E4",
+        "brand-tint-softer": "#F6F9FB",
+        "brand-line": "#D3DEEA",
         "line": "#DDE3E8",
-        "paper": "#F7FAFA",
+        "paper": "#F7F9FA",
         "paper-raised": "#FFFFFF",
         "health-clear": "#2E7D4F",
         "health-clear-tint": "#E7F3EC",

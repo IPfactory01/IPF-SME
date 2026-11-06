@@ -163,7 +163,7 @@ export function publicPages(): PublicPage[] {
     page("/guides", PAGE_META.guides, "Answers to what owners ask.", [PAGE_META.guides.description, ...GUIDES.map((guide) => `${guide.h1} ${guide.description}`)]),
     ...GUIDES.map((guide) => page(guidePath(guide), { title: guide.title, description: guide.description }, guide.h1, [guide.lede, ...guide.sections.flatMap((section) => [section.heading, ...(section.paragraphs ?? []), ...(section.points ?? [])])], [faqJsonLd(guide.faq)], guide.h1)),
     page("/questions", PAGE_META.questions, "Questions owners ask.", QUESTION_GROUPS.flatMap((group) => group.items.map((item) => `${item.q} ${item.a}`)), [faqJsonLd(QUESTION_GROUPS.flatMap((group) => group.items))]),
-    page("/contact", PAGE_META.contact, "Talk to a person.", [PAGE_META.contact.description]),
+    page("/contact", PAGE_META.contact, "Talk to an expert.", [PAGE_META.contact.description]),
     page("/check", PAGE_META.check, "Free Business Health Check", [PAGE_META.check.description]),
     page("/terms", PAGE_META.terms, "Terms & Conditions", [PAGE_META.terms.description]),
     page("/privacy", PAGE_META.privacy, "Privacy Policy", [PAGE_META.privacy.description]),

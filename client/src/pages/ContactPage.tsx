@@ -19,7 +19,7 @@ export default function ContactPage() {
 
   return (
     <SiteShell>
-      <PageHero eyebrow="Contact" title="Talk to a person." sub="A free 20-minute call, by phone or video, to agree what is wrong and where to start. Or write to us." />
+      <PageHero eyebrow="Contact" title="Talk to an expert." sub="A free 20-minute call with one of our business experts, by phone or video. Tell us the problem; we tell you where to start. Or write to us." />
 
       <section aria-label="Ways to reach us" className="bg-paper-sunken/60 py-16 sm:py-20">
         <ul className="container mx-auto grid max-w-6xl gap-4 md:grid-cols-3">

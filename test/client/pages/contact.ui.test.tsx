@@ -12,6 +12,12 @@ const { BRAND } = await import("@shared/brand");
 afterEach(cleanup);
 
 describe("Contact (/contact)", () => {
+  it("offers an expert, which Nigerian owners rate above \"a person\"", () => {
+    renderAt("/contact", ContactPage);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Talk to an expert.");
+    expect(screen.getByText(/with one of our business experts/)).toBeTruthy();
+  });
+
   it("offers the free call, the mailbox and where we work", () => {
     renderAt("/contact", ContactPage);
     const ways = within(screen.getByRole("region", { name: "Ways to reach us" }));

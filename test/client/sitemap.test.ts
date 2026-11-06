@@ -3,12 +3,13 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SITE_PAGES } from "@/components/SiteShell";
 import { MENU_PRODUCTS, servicePath } from "@shared/products";
+import { GUIDES, guidePath } from "@shared/guides";
 
 const read = (file: string) => readFileSync(resolve(process.cwd(), "client", file), "utf8");
 const ORIGIN = "https://www.ipfactory.co";
 
-/** Every page a visitor can reach from the menu: the site's pages, the free check, each service and the legal pages. */
-const PUBLIC_PATHS = ["/", ...SITE_PAGES.map((page) => page.href), "/check", ...MENU_PRODUCTS.map(servicePath), "/terms", "/privacy"];
+/** Every page a visitor can reach from the menu: the site's pages, the free check, each service, the guides and the legal pages. */
+const PUBLIC_PATHS = ["/", ...SITE_PAGES.map((page) => page.href), "/check", ...MENU_PRODUCTS.map(servicePath), "/guides", ...GUIDES.map(guidePath), "/terms", "/privacy"];
 
 describe("search engines and shared links", () => {
   it("lists every public page in the sitemap, and nothing else", () => {

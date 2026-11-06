@@ -69,7 +69,7 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
           <ol className="mt-4" aria-label="Engagement timeline">
             {steps.map((step, index) => {
               const last = index === steps.length - 1;
-              const tone = step.state === "done" ? "border-health-clear bg-health-clear text-white" : step.state === "now" ? "border-brand-plum bg-brand-plum text-brand-deep" : "border-line bg-white text-ink-muted";
+              const tone = step.state === "done" ? "border-health-clear bg-health-clear text-white" : step.state === "now" ? "border-brand-plum bg-brand-plum text-white" : "border-line bg-white text-ink-muted";
               return (
                 <li key={step.n} id={`step-${step.n}`} aria-current={step.state === "now" ? "step" : undefined} className="relative flex gap-4 scroll-mt-24">
                   {!last && <span aria-hidden className={`absolute left-[15px] top-8 h-full w-px ${step.state === "done" ? "bg-health-clear" : "bg-line"}`} />}

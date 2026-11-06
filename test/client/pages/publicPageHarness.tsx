@@ -2,7 +2,7 @@
 import React from "react";
 import { render } from "@testing-library/react";
 import { MotionGlobalConfig } from "framer-motion";
-import { Router } from "wouter";
+import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 
 MotionGlobalConfig.skipAnimations = true;
@@ -16,8 +16,9 @@ window.scrollTo = () => undefined;
 
 export const PRICES_MOCK = { trpc: { businessCheck: { prices: { useQuery: () => ({ data: { fullReport: 100_000, currentState: 600_000 } }) } } } };
 
-export function renderAt(path: string, Page: React.ComponentType) {
-  return render(<Router hook={memoryLocation({ path }).hook}><Page /></Router>);
+/** Renders a page at a path; give the route's pattern (such as "/guides/:slug") for a page that reads its parameters. */
+export function renderAt(path: string, Page: React.ComponentType, pattern?: string) {
+  return render(<Router hook={memoryLocation({ path }).hook}>{pattern ? <Route path={pattern} component={Page} /> : <Page />}</Router>);
 }
 
 /** Words the site never uses (AGENTS.md conventions). */

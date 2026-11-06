@@ -142,6 +142,30 @@
       "destination": "/about/index.html"
     },
     {
+      "source": "/guides",
+      "destination": "/guides/index.html"
+    },
+    {
+      "source": "/guides/my-business-is-struggling",
+      "destination": "/guides/my-business-is-struggling/index.html"
+    },
+    {
+      "source": "/guides/how-to-get-a-business-loan-in-nigeria",
+      "destination": "/guides/how-to-get-a-business-loan-in-nigeria/index.html"
+    },
+    {
+      "source": "/guides/how-much-does-a-business-plan-cost-in-nigeria",
+      "destination": "/guides/how-much-does-a-business-plan-cost-in-nigeria/index.html"
+    },
+    {
+      "source": "/guides/cash-flow-problems-in-small-business",
+      "destination": "/guides/cash-flow-problems-in-small-business/index.html"
+    },
+    {
+      "source": "/guides/how-to-price-your-products-for-profit",
+      "destination": "/guides/how-to-price-your-products-for-profit/index.html"
+    },
+    {
       "source": "/questions",
       "destination": "/questions/index.html"
     },

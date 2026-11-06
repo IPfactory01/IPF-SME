@@ -1,8 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Colour tokens, named by role (IP Factory ipf-teal-navy palette, ET 6 November 2026; the ipf-gradient values are in git
- * history at 0de5a75). Utilities use them as bg-brand, text-ink-muted, border-line, etc.
+ * Colour tokens, named by role (IP Factory ipf-gradient palette; ET tried teal-navy on 6 November 2026 and kept this). Utilities use them as bg-brand, text-ink-muted, border-line, etc.
  * Rebranding is a change of values here; shared/brand.ts holds the email/PDF equivalents.
  * Names deliberately avoid shadcn roles (primary, muted, accent, border, ...) used by components/ui.
  */
@@ -14,35 +13,35 @@
   --font-display: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
 
   /* Brand */
-  --color-brand: #174579; /* Primary brand colour: buttons, links, key text, rules */
-  --color-brand-ink: #174579; /* Brand-coloured body text */
-  --color-brand-deep: #0F2E52; /* Deep brand: text on tints, hover state of brand buttons */
-  --color-brand-deep-hover: #0A2240; /* Hover state of brand fills */
+  --color-brand: #1C4E7E; /* Primary brand colour: buttons, links, key text, rules */
+  --color-brand-ink: #1C4E7E; /* Brand-coloured body text */
+  --color-brand-deep: #12324F; /* Deep brand: text on tints, hover state of brand buttons */
+  --color-brand-deep-hover: #0D2540; /* Hover state of brand fills */
   --color-brand-slate: #4A5E73; /* Brand-tinted secondary text */
   --color-brand-slate-soft: #5C7183; /* Brand-tinted tertiary text */
-  --color-brand-tint: #EDF7F6; /* Brand call-out and selected backgrounds */
-  --color-brand-tint-soft: #F2F9F8; /* Soft brand background */
-  --color-brand-tint-softer: #F6FBFA; /* Softer brand background */
-  --color-brand-tint-softest: #FAFDFC; /* Softest brand background */
-  --color-brand-tint-line: #D7ECEA; /* Dividers inside brand-tinted areas */
-  --color-brand-line: #CFE6E4; /* Brand hairlines and borders */
-  --color-brand-line-strong: #A9D3CF; /* Stronger brand borders */
+  --color-brand-tint: #EEF3F8; /* Brand call-out and selected backgrounds */
+  --color-brand-tint-soft: #F3F6FA; /* Soft brand background */
+  --color-brand-tint-softer: #F6F9FB; /* Softer brand background */
+  --color-brand-tint-softest: #F9FBFD; /* Softest brand background */
+  --color-brand-tint-line: #DCE5EF; /* Dividers inside brand-tinted areas */
+  --color-brand-line: #D3DEEA; /* Brand hairlines and borders */
+  --color-brand-line-strong: #B3C5D9; /* Stronger brand borders */
 
-  /* Highlight: the logo's teal, for fills, rules and text on navy only (never teal text on white). The readable accent on light backgrounds is the logo's navy. */
-  --color-highlight: #57C3BD; /* Cyan fills and text on dark navy */
-  --color-highlight-hover: #7AD1CC; /* Hover state of cyan fills */
-  --color-highlight-ink: #174579; /* Crimson accent on light backgrounds */
-  --color-brand-plum: #57C3BD; /* Second brand colour (the logo's teal since 6 November 2026): the current stage, panel gradients */
+  /* Highlight: the logo's cyan and crimson. Cyan is for fills and text on dark navy only; crimson is the readable accent on light backgrounds (labels, rules, icons). */
+  --color-highlight: #36B7E0; /* Cyan fills and text on dark navy */
+  --color-highlight-hover: #5CC6E8; /* Hover state of cyan fills */
+  --color-highlight-ink: #CB3756; /* Crimson accent on light backgrounds */
+  --color-brand-plum: #6C335C; /* Top of the navy-to-plum panel gradient that echoes the logo */
 
-  /* Call to action: the free Business Health Check and other primary buttons, in the logo's teal with the logo's navy
-     text on it (contrast 4.6 to 1). The closing band is the logo's navy. Only the logo's two colours (ET, 6 Nov 2026). */
-  --color-cta: #57C3BD; /* Primary button fill: the logo's teal */
-  --color-cta-hover: #7AD1CC; /* Its hover */
-  --color-cta-ink: #174579; /* Text on the teal: the logo's navy */
-  --color-cta-deep: #174579; /* The closing band behind the free check: the logo's navy */
+  /* Call to action: the free Business Health Check and other primary buttons, in the logo's cyan with deep navy text
+     on it (5.5 to 1), so the check stands out on every page. The closing band is the deep navy. */
+  --color-cta: #36B7E0; /* Primary button fill: the logo's cyan */
+  --color-cta-hover: #5CC6E8; /* Its hover */
+  --color-cta-ink: #12324F; /* Text on the cyan: deep navy */
+  --color-cta-deep: #12324F; /* The closing band behind the free check */
 
   /* Surfaces */
-  --color-paper: #F7FAFA; /* Page background; text on dark fills */
+  --color-paper: #F7F9FA; /* Page background; text on dark fills */
   --color-paper-raised: #FFFFFF; /* Raised card background */
   --color-paper-neutral: #F6F8F9; /* Neutral panel background */
   --color-paper-muted: #F2F5F7; /* Muted panel background */
@@ -59,7 +58,7 @@
   --color-on-dark-muted: #C9D3DC; /* Muted text on dark fills */
 
   /* Text */
-  --color-ink: #0F2E52; /* Primary text and dark fills */
+  --color-ink: #12324F; /* Primary text and dark fills */
   --color-ink-800: #26313D; /* Near-black text */
   --color-ink-750: #2E3946; /* Dark text */
   --color-ink-700: #36414D; /* Dark text */
@@ -68,7 +67,7 @@
   --color-ink-muted: #5F6B77; /* Muted text, labels */
   --color-ink-faint: #76818C; /* Faint text */
   --color-ink-fainter: #7D8893; /* Fainter text */
-  --color-charcoal: #174579; /* Hover state of dark fills */
+  --color-charcoal: #1C4E7E; /* Hover state of dark fills */
 
   /* Business outline (business check): clear, watch, stuck */
   --color-health-clear: #2E7D4F; /* Clear: text, dots and borders */

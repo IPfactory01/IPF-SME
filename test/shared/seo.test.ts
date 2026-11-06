@@ -22,11 +22,11 @@ describe("what search engines and link previews read", () => {
     const product = productById("cash_flow_forecast")!;
     const html = pageHtml(template, publicPages().find((page) => page.path === servicePath(product))!);
     const url = `${SITE_ORIGIN}${servicePath(product)}`;
-    expect(html).toContain("<title>13-Week Cash Flow Forecast | The Shift, by IP Factory</title>");
+    expect(html).toContain("<title>13-Week Cash Flow Forecast: fix cash flow problems before they land | The Shift, by IP Factory</title>");
     expect(html).toMatch(/<meta name="description" content="[^"]*₦300,000[^"]*" \/>/);
     expect(html).toContain(`<link rel="canonical" href="${url}" />`);
     expect(html).toContain(`<meta property="og:url" content="${url}" />`);
-    expect(html).toContain('<meta property="og:title" content="13-Week Cash Flow Forecast | The Shift, by IP Factory" />');
+    expect(html).toContain('<meta property="og:title" content="13-Week Cash Flow Forecast: fix cash flow problems before they land | The Shift, by IP Factory" />');
     expect(html).toMatch(/<div id="root"><div class="sr-only"><h1>See the cash crunch before it comes\.<\/h1>/);
     expect(html.match(/<title>/g)).toHaveLength(1);
     expect(html.match(/rel="canonical"/g)).toHaveLength(1);
@@ -35,7 +35,9 @@ describe("what search engines and link previews read", () => {
   it("keeps the home page's own title and the address of the site", () => {
     const html = pageHtml(template, publicPages()[0]);
     expect(html).toContain(`<link rel="canonical" href="${SITE_ORIGIN}/" />`);
-    expect(html).toContain(`<title>${BRAND.productEndorsement} · ${BRAND.productTagline}</title>`);
+    // The home page's title is the search owners make: a small business consultant, in Lagos, Nigeria.
+    expect(html).toContain(`<title>Small Business Consultant in Lagos, Nigeria | ${BRAND.productEndorsement}</title>`);
+    expect(template).toContain(`<title>Small Business Consultant in Lagos, Nigeria | ${BRAND.productEndorsement}</title>`);
   });
 
   it("describes IP Factory as a business in Lekki serving all of Nigeria, on every page", () => {

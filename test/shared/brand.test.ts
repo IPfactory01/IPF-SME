@@ -37,7 +37,8 @@ describe("product name", () => {
 
   it("names the product in the page title and search description, without the retired headline", () => {
     const page = read("client/index.html");
-    expect(page).toContain(`<title>${BRAND.productEndorsement} · Support for business owners</title>`);
+    // The title is the search owners make (6 November 2026), with the product name after it.
+    expect(page).toContain(`<title>Small Business Consultant in Lagos, Nigeria | ${BRAND.productEndorsement}</title>`);
     expect(page).toMatch(/<meta name="description" content="[^"]*The Shift, by IP Factory/);
     expect(page).not.toContain("You know what your business needs");
   });

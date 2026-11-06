@@ -13,6 +13,7 @@ import ProductPage from "./pages/ProductPage";
 import HowWeWorkPage from "./pages/HowWeWorkPage";
 import AboutPage from "./pages/AboutPage";
 import ExperiencePage from "./pages/ExperiencePage";
+import GuidePage, { GuidesIndex } from "./pages/GuidesPage";
 import QuestionsPage from "./pages/QuestionsPage";
 import ContactPage from "./pages/ContactPage";
 import Home from "./pages/Home";
@@ -55,6 +56,8 @@ function Router() {
       <Route path="/services/:slug" component={ProductPage} />
       <Route path="/how-we-work" component={HowWeWorkPage} />
       <Route path="/experience" component={ExperiencePage} />
+      <Route path="/guides" component={GuidesIndex} />
+      <Route path="/guides/:slug" component={GuidePage} />
       <Route path="/about" component={AboutPage} />
       <Route path="/questions" component={QuestionsPage} />
       <Route path="/contact" component={ContactPage} />

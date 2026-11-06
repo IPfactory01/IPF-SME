@@ -78,7 +78,7 @@ export function SiteHeader({ cta = true }: { cta?: boolean }) {
   useEffect(() => { setOpen(false); }, [location]);
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur-md">
-      <div aria-hidden className="h-[3px] bg-gradient-to-r from-brand via-highlight-ink to-highlight" />
+      <div aria-hidden className="h-[3px] bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight" />
       <div className="container flex h-[60px] items-center justify-between gap-4">
         <Link href="/" className="flex shrink-0 items-center gap-3" aria-label={`${BRAND.productEndorsement}: home`}>
           <img src={BRAND.markUrl} alt="" className="h-9 w-auto" />
@@ -129,7 +129,7 @@ export function SiteFooter() {
     <footer className="border-t border-line bg-paper py-10">
       <div className="container flex flex-col items-center gap-3 text-center text-xs text-ink-muted">
         <nav aria-label="Footer" className="flex flex-wrap items-center justify-center gap-x-5 text-sm">
-          {[{ href: "/", label: "Home" }, ...SITE_PAGES, { href: "/check", label: "Free Business Health Check" }, { href: "/login", label: "Client sign in" }].map((page) => (
+          {[{ href: "/", label: "Home" }, ...SITE_PAGES, { href: "/guides", label: "Guides" }, { href: "/check", label: "Free Business Health Check" }, { href: "/login", label: "Client sign in" }].map((page) => (
             <Link key={page.href} href={page.href} className="inline-flex min-h-11 items-center hover:text-ink hover:underline">{page.label}</Link>
           ))}
         </nav>

@@ -27,27 +27,25 @@ Colours come from the theme tokens. **Never hard-code a hex value in a component
 
 ### Core palette
 
-The ipf-teal-navy palette since 6 November 2026 (ET: friendlier for Nigerian owners than the navy, plum and crimson of
-ipf-gradient, which is in git history at commit `0de5a75`). Two colours carry the brand, from the teal-navy logo option: navy #174579
-for text and the closing band, teal #57C3BD for buttons, rules and fills, never as text on white. The token names did not change, so every screen moved with
-the values.
+The ipf-gradient palette. ET tried the teal-navy logo and its colours on 6 November 2026 and kept these; the free check
+became cyan so it stands out on every page.
 
 | Token | Hex | Use |
 |---|---|---|
-| `brand` | #174579 | Primary: links, key text, rules (the logo's navy) |
-| `brand-deep` | #0F2E52 | Text on tints; hover on brand buttons |
-| `ink` | #0F2E52 | Primary text and dark fills |
+| `brand` | #1C4E7E | Primary: links, key text, rules |
+| `cta` | #36B7E0 | The logo's cyan: the free check and every primary button, with deep navy text (`cta-ink` #12324F, 5.5 to 1); `cta-hover` #5CC6E8; `cta-deep` #12324F, the closing band (6 November 2026) |
+| `brand-deep` | #12324F | Text on tints; hover on brand buttons |
+| `ink` | #12324F | Primary text and dark fills |
 | `ink-soft` | #4F5A66 | Secondary text, email paragraphs |
 | `ink-muted` | #5F6B77 | Labels, captions, footers |
 | `brand-slate` | #4A5E73 | Brand-tinted secondary text, table labels |
-| `cta` | #57C3BD | The logo's teal: the free check and every primary button, with navy text (`cta-ink` #174579, 4.6 to 1); `cta-hover` #7AD1CC; `cta-deep` #174579, the navy closing band |
-| `highlight-ink` | #174579 | The logo's navy: the readable accent on light backgrounds (eyebrows, section labels, numbers) |
-| `highlight` | #57C3BD | The logo's teal: fills, bullets and text on dark navy only. Never teal text on white |
-| `brand-plum` | #57C3BD | The logo's teal (the name stays from the gradient palette): the current stage |
-| `paper` | #F7FAFA | Page background; text on dark fills |
+| `highlight-ink` | #CB3756 | Crimson: the readable accent on light backgrounds (eyebrows, section labels, numbers) |
+| `highlight` | #36B7E0 | Cyan: fills, bullets and text on dark navy only. Never cyan text on white |
+| `brand-plum` | #6C335C | Start of the plum → crimson → cyan rule |
+| `paper` | #F7F9FA | Page background; text on dark fills |
 | `paper-raised` | #FFFFFF | Cards |
-| `brand-tint-softer` | #F6FBFA | Call-outs, table headers, email footer |
-| `brand-line` | #CFE6E4 | Brand hairlines and borders |
+| `brand-tint-softer` | #F6F9FB | Call-outs, table headers, email footer |
+| `brand-line` | #D3DEEA | Brand hairlines and borders |
 | `line` | #DDE3E8 | Default hairline |
 
 ### Health colours (the business outline)

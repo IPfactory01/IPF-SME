@@ -7,6 +7,7 @@ import { EASE, Reveal } from "@/components/motion";
 import { onSectionLinkClick } from "@/lib/scrollToSection";
 import { BRAND } from "@shared/brand";
 import { buildJourney, PROBLEM_AREAS, PROMISE } from "@shared/businessSupport";
+import { GUIDES, guidePath } from "@shared/guides";
 import { DELIVERY_PROMISE, MENU_PRODUCTS, NEED_DETAILS, NEED_LEAD, NEEDS, productById, servicePath } from "@shared/products";
 import { DeliveryPromise } from "@/components/store/StoreBits";
 import { ServiceTile } from "@/components/store/ServiceTile";
@@ -76,7 +77,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
           <motion.span variants={word} className="inline-block">{lead2}</motion.span>{" "}
           <motion.span variants={word} className="relative inline-block font-normal">
             {close}
-            <motion.span aria-hidden className="absolute -bottom-1 left-0 h-[0.08em] w-full origin-left bg-highlight" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 1.1, duration: 0.9, ease: EASE }} />
+            <motion.span aria-hidden className="absolute -bottom-1 left-0 h-[0.08em] w-full origin-left bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 1.1, duration: 0.9, ease: EASE }} />
           </motion.span>
         </motion.h1>
 
@@ -155,6 +156,12 @@ export function ProblemsToServices() {
           })}
         </ul>
         <p className="mt-8 text-ink-soft">Not sure which one it is? <Link href="/check" className="font-semibold text-brand underline underline-offset-4">Take the free Business Health Check</Link>. In ten minutes it tells you the problem and the fix.</p>
+        <nav aria-label="Owners also ask" className="mt-10 border-t border-line pt-6">
+          <p className="text-sm font-semibold text-ink-muted">Owners also ask</p>
+          <ul className="mt-3 flex flex-wrap gap-x-6 gap-y-2">
+            {GUIDES.map((guide) => <li key={guide.slug}><Link href={guidePath(guide)} className="font-semibold text-brand underline-offset-4 hover:underline">{guide.h1}</Link></li>)}
+          </ul>
+        </nav>
       </div>
     </section>
   );

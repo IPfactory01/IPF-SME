@@ -33,13 +33,19 @@ export default function EngagementsView() {
   const [openId, setOpenId] = useState<number | null>(null);
   const open = list.data?.items.find(item => item.id === openId) ?? null;
 
+  // Every type of engagement, not only the Business Review. The desk sees every engagement and how each starts; anyone
+  // else sees the projects they are on.
+  const seesAll = Boolean(list.data && "seesAll" in list.data && list.data.seesAll);
+  const canOpen = Boolean(list.data && "canStart" in list.data && list.data.canStart);
   if (list.error) return <p role="alert" className="p-6 text-sm text-danger">{list.error.message}</p>;
   if (list.data && !list.data.setUp) {
     return <p role="note" className="m-6 border border-line bg-white p-4 text-sm text-ink-muted">The engagement room is not set up in the database yet. It starts working once migration 0008 is applied.</p>;
   }
   return (
     <div className="space-y-4 p-6">
-      <p className="text-sm text-ink-muted">A Business Review engagement starts when it is paid; open any other directly with New engagement. Open one to name the team, book the Sessions, send the Data Requests and share the Deliverables.</p>
+      <p className="text-sm text-ink-muted">{seesAll
+        ? `Every engagement, of every type. A Business Review starts when it is paid${canOpen ? "; open any other, such as Digital marketing, with New engagement" : ""}. Open one to name the team, book the Sessions, send the Data Requests and share the Deliverables.`
+        : "The projects you are on, of every type. Open one to see its Work Plan, Sessions, Data Requests and Deliverables."}</p>
       {storage.data && <StorageLine status={storage.data} onCheck={() => void storage.refetch()} />}
       {storage.error && <p role="status" aria-label="File uploads" className="border border-health-watch bg-health-watch-tint p-3 text-sm text-health-watch">Could not check file storage: {storage.error.message}</p>}
       {awaiting.data && awaiting.data.length > 0 && (
@@ -72,7 +78,9 @@ export default function EngagementsView() {
                   <td className={TD}>{row.nextSession ? <><span className="block">{row.nextSession.title}</span><span className="block text-xs text-ink-muted">{formatDateTime(row.nextSession.scheduledFor)}</span></> : row.unscheduledSessions ? <span className="text-danger">{row.unscheduledSessions} not booked</span> : "-"}</td>
                 </ClickableRow>
               ))}
-              {list.data?.items.length === 0 && <tr><td colSpan={5} className="px-3 py-4 text-sm text-ink-muted">No engagements yet. One starts when a Business Review payment is confirmed.</td></tr>}
+              {list.data?.items.length === 0 && <tr><td colSpan={5} className="px-3 py-4 text-sm text-ink-muted">{seesAll
+                ? `No engagements yet. A Business Review starts when its payment is confirmed${canOpen ? "; open any other type with New engagement" : ""}.`
+                : "You are not on any project yet. When a lead adds you to one, it appears here and you get an email."}</td></tr>}
             </tbody>
           </table>
         </div>

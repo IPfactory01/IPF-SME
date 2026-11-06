@@ -357,6 +357,23 @@ describe("my projects", () => {
   });
 });
 
+describe("what the list says, for the desk and for an analyst", () => {
+  it("tells an analyst on no project where projects come from, and never that every engagement is a Business Review", () => {
+    api.list = { setUp: true, items: [], canStart: false, seesAll: false } as never;
+    render(<EngagementsView />);
+    expect(screen.getByText("You are not on any project yet. When a lead adds you to one, it appears here and you get an email.")).toBeTruthy();
+    expect(screen.getByText(/The projects you are on, of every type/)).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/One starts when a Business Review payment is confirmed/);
+  });
+
+  it("tells the desk how each type starts: a Business Review when it is paid, any other with New engagement", () => {
+    api.list = { setUp: true, items: [], canStart: true, seesAll: true } as never;
+    render(<EngagementsView />);
+    expect(screen.getByText(/Every engagement, of every type\. A Business Review starts when it is paid; open any other, such as Digital marketing, with New engagement/)).toBeTruthy();
+    expect(screen.getByText("No engagements yet. A Business Review starts when its payment is confirmed; open any other type with New engagement.")).toBeTruthy();
+  });
+});
+
 describe("a new engagement opened directly", () => {
   it("is offered to the desk only, opens with the chosen type, and shows the client's link once to send by hand", () => {
     api.list = { setUp: true, items: [row], canStart: false } as never;

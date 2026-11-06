@@ -256,7 +256,7 @@ export async function linkEngagementToBusiness(db: Pick<Database, "update">, inp
 
 export type StaffActor = { id: number; authority: Authority };
 
-const canSeeAll = (actor: StaffActor) => authorityAllows(actor.authority, "view_all_businesses");
+export const canSeeAll = (actor: StaffActor) => authorityAllows(actor.authority, "view_all_businesses");
 const canSeeAssigned = (actor: StaffActor) => authorityAllows(actor.authority, "view_assigned_businesses");
 
 /** Engagement ids the person is on. */

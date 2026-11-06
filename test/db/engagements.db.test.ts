@@ -313,7 +313,8 @@ for (const target of targets) {
         const expert = await signIn(await person(["subject_matter_expert"]), true);
 
         expect((await (await deskLead.call()).engagement.staff.list()).items.map(item => item.id)).toContain(engagementId);
-        expect((await (await analyst.call()).engagement.staff.list()).items).toEqual([]);
+        expect((await (await analyst.call()).engagement.staff.list())).toMatchObject({ items: [], canStart: false, seesAll: false });
+        expect((await (await deskLead.call()).engagement.staff.list())).toMatchObject({ seesAll: true });
         await expect((await analyst.call()).engagement.staff.detail({ engagementId })).rejects.toMatchObject({ code: "NOT_FOUND" });
         await expect((await partner.call()).engagement.staff.detail({ engagementId })).rejects.toMatchObject({ code: "NOT_FOUND" });
         await expect((await expert.call()).engagement.staff.detail({ engagementId })).rejects.toMatchObject({ code: "NOT_FOUND" });

@@ -51,6 +51,7 @@ import {
   deleteContentItem,
   respondToContent,
   canStart,
+  canSeeAll,
   clientRequestDrop,
   clientConfirmDrop,
   setNotAvailable,
@@ -111,7 +112,7 @@ const staff = adminProcedure.use(async ({ ctx, next }) => {
 const staffRouter = router({
   list: staff.query(async ({ ctx }) => {
     try {
-      return { setUp: true, items: await listStaffEngagements(await engagementDb(), ctx.actor), canStart: canStart(ctx.actor) };
+      return { setUp: true, items: await listStaffEngagements(await engagementDb(), ctx.actor), canStart: canStart(ctx.actor), seesAll: canSeeAll(ctx.actor) };
     } catch (error) {
       if (!isMissingEngagementTable(error)) throw error;
       return { setUp: false, items: [] };

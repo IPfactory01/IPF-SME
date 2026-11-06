@@ -97,52 +97,54 @@ describe("home page: a standard home page that leads to the site's other pages",
     expect(how.getByRole("link", { name: /How we work/ }).getAttribute("href")).toBe("/how-we-work");
   });
 
-  it("backs the promise with sourced figures, in the site's words, and links to About", () => {
+  it("leads with the problem we solve and why it matters, with sourced figures, in the site's words", () => {
     const { container } = renderHome();
-    const evidence = container.querySelector("#evidence")!;
-    expect(evidence.textContent).toContain("They fail between knowing and doing.");
-    for (const source of ["PwC MSME Survey, 2024", "World Bank, Nigeria, 2022", "Field trial of 852 owners, 2018"]) expect(evidence.textContent).toContain(source);
-    expect(within(evidence as HTMLElement).getByRole("link", { name: /About/ }).getAttribute("href")).toBe("/about");
+    const problem = container.querySelector("#problem")!;
+    expect(problem.querySelector("h2")!.textContent).toBe("Hard work is not what's missing. Seeing the real problem is.");
+    for (const source of ["PwC MSME Survey, 2024", "World Bank, Nigeria, 2022", "Field trial of 852 owners, 2018"]) expect(problem.textContent).toContain(source);
     expect(container.textContent).not.toMatch(/\b(framework|strategic|solutions?|leverage|holistic|playbook|sprint|retainer|door)\b/i);
+  });
+
+  it("goes problem, the owners' words, how we fix it, why us, services, then the free check", () => {
+    const { container } = renderHome();
+    expect(Array.from(container.querySelectorAll("main h2")).map((heading) => heading.textContent)).toEqual([
+      "Hard work is not what's missing. Seeing the real problem is.",
+      "Tell us what it feels like. We'll show you where to start.",
+      "Find it. Fix it. See the results.",
+      "Consultants who have fixed this before, at the size of your business.",
+      "Where most owners start.",
+      "Start with the free Business Health Check.",
+    ]);
   });
 });
 
-describe("home page track record", () => {
-  it("states the track record from the brand settings, under the hero", () => {
+describe("the free check comes first", () => {
+  it("puts the free check straight under the headline and one line of what it means for the owner", () => {
+    const { container } = renderHome();
+    const hero = container.querySelector("#top")!;
+    const line = Array.from(hero.querySelectorAll("p")).find((p) => p.textContent!.startsWith("Your business is busy"))!;
+    expect(line.textContent).toBe("Your business is busy, but the money isn't following. We find the one problem holding it back, fix it with you on your own numbers, and stay until you see it in your cash.");
+    // The button follows that line directly: no quote or second paragraph between them.
+    expect(line.nextElementSibling!.querySelector("button")!.textContent).toBe("Start your free Business Health Check");
+    expect(hero.textContent).toContain("Free. Ten minutes on your phone. Your result straight away.");
+    expect(hero.textContent).not.toContain("Some owners know exactly what their business needs");
+  });
+
+  it("keeps a free check button in the header on a phone, on every page", () => {
     renderHome();
-    const record = screen.getByRole("region", { name: "Our track record" });
-    for (const text of ["250+", "clients advised", "50+", "years of partner experience", "Since 2011", `${BRAND.trackRecord.sectors.length}`, "sectors of the economy"]) expect(record.textContent).toContain(text);
+    expect(screen.getByRole("link", { name: "Free check" }).getAttribute("href")).toBe("/check");
+  });
+});
+
+describe("why us, in one band", () => {
+  it("states the record from the brand settings and leads to the Experience page, without the logo strip", () => {
+    renderHome();
+    const why = screen.getByRole("region", { name: "Consultants who have fixed this before, at the size of your business." });
+    for (const text of ["250+", "clients advised", "50+", "years of partner experience", "Since 2011", "sectors of the economy"]) expect(why.textContent).toContain(text);
+    expect(within(why).getByRole("link", { name: /See our experience/ }).getAttribute("href")).toBe("/experience");
+    expect(screen.queryByRole("list", { name: "Client logos" })).toBeNull();
     expect(document.body.textContent).not.toMatch(/Tarfa|Anago|Kurumi/i);
   });
-
-  it("names clients once, in the logo strip, not again as cards further down the page", () => {
-    renderHome();
-    expect(screen.queryByRole("list", { name: "Clients we have worked with" })).toBeNull();
-    expect(screen.queryByText(/Named with their agreement/)).toBeNull();
-  });
-
-  it("shows the client logos, each file on the site and named for screen readers, as work done rather than an endorsement", () => {
-    renderHome();
-    const logos = within(screen.getByRole("list", { name: "Client logos" })).getAllByRole("img");
-    expect(logos.map((logo) => logo.getAttribute("aria-label"))).toEqual(BRAND.trackRecord.clientLogos.map((client) => client.name));
-    // The colour version only cross-fades in under a mouse; screen readers hear each name once.
-    for (const tile of within(screen.getByRole("list", { name: "Client logos" })).getAllByRole("listitem")) {
-      expect(tile.querySelector("img")!.getAttribute("aria-hidden")).toBe("true");
-    }
-    expect(screen.getByText(`The team behind ${BRAND.productName} has worked with`)).toBeTruthy();
-    expect(screen.getByRole("list", { name: "Client logos" }).parentElement!.textContent).not.toMatch(/trusted|partner|endorse/i);
-    expect(new Set(BRAND.trackRecord.clientLogos.map((client) => client.name)).size).toBe(BRAND.trackRecord.clientLogos.length);
-    for (const client of BRAND.trackRecord.clientLogos) {
-      for (const file of [client.src, client.mono]) {
-        const path = resolve(process.cwd(), "client/public", file.slice(1));
-        expect(existsSync(path)).toBe(true);
-        // width and height must be the file's real pixel size, or the optical sizing is wrong (PNG header, IHDR).
-        const header = readFileSync(path);
-        expect([header.readUInt32BE(16), header.readUInt32BE(20)]).toEqual([client.width, client.height]);
-      }
-    }
-  });
-
 });
 
 describe("home page for keyboard users", () => {

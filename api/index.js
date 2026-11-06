@@ -86,12 +86,13 @@ var init_brand = __esm({
        */
       discoveryCallUrl: "https://calendly.com/ipfactory-info/ipf-free-20-minute-discovery-call",
       /**
-       * Logo files in client/public/brand (ipf-gradient, the Option 1 stacked logo). Use as supplied:
-       * never recolour or stretch. The white version goes on dark panels only.
+       * Logo files in client/public/brand: ipf-teal-navy, the Option 2 wide logo with the teal box (ET, 6 November 2026,
+       * from the Brand Kit). Use as supplied: never recolour or stretch. The white version goes on dark panels only. The
+       * ipf-gradient files stay for the full report PDF and email until those move too.
        */
-      logoUrl: "/brand/ipf-gradient-logo.webp",
-      logoOnDarkUrl: "/brand/ipf-gradient-logo-white.webp",
-      markUrl: "/brand/ipf-gradient-mark.webp",
+      logoUrl: "/brand/ipf-teal-navy-logo.webp",
+      logoOnDarkUrl: "/brand/ipf-teal-navy-logo-white.webp",
+      markUrl: "/brand/ipf-teal-navy-mark.webp",
       /** Short programme name used in compounds such as "JUMP portal" or "JUMP administrator". */
       programmeShortName,
       /** Programme name with edition, e.g. in email subjects and headings. */
@@ -117,26 +118,26 @@ var init_brand = __esm({
        * Brand colours for email HTML and PDFs, which cannot read CSS variables.
        * Must match --color-brand / --color-brand-deep in client/src/index.css (enforced by brand.test.ts).
        */
-      colorBrand: "#1C4E7E",
-      colorBrandDeep: "#12324F",
+      colorBrand: "#174579",
+      colorBrandDeep: "#0F2E52",
       /**
        * The theme tokens email HTML uses, keyed by their name in client/src/index.css (--color-<name>). Email cannot read
        * CSS variables, so the values are copied here; brand.test.ts fails if any of them drifts from the stylesheet.
        */
       palette: {
-        "brand": "#1C4E7E",
-        "brand-deep": "#12324F",
-        "brand-plum": "#6C335C",
-        "highlight": "#36B7E0",
-        "highlight-ink": "#CB3756",
-        "ink": "#12324F",
+        "brand": "#174579",
+        "brand-deep": "#0F2E52",
+        "brand-plum": "#23807B",
+        "highlight": "#57C3BD",
+        "highlight-ink": "#23807B",
+        "ink": "#0F2E52",
         "ink-soft": "#4F5A66",
         "ink-muted": "#5F6B77",
         "brand-slate": "#4A5E73",
-        "brand-tint-softer": "#F6F9FB",
-        "brand-line": "#D3DEEA",
+        "brand-tint-softer": "#F6FBFA",
+        "brand-line": "#CFE6E4",
         "line": "#DDE3E8",
-        "paper": "#F7F9FA",
+        "paper": "#F7FAFA",
         "paper-raised": "#FFFFFF",
         "health-clear": "#2E7D4F",
         "health-clear-tint": "#E7F3EC",

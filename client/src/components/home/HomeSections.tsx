@@ -29,7 +29,7 @@ export function useStartCheck() {
 }
 
 export function CtaButton({ onClick, tone = "dark", children, className = "" }: { onClick: () => void; tone?: "dark" | "light"; children: React.ReactNode; className?: string }) {
-  const colours = tone === "dark" ? "bg-ink text-paper hover:bg-charcoal shadow-[0_18px_40px_-18px_rgba(18,50,79,0.7)]" : "bg-highlight text-brand-deep hover:bg-highlight-hover shadow-[0_18px_40px_-18px_rgba(54,183,224,0.8)]";
+  const colours = tone === "dark" ? "bg-cta text-white hover:bg-cta-hover shadow-[0_18px_40px_-18px_rgba(30,124,119,0.75)]" : "bg-highlight text-brand-deep hover:bg-highlight-hover shadow-[0_18px_40px_-18px_rgba(87,195,189,0.8)]";
   return (
     <motion.button
       type="button"
@@ -37,7 +37,7 @@ export function CtaButton({ onClick, tone = "dark", children, className = "" }: 
       whileHover={{ y: -2 }}
       whileTap={{ scale: 0.97 }}
       transition={{ type: "spring", stiffness: 400, damping: 25 }}
-      className={`group inline-flex h-14 items-center justify-center px-8 text-base font-semibold transition-colors ${colours} ${className}`}
+      className={`group inline-flex h-14 items-center justify-center rounded-xl px-8 text-base font-semibold transition-colors ${colours} ${className}`}
     >
       {children}
       <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
@@ -63,33 +63,31 @@ export function Hero({ onStart }: { onStart: () => void }) {
   }, [sentences.length, calm]);
 
   return (
-    <section id="top" className="relative overflow-hidden border-b border-line pt-20 pb-20 md:pt-28 md:pb-24">
+    <section id="top" className="relative overflow-hidden border-b border-line pt-10 pb-16 sm:pt-20 md:pt-28 md:pb-24">
 
       <div className="relative container mx-auto max-w-5xl px-4 text-center">
-        <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }} className="mx-auto mb-8 inline-flex items-center gap-2 border border-brand-line bg-paper-raised/70 px-4 py-1.5 text-xs font-semibold text-brand backdrop-blur">
+        <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }} className="mx-auto mb-6 inline-flex items-center gap-2 border border-brand-line sm:mb-8 bg-paper-raised/70 px-4 py-1.5 text-xs font-semibold text-brand backdrop-blur">
           <span aria-hidden className="inline-flex h-2 w-2 rounded-full bg-brand" />
           {BRAND.productEndorsement}
         </motion.p>
 
-        <motion.h1 initial="hidden" animate="show" transition={{ staggerChildren: 0.18 }} className="mb-8 font-serif text-5xl font-normal leading-[1.05] tracking-tight text-ink sm:text-7xl md:text-8xl">
+        <motion.h1 initial="hidden" animate="show" transition={{ staggerChildren: 0.18 }} className="mb-6 font-serif text-[2.75rem] font-normal leading-[1.05] tracking-tight text-ink sm:text-7xl md:text-8xl">
           <motion.span variants={word} className="inline-block">{lead1}</motion.span>{" "}
           <motion.span variants={word} className="inline-block">{lead2}</motion.span>{" "}
           <motion.span variants={word} className="relative inline-block font-normal">
             {close}
-            <motion.span aria-hidden className="absolute -bottom-1 left-0 h-[0.08em] w-full origin-left bg-brand" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 1.1, duration: 0.9, ease: EASE }} />
+            <motion.span aria-hidden className="absolute -bottom-1 left-0 h-[0.08em] w-full origin-left bg-highlight" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 1.1, duration: 0.9, ease: EASE }} />
           </motion.span>
         </motion.h1>
 
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.8, ease: EASE }}>
-          <p className="mx-auto mb-6 max-w-3xl font-serif text-xl italic leading-relaxed text-ink-soft sm:text-2xl">
-            &ldquo;Some owners know exactly what their business needs. Most can only feel the problem. Either way, we start there.&rdquo;
+          <p className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed text-ink-600 sm:text-xl">
+            Your business is busy, but the money isn&apos;t following. We find the one problem holding it back, fix it with you on your own numbers, and stay until you see it in your cash.
           </p>
-          <p className="mx-auto mb-12 max-w-2xl text-lg leading-relaxed text-ink-600">
-            On {BRAND.productName}, we get in with you, name the real problem, show you exactly what to do, give you the tools, and check your work every week until the number moves.
-          </p>
-          <div className="flex flex-col items-center gap-4">
-            <CtaButton onClick={onStart} className="w-full max-w-sm">Start with a free Business Health Check</CtaButton>
-            <p className="text-sm text-ink-muted">Ten minutes, on your phone. Or <Link href="/services" className="font-semibold text-brand underline underline-offset-4">see our services</Link>.</p>
+          <div className="flex flex-col items-center gap-3">
+            <CtaButton onClick={onStart} className="w-full max-w-sm">Start your free Business Health Check</CtaButton>
+            <p className="text-sm text-ink-muted">Free. Ten minutes on your phone. Your result straight away.</p>
+            <p className="text-sm text-ink-muted">Know what you need? <Link href="/services" className="font-semibold text-brand underline underline-offset-4">See our services</Link>.</p>
           </div>
         </motion.div>
 
@@ -99,7 +97,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.4, duration: 0.8 }}
-          className="group mx-auto mt-14 flex w-full max-w-xl flex-col items-center gap-2"
+          className="group mx-auto mt-12 flex w-full max-w-xl flex-col items-center gap-2"
           aria-label="Start the Business Health Check"
         >
           <span className="text-xs font-semibold text-ink-muted">Sound familiar?</span>
@@ -119,7 +117,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
           </span>
         </motion.button>
 
-        <motion.a href="#problems" onClick={onSectionLinkClick} aria-label="Scroll down" className="mx-auto mt-6 flex h-10 w-10 items-center justify-center rounded-full border border-line text-ink-faint hover:border-brand hover:text-brand">
+        <motion.a href="#problem" onClick={onSectionLinkClick} aria-label="Scroll down" className="mx-auto mt-6 flex h-10 w-10 items-center justify-center rounded-full border border-line text-ink-faint hover:border-brand hover:text-brand">
           <ArrowDown className="h-4 w-4" />
         </motion.a>
       </div>
@@ -133,10 +131,10 @@ export function Hero({ onStart }: { onStart: () => void }) {
  */
 export function ProblemsToServices() {
   return (
-    <section id="problems" aria-labelledby="problems-heading" className="scroll-mt-16 border-b border-line py-20 sm:py-24">
+    <section id="problems" aria-labelledby="problems-heading" className="scroll-mt-16 border-b border-line bg-paper-sunken/50 py-20 sm:py-24">
       <div className="container mx-auto max-w-6xl">
         <Reveal className="max-w-3xl">
-          <p className="text-sm font-semibold text-brand">Start with what's wrong</p>
+          <p className="text-sm font-semibold text-highlight-ink">Which one sounds like you?</p>
           <h2 id="problems-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">Tell us what it feels like. We'll show you where to start.</h2>
         </Reveal>
         <ul className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -144,7 +142,7 @@ export function ProblemsToServices() {
             const product = productById(NEED_LEAD[need])!;
             return (
               <li key={need}>
-                <Link href={servicePath(product)} className="group flex h-full flex-col justify-between gap-6 bg-paper-raised p-6 transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[0_24px_50px_-32px_rgba(18,50,79,0.55)]">
+                <Link href={servicePath(product)} className="group flex h-full flex-col justify-between gap-6 rounded-xl border border-line-soft bg-paper-raised p-6 transition-[transform,box-shadow,border-color] hover:border-highlight duration-300 hover:-translate-y-1 hover:shadow-[0_24px_50px_-32px_rgba(18,50,79,0.55)]">
                   <span className="font-serif text-xl italic leading-snug text-ink-750">&ldquo;{NEED_DETAILS[need].ownerWords}&rdquo;</span>
                   <span>
                     <span className="block text-xs font-semibold text-ink-muted">{NEED_DETAILS[need].name}</span>
@@ -167,7 +165,7 @@ export const FEATURED_SERVICES = ["cash_flow_forecast", "business_review", "six_
 export function FeaturedServices() {
   const prices = useServicePricesOrDefault();
   return (
-    <section aria-labelledby="featured-heading" className="border-b border-line bg-paper-sunken/60 py-20 sm:py-24">
+    <section aria-labelledby="featured-heading" className="border-b border-line py-20 sm:py-24">
       <div className="container mx-auto max-w-6xl">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <Reveal>
@@ -186,24 +184,24 @@ export function FeaturedServices() {
 
 export function HowWeWorkTeaser() {
   const steps = [
-    { title: "Find it", body: "The free Business Health Check, or a two-week Business Review, names the one problem to fix first." },
-    { title: "Fix it", body: "We deliver finished work in days, or work with your team on one problem for six weeks." },
-    { title: "See the results", body: "Every piece of work is checked before you see it, and we track the number that tells you it worked." },
+    { title: "Find it", body: "In ten minutes, the free Business Health Check shows where your business is stuck. A two-week Business Review names the one problem to fix first." },
+    { title: "Fix it", body: "We do the work for you in days, or work beside your team on that one problem for six weeks. You get finished work, not advice to act on alone." },
+    { title: "See the results", body: "We agree one number at the start, such as cash at month end, and check it with you every week until it moves." },
   ];
   return (
     <section aria-labelledby="how-heading" className="border-b border-line py-20 sm:py-24">
       <div className="container mx-auto max-w-6xl">
         <div className="flex flex-wrap items-end justify-between gap-6">
           <Reveal>
-            <p className="text-sm font-semibold text-brand">How we work</p>
+            <p className="text-sm font-semibold text-highlight-ink">How we fix it</p>
             <h2 id="how-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">Find it. Fix it. See the results.</h2>
           </Reveal>
           <Link href="/how-we-work" className="group inline-flex items-center gap-1.5 font-semibold text-brand">How we work <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></Link>
         </div>
         <ol className="mt-10 grid gap-4 md:grid-cols-3">
           {steps.map((step, index) => (
-            <li key={step.title} className="bg-paper-raised p-6">
-              <span className="font-display text-5xl font-semibold leading-none tracking-[-0.04em] text-brand">{index + 1}</span>
+            <li key={step.title} className="rounded-xl border border-line-soft bg-paper-raised p-6">
+              <span className="font-display text-5xl font-semibold leading-none tracking-[-0.04em] text-highlight-ink">{index + 1}</span>
               <h3 className="mt-4 font-sans text-xl font-semibold text-ink">{step.title}</h3>
               <p className="mt-2 leading-relaxed text-ink-soft">{step.body}</p>
             </li>
@@ -333,7 +331,7 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
                           <p className="text-xs font-semibold text-brand">Measure of Success</p>
                           <p className="mt-1.5 leading-relaxed text-ink-700">{area.measure}</p>
                         </div>
-                        <button type="button" onClick={onStart} className="group inline-flex w-fit items-center gap-2 bg-ink px-5 py-3 text-sm font-semibold text-paper transition-colors hover:bg-charcoal">
+                        <button type="button" onClick={onStart} className="group inline-flex w-fit items-center gap-2 rounded-lg bg-cta px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-cta-hover">
                           Check this <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                         </button>
                       </div>
@@ -385,9 +383,9 @@ export function Faq({ id, heading, items }: { id: string; heading: string; items
 /** The closing band of every public page: the free check. */
 export function CheckCta({ onStart }: { onStart: () => void }) {
   return (
-    <section className="relative overflow-hidden bg-brand-deep py-20 text-paper">
+    <section className="relative overflow-hidden bg-cta-deep py-20 text-paper">
       <Reveal className="relative container mx-auto max-w-3xl text-center">
-        <img src={BRAND.logoOnDarkUrl} alt={BRAND.organisationName} className="mx-auto mb-8 h-28 w-auto" />
+        <img src={BRAND.logoOnDarkUrl} alt={BRAND.organisationName} className="mx-auto mb-8 h-14 w-auto max-w-full sm:h-16" />
         <h2 className="font-display mb-4 text-[clamp(2.1rem,5vw,3.25rem)] font-semibold leading-[1.05] tracking-[-0.03em]">Start with the free Business Health Check.</h2>
         <p className="mx-auto mb-8 max-w-xl text-on-dark-muted">Ten minutes. No card. You&apos;ll know where you stand before you decide anything.</p>
         <CtaButton onClick={onStart} tone="light">Start with a free Business Health Check</CtaButton>

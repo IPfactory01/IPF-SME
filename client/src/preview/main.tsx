@@ -37,6 +37,7 @@ const PAGES = [
   { path: "/", label: "Home" },
   { path: "/services", label: "Services" },
   { path: "/how-we-work", label: "How we work" },
+  { path: "/experience", label: "Experience" },
   { path: "/about", label: "About" },
   { path: "/questions", label: "Questions" },
   { path: "/contact", label: "Contact" },

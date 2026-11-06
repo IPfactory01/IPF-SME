@@ -25,7 +25,8 @@ export const HOME_META: Meta = {
 export const PAGE_META = {
   services: { title: "Services", description: `Every service of ${BRAND.productEndorsement}, with its price and delivery time: assessments, Done for You work, the Six-Week Fix and Monthly Services, for businesses across Nigeria.` },
   howWeWork: { title: "How we work", description: `How ${BRAND.productName} works: the free Business Health Check, the four ways to work with us and how each is paid, and what every piece of work comes with.` },
-  about: { title: "About", description: `${BRAND.productName} is run by ${BRAND.organisationName}, the delivery and method arm of ${BRAND.trackRecord.groupName}. Our track record, who we work with, and the research behind the method.` },
+  experience: { title: "Experience", description: `The record behind ${BRAND.productName}: ${BRAND.trackRecord.clients} clients advised since ${BRAND.trackRecord.since}, the businesses we have worked with, and the research behind the method.` },
+  about: { title: "About", description: `${BRAND.productName} is run by ${BRAND.organisationName}, the delivery and method arm of ${BRAND.trackRecord.groupName}. What we are and are not, who it is for, and who you work with.` },
   questions: { title: "Questions", description: `Answers to the questions owners ask about ${BRAND.productName}: paying, delivery dates, refunds, your information, and each service.` },
   contact: { title: "Contact", description: `Book a free 20-minute call with ${BRAND.productName}, or write to ${BRAND.businessSupportMailbox}. Our office is at ${BRAND.officeAddress.oneLine}.` },
   check: { title: "Free Business Health Check", description: "Ten minutes on your phone. See where your business is stuck, area by area, and the first step that fits. Free, no card needed." },
@@ -128,6 +129,7 @@ export function publicPages(): PublicPage[] {
       return page(servicePath(product), productMeta(product), story ? story.headline.join(" ") : product.name, [productMeta(product).description, ...product.youGet], [serviceJsonLd(product), ...(story?.faq.length ? [faqJsonLd(story.faq)] : [])]);
     }),
     page("/how-we-work", PAGE_META.howWeWork, "Find it. Fix it. See the results.", [PAGE_META.howWeWork.description]),
+    page("/experience", PAGE_META.experience, "We have done this before, many times.", [PAGE_META.experience.description]),
     page("/about", PAGE_META.about, "Consulting experience, at the size of your business.", [PAGE_META.about.description]),
     page("/questions", PAGE_META.questions, "Questions owners ask.", QUESTION_GROUPS.flatMap((group) => group.items.map((item) => `${item.q} ${item.a}`)), [faqJsonLd(QUESTION_GROUPS.flatMap((group) => group.items))]),
     page("/contact", PAGE_META.contact, "Talk to a person.", [PAGE_META.contact.description]),
@@ -148,7 +150,7 @@ const escapeHtml = (text: string) => text.replace(/&/g, "&amp;").replace(/</g, "
 /** JSON inside a script tag: "</script>" or "<!--" in the data must not end it. */
 const scriptJson = (value: object) => JSON.stringify(value).replace(/</g, "\\u003c");
 
-const NAV = [["/", "Home"], ["/services", "Services"], ["/how-we-work", "How we work"], ["/about", "About"], ["/questions", "Questions"], ["/contact", "Contact"], ["/check", "Free Business Health Check"]] as const;
+const NAV = [["/", "Home"], ["/services", "Services"], ["/how-we-work", "How we work"], ["/experience", "Experience"], ["/about", "About"], ["/questions", "Questions"], ["/contact", "Contact"], ["/check", "Free Business Health Check"]] as const;
 
 /**
  * The built index.html, made into one page's own: its title, description, canonical address, share card and structured

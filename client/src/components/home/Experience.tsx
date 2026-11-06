@@ -6,7 +6,8 @@ import { Reveal, Stagger, staggerChild } from "@/components/motion";
 import { logoWidth } from "@/lib/logoSize";
 import { BRAND } from "@shared/brand";
 import { motion } from "framer-motion";
-import { BookOpenCheck, Scale, UserCheck } from "lucide-react";
+import { ArrowRight, BookOpenCheck, Scale, UserCheck } from "lucide-react";
+import { Link } from "wouter";
 import React from "react";
 
 const RECORD = BRAND.trackRecord;
@@ -124,6 +125,58 @@ export function ExperienceBehind() {
               <h3 className="mb-2 font-semibold text-ink">{title}</h3>
               <p className="text-ink-600 leading-relaxed">{text}</p>
             </motion.div>
+          ))}
+        </Stagger>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The home page's problem, said from the owner's side: hard work is not what is missing, seeing the real problem is.
+ * The three sourced figures say why it matters; the owners' own words follow, each leading to a service.
+ */
+export function TheProblem() {
+  return (
+    <section id="problem" aria-labelledby="problem-heading" className="scroll-mt-16 border-b border-line bg-paper-raised py-20 sm:py-24">
+      <div className="container mx-auto max-w-5xl">
+        <Reveal className="max-w-3xl">
+          <p className="text-sm font-semibold text-highlight-ink">The problem</p>
+          <h2 id="problem-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">Hard work is not what&apos;s missing. Seeing the real problem is.</h2>
+          <p className="mt-5 text-lg leading-relaxed text-ink-600">Cash you can&apos;t see. Prices that stopped paying. Sales that went flat. Most owners feel these long before they can name them, and a course won&apos;t name them for you. Until the real problem has a name, every naira of effort goes into the wrong place.</p>
+        </Reveal>
+        <Stagger className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-3">
+          {EVIDENCE.map((item) => (
+            <motion.div key={item.label} variants={staggerChild} className="border-l-2 border-highlight pl-4">
+              <p className="font-serif text-3xl font-normal text-ink">{item.value}</p>
+              <p className="mt-1 text-sm text-ink-600">{item.label}</p>
+              <p className="mt-2 text-xs text-ink-muted">{item.source}</p>
+            </motion.div>
+          ))}
+        </Stagger>
+        <p className="mt-8 max-w-3xl text-ink-600">The last figure is the point: owners who get applied, expert help on their own business earn more. That is the help we give.</p>
+      </div>
+    </section>
+  );
+}
+
+/** Why we can be trusted with it, in one band: the record in figures, and the way to the full Experience page. */
+export function WhyUs() {
+  return (
+    <section aria-labelledby="why-us-heading" className="border-b border-line bg-brand-tint py-16 sm:py-20">
+      <div className="container mx-auto grid max-w-5xl grid-cols-1 items-end gap-10 md:grid-cols-[1.1fr_1fr]">
+        <Reveal>
+          <p className="text-sm font-semibold text-highlight-ink">Why us</p>
+          <h2 id="why-us-heading" className="font-display mt-3 text-[clamp(1.9rem,4vw,2.75rem)] font-semibold leading-[1.06] tracking-[-0.03em] text-ink">Consultants who have fixed this before, at the size of your business.</h2>
+          <p className="mt-4 leading-relaxed text-ink-600">{BRAND.productName} is run by {BRAND.organisationName}, part of {RECORD.groupName}. The same method we use with banks, funds and larger firms, at a price an owner-run business can pay.</p>
+          <Link href="/experience" className="group mt-5 inline-flex items-center gap-1.5 font-semibold text-brand">See our experience <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></Link>
+        </Reveal>
+        <Stagger as="ul" className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-brand-line bg-brand-line">
+          {TRACK_RECORD.map((item) => (
+            <motion.li key={item.label} variants={staggerChild} className="bg-paper-raised p-5">
+              <p className="font-serif text-3xl font-normal text-brand">{item.value}</p>
+              <p className="mt-1 text-sm font-semibold text-ink-muted">{item.label}</p>
+            </motion.li>
           ))}
         </Stagger>
       </div>

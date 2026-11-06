@@ -16,8 +16,8 @@ is what ships; fix whichever is wrong in the same change.
 | **Maker** | IP Factory (Intellectual Property Factory) |
 | **Tagline** | Support for business owners |
 | **Promise** | Find it. Fix it. See the results. |
-| **Logo** | The ipf-gradient logo in `client/public/brand/`. Use as supplied: never recolour, stretch or crop. The white version goes on dark panels only |
-| **Logo files** | `ipf-gradient-logo.webp` (site), `ipf-gradient-logo-white.webp` (dark panels), `ipf-gradient-mark.webp` (small spaces), `ipf-gradient-logo-email.png` (email, shown at 96 × 90), `ipf-gradient-logo-print.png` (PDF), `favicon-32.png`, `apple-touch-icon.png`, `ipf-mark-512.png` |
+| **Logo** | The ipf-teal-navy logo (Option 2, the teal box with the navy wordmark) in `client/public/brand/`. Use as supplied: never recolour, stretch or crop. The white version goes on dark panels only |
+| **Logo files** | `ipf-teal-navy-logo.webp` (site, header from tablet width up), `ipf-teal-navy-logo-white.webp` (dark panels), `ipf-teal-navy-mark.webp` (small spaces, the header on a phone), `favicon-32.png`, `apple-touch-icon.png` and `ipf-mark-512.png` (from the teal mark); still ipf-gradient until moved: `ipf-gradient-logo-email.png` (email, shown at 96 × 90), `ipf-gradient-logo-print.png` (PDF) |
 | **Signature motif** | A thin rule in three segments, plum → crimson → cyan, echoing the logo: the top of every email and the report cover; the scroll progress bar on the site |
 
 ## 2. Colour
@@ -27,21 +27,26 @@ Colours come from the theme tokens. **Never hard-code a hex value in a component
 
 ### Core palette
 
+The ipf-teal-navy palette since 6 November 2026 (ET: friendlier for Nigerian owners than the navy, plum and crimson of
+ipf-gradient, which is in git history at commit `0de5a75`). The token names did not change, so every screen moved with
+the values.
+
 | Token | Hex | Use |
 |---|---|---|
-| `brand` | #1C4E7E | Primary: buttons, links, key text, rules |
-| `brand-deep` | #12324F | Text on tints; hover on brand buttons |
-| `ink` | #12324F | Primary text and dark fills |
+| `brand` | #174579 | Primary: links, key text, rules (the logo's navy) |
+| `brand-deep` | #0F2E52 | Text on tints; hover on brand buttons |
+| `ink` | #0F2E52 | Primary text and dark fills |
 | `ink-soft` | #4F5A66 | Secondary text, email paragraphs |
 | `ink-muted` | #5F6B77 | Labels, captions, footers |
 | `brand-slate` | #4A5E73 | Brand-tinted secondary text, table labels |
-| `highlight-ink` | #CB3756 | Crimson: the readable accent on light backgrounds (eyebrows, section labels, numbers) |
-| `highlight` | #36B7E0 | Cyan: fills, bullets and text on dark navy only. Never cyan text on white |
-| `brand-plum` | #6C335C | Start of the plum → crimson → cyan rule |
-| `paper` | #F7F9FA | Page background; text on dark fills |
+| `cta` | #1E7C77 | The logo's teal, deepened for white text: the free check and every primary button (`cta-hover` #17635F; `cta-deep` #0E4A47 for the closing band) |
+| `highlight-ink` | #23807B | Deep teal: the readable accent on light backgrounds (eyebrows, section labels, numbers) |
+| `highlight` | #57C3BD | The logo's teal: fills, bullets and text on dark navy only. Never teal text on white |
+| `brand-plum` | #23807B | Second brand colour (the name stays from the gradient palette): the current stage, the start of the header rule |
+| `paper` | #F7FAFA | Page background; text on dark fills |
 | `paper-raised` | #FFFFFF | Cards |
-| `brand-tint-softer` | #F6F9FB | Call-outs, table headers, email footer |
-| `brand-line` | #D3DEEA | Brand hairlines and borders |
+| `brand-tint-softer` | #F6FBFA | Call-outs, table headers, email footer |
+| `brand-line` | #CFE6E4 | Brand hairlines and borders |
 | `line` | #DDE3E8 | Default hairline |
 
 ### Health colours (the business outline)

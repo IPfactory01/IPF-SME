@@ -1,8 +1,7 @@
 /**
- * About (/about): who runs The Shift and the firm behind it, the track record and clients, what we are and are not,
- * who it is for and who you work with, and the research behind the method. Figures from BRAND.trackRecord.
+ * About (/about): who runs The Shift, what we are and are not, who it is for and who you work with. The track record,
+ * clients and research are on Experience (/experience) since 6 November 2026.
  */
-import { ExperienceBehind, TrackRecord, WhyStuck } from "@/components/home/Experience";
 import { CheckCta, useStartCheck } from "@/components/home/HomeSections";
 import { Reveal, Stagger, staggerChild } from "@/components/motion";
 import { PageHero, SectionHeading } from "@/components/PageHero";
@@ -13,6 +12,7 @@ import { startingPriceOf } from "@shared/products";
 import { motion } from "framer-motion";
 import { CheckCircle2, X } from "lucide-react";
 import React from "react";
+import { Link } from "wouter";
 import { PAGE_META } from "@shared/seo";
 
 const WHO_YOU_WORK_WITH = [
@@ -30,8 +30,9 @@ export default function AboutPage() {
   return (
     <SiteShell>
       <PageHero eyebrow="About" title="Consulting experience, at the size of your business." sub={`${BRAND.productName} is run by ${BRAND.organisationName}, the delivery and method arm of ${BRAND.trackRecord.groupName}.`} />
-      <TrackRecord />
-      <ExperienceBehind />
+      <section aria-label="Our experience" className="border-b border-line bg-brand-tint py-6">
+        <p className="container mx-auto max-w-5xl text-ink-600">Our track record, the clients we have worked with and the research behind the method are on <Link href="/experience" className="font-semibold text-brand underline underline-offset-4">Experience</Link>.</p>
+      </section>
 
       <section id="what" aria-labelledby="what-heading" className="border-b border-line bg-paper-sunken/50 py-20 sm:py-24">
         <div className="container mx-auto grid max-w-5xl grid-cols-1 items-start gap-12 md:grid-cols-2">
@@ -71,12 +72,6 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section id="research" aria-labelledby="research-heading" className="border-b border-line py-20 sm:py-24">
-        <div className="container mx-auto max-w-5xl">
-          <SectionHeading id="research-heading" eyebrow="The research" title="Why help on your own numbers works." />
-          <WhyStuck />
-        </div>
-      </section>
 
       <CheckCta onStart={startCheck} />
     </SiteShell>

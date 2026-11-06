@@ -134,6 +134,10 @@
       "destination": "/how-we-work/index.html"
     },
     {
+      "source": "/experience",
+      "destination": "/experience/index.html"
+    },
+    {
       "source": "/about",
       "destination": "/about/index.html"
     },

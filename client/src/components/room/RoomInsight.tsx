@@ -13,7 +13,7 @@ import { project, TAB_SPRING } from "./RoomTabs";
  * one, their Business Health Check), as the server sent it: the room never says something the report does not.
  */
 
-const CARD = "rounded-xl border border-line-soft bg-white p-5";
+const CARD = "min-w-0 rounded-xl border border-line-soft bg-white p-5";
 const KICKER = "text-sm font-medium text-ink-muted";
 const HEALTH: Record<ReportHealth, { label: string; chip: string; bar: string }> = {
   stuck: { label: "Stuck", chip: "bg-health-stuck-tint text-health-stuck", bar: "bg-health-stuck" },
@@ -50,7 +50,7 @@ export function FounderPanel({ insight }: { insight: RoomInsight }) {
     <div className="space-y-4">
       <Heading title="You, as the founder" source={sourceLine(insight)} />
       {/* One section under the other on a phone; Founder readiness beside Strategic intent on a wide screen. */}
-      <div className="space-y-4 lg:grid lg:grid-cols-2 lg:items-start lg:gap-6 lg:space-y-0">
+      <div className="space-y-4 lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start lg:gap-6 lg:space-y-0">
       {founder.sections.length ? founder.sections.map(section => (
         <article key={section.number} className={CARD} aria-labelledby={`founder-${section.number}`}>
           <div className="flex items-start justify-between gap-3">
@@ -233,7 +233,7 @@ export function BusinessPanel({ insight }: { insight: RoomInsight }) {
         </p>
       </div>
       {/* A list on a phone; a grid of the whole business at once on a wide screen. */}
-      <ul className="space-y-2 lg:grid lg:grid-cols-2 lg:gap-3 lg:space-y-0 xl:grid-cols-3" aria-label="Areas of your business">
+      <ul className="space-y-2 lg:grid lg:grid-cols-[repeat(2,minmax(0,1fr))] lg:gap-3 lg:space-y-0 xl:grid-cols-[repeat(3,minmax(0,1fr))]" aria-label="Areas of your business">
         {insight.areas.map(area => (
           <li key={area.area} className="lg:flex">
             <button

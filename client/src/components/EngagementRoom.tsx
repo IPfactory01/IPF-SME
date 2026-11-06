@@ -778,10 +778,9 @@ function RoomSidebar({ room, tabs, account }: { room: Room; tabs: RoomTab[]; acc
           <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-brand-plum to-brand text-xs font-semibold text-white">{room.businessName.trim().charAt(0).toUpperCase()}</span>
           <span className="min-w-0 truncate">{room.businessName}</span>
         </p>
-        <div className="ml-6 mt-1 space-y-3 border-l border-line-soft pl-3">
+        <div className="ml-6 mt-1 space-y-2 border-l border-line-soft pl-3">
           {Array.from(new Set(tabs.map(tab => tab.group ?? ""))).map(group => (
             <div key={group || "top"}>
-              {group && <p className="px-3 pb-1 text-[11px] font-medium text-ink-muted">{group}</p>}
               <ul className="space-y-0.5" aria-label={group || "Overview"}>
                 {tabs.filter(tab => (tab.group ?? "") === group).map(tab => (
                   <li key={tab.id}><a href={`#${tab.id}`} className={RAIL_LINK}><span>{tab.label}</span>{tab.count && tab.count.value > 0 && <span className="text-xs tabular-nums text-ink-muted" aria-label={tab.count.label}>{tab.count.value}</span>}</a></li>
@@ -833,7 +832,8 @@ const whoName = (task: Task, room: Room) => task.assigneeName || (task.side === 
 function Avatar({ name }: { name: string }) {
   return <span title={name} className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-medium text-white ${avatarColour(name)}`}><span aria-hidden>{initials(name)}</span><span className="sr-only">{name}</span></span>;
 }
-const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]!.toUpperCase()).join("") || "?";
+/** Two initials for a person; the firm is always IPF. */
+const initials = (name: string) => (name.trim() === BRAND.organisationName ? BRAND.organisationShortName : name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]!.toUpperCase()).join("") || "?");
 
 const PLAN_GROUPS: { id: string; name: string; dot: string; pill: string; test: (task: Task) => boolean }[] = [
   { id: "you", name: "Waiting on you", dot: "border-brand-plum bg-white", pill: "bg-brand-plum text-white", test: isClientOpen },

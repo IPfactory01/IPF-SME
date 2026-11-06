@@ -23,6 +23,8 @@ var init_brand = __esm({
     BRAND = {
       /** The organisation that owns and runs the programme. */
       organisationName: "IP Factory",
+      /** The firm's shorthand, used wherever initials stand for it (avatars, labels). Always IPF, never IF. */
+      organisationShortName: "IPF",
       organisationLegalName: "Intellectual Property Factory",
       /**
        * IP Factory's office: the same office as Enzo Krypton & Co. (ET, 22 October 2026), as printed in Enzo Krypton's

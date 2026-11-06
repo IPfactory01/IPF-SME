@@ -167,7 +167,7 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
               aria-labelledby={`tab-${tab.id}`}
               aria-hidden={k !== index}
               inert={k !== index}
-              className="min-w-0 px-4 pb-10 pt-6 sm:px-7"
+              className="min-w-0 overflow-x-clip px-4 pb-10 pt-6 sm:px-7"
               style={{ width: `${100 / tabs.length}%` }}
             >
               {tab.content}

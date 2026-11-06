@@ -398,6 +398,8 @@ describe("the room's views", () => {
     width = 1000;
     act(() => { for (const callback of observers) callback(); });
     await waitFor(() => expect(track.style.transform).toContain("-4000px"));
+    // A panel never lets wide content (a long table in Founder) spill into the next one.
+    for (const panel of screen.getAllByRole("tabpanel", { hidden: true })) expect(panel.className).toContain("overflow-x-clip");
     clientWidth.mockRestore();
   });
 
@@ -488,6 +490,15 @@ describe("the room on a laptop or desktop", () => {
     // A link in the column opens the step that holds it.
     fireEvent.click(waiting.getByRole("link", { name: "Your Sign-off on the Findings" }));
     expect(screen.getByRole("region", { name: "Step 5: Findings" })).toBeTruthy();
+  });
+
+  it("lists the views in the rail by group, without group headings", () => {
+    onWideScreen();
+    render(<EngagementRoom room={room()} />);
+    const rail = within(screen.getByRole("navigation", { name: "Your room" }));
+    expect(within(rail.getByRole("list", { name: "The work" })).getAllByRole("link").map(link => link.textContent)).toEqual(["Work Plan2", "Data Request", "Sessions"]);
+    expect(rail.queryByText("The work")).toBeNull();
+    expect(rail.queryByText("What you receive")).toBeNull();
   });
 
   it("tells a staff member with full access that the Sign-off is the owner's, and says when nothing is waiting", () => {
@@ -582,7 +593,7 @@ describe("the Plan, Meetings and Data requests views", () => {
     const row = (title: string) => screen.getAllByText(title).map(item => item.closest("tr")).find(Boolean)!;
     expect(within(row("Your last 12 months of sales")).getByTitle("Marcelle Tiogo").textContent).toContain("MT");
     expect(within(row("Your price list")).getByTitle("Ada Foods").textContent).toContain("AF");
-    expect(within(row("Send the cash template")).getByTitle("IP Factory").textContent).toContain("IF");
+    expect(within(row("Send the cash template")).getByTitle("IP Factory").textContent).toBe("IPFIP Factory");
     expect(within(row("Your last 12 months of sales")).getByText("High").className).toContain("text-health-stuck");
     expect(within(row("Your price list")).getByText("Medium").className).toContain("text-ink-muted");
   });

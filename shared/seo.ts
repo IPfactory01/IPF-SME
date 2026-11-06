@@ -122,13 +122,13 @@ export function publicPages(): PublicPage[] {
     return { path, title: meta.title, description: meta.description, heading, body, jsonLd: [org, ...(trail.length ? [breadcrumbJsonLd(trail)] : []), ...extra] };
   };
   pagesCache = [
-    page("/", HOME_META, "Find it. Fix it. See the results.", [HOME_META.description]),
+    page("/", HOME_META, "Find it. Fix it. See the shift.", [HOME_META.description]),
     page("/services", PAGE_META.services, "Help that does the work.", [PAGE_META.services.description, ...MENU_PRODUCTS.map((product) => `${product.name}: ${priceLabel(product.price)}. ${product.short}`)]),
     ...MENU_PRODUCTS.map((product) => {
       const story = storyOf(product.id);
       return page(servicePath(product), productMeta(product), story ? story.headline.join(" ") : product.name, [productMeta(product).description, ...product.youGet], [serviceJsonLd(product), ...(story?.faq.length ? [faqJsonLd(story.faq)] : [])]);
     }),
-    page("/how-we-work", PAGE_META.howWeWork, "Find it. Fix it. See the results.", [PAGE_META.howWeWork.description]),
+    page("/how-we-work", PAGE_META.howWeWork, "Find it. Fix it. See the shift.", [PAGE_META.howWeWork.description]),
     page("/experience", PAGE_META.experience, "We have done this before, many times.", [PAGE_META.experience.description]),
     page("/about", PAGE_META.about, "Consulting experience, at the size of your business.", [PAGE_META.about.description]),
     page("/questions", PAGE_META.questions, "Questions owners ask.", QUESTION_GROUPS.flatMap((group) => group.items.map((item) => `${item.q} ${item.a}`)), [faqJsonLd(QUESTION_GROUPS.flatMap((group) => group.items))]),

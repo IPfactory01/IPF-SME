@@ -3,7 +3,7 @@
 import React from "react";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MotionGlobalConfig } from "framer-motion";
 import { Router } from "wouter";
@@ -72,7 +72,7 @@ describe("home page: a standard home page that leads to the site's other pages",
 
   it("turns each owner's problem into a link to the service that answers it first", () => {
     renderHome();
-    const problems = within(screen.getByRole("region", { name: /Tell us what it feels like/ }));
+    const problems = within(screen.getByRole("region", { name: /What problem are you facing right now/ }));
     for (const need of NEEDS) {
       const product = productById(NEED_LEAD[need])!;
       const link = problems.getByRole("link", { name: new RegExp(NEED_DETAILS[need].ownerWords.replace(/[?.()]/g, "\\$&")) });
@@ -92,15 +92,15 @@ describe("home page: a standard home page that leads to the site's other pages",
 
   it("explains how we work in three steps and links to the full page", () => {
     renderHome();
-    const how = within(screen.getByRole("region", { name: "Find it. Fix it. See the results." }));
-    expect(how.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["Find it", "Fix it", "See the results"]);
+    const how = within(screen.getByRole("region", { name: "Find it. Fix it. See the shift." }));
+    expect(how.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["Find it", "Fix it", "See the shift"]);
     expect(how.getByRole("link", { name: /How we work/ }).getAttribute("href")).toBe("/how-we-work");
   });
 
   it("leads with the problem we solve and why it matters, with sourced figures, in the site's words", () => {
     const { container } = renderHome();
     const problem = container.querySelector("#problem")!;
-    expect(problem.querySelector("h2")!.textContent).toBe("Hard work is not what's missing. Seeing the real problem is.");
+    expect(problem.querySelector("h2")!.textContent).toBe("You are working hard. The business is not moving.");
     for (const source of ["PwC MSME Survey, 2024", "World Bank, Nigeria, 2022", "Field trial of 852 owners, 2018"]) expect(problem.textContent).toContain(source);
     expect(container.textContent).not.toMatch(/\b(framework|strategic|solutions?|leverage|holistic|playbook|sprint|retainer|door)\b/i);
   });
@@ -108,9 +108,9 @@ describe("home page: a standard home page that leads to the site's other pages",
   it("goes problem, the owners' words, how we fix it, why us, services, then the free check", () => {
     const { container } = renderHome();
     expect(Array.from(container.querySelectorAll("main h2")).map((heading) => heading.textContent)).toEqual([
-      "Hard work is not what's missing. Seeing the real problem is.",
-      "Tell us what it feels like. We'll show you where to start.",
-      "Find it. Fix it. See the results.",
+      "You are working hard. The business is not moving.",
+      "What problem are you facing right now?",
+      "Find it. Fix it. See the shift.",
       "Consultants who have fixed this before, at the size of your business.",
       "Where most owners start.",
       "Start with the free Business Health Check.",
@@ -122,8 +122,8 @@ describe("the free check comes first", () => {
   it("puts the free check straight under the headline and one line of what it means for the owner", () => {
     const { container } = renderHome();
     const hero = container.querySelector("#top")!;
-    const line = Array.from(hero.querySelectorAll("p")).find((p) => p.textContent!.startsWith("Your business is busy"))!;
-    expect(line.textContent).toBe("Your business is busy, but the money isn't following. We find the one problem holding it back, fix it with you on your own numbers, and stay until you see it in your cash.");
+    const line = Array.from(hero.querySelectorAll("p")).find((p) => p.textContent!.startsWith("Today, your business is busy"))!;
+    expect(line.textContent).toBe("Today, your business is busy but the money is not showing. We find the real problem, fix it with you on your own numbers, and stay until you see the shift.");
     // The button follows that line directly: no quote or second paragraph between them.
     expect(line.nextElementSibling!.querySelector("button")!.textContent).toBe("Start your free Business Health Check");
     expect(hero.textContent).toContain("Free. Ten minutes on your phone. Your result straight away.");
@@ -133,6 +133,31 @@ describe("the free check comes first", () => {
   it("keeps a free check button in the header on a phone, on every page", () => {
     renderHome();
     expect(screen.getByRole("link", { name: "Free check" }).getAttribute("href")).toBe("/check");
+  });
+});
+
+describe("the owners' words under the headline", () => {
+  it("holds each one on screen for at least two seconds, so it can be read", async () => {
+    vi.useFakeTimers();
+    try {
+      const { container } = renderHome();
+      const quote = () => container.querySelector('[aria-label="Start the Business Health Check"]')!.textContent;
+      const first = quote();
+      await act(async () => { vi.advanceTimersByTime(2_500); });
+      expect(quote()).toBe(first);
+      await act(async () => { vi.advanceTimersByTime(3_000); });
+      expect(quote()).not.toBe(first);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("puts the fix right under each problem, on this site", () => {
+    renderHome();
+    const problems = within(screen.getByRole("region", { name: "What problem are you facing right now?" }));
+    const cards = problems.getAllByRole("link").filter((link) => link.getAttribute("href")!.startsWith("/services/"));
+    expect(cards.length).toBe(NEEDS.length);
+    for (const card of cards) expect(card.textContent).toContain("The fix");
   });
 });
 

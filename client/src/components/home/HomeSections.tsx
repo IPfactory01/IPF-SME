@@ -29,7 +29,7 @@ export function useStartCheck() {
 }
 
 export function CtaButton({ onClick, tone = "dark", children, className = "" }: { onClick: () => void; tone?: "dark" | "light"; children: React.ReactNode; className?: string }) {
-  const colours = tone === "dark" ? "bg-cta text-white hover:bg-cta-hover shadow-[0_18px_40px_-18px_rgba(30,124,119,0.75)]" : "bg-highlight text-brand-deep hover:bg-highlight-hover shadow-[0_18px_40px_-18px_rgba(87,195,189,0.8)]";
+  const colours = tone === "dark" ? "bg-cta text-cta-ink hover:bg-cta-hover shadow-[0_18px_40px_-18px_rgba(30,124,119,0.75)]" : "bg-highlight text-brand-deep hover:bg-highlight-hover shadow-[0_18px_40px_-18px_rgba(87,195,189,0.8)]";
   return (
     <motion.button
       type="button"
@@ -58,7 +58,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
   const calm = useReducedMotion();
   useEffect(() => {
     if (calm) return;
-    const timer = window.setInterval(() => setIndex((current) => (current + 1) % sentences.length), 3200);
+    const timer = window.setInterval(() => setIndex((current) => (current + 1) % sentences.length), 5000);
     return () => window.clearInterval(timer);
   }, [sentences.length, calm]);
 
@@ -82,7 +82,7 @@ export function Hero({ onStart }: { onStart: () => void }) {
 
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.8, ease: EASE }}>
           <p className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed text-ink-600 sm:text-xl">
-            Your business is busy, but the money isn&apos;t following. We find the one problem holding it back, fix it with you on your own numbers, and stay until you see it in your cash.
+            Today, your business is busy but the money is not showing. We find the real problem, fix it with you on your own numbers, and stay until you see the shift.
           </p>
           <div className="flex flex-col items-center gap-3">
             <CtaButton onClick={onStart} className="w-full max-w-sm">Start your free Business Health Check</CtaButton>
@@ -134,8 +134,9 @@ export function ProblemsToServices() {
     <section id="problems" aria-labelledby="problems-heading" className="scroll-mt-16 border-b border-line bg-paper-sunken/50 py-20 sm:py-24">
       <div className="container mx-auto max-w-6xl">
         <Reveal className="max-w-3xl">
-          <p className="text-sm font-semibold text-highlight-ink">Which one sounds like you?</p>
-          <h2 id="problems-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">Tell us what it feels like. We'll show you where to start.</h2>
+          <p className="text-sm font-semibold text-highlight-ink">Your problem, and the fix</p>
+          <h2 id="problems-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">What problem are you facing right now?</h2>
+          <p className="mt-4 text-lg text-ink-600">Pick the one that sounds like you. The fix is right under it.</p>
         </Reveal>
         <ul className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {NEEDS.map((need) => {
@@ -144,8 +145,8 @@ export function ProblemsToServices() {
               <li key={need}>
                 <Link href={servicePath(product)} className="group flex h-full flex-col justify-between gap-6 rounded-xl border border-line-soft bg-paper-raised p-6 transition-[transform,box-shadow,border-color] hover:border-highlight duration-300 hover:-translate-y-1 hover:shadow-[0_24px_50px_-32px_rgba(18,50,79,0.55)]">
                   <span className="font-serif text-xl italic leading-snug text-ink-750">&ldquo;{NEED_DETAILS[need].ownerWords}&rdquo;</span>
-                  <span>
-                    <span className="block text-xs font-semibold text-ink-muted">{NEED_DETAILS[need].name}</span>
+                  <span className="border-t border-line-soft pt-4">
+                    <span className="block text-xs font-semibold text-ink-muted">The fix</span>
                     <span className="mt-1 inline-flex items-center gap-1.5 font-semibold text-brand">{product.name} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></span>
                   </span>
                 </Link>
@@ -153,7 +154,7 @@ export function ProblemsToServices() {
             );
           })}
         </ul>
-        <p className="mt-8 text-ink-soft">Not sure which it is? <Link href="/check" className="font-semibold text-brand underline underline-offset-4">Take the free Business Health Check</Link>. It names your first step in ten minutes.</p>
+        <p className="mt-8 text-ink-soft">Not sure which one it is? <Link href="/check" className="font-semibold text-brand underline underline-offset-4">Take the free Business Health Check</Link>. In ten minutes it tells you the problem and the fix.</p>
       </div>
     </section>
   );
@@ -184,9 +185,9 @@ export function FeaturedServices() {
 
 export function HowWeWorkTeaser() {
   const steps = [
-    { title: "Find it", body: "In ten minutes, the free Business Health Check shows where your business is stuck. A two-week Business Review names the one problem to fix first." },
-    { title: "Fix it", body: "We do the work for you in days, or work beside your team on that one problem for six weeks. You get finished work, not advice to act on alone." },
-    { title: "See the results", body: "We agree one number at the start, such as cash at month end, and check it with you every week until it moves." },
+    { title: "Find it", body: "Where is your business today? The free Business Health Check shows you in ten minutes. A two-week Business Review names the one problem to fix first." },
+    { title: "Fix it", body: "We do the work for you in days, or work beside your team on that problem for six weeks. You get finished work, not advice." },
+    { title: "See the shift", body: "We agree one number at the start, like cash at month end. We check it with you every week until it moves from where it was to where it should be." },
   ];
   return (
     <section aria-labelledby="how-heading" className="border-b border-line py-20 sm:py-24">
@@ -194,7 +195,7 @@ export function HowWeWorkTeaser() {
         <div className="flex flex-wrap items-end justify-between gap-6">
           <Reveal>
             <p className="text-sm font-semibold text-highlight-ink">How we fix it</p>
-            <h2 id="how-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">Find it. Fix it. See the results.</h2>
+            <h2 id="how-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">Find it. Fix it. See the shift.</h2>
           </Reveal>
           <Link href="/how-we-work" className="group inline-flex items-center gap-1.5 font-semibold text-brand">How we work <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></Link>
         </div>
@@ -331,7 +332,7 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
                           <p className="text-xs font-semibold text-brand">Measure of Success</p>
                           <p className="mt-1.5 leading-relaxed text-ink-700">{area.measure}</p>
                         </div>
-                        <button type="button" onClick={onStart} className="group inline-flex w-fit items-center gap-2 rounded-lg bg-cta px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-cta-hover">
+                        <button type="button" onClick={onStart} className="group inline-flex w-fit items-center gap-2 rounded-lg bg-cta px-5 py-3 text-sm font-semibold text-cta-ink transition-colors hover:bg-cta-hover">
                           Check this <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                         </button>
                       </div>

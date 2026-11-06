@@ -15,7 +15,7 @@ afterEach(cleanup);
 describe("How we work (/how-we-work)", () => {
   it("names the page and sets out the seven-step method, what each step produces and where The Shift's stages sit", () => {
     renderAt("/how-we-work", HowWeWorkPage);
-    expect(screen.getByRole("heading", { level: 1, name: "Find it. Fix it. See the results." })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Find it. Fix it. See the shift." })).toBeTruthy();
     const steps = within(screen.getByRole("list", { name: "The seven steps" }));
     expect(steps.getAllByRole("heading").map((heading) => heading.textContent)).toEqual(["1. Define", "2. Structure", "3. Prioritise", "4. Analyse", "5. Synthesise", "6. Recommend", "7. Implement", "Outcome standard"]);
     expect(steps.getByText("Question, scope, intended outcome and success measures")).toBeTruthy();

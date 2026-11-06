@@ -24,7 +24,7 @@ export default function HowWeWorkPage() {
 
   return (
     <SiteShell>
-      <PageHero eyebrow="How we work" title="Find it. Fix it. See the results." sub="Every piece of work starts with the real problem and ends with a number that moved. A consultant checks it before you see it." />
+      <PageHero eyebrow="How we work" title="Find it. Fix it. See the shift." sub="Every piece of work starts with the real problem and ends with a number that moved. A consultant checks it before you see it." />
 
       <MethodSection />
 

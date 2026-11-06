@@ -84,7 +84,7 @@ function StageBand({ steps }: { steps: DashboardStep[] }) {
         {steps.map(step => (
           <li key={step.n} aria-current={step.state === "now" ? "step" : undefined} className="min-w-0">
             <a href={`#step-${step.n}`} className="group block" title={`${step.n}. ${step.title}`}>
-              <span aria-hidden className={`flex h-8 items-center justify-center rounded-md text-xs font-medium tabular-nums transition-opacity group-hover:opacity-80 ${step.state === "done" ? "bg-brand text-white" : step.state === "now" ? "bg-brand-plum text-white" : "bg-paper-sunken text-ink-muted"}`}>
+              <span aria-hidden className={`flex h-8 items-center justify-center rounded-md text-xs font-medium tabular-nums transition-opacity group-hover:opacity-80 ${step.state === "done" ? "bg-brand text-white" : step.state === "now" ? "bg-brand-plum text-brand-deep" : "bg-paper-sunken text-ink-muted"}`}>
                 {step.state === "done" ? <Check className="h-4 w-4" aria-hidden /> : step.n}
               </span>
               <span className={`mt-2 hidden truncate text-xs md:block ${step.state === "now" ? "font-semibold text-ink" : "text-ink-muted"}`}>{step.title}</span>

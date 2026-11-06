@@ -28,7 +28,8 @@ Colours come from the theme tokens. **Never hard-code a hex value in a component
 ### Core palette
 
 The ipf-teal-navy palette since 6 November 2026 (ET: friendlier for Nigerian owners than the navy, plum and crimson of
-ipf-gradient, which is in git history at commit `0de5a75`). The token names did not change, so every screen moved with
+ipf-gradient, which is in git history at commit `0de5a75`). Only the logo's two colours carry the brand: navy #174579
+for text and the closing band, teal #57C3BD for buttons, rules and fills, never as text on white. The token names did not change, so every screen moved with
 the values.
 
 | Token | Hex | Use |
@@ -39,10 +40,10 @@ the values.
 | `ink-soft` | #4F5A66 | Secondary text, email paragraphs |
 | `ink-muted` | #5F6B77 | Labels, captions, footers |
 | `brand-slate` | #4A5E73 | Brand-tinted secondary text, table labels |
-| `cta` | #1E7C77 | The logo's teal, deepened for white text: the free check and every primary button (`cta-hover` #17635F; `cta-deep` #0E4A47 for the closing band) |
-| `highlight-ink` | #23807B | Deep teal: the readable accent on light backgrounds (eyebrows, section labels, numbers) |
+| `cta` | #57C3BD | The logo's teal: the free check and every primary button, with navy text (`cta-ink` #174579, 4.6 to 1); `cta-hover` #7AD1CC; `cta-deep` #174579, the navy closing band |
+| `highlight-ink` | #174579 | The logo's navy: the readable accent on light backgrounds (eyebrows, section labels, numbers) |
 | `highlight` | #57C3BD | The logo's teal: fills, bullets and text on dark navy only. Never teal text on white |
-| `brand-plum` | #23807B | Second brand colour (the name stays from the gradient palette): the current stage, the start of the header rule |
+| `brand-plum` | #57C3BD | The logo's teal (the name stays from the gradient palette): the current stage |
 | `paper` | #F7FAFA | Page background; text on dark fills |
 | `paper-raised` | #FFFFFF | Cards |
 | `brand-tint-softer` | #F6FBFA | Call-outs, table headers, email footer |

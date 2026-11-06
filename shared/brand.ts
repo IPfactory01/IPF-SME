@@ -131,9 +131,9 @@ export const BRAND = {
   palette: {
     "brand": "#174579",
     "brand-deep": "#0F2E52",
-    "brand-plum": "#23807B",
+    "brand-plum": "#57C3BD",
     "highlight": "#57C3BD",
-    "highlight-ink": "#23807B",
+    "highlight-ink": "#174579",
     "ink": "#0F2E52",
     "ink-soft": "#4F5A66",
     "ink-muted": "#5F6B77",

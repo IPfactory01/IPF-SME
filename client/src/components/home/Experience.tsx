@@ -142,8 +142,8 @@ export function TheProblem() {
       <div className="container mx-auto max-w-5xl">
         <Reveal className="max-w-3xl">
           <p className="text-sm font-semibold text-highlight-ink">The problem</p>
-          <h2 id="problem-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">Hard work is not what&apos;s missing. Seeing the real problem is.</h2>
-          <p className="mt-5 text-lg leading-relaxed text-ink-600">Cash you can&apos;t see. Prices that stopped paying. Sales that went flat. Most owners feel these long before they can name them, and a course won&apos;t name them for you. Until the real problem has a name, every naira of effort goes into the wrong place.</p>
+          <h2 id="problem-heading" className="font-display mt-3 text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">You are working hard. The business is not moving.</h2>
+          <p className="mt-5 text-lg leading-relaxed text-ink-600">Sales are coming in but cash is always short. Costs have gone up and your prices have not. Customers buy once and do not come back. You feel the problem long before you can name it, and until it has a name, your money and effort go to the wrong place.</p>
         </Reveal>
         <Stagger className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-3">
           {EVIDENCE.map((item) => (
@@ -154,7 +154,7 @@ export function TheProblem() {
             </motion.div>
           ))}
         </Stagger>
-        <p className="mt-8 max-w-3xl text-ink-600">The last figure is the point: owners who get applied, expert help on their own business earn more. That is the help we give.</p>
+        <p className="mt-8 max-w-3xl text-ink-600">The last figure is the point: owners who get expert help on their own business make more profit. That is the shift we work for.</p>
       </div>
     </section>
   );

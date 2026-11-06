@@ -42,7 +42,8 @@ export const PROBLEM_AREAS: readonly ProblemArea[] = [
  * It starts with finding the problem because many owners can feel that something is wrong without
  * being able to name it, and ends on what the owner gets: results they can see.
  */
-export const PROMISE = ["Find it.", "Fix it.", "See the results."] as const;
+/** The promise. "See the shift" (ET, 6 November 2026) ties the outcome to the product's name: from where the business is today to where it should be. */
+export const PROMISE = ["Find it.", "Fix it.", "See the shift."] as const;
 
 /**
  * Prices in naira, as ET set them on 21 October 2026 (Operational Business Plan, page 11): the Business Review at

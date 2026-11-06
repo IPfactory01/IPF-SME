@@ -16,6 +16,7 @@ import { useWide } from "@/hooks/useWide";
 import { BusinessPanel, FounderPanel } from "./room/RoomInsight";
 import RoomDashboard from "./room/RoomDashboard";
 import RoomTabs from "./room/RoomTabs";
+import { useRoomPreview } from "./room/RoomPreview";
 import TaskDetail from "./TaskDetail";
 import type { AppRouter } from "../../../server/routers";
 
@@ -627,6 +628,7 @@ function useDropUpload() {
 
 /** Files on an item, each opened through a short-lived link the server issues after checking who is asking. */
 function FileList({ files }: { files: RoomFile[] }) {
+  const preview = useRoomPreview();
   const link = trpc.engagement.client.fileLink.useMutation({ onError: error => toast.error(error.message) });
   if (!files.length) return null;
   return (
@@ -636,9 +638,9 @@ function FileList({ files }: { files: RoomFile[] }) {
           <Paperclip className="h-3.5 w-3.5 text-ink-muted" aria-hidden />
           <span>{file.fileName}</span>
           <span className="text-xs text-ink-muted">{formatFileSize(file.sizeBytes)}{file.fromTeam ? " · from your team at IP Factory" : file.mine ? " · you" : ""}</span>
-          <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>
+          {!preview && <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>
             <Download className="h-3.5 w-3.5" aria-hidden />Download
-          </button>
+          </button>}
         </li>
       ))}
     </ul>
@@ -650,6 +652,7 @@ function FileList({ files }: { files: RoomFile[] }) {
  * saying it went another way. An action is marked done.
  */
 function TaskControls({ task, uploadsEnabled, due }: { task: Task; uploadsEnabled: boolean; due?: boolean }) {
+  if (useRoomPreview()) return null;
   if (task.kind === "data_request") return <RequestControls task={task} />;
   return <ActionControls task={task} uploadsEnabled={uploadsEnabled} due={due} />;
 }
@@ -707,6 +710,7 @@ function ActionControls({ task, due }: { task: Task; uploadsEnabled: boolean; du
 }
 
 function DeliverableItem({ item, isOwner }: { item: Deliverable; isOwner: boolean }) {
+  const preview = useRoomPreview();
   const refresh = useRoomRefresh();
   const [comment, setComment] = useState("");
   const accept = trpc.engagement.client.accept.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success(`${METHOD.signOff} recorded. Thank you.`); } });
@@ -719,11 +723,11 @@ function DeliverableItem({ item, isOwner }: { item: Deliverable; isOwner: boolea
       {item.summary && <p className="mt-2 whitespace-pre-line text-sm">{item.summary}</p>}
       <FileList files={item.files} />
       {item.comments.length > 0 && <ul className="mt-3 space-y-1 border-t border-line-soft pt-2">{item.comments.map((entry, index) => <li key={index} className="text-sm"><span className="font-medium">{entry.authorName}</span>: {entry.body}</li>)}</ul>}
-      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+      {!preview && <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <input aria-label={`Your comment on ${item.title}`} className="w-full border border-line bg-white px-2 py-1.5 text-sm" placeholder="Ask a question or add a comment" value={comment} maxLength={4000} onChange={event => setComment(event.target.value)} />
         <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={!comment.trim() || addComment.isPending} onClick={() => addComment.mutate({ deliverableId: item.id, body: comment })}>Send</Button>
-      </div>
-      {isOwner && (
+      </div>}
+      {isOwner && !preview && (
         <div className="mt-3 flex flex-wrap items-center gap-3">
           {item.accepted ? <span className="text-sm font-semibold text-brand">{METHOD.signOff} given</span> : <Button type="button" size="sm" className="rounded-none bg-brand text-xs text-white" disabled={accept.isPending} onClick={() => accept.mutate({ deliverableId: item.id })}>Sign off the {item.kindLabel}</Button>}
           <AudienceToggle item="deliverable" id={item.id} audience={item.audience} />
@@ -735,8 +739,10 @@ function DeliverableItem({ item, isOwner }: { item: Deliverable; isOwner: boolea
 
 /** Only the owner decides whether their staff see an item. */
 function AudienceToggle({ item, id, audience }: { item: "notes" | "deliverable"; id: number; audience: "owner" | "business" | "team" }) {
+  const preview = useRoomPreview();
   const refresh = useRoomRefresh();
   const set = trpc.engagement.client.setAudience.useMutation(refresh);
+  if (preview) return null;
   const shared = audience === "business";
   return (
     <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" disabled={set.isPending} onClick={() => set.mutate({ item, id, audience: shared ? "owner" : "business" })}>
@@ -979,6 +985,7 @@ function RequestSummary({ items, now }: { items: Task[]; now: number }) {
 
 /** Drag everything in, or choose many files at once. No need to say which file is which: the team sorts them. */
 function DropBox({ uploadsEnabled }: { uploadsEnabled: boolean }) {
+  const preview = useRoomPreview();
   const drop = useDropUpload();
   const [over, setOver] = useState(false);
   const take = (list: FileList | null) => { const files = list ? Array.from(list) : []; if (files.length) void drop.send(files, ""); };
@@ -986,7 +993,7 @@ function DropBox({ uploadsEnabled }: { uploadsEnabled: boolean }) {
     <section id="drop" aria-labelledby="drop-title" className="scroll-mt-24 rounded-xl border border-line-soft bg-white p-5">
       <h3 id="drop-title" className="font-sans text-base font-semibold tracking-tight">Upload documents</h3>
       <p className="mt-1 text-sm text-ink-600">Upload in any order. We match each file to the {METHOD.dataRequest}.</p>
-      {uploadsEnabled ? (
+      {preview ? <p className="mt-3 rounded-lg bg-paper-sunken p-3 text-sm text-ink-600">The client uploads here. Switched off in the preview.</p> : uploadsEnabled ? (
         <>
           <label
             onDragOver={event => { event.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
@@ -1015,6 +1022,7 @@ function DropBox({ uploadsEnabled }: { uploadsEnabled: boolean }) {
 
 /** Everything the client's side sent through the drop box, and what each file was matched to. */
 function SentFiles({ files }: { files: Room["sentFiles"] }) {
+  const preview = useRoomPreview();
   const link = trpc.engagement.client.fileLink.useMutation({ onError: error => toast.error(error.message) });
   if (!files.length) return null;
   return (
@@ -1024,7 +1032,7 @@ function SentFiles({ files }: { files: Room["sentFiles"] }) {
         {files.map(file => (
           <li key={file.id} className="py-2.5">
             <div className="flex items-start justify-between gap-3">
-              <button type="button" className="flex min-w-0 items-center gap-2 text-left text-ink hover:text-brand" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>
+              <button type="button" className="flex min-w-0 items-center gap-2 text-left text-ink hover:text-brand" disabled={preview || link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>
                 <FileText className="h-3.5 w-3.5 shrink-0 text-ink-muted" aria-hidden /><span className="truncate">{file.fileName}</span>
               </button>
               <span className="shrink-0 text-xs text-ink-muted">{lagos(file.createdAt, false)}</span>

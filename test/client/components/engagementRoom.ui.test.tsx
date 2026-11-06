@@ -711,3 +711,43 @@ describe("the team on the room", () => {
   });
 });
 
+
+describe("Preview as client", () => {
+  it("shows the team the owner's room with every action switched off: no Sign-off, comment, sharing, upload, approval or download", async () => {
+    const { RoomPreviewContext } = await import("@/components/room/RoomPreview");
+    const file = { id: 31, fileName: "sales.pdf", sizeBytes: 2048, createdAt: new Date("2026-10-20T10:00:00Z"), mine: true, fromTeam: false };
+    const preview = room({
+      uploadsEnabled: true,
+      deliverables: [{ ...room().deliverables[0], files: [file] }],
+    });
+    render(<RoomPreviewContext.Provider value><EngagementRoom room={preview} /></RoomPreviewContext.Provider>);
+    // What the owner reads is all there.
+    const found = within(screen.getByRole("region", { name: "Step 5: Findings" }));
+    expect(found.getByText("Cash leaks at the till.")).toBeTruthy();
+    expect(found.getByText("sales.pdf")).toBeTruthy();
+    // What the owner does is not.
+    expect(found.queryByRole("button", { name: "Sign off the Findings" })).toBeNull();
+    expect(found.queryByLabelText("Your comment on What we found")).toBeNull();
+    expect(found.queryByRole("button", { name: "Share with my team" })).toBeNull();
+    expect(found.queryByRole("button", { name: /Download/ })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: /^Data Request/ }));
+    expect(screen.queryByLabelText("Choose files to send")).toBeNull();
+    expect(screen.getByText(/Switched off in the preview/)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Not available" })).toBeNull();
+    expect(Object.values(api.calls).every(calls => calls.length === 0)).toBe(true);
+  });
+
+  it("shows a content piece waiting for approval without the Approve and Request changes buttons", async () => {
+    const { RoomPreviewContext } = await import("@/components/room/RoomPreview");
+    const preview = room({
+      type: "digital_marketing", typeLabel: "Digital marketing", startedOn: "2026-10-01",
+      contentTargets: [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }],
+      content: [{ id: 41, kind: "reel", kindLabel: "Reel", title: "Opening day reel", month: 2, status: "for_approval", statusLabel: "For your approval", dueOn: null, link: null, clientNote: null, approvedAt: null, publishedAt: null }],
+    });
+    render(<RoomPreviewContext.Provider value><EngagementRoom room={preview} now={new Date("2026-11-06T10:00:00Z").getTime()} /></RoomPreviewContext.Provider>);
+    fireEvent.click(screen.getByRole("tab", { name: /^Content/ }));
+    const card = within(screen.getByRole("article", { name: "Opening day reel" }));
+    expect(card.queryByRole("button", { name: "Approve" })).toBeNull();
+    expect(card.queryByRole("button", { name: "Request changes" })).toBeNull();
+  });
+});

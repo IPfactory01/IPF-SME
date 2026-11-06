@@ -366,6 +366,20 @@ for (const target of targets) {
         expect(room.people).toEqual([expect.objectContaining({ label: "Owner", you: true })]);
       });
 
+      it("previews the client's room exactly as the owner sees it, for staff in scope only, and logs each preview", async () => {
+        const { owner, engagementId } = await client("preview");
+        const ownerRoom = await (await owner.call()).engagement.client.room();
+        const preview = await (await superAdmin.call()).engagement.staff.previewRoom({ engagementId });
+        expect(preview).toEqual(ownerRoom);
+        expect(preview.viewer.kind).toBe("owner");
+        const audits = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_room_previewed"));
+        expect(audits.map((row: { details: string | null }) => JSON.parse(row.details ?? "{}").engagementId)).toContain(engagementId);
+        // An analyst not on the engagement cannot open it, and a client cannot use the team's side.
+        const analyst = await signIn(await person(["analyst"]), true);
+        await expect((await analyst.call()).engagement.staff.previewRoom({ engagementId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect((await owner.call()).engagement.staff.previewRoom({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      });
+
       it("keeps clients out of the team's side", async () => {
         const { owner, engagementId } = await client("no-staff");
         await expect((await owner.call()).engagement.staff.detail({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });

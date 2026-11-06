@@ -6,6 +6,7 @@ import { ExternalLink } from "lucide-react";
 import React, { useState } from "react";
 import { toast } from "sonner";
 import type { AppRouter } from "../../../../server/routers";
+import { useRoomPreview } from "./RoomPreview";
 
 type Room = NonNullable<inferRouterOutputs<AppRouter>["engagement"]["client"]["room"]>;
 type Item = Room["content"][number];
@@ -73,6 +74,7 @@ export default function ContentBoard({ room, currentMonth, months }: { room: Roo
 }
 
 function ContentCard({ item }: { item: Item }) {
+  const preview = useRoomPreview();
   const utils = trpc.useUtils();
   const [asking, setAsking] = useState(false);
   const [note, setNote] = useState("");
@@ -89,7 +91,7 @@ function ContentCard({ item }: { item: Item }) {
       <p className="text-sm font-medium text-ink">{item.title}</p>
       {item.status === "changes_requested" && item.clientNote && <p className="text-xs text-ink-600"><span className="text-ink-muted">Your note: </span>{item.clientNote}</p>}
       {item.link && <a href={item.link} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-brand underline underline-offset-2">View<ExternalLink className="h-3 w-3" aria-hidden /></a>}
-      {item.status === "for_approval" && (asking ? (
+      {item.status === "for_approval" && !preview && (asking ? (
         <div className="space-y-2">
           <textarea aria-label={`What to change in ${item.title}`} rows={2} maxLength={1000} className="w-full rounded-lg border border-line bg-white px-2 py-1.5 text-sm" placeholder="What to change" value={note} onChange={event => setNote(event.target.value)} />
           <div className="flex gap-2">

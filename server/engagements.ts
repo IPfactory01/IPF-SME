@@ -794,6 +794,25 @@ export async function getClientRoom(db: Database, session: AccountSession) {
   const engagement = (await db.select().from(engagements).where(eq(engagements.businessId, business.businessId)).orderBy(desc(engagements.id)).limit(1))[0];
   if (!engagement) return null;
   const viewer = await clientViewerFor(db, session, business.businessId);
+  return buildClientRoom(db, engagement, viewer, session.user.id, business.businessName);
+}
+
+/**
+ * Preview as client: the room of one engagement exactly as its owner sees it, for the team, read-only. The owner's own
+ * account decides what is "theirs"; without one yet, the owner view is shown as it will be. Every preview is logged.
+ */
+export async function previewClientRoom(db: Database, actor: StaffActor, input: { engagementId: number }) {
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  const owner = engagement.businessId === null ? undefined : (await db.select({ userId: businessMemberships.userId }).from(businessMemberships)
+    .where(and(eq(businessMemberships.businessId, engagement.businessId), eq(businessMemberships.role, "owner"), eq(businessMemberships.status, "active"))).limit(1))[0];
+  const business = engagement.businessId === null ? undefined : (await db.select({ name: businesses.name }).from(businesses).where(eq(businesses.id, engagement.businessId)).limit(1))[0];
+  const check = engagement.businessCheckId === null ? undefined : (await db.select({ businessName: businessChecks.businessName, fullName: businessChecks.fullName }).from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  const businessName = business?.name ?? check?.businessName ?? check?.fullName ?? engagement.contactName ?? "";
+  await recordAudit(db, { action: "engagement_room_previewed", actorUserId: actor.id, details: { engagementId: engagement.id } });
+  return buildClientRoom(db, engagement, { kind: "owner" } as ClientViewer, owner?.userId ?? 0, businessName);
+}
+
+async function buildClientRoom(db: Database, engagement: typeof engagements.$inferSelect, viewer: ClientViewer, viewerUserId: number, businessName: string) {
   // Sessions the owner booked on Calendly since the last visit appear with their time before anything is read.
   const owner = engagement.businessCheckId !== null
     ? (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0]
@@ -825,8 +844,8 @@ export async function getClientRoom(db: Database, session: AccountSession) {
   const visibleDeliverables = deliverables.filter(item => clientCanSee(item.audience, viewer));
   const matchedTo = (fileId: number) => matches.filter(match => match.fileId === fileId).map(match => match.taskId);
   const clientFiles = (where: "taskId" | "deliverableId", id: number) => files
-    .filter(file => (file[where] === id || (where === "taskId" && matchedTo(file.id).includes(id))) && clientFileVisible(file, viewer, session.user.id))
-    .map(file => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === session.user.id, fromTeam: file.fromTeam }));
+    .filter(file => (file[where] === id || (where === "taskId" && matchedTo(file.id).includes(id))) && clientFileVisible(file, viewer, viewerUserId))
+    .map(file => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === viewerUserId, fromTeam: file.fromTeam }));
   const now = Date.now();
   const scheduled = sessions.filter(item => item.status !== "cancelled");
   const next = scheduled.filter(item => item.status === "planned" && item.scheduledFor && item.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor!.getTime() - b.scheduledFor!.getTime())[0];
@@ -840,7 +859,7 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     typeLabel: ENGAGEMENT_TYPE_LABELS[engagement.type],
     startedOn: engagement.startedOn,
     uploadsEnabled: isFileStorageConfigured(),
-    businessName: business.businessName,
+    businessName: businessName,
     viewer: viewer.kind === "owner" ? { kind: "owner" as const } : { kind: "member" as const, access: viewer.access },
     stage: engagement.stage,
     stageLabel: engagementStageLabel(engagement, Date.now()),
@@ -860,8 +879,8 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     team: [...team].sort((a, b) => ENGAGEMENT_TEAM_ROLE_ORDER[a.role] - ENGAGEMENT_TEAM_ROLE_ORDER[b.role])
       .map(member => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role], jobTitle: member.jobTitle ?? null })),
     // The client's own people on the engagement, owner first, with what each can see. Names only: no email or phone.
-    people: (await clientPeopleOf(db, business.businessId)).map(person => ({
-      name: person.name, you: person.userId === session.user.id,
+    people: (await clientPeopleOf(db, engagement.businessId!)).map(person => ({
+      name: person.name, you: person.userId === viewerUserId,
       label: person.role === "owner" ? "Owner" : person.role === "business_admin" ? "Administrator" : `${CLIENT_ACCESS_LABELS[person.access as ClientAccessLevel].name} access`,
     })),
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
@@ -884,14 +903,14 @@ export async function getClientRoom(db: Database, session: AccountSession) {
     tasks: tasks.filter(task => task.status !== "cancelled" && clientCanSeeTask(task, viewer)).map(task => ({
       // Who it is with, by name, for the initials in the List: the person named on it, or null for the business or the team.
       assigneeName: task.assigneeUserId ? assigneeNames.get(task.assigneeUserId) ?? null : null,
-      id: task.id, kind: task.kind, side: task.side, title: task.title, detail: task.detail, dueOn: task.dueOn, status: task.status, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], statusNote: task.statusNote, mine: task.assigneeUserId === session.user.id,
+      id: task.id, kind: task.kind, side: task.side, title: task.title, detail: task.detail, dueOn: task.dueOn, status: task.status, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], statusNote: task.statusNote, mine: task.assigneeUserId === viewerUserId,
       weekNumber: task.weekNumber, sortOrder: task.sortOrder, factor: task.factor,
       section: task.section, ref: task.ref, informs: task.informs, format: task.format, priority: task.priority,
       files: clientFiles("taskId", task.id),
     })),
     // What the client's side dropped into the room, newest first, and which visible requests each file was matched to.
-    sentFiles: files.filter(file => file.taskId === null && file.deliverableId === null && !file.fromTeam && clientFileVisible(file, viewer, session.user.id))
-      .map(file => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === session.user.id, note: file.note,
+    sentFiles: files.filter(file => file.taskId === null && file.deliverableId === null && !file.fromTeam && clientFileVisible(file, viewer, viewerUserId))
+      .map(file => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === viewerUserId, note: file.note,
         matchedTo: tasks.filter(task => matchedTo(file.id).includes(task.id) && task.status !== "cancelled" && clientCanSeeTask(task, viewer)).map(task => ({ taskId: task.id, ref: task.ref, title: task.title })) }))
       .sort((a, b) => b.id - a.id),
     deliverables: visibleDeliverables.map(item => ({

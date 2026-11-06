@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
+import PreviewAsClient from "./PreviewAsClient";
 import { PROBLEM_AREAS } from "@shared/businessSupport";
 import {
   ENGAGEMENT_TASK_FACTORS,
@@ -88,6 +89,7 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
         <DetailField label="WhatsApp">{data.owner?.whatsapp ? <a className="text-brand underline" href={whatsappLink(data.owner.whatsapp) ?? undefined} target="_blank" rel="noreferrer">{data.owner.whatsapp}</a> : "-"}</DetailField>
         <DetailField label="Client account">{data.hasAccount ? `Yes${data.clientPeople.length > 1 ? `, ${data.clientPeople.length} people` : ""}` : "Not yet: the invitation is out"}</DetailField>
         {data.can.sendSignIn && data.engagement.businessCheckId !== null && <SendSignInLink businessCheckId={data.engagement.businessCheckId} hasAccount={data.hasAccount} />}
+        <div className="border-t border-line-soft pt-2"><PreviewAsClient engagementId={engagementId} /></div>
       </DetailSection>
       <StageAndTeam data={data} engagementId={engagementId} />
       <Problem data={data} engagementId={engagementId} />

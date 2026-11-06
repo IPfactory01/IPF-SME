@@ -13409,6 +13409,18 @@ async function getClientRoom(db, session) {
   const engagement = (await db.select().from(engagements).where(eq19(engagements.businessId, business.businessId)).orderBy(desc10(engagements.id)).limit(1))[0];
   if (!engagement) return null;
   const viewer = await clientViewerFor(db, session, business.businessId);
+  return buildClientRoom(db, engagement, viewer, session.user.id, business.businessName);
+}
+async function previewClientRoom(db, actor, input) {
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  const owner = engagement.businessId === null ? void 0 : (await db.select({ userId: businessMemberships.userId }).from(businessMemberships).where(and13(eq19(businessMemberships.businessId, engagement.businessId), eq19(businessMemberships.role, "owner"), eq19(businessMemberships.status, "active"))).limit(1))[0];
+  const business = engagement.businessId === null ? void 0 : (await db.select({ name: businesses.name }).from(businesses).where(eq19(businesses.id, engagement.businessId)).limit(1))[0];
+  const check = engagement.businessCheckId === null ? void 0 : (await db.select({ businessName: businessChecks.businessName, fullName: businessChecks.fullName }).from(businessChecks).where(eq19(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  const businessName = business?.name ?? check?.businessName ?? check?.fullName ?? engagement.contactName ?? "";
+  await recordAudit(db, { action: "engagement_room_previewed", actorUserId: actor.id, details: { engagementId: engagement.id } });
+  return buildClientRoom(db, engagement, { kind: "owner" }, owner?.userId ?? 0, businessName);
+}
+async function buildClientRoom(db, engagement, viewer, viewerUserId, businessName) {
   const owner = engagement.businessCheckId !== null ? (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq19(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { email: engagement.contactEmail, fullName: engagement.contactName ?? "" } : void 0;
   if (owner) await syncSessionBookings(db, engagement, owner.email);
   const [team, sessions, tasks, deliverables, comments, files, measure, checkins, matches] = await Promise.all([
@@ -13432,7 +13444,7 @@ async function getClientRoom(db, session) {
   const insight = fullView && checkId !== null ? await insightFor(db, checkId, Boolean(report?.deliveredAt)) : null;
   const visibleDeliverables = deliverables.filter((item2) => clientCanSee(item2.audience, viewer));
   const matchedTo = (fileId) => matches.filter((match) => match.fileId === fileId).map((match) => match.taskId);
-  const clientFiles = (where, id3) => files.filter((file) => (file[where] === id3 || where === "taskId" && matchedTo(file.id).includes(id3)) && clientFileVisible(file, viewer, session.user.id)).map((file) => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === session.user.id, fromTeam: file.fromTeam }));
+  const clientFiles = (where, id3) => files.filter((file) => (file[where] === id3 || where === "taskId" && matchedTo(file.id).includes(id3)) && clientFileVisible(file, viewer, viewerUserId)).map((file) => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === viewerUserId, fromTeam: file.fromTeam }));
   const now = Date.now();
   const scheduled = sessions.filter((item2) => item2.status !== "cancelled");
   const next = scheduled.filter((item2) => item2.status === "planned" && item2.scheduledFor && item2.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime())[0];
@@ -13446,7 +13458,7 @@ async function getClientRoom(db, session) {
     typeLabel: ENGAGEMENT_TYPE_LABELS[engagement.type],
     startedOn: engagement.startedOn,
     uploadsEnabled: isFileStorageConfigured(),
-    businessName: business.businessName,
+    businessName,
     viewer: viewer.kind === "owner" ? { kind: "owner" } : { kind: "member", access: viewer.access },
     stage: engagement.stage,
     stageLabel: engagementStageLabel(engagement, Date.now()),
@@ -13465,9 +13477,9 @@ async function getClientRoom(db, session) {
     // Who runs it first (partner, Engagement Manager, Lead Consultant), then analysts and specialists; each with their firm title.
     team: [...team].sort((a, b) => ENGAGEMENT_TEAM_ROLE_ORDER[a.role] - ENGAGEMENT_TEAM_ROLE_ORDER[b.role]).map((member) => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role], jobTitle: member.jobTitle ?? null })),
     // The client's own people on the engagement, owner first, with what each can see. Names only: no email or phone.
-    people: (await clientPeopleOf(db, business.businessId)).map((person) => ({
+    people: (await clientPeopleOf(db, engagement.businessId)).map((person) => ({
       name: person.name,
-      you: person.userId === session.user.id,
+      you: person.userId === viewerUserId,
       label: person.role === "owner" ? "Owner" : person.role === "business_admin" ? "Administrator" : `${CLIENT_ACCESS_LABELS[person.access].name} access`
     })),
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
@@ -13499,7 +13511,7 @@ async function getClientRoom(db, session) {
       status: task.status,
       statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status],
       statusNote: task.statusNote,
-      mine: task.assigneeUserId === session.user.id,
+      mine: task.assigneeUserId === viewerUserId,
       weekNumber: task.weekNumber,
       sortOrder: task.sortOrder,
       factor: task.factor,
@@ -13511,12 +13523,12 @@ async function getClientRoom(db, session) {
       files: clientFiles("taskId", task.id)
     })),
     // What the client's side dropped into the room, newest first, and which visible requests each file was matched to.
-    sentFiles: files.filter((file) => file.taskId === null && file.deliverableId === null && !file.fromTeam && clientFileVisible(file, viewer, session.user.id)).map((file) => ({
+    sentFiles: files.filter((file) => file.taskId === null && file.deliverableId === null && !file.fromTeam && clientFileVisible(file, viewer, viewerUserId)).map((file) => ({
       id: file.id,
       fileName: file.fileName,
       sizeBytes: file.sizeBytes,
       createdAt: file.createdAt,
-      mine: file.uploadedByUserId === session.user.id,
+      mine: file.uploadedByUserId === viewerUserId,
       note: file.note,
       matchedTo: tasks.filter((task) => matchedTo(file.id).includes(task.id) && task.status !== "cancelled" && clientCanSeeTask(task, viewer)).map((task) => ({ taskId: task.id, ref: task.ref, title: task.title }))
     })).sort((a, b) => b.id - a.id),
@@ -15177,6 +15189,8 @@ var staffRouter = router({
   /** Whether file uploads are on, and if not exactly which setting or the bucket is missing. Reads only. */
   storageStatus: staff.query(() => checkFileStorage()),
   start: staff.input(z24.object({ businessCheckId: id })).mutation(async ({ ctx, input }) => guarded(async () => startAwaitingEngagement(await engagementDb(), ctx.actor, input))),
+  /** Preview as client: the room exactly as the owner sees it, read-only, for staff in the engagement's scope. Logged. */
+  previewRoom: staff.input(z24.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => previewClientRoom(await engagementDb(), ctx.actor, input))),
   detail: staff.input(z24.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => getStaffEngagement(await engagementDb(), ctx.actor, input.engagementId))),
   assignableStaff: staff.query(async ({ ctx }) => listAssignableStaff(await engagementDb(), ctx.actor)),
   assign: staff.input(z24.object({ engagementId: id, userId: id, role: z24.enum(ENGAGEMENT_TEAM_ROLES) })).mutation(async ({ ctx, input }) => guarded(async () => assignTeamMember(await engagementDb(), ctx.actor, input))),

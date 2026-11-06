@@ -1,6 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { ENGAGEMENT_TYPES } from "../../shared/engagementTypes";
+import { CONTENT_KINDS, CONTENT_STATUSES, ENGAGEMENT_TYPES } from "../../shared/engagementTypes";
 import {
   ENGAGEMENT_DELIVERABLE_KINDS,
   ENGAGEMENT_SESSION_KINDS,
@@ -46,6 +46,9 @@ import {
   saveSessionNotes,
   saveTask,
   createDirectEngagement,
+  saveContentItem,
+  deleteContentItem,
+  respondToContent,
   canStart,
   clientRequestDrop,
   clientConfirmDrop,
@@ -184,6 +187,12 @@ const staffRouter = router({
     contactEmail: z.string().trim().email("Enter the client's email address.").max(320),
     startedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the start date."),
   })).mutation(async ({ ctx, input }) => guarded(async () => createDirectEngagement(await engagementDb(), { ...ctx.actor, name: ctx.user?.name ?? null }, input))),
+  /** The content board: add or update a reel, post or story; remove one. */
+  saveContent: staff.input(z.object({
+    engagementId: id, itemId: id.optional(), kind: z.enum(CONTENT_KINDS), title: text(200).min(1, "Give it a title."), month: z.number().int().min(1).max(12),
+    status: z.enum(CONTENT_STATUSES), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(), link: z.string().trim().url("Paste the full link, starting https://").max(1024).nullable().or(z.literal("").transform(() => null)),
+  })).mutation(async ({ ctx, input }) => guarded(async () => saveContentItem(await engagementDb(), ctx.actor, input))),
+  deleteContent: staff.input(z.object({ itemId: id })).mutation(async ({ ctx, input }) => guarded(async () => deleteContentItem(await engagementDb(), ctx.actor, input))),
   /** Sort a file the client dropped: the Data Requests it answers (an empty list clears the match). */
   matchFile: staff.input(z.object({ fileId: id, taskIds: z.array(id).max(50) })).mutation(async ({ ctx, input }) => guarded(async () => matchFile(await engagementDb(), ctx.actor, input))),
   saveMeasure: staff.input(z.object({ engagementId: id, name: text(160).min(1, "Name the number."), definition: optionalText(2000), unit: optionalText(32), baselineValue: reading, targetValue: reading }))
@@ -218,6 +227,8 @@ const clientRouter = router({
   /** The drop box: send any file without saying which request it answers; the team sorts it. */
   requestDrop: accountProcedure.input(z.object(upload)).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileDrop, `account:${ctx.account.user.id}`); return guarded(async () => clientRequestDrop(await engagementDb(), ctx.account, input)); }),
   confirmDrop: accountProcedure.input(z.object({ storageKey, note: optionalText(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmDrop(await engagementDb(), ctx.account, input))),
+  /** Approve a reel, post or story, or ask for changes with a note. */
+  respondToContent: accountProcedure.input(z.object({ itemId: id, approve: z.boolean(), note: optionalText(1000) })).mutation(async ({ ctx, input }) => guarded(async () => respondToContent(await engagementDb(), ctx.account, input))),
   /** "We don't have this", or take it back. */
   setNotAvailable: accountProcedure.input(z.object({ taskId: id, unavailable: z.boolean(), note: optionalText(500) })).mutation(async ({ ctx, input }) => guarded(async () => setNotAvailable(await engagementDb(), ctx.account, input))),
 });

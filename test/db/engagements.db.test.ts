@@ -253,6 +253,41 @@ for (const target of targets) {
         expect(detail.owner).toMatchObject({ name: "Marie Tiogo", email });
       });
 
+      it("runs the content board: the team plans and sends for approval, the owner approves or asks for changes, others cannot", async () => {
+        const email = uniqueEmail("board");
+        const { engagementId, invitationUrl } = await (await superAdmin.call()).engagement.staff.createDirect({ type: "digital_marketing", businessName: "Board Studio", contactName: "Bola Board", contactEmail: email, startedOn: "2026-11-02" });
+        const owner = browser();
+        await (await owner.call()).invitations.accept({ token: decodeURIComponent(invitationUrl!.split("/join/")[1]), email, fullName: "Bola Board", password: PASSWORD, confirmPassword: PASSWORD });
+        const admin = await superAdmin.call();
+        const { itemId: reel } = await admin.engagement.staff.saveContent({ engagementId, kind: "reel", title: "Knotless braids, before and after", month: 1, status: "planned", dueOn: "2026-11-12", link: null });
+        await admin.engagement.staff.saveContent({ engagementId, kind: "post", title: "December offer", month: 1, status: "planned", dueOn: null, link: null });
+        // Not waiting for approval yet: the owner cannot approve it.
+        await expect((await owner.call()).engagement.client.respondToContent({ itemId: reel, approve: true, note: null })).rejects.toMatchObject({ code: "CONFLICT" });
+        await admin.engagement.staff.saveContent({ engagementId, itemId: reel, kind: "reel", title: "Knotless braids, before and after", month: 1, status: "for_approval", dueOn: "2026-11-12", link: "https://example.com/draft/reel" });
+
+        let room = (await (await owner.call()).engagement.client.room())!;
+        expect(room.contentTargets).toEqual([{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }]);
+        expect(room.content.map(item => [item.title, item.statusLabel])).toEqual([["Knotless braids, before and after", "For your approval"], ["December offer", "Planned"]]);
+
+        // Changes need a note; then the team sends it again and the owner approves.
+        await expect((await owner.call()).engagement.client.respondToContent({ itemId: reel, approve: false, note: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await (await owner.call()).engagement.client.respondToContent({ itemId: reel, approve: false, note: "Shorter intro, please" });
+        expect((await admin.engagement.staff.detail({ engagementId })).content.find(item => item.id === reel)).toMatchObject({ status: "changes_requested", clientNote: "Shorter intro, please" });
+        await admin.engagement.staff.saveContent({ engagementId, itemId: reel, kind: "reel", title: "Knotless braids, before and after", month: 1, status: "for_approval", dueOn: "2026-11-12", link: "https://example.com/draft/reel-2" });
+        expect(await (await owner.call()).engagement.client.respondToContent({ itemId: reel, approve: true, note: null })).toMatchObject({ status: "approved" });
+        room = (await (await owner.call()).engagement.client.room())!;
+        expect(room.content.find(item => item.id === reel)).toMatchObject({ status: "approved", clientNote: null, approvedAt: expect.any(Date) });
+
+        // Another business never reaches it; a Business Review room has no board.
+        const other = await client("board-other");
+        await expect((await other.owner.call()).engagement.client.respondToContent({ itemId: reel, approve: true, note: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        const otherRoom = (await (await other.owner.call()).engagement.client.room())!;
+        expect(otherRoom).toMatchObject({ content: [], contentTargets: [] });
+        // An analyst not on the engagement cannot touch it.
+        const analyst = await signIn(await person(["analyst"]), true);
+        await expect((await analyst.call()).engagement.staff.saveContent({ engagementId, kind: "story", title: "Nope", month: 1, status: "planned", dueOn: null, link: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+      });
+
       it("puts an existing client account straight in as owner, refuses a staff email, and is the desk's call only", async () => {
         const { email } = await client("direct-existing");
         const opened = await (await superAdmin.call()).engagement.staff.createDirect({ type: "business_review", businessName: "Second Venture", contactName: "Existing Owner", contactEmail: email, startedOn: "2026-11-09" });

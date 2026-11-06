@@ -9,7 +9,8 @@ import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlas
 import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
-import { DATED_TYPES, datedProgress } from "@shared/engagementTypes";
+import { DATED_TYPES, datedProgress, monthOfDay } from "@shared/engagementTypes";
+import ContentBoard from "./room/ContentBoard";
 import { toast } from "sonner";
 import { useWide } from "@/hooks/useWide";
 import { BusinessPanel, FounderPanel } from "./room/RoomInsight";
@@ -51,6 +52,12 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
   const here = nowOf(room, now);
   const action = nextActionOf(room, isOwner);
   const steps = stepsOf(room, now);
+  // A Digital marketing room adds its content board, opening on the engagement month we are in.
+  const datedType = DATED_TYPES[room.type];
+  const contentMonth = datedType && room.startedOn && room.contentTargets.length
+    ? { month: monthOfDay(datedProgress(datedType, room.startedOn, now).day, datedType.durationDays), months: Math.ceil(datedType.durationDays / 30) }
+    : null;
+  const awaitingApproval = room.content.filter(item => item.status === "for_approval").length;
   const current = steps.find(step => step.state === "now")?.n ?? null;
   const shown = (n: number) => (open === null ? n === current : open === n);
   const wide = useWide();
@@ -173,7 +180,7 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
 
   const overview = (
     <div className="space-y-5">
-      <RoomDashboard room={room} steps={steps} now={now} />
+      <RoomDashboard room={room} steps={steps} now={now} contentMonth={contentMonth?.month ?? null} />
       <div className="grid gap-5 lg:grid-cols-3">{nextAction}{nextMeeting}</div>
       <div className="grid items-start gap-5 lg:grid-cols-3">
         <div className={`${card} lg:col-span-2`}>{timeline}</div>
@@ -193,6 +200,7 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
   // found, and what they receive. Named as the method names them.
   const tabs: (RoomTab & { content: React.ReactNode })[] = [
     { id: "overview", label: "Overview", content: overview },
+    ...(contentMonth ? [{ id: "content", label: "Content", group: "The work", count: awaitingApproval ? { value: awaitingApproval, label: `${awaitingApproval} for your approval` } : undefined, content: <ContentBoard room={room} currentMonth={contentMonth.month} months={contentMonth.months} /> }] : []),
     { id: "plan", label: METHOD.workPlan, group: "The work", count: counts.waiting ? { value: counts.waiting, label: `${counts.waiting} waiting on you` } : undefined, content: <PlanView room={room} now={now} /> },
     ...(counts.dataRequests ? [{ id: "data", label: METHOD.dataRequest, group: "The work", content: <DataRequestsView room={room} now={now} /> }] : []),
     { id: "meetings", label: `${METHOD.session}s`, group: "The work", content: <MeetingsView room={room} now={now} isOwner={isOwner} /> },

@@ -20,6 +20,7 @@ import {
   userPlatformRoles,
   users,
   engagementFileMatches,
+  engagementContentItems,
 } from "../drizzle/schema";
 import { authorityAllows, type Authority } from "../shared/platformPermissions";
 import {
@@ -55,7 +56,7 @@ import {
   type ClientAccessLevel,
 } from "../shared/engagement";
 import type { AccountSession, Database } from "./accountAuth";
-import { DATED_TYPES, datedProgress, ENGAGEMENT_TYPE_LABELS, type EngagementType } from "../shared/engagementTypes";
+import { CONTENT_KIND_LABELS, CONTENT_STATUS_LABELS, DATED_TYPES, datedProgress, ENGAGEMENT_TYPE_LABELS, type ContentKind, type ContentStatus, type EngagementType } from "../shared/engagementTypes";
 import { inviteBusinessOwner } from "./accountInvitations";
 import { slugify } from "./accountAuth";
 import { recordAudit } from "./audit";
@@ -392,6 +393,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     tasks: tasks.map(task => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id) })),
     // The drop box: every file the client sent without saying what it answers, with the requests it has been matched to.
     // Unsorted files come first.
+    content: (await contentOf(db, engagementId)).map(item => ({ ...item, kindLabel: CONTENT_KIND_LABELS[item.kind], statusLabel: CONTENT_STATUS_LABELS[item.status] })),
     inbox: files.filter(file => file.taskId === null && file.deliverableId === null && !file.fromTeam)
       .map(file => ({ ...staffFile(file), note: file.note, taskIds: matches.filter(match => match.fileId === file.id).map(match => match.taskId) }))
       .sort((a, b) => Number(a.taskIds.length > 0) - Number(b.taskIds.length > 0) || b.id - a.id),
@@ -831,6 +833,9 @@ export async function getClientRoom(db: Database, session: AccountSession) {
   const notesVisible = (item: (typeof sessions)[number]) => Boolean(item.notesSharedAt && item.clientNotes && clientCanSee(item.notesAudience, viewer));
   return {
     engagementId: engagement.id,
+    // The content board (Digital marketing): the owner and full-access staff see it and approve.
+    content: fullView ? (await contentOf(db, engagement.id)).map(clientContent) : [],
+    contentTargets: DATED_TYPES[engagement.type]?.monthly ?? [],
     type: engagement.type,
     typeLabel: ENGAGEMENT_TYPE_LABELS[engagement.type],
     startedOn: engagement.startedOn,
@@ -1070,6 +1075,68 @@ export async function clientFileLink(db: Database, session: AccountSession, inpu
     if (!deliverable || deliverable.status !== "shared" || !clientCanSee(deliverable.audience, viewer)) throw notFound();
   }
   return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+}
+
+// ---- The content board: reels, posts and stories, approved by the client before they go out ------------------------
+
+async function contentOf(db: Pick<Database, "select">, engagementId: number) {
+  return db.select().from(engagementContentItems).where(eq(engagementContentItems.engagementId, engagementId)).orderBy(asc(engagementContentItems.month), asc(engagementContentItems.sortOrder), asc(engagementContentItems.id));
+}
+
+const clientContent = (item: typeof engagementContentItems.$inferSelect) => ({
+  id: item.id, kind: item.kind, kindLabel: CONTENT_KIND_LABELS[item.kind], title: item.title, month: item.month, status: item.status, statusLabel: CONTENT_STATUS_LABELS[item.status],
+  dueOn: item.dueOn, link: item.link, clientNote: item.clientNote, approvedAt: item.approvedAt, publishedAt: item.publishedAt,
+});
+
+export type ContentInput = { engagementId: number; itemId?: number; kind: ContentKind; title: string; month: number; status: ContentStatus; dueOn: string | null; link: string | null };
+
+/** The team adds or updates a piece of content. Moving it to Published stamps the date; the client's approval stands. */
+export async function saveContentItem(db: Database, actor: StaffActor, input: ContentInput) {
+  requireManage(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  const values = { kind: input.kind, title: input.title.trim(), month: input.month, status: input.status, dueOn: input.dueOn, link: input.link, ...(input.status === "published" ? { publishedAt: new Date() } : {}) };
+  if (input.itemId) {
+    const updated = await db.update(engagementContentItems).set(values).where(and(eq(engagementContentItems.id, input.itemId), eq(engagementContentItems.engagementId, engagement.id))).returning({ id: engagementContentItems.id });
+    if (!updated.length) throw notFound();
+    await recordAudit(db, { action: "engagement_content_saved", actorUserId: actor.id, details: { engagementId: engagement.id, itemId: input.itemId, status: input.status } });
+    return { itemId: input.itemId } as const;
+  }
+  const [created] = await db.insert(engagementContentItems).values({ engagementId: engagement.id, ...values, createdByUserId: actor.id }).returning({ id: engagementContentItems.id });
+  await recordAudit(db, { action: "engagement_content_saved", actorUserId: actor.id, details: { engagementId: engagement.id, itemId: created.id, status: input.status } });
+  return { itemId: created.id } as const;
+}
+
+export async function deleteContentItem(db: Database, actor: StaffActor, input: { itemId: number }) {
+  requireManage(actor);
+  const item = (await db.select().from(engagementContentItems).where(eq(engagementContentItems.id, input.itemId)).limit(1))[0];
+  if (!item) throw notFound();
+  await requireStaffEngagement(db, actor, item.engagementId);
+  await db.transaction(async tx => {
+    await tx.delete(engagementContentItems).where(eq(engagementContentItems.id, item.id));
+    await recordAudit(tx, { action: "engagement_content_deleted", actorUserId: actor.id, details: { engagementId: item.engagementId, itemId: item.id } });
+  });
+  return { success: true } as const;
+}
+
+/**
+ * The client approves a piece of content, or asks for changes with a note. Only something waiting for their approval,
+ * and only the owner or someone with full access.
+ */
+export async function respondToContent(db: Database, session: AccountSession, input: { itemId: number; approve: boolean; note: string | null }) {
+  const item = (await db.select().from(engagementContentItems).where(eq(engagementContentItems.id, input.itemId)).limit(1))[0];
+  if (!item) throw notFound();
+  const { viewer } = await requireClientEngagement(db, session, item.engagementId);
+  if (!(viewer.kind === "owner" || viewer.access === "full")) throw notFound();
+  if (item.status !== "for_approval") throw new TRPCError({ code: "CONFLICT", message: "This is not waiting for your approval." });
+  if (!input.approve && !input.note?.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Say what to change." });
+  const set = input.approve
+    ? { status: "approved" as const, approvedAt: new Date(), approvedByUserId: session.user.id, clientNote: null }
+    : { status: "changes_requested" as const, clientNote: input.note!.trim() };
+  await db.transaction(async tx => {
+    await tx.update(engagementContentItems).set(set).where(eq(engagementContentItems.id, item.id));
+    await recordAudit(tx, { action: input.approve ? "engagement_content_approved" : "engagement_content_changes_requested", actorUserId: session.user.id, details: { engagementId: item.engagementId, itemId: item.id } });
+  });
+  return { success: true, status: set.status } as const;
 }
 
 // ---- The drop box: the client sends everything at once; the team sorts it against the Data Requests ------------------

@@ -75,3 +75,25 @@ export function datedProgress(type: DatedEngagementType, startedOn: string, now:
   const stages = type.stages.map(stage => ({ ...stage, state: day > stage.to ? "done" as const : day >= stage.from ? "now" as const : "next" as const }));
   return { day: Math.min(day + 1, type.durationDays), started: now >= start, stages };
 }
+
+// ---- The content board (Digital marketing) --------------------------------------------------------------------------
+
+export const CONTENT_KINDS = ["reel", "post", "story"] as const;
+export type ContentKind = (typeof CONTENT_KINDS)[number];
+export const CONTENT_KIND_LABELS: Record<ContentKind, string> = { reel: "Reel", post: "Post", story: "Story" };
+
+/**
+ * Where a piece of content stands: the team plans and edits it, the client approves it (or asks for changes), then it
+ * goes out. Nothing is published without the client's approval.
+ */
+export const CONTENT_STATUSES = ["planned", "in_edit", "for_approval", "changes_requested", "approved", "published"] as const;
+export type ContentStatus = (typeof CONTENT_STATUSES)[number];
+export const CONTENT_STATUS_LABELS: Record<ContentStatus, string> = {
+  planned: "Planned", in_edit: "In edit", for_approval: "For your approval", changes_requested: "Changes requested", approved: "Approved", published: "Published",
+};
+/** Counted towards the month's numbers once the client has approved it. */
+export const CONTENT_COUNTED: readonly ContentStatus[] = ["approved", "published"];
+
+/** The engagement month a day falls in (1 for days 1 to 30, and so on), capped at the programme's last month. */
+export const monthOfDay = (day: number, durationDays: number) => Math.min(Math.max(1, Math.ceil(durationDays / 30)), Math.max(1, Math.ceil(day / 30)));
+

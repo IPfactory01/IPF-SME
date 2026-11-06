@@ -270,6 +270,10 @@ the team (each person's role on this engagement and firm title). Phones get a sl
   owner and due flag sit under each title.
 - **Schedule:** every Session in date order with a date tile, Held / Next / Booked / To be booked, the Join link
   before it and the notes once shared.
+- **Content** (Digital marketing only, first in the work): the month's reels, posts and stories against the programme
+  (15, 5 and 20 a month), counted once approved; a board of For your approval, In progress, Approved and Published by
+  month; the owner and full-access staff approve or ask for changes with a note. The dashboard leads with the month's
+  counts. The team adds and moves pieces in the engagement record's Content section.
 - **Your team** (Overview): IP Factory first (name, role on the engagement, firm title), then the business's own people (name and Owner, Administrator, Full access or Contributor access; the viewer marked "you"), seen by everyone in the room.
 - **The timeline's current step** shows the Work Plan as one line per item (number or tick, title, who, due date or
   status), grouped by week with "N of M done". A line opens the item in the List (`#task-N`), a Session in Schedule;

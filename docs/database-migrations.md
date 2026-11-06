@@ -117,3 +117,8 @@ gains `business_owner`). Additive. **Apply it before deploying.** Paste
 `drizzle/supabase/apply-0016-engagement-types.sql` into the Supabase SQL Editor and press Run; it stops, changing
 nothing, unless exactly `0000` to `0015` are recorded.
 
+**`0017` and deployment order.** The content board of a Digital marketing engagement: `engagement_content_items`
+(each reel, post and story, its month, status from planned to published, link, and the client's approval or note).
+Additive. **Apply it before deploying.** Paste `drizzle/supabase/apply-0017-content-board.sql` into the Supabase SQL
+Editor and press Run; it stops, changing nothing, unless exactly `0000` to `0016` are recorded.
+

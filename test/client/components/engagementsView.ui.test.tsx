@@ -31,7 +31,7 @@ vi.mock("@/lib/trpc", () => ({
         storageStatus: { useQuery: () => ({ data: api.storageError ? undefined : api.storage, error: api.storageError, refetch: () => undefined }) },
         detail: { useQuery: () => ({ data: api.detail, isLoading: false, error: null }) },
         assignableStaff: { useQuery: () => ({ data: [{ userId: 9, name: "Ola Analyst", email: "ola@example.test", roles: ["analyst"] }] }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -57,6 +57,7 @@ const detail = (can: { manage: boolean; assign: boolean; review: boolean; sendSi
   measure: null as unknown,
   checkins: [] as unknown[],
   inbox: [] as unknown[],
+  content: [] as unknown[],
   can,
 });
 
@@ -374,6 +375,30 @@ describe("a new engagement opened directly", () => {
     fireEvent.click(form.getByRole("button", { name: "Open the engagement" }));
     expect(api.calls.createDirect).toEqual([{ type: "digital_marketing", startedOn: "2026-11-09", businessName: "Crown Studio", contactName: "Marie Tiogo", contactEmail: "marie@example.com" }]);
     expect((form.getByLabelText("Client invitation link") as HTMLInputElement).value).toBe("https://ipf-sme.example.test/join/OWNER");
+  });
+});
+
+describe("the content board on the team's side", () => {
+  it("adds a reel to a Digital marketing engagement and shows the client's request for changes", () => {
+    const base = detail({ manage: true, assign: false, review: false }, []);
+    api.detail = { ...base, engagement: { ...base.engagement, type: "digital_marketing" }, content: [{ id: 7, engagementId: 4, kind: "reel", kindLabel: "Reel", title: "Reel 6", month: 1, status: "changes_requested", statusLabel: "Changes requested", dueOn: null, link: null, clientNote: "Shorter intro", approvedByUserId: null, approvedAt: null, publishedAt: null, sortOrder: 0, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() }] };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const dialog = within(screen.getByRole("dialog"));
+    expect(dialog.getByText("The client asked for changes: Shorter intro")).toBeTruthy();
+    fireEvent.click(dialog.getByRole("button", { name: "Add a piece of content" }));
+    const card = within(dialog.getByLabelText("New piece of content"));
+    fireEvent.change(card.getByLabelText("Title"), { target: { value: "Reel 7: silk press" } });
+    fireEvent.change(card.getByLabelText("Status"), { target: { value: "for_approval" } });
+    fireEvent.click(card.getByRole("button", { name: "Save" }));
+    expect(api.calls.saveContent).toEqual([{ engagementId: 4, itemId: undefined, kind: "reel", title: "Reel 7: silk press", month: 1, status: "for_approval", dueOn: null, link: null }]);
+  });
+
+  it("is not shown for a Business Review", () => {
+    api.detail = detail({ manage: true, assign: false, review: false }, []);
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    expect(within(screen.getByRole("dialog")).queryByRole("button", { name: "Add a piece of content" })).toBeNull();
   });
 });
 

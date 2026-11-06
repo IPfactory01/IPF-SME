@@ -13,7 +13,7 @@ import { WIDE_QUERY } from "@/hooks/useWide";
 import { businessCheckProfiles } from "../../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../../fixtures/reportIntake";
 
-const api = vi.hoisted(() => ({ calls: { respond: [] as unknown[], comment: [] as unknown[], accept: [] as unknown[], audience: [] as unknown[], requestUpload: [] as unknown[], confirmUpload: [] as unknown[], fileLink: [] as unknown[], requestDrop: [] as unknown[], confirmDrop: [] as unknown[], setNotAvailable: [] as unknown[] } }));
+const api = vi.hoisted(() => ({ calls: { respond: [] as unknown[], comment: [] as unknown[], accept: [] as unknown[], audience: [] as unknown[], requestUpload: [] as unknown[], confirmUpload: [] as unknown[], fileLink: [] as unknown[], requestDrop: [] as unknown[], confirmDrop: [] as unknown[], setNotAvailable: [] as unknown[], respondToContent: [] as unknown[] } }));
 const replies: Record<string, unknown> = {
   requestUpload: { storageKey: "engagements/4/tasks/11/abc-sales.pdf", uploadUrl: "https://example-project.supabase.co/storage/v1/object/upload/sign/engagement-files/engagements/4/tasks/11/abc-sales.pdf?token=up", headers: { "content-type": "application/pdf", "x-upsert": "false" } },
   confirmUpload: { success: true, fileId: 99, status: "received" },
@@ -42,6 +42,7 @@ vi.mock("@/lib/trpc", () => ({
         requestDrop: { useMutation: mutation("requestDrop") },
         confirmDrop: { useMutation: mutation("confirmDrop") },
         setNotAvailable: { useMutation: mutation("setNotAvailable") },
+        respondToContent: { useMutation: mutation("respondToContent") },
       },
     },
   },
@@ -51,6 +52,8 @@ const { default: EngagementRoom, dueFlag } = await import("@/components/Engageme
 
 const room = (over: Record<string, unknown> = {}) => ({
   engagementId: 4,
+  content: [] as { id: number; kind: "reel" | "post" | "story"; kindLabel: string; title: string; month: number; status: "planned" | "in_edit" | "for_approval" | "changes_requested" | "approved" | "published"; statusLabel: string; dueOn: string | null; link: string | null; clientNote: string | null; approvedAt: Date | null; publishedAt: Date | null }[],
+  contentTargets: [] as { label: string; count: number }[],
   type: "business_review" as "business_review" | "digital_marketing",
   typeLabel: "Business Review",
   startedOn: null as string | null,
@@ -92,7 +95,7 @@ const room = (over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
-  api.calls = { respond: [], comment: [], accept: [], audience: [], requestUpload: [], confirmUpload: [], fileLink: [], requestDrop: [], confirmDrop: [], setNotAvailable: [] };
+  api.calls = { respond: [], comment: [], accept: [], audience: [], requestUpload: [], confirmUpload: [], fileLink: [], requestDrop: [], confirmDrop: [], setNotAvailable: [], respondToContent: [] };
 });
 afterEach(() => {
   cleanup();
@@ -637,6 +640,34 @@ describe("a Digital marketing room", () => {
     expect(within(screen.getByRole("region", { name: "Step 2: Month 1" })).getByRole("list", { name: "Week 1" })).toBeTruthy();
     // No Business Health Check behind it: no Founder or Business views.
     expect(screen.queryByRole("tab", { name: "Founder" })).toBeNull();
+  });
+
+  it("leads with the month's reels, posts and stories, and lets the owner approve or ask for changes on the content board", () => {
+    const now = new Date("2026-11-20T10:00:00Z").getTime();
+    const item = (id: number, kind: "reel" | "post" | "story", title: string, status: "planned" | "for_approval" | "approved" | "published", month = 1) => ({ id, kind, kindLabel: kind, title, month, status, statusLabel: status, dueOn: null, link: null, clientNote: null, approvedAt: null, publishedAt: null });
+    const content = [item(1, "reel", "Reel 6: knotless braids", "for_approval"), item(2, "reel", "Reel 5", "approved"), item(3, "post", "December offer", "published"), item(4, "story", "Behind the chair", "planned"), item(5, "reel", "Month 2 reel", "approved", 2)];
+    const targets = [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }];
+    render(<EngagementRoom room={room({ type: "digital_marketing", typeLabel: "Digital marketing", startedOn: "2026-11-02", check: null, deliverables: [], content, contentTargets: targets })} now={now} />);
+    // The dashboard counts what is approved or published this month only.
+    const board = within(screen.getByRole("region", { name: "Dashboard" }));
+    expect(board.getByText("Reels, month 1").closest("a")!.textContent).toContain("1 of 15");
+    expect(board.getByText("Posts, month 1").closest("a")!.textContent).toContain("1 of 5");
+    expect(board.getByText("Stories, month 1").closest("a")!.textContent).toContain("0 of 20");
+    // The Content view comes first in the work, counting what waits for approval.
+    fireEvent.click(screen.getByRole("tab", { name: /^Content/ }));
+    const approval = within(screen.getByRole("region", { name: "For your approval" }));
+    const card = within(approval.getByRole("article", { name: "Reel 6: knotless braids" }));
+    fireEvent.click(card.getByRole("button", { name: "Approve" }));
+    expect(api.calls.respondToContent).toEqual([{ itemId: 1, approve: true, note: null }]);
+    fireEvent.click(card.getByRole("button", { name: "Request changes" }));
+    expect((card.getByRole("button", { name: "Send" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(card.getByLabelText("What to change in Reel 6: knotless braids"), { target: { value: "Shorter intro" } });
+    fireEvent.click(card.getByRole("button", { name: "Send" }));
+    expect(api.calls.respondToContent[1]).toEqual({ itemId: 1, approve: false, note: "Shorter intro" });
+    // Month 2 holds its own items.
+    expect(screen.queryByRole("article", { name: "Month 2 reel" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Month 2" }));
+    expect(within(screen.getByRole("region", { name: "Approved" })).getByRole("article", { name: "Month 2 reel" })).toBeTruthy();
   });
 
   it("says when the programme starts before its first day", () => {

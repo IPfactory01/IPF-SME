@@ -39,6 +39,7 @@ import {
   type EngagementTeamRole,
 } from "@shared/engagement";
 import type { inferRouterOutputs } from "@trpc/server";
+import { CONTENT_KIND_LABELS, CONTENT_KINDS, CONTENT_STATUS_LABELS, CONTENT_STATUSES, type ContentKind, type ContentStatus } from "@shared/engagementTypes";
 import React, { useState } from "react";
 import { toast } from "sonner";
 import type { AppRouter } from "../../../../server/routers";
@@ -91,6 +92,7 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
       <StageAndTeam data={data} engagementId={engagementId} />
       <Problem data={data} engagementId={engagementId} />
       <Sessions data={data} engagementId={engagementId} />
+      {data.engagement.type === "digital_marketing" && <ContentAdmin data={data} engagementId={engagementId} />}
       <FileInbox data={data} engagementId={engagementId} />
       <Tasks data={data} engagementId={engagementId} />
       <Deliverables data={data} engagementId={engagementId} />
@@ -334,6 +336,68 @@ function SessionCard({ session, engagementId, canManage, onDone }: { session?: S
 }
 
 /** The Work Plan: every Data Request and action, by week and in order, the client's side and ours. */
+type ContentItem = Detail["content"][number];
+
+/**
+ * The content board, for the team: each reel, post and story by month, moved through planned, in edit and for the
+ * client's approval to published. The client approves or asks for changes in their room.
+ */
+function ContentAdmin({ data, engagementId }: { data: Detail; engagementId: number }) {
+  const [adding, setAdding] = useState(false);
+  const months = Array.from(new Set([1, 2, 3, ...data.content.map(item => item.month)])).sort((a, b) => a - b);
+  return (
+    <DetailSection title={`Content (${data.content.length})`}>
+      <p className="text-xs text-ink-muted">Reels, posts and stories by month. Move a piece to For your approval when the client should see it; it counts once they approve it. Nothing is published without their yes.</p>
+      {months.map(month => {
+        const items = data.content.filter(item => item.month === month);
+        if (!items.length) return null;
+        return (
+          <div key={month} className="space-y-2">
+            <p className={`${LABEL} mt-3`}>Month {month}</p>
+            {items.map(item => <ContentRow key={item.id} item={item} engagementId={engagementId} canManage={data.can.manage} />)}
+          </div>
+        );
+      })}
+      {adding ? <ContentRow engagementId={engagementId} canManage={data.can.manage} onDone={() => setAdding(false)} /> : data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add a piece of content</Button>}
+    </DetailSection>
+  );
+}
+
+function ContentRow({ item, engagementId, canManage, onDone }: { item?: ContentItem; engagementId: number; canManage: boolean; onDone?: () => void }) {
+  const refresh = useRefresh(engagementId);
+  const [kind, setKind] = useState<ContentKind>(item?.kind ?? "reel");
+  const [title, setTitle] = useState(item?.title ?? "");
+  const [month, setMonth] = useState(String(item?.month ?? 1));
+  const [status, setStatus] = useState<ContentStatus>(item?.status ?? "planned");
+  const [dueOn, setDueOn] = useState(item?.dueOn ?? "");
+  const [link, setLink] = useState(item?.link ?? "");
+  const save = trpc.engagement.staff.saveContent.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Saved."); onDone?.(); } });
+  const remove = trpc.engagement.staff.deleteContent.useMutation(refresh);
+  const id = item?.id ?? "new";
+  return (
+    <div className="space-y-2 border border-line bg-paper-raised p-3" aria-label={item?.title ?? "New piece of content"}>
+      {item?.status === "changes_requested" && item.clientNote && <p className="text-xs text-danger">The client asked for changes: {item.clientNote}</p>}
+      <div className="grid gap-2 sm:grid-cols-[7rem_minmax(0,1fr)_6rem]">
+        <div><label className={LABEL} htmlFor={`content-kind-${id}`}>Kind</label><select id={`content-kind-${id}`} className={FIELD} disabled={!canManage} value={kind} onChange={event => setKind(event.target.value as ContentKind)}>{CONTENT_KINDS.map(value => <option key={value} value={value}>{CONTENT_KIND_LABELS[value]}</option>)}</select></div>
+        <div><label className={LABEL} htmlFor={`content-title-${id}`}>Title</label><input id={`content-title-${id}`} className={FIELD} disabled={!canManage} value={title} onChange={event => setTitle(event.target.value)} /></div>
+        <div><label className={LABEL} htmlFor={`content-month-${id}`}>Month</label><select id={`content-month-${id}`} className={FIELD} disabled={!canManage} value={month} onChange={event => setMonth(event.target.value)}>{[1, 2, 3].map(value => <option key={value} value={value}>Month {value}</option>)}</select></div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <div><label className={LABEL} htmlFor={`content-status-${id}`}>Status</label><select id={`content-status-${id}`} className={FIELD} disabled={!canManage} value={status} onChange={event => setStatus(event.target.value as ContentStatus)}>{CONTENT_STATUSES.map(value => <option key={value} value={value}>{CONTENT_STATUS_LABELS[value]}</option>)}</select></div>
+        <div><label className={LABEL} htmlFor={`content-due-${id}`}>Due</label><input id={`content-due-${id}`} type="date" className={FIELD} disabled={!canManage} value={dueOn} onChange={event => setDueOn(event.target.value)} /></div>
+        <div><label className={LABEL} htmlFor={`content-link-${id}`}>Link</label><input id={`content-link-${id}`} className={FIELD} disabled={!canManage} placeholder="https://" value={link} onChange={event => setLink(event.target.value)} /></div>
+      </div>
+      {canManage && (
+        <div className="flex gap-2">
+          <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !title.trim()} onClick={() => save.mutate({ engagementId, itemId: item?.id, kind, title, month: Number(month), status, dueOn: dueOn || null, link: link || null })}>Save</Button>
+          {item && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={remove.isPending} onClick={() => remove.mutate({ itemId: item.id })}>Remove</Button>}
+          {onDone && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={onDone}>Cancel</Button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 type InboxFile = Detail["inbox"][number];
 
 /**

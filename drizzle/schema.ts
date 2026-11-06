@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import { type AnyPgColumn, boolean, date, index, integer, numeric, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { PIPELINE_STAGES } from "../shared/businessCheck/pipeline";
 import { PAYMENT_ITEMS, PAYMENT_STATUSES } from "../shared/payments";
-import { ENGAGEMENT_TYPES } from "../shared/engagementTypes";
+import { CONTENT_KINDS, CONTENT_STATUSES, ENGAGEMENT_TYPES } from "../shared/engagementTypes";
 import {
   CLIENT_ACCESS_LEVELS,
   ENGAGEMENT_AUDIENCES,
@@ -1060,6 +1060,35 @@ export const engagementFileMatches = pgTable("engagement_file_matches", {
   matchedByUserId: integer("matchedByUserId").notNull().references(() => users.id),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
 }, table => [unique("engagement_file_matches_file_task_unique").on(table.fileId, table.taskId), index("engagement_file_matches_task_idx").on(table.taskId)]);
+
+export const engagementContentKindEnum = pgEnum("engagement_content_kind", CONTENT_KINDS);
+export const engagementContentStatusEnum = pgEnum("engagement_content_status", CONTENT_STATUSES);
+
+/**
+ * The content board of a Digital marketing engagement (0017): each reel, post and story, the engagement month it
+ * counts in, where it stands, and the client's approval. Nothing is published without the client's yes.
+ */
+export const engagementContentItems = pgTable("engagement_content_items", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  kind: engagementContentKindEnum("kind").notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  /** Engagement month 1, 2 or 3. */
+  month: integer("month").notNull(),
+  status: engagementContentStatusEnum("status").default("planned").notNull(),
+  dueOn: date("dueOn"),
+  /** Where to see it: the draft or the published post. */
+  link: varchar("link", { length: 1024 }),
+  /** The client's note when they ask for changes. */
+  clientNote: varchar("clientNote", { length: 1000 }),
+  approvedByUserId: integer("approvedByUserId").references(() => users.id),
+  approvedAt: timestamp("approvedAt", { withTimezone: true }),
+  publishedAt: timestamp("publishedAt", { withTimezone: true }),
+  sortOrder: integer("sortOrder").default(0).notNull(),
+  createdByUserId: integer("createdByUserId").references(() => users.id),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [index("engagement_content_items_engagement_idx").on(table.engagementId)]);
 
 /** Feedback on a deliverable, from the client or the team. */
 export const engagementComments = pgTable("engagement_comments", {

@@ -296,11 +296,13 @@ for (const target of targets) {
         const mine = finance.fees.filter(row => row.engagementId === engagementId);
         expect(mine.map(row => [row.label, row.agreed, row.late, row.engagement])).toEqual([["To start", true, true, "Business Review"], ["With the Findings", true, false, "Business Review"]]);
         expect(finance.totals.late).toBeGreaterThanOrEqual(300000);
-        // Finance may see it; an analyst or a desk lead without view_financials may not.
-        const financeUser = await signIn(await person(["finance"]), true);
-        expect((await (await financeUser.call()).engagement.finance.list()).fees.some(row => row.engagementId === engagementId)).toBe(true);
-        const deskLead = await signIn(await person(["desk_lead"]), true);
-        await expect((await deskLead.call()).engagement.finance.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
+        // Finance sees it, and so do the desk (Senior Associate, Vice President) and partners; an analyst does not.
+        for (const roles of [["finance"], ["desk_lead"], ["partner"], ["desk_lead", "partner"]] as const) {
+          const viewer = await signIn(await person([...roles]), true);
+          expect((await (await viewer.call()).engagement.finance.list()).fees.some(row => row.engagementId === engagementId), roles.join("+")).toBe(true);
+        }
+        const analyst = await signIn(await person(["analyst"]), true);
+        await expect((await analyst.call()).engagement.finance.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
       });
     });
 

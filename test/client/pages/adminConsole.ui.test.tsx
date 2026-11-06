@@ -153,6 +153,8 @@ describe("which sections each person sees (decided from what the server resolved
     expect(visibleAdminSections({ permissions: [], platformPermissions: ["view_all_businesses"] }).map(section => section.id)).toEqual(["engagements", "clients"]);
     // An analyst sees the engagements they are on, and nothing of the funnel, the client list or the money.
     expect(visibleAdminSections({ permissions: [], platformPermissions: ["view_assigned_businesses", "manage_engagements"] }).map(section => section.id)).toEqual(["engagements"]);
+    // The desk sees the money with everything else (Senior Associates and Partners, 6 November 2026).
+    expect(visibleAdminSections({ permissions: [], platformPermissions: ["view_all_businesses", "manage_engagements", "view_financials"] }).map(section => section.id)).toEqual(["engagements", "clients", "finance"]);
     // Finance sees the money, and nothing else.
     expect(visibleAdminSections({ permissions: [], platformPermissions: ["manage_payments", "view_financials"] }).map(section => section.id)).toEqual(["finance"]);
     expect(visibleAdminSections({ permissions: [] })).toEqual([]);

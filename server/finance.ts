@@ -2,7 +2,7 @@
  * Finance (Admin › Finance): money across every client, in one place. Payment requests from the Business Health Check
  * route (Full Report, Business Review) and the fee lines of every engagement's agreement, each with what is due, paid
  * and late. Read only here; payments are confirmed where they belong (the check's record, the engagement's agreement).
- * Permission: view_financials (Finance, Super Admin).
+ * Permission: view_financials (Finance; Partner, Vice President and Senior Associate; Super Admin).
  */
 import { TRPCError } from "@trpc/server";
 import { asc, desc, eq } from "drizzle-orm";

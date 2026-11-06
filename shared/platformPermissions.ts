@@ -47,9 +47,10 @@ export function isPlatformPermission(value: string): value is PlatformPermission
 export const PLATFORM_ROLE_PERMISSIONS: Record<PlatformRole, readonly PlatformPermission[]> = {
   super_admin: PLATFORM_PERMISSIONS,
   admin: [],
-  desk_lead: ["view_all_businesses", "manage_engagements", "assign_engagements", "review_engagements", "manage_scheduling", "manage_communications"],
+  // The desk and partners see Finance (ET, 6 November 2026): read only; recording payments stays with manage_payments.
+  desk_lead: ["view_all_businesses", "manage_engagements", "assign_engagements", "review_engagements", "manage_scheduling", "manage_communications", "view_financials"],
   analyst: ["view_assigned_businesses", "manage_engagements"],
-  partner: ["view_assigned_businesses", "review_engagements"],
+  partner: ["view_assigned_businesses", "review_engagements", "view_financials"],
   subject_matter_expert: ["view_assigned_businesses"],
   finance: ["manage_payments", "view_financials"],
 };
@@ -178,9 +179,9 @@ export const LEVEL_ROLES: Record<FirmLevel, readonly PlatformRole[]> = {
 };
 /** What a level can do, in one line, for the invite form and People. */
 export const LEVEL_ACCESS: Record<FirmLevel, string> = {
-  Partner: "Every engagement; assigns people and approves",
-  "Vice President": "Every engagement; assigns people and approves",
-  "Senior Associate": "Every engagement; assigns people and approves",
+  Partner: "Every engagement; assigns people and approves; sees Finance",
+  "Vice President": "Every engagement; assigns people and approves; sees Finance",
+  "Senior Associate": "Every engagement; assigns people and approves; sees Finance",
   Associate: "Engagements they are on; approves when leading one",
   "Senior Business Analyst": "Engagements they are on",
   "Business Analyst": "Engagements they are on",

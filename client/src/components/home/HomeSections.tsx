@@ -386,7 +386,7 @@ export function CheckCta({ onStart }: { onStart: () => void }) {
   return (
     <section className="relative overflow-hidden bg-cta-deep py-20 text-paper">
       <Reveal className="relative container mx-auto max-w-3xl text-center">
-        <img src={BRAND.logoOnDarkUrl} alt={BRAND.organisationName} className="mx-auto mb-8 h-14 w-auto max-w-full sm:h-16" />
+        <img src={BRAND.logoOnDarkUrl} alt={BRAND.organisationName} className="mx-auto mb-8 h-28 w-auto" />
         <h2 className="font-display mb-4 text-[clamp(2.1rem,5vw,3.25rem)] font-semibold leading-[1.05] tracking-[-0.03em]">Start with the free Business Health Check.</h2>
         <p className="mx-auto mb-8 max-w-xl text-on-dark-muted">Ten minutes. No card. You&apos;ll know where you stand before you decide anything.</p>
         <CtaButton onClick={onStart} tone="light">Start with a free Business Health Check</CtaButton>

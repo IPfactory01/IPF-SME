@@ -86,13 +86,12 @@ export const BRAND = {
    */
   discoveryCallUrl: "https://calendly.com/ipfactory-info/ipf-free-20-minute-discovery-call",
   /**
-   * Logo files in client/public/brand: ipf-teal-navy, the Option 2 wide logo with the teal box (ET, 6 November 2026,
-   * from the Brand Kit). Use as supplied: never recolour or stretch. The white version goes on dark panels only. The
-   * ipf-gradient files stay for the full report PDF and email until those move too.
+   * Logo files in client/public/brand (ipf-gradient, the Option 1 stacked logo; ET kept it on 6 November 2026 after
+   * trying the teal-navy logo). Use as supplied: never recolour or stretch. The white version goes on dark panels only.
    */
-  logoUrl: "/brand/ipf-teal-navy-logo.webp",
-  logoOnDarkUrl: "/brand/ipf-teal-navy-logo-white.webp",
-  markUrl: "/brand/ipf-teal-navy-mark.webp",
+  logoUrl: "/brand/ipf-gradient-logo.webp",
+  logoOnDarkUrl: "/brand/ipf-gradient-logo-white.webp",
+  markUrl: "/brand/ipf-gradient-mark.webp",
 
   /** Short programme name used in compounds such as "JUMP portal" or "JUMP administrator". */
   programmeShortName,

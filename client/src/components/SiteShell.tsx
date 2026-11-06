@@ -81,9 +81,8 @@ export function SiteHeader({ cta = true }: { cta?: boolean }) {
       <div aria-hidden className="h-[3px] bg-gradient-to-r from-brand via-highlight-ink to-highlight" />
       <div className="container flex h-[60px] items-center justify-between gap-4">
         <Link href="/" className="flex shrink-0 items-center gap-3" aria-label={`${BRAND.productEndorsement}: home`}>
-          <img src={BRAND.markUrl} alt="" className="h-9 w-auto sm:hidden" />
-          <img src={BRAND.logoUrl} alt="" className="hidden h-10 w-auto sm:block" />
-          <span className="hidden whitespace-nowrap border-l border-line pl-3 text-sm font-semibold text-ink-muted xl:inline">{BRAND.productName}</span>
+          <img src={BRAND.markUrl} alt="" className="h-9 w-auto" />
+          <span className="hidden whitespace-nowrap border-l border-line pl-3 text-sm font-semibold text-ink-muted sm:inline">{BRAND.productName}</span>
         </Link>
         <nav aria-label="Site" className="hidden items-center gap-6 text-sm font-medium text-ink-600 lg:flex">
           {SITE_PAGES.map((page) => (

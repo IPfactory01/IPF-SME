@@ -16,8 +16,8 @@ is what ships; fix whichever is wrong in the same change.
 | **Maker** | IP Factory (Intellectual Property Factory) |
 | **Tagline** | Support for business owners |
 | **Promise** | Find it. Fix it. See the results. |
-| **Logo** | The ipf-teal-navy logo (Option 2, the teal box with the navy wordmark) in `client/public/brand/`. Use as supplied: never recolour, stretch or crop. The white version goes on dark panels only |
-| **Logo files** | `ipf-teal-navy-logo.webp` (site, header from tablet width up), `ipf-teal-navy-logo-white.webp` (dark panels), `ipf-teal-navy-mark.webp` (small spaces, the header on a phone), `favicon-32.png`, `apple-touch-icon.png` and `ipf-mark-512.png` (from the teal mark); still ipf-gradient until moved: `ipf-gradient-logo-email.png` (email, shown at 96 × 90), `ipf-gradient-logo-print.png` (PDF) |
+| **Logo** | The ipf-gradient logo in `client/public/brand/` (ET tried the teal-navy logo on 6 November 2026 and kept this one; the site's colours stayed teal and navy). Use as supplied: never recolour, stretch or crop. The white version goes on dark panels only |
+| **Logo files** | `ipf-gradient-logo.webp` (site), `ipf-gradient-logo-white.webp` (dark panels), `ipf-gradient-mark.webp` (small spaces), `ipf-gradient-logo-email.png` (email, shown at 96 × 90), `ipf-gradient-logo-print.png` (PDF), `favicon-32.png`, `apple-touch-icon.png`, `ipf-mark-512.png` |
 | **Signature motif** | A thin rule in three segments, plum → crimson → cyan, echoing the logo: the top of every email and the report cover; the scroll progress bar on the site |
 
 ## 2. Colour
@@ -28,7 +28,7 @@ Colours come from the theme tokens. **Never hard-code a hex value in a component
 ### Core palette
 
 The ipf-teal-navy palette since 6 November 2026 (ET: friendlier for Nigerian owners than the navy, plum and crimson of
-ipf-gradient, which is in git history at commit `0de5a75`). Only the logo's two colours carry the brand: navy #174579
+ipf-gradient, which is in git history at commit `0de5a75`). Two colours carry the brand, from the teal-navy logo option: navy #174579
 for text and the closing band, teal #57C3BD for buttons, rules and fills, never as text on white. The token names did not change, so every screen moved with
 the values.
 

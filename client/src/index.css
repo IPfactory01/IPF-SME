@@ -33,8 +33,8 @@
   --color-highlight-ink: #CB3756; /* Crimson accent on light backgrounds */
   --color-brand-plum: #6C335C; /* Top of the navy-to-plum panel gradient that echoes the logo */
 
-  /* Call to action: the free Business Health Check and other primary buttons, in the logo's cyan with deep navy text
-     on it (5.5 to 1), so the check stands out on every page. The closing band is the deep navy. */
+  /* Call to action tokens. The free check and primary buttons now use the logo's gradient (plum to crimson, white
+     text) as Tailwind gradient classes; these remain for anything that needs a single colour. */
   --color-cta: #36B7E0; /* Primary button fill: the logo's cyan */
   --color-cta-hover: #5CC6E8; /* Its hover */
   --color-cta-ink: #12324F; /* Text on the cyan: deep navy */

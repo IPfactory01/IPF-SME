@@ -33,7 +33,7 @@ became cyan so it stands out on every page.
 | Token | Hex | Use |
 |---|---|---|
 | `brand` | #1C4E7E | Primary: links, key text, rules |
-| `cta` | #36B7E0 | The logo's cyan: the free check and every primary button, with deep navy text (`cta-ink` #12324F, 5.5 to 1); `cta-hover` #5CC6E8; `cta-deep` #12324F, the closing band (6 November 2026) |
+| `cta` | #36B7E0 | Kept for reference; the free check and primary buttons use the logo's gradient instead: plum #6C335C to crimson #CB3756 with white text. The logo's gradient also runs behind the hero (soft plum and cyan light), across the closing band (deep navy to plum), in the step numbers and record figures, and along the header (6 November 2026) |
 | `brand-deep` | #12324F | Text on tints; hover on brand buttons |
 | `ink` | #12324F | Primary text and dark fills |
 | `ink-soft` | #4F5A66 | Secondary text, email paragraphs |

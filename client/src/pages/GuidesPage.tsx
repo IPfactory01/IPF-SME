@@ -62,7 +62,7 @@ export default function GuidePage() {
             <Link href="/guides" className="text-sm font-semibold text-brand">Guides</Link>
             <h1 id="guide-title" className="font-display mt-3 text-[clamp(2.2rem,6vw,3.75rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">{guide.h1}</h1>
             <p className="mt-5 text-[clamp(1.1rem,2.2vw,1.3rem)] leading-relaxed text-ink-soft">{guide.lede}</p>
-            <button type="button" onClick={startCheck} className="group mt-7 inline-flex items-center gap-2 rounded-xl bg-cta px-6 py-3.5 font-semibold text-cta-ink transition-colors hover:bg-cta-hover">
+            <button type="button" onClick={startCheck} className="group mt-7 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-brand-plum to-highlight-ink px-6 py-3.5 font-semibold text-white transition-colors hover:brightness-110">
               Start your free Business Health Check <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden />
             </button>
           </div>

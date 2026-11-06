@@ -96,11 +96,11 @@ export function SiteHeader({ cta = true }: { cta?: boolean }) {
           <Link href="/login" className="hidden whitespace-nowrap border border-brand-line px-3 py-2 text-sm font-semibold text-brand transition-colors hover:bg-brand-tint sm:inline-flex">Client sign in</Link>
           {cta && (
             <>
-              <Link href="/check" className="group hidden items-center whitespace-nowrap rounded-lg bg-cta px-4 py-2.5 text-sm font-semibold text-cta-ink transition-colors hover:bg-cta-hover md:inline-flex">
+              <Link href="/check" className="group hidden items-center whitespace-nowrap rounded-lg bg-gradient-to-r from-brand-plum to-highlight-ink px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:brightness-110 md:inline-flex">
                 Free Business Health Check <ArrowRight className="ml-1.5 h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
               </Link>
               {/* On a phone the header keeps the free check in reach on every page, however far down the visitor is. */}
-              <Link href="/check" className="inline-flex items-center whitespace-nowrap rounded-lg bg-cta px-3 py-2 text-sm font-semibold text-cta-ink transition-colors hover:bg-cta-hover md:hidden">Free check</Link>
+              <Link href="/check" className="inline-flex items-center whitespace-nowrap rounded-lg bg-gradient-to-r from-brand-plum to-highlight-ink px-3 py-2 text-sm font-semibold text-white transition-colors hover:brightness-110 md:hidden">Free check</Link>
             </>
           )}
           <button type="button" aria-expanded={open} aria-controls="site-menu" onClick={() => setOpen((value) => !value)} className="inline-flex h-10 w-10 items-center justify-center text-ink lg:hidden">
@@ -116,7 +116,7 @@ export function SiteHeader({ cta = true }: { cta?: boolean }) {
               <li key={page.href}><Link href={page.href} aria-current={current(page.href) ? "page" : undefined} className={`block border-b border-line-soft py-3.5 text-lg font-semibold ${current(page.href) ? "text-brand" : "text-ink"}`}>{page.label}</Link></li>
             ))}
             <li><Link href="/login" className="block py-3.5 text-lg font-semibold text-ink">Client sign in</Link></li>
-            <li className="pb-3"><Link href="/check" className="flex h-12 items-center justify-center rounded-lg bg-cta font-semibold text-cta-ink">Free Business Health Check</Link></li>
+            <li className="pb-3"><Link href="/check" className="flex h-12 items-center justify-center rounded-lg bg-gradient-to-r from-brand-plum to-highlight-ink font-semibold text-white">Free Business Health Check</Link></li>
           </ul>
         </nav>
       )}

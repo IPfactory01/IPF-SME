@@ -147,7 +147,7 @@ export function TheProblem() {
         </Reveal>
         <Stagger className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-3">
           {EVIDENCE.map((item) => (
-            <motion.div key={item.label} variants={staggerChild} className="border-l-2 border-highlight pl-4">
+            <motion.div key={item.label} variants={staggerChild} className="border-l-2 border-highlight-ink pl-4">
               <p className="font-serif text-3xl font-normal text-ink">{item.value}</p>
               <p className="mt-1 text-sm text-ink-600">{item.label}</p>
               <p className="mt-2 text-xs text-ink-muted">{item.source}</p>
@@ -171,10 +171,10 @@ export function WhyUs() {
           <p className="mt-4 leading-relaxed text-ink-600">{BRAND.productName} is run by {BRAND.organisationName}, part of {RECORD.groupName}. The same method we use with banks, funds and larger firms, at a price an owner-run business can pay.</p>
           <Link href="/experience" className="group mt-5 inline-flex items-center gap-1.5 font-semibold text-brand">See our experience <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" aria-hidden /></Link>
         </Reveal>
-        <Stagger as="ul" className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-brand-line bg-brand-line">
+        <Stagger as="ul" className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-gradient-to-br from-brand-plum via-highlight-ink to-highlight p-px">
           {TRACK_RECORD.map((item) => (
             <motion.li key={item.label} variants={staggerChild} className="bg-paper-raised p-5">
-              <p className="font-serif text-3xl font-normal text-brand">{item.value}</p>
+              <p className="bg-gradient-to-r from-brand-plum to-highlight-ink bg-clip-text font-serif text-3xl font-normal text-transparent">{item.value}</p>
               <p className="mt-1 text-sm font-semibold text-ink-muted">{item.label}</p>
             </motion.li>
           ))}

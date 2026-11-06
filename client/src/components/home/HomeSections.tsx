@@ -30,7 +30,7 @@ export function useStartCheck() {
 }
 
 export function CtaButton({ onClick, tone = "dark", children, className = "" }: { onClick: () => void; tone?: "dark" | "light"; children: React.ReactNode; className?: string }) {
-  const colours = tone === "dark" ? "bg-cta text-cta-ink hover:bg-cta-hover shadow-[0_18px_40px_-18px_rgba(30,124,119,0.75)]" : "bg-highlight text-brand-deep hover:bg-highlight-hover shadow-[0_18px_40px_-18px_rgba(87,195,189,0.8)]";
+  const colours = tone === "dark" ? "bg-gradient-to-r from-brand-plum to-highlight-ink text-white hover:brightness-110 shadow-[0_18px_40px_-18px_rgba(203,55,86,0.75)]" : "bg-highlight text-brand-deep hover:bg-highlight-hover shadow-[0_18px_40px_-18px_rgba(87,195,189,0.8)]";
   return (
     <motion.button
       type="button"
@@ -65,6 +65,11 @@ export function Hero({ onStart }: { onStart: () => void }) {
 
   return (
     <section id="top" className="relative overflow-hidden border-b border-line pt-10 pb-16 sm:pt-20 md:pt-28 md:pb-24">
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-32 -top-24 h-[28rem] w-[28rem] rounded-full bg-brand-plum/15 blur-3xl" />
+        <div className="absolute -right-24 top-10 h-[24rem] w-[24rem] rounded-full bg-highlight/20 blur-3xl" />
+        <div className="absolute bottom-[-10rem] left-1/3 h-[22rem] w-[22rem] rounded-full bg-highlight-ink/10 blur-3xl" />
+      </div>
 
       <div className="relative container mx-auto max-w-5xl px-4 text-center">
         <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }} className="mx-auto mb-6 inline-flex items-center gap-2 border border-brand-line sm:mb-8 bg-paper-raised/70 px-4 py-1.5 text-xs font-semibold text-brand backdrop-blur">
@@ -209,7 +214,7 @@ export function HowWeWorkTeaser() {
         <ol className="mt-10 grid gap-4 md:grid-cols-3">
           {steps.map((step, index) => (
             <li key={step.title} className="rounded-xl border border-line-soft bg-paper-raised p-6">
-              <span className="font-display text-5xl font-semibold leading-none tracking-[-0.04em] text-highlight-ink">{index + 1}</span>
+              <span className="inline-block bg-gradient-to-br from-brand-plum via-highlight-ink to-highlight bg-clip-text font-display text-5xl font-semibold leading-none tracking-[-0.04em] text-transparent">{index + 1}</span>
               <h3 className="mt-4 font-sans text-xl font-semibold text-ink">{step.title}</h3>
               <p className="mt-2 leading-relaxed text-ink-soft">{step.body}</p>
             </li>
@@ -339,7 +344,7 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
                           <p className="text-xs font-semibold text-brand">Measure of Success</p>
                           <p className="mt-1.5 leading-relaxed text-ink-700">{area.measure}</p>
                         </div>
-                        <button type="button" onClick={onStart} className="group inline-flex w-fit items-center gap-2 rounded-lg bg-cta px-5 py-3 text-sm font-semibold text-cta-ink transition-colors hover:bg-cta-hover">
+                        <button type="button" onClick={onStart} className="group inline-flex w-fit items-center gap-2 rounded-lg bg-gradient-to-r from-brand-plum to-highlight-ink px-5 py-3 text-sm font-semibold text-white transition-colors hover:brightness-110">
                           Check this <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                         </button>
                       </div>
@@ -391,7 +396,7 @@ export function Faq({ id, heading, items }: { id: string; heading: string; items
 /** The closing band of every public page: the free check. */
 export function CheckCta({ onStart }: { onStart: () => void }) {
   return (
-    <section className="relative overflow-hidden bg-cta-deep py-20 text-paper">
+    <section className="relative overflow-hidden bg-gradient-to-br from-brand-deep via-brand to-brand-plum py-20 text-paper">
       <Reveal className="relative container mx-auto max-w-3xl text-center">
         <img src={BRAND.logoOnDarkUrl} alt={BRAND.organisationName} className="mx-auto mb-8 h-28 w-auto" />
         <h2 className="font-display mb-4 text-[clamp(2.1rem,5vw,3.25rem)] font-semibold leading-[1.05] tracking-[-0.03em]">Start with the free Business Health Check.</h2>

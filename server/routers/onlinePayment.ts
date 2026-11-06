@@ -4,6 +4,7 @@ import { PAYMENT_ITEMS } from "../../shared/payments";
 import { publicProcedure, router } from "../_core/trpc";
 import { getDb } from "../db";
 import { onlinePaymentPage, onlinePaymentStatus, requireOnlinePayment, startOnlinePayment } from "../onlinePayment";
+import { feePayPage, startFeePayment } from "../feePayments";
 import { consumeLimit, LIMITS, type RateLimitRule } from "../rateLimit";
 
 async function database() {
@@ -20,6 +21,8 @@ async function allow(rule: RateLimitRule, subject: string) {
 /** The Business Health Check's unguessable token (as its result page uses), never the sequential payment reference. */
 const token = z.string().trim().min(16).max(64);
 const item = z.enum(PAYMENT_ITEMS);
+/** An engagement fee's pay-link token (server/feePayments.ts feePayToken). */
+const feeToken = z.string().trim().min(16).max(64);
 /** A Paystack attempt's reference, e.g. TS-R-000123-1a2b3c4d. */
 const reference = z.string().trim().min(1).max(64);
 
@@ -40,6 +43,17 @@ export const onlinePaymentRouter = router({
     await allow(LIMITS.paymentStart, input.token);
     requireOnlinePayment();
     return startOnlinePayment(await database(), input);
+  }),
+  /** Public: an engagement fee's pay page (server/feePayments.ts), keyed by the fee and its signed token. */
+  feePage: publicProcedure.input(z.object({ feeLineId: z.number().int().positive(), token: feeToken })).query(async ({ input }) => {
+    await allow(LIMITS.paymentPage, `fee:${input.feeLineId}`);
+    return feePayPage(await database(), input);
+  }),
+  /** Public: "Pay securely with Paystack" for an engagement fee: the amount comes from the fee line. */
+  feeStart: publicProcedure.input(z.object({ feeLineId: z.number().int().positive(), token: feeToken })).mutation(async ({ input }) => {
+    await allow(LIMITS.paymentStart, `fee:${input.feeLineId}`);
+    requireOnlinePayment();
+    return startFeePayment(await database(), input);
   }),
   /** Public: the return page after Paystack. Confirms through the shared path if the webhook has not yet; answers paid, pending or failed. */
   status: publicProcedure.input(z.object({ reference })).mutation(async ({ ctx, input }) => {

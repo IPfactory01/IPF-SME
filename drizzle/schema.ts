@@ -928,6 +928,8 @@ export const engagements = pgTable("engagements", {
   /** The client contact for an engagement opened directly, when there is no Business Health Check to name them. */
   contactName: varchar("contactName", { length: 200 }),
   contactEmail: varchar("contactEmail", { length: 320 }),
+  /** Opened before it was paid (0020): the room shows only the first fee to pay until a fee is paid, online or by hand. */
+  opensOnPayment: boolean("opensOnPayment").default(false).notNull(),
   /** The confirmed Current State Assessment payment that started it. */
   paymentRequestId: integer("paymentRequestId").references(() => paymentRequests.id),
   stage: engagementsStageEnum("stage").default("setting_up").notNull(),
@@ -1127,6 +1129,8 @@ export const engagementFeeLines = pgTable("engagement_fee_lines", {
   amount: integer("amount").notNull(),
   dueOn: date("dueOn"),
   paidAt: timestamp("paidAt", { withTimezone: true }),
+  /** The Paystack attempt that paid it (0020), so a repeat confirmation is recognised and a second payment flagged. */
+  paidReference: varchar("paidReference", { length: 64 }),
   sortOrder: integer("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),

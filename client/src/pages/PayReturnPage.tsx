@@ -16,9 +16,13 @@ import { Link, useSearch } from "wouter";
  * pending or failed, and which item.
  */
 
-type Outcome = { status: OnlinePaymentStatus; item: PaymentItem; mode: OnlinePaymentMode };
+type Outcome = { status: OnlinePaymentStatus; item: PaymentItem | "fee"; mode: OnlinePaymentMode };
 
-const NEXT_STEPS: Record<PaymentItem, { thanks: string; steps: string[] }> = {
+const NEXT_STEPS: Record<PaymentItem | "fee", { thanks: string; steps: string[] }> = {
+  fee: {
+    thanks: "Thank you. Your payment is received.",
+    steps: ["We email you a receipt with the reference.", `Your room on ${BRAND.productName} shows the payment, and opens if this was your first one.`],
+  },
   full_report: {
     thanks: `Thank you. Your ${METHOD.fullReport} is paid.`,
     steps: [

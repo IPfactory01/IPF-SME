@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| R11 built: each engagement fee has its own Paystack pay link (emailed by the team or paid from the room's Payments tab); Paystack marks it paid and the client gets a receipt; an engagement opened with fees opens to the client on the first payment, online or by hand, or when the lead opens it early (migration 0020) | ET, 6 November 2026 |
 | The PRD is rewritten from scratch around the journey, with priorities, acceptance and measures; this log holds the history | ET, 6 November 2026 |
 | The Shift is a service business today and a self-serve platform over time; clients keep their access throughout; the platform does the routine work | ET, 6 November 2026 |
 | Digital marketing is a Shift product: a monthly service fee of ₦470,000 for 90 days, each month paid before it starts, the first at signing, with milestones and a quarter review; it goes on the public menu | ET, 6 November 2026 |

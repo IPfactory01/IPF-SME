@@ -12,14 +12,14 @@ const api = vi.hoisted(() => ({
   storageError: null as { message: string } | null,
   storage: { configured: true, missing: [] as string[], bucket: "engagement-files", bucketFound: true as boolean | null, bucketPublic: false as boolean | null, problem: null as string | null },
   requests: [] as unknown[],
-  fees: { feeLines: [], total: 0, suggested: [{ label: "Business Review, payable before work begins", amount: 600000, dueOn: null }], can: { edit: true } } as unknown,
+  fees: { feeLines: [], total: 0, suggested: [{ label: "Business Review, payable before work begins", amount: 600000, dueOn: null }], opensOnPayment: false, online: true, can: { edit: true, sendLink: true } } as unknown,
   calls: {} as Record<string, unknown[]>,
 }));
-const replies: Record<string, unknown> = { createDirect: { engagementId: 9, invitationUrl: "https://ipf-sme.example.test/join/OWNER", deliveryStatus: "Simulated", hasAccount: false }, sendSignInLink: { kind: "reset", email: "ada@example.test", url: "https://ipf-sme.example.test/reset/abc", deliveryStatus: "Simulated" }, start: { engagementId: 4, created: true }, fileLink: { url: "https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf" } };
-const mutation = (name: string) => (options?: { onSuccess?: (value: never) => void }) => ({
+const replies: Record<string, unknown> = { createDirect: { engagementId: 9, invitationUrl: "https://ipf-sme.example.test/join/OWNER", deliveryStatus: "Simulated", hasAccount: false }, sendSignInLink: { kind: "reset", email: "ada@example.test", url: "https://ipf-sme.example.test/reset/abc", deliveryStatus: "Simulated" }, start: { engagementId: 4, created: true }, sendFeeLink: { url: "https://ipf-sme.example.test/pay/fee/81/abcdefghijklmnopqrstuvwxyz012345", deliveryStatus: "Simulated" }, fileLink: { url: "https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf" } };
+const mutation = (name: string) => (options?: { onSuccess?: (value: never, input: never) => void }) => ({
   isPending: false,
-  mutate: (input: unknown) => { (api.calls[name] ??= []).push(input); options?.onSuccess?.((replies[name] ?? { success: true }) as never); },
-  mutateAsync: async (input: unknown) => { (api.calls[name] ??= []).push(input); options?.onSuccess?.((replies[name] ?? { success: true }) as never); return replies[name] ?? { success: true }; },
+  mutate: (input: unknown) => { (api.calls[name] ??= []).push(input); options?.onSuccess?.((replies[name] ?? { success: true }) as never, input as never); },
+  mutateAsync: async (input: unknown) => { (api.calls[name] ??= []).push(input); options?.onSuccess?.((replies[name] ?? { success: true }) as never, input as never); return replies[name] ?? { success: true }; },
 });
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock("@/lib/trpc", () => ({
@@ -37,7 +37,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         fees: { useQuery: () => ({ data: api.fees, error: null }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "handleRequest", "saveFees", "loadDataRequest", "setFeePaid", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "loadDataRequest", "setFeePaid", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -486,16 +486,22 @@ describe("fees on the team's side", () => {
     expect(api.calls.saveFees).toEqual([{ engagementId: row.id, feeLines: [{ label: "Business Review, payable before work begins", amount: 600000, dueOn: null }, { label: "Travel to Abuja", amount: 50000, dueOn: null }] }]);
   });
 
-  it("records a payment on a saved fee", () => {
+  it("sends a fee's payment link, opens the room early, and records a payment by hand", () => {
     api.list = { setUp: true, items: [row], canStart: true, seesAll: true } as never;
     api.calls = {};
     const before = api.fees;
-    api.fees = { feeLines: [{ id: 81, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-09", paidAt: null }], total: 470000, suggested: null, can: { edit: true } };
+    api.fees = { feeLines: [{ id: 81, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-09", paidAt: null, paidOnline: false, reference: "TS-F-000081" }], total: 470000, suggested: null, opensOnPayment: true, online: true, can: { edit: true, sendLink: true } };
     api.detail = detail({ manage: true, assign: true, review: true });
     render(<EngagementsView />);
     fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
     const section = within(within(screen.getByRole("dialog")).getByText("Fees").closest("section")!);
     expect(section.queryByRole("button", { name: "Save the fees" })).toBeNull();
+    expect(section.getByText(/opens once the first fee is paid/)).toBeTruthy();
+    fireEvent.click(section.getByRole("button", { name: "Send link" }));
+    expect(api.calls.sendFeeLink).toEqual([{ feeLineId: 81 }]);
+    expect(section.getByText("https://ipf-sme.example.test/pay/fee/81/abcdefghijklmnopqrstuvwxyz012345")).toBeTruthy();
+    fireEvent.click(section.getByRole("button", { name: "Open the room now" }));
+    expect(api.calls.openRoomNow).toEqual([{ engagementId: row.id }]);
     fireEvent.click(section.getByRole("checkbox"));
     expect(api.calls.setFeePaid).toEqual([{ feeLineId: 81, paid: true }]);
     api.fees = before;

@@ -1877,6 +1877,8 @@ var engagements = pgTable("engagements", {
   /** The client contact for an engagement opened directly, when there is no Business Health Check to name them. */
   contactName: varchar("contactName", { length: 200 }),
   contactEmail: varchar("contactEmail", { length: 320 }),
+  /** Opened before it was paid (0020): the room shows only the first fee to pay until a fee is paid, online or by hand. */
+  opensOnPayment: boolean("opensOnPayment").default(false).notNull(),
   /** The confirmed Current State Assessment payment that started it. */
   paymentRequestId: integer("paymentRequestId").references(() => paymentRequests.id),
   stage: engagementsStageEnum("stage").default("setting_up").notNull(),
@@ -2045,6 +2047,8 @@ var engagementFeeLines = pgTable("engagement_fee_lines", {
   amount: integer("amount").notNull(),
   dueOn: date("dueOn"),
   paidAt: timestamp("paidAt", { withTimezone: true }),
+  /** The Paystack attempt that paid it (0020), so a repeat confirmation is recognised and a second payment flagged. */
+  paidReference: varchar("paidReference", { length: 64 }),
   sortOrder: integer("sortOrder").default(0).notNull(),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
@@ -2490,8 +2494,8 @@ var SDKServer = class {
     return new Map(Object.entries(parsed));
   }
   getSessionSecret() {
-    const secret2 = ENV.cookieSecret;
-    return new TextEncoder().encode(secret2);
+    const secret3 = ENV.cookieSecret;
+    return new TextEncoder().encode(secret3);
   }
   /**
    * Create a session token for a Manus user openId
@@ -3776,30 +3780,30 @@ function newTotpSecret() {
 function totpStep(now = Date.now()) {
   return Math.floor(now / 1e3 / TOTP_PERIOD_SECONDS);
 }
-function totpCode(secret2, step2) {
+function totpCode(secret3, step2) {
   const counter = Buffer.alloc(8);
   counter.writeBigUInt64BE(BigInt(step2));
-  const hmac = createHmac2("sha1", base32Decode(secret2)).update(counter).digest();
+  const hmac = createHmac2("sha1", base32Decode(secret3)).update(counter).digest();
   const offset = hmac[hmac.length - 1] & 15;
   const binary = (hmac[offset] & 127) << 24 | hmac[offset + 1] << 16 | hmac[offset + 2] << 8 | hmac[offset + 3];
   return String(binary % 10 ** TOTP_DIGITS).padStart(TOTP_DIGITS, "0");
 }
-function matchTotp(secret2, code, lastUsedStep, now = Date.now()) {
+function matchTotp(secret3, code, lastUsedStep, now = Date.now()) {
   const clean = code.replace(/\s/g, "");
   if (!/^\d{6}$/.test(clean)) return null;
   const current = totpStep(now);
   for (let drift = -TOTP_DRIFT_STEPS; drift <= TOTP_DRIFT_STEPS; drift++) {
     const step2 = current + drift;
     if (lastUsedStep !== null && step2 <= lastUsedStep) continue;
-    const expected = Buffer.from(totpCode(secret2, step2));
+    const expected = Buffer.from(totpCode(secret3, step2));
     if (timingSafeEqual3(expected, Buffer.from(clean))) return step2;
   }
   return null;
 }
-function otpauthUri(secret2, email) {
+function otpauthUri(secret3, email) {
   const issuer = BRAND.productEndorsement;
   const label = encodeURIComponent(`${issuer}:${email}`);
-  return `otpauth://totp/${label}?secret=${secret2}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=${TOTP_DIGITS}&period=${TOTP_PERIOD_SECONDS}`;
+  return `otpauth://totp/${label}?secret=${secret3}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=${TOTP_DIGITS}&period=${TOTP_PERIOD_SECONDS}`;
 }
 var DEVELOPMENT_KEY_MATERIAL = "ipf-development-only-two-step-key";
 function sealingKey() {
@@ -3807,10 +3811,10 @@ function sealingKey() {
   if (!material) throw new Error("JWT_SECRET is not set, so two-step secrets cannot be sealed.");
   return Buffer.from(hkdfSync("sha256", material, "ipf-two-step-v1", "totp-secret", 32));
 }
-function sealSecret(secret2) {
+function sealSecret(secret3) {
   const iv = randomBytes3(12);
   const cipher = createCipheriv("aes-256-gcm", sealingKey(), iv);
-  const body = Buffer.concat([cipher.update(secret2, "utf8"), cipher.final()]);
+  const body = Buffer.concat([cipher.update(secret3, "utf8"), cipher.final()]);
   return ["v1", iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), body.toString("base64url")].join(".");
 }
 function openSecret(sealed) {
@@ -4039,13 +4043,13 @@ async function issueTwoStepChallenge(db, user, credentialId, memberships) {
   let setup = null;
   let sealed = null;
   if (!existing?.enabledAt) {
-    const secret2 = newTotpSecret();
+    const secret3 = newTotpSecret();
     try {
-      sealed = sealSecret(secret2);
+      sealed = sealSecret(secret3);
     } catch {
       throw new TRPCError2({ code: "INTERNAL_SERVER_ERROR", message: TWO_STEP_ERRORS.notConfigured });
     }
-    setup = { secret: secret2, uri: otpauthUri(secret2, user.email ?? "") };
+    setup = { secret: secret3, uri: otpauthUri(secret3, user.email ?? "") };
   }
   const created = await db.transaction(async (tx) => {
     await tx.update(userCredentials).set({ failedAttempts: 0, lockedUntil: null }).where(eq6(userCredentials.id, credentialId));
@@ -4081,14 +4085,14 @@ async function verifyTwoStep(req, res, rawInput) {
     });
     throw new TRPCError2({ code: "TOO_MANY_REQUESTS", message: TWO_STEP_ERRORS.expired });
   }
-  let secret2;
+  let secret3;
   try {
-    secret2 = openSecret(record.secretSealed);
+    secret3 = openSecret(record.secretSealed);
   } catch {
     throw new TRPCError2({ code: "INTERNAL_SERVER_ERROR", message: TWO_STEP_ERRORS.notConfigured });
   }
   const enabled = Boolean(record.enabledAt);
-  const step2 = matchTotp(secret2, parsed.data.code, record.lastUsedStep);
+  const step2 = matchTotp(secret3, parsed.data.code, record.lastUsedStep);
   const storedHashes = JSON.parse(record.recoveryCodeHashes);
   const remaining = step2 === null && enabled ? useRecoveryCode(storedHashes, parsed.data.code) : null;
   if (step2 === null && remaining === null) {
@@ -4603,9 +4607,9 @@ ${BRAND.senderDisplayName}`
 });
 
 // server/routers/businessCheck.ts
-import { TRPCError as TRPCError16 } from "@trpc/server";
+import { TRPCError as TRPCError18 } from "@trpc/server";
 import { randomBytes as randomBytes10 } from "crypto";
-import { and as and11, eq as eq17, isNull as isNull9 } from "drizzle-orm";
+import { and as and13, eq as eq19, isNull as isNull10 } from "drizzle-orm";
 import { z as z9 } from "zod";
 
 // shared/phone.ts
@@ -6243,12 +6247,12 @@ function officeEmail(input) {
 }
 
 // server/payments.ts
-import { and as and10, desc as desc7, eq as eq15, inArray as inArray4, ne as ne3 } from "drizzle-orm";
-import { TRPCError as TRPCError14 } from "@trpc/server";
+import { and as and12, desc as desc7, eq as eq18, inArray as inArray4, ne as ne3 } from "drizzle-orm";
+import { TRPCError as TRPCError17 } from "@trpc/server";
 
 // server/engagements.ts
-import { TRPCError as TRPCError11 } from "@trpc/server";
-import { and as and7, asc as asc2, desc as desc5, eq as eq12, inArray as inArray3, isNull as isNull6, sql as sql5 } from "drizzle-orm";
+import { TRPCError as TRPCError14 } from "@trpc/server";
+import { and as and9, asc as asc3, desc as desc5, eq as eq15, inArray as inArray3, isNull as isNull7, sql as sql5 } from "drizzle-orm";
 
 // server/accountInvitations.ts
 import { randomBytes as randomBytes6, randomUUID } from "crypto";
@@ -6507,24 +6511,504 @@ var BUSINESS_REVIEW = ASSESSMENT_TEMPLATE.dataRequests.map((item2, index2) => ({
 }));
 
 // server/agreements.ts
+import { TRPCError as TRPCError11 } from "@trpc/server";
+import { asc as asc2, eq as eq12 } from "drizzle-orm";
+
+// server/feePayments.ts
+import { createHmac as createHmac3, timingSafeEqual as timingSafeEqual4 } from "node:crypto";
+import { TRPCError as TRPCError10 } from "@trpc/server";
+import { and as and7, asc, eq as eq11, isNull as isNull6 } from "drizzle-orm";
+
+// server/lagosTime.ts
+var lagosTime = (date2) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(date2);
+
+// server/onlinePayment.ts
+import { TRPCError as TRPCError9 } from "@trpc/server";
+import { and as and6, eq as eq10 } from "drizzle-orm";
+
+// server/fullReportRequest.ts
 import { TRPCError as TRPCError8 } from "@trpc/server";
-import { asc, eq as eq9 } from "drizzle-orm";
-var notFound = () => new TRPCError8({ code: "NOT_FOUND", message: "Not found." });
+import { eq as eq9 } from "drizzle-orm";
+var PAY_LINK_NOTE = "Started paying online from the link in their Business Health Check summary email.";
+async function askForFullReport(db, check, input) {
+  const first = !check.reportRequestedAt;
+  if (!first && input.source === "result_page") return;
+  if (first) await db.update(businessChecks).set({ reportRequestedAt: databaseNow() }).where(eq9(businessChecks.id, check.id));
+  let payment;
+  try {
+    const sent = await requestPayment(db, { businessCheckId: check.id, item: "full_report", actorUserId: null });
+    payment = sent.deliveryStatus === "Failed" ? `Payment details: ${sent.reference}, but the email to the owner failed (${sent.deliveryProblem ?? "no reason given"}). Send them again from admin once that is fixed.` : `Payment details sent: ${sent.reference}`;
+  } catch (error) {
+    const paid = error instanceof TRPCError8 && error.code === "CONFLICT";
+    if (!paid) console.error("[BusinessCheck] Could not send the report payment details:", error instanceof Error ? error.message : error);
+    payment = paid ? "Payment: already paid" : "Payment details: NOT SENT. Send them from the admin console.";
+  }
+  if (!first) return;
+  const note = input.note || (input.source === "pay_link" ? PAY_LINK_NOTE : "None");
+  await deliverEmail({
+    sender: "business_support",
+    idempotencyKey: `business_checks:${check.id}:report:office`,
+    to: BUSINESS_SUPPORT_MAILBOX,
+    subject: `Business Health Check: ${check.businessName || check.fullName} asked for the Full Report`,
+    body: [
+      `${check.fullName} asked for the Full Report.`,
+      "",
+      `Email: ${check.email}`,
+      `WhatsApp: ${check.whatsapp || "Not given"}`,
+      `Business: ${check.businessName || "Not given"}`,
+      `Note: ${note}`,
+      payment,
+      "",
+      `Business Health Check #${check.id}${check.completedAt ? `, completed ${lagosTime(check.completedAt)} (Lagos time)` : ""}.`
+    ].join("\n")
+  });
+}
+
+// server/onlinePayment.ts
+var notFound = () => new TRPCError9({ code: "NOT_FOUND", message: "We could not find this payment. Use the link in your payment email." });
+var ONLINE_PAYMENT_OFF_MESSAGE = "Online payment is not open yet. Please try again later, or reply to your payment email and we will send you a link when it is.";
+function requireOnlinePayment() {
+  const mode = paystackMode();
+  if (mode === "off") throw new TRPCError9({ code: "PRECONDITION_FAILED", message: ONLINE_PAYMENT_OFF_MESSAGE });
+  return mode;
+}
+async function lookup(db, token3, item2) {
+  const check = (await db.select().from(businessChecks).where(eq10(businessChecks.publicToken, token3)).limit(1))[0];
+  if (!check) throw notFound();
+  const request = (await db.select().from(paymentRequests).where(and6(eq10(paymentRequests.businessCheckId, check.id), eq10(paymentRequests.item, item2))).limit(1))[0];
+  return { check, request };
+}
+var ownerMayStart = (check, item2) => item2 === "full_report" && Boolean(check.completedAt);
+var requestByReference = async (db, reference2) => (await db.select().from(paymentRequests).where(eq10(paymentRequests.reference, reference2)).limit(1))[0];
+var PAGE_STATE = { requested: "open", expired: "expired", proof_received: "open", confirmed: "paid" };
+async function onlinePaymentPage(db, input) {
+  const { check, request } = await lookup(db, input.token, input.item);
+  if (!request) {
+    if (!ownerMayStart(check, input.item)) throw notFound();
+    return { item: input.item, name: PAYMENT_ITEM_TITLES[input.item], amountNaira: getBusinessSupportPrice(input.item), mode: paystackMode(), state: "open" };
+  }
+  const display = effectivePaymentStatus(request);
+  return {
+    item: request.item,
+    name: PAYMENT_ITEM_TITLES[request.item],
+    amountNaira: request.amountNaira,
+    mode: paystackMode(),
+    // An owner's own Full Report link never dead-ends: pressing pay starts a new 48 hours.
+    state: display === "expired" && ownerMayStart(check, request.item) ? "open" : PAGE_STATE[display]
+  };
+}
+async function startOnlinePayment(db, input) {
+  requireOnlinePayment();
+  const found = await lookup(db, input.token, input.item);
+  const { check } = found;
+  let request = found.request;
+  if (!request) {
+    if (!ownerMayStart(check, input.item)) throw notFound();
+    await askForFullReport(db, check, { source: "pay_link" });
+    request = (await lookup(db, input.token, input.item)).request;
+    if (!request) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute, or reply to your summary email." });
+  }
+  if (request.status === "confirmed") return { alreadyPaid: true };
+  if (effectivePaymentStatus(request) === "expired") {
+    if (!ownerMayStart(check, request.item)) {
+      throw new TRPCError9({ code: "PRECONDITION_FAILED", message: "This payment link has passed its 48 hours. Reply to your payment email and we will send you a new one." });
+    }
+    await requestPayment(db, { businessCheckId: check.id, item: request.item, actorUserId: null });
+    request = (await lookup(db, input.token, input.item)).request ?? request;
+  }
+  assertAmountAllowed(request.amountNaira);
+  const email = check.email;
+  const reference2 = onlineReference(request.reference);
+  try {
+    const { authorizationUrl } = await initializeTransaction({
+      email,
+      amountKobo: request.amountNaira * 100,
+      reference: reference2,
+      callbackUrl: `${getTrustedApplicationOrigin()}${PAY_RETURN_PATH}`,
+      metadata: { paymentRequestId: request.id, businessCheckId: request.businessCheckId, item: request.item }
+    });
+    return { alreadyPaid: false, url: authorizationUrl };
+  } catch (error) {
+    console.error(`[Paystack] Could not open a payment for ${request.reference}:`, error instanceof Error ? error.message : "unknown error");
+    throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute." });
+  }
+}
+function transactionProblem(request, transaction) {
+  if (!transaction.reference.startsWith(`${request.reference}-`)) return "reference";
+  if (transaction.status !== "success") return "status";
+  if (transaction.currency !== "NGN") return "currency";
+  if (!amountMatches(transaction, request.amountNaira * 100)) return "amount";
+  return null;
+}
+function amountMatches(transaction, expectedKobo) {
+  if (transaction.amount === expectedKobo) return true;
+  return transaction.requestedAmount === expectedKobo && Number.isFinite(transaction.amount) && transaction.amount >= expectedKobo;
+}
+var STILL_OPEN = /* @__PURE__ */ new Set(["ongoing", "pending", "processing", "queued"]);
+var paidBy = (request, reference2) => Boolean(request.note?.includes(reference2));
+async function checkOf(db, businessCheckId) {
+  return (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, businessName: businessChecks.businessName }).from(businessChecks).where(eq10(businessChecks.id, businessCheckId)).limit(1))[0];
+}
+var PROBLEM_TEXT = {
+  reference: () => "The Paystack reference does not belong to this payment.",
+  currency: (transaction) => `The payment was not in naira (${transaction.currency || "no currency given"}).`,
+  amount: (transaction, request) => `The amount does not match: ${Number.isFinite(transaction.amount) ? formatNaira(transaction.amount / 100) : "no amount"} paid, ${formatNaira(request.amountNaira)} expected.`,
+  paid_twice: () => "This item was already paid, so this may be a second payment for it."
+};
+async function needsALook(db, request, transaction, problem, source) {
+  const reason = PROBLEM_TEXT[problem](transaction, request);
+  console.error(`[Paystack] ${source}: ${transaction.reference} was not confirmed for ${request.reference}: ${problem}.`);
+  const check = await checkOf(db, request.businessCheckId);
+  await recordAudit(db, {
+    action: "payment_online_refused",
+    actorUserId: null,
+    targetEmail: check?.email ?? null,
+    details: { businessCheckId: request.businessCheckId, item: request.item, reference: request.reference, via: "paystack", paystackReference: transaction.reference, mode: paystackMode(), problem, amountKobo: transaction.amount, currency: transaction.currency }
+  });
+  await deliverEmail({
+    to: BUSINESS_SUPPORT_MAILBOX,
+    sender: "business_support",
+    idempotencyKey: `paystack:${transaction.reference}:${problem}:office`,
+    subject: `Paystack payment needs a look: ${request.reference}`,
+    body: [
+      "A payment on Paystack was not confirmed automatically. Check it in Paystack, then confirm it by hand in the admin console or refund it.",
+      "",
+      `Reason: ${reason}`,
+      `Reference: ${request.reference}`,
+      `Paystack reference: ${transaction.reference}`,
+      `Owner: ${check ? `${check.fullName} (${check.email})` : "Not found"}`,
+      `Item: ${PAYMENT_ITEM_TITLES[request.item]}`,
+      "",
+      `Business Health Check #${request.businessCheckId}.`
+    ].join("\n")
+  }).catch((error) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
+}
+async function tellOfficePaid(db, request, online, result) {
+  const check = await checkOf(db, request.businessCheckId);
+  const test = online.mode === "test";
+  const next = request.item === "full_report" ? ["The payment confirmation with the Report Intake link has been emailed to the owner."] : [
+    "The business is now Won.",
+    `Engagement: ${result.engagement === "started" || result.engagement === "exists" ? "started" : "NOT STARTED. Start it from Engagements."}`,
+    `Client account invitation: ${result.invitation === "sent" ? "sent" : result.invitation === "already_invited" ? "already out" : result.invitation === "has_account" ? "they already have an account" : "NOT SENT. Send it from Client Onboarding."}`
+  ];
+  await deliverEmail({
+    to: BUSINESS_SUPPORT_MAILBOX,
+    sender: "business_support",
+    idempotencyKey: `payment_requests:${request.id}:paid_online:office`,
+    subject: `${test ? "TEST: " : ""}Paid online: ${check?.businessName || check?.fullName || request.reference}, ${PAYMENT_ITEM_TITLES[request.item]}`,
+    body: [
+      ...test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : [],
+      `${check?.fullName ?? "The owner"} paid ${formatNaira(request.amountNaira)} for the ${PAYMENT_ITEM_TITLES[request.item]} with Paystack. It is confirmed: nothing to do in the admin console.`,
+      "",
+      `Email: ${check?.email ?? "Not found"}`,
+      `Business: ${check?.businessName || "Not given"}`,
+      `Reference: ${request.reference}`,
+      `Paystack reference: ${online.reference}`,
+      `Confirmed: ${lagosTime(/* @__PURE__ */ new Date())} (Lagos time)`,
+      "",
+      ...next,
+      "",
+      `Business Health Check #${request.businessCheckId}. ${BRAND.organisationName}`
+    ].join("\n")
+  }).catch((error) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
+}
+async function settle(db, request, reference2, source) {
+  if (request.status === "confirmed" && paidBy(request, reference2)) return "already_paid";
+  const transaction = await verifyTransaction(reference2);
+  if (!transaction || transaction.reference !== reference2) {
+    console.warn(`[Paystack] ${source}: Paystack does not know ${reference2}; nothing was confirmed.`);
+    return "failed";
+  }
+  const problem = transactionProblem(request, transaction);
+  if (problem === "status") return STILL_OPEN.has(transaction.status) ? "pending" : "failed";
+  if (problem) {
+    await needsALook(db, request, transaction, problem, source);
+    return "refused";
+  }
+  const mode = paystackMode();
+  if (mode === "off") throw new Error("Paystack was switched off while a payment was being confirmed.");
+  const online = { provider: "paystack", reference: reference2, mode };
+  if (request.status !== "confirmed") {
+    const result = await confirmPayment(db, { paymentRequestId: request.id, actorUserId: null, online });
+    if (result.changed) {
+      await tellOfficePaid(db, request, online, result);
+      return "confirmed";
+    }
+  }
+  const now = await requestByReference(db, request.reference);
+  if (now && !paidBy(now, reference2)) await needsALook(db, now, transaction, "paid_twice", source);
+  return "already_paid";
+}
+async function settleOnlinePayment(db, reference2, source) {
+  const prefix = paymentReferenceOf(reference2);
+  const feeLineId = prefix ? feeIdOfReference(prefix) : null;
+  if (feeLineId !== null) return settleFee(db, feeLineId, reference2, source);
+  const request = prefix ? await requestByReference(db, prefix) : void 0;
+  if (!request) return "unknown";
+  return settle(db, request, reference2, source);
+}
+function itemOfReference(paymentReference2) {
+  const code = /^TS-([A-Z]{1,3})-/.exec(paymentReference2)?.[1];
+  return PAYMENT_ITEMS.find((item2) => PAYMENT_ITEM_DETAILS[item2].code === code) ?? null;
+}
+async function onlinePaymentStatus(db, reference2) {
+  const prefix = paymentReferenceOf(reference2);
+  const feeLineId = prefix ? feeIdOfReference(prefix) : null;
+  if (feeLineId !== null) return feePaymentStatus(db, feeLineId, reference2);
+  const item2 = prefix ? itemOfReference(prefix) : null;
+  if (!prefix || !item2) throw notFound();
+  const mode = paystackMode();
+  const answer2 = (status) => ({ status, item: item2, mode });
+  const request = await requestByReference(db, prefix);
+  if (!request) return answer2(mode === "off" ? "pending" : "failed");
+  const paidByThis = request.status === "confirmed" && paidBy(request, reference2);
+  if (mode === "off") return answer2(paidByThis ? "paid" : "pending");
+  let settlement;
+  try {
+    settlement = await settle(db, request, reference2, "return");
+  } catch (error) {
+    console.error(`[Paystack] Could not check ${reference2} for the return page:`, error instanceof Error ? error.message : "unknown error");
+    return answer2(paidByThis ? "paid" : "pending");
+  }
+  if (settlement === "confirmed" || settlement === "already_paid") return answer2("paid");
+  if (settlement === "failed") return answer2("failed");
+  return answer2("pending");
+}
+function parseEvent(raw) {
+  try {
+    const parsed = JSON.parse(raw.toString("utf8"));
+    return { event: typeof parsed?.event === "string" ? parsed.event : "", reference: typeof parsed?.data?.reference === "string" ? parsed.data.reference : null };
+  } catch {
+    return null;
+  }
+}
+async function handlePaystackWebhook(req, res) {
+  const raw = Buffer.isBuffer(req.body) ? req.body : null;
+  if (!raw || !isValidPaystackSignature(raw, req.headers["x-paystack-signature"])) {
+    res.status(401).json({ message: "Invalid signature." });
+    return;
+  }
+  const event = parseEvent(raw);
+  if (event?.event !== "charge.success" || !event.reference) {
+    res.status(200).json({ received: true });
+    return;
+  }
+  try {
+    const db = await getDb();
+    if (!db) throw new Error("the database is not available");
+    const settlement = await settleOnlinePayment(db, event.reference, "webhook");
+    if (settlement === "unknown") console.warn(`[Paystack] webhook: ${event.reference} is not a payment of ours; ignored.`);
+    res.status(200).json({ received: true });
+  } catch (error) {
+    console.error("[Paystack] webhook not processed; Paystack will send it again:", error instanceof Error ? error.message : "unknown error");
+    res.status(500).json({ message: "Not processed. Please send it again." });
+  }
+}
+
+// server/feePayments.ts
+var notFound2 = () => new TRPCError10({ code: "NOT_FOUND", message: "We could not find this payment. Use the link in your payment email." });
+var feeReference = (feeLineId) => `TS-F-${String(feeLineId).padStart(6, "0")}`;
+var feeIdOfReference = (reference2) => {
+  const match = /^TS-F-(\d{6,})$/.exec(reference2);
+  return match ? Number(match[1]) : null;
+};
+function secret2() {
+  const key = ENV.cookieSecret;
+  if (!key) throw new TRPCError10({ code: "PRECONDITION_FAILED", message: "Payment links are not set up on this server." });
+  return key;
+}
+var feePayToken = (feeLineId) => createHmac3("sha256", secret2()).update(`engagement-fee:${feeLineId}`).digest("base64url").slice(0, 32);
+var tokenMatches = (feeLineId, token3) => {
+  const expected = Buffer.from(feePayToken(feeLineId));
+  const given = Buffer.from(token3);
+  return given.length === expected.length && timingSafeEqual4(given, expected);
+};
+var feePayPath = (feeLineId) => `/pay/fee/${feeLineId}/${feePayToken(feeLineId)}`;
+var feePayUrl = (feeLineId) => `${getTrustedApplicationOrigin()}${feePayPath(feeLineId)}`;
+async function feeContext(db, feeLineId) {
+  const fee = (await db.select().from(engagementFeeLines).where(eq11(engagementFeeLines.id, feeLineId)).limit(1))[0];
+  if (!fee) return null;
+  const engagement = (await db.select().from(engagements).where(eq11(engagements.id, fee.engagementId)).limit(1))[0];
+  if (!engagement) return null;
+  const business = engagement.businessId === null ? void 0 : (await db.select({ name: businesses.name }).from(businesses).where(eq11(businesses.id, engagement.businessId)).limit(1))[0];
+  const owner = engagement.businessId === null ? void 0 : (await db.select({ email: users.email, name: users.name }).from(businessMemberships).innerJoin(users, eq11(businessMemberships.userId, users.id)).where(and7(eq11(businessMemberships.businessId, engagement.businessId), eq11(businessMemberships.role, "owner"), eq11(businessMemberships.status, "active"))).limit(1))[0];
+  const payer = owner?.email ? { email: owner.email, name: owner.name ?? engagement.contactName ?? "" } : engagement.contactEmail ? { email: engagement.contactEmail, name: engagement.contactName ?? "" } : null;
+  return { fee, engagement, businessName: business?.name ?? engagement.contactName ?? "", payer, title: engagementTitle(engagement.type, engagement.service) };
+}
+async function requireFee(db, feeLineId, token3) {
+  if (!tokenMatches(feeLineId, token3)) throw notFound2();
+  const found = await feeContext(db, feeLineId);
+  if (!found) throw notFound2();
+  return found;
+}
+async function feePayPage(db, input) {
+  const { fee, businessName, title } = await requireFee(db, input.feeLineId, input.token);
+  return { businessName, engagement: title, label: fee.label, amountNaira: fee.amount, dueOn: fee.dueOn, reference: feeReference(fee.id), mode: paystackMode(), state: fee.paidAt ? "paid" : "open" };
+}
+async function startFeePayment(db, input) {
+  requireOnlinePayment();
+  const { fee, payer, engagement } = await requireFee(db, input.feeLineId, input.token);
+  if (fee.paidAt) return { alreadyPaid: true };
+  if (!payer) throw new TRPCError10({ code: "PRECONDITION_FAILED", message: "We do not have an email for this payment yet. Reply to your payment email and we will sort it out." });
+  try {
+    const { authorizationUrl } = await initializeTransaction({
+      email: payer.email,
+      amountKobo: fee.amount * 100,
+      reference: onlineReference(feeReference(fee.id)),
+      callbackUrl: `${getTrustedApplicationOrigin()}${PAY_RETURN_PATH}`,
+      metadata: { feeLineId: fee.id, engagementId: engagement.id }
+    });
+    return { alreadyPaid: false, url: authorizationUrl };
+  } catch (error) {
+    console.error(`[Paystack] Could not open a payment for ${feeReference(fee.id)}:`, error instanceof Error ? error.message : "unknown error");
+    throw new TRPCError10({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute." });
+  }
+}
+var STILL_OPEN2 = /* @__PURE__ */ new Set(["ongoing", "pending", "processing", "queued"]);
+async function tellOffice(subject, lines, key) {
+  await deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, sender: "business_support", idempotencyKey: key, subject, body: lines.join("\n") }).catch((error) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
+}
+async function settleFee(db, feeLineId, reference2, source) {
+  const found = await feeContext(db, feeLineId);
+  if (!found) return "unknown";
+  const { fee, engagement, businessName, payer, title } = found;
+  if (fee.paidAt && fee.paidReference === reference2) return "already_paid";
+  const transaction = await verifyTransaction(reference2);
+  if (!transaction || transaction.reference !== reference2) return "failed";
+  const ours = transaction.reference.startsWith(`${feeReference(fee.id)}-`);
+  if (ours && transaction.status !== "success") return STILL_OPEN2.has(transaction.status) ? "pending" : "failed";
+  const problem = !ours ? "The Paystack reference does not belong to this fee." : transaction.currency !== "NGN" ? `The payment was not in naira (${transaction.currency || "no currency given"}).` : !amountMatches(transaction, fee.amount * 100) ? `The amount does not match: ${Number.isFinite(transaction.amount) ? formatNaira(transaction.amount / 100) : "no amount"} paid, ${formatNaira(fee.amount)} expected.` : fee.paidAt ? "This fee was already paid, so this may be a second payment for it." : null;
+  if (problem) {
+    console.error(`[Paystack] ${source}: ${reference2} was not confirmed for ${feeReference(fee.id)}.`);
+    await recordAudit(db, { action: "engagement_fee_online_refused", actorUserId: null, targetEmail: payer?.email ?? null, details: { engagementId: engagement.id, feeLineId: fee.id, paystackReference: reference2, reason: problem } });
+    await tellOffice(`Paystack payment needs a look: ${feeReference(fee.id)}`, [
+      "A fee payment on Paystack was not confirmed automatically. Check it in Paystack, then tick Paid on the engagement's Fees or refund it.",
+      "",
+      `Reason: ${problem}`,
+      `Fee: ${fee.label} (${formatNaira(fee.amount)})`,
+      `Client: ${businessName}`,
+      `Engagement: ${title}`,
+      `Paystack reference: ${reference2}`
+    ], `paystack:${reference2}:fee:office`);
+    return "refused";
+  }
+  const mode = paystackMode();
+  const claimed = await db.update(engagementFeeLines).set({ paidAt: /* @__PURE__ */ new Date(), paidReference: reference2 }).where(and7(eq11(engagementFeeLines.id, fee.id), isNull6(engagementFeeLines.paidAt))).returning({ id: engagementFeeLines.id });
+  if (!claimed.length) return "already_paid";
+  await recordAudit(db, { action: "engagement_fee_paid_online", actorUserId: null, targetEmail: payer?.email ?? null, details: { engagementId: engagement.id, feeLineId: fee.id, amount: fee.amount, via: "paystack", paystackReference: reference2, mode } });
+  const opened = await openRoomIfFirstPayment(db, engagement.id);
+  const test = mode === "test";
+  if (payer) {
+    await deliverEmail({
+      to: payer.email,
+      sender: "business_support",
+      idempotencyKey: `engagement_fee_lines:${fee.id}:paid:client`,
+      subject: `${test ? "TEST: " : ""}Payment received: ${fee.label}`,
+      body: [
+        ...test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : [],
+        `Hello ${payer.name.split(" ")[0] ?? ""},`,
+        "",
+        `We have received ${formatNaira(fee.amount)} for the ${title}: ${fee.label}. Thank you.`,
+        "",
+        `Reference: ${feeReference(fee.id)}`,
+        `Paid: ${lagosTime(/* @__PURE__ */ new Date())} (Lagos time)`,
+        "",
+        opened ? `Your room is open: ${getTrustedApplicationOrigin()}/dashboard` : `Everything about the engagement is in your room: ${getTrustedApplicationOrigin()}/dashboard`,
+        "",
+        BRAND.organisationName
+      ].join("\n")
+    }).catch((error) => console.error("[Paystack] The receipt could not be sent:", error instanceof Error ? error.message : "unknown error"));
+  }
+  await tellOffice(`${test ? "TEST: " : ""}Paid online: ${businessName}, ${fee.label}`, [
+    ...test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : [],
+    `${businessName} paid ${formatNaira(fee.amount)} for the ${title} (${fee.label}) with Paystack. It is marked Paid: nothing to do.`,
+    "",
+    `Reference: ${feeReference(fee.id)}`,
+    `Paystack reference: ${reference2}`,
+    opened ? "This was the first payment: the client's room is now open." : ""
+  ], `engagement_fee_lines:${fee.id}:paid:office`);
+  return "confirmed";
+}
+async function openRoomIfFirstPayment(db, engagementId) {
+  const opened = await db.update(engagements).set({ opensOnPayment: false }).where(and7(eq11(engagements.id, engagementId), eq11(engagements.opensOnPayment, true))).returning({ id: engagements.id });
+  return opened.length > 0;
+}
+async function feePaymentStatus(db, feeLineId, reference2) {
+  const mode = paystackMode();
+  const answer2 = (status) => ({ status, item: "fee", mode });
+  const fee = (await db.select().from(engagementFeeLines).where(eq11(engagementFeeLines.id, feeLineId)).limit(1))[0];
+  if (!fee) return answer2(mode === "off" ? "pending" : "failed");
+  const paidByThis = Boolean(fee.paidAt) && fee.paidReference === reference2;
+  if (mode === "off") return answer2(paidByThis ? "paid" : "pending");
+  try {
+    const settlement = await settleFee(db, feeLineId, reference2, "return");
+    if (settlement === "confirmed") return answer2("paid");
+    if (settlement === "already_paid") return answer2(paidByThis || (await db.select({ paidReference: engagementFeeLines.paidReference }).from(engagementFeeLines).where(eq11(engagementFeeLines.id, feeLineId)).limit(1))[0]?.paidReference === reference2 ? "paid" : "pending");
+    if (settlement === "failed") return answer2("failed");
+    return answer2("pending");
+  } catch (error) {
+    console.error(`[Paystack] Could not check ${reference2} for the return page:`, error instanceof Error ? error.message : "unknown error");
+    return answer2(paidByThis ? "paid" : "pending");
+  }
+}
+async function sendFeeLink(db, input) {
+  requireOnlinePayment();
+  const found = await feeContext(db, input.feeLineId);
+  if (!found) throw notFound2();
+  const { fee, payer, title, businessName, engagement } = found;
+  if (fee.paidAt) throw new TRPCError10({ code: "BAD_REQUEST", message: "This fee is already paid." });
+  if (!payer) throw new TRPCError10({ code: "BAD_REQUEST", message: "There is no client email on this engagement." });
+  const url = feePayUrl(fee.id);
+  const test = paystackMode() === "test";
+  const delivery = await deliverEmail({
+    to: payer.email,
+    sender: "business_support",
+    subject: `${test ? "TEST: " : ""}${fee.label}: ${formatNaira(fee.amount)} for the ${title}`,
+    body: [
+      ...test ? ["TEST MODE - NO REAL MONEY MOVES", ""] : [],
+      `Hello ${payer.name.split(" ")[0] ?? ""},`,
+      "",
+      `Your payment for the ${title} is ready: ${fee.label}, ${formatNaira(fee.amount)}${fee.dueOn ? `, due ${lagosTime(/* @__PURE__ */ new Date(`${fee.dueOn}T12:00:00Z`)).split(",")[0]}` : ""}.`,
+      engagement.opensOnPayment ? "Your room opens as soon as it is paid." : "",
+      "",
+      `Pay online: ${url}`,
+      "",
+      "Paystack takes card, bank transfer or USSD. Any questions, reply to this email.",
+      "",
+      `Reference: ${feeReference(fee.id)}`,
+      "",
+      BRAND.organisationName
+    ].join("\n")
+  }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
+  await recordAudit(db, { action: "engagement_fee_link_sent", actorUserId: input.actorUserId, targetEmail: payer.email, details: { engagementId: engagement.id, feeLineId: fee.id, amount: fee.amount, business: businessName } });
+  return { url, deliveryStatus: delivery.status };
+}
+async function clientFees(db, engagementId) {
+  const lines = await db.select().from(engagementFeeLines).where(eq11(engagementFeeLines.engagementId, engagementId)).orderBy(asc(engagementFeeLines.sortOrder), asc(engagementFeeLines.id));
+  const online = paystackMode() !== "off" && Boolean(ENV.cookieSecret);
+  return lines.map((line) => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn, paid: line.paidAt !== null, reference: feeReference(line.id), payPath: !line.paidAt && online ? feePayPath(line.id) : null }));
+}
+
+// server/agreements.ts
+var notFound3 = () => new TRPCError11({ code: "NOT_FOUND", message: "Not found." });
 var requireManage = (actor) => {
-  if (!authorityAllows(actor.authority, "manage_engagements")) throw new TRPCError8({ code: "FORBIDDEN", message: "Your role does not include working on engagements." });
+  if (!authorityAllows(actor.authority, "manage_engagements")) throw new TRPCError11({ code: "FORBIDDEN", message: "Your role does not include working on engagements." });
 };
 async function feeLinesOf(db, engagementId) {
-  return db.select().from(engagementFeeLines).where(eq9(engagementFeeLines.engagementId, engagementId)).orderBy(asc(engagementFeeLines.sortOrder), asc(engagementFeeLines.id));
+  return db.select().from(engagementFeeLines).where(eq12(engagementFeeLines.engagementId, engagementId)).orderBy(asc2(engagementFeeLines.sortOrder), asc2(engagementFeeLines.id));
 }
 async function staffFees(db, actor, engagementId) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
-  if (!canSeeFees(actor)) throw new TRPCError8({ code: "FORBIDDEN", message: "Fees are for the team leading the engagement and Finance." });
+  if (!canSeeFees(actor)) throw new TRPCError11({ code: "FORBIDDEN", message: "Fees are for the team leading the engagement and Finance." });
   const feeLines = await feeLinesOf(db, engagementId);
   return {
-    feeLines: feeLines.map((line) => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn, paidAt: line.paidAt })),
+    feeLines: feeLines.map((line) => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn, paidAt: line.paidAt, paidOnline: line.paidReference !== null, reference: feeReference(line.id) })),
     total: feeTotal(feeLines),
     suggested: feeLines.length ? null : defaultFees(engagement.type, engagement.service),
-    can: { edit: authorityAllows(actor.authority, "manage_engagements") }
+    /** Waiting for its first payment: the client sees only the fee to pay until one is paid. */
+    opensOnPayment: engagement.opensOnPayment,
+    online: paystackMode() !== "off",
+    can: { edit: authorityAllows(actor.authority, "manage_engagements"), sendLink: canSendLinks(actor) }
   };
 }
 function initialFeeRows(engagementId, lines) {
@@ -6533,14 +7017,14 @@ function initialFeeRows(engagementId, lines) {
 async function saveFees(db, actor, input) {
   requireManage(actor);
   await requireStaffEngagement(db, actor, input.engagementId);
-  if (input.feeLines.length > AGREEMENT_LIMITS.feeLines) throw new TRPCError8({ code: "BAD_REQUEST", message: "Too many fee lines." });
+  if (input.feeLines.length > AGREEMENT_LIMITS.feeLines) throw new TRPCError11({ code: "BAD_REQUEST", message: "Too many fee lines." });
   for (const line of input.feeLines) {
-    if (!line.label.trim()) throw new TRPCError8({ code: "BAD_REQUEST", message: "Name every fee." });
-    if (!Number.isInteger(line.amount) || line.amount <= 0 || line.amount > AGREEMENT_LIMITS.amount) throw new TRPCError8({ code: "BAD_REQUEST", message: "Every fee needs an amount in naira." });
+    if (!line.label.trim()) throw new TRPCError11({ code: "BAD_REQUEST", message: "Name every fee." });
+    if (!Number.isInteger(line.amount) || line.amount <= 0 || line.amount > AGREEMENT_LIMITS.amount) throw new TRPCError11({ code: "BAD_REQUEST", message: "Every fee needs an amount in naira." });
   }
   const existing = await feeLinesOf(db, input.engagementId);
   await db.transaction(async (tx) => {
-    await tx.delete(engagementFeeLines).where(eq9(engagementFeeLines.engagementId, input.engagementId));
+    await tx.delete(engagementFeeLines).where(eq12(engagementFeeLines.engagementId, input.engagementId));
     if (input.feeLines.length) {
       await tx.insert(engagementFeeLines).values(input.feeLines.map((line, index2) => ({
         engagementId: input.engagementId,
@@ -6557,28 +7041,44 @@ async function saveFees(db, actor, input) {
 }
 async function setFeePaid(db, actor, input) {
   requireManage(actor);
-  const [line] = await db.select().from(engagementFeeLines).where(eq9(engagementFeeLines.id, input.feeLineId)).limit(1);
-  if (!line) throw notFound();
+  const [line] = await db.select().from(engagementFeeLines).where(eq12(engagementFeeLines.id, input.feeLineId)).limit(1);
+  if (!line) throw notFound3();
   await requireStaffEngagement(db, actor, line.engagementId);
-  await db.update(engagementFeeLines).set({ paidAt: input.paid ? /* @__PURE__ */ new Date() : null }).where(eq9(engagementFeeLines.id, line.id));
+  await db.update(engagementFeeLines).set({ paidAt: input.paid ? /* @__PURE__ */ new Date() : null, ...input.paid ? {} : { paidReference: null } }).where(eq12(engagementFeeLines.id, line.id));
   await recordAudit(db, { action: "engagement_fee_paid", actorUserId: actor.id, details: { engagementId: line.engagementId, feeLineId: line.id, paid: input.paid, amount: line.amount } });
-  return { success: true };
+  const opened = input.paid ? await openRoomIfFirstPayment(db, line.engagementId) : false;
+  return { success: true, opened };
+}
+var canSendLinks = (actor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "manage_payments");
+async function staffSendFeeLink(db, actor, input) {
+  if (!canSendLinks(actor)) throw new TRPCError11({ code: "FORBIDDEN", message: "Your role does not include sending payment links." });
+  const [line] = await db.select().from(engagementFeeLines).where(eq12(engagementFeeLines.id, input.feeLineId)).limit(1);
+  if (!line) throw notFound3();
+  await requireStaffEngagement(db, actor, line.engagementId);
+  return sendFeeLink(db, { feeLineId: line.id, actorUserId: actor.id });
+}
+async function openRoomNow(db, actor, input) {
+  requireManage(actor);
+  await requireStaffEngagement(db, actor, input.engagementId);
+  const opened = await openRoomIfFirstPayment(db, input.engagementId);
+  if (opened) await recordAudit(db, { action: "engagement_room_opened", actorUserId: actor.id, details: { engagementId: input.engagementId, before: "first payment" } });
+  return { success: true, opened };
 }
 
 // server/debriefs.ts
-import { TRPCError as TRPCError9 } from "@trpc/server";
-import { eq as eq10 } from "drizzle-orm";
+import { TRPCError as TRPCError12 } from "@trpc/server";
+import { eq as eq13 } from "drizzle-orm";
 function isMissingDebriefTable(error) {
   const code = error?.code ?? error?.cause?.code;
   return code === "42P01";
 }
 async function requireCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email }).from(businessChecks).where(eq10(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError9({ code: "NOT_FOUND", message: "This Business Health Check does not exist." });
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email }).from(businessChecks).where(eq13(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError12({ code: "NOT_FOUND", message: "This Business Health Check does not exist." });
   return check;
 }
 async function getDebrief(db, businessCheckId) {
-  return (await db.select().from(debriefs).where(eq10(debriefs.businessCheckId, businessCheckId)).limit(1))[0] ?? null;
+  return (await db.select().from(debriefs).where(eq13(debriefs.businessCheckId, businessCheckId)).limit(1))[0] ?? null;
 }
 async function saveDebrief(db, input, actorUserId) {
   const check = await requireCheck(db, input.businessCheckId);
@@ -6592,8 +7092,8 @@ async function saveDebrief(db, input, actorUserId) {
 async function shareDebrief(db, input, actorUserId) {
   const check = await requireCheck(db, input.businessCheckId);
   return db.transaction(async (tx) => {
-    const updated = await tx.update(debriefs).set({ sharedAt: input.shared ? /* @__PURE__ */ new Date() : null }).where(eq10(debriefs.businessCheckId, check.id)).returning({ id: debriefs.id });
-    if (!updated.length) throw new TRPCError9({ code: "NOT_FOUND", message: "Write the Discovery Call up before sharing it." });
+    const updated = await tx.update(debriefs).set({ sharedAt: input.shared ? /* @__PURE__ */ new Date() : null }).where(eq13(debriefs.businessCheckId, check.id)).returning({ id: debriefs.id });
+    if (!updated.length) throw new TRPCError12({ code: "NOT_FOUND", message: "Write the Discovery Call up before sharing it." });
     await recordAudit(tx, { action: "debrief_shared", actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, debriefId: updated[0].id, shared: input.shared } });
     return { success: true };
   });
@@ -6675,8 +7175,8 @@ function roomInsight(input) {
 
 // server/fullReport/service.ts
 import { randomBytes as randomBytes7 } from "node:crypto";
-import { and as and6, eq as eq11 } from "drizzle-orm";
-import { TRPCError as TRPCError10 } from "@trpc/server";
+import { and as and8, eq as eq14 } from "drizzle-orm";
+import { TRPCError as TRPCError13 } from "@trpc/server";
 
 // shared/fullReport/content.ts
 var AREA_CONTENT = {
@@ -8827,21 +9327,21 @@ var REPORT_ERRORS = {
 var reportUrl = (token3) => `${getTrustedApplicationOrigin()}/report/${encodeURIComponent(token3)}`;
 async function issueReportLink(db, input) {
   const token3 = randomBytes7(32).toString("base64url");
-  const existing = (await db.select().from(fullReports).where(eq11(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
+  const existing = (await db.select().from(fullReports).where(eq14(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
   if (existing?.status === "delivered") return null;
-  if (existing) await db.update(fullReports).set({ tokenHash: sha256(token3) }).where(eq11(fullReports.id, existing.id));
+  if (existing) await db.update(fullReports).set({ tokenHash: sha256(token3) }).where(eq14(fullReports.id, existing.id));
   else await db.insert(fullReports).values({ businessCheckId: input.businessCheckId, paymentRequestId: input.paymentRequestId, tokenHash: sha256(token3) });
   return reportUrl(token3);
 }
 async function recordFor(db, token3) {
-  if (!token3 || token3.length > 200) throw new TRPCError10({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
-  const record = (await db.select().from(fullReports).where(eq11(fullReports.tokenHash, sha256(token3))).limit(1))[0];
-  if (!record) throw new TRPCError10({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
+  if (!token3 || token3.length > 200) throw new TRPCError13({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
+  const record = (await db.select().from(fullReports).where(eq14(fullReports.tokenHash, sha256(token3))).limit(1))[0];
+  if (!record) throw new TRPCError13({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
   return record;
 }
 async function checkFor(db, businessCheckId) {
-  const check = (await db.select().from(businessChecks).where(eq11(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError10({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
+  const check = (await db.select().from(businessChecks).where(eq14(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError13({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
   return check;
 }
 async function reportForm(db, token3) {
@@ -8859,9 +9359,9 @@ function parse(text4) {
 }
 async function assemble(db, record) {
   const intake = readIntake(parse(record.intakeJson));
-  if (!intake || !record.intakeSubmittedAt) throw new TRPCError10({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
+  if (!intake || !record.intakeSubmittedAt) throw new TRPCError13({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
   const check = await checkFor(db, record.businessCheckId);
-  const payment = (await db.select({ reference: paymentRequests.reference }).from(paymentRequests).where(eq11(paymentRequests.id, record.paymentRequestId)).limit(1))[0];
+  const payment = (await db.select({ reference: paymentRequests.reference }).from(paymentRequests).where(eq14(paymentRequests.id, record.paymentRequestId)).limit(1))[0];
   const answers = parse(check.answersJson) ?? {};
   const result = parse(check.resultJson) ?? evaluate(answers);
   const report = buildFullReport({
@@ -8907,11 +9407,11 @@ function reportEmail(report, downloadUrl) {
 }
 async function submitReportIntake(db, token3, rawIntake) {
   const record = await recordFor(db, token3);
-  if (record.status === "delivered") throw new TRPCError10({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
+  if (record.status === "delivered") throw new TRPCError13({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
   const parsed = intakeSchema.safeParse(rawIntake);
-  if (!parsed.success) throw new TRPCError10({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Please check your answers." });
-  const [claimed] = await db.update(fullReports).set({ status: "delivered", intakeJson: JSON.stringify(parsed.data), intakeSubmittedAt: /* @__PURE__ */ new Date(), reportVersion: REPORT_VERSION }).where(and6(eq11(fullReports.id, record.id), eq11(fullReports.status, "awaiting_intake"))).returning();
-  if (!claimed) throw new TRPCError10({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
+  if (!parsed.success) throw new TRPCError13({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Please check your answers." });
+  const [claimed] = await db.update(fullReports).set({ status: "delivered", intakeJson: JSON.stringify(parsed.data), intakeSubmittedAt: /* @__PURE__ */ new Date(), reportVersion: REPORT_VERSION }).where(and8(eq14(fullReports.id, record.id), eq14(fullReports.status, "awaiting_intake"))).returning();
+  if (!claimed) throw new TRPCError13({ code: "CONFLICT", message: REPORT_ERRORS.alreadySent });
   const { report, generatedAt, email } = await assemble(db, claimed);
   const pdf = await renderFullReportPdf(report, generatedAt);
   const message = reportEmail(report, reportUrl(token3));
@@ -8924,7 +9424,7 @@ async function submitReportIntake(db, token3, rawIntake) {
     body: message.body,
     attachments: [{ filename: fileName(report), content: pdf, contentType: "application/pdf" }]
   }).catch(() => ({ status: "Failed" }));
-  await db.update(fullReports).set({ deliveredAt: /* @__PURE__ */ new Date(), deliveryStatus: delivery.status }).where(eq11(fullReports.id, claimed.id));
+  await db.update(fullReports).set({ deliveredAt: /* @__PURE__ */ new Date(), deliveryStatus: delivery.status }).where(eq14(fullReports.id, claimed.id));
   await recordAudit(db, { action: "full_report_delivered", targetEmail: email, details: { businessCheckId: claimed.businessCheckId, reference: report.reference, delivery: delivery.status } });
   await deliverEmail({
     sender: "business_support",
@@ -8947,18 +9447,18 @@ async function submitReportIntake(db, token3, rawIntake) {
 }
 async function downloadReport(db, token3) {
   const record = await recordFor(db, token3);
-  if (record.status !== "delivered") throw new TRPCError10({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
+  if (record.status !== "delivered") throw new TRPCError13({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
   const { report, generatedAt } = await assemble(db, record);
   return { fileName: fileName(report), pdf: (await renderFullReportPdf(report, generatedAt)).toString("base64") };
 }
 async function adminDownloadReport(db, businessCheckId) {
-  const record = (await db.select().from(fullReports).where(eq11(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
-  if (!record || record.status !== "delivered") throw new TRPCError10({ code: "NOT_FOUND", message: "This Full Report has not been sent yet." });
+  const record = (await db.select().from(fullReports).where(eq14(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
+  if (!record || record.status !== "delivered") throw new TRPCError13({ code: "NOT_FOUND", message: "This Full Report has not been sent yet." });
   const { report, generatedAt } = await assemble(db, record);
   return { fileName: fileName(report), pdf: (await renderFullReportPdf(report, generatedAt)).toString("base64") };
 }
 async function reportForCheck(db, businessCheckId) {
-  const record = (await db.select().from(fullReports).where(eq11(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
+  const record = (await db.select().from(fullReports).where(eq14(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
   if (!record || record.status !== "delivered") return null;
   try {
     return (await assemble(db, record)).report;
@@ -8967,14 +9467,14 @@ async function reportForCheck(db, businessCheckId) {
   }
 }
 async function reportStatusFor(db, businessCheckId) {
-  const record = (await db.select({ status: fullReports.status, createdAt: fullReports.createdAt, deliveredAt: fullReports.deliveredAt, deliveryStatus: fullReports.deliveryStatus }).from(fullReports).where(eq11(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
+  const record = (await db.select({ status: fullReports.status, createdAt: fullReports.createdAt, deliveredAt: fullReports.deliveredAt, deliveryStatus: fullReports.deliveryStatus }).from(fullReports).where(eq14(fullReports.businessCheckId, businessCheckId)).limit(1))[0];
   return record ?? null;
 }
 async function resendReportLink(db, input) {
-  const record = (await db.select().from(fullReports).where(eq11(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
-  if (record?.status === "delivered") throw new TRPCError10({ code: "CONFLICT", message: "The Full Report has already been sent." });
-  const paymentRequestId = record?.paymentRequestId ?? (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and6(eq11(paymentRequests.businessCheckId, input.businessCheckId), eq11(paymentRequests.item, "full_report"), eq11(paymentRequests.status, "confirmed"))).limit(1))[0]?.id;
-  if (!paymentRequestId) throw new TRPCError10({ code: "NOT_FOUND", message: "Confirm the Full Report payment first: that sends the Report Intake link." });
+  const record = (await db.select().from(fullReports).where(eq14(fullReports.businessCheckId, input.businessCheckId)).limit(1))[0];
+  if (record?.status === "delivered") throw new TRPCError13({ code: "CONFLICT", message: "The Full Report has already been sent." });
+  const paymentRequestId = record?.paymentRequestId ?? (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and8(eq14(paymentRequests.businessCheckId, input.businessCheckId), eq14(paymentRequests.item, "full_report"), eq14(paymentRequests.status, "confirmed"))).limit(1))[0]?.id;
+  if (!paymentRequestId) throw new TRPCError13({ code: "NOT_FOUND", message: "Confirm the Full Report payment first: that sends the Report Intake link." });
   const check = await checkFor(db, input.businessCheckId);
   const link = await issueReportLink(db, { businessCheckId: check.id, paymentRequestId });
   const firstName2 = check.fullName.trim().split(/\s+/)[0] || "there";
@@ -9096,10 +9596,10 @@ async function bookedCallTime(eventUri, inviteeEmail) {
 
 // server/engagements.ts
 var NOT_FOUND = "This engagement is not available.";
-var notFound2 = () => new TRPCError11({ code: "NOT_FOUND", message: NOT_FOUND });
+var notFound4 = () => new TRPCError14({ code: "NOT_FOUND", message: NOT_FOUND });
 async function engagementDb() {
   const db = await getDb();
-  if (!db) throw new TRPCError11({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 function isMissingEngagementTable(error) {
@@ -9121,7 +9621,7 @@ function addWorkingDays(from, days) {
 async function startEngagement(db, input) {
   const now = input.now ?? /* @__PURE__ */ new Date();
   return db.transaction(async (tx) => {
-    const accepted = (await tx.select({ businessId: clientOnboardingInvitations.businessId }).from(clientOnboardingInvitations).where(and7(eq12(clientOnboardingInvitations.businessCheckId, input.businessCheckId), eq12(clientOnboardingInvitations.status, "accepted"))).orderBy(desc5(clientOnboardingInvitations.id)).limit(1))[0];
+    const accepted = (await tx.select({ businessId: clientOnboardingInvitations.businessId }).from(clientOnboardingInvitations).where(and9(eq15(clientOnboardingInvitations.businessCheckId, input.businessCheckId), eq15(clientOnboardingInvitations.status, "accepted"))).orderBy(desc5(clientOnboardingInvitations.id)).limit(1))[0];
     const [created] = await tx.insert(engagements).values({ businessCheckId: input.businessCheckId, paymentRequestId: input.paymentRequestId, businessId: accepted?.businessId ?? null }).onConflictDoNothing({ target: engagements.businessCheckId }).returning({ id: engagements.id });
     if (!created) return { engagementId: null, created: false };
     const dueFor = (week) => addWorkingDays(now, week === 1 ? 3 : 8);
@@ -9175,26 +9675,26 @@ async function createDirectEngagement(db, actor, input) {
   const service = input.type === "six_week_fix" ? "six_week_fix" : SERVICE_TYPES[input.type] ? input.service ?? null : null;
   const product2 = service ? PRODUCTS.find((item2) => item2.id === service) : void 0;
   if (SERVICE_TYPES[input.type] && (!product2 || input.type !== "six_week_fix" && !servicesFor(input.type).some((item2) => item2.id === product2.id))) {
-    throw new TRPCError11({ code: "BAD_REQUEST", message: "Choose the service this engagement is for." });
+    throw new TRPCError14({ code: "BAD_REQUEST", message: "Choose the service this engagement is for." });
   }
   const dated = DATED_TYPES[input.type];
   const starter = dated ?? (product2 ? serviceStarter(product2) : null);
   const dueFor = (week) => addDays(input.startedOn, (week - 1) * 7 + 3);
   if (input.businessId) {
-    const business = (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq12(businesses.id, input.businessId)).limit(1))[0];
-    if (!business) throw notFound2();
-    const owner = (await db.select({ email: users.email }).from(businessMemberships).innerJoin(users, eq12(businessMemberships.userId, users.id)).where(and7(eq12(businessMemberships.businessId, business.id), eq12(businessMemberships.role, "owner"))).limit(1))[0];
+    const business = (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq15(businesses.id, input.businessId)).limit(1))[0];
+    if (!business) throw notFound4();
+    const owner = (await db.select({ email: users.email }).from(businessMemberships).innerJoin(users, eq15(businessMemberships.userId, users.id)).where(and9(eq15(businessMemberships.businessId, business.id), eq15(businessMemberships.role, "owner"))).limit(1))[0];
     const engagementId2 = await db.transaction(async (tx) => insertDirect(tx, actor, input, { businessId: business.id, service, starter, dueFor, contactName: null, contactEmail: owner?.email ?? null }));
     return { engagementId: engagementId2, invitationUrl: null, deliveryStatus: null, hasAccount: true };
   }
   const businessName = input.businessName?.trim() ?? "";
   const contactName = input.contactName?.trim() ?? "";
   const email = input.contactEmail?.trim().toLowerCase() ?? "";
-  if (businessName.length < 2 || contactName.length < 2 || !email.includes("@")) throw new TRPCError11({ code: "BAD_REQUEST", message: "Name the business and the client, and give the client's email." });
+  if (businessName.length < 2 || contactName.length < 2 || !email.includes("@")) throw new TRPCError14({ code: "BAD_REQUEST", message: "Name the business and the client, and give the client's email." });
   const existing = (await db.select({ id: users.id, status: users.status }).from(users).where(sql5`lower(${users.email}) = ${email}`).limit(1))[0];
   if (existing) {
-    const staff2 = (await db.select({ id: userPlatformRoles.id }).from(userPlatformRoles).where(eq12(userPlatformRoles.userId, existing.id)).limit(1)).length > 0;
-    if (staff2) throw new TRPCError11({ code: "BAD_REQUEST", message: "This email belongs to a staff account. Use the client's own email." });
+    const staff2 = (await db.select({ id: userPlatformRoles.id }).from(userPlatformRoles).where(eq15(userPlatformRoles.userId, existing.id)).limit(1)).length > 0;
+    if (staff2) throw new TRPCError14({ code: "BAD_REQUEST", message: "This email belongs to a staff account. Use the client's own email." });
   }
   const { engagementId, businessId } = await db.transaction(async (tx) => {
     const [business] = await tx.insert(businesses).values({ name: businessName, slug: slugify(businessName), createdByUserId: existing?.id ?? actor.id }).returning({ id: businesses.id });
@@ -9207,6 +9707,7 @@ async function createDirectEngagement(db, actor, input) {
   return { engagementId, invitationUrl: invitation.invitationUrl, deliveryStatus: invitation.deliveryStatus, hasAccount: false };
 }
 async function insertDirect(tx, actor, input, at) {
+  const feeLines = defaultFees(input.type, at.service);
   const [created] = await tx.insert(engagements).values({
     businessId: at.businessId,
     type: input.type,
@@ -9214,6 +9715,7 @@ async function insertDirect(tx, actor, input, at) {
     startedOn: input.startedOn,
     contactName: at.contactName,
     contactEmail: at.contactEmail,
+    opensOnPayment: feeLines.length > 0,
     // The Six-Week Fix starts in the fix; every other direct engagement is getting set up.
     stage: input.type === "six_week_fix" ? "fix" : "setting_up",
     fixStartedAt: input.type === "six_week_fix" ? /* @__PURE__ */ new Date() : null
@@ -9230,7 +9732,7 @@ async function insertDirect(tx, actor, input, at) {
   if (tasks.length) await tx.insert(engagementTasks).values(tasks);
   const sessions = starter ? starter.sessions : ASSESSMENT_TEMPLATE.sessions;
   if (sessions.length) await tx.insert(engagementSessions).values(sessions.map((item2) => ({ engagementId: created.id, kind: item2.kind, title: item2.title, durationMinutes: item2.durationMinutes, agenda: item2.agenda, weekNumber: item2.week, sortOrder: item2.order, createdByUserId: actor.id })));
-  const fees = initialFeeRows(created.id, defaultFees(input.type, at.service));
+  const fees = initialFeeRows(created.id, feeLines);
   if (fees.length) await tx.insert(engagementFeeLines).values(fees);
   await recordAudit(tx, { action: "engagement_started", actorUserId: actor.id, targetEmail: at.contactEmail, details: { engagementId: created.id, type: input.type, service: at.service, direct: true, businessId: at.businessId } });
   return created.id;
@@ -9250,7 +9752,7 @@ async function startEngagementSafely(db, input) {
 var canStart = (actor) => canSeeAll(actor) && authorityAllows(actor.authority, "manage_engagements");
 function requireStart(actor) {
   if (!canStart(actor)) {
-    throw new TRPCError11({ code: "FORBIDDEN", message: "Only the desk lead can start an engagement by hand." });
+    throw new TRPCError14({ code: "FORBIDDEN", message: "Only the desk lead can start an engagement by hand." });
   }
 }
 async function listAwaitingStart(db, actor) {
@@ -9262,34 +9764,34 @@ async function listAwaitingStart(db, actor) {
     fullName: businessChecks.fullName,
     businessName: businessChecks.businessName,
     email: businessChecks.email
-  }).from(paymentRequests).innerJoin(businessChecks, eq12(paymentRequests.businessCheckId, businessChecks.id)).leftJoin(engagements, eq12(engagements.businessCheckId, paymentRequests.businessCheckId)).where(and7(eq12(paymentRequests.item, "current_state"), eq12(paymentRequests.status, "confirmed"), isNull6(engagements.id))).orderBy(asc2(paymentRequests.confirmedAt));
+  }).from(paymentRequests).innerJoin(businessChecks, eq15(paymentRequests.businessCheckId, businessChecks.id)).leftJoin(engagements, eq15(engagements.businessCheckId, paymentRequests.businessCheckId)).where(and9(eq15(paymentRequests.item, "current_state"), eq15(paymentRequests.status, "confirmed"), isNull7(engagements.id))).orderBy(asc3(paymentRequests.confirmedAt));
 }
 async function startAwaitingEngagement(db, actor, input) {
   requireStart(actor);
-  const payment = (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and7(eq12(paymentRequests.businessCheckId, input.businessCheckId), eq12(paymentRequests.item, "current_state"), eq12(paymentRequests.status, "confirmed"))).limit(1))[0];
-  if (!payment) throw new TRPCError11({ code: "NOT_FOUND", message: "This Business Review is not paid yet." });
+  const payment = (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and9(eq15(paymentRequests.businessCheckId, input.businessCheckId), eq15(paymentRequests.item, "current_state"), eq15(paymentRequests.status, "confirmed"))).limit(1))[0];
+  if (!payment) throw new TRPCError14({ code: "NOT_FOUND", message: "This Business Review is not paid yet." });
   const result = await startEngagement(db, { businessCheckId: input.businessCheckId, paymentRequestId: payment.id, actorUserId: actor.id });
-  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq12(engagements.businessCheckId, input.businessCheckId)).limit(1))[0];
+  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq15(engagements.businessCheckId, input.businessCheckId)).limit(1))[0];
   return { engagementId: engagement.id, created: result.created };
 }
 async function linkEngagementToBusiness(db, input) {
-  await db.update(engagements).set({ businessId: input.businessId }).where(and7(eq12(engagements.businessCheckId, input.businessCheckId), isNull6(engagements.businessId)));
+  await db.update(engagements).set({ businessId: input.businessId }).where(and9(eq15(engagements.businessCheckId, input.businessCheckId), isNull7(engagements.businessId)));
 }
 var canSeeAll = (actor) => authorityAllows(actor.authority, "view_all_businesses");
 var canSeeAssigned = (actor) => authorityAllows(actor.authority, "view_assigned_businesses");
 async function assignedEngagementIds(db, userId) {
-  const rows = await db.select({ engagementId: engagementTeam.engagementId }).from(engagementTeam).where(eq12(engagementTeam.userId, userId));
+  const rows = await db.select({ engagementId: engagementTeam.engagementId }).from(engagementTeam).where(eq15(engagementTeam.userId, userId));
   return rows.map((row) => row.engagementId);
 }
 async function requireStaffEngagement(db, actor, engagementId) {
-  const engagement = (await db.select().from(engagements).where(eq12(engagements.id, engagementId)).limit(1))[0];
-  if (!engagement) throw notFound2();
+  const engagement = (await db.select().from(engagements).where(eq15(engagements.id, engagementId)).limit(1))[0];
+  if (!engagement) throw notFound4();
   if (canSeeAll(actor)) return engagement;
   if (canSeeAssigned(actor) && (await assignedEngagementIds(db, actor.id)).includes(engagementId)) return engagement;
-  throw notFound2();
+  throw notFound4();
 }
 function requirePermission(actor, permission, message) {
-  if (!authorityAllows(actor.authority, permission)) throw new TRPCError11({ code: "FORBIDDEN", message });
+  if (!authorityAllows(actor.authority, permission)) throw new TRPCError14({ code: "FORBIDDEN", message });
 }
 var requireManage2 = (actor) => requirePermission(actor, "manage_engagements", "Your role does not include working on engagements.");
 var canContribute = (actor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "contribute_engagements");
@@ -9325,16 +9827,16 @@ async function listStaffEngagements(db, actor) {
     startedOn: engagements.startedOn,
     contactName: engagements.contactName,
     contactEmail: engagements.contactEmail
-  }).from(engagements).leftJoin(businessChecks, eq12(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq12(engagements.businessId, businesses.id)).where(scope ? inArray3(engagements.id, scope) : void 0).orderBy(desc5(engagements.id));
+  }).from(engagements).leftJoin(businessChecks, eq15(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq15(engagements.businessId, businesses.id)).where(scope ? inArray3(engagements.id, scope) : void 0).orderBy(desc5(engagements.id));
   if (!rows.length) return [];
   const ids = rows.map((row) => row.id);
   const [team, tasks, sessions, drops, matched] = await Promise.all([
-    db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role, name: users.name, userId: engagementTeam.userId }).from(engagementTeam).innerJoin(users, eq12(engagementTeam.userId, users.id)).where(inArray3(engagementTeam.engagementId, ids)),
+    db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role, name: users.name, userId: engagementTeam.userId }).from(engagementTeam).innerJoin(users, eq15(engagementTeam.userId, users.id)).where(inArray3(engagementTeam.engagementId, ids)),
     db.select({ engagementId: engagementTasks.engagementId, side: engagementTasks.side, status: engagementTasks.status, dueOn: engagementTasks.dueOn }).from(engagementTasks).where(inArray3(engagementTasks.engagementId, ids)),
     db.select({ engagementId: engagementSessions.engagementId, title: engagementSessions.title, scheduledFor: engagementSessions.scheduledFor, status: engagementSessions.status }).from(engagementSessions).where(inArray3(engagementSessions.engagementId, ids)),
     // Files in the drop box (on no request or deliverable yet), and which of them the team has matched.
-    db.select({ id: engagementFiles.id, engagementId: engagementFiles.engagementId }).from(engagementFiles).where(and7(inArray3(engagementFiles.engagementId, ids), isNull6(engagementFiles.taskId), isNull6(engagementFiles.deliverableId))),
-    db.select({ fileId: engagementFileMatches.fileId }).from(engagementFileMatches).innerJoin(engagementFiles, eq12(engagementFileMatches.fileId, engagementFiles.id)).where(inArray3(engagementFiles.engagementId, ids))
+    db.select({ id: engagementFiles.id, engagementId: engagementFiles.engagementId }).from(engagementFiles).where(and9(inArray3(engagementFiles.engagementId, ids), isNull7(engagementFiles.taskId), isNull7(engagementFiles.deliverableId))),
+    db.select({ fileId: engagementFileMatches.fileId }).from(engagementFileMatches).innerJoin(engagementFiles, eq15(engagementFileMatches.fileId, engagementFiles.id)).where(inArray3(engagementFiles.engagementId, ids))
   ]);
   const now = Date.now();
   const matchedIds = new Set(matched.map((row) => row.fileId));
@@ -9369,15 +9871,15 @@ async function listStaffEngagements(db, actor) {
 }
 async function getStaffEngagement(db, actor, engagementId) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
-  const check = engagement.businessCheckId !== null ? (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq12(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { id: null, fullName: engagement.contactName ?? "", email: engagement.contactEmail, whatsapp: null, businessName: null } : void 0;
+  const check = engagement.businessCheckId !== null ? (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq15(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { id: null, fullName: engagement.contactName ?? "", email: engagement.contactEmail, whatsapp: null, businessName: null } : void 0;
   if (check) await syncSessionBookings(db, engagement, check.email);
-  const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq12(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
+  const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq15(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
   const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins, matches] = await Promise.all([
-    db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq12(engagementTeam.userId, users.id)).where(eq12(engagementTeam.engagementId, engagementId)).orderBy(asc2(engagementTeam.id)),
-    db.select().from(engagementSessions).where(eq12(engagementSessions.engagementId, engagementId)).orderBy(asc2(engagementSessions.id)),
-    db.select().from(engagementTasks).where(eq12(engagementTasks.engagementId, engagementId)).orderBy(asc2(engagementTasks.id)),
-    db.select().from(engagementDeliverables).where(eq12(engagementDeliverables.engagementId, engagementId)).orderBy(asc2(engagementDeliverables.id)),
-    db.select({ id: engagementComments.id, deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq12(engagementComments.authorUserId, users.id)).where(eq12(engagementComments.engagementId, engagementId)).orderBy(asc2(engagementComments.id)),
+    db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq15(engagementTeam.userId, users.id)).where(eq15(engagementTeam.engagementId, engagementId)).orderBy(asc3(engagementTeam.id)),
+    db.select().from(engagementSessions).where(eq15(engagementSessions.engagementId, engagementId)).orderBy(asc3(engagementSessions.id)),
+    db.select().from(engagementTasks).where(eq15(engagementTasks.engagementId, engagementId)).orderBy(asc3(engagementTasks.id)),
+    db.select().from(engagementDeliverables).where(eq15(engagementDeliverables.engagementId, engagementId)).orderBy(asc3(engagementDeliverables.id)),
+    db.select({ id: engagementComments.id, deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq15(engagementComments.authorUserId, users.id)).where(eq15(engagementComments.engagementId, engagementId)).orderBy(asc3(engagementComments.id)),
     engagement.businessId ? clientPeopleOf(db, engagement.businessId) : Promise.resolve([]),
     filesOf(db, engagementId),
     measureOf(db, engagementId),
@@ -9416,12 +9918,12 @@ async function getStaffEngagement(db, actor, engagementId) {
   };
 }
 async function clientPeopleOf(db, businessId) {
-  const rows = await db.select({ userId: users.id, name: users.name, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq12(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq12(businessMemberAccess.membershipId, businessMemberships.id)).where(and7(eq12(businessMemberships.businessId, businessId), eq12(businessMemberships.status, "active"))).orderBy(asc2(businessMemberships.id));
+  const rows = await db.select({ userId: users.id, name: users.name, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq15(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq15(businessMemberAccess.membershipId, businessMemberships.id)).where(and9(eq15(businessMemberships.businessId, businessId), eq15(businessMemberships.status, "active"))).orderBy(asc3(businessMemberships.id));
   return rows.map((row) => ({ userId: row.userId, name: row.name ?? "", role: row.role, access: row.role === "member" ? row.access ?? "full" : "full" }));
 }
 async function listAssignableStaff(db, actor) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
-  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, role: userPlatformRoles.role }).from(userPlatformRoles).innerJoin(users, eq12(userPlatformRoles.userId, users.id)).where(eq12(users.status, "active")).orderBy(asc2(users.name));
+  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, role: userPlatformRoles.role }).from(userPlatformRoles).innerJoin(users, eq15(userPlatformRoles.userId, users.id)).where(eq15(users.status, "active")).orderBy(asc3(users.name));
   const people = /* @__PURE__ */ new Map();
   for (const row of rows) {
     const person = people.get(row.userId) ?? { userId: row.userId, name: row.name ?? "", email: row.email ?? "", roles: [] };
@@ -9446,12 +9948,12 @@ function sharedNoticeEmail(input) {
   };
 }
 async function clientRecipients(db, businessId, audience) {
-  const people = await db.select({ name: users.name, email: users.email, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq12(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq12(businessMemberAccess.membershipId, businessMemberships.id)).where(and7(eq12(businessMemberships.businessId, businessId), eq12(businessMemberships.status, "active"), eq12(users.status, "active")));
+  const people = await db.select({ name: users.name, email: users.email, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq15(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq15(businessMemberAccess.membershipId, businessMemberships.id)).where(and9(eq15(businessMemberships.businessId, businessId), eq15(businessMemberships.status, "active"), eq15(users.status, "active")));
   return people.filter((person) => person.email && clientCanSee(audience, person.role === "member" ? { kind: "member", access: person.access ?? "full", userId: 0 } : { kind: "owner" }));
 }
 async function notifyShared(db, engagementId, audience, what, title) {
   try {
-    const engagement = (await db.select({ businessId: engagements.businessId }).from(engagements).where(eq12(engagements.id, engagementId)).limit(1))[0];
+    const engagement = (await db.select({ businessId: engagements.businessId }).from(engagements).where(eq15(engagements.id, engagementId)).limit(1))[0];
     if (!engagement?.businessId) return;
     const url = `${getTrustedApplicationOrigin()}/dashboard`;
     for (const person of await clientRecipients(db, engagement.businessId, audience)) {
@@ -9465,9 +9967,9 @@ async function notifyShared(db, engagementId, audience, what, title) {
 async function assignTeamMember(db, actor, input) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
   await requireStaffEngagement(db, actor, input.engagementId);
-  const staff2 = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq12(userPlatformRoles.userId, users.id)).where(and7(eq12(userPlatformRoles.userId, input.userId), eq12(users.status, "active"))).limit(1))[0];
-  if (!staff2) throw new TRPCError11({ code: "BAD_REQUEST", message: "Only IP Factory staff can join an engagement team." });
-  const existing = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and7(eq12(engagementTeam.engagementId, input.engagementId), eq12(engagementTeam.userId, input.userId))).limit(1))[0];
+  const staff2 = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq15(userPlatformRoles.userId, users.id)).where(and9(eq15(userPlatformRoles.userId, input.userId), eq15(users.status, "active"))).limit(1))[0];
+  if (!staff2) throw new TRPCError14({ code: "BAD_REQUEST", message: "Only IP Factory staff can join an engagement team." });
+  const existing = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and9(eq15(engagementTeam.engagementId, input.engagementId), eq15(engagementTeam.userId, input.userId))).limit(1))[0];
   await db.transaction(async (tx) => {
     await tx.insert(engagementTeam).values({ engagementId: input.engagementId, userId: input.userId, role: input.role, assignedByUserId: actor.id }).onConflictDoUpdate({ target: [engagementTeam.engagementId, engagementTeam.userId], set: { role: input.role, assignedByUserId: actor.id } });
     await recordAudit(tx, { action: "engagement_team_assigned", actorUserId: actor.id, details: { engagementId: input.engagementId, userId: input.userId, role: input.role, ...existing ? { previousRole: existing.role } : {} } });
@@ -9492,9 +9994,9 @@ function assignedNoticeEmail(input) {
 }
 async function notifyAssigned(db, engagementId, userId, role, changed) {
   try {
-    const person = (await db.select({ name: users.name, email: users.email }).from(users).where(eq12(users.id, userId)).limit(1))[0];
+    const person = (await db.select({ name: users.name, email: users.email }).from(users).where(eq15(users.id, userId)).limit(1))[0];
     if (!person?.email) return false;
-    const row = (await db.select({ businessName: businesses.name, checkBusiness: businessChecks.businessName, ownerName: businessChecks.fullName }).from(engagements).leftJoin(businessChecks, eq12(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq12(engagements.businessId, businesses.id)).where(eq12(engagements.id, engagementId)).limit(1))[0];
+    const row = (await db.select({ businessName: businesses.name, checkBusiness: businessChecks.businessName, ownerName: businessChecks.fullName }).from(engagements).leftJoin(businessChecks, eq15(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq15(engagements.businessId, businesses.id)).where(eq15(engagements.id, engagementId)).limit(1))[0];
     const businessName = row?.businessName ?? row?.checkBusiness ?? row?.ownerName ?? "a client";
     const message = assignedNoticeEmail({ fullName: person.name ?? "", businessName, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[role], changed, url: `${getTrustedApplicationOrigin()}/admin` });
     await deliverEmail({ to: person.email, subject: message.subject, body: message.body, sender: "business_support" });
@@ -9508,7 +10010,7 @@ async function removeTeamMember(db, actor, input) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
   await requireStaffEngagement(db, actor, input.engagementId);
   await db.transaction(async (tx) => {
-    await tx.delete(engagementTeam).where(and7(eq12(engagementTeam.engagementId, input.engagementId), eq12(engagementTeam.userId, input.userId)));
+    await tx.delete(engagementTeam).where(and9(eq15(engagementTeam.engagementId, input.engagementId), eq15(engagementTeam.userId, input.userId)));
     await recordAudit(tx, { action: "engagement_team_removed", actorUserId: actor.id, details: { engagementId: input.engagementId, userId: input.userId } });
   });
   return { success: true };
@@ -9524,7 +10026,7 @@ async function setEngagementStage(db, actor, input) {
       ...input.stage === "assessment" && !engagement.assessmentStartedAt ? { assessmentStartedAt: now } : {},
       ...input.stage === "fix" && !engagement.fixStartedAt ? { fixStartedAt: now } : {},
       ...input.stage === "closed" ? { closedAt: now } : { closedAt: null }
-    }).where(eq12(engagements.id, engagement.id));
+    }).where(eq15(engagements.id, engagement.id));
     await recordAudit(tx, { action: "engagement_stage_changed", actorUserId: actor.id, details: { engagementId: engagement.id, from: engagement.stage, to: input.stage } });
   });
   return { success: true, changed: true };
@@ -9532,7 +10034,7 @@ async function setEngagementStage(db, actor, input) {
 async function saveProblem(db, actor, input) {
   requireManage2(actor);
   await requireStaffEngagement(db, actor, input.engagementId);
-  await db.update(engagements).set({ problemArea: input.problemArea, subProblem: input.subProblem, problemStatement: input.problemStatement }).where(eq12(engagements.id, input.engagementId));
+  await db.update(engagements).set({ problemArea: input.problemArea, subProblem: input.subProblem, problemStatement: input.problemStatement }).where(eq15(engagements.id, input.engagementId));
   return { success: true };
 }
 async function saveSession(db, actor, input) {
@@ -9540,31 +10042,31 @@ async function saveSession(db, actor, input) {
   await requireStaffEngagement(db, actor, input.engagementId);
   const values2 = { kind: input.kind, title: input.title, scheduledFor: input.scheduledFor, durationMinutes: input.durationMinutes, meetingLink: input.meetingLink, agenda: input.agenda, status: input.status, ...input.weekNumber === void 0 ? {} : { weekNumber: input.weekNumber } };
   if (input.sessionId) {
-    const updated = await db.update(engagementSessions).set(values2).where(and7(eq12(engagementSessions.id, input.sessionId), eq12(engagementSessions.engagementId, input.engagementId))).returning({ id: engagementSessions.id });
-    if (!updated.length) throw notFound2();
+    const updated = await db.update(engagementSessions).set(values2).where(and9(eq15(engagementSessions.id, input.sessionId), eq15(engagementSessions.engagementId, input.engagementId))).returning({ id: engagementSessions.id });
+    if (!updated.length) throw notFound4();
     return { sessionId: input.sessionId };
   }
   const [created] = await db.insert(engagementSessions).values({ engagementId: input.engagementId, ...values2, createdByUserId: actor.id }).returning({ id: engagementSessions.id });
   return { sessionId: created.id };
 }
 async function requireStaffSession(db, actor, sessionId) {
-  const session = (await db.select().from(engagementSessions).where(eq12(engagementSessions.id, sessionId)).limit(1))[0];
-  if (!session) throw notFound2();
+  const session = (await db.select().from(engagementSessions).where(eq15(engagementSessions.id, sessionId)).limit(1))[0];
+  if (!session) throw notFound4();
   await requireStaffEngagement(db, actor, session.engagementId);
   return session;
 }
 async function saveSessionNotes(db, actor, input) {
   requireManage2(actor);
   await requireStaffSession(db, actor, input.sessionId);
-  await db.update(engagementSessions).set({ clientNotes: input.clientNotes, internalNotes: input.internalNotes }).where(eq12(engagementSessions.id, input.sessionId));
+  await db.update(engagementSessions).set({ clientNotes: input.clientNotes, internalNotes: input.internalNotes }).where(eq15(engagementSessions.id, input.sessionId));
   return { success: true };
 }
 async function shareSessionNotes(db, actor, input) {
   requireManage2(actor);
   const session = await requireStaffSession(db, actor, input.sessionId);
-  if (!session.clientNotes?.trim()) throw new TRPCError11({ code: "BAD_REQUEST", message: "Write the client's version of the notes before sharing them." });
+  if (!session.clientNotes?.trim()) throw new TRPCError14({ code: "BAD_REQUEST", message: "Write the client's version of the notes before sharing them." });
   await db.transaction(async (tx) => {
-    await tx.update(engagementSessions).set({ notesAudience: input.audience, notesSharedAt: /* @__PURE__ */ new Date(), notesSharedByUserId: actor.id }).where(eq12(engagementSessions.id, session.id));
+    await tx.update(engagementSessions).set({ notesAudience: input.audience, notesSharedAt: /* @__PURE__ */ new Date(), notesSharedByUserId: actor.id }).where(eq15(engagementSessions.id, session.id));
     await recordAudit(tx, { action: "engagement_notes_shared", actorUserId: actor.id, details: { engagementId: session.engagementId, sessionId: session.id, audience: input.audience } });
   });
   await notifyShared(db, session.engagementId, input.audience, "the Session notes", session.title);
@@ -9573,20 +10075,20 @@ async function shareSessionNotes(db, actor, input) {
 async function saveTask(db, actor, input) {
   if (!authorityAllows(actor.authority, "manage_engagements")) {
     if (!canContribute(actor)) requireManage2(actor);
-    if (input.taskId || input.side !== "ipf") throw new TRPCError11({ code: "FORBIDDEN", message: "You can add team items to the Work Plan. The lead changes the rest." });
-    if (input.assigneeUserId !== null && input.assigneeUserId !== actor.id) throw new TRPCError11({ code: "FORBIDDEN", message: "Add the item for yourself; the lead assigns others." });
+    if (input.taskId || input.side !== "ipf") throw new TRPCError14({ code: "FORBIDDEN", message: "You can add team items to the Work Plan. The lead changes the rest." });
+    if (input.assigneeUserId !== null && input.assigneeUserId !== actor.id) throw new TRPCError14({ code: "FORBIDDEN", message: "Add the item for yourself; the lead assigns others." });
   }
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   if (input.assigneeUserId !== null) {
-    const allowed = input.side === "client" ? engagement.businessId !== null && (await clientPeopleOf(db, engagement.businessId)).some((person) => person.userId === input.assigneeUserId) : (await db.select({ userId: engagementTeam.userId }).from(engagementTeam).where(and7(eq12(engagementTeam.engagementId, engagement.id), eq12(engagementTeam.userId, input.assigneeUserId))).limit(1)).length === 1;
-    if (!allowed) throw new TRPCError11({ code: "BAD_REQUEST", message: input.side === "client" ? "That person is not part of the client's business." : "That person is not on the engagement team." });
+    const allowed = input.side === "client" ? engagement.businessId !== null && (await clientPeopleOf(db, engagement.businessId)).some((person) => person.userId === input.assigneeUserId) : (await db.select({ userId: engagementTeam.userId }).from(engagementTeam).where(and9(eq15(engagementTeam.engagementId, engagement.id), eq15(engagementTeam.userId, input.assigneeUserId))).limit(1)).length === 1;
+    if (!allowed) throw new TRPCError14({ code: "BAD_REQUEST", message: input.side === "client" ? "That person is not part of the client's business." : "That person is not on the engagement team." });
   }
-  if (input.sessionId !== null && !(await db.select({ id: engagementSessions.id }).from(engagementSessions).where(and7(eq12(engagementSessions.id, input.sessionId), eq12(engagementSessions.engagementId, engagement.id))).limit(1)).length) throw notFound2();
+  if (input.sessionId !== null && !(await db.select({ id: engagementSessions.id }).from(engagementSessions).where(and9(eq15(engagementSessions.id, input.sessionId), eq15(engagementSessions.engagementId, engagement.id))).limit(1)).length) throw notFound4();
   const finished = input.status === "accepted" || input.status === "done";
   const values2 = { kind: input.kind, title: input.title, detail: input.detail, side: input.side, assigneeUserId: input.assigneeUserId, dueOn: input.dueOn, status: input.status, statusNote: input.statusNote, sessionId: input.sessionId, weekNumber: input.weekNumber, sortOrder: input.sortOrder, factor: input.factor, section: input.section ?? null, ref: input.ref ?? null, informs: input.informs ?? null, format: input.format ?? null, priority: input.priority ?? null, completedAt: finished ? /* @__PURE__ */ new Date() : null };
   if (input.taskId) {
-    const updated = await db.update(engagementTasks).set(values2).where(and7(eq12(engagementTasks.id, input.taskId), eq12(engagementTasks.engagementId, engagement.id))).returning({ id: engagementTasks.id });
-    if (!updated.length) throw notFound2();
+    const updated = await db.update(engagementTasks).set(values2).where(and9(eq15(engagementTasks.id, input.taskId), eq15(engagementTasks.engagementId, engagement.id))).returning({ id: engagementTasks.id });
+    if (!updated.length) throw notFound4();
     return { taskId: input.taskId };
   }
   const [created] = await db.insert(engagementTasks).values({ engagementId: engagement.id, ...values2, createdByUserId: actor.id }).returning({ id: engagementTasks.id });
@@ -9595,8 +10097,8 @@ async function saveTask(db, actor, input) {
 async function loadDataRequest(db, actor, input) {
   requireManage2(actor);
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
-  if (!input.items.length) throw new TRPCError11({ code: "BAD_REQUEST", message: "There is nothing to add." });
-  const existing = await db.select({ title: engagementTasks.title, sortOrder: engagementTasks.sortOrder }).from(engagementTasks).where(eq12(engagementTasks.engagementId, engagement.id));
+  if (!input.items.length) throw new TRPCError14({ code: "BAD_REQUEST", message: "There is nothing to add." });
+  const existing = await db.select({ title: engagementTasks.title, sortOrder: engagementTasks.sortOrder }).from(engagementTasks).where(eq15(engagementTasks.engagementId, engagement.id));
   const seen = new Set(existing.map((row) => row.title.trim().toLowerCase()));
   const today = input.today ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(/* @__PURE__ */ new Date());
   let order = existing.reduce((max, row) => Math.max(max, row.sortOrder ?? 0), 0);
@@ -9637,30 +10139,30 @@ async function saveDeliverable(db, actor, input) {
   await requireStaffEngagement(db, actor, input.engagementId);
   const values2 = { kind: input.kind, title: input.title, summary: input.summary };
   if (input.deliverableId) {
-    const updated = await db.update(engagementDeliverables).set({ ...values2, status: "draft", approvedAt: null, approvedByUserId: null, sharedAt: null, sharedByUserId: null, clientAcceptedAt: null, clientAcceptedByUserId: null }).where(and7(eq12(engagementDeliverables.id, input.deliverableId), eq12(engagementDeliverables.engagementId, input.engagementId))).returning({ id: engagementDeliverables.id });
-    if (!updated.length) throw notFound2();
+    const updated = await db.update(engagementDeliverables).set({ ...values2, status: "draft", approvedAt: null, approvedByUserId: null, sharedAt: null, sharedByUserId: null, clientAcceptedAt: null, clientAcceptedByUserId: null }).where(and9(eq15(engagementDeliverables.id, input.deliverableId), eq15(engagementDeliverables.engagementId, input.engagementId))).returning({ id: engagementDeliverables.id });
+    if (!updated.length) throw notFound4();
     return { deliverableId: input.deliverableId };
   }
   const [created] = await db.insert(engagementDeliverables).values({ engagementId: input.engagementId, ...values2, createdByUserId: actor.id }).returning({ id: engagementDeliverables.id });
   return { deliverableId: created.id };
 }
 async function requireStaffDeliverable(db, actor, deliverableId) {
-  const deliverable = (await db.select().from(engagementDeliverables).where(eq12(engagementDeliverables.id, deliverableId)).limit(1))[0];
-  if (!deliverable) throw notFound2();
+  const deliverable = (await db.select().from(engagementDeliverables).where(eq15(engagementDeliverables.id, deliverableId)).limit(1))[0];
+  if (!deliverable) throw notFound4();
   await requireStaffEngagement(db, actor, deliverable.engagementId);
   return deliverable;
 }
 async function canReviewEngagement(db, actor, engagementId) {
   if (authorityAllows(actor.authority, "review_engagements")) return true;
-  const mine = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and7(eq12(engagementTeam.engagementId, engagementId), eq12(engagementTeam.userId, actor.id))).limit(1))[0];
+  const mine = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and9(eq15(engagementTeam.engagementId, engagementId), eq15(engagementTeam.userId, actor.id))).limit(1))[0];
   return Boolean(mine && ENGAGEMENT_REVIEW_ROLES.includes(mine.role));
 }
 async function approveDeliverable(db, actor, input) {
   const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
-  if (!await canReviewEngagement(db, actor, deliverable.engagementId)) throw new TRPCError11({ code: "FORBIDDEN", message: "Only the desk lead, a partner or this engagement's Engagement Manager or Lead Consultant can approve this." });
-  if (deliverable.status === "shared") throw new TRPCError11({ code: "CONFLICT", message: "This is already shared." });
+  if (!await canReviewEngagement(db, actor, deliverable.engagementId)) throw new TRPCError14({ code: "FORBIDDEN", message: "Only the desk lead, a partner or this engagement's Engagement Manager or Lead Consultant can approve this." });
+  if (deliverable.status === "shared") throw new TRPCError14({ code: "CONFLICT", message: "This is already shared." });
   await db.transaction(async (tx) => {
-    await tx.update(engagementDeliverables).set({ status: "approved", approvedAt: /* @__PURE__ */ new Date(), approvedByUserId: actor.id }).where(eq12(engagementDeliverables.id, deliverable.id));
+    await tx.update(engagementDeliverables).set({ status: "approved", approvedAt: /* @__PURE__ */ new Date(), approvedByUserId: actor.id }).where(eq15(engagementDeliverables.id, deliverable.id));
     await recordAudit(tx, { action: "engagement_deliverable_approved", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind } });
   });
   return { success: true };
@@ -9669,10 +10171,10 @@ async function shareDeliverable(db, actor, input) {
   requireManage2(actor);
   const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
   if (DELIVERABLES_NEEDING_APPROVAL.includes(deliverable.kind) && deliverable.status !== "approved" && deliverable.status !== "shared") {
-    throw new TRPCError11({ code: "FORBIDDEN", message: `The desk lead approves every ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]} before the client sees it.` });
+    throw new TRPCError14({ code: "FORBIDDEN", message: `The desk lead approves every ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]} before the client sees it.` });
   }
   await db.transaction(async (tx) => {
-    await tx.update(engagementDeliverables).set({ status: "shared", audience: input.audience, sharedAt: /* @__PURE__ */ new Date(), sharedByUserId: actor.id }).where(eq12(engagementDeliverables.id, deliverable.id));
+    await tx.update(engagementDeliverables).set({ status: "shared", audience: input.audience, sharedAt: /* @__PURE__ */ new Date(), sharedByUserId: actor.id }).where(eq15(engagementDeliverables.id, deliverable.id));
     await recordAudit(tx, { action: "engagement_deliverable_shared", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind, audience: input.audience } });
   });
   await notifyShared(db, deliverable.engagementId, input.audience, `your ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]}`, deliverable.title);
@@ -9685,9 +10187,9 @@ async function staffComment(db, actor, input) {
 }
 async function clientViewerFor(db, session, businessId) {
   const membership = session.memberships.find((item2) => item2.businessId === businessId);
-  if (!membership) throw notFound2();
+  if (!membership) throw notFound4();
   if (membership.role !== "member") return { kind: "owner" };
-  const access = (await db.select({ access: businessMemberAccess.access }).from(businessMemberAccess).innerJoin(businessMemberships, eq12(businessMemberAccess.membershipId, businessMemberships.id)).where(and7(eq12(businessMemberships.businessId, businessId), eq12(businessMemberships.userId, session.user.id))).limit(1))[0];
+  const access = (await db.select({ access: businessMemberAccess.access }).from(businessMemberAccess).innerJoin(businessMemberships, eq15(businessMemberAccess.membershipId, businessMemberships.id)).where(and9(eq15(businessMemberships.businessId, businessId), eq15(businessMemberships.userId, session.user.id))).limit(1))[0];
   return { kind: "member", access: access?.access ?? "full", userId: session.user.id };
 }
 var lastSessionSync = /* @__PURE__ */ new Map();
@@ -9696,7 +10198,7 @@ async function syncSessionBookings(db, engagement, inviteeEmail, now = Date.now(
   if (!isSessionBookingConfigured() || !inviteeEmail) return 0;
   if (now - (lastSessionSync.get(engagement.id) ?? 0) < SESSION_SYNC_INTERVAL_MS) return 0;
   lastSessionSync.set(engagement.id, now);
-  const sessions = await db.select().from(engagementSessions).where(and7(eq12(engagementSessions.engagementId, engagement.id), eq12(engagementSessions.kind, "assessment_call"))).orderBy(asc2(engagementSessions.weekNumber), asc2(engagementSessions.sortOrder), asc2(engagementSessions.id));
+  const sessions = await db.select().from(engagementSessions).where(and9(eq15(engagementSessions.engagementId, engagement.id), eq15(engagementSessions.kind, "assessment_call"))).orderBy(asc3(engagementSessions.weekNumber), asc3(engagementSessions.sortOrder), asc3(engagementSessions.id));
   const waiting = sessions.filter((item2) => item2.status === "planned" && !item2.scheduledFor);
   if (!waiting.length) return 0;
   const timed = new Set(sessions.filter((item2) => item2.scheduledFor).map((item2) => item2.scheduledFor.getTime()));
@@ -9712,7 +10214,7 @@ async function syncSessionBookings(db, engagement, inviteeEmail, now = Date.now(
       scheduledFor: booking.start,
       ...minutes && minutes > 0 ? { durationMinutes: minutes } : {},
       ...booking.joinUrl && !session.meetingLink ? { meetingLink: booking.joinUrl } : {}
-    }).where(and7(eq12(engagementSessions.id, session.id), isNull6(engagementSessions.scheduledFor)));
+    }).where(and9(eq15(engagementSessions.id, session.id), isNull7(engagementSessions.scheduledFor)));
     await recordAudit(db, { action: "engagement_session_booked", actorUserId: null, details: { engagementId: engagement.id, sessionId: session.id, via: "calendly", scheduledFor: booking.start.toISOString() } });
     recorded += 1;
   }
@@ -9729,7 +10231,7 @@ function parseJson(text4) {
 async function insightFor(db, businessCheckId, reportDelivered) {
   const report = reportDelivered ? await reportForCheck(db, businessCheckId) : null;
   if (report) return roomInsight({ report, result: null });
-  const check = (await db.select({ answersJson: businessChecks.answersJson, resultJson: businessChecks.resultJson }).from(businessChecks).where(eq12(businessChecks.id, businessCheckId)).limit(1))[0];
+  const check = (await db.select({ answersJson: businessChecks.answersJson, resultJson: businessChecks.resultJson }).from(businessChecks).where(eq15(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!check) return null;
   const answers = parseJson(check.answersJson);
   const stored = parseJson(check.resultJson);
@@ -9745,8 +10247,8 @@ function bookingFor(sessions, viewer, owner) {
 async function getClientRoom(db, session, engagementId) {
   const business = session.activeBusiness;
   if (!business) return null;
-  const all = await db.select().from(engagements).where(eq12(engagements.businessId, business.businessId)).orderBy(desc5(engagements.id));
-  if (engagementId && !all.some((row) => row.id === engagementId)) throw notFound2();
+  const all = await db.select().from(engagements).where(eq15(engagements.businessId, business.businessId)).orderBy(desc5(engagements.id));
+  if (engagementId && !all.some((row) => row.id === engagementId)) throw notFound4();
   const engagement = engagementId ? all.find((row) => row.id === engagementId) : all.find((row) => row.stage !== "closed") ?? all[0];
   if (!engagement) return null;
   const viewer = await clientViewerFor(db, session, business.businessId);
@@ -9754,22 +10256,22 @@ async function getClientRoom(db, session, engagementId) {
 }
 async function previewClientRoom(db, actor, input) {
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
-  const owner = engagement.businessId === null ? void 0 : (await db.select({ userId: businessMemberships.userId }).from(businessMemberships).where(and7(eq12(businessMemberships.businessId, engagement.businessId), eq12(businessMemberships.role, "owner"), eq12(businessMemberships.status, "active"))).limit(1))[0];
-  const business = engagement.businessId === null ? void 0 : (await db.select({ name: businesses.name }).from(businesses).where(eq12(businesses.id, engagement.businessId)).limit(1))[0];
-  const check = engagement.businessCheckId === null ? void 0 : (await db.select({ businessName: businessChecks.businessName, fullName: businessChecks.fullName }).from(businessChecks).where(eq12(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  const owner = engagement.businessId === null ? void 0 : (await db.select({ userId: businessMemberships.userId }).from(businessMemberships).where(and9(eq15(businessMemberships.businessId, engagement.businessId), eq15(businessMemberships.role, "owner"), eq15(businessMemberships.status, "active"))).limit(1))[0];
+  const business = engagement.businessId === null ? void 0 : (await db.select({ name: businesses.name }).from(businesses).where(eq15(businesses.id, engagement.businessId)).limit(1))[0];
+  const check = engagement.businessCheckId === null ? void 0 : (await db.select({ businessName: businessChecks.businessName, fullName: businessChecks.fullName }).from(businessChecks).where(eq15(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   const businessName = business?.name ?? check?.businessName ?? check?.fullName ?? engagement.contactName ?? "";
   await recordAudit(db, { action: "engagement_room_previewed", actorUserId: actor.id, details: { engagementId: engagement.id } });
   return buildClientRoom(db, engagement, { kind: "owner" }, owner?.userId ?? 0, businessName);
 }
 async function buildClientRoom(db, engagement, viewer, viewerUserId, businessName) {
-  const owner = engagement.businessCheckId !== null ? (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq12(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { email: engagement.contactEmail, fullName: engagement.contactName ?? "" } : void 0;
+  const owner = engagement.businessCheckId !== null ? (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq15(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { email: engagement.contactEmail, fullName: engagement.contactName ?? "" } : void 0;
   if (owner) await syncSessionBookings(db, engagement, owner.email);
   const [team, sessions, tasks, deliverables, comments, files, measure, checkins, matches] = await Promise.all([
-    db.select({ name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq12(engagementTeam.userId, users.id)).where(eq12(engagementTeam.engagementId, engagement.id)).orderBy(asc2(engagementTeam.id)),
-    db.select().from(engagementSessions).where(eq12(engagementSessions.engagementId, engagement.id)).orderBy(asc2(engagementSessions.id)),
-    db.select().from(engagementTasks).where(eq12(engagementTasks.engagementId, engagement.id)).orderBy(asc2(engagementTasks.id)),
-    db.select().from(engagementDeliverables).where(and7(eq12(engagementDeliverables.engagementId, engagement.id), eq12(engagementDeliverables.status, "shared"))).orderBy(asc2(engagementDeliverables.id)),
-    db.select({ deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq12(engagementComments.authorUserId, users.id)).where(eq12(engagementComments.engagementId, engagement.id)).orderBy(asc2(engagementComments.id)),
+    db.select({ name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq15(engagementTeam.userId, users.id)).where(eq15(engagementTeam.engagementId, engagement.id)).orderBy(asc3(engagementTeam.id)),
+    db.select().from(engagementSessions).where(eq15(engagementSessions.engagementId, engagement.id)).orderBy(asc3(engagementSessions.id)),
+    db.select().from(engagementTasks).where(eq15(engagementTasks.engagementId, engagement.id)).orderBy(asc3(engagementTasks.id)),
+    db.select().from(engagementDeliverables).where(and9(eq15(engagementDeliverables.engagementId, engagement.id), eq15(engagementDeliverables.status, "shared"))).orderBy(asc3(engagementDeliverables.id)),
+    db.select({ deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq15(engagementComments.authorUserId, users.id)).where(eq15(engagementComments.engagementId, engagement.id)).orderBy(asc3(engagementComments.id)),
     filesOf(db, engagement.id),
     measureOf(db, engagement.id),
     checkinsOf(db, engagement.id),
@@ -9778,10 +10280,10 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
   const assigneeIds = Array.from(new Set(tasks.map((task) => task.assigneeUserId).filter((value) => value !== null)));
   const assigneeNames = new Map((assigneeIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray3(users.id, assigneeIds)) : []).map((row) => [row.id, row.name ?? ""]));
   const fullView = viewer.kind === "owner" || viewer.access === "full";
-  const projects = engagement.businessId === null ? [engagement] : await db.select().from(engagements).where(eq12(engagements.businessId, engagement.businessId)).orderBy(desc5(engagements.id));
+  const projects = engagement.businessId === null ? [engagement] : await db.select().from(engagements).where(eq15(engagements.businessId, engagement.businessId)).orderBy(desc5(engagements.id));
   const checkId = engagement.businessCheckId ?? projects.find((row) => row.businessCheckId !== null)?.businessCheckId ?? null;
-  const check = checkId === null ? void 0 : (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor }).from(businessChecks).where(eq12(businessChecks.id, checkId)).limit(1))[0];
-  const report = checkId === null ? null : (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq12(fullReports.businessCheckId, checkId)).limit(1))[0] ?? null;
+  const check = checkId === null ? void 0 : (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor }).from(businessChecks).where(eq15(businessChecks.id, checkId)).limit(1))[0];
+  const report = checkId === null ? null : (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq15(fullReports.businessCheckId, checkId)).limit(1))[0] ?? null;
   const debrief = fullView && checkId !== null ? await sharedDebriefFor(db, checkId) : null;
   const insight = fullView && checkId !== null ? await insightFor(db, checkId, Boolean(report?.deliveredAt)) : null;
   const visibleDeliverables = deliverables.filter((item2) => clientCanSee(item2.audience, viewer));
@@ -9793,6 +10295,10 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
   const notesVisible = (item2) => Boolean(item2.notesSharedAt && item2.clientNotes && clientCanSee(item2.notesAudience, viewer));
   return {
     engagementId: engagement.id,
+    /** The engagement's fees, each with its status and pay link while unpaid: for the owner and full-access staff. */
+    fees: fullView ? await clientFees(db, engagement.id) : [],
+    /** Waiting for its first payment (R11): the room shows only the fee to pay until one is paid. */
+    awaitingPayment: engagement.opensOnPayment,
     // The content board (Digital marketing): the owner and full-access staff see it and approve.
     content: fullView ? (await contentOf(db, engagement.id)).map(clientContent) : [],
     contentTargets: DATED_TYPES[engagement.type]?.monthly ?? [],
@@ -9811,7 +10317,7 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
     /** Every engagement of the business, newest first, to move between them. */
     projects: projects.map((row) => ({ id: row.id, title: engagementTitle(row.type, row.service), stageLabel: engagementStageLabel(row, now), closed: row.stage === "closed", current: row.id === engagement.id })),
     /** "Fix the next problem": what the business has asked for that the desk has not handled yet. */
-    requests: engagement.businessId === null ? [] : (await db.select({ id: serviceRequests.id, service: serviceRequests.service, createdAt: serviceRequests.createdAt }).from(serviceRequests).where(and7(eq12(serviceRequests.businessId, engagement.businessId), eq12(serviceRequests.status, "open"))).orderBy(desc5(serviceRequests.id))).map((row) => ({ ...row, serviceName: PRODUCTS.find((product2) => product2.id === row.service)?.name ?? row.service })),
+    requests: engagement.businessId === null ? [] : (await db.select({ id: serviceRequests.id, service: serviceRequests.service, createdAt: serviceRequests.createdAt }).from(serviceRequests).where(and9(eq15(serviceRequests.businessId, engagement.businessId), eq15(serviceRequests.status, "open"))).orderBy(desc5(serviceRequests.id))).map((row) => ({ ...row, serviceName: PRODUCTS.find((product2) => product2.id === row.service)?.name ?? row.service })),
     startedOn: engagement.startedOn,
     uploadsEnabled: isFileStorageConfigured(),
     businessName,
@@ -9905,29 +10411,29 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
 }
 async function requireClientEngagement(db, session, engagementId) {
   const business = session.activeBusiness;
-  if (!business) throw notFound2();
-  const engagement = (await db.select().from(engagements).where(and7(eq12(engagements.id, engagementId), eq12(engagements.businessId, business.businessId))).limit(1))[0];
-  if (!engagement || engagement.businessId === null) throw notFound2();
+  if (!business) throw notFound4();
+  const engagement = (await db.select().from(engagements).where(and9(eq15(engagements.id, engagementId), eq15(engagements.businessId, business.businessId))).limit(1))[0];
+  if (!engagement || engagement.businessId === null) throw notFound4();
   return { engagement, viewer: await clientViewerFor(db, session, engagement.businessId) };
 }
 async function respondToTask(db, session, input) {
-  const task = (await db.select().from(engagementTasks).where(eq12(engagementTasks.id, input.taskId)).limit(1))[0];
-  if (!task) throw notFound2();
+  const task = (await db.select().from(engagementTasks).where(eq15(engagementTasks.id, input.taskId)).limit(1))[0];
+  if (!task) throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, task.engagementId);
-  if (task.side !== "client" || !clientCanSeeTask(task, viewer)) throw notFound2();
-  if (task.status !== "open" && task.status !== "needs_more") throw new TRPCError11({ code: "CONFLICT", message: "This is already with us." });
+  if (task.side !== "client" || !clientCanSeeTask(task, viewer)) throw notFound4();
+  if (task.status !== "open" && task.status !== "needs_more") throw new TRPCError14({ code: "CONFLICT", message: "This is already with us." });
   const status = task.kind === "data_request" ? "received" : "done";
   await db.transaction(async (tx) => {
-    await tx.update(engagementTasks).set({ status, statusNote: input.note, completedAt: status === "done" ? /* @__PURE__ */ new Date() : null }).where(eq12(engagementTasks.id, task.id));
+    await tx.update(engagementTasks).set({ status, statusNote: input.note, completedAt: status === "done" ? /* @__PURE__ */ new Date() : null }).where(eq15(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status } });
   });
   return { success: true, status };
 }
 async function requireClientDeliverable(db, session, deliverableId) {
-  const deliverable = (await db.select().from(engagementDeliverables).where(eq12(engagementDeliverables.id, deliverableId)).limit(1))[0];
-  if (!deliverable || deliverable.status !== "shared") throw notFound2();
+  const deliverable = (await db.select().from(engagementDeliverables).where(eq15(engagementDeliverables.id, deliverableId)).limit(1))[0];
+  if (!deliverable || deliverable.status !== "shared") throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, deliverable.engagementId);
-  if (!clientCanSee(deliverable.audience, viewer)) throw notFound2();
+  if (!clientCanSee(deliverable.audience, viewer)) throw notFound4();
   return { deliverable, viewer };
 }
 async function clientComment(db, session, input) {
@@ -9937,10 +10443,10 @@ async function clientComment(db, session, input) {
 }
 async function acceptDeliverable(db, session, input) {
   const { deliverable, viewer } = await requireClientDeliverable(db, session, input.deliverableId);
-  if (viewer.kind !== "owner") throw new TRPCError11({ code: "FORBIDDEN", message: "Only the owner can sign this off." });
+  if (viewer.kind !== "owner") throw new TRPCError14({ code: "FORBIDDEN", message: "Only the owner can sign this off." });
   if (deliverable.clientAcceptedAt) return { success: true, changed: false };
   await db.transaction(async (tx) => {
-    await tx.update(engagementDeliverables).set({ clientAcceptedAt: /* @__PURE__ */ new Date(), clientAcceptedByUserId: session.user.id }).where(eq12(engagementDeliverables.id, deliverable.id));
+    await tx.update(engagementDeliverables).set({ clientAcceptedAt: /* @__PURE__ */ new Date(), clientAcceptedByUserId: session.user.id }).where(eq15(engagementDeliverables.id, deliverable.id));
     await recordAudit(tx, { action: "engagement_deliverable_accepted", actorUserId: session.user.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id } });
   });
   return { success: true, changed: true };
@@ -9948,28 +10454,28 @@ async function acceptDeliverable(db, session, input) {
 async function setClientAudience(db, session, input) {
   if (input.item === "deliverable") {
     const { deliverable, viewer } = await requireClientDeliverable(db, session, input.id);
-    if (viewer.kind !== "owner") throw new TRPCError11({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
-    await db.update(engagementDeliverables).set({ audience: input.audience }).where(eq12(engagementDeliverables.id, deliverable.id));
+    if (viewer.kind !== "owner") throw new TRPCError14({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
+    await db.update(engagementDeliverables).set({ audience: input.audience }).where(eq15(engagementDeliverables.id, deliverable.id));
   } else {
-    const item2 = (await db.select().from(engagementSessions).where(eq12(engagementSessions.id, input.id)).limit(1))[0];
-    if (!item2 || !item2.notesSharedAt) throw notFound2();
+    const item2 = (await db.select().from(engagementSessions).where(eq15(engagementSessions.id, input.id)).limit(1))[0];
+    if (!item2 || !item2.notesSharedAt) throw notFound4();
     const { viewer } = await requireClientEngagement(db, session, item2.engagementId);
-    if (viewer.kind !== "owner") throw new TRPCError11({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
-    await db.update(engagementSessions).set({ notesAudience: input.audience }).where(eq12(engagementSessions.id, item2.id));
+    if (viewer.kind !== "owner") throw new TRPCError14({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
+    await db.update(engagementSessions).set({ notesAudience: input.audience }).where(eq15(engagementSessions.id, item2.id));
   }
   await recordAudit(db, { action: "engagement_audience_changed", actorUserId: session.user.id, details: { item: input.item, id: input.id, audience: input.audience } });
   return { success: true };
 }
 var UPLOADS_OFF = 'File upload is not set up yet. Send it on WhatsApp or by email, then tick "I have sent this".';
 var requireUploads = () => {
-  if (!isFileStorageConfigured()) throw new TRPCError11({ code: "PRECONDITION_FAILED", message: UPLOADS_OFF });
+  if (!isFileStorageConfigured()) throw new TRPCError14({ code: "PRECONDITION_FAILED", message: UPLOADS_OFF });
 };
 function validateUpload(input) {
   if (!Number.isFinite(input.sizeBytes) || input.sizeBytes <= 0 || input.sizeBytes > UPLOAD_MAX_BYTES) {
-    throw new TRPCError11({ code: "BAD_REQUEST", message: `Files up to ${UPLOAD_MAX_MB} MB.` });
+    throw new TRPCError14({ code: "BAD_REQUEST", message: `Files up to ${UPLOAD_MAX_MB} MB.` });
   }
   if (!isAllowedUploadType(input.contentType, input.fileName)) {
-    throw new TRPCError11({ code: "BAD_REQUEST", message: "PDF, photos, spreadsheets and Word documents only." });
+    throw new TRPCError14({ code: "BAD_REQUEST", message: "PDF, photos, spreadsheets and Word documents only." });
   }
 }
 var keyPrefix = (engagementId, target) => `engagements/${engagementId}/${target.kind}s/${target.id}/`;
@@ -9993,15 +10499,15 @@ async function filesOf(db, engagementId) {
     createdAt: engagementFiles.createdAt,
     note: engagementFiles.note,
     membershipId: businessMemberships.id
-  }).from(engagementFiles).innerJoin(users, eq12(engagementFiles.uploadedByUserId, users.id)).innerJoin(engagements, eq12(engagementFiles.engagementId, engagements.id)).leftJoin(businessMemberships, and7(eq12(businessMemberships.userId, engagementFiles.uploadedByUserId), eq12(businessMemberships.businessId, engagements.businessId))).where(eq12(engagementFiles.engagementId, engagementId)).orderBy(asc2(engagementFiles.id));
+  }).from(engagementFiles).innerJoin(users, eq15(engagementFiles.uploadedByUserId, users.id)).innerJoin(engagements, eq15(engagementFiles.engagementId, engagements.id)).leftJoin(businessMemberships, and9(eq15(businessMemberships.userId, engagementFiles.uploadedByUserId), eq15(businessMemberships.businessId, engagements.businessId))).where(eq15(engagementFiles.engagementId, engagementId)).orderBy(asc3(engagementFiles.id));
   return rows.map(({ membershipId, ...row }) => ({ ...row, fromTeam: membershipId === null }));
 }
 var clientFileVisible = (file, viewer, userId) => file.uploadedByUserId === userId || clientCanSee(file.audience, viewer);
 async function requireClientTaskForUpload(db, session, taskId) {
-  const task = (await db.select().from(engagementTasks).where(eq12(engagementTasks.id, taskId)).limit(1))[0];
-  if (!task) throw notFound2();
+  const task = (await db.select().from(engagementTasks).where(eq15(engagementTasks.id, taskId)).limit(1))[0];
+  if (!task) throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, task.engagementId);
-  if (task.side !== "client" || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound2();
+  if (task.side !== "client" || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound4();
   return task;
 }
 async function clientRequestUpload(db, session, input) {
@@ -10016,8 +10522,8 @@ async function clientConfirmUpload(db, session, input) {
   requireUploads();
   validateUpload(input);
   const task = await requireClientTaskForUpload(db, session, input.taskId);
-  if (!isTargetStorageKey(input.storageKey, keyPrefix(task.engagementId, { kind: "task", id: task.id }))) throw notFound2();
-  if (!await objectExists(input.storageKey)) throw new TRPCError11({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
+  if (!isTargetStorageKey(input.storageKey, keyPrefix(task.engagementId, { kind: "task", id: task.id }))) throw notFound4();
+  if (!await objectExists(input.storageKey)) throw new TRPCError14({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
   const open = task.status === "open" || task.status === "needs_more";
   return db.transaction(async (tx) => {
     const [file] = await tx.insert(engagementFiles).values({
@@ -10030,28 +10536,28 @@ async function clientConfirmUpload(db, session, input) {
       audience: "owner",
       uploadedByUserId: session.user.id
     }).returning({ id: engagementFiles.id });
-    if (open) await tx.update(engagementTasks).set({ status: "received", statusNote: input.note || "Uploaded to the room" }).where(eq12(engagementTasks.id, task.id));
+    if (open) await tx.update(engagementTasks).set({ status: "received", statusNote: input.note || "Uploaded to the room" }).where(eq15(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_file_uploaded", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, fileId: file.id, ...open ? { status: "received" } : {} } });
     return { success: true, fileId: file.id, status: open ? "received" : task.status };
   });
 }
 async function clientFileLink(db, session, input) {
   requireUploads();
-  const file = (await db.select().from(engagementFiles).where(eq12(engagementFiles.id, input.fileId)).limit(1))[0];
-  if (!file) throw notFound2();
+  const file = (await db.select().from(engagementFiles).where(eq15(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file) throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, file.engagementId);
-  if (!clientFileVisible(file, viewer, session.user.id)) throw notFound2();
+  if (!clientFileVisible(file, viewer, session.user.id)) throw notFound4();
   if (file.taskId !== null) {
-    const task = (await db.select().from(engagementTasks).where(eq12(engagementTasks.id, file.taskId)).limit(1))[0];
-    if (!task || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound2();
+    const task = (await db.select().from(engagementTasks).where(eq15(engagementTasks.id, file.taskId)).limit(1))[0];
+    if (!task || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound4();
   } else if (file.deliverableId !== null) {
-    const deliverable = (await db.select().from(engagementDeliverables).where(eq12(engagementDeliverables.id, file.deliverableId)).limit(1))[0];
-    if (!deliverable || deliverable.status !== "shared" || !clientCanSee(deliverable.audience, viewer)) throw notFound2();
+    const deliverable = (await db.select().from(engagementDeliverables).where(eq15(engagementDeliverables.id, file.deliverableId)).limit(1))[0];
+    if (!deliverable || deliverable.status !== "shared" || !clientCanSee(deliverable.audience, viewer)) throw notFound4();
   }
   return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
 }
 async function contentOf(db, engagementId) {
-  return db.select().from(engagementContentItems).where(eq12(engagementContentItems.engagementId, engagementId)).orderBy(asc2(engagementContentItems.month), asc2(engagementContentItems.sortOrder), asc2(engagementContentItems.id));
+  return db.select().from(engagementContentItems).where(eq15(engagementContentItems.engagementId, engagementId)).orderBy(asc3(engagementContentItems.month), asc3(engagementContentItems.sortOrder), asc3(engagementContentItems.id));
 }
 var clientContent = (item2) => ({
   id: item2.id,
@@ -10072,8 +10578,8 @@ async function saveContentItem(db, actor, input) {
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   const values2 = { kind: input.kind, title: input.title.trim(), month: input.month, status: input.status, dueOn: input.dueOn, link: input.link, ...input.status === "published" ? { publishedAt: /* @__PURE__ */ new Date() } : {} };
   if (input.itemId) {
-    const updated = await db.update(engagementContentItems).set(values2).where(and7(eq12(engagementContentItems.id, input.itemId), eq12(engagementContentItems.engagementId, engagement.id))).returning({ id: engagementContentItems.id });
-    if (!updated.length) throw notFound2();
+    const updated = await db.update(engagementContentItems).set(values2).where(and9(eq15(engagementContentItems.id, input.itemId), eq15(engagementContentItems.engagementId, engagement.id))).returning({ id: engagementContentItems.id });
+    if (!updated.length) throw notFound4();
     await recordAudit(db, { action: "engagement_content_saved", actorUserId: actor.id, details: { engagementId: engagement.id, itemId: input.itemId, status: input.status } });
     return { itemId: input.itemId };
   }
@@ -10083,38 +10589,38 @@ async function saveContentItem(db, actor, input) {
 }
 async function deleteContentItem(db, actor, input) {
   requireManage2(actor);
-  const item2 = (await db.select().from(engagementContentItems).where(eq12(engagementContentItems.id, input.itemId)).limit(1))[0];
-  if (!item2) throw notFound2();
+  const item2 = (await db.select().from(engagementContentItems).where(eq15(engagementContentItems.id, input.itemId)).limit(1))[0];
+  if (!item2) throw notFound4();
   await requireStaffEngagement(db, actor, item2.engagementId);
   await db.transaction(async (tx) => {
-    await tx.delete(engagementContentItems).where(eq12(engagementContentItems.id, item2.id));
+    await tx.delete(engagementContentItems).where(eq15(engagementContentItems.id, item2.id));
     await recordAudit(tx, { action: "engagement_content_deleted", actorUserId: actor.id, details: { engagementId: item2.engagementId, itemId: item2.id } });
   });
   return { success: true };
 }
 async function respondToContent(db, session, input) {
-  const item2 = (await db.select().from(engagementContentItems).where(eq12(engagementContentItems.id, input.itemId)).limit(1))[0];
-  if (!item2) throw notFound2();
+  const item2 = (await db.select().from(engagementContentItems).where(eq15(engagementContentItems.id, input.itemId)).limit(1))[0];
+  if (!item2) throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, item2.engagementId);
-  if (!(viewer.kind === "owner" || viewer.access === "full")) throw notFound2();
-  if (item2.status !== "for_approval") throw new TRPCError11({ code: "CONFLICT", message: "This is not waiting for your approval." });
-  if (!input.approve && !input.note?.trim()) throw new TRPCError11({ code: "BAD_REQUEST", message: "Say what to change." });
+  if (!(viewer.kind === "owner" || viewer.access === "full")) throw notFound4();
+  if (item2.status !== "for_approval") throw new TRPCError14({ code: "CONFLICT", message: "This is not waiting for your approval." });
+  if (!input.approve && !input.note?.trim()) throw new TRPCError14({ code: "BAD_REQUEST", message: "Say what to change." });
   const set = input.approve ? { status: "approved", approvedAt: /* @__PURE__ */ new Date(), approvedByUserId: session.user.id, clientNote: null } : { status: "changes_requested", clientNote: input.note.trim() };
   await db.transaction(async (tx) => {
-    await tx.update(engagementContentItems).set(set).where(eq12(engagementContentItems.id, item2.id));
+    await tx.update(engagementContentItems).set(set).where(eq15(engagementContentItems.id, item2.id));
     await recordAudit(tx, { action: input.approve ? "engagement_content_approved" : "engagement_content_changes_requested", actorUserId: session.user.id, details: { engagementId: item2.engagementId, itemId: item2.id } });
   });
   return { success: true, status: set.status };
 }
 var dropPrefix = (engagementId) => `engagements/${engagementId}/inbox/`;
 async function matchesOf(db, engagementId) {
-  return db.select({ fileId: engagementFileMatches.fileId, taskId: engagementFileMatches.taskId }).from(engagementFileMatches).innerJoin(engagementFiles, eq12(engagementFileMatches.fileId, engagementFiles.id)).where(eq12(engagementFiles.engagementId, engagementId));
+  return db.select({ fileId: engagementFileMatches.fileId, taskId: engagementFileMatches.taskId }).from(engagementFileMatches).innerJoin(engagementFiles, eq15(engagementFileMatches.fileId, engagementFiles.id)).where(eq15(engagementFiles.engagementId, engagementId));
 }
 async function requireClientRoomEngagement(db, session, engagementId) {
   const business = session.activeBusiness;
-  if (!business) throw notFound2();
-  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(engagementId ? and7(eq12(engagements.businessId, business.businessId), eq12(engagements.id, engagementId)) : eq12(engagements.businessId, business.businessId)).orderBy(desc5(engagements.id)).limit(1))[0];
-  if (!engagement) throw notFound2();
+  if (!business) throw notFound4();
+  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(engagementId ? and9(eq15(engagements.businessId, business.businessId), eq15(engagements.id, engagementId)) : eq15(engagements.businessId, business.businessId)).orderBy(desc5(engagements.id)).limit(1))[0];
+  if (!engagement) throw notFound4();
   return engagement;
 }
 async function clientRequestDrop(db, session, input) {
@@ -10129,8 +10635,8 @@ async function clientConfirmDrop(db, session, input) {
   requireUploads();
   validateUpload(input);
   const engagement = await requireClientRoomEngagement(db, session, input.engagementId);
-  if (!isTargetStorageKey(input.storageKey, dropPrefix(engagement.id))) throw notFound2();
-  if (!await objectExists(input.storageKey)) throw new TRPCError11({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
+  if (!isTargetStorageKey(input.storageKey, dropPrefix(engagement.id))) throw notFound4();
+  if (!await objectExists(input.storageKey)) throw new TRPCError14({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
   return db.transaction(async (tx) => {
     const [file] = await tx.insert(engagementFiles).values({
       engagementId: engagement.id,
@@ -10147,29 +10653,29 @@ async function clientConfirmDrop(db, session, input) {
   });
 }
 async function setNotAvailable(db, session, input) {
-  const task = (await db.select().from(engagementTasks).where(eq12(engagementTasks.id, input.taskId)).limit(1))[0];
-  if (!task) throw notFound2();
+  const task = (await db.select().from(engagementTasks).where(eq15(engagementTasks.id, input.taskId)).limit(1))[0];
+  if (!task) throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, task.engagementId);
-  if (task.side !== "client" || task.kind !== "data_request" || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound2();
-  if (input.unavailable && task.status !== "open" && task.status !== "needs_more") throw new TRPCError11({ code: "CONFLICT", message: "This is already with us." });
-  if (!input.unavailable && task.status !== "not_available") throw new TRPCError11({ code: "CONFLICT", message: "This is already with us." });
+  if (task.side !== "client" || task.kind !== "data_request" || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound4();
+  if (input.unavailable && task.status !== "open" && task.status !== "needs_more") throw new TRPCError14({ code: "CONFLICT", message: "This is already with us." });
+  if (!input.unavailable && task.status !== "not_available") throw new TRPCError14({ code: "CONFLICT", message: "This is already with us." });
   const status = input.unavailable ? "not_available" : "open";
   await db.transaction(async (tx) => {
-    await tx.update(engagementTasks).set({ status, statusNote: input.unavailable ? input.note : null }).where(eq12(engagementTasks.id, task.id));
+    await tx.update(engagementTasks).set({ status, statusNote: input.unavailable ? input.note : null }).where(eq15(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status } });
   });
   return { success: true, status };
 }
 async function matchFile(db, actor, input) {
   requireManage2(actor);
-  const file = (await db.select().from(engagementFiles).where(eq12(engagementFiles.id, input.fileId)).limit(1))[0];
-  if (!file || file.taskId !== null || file.deliverableId !== null) throw notFound2();
+  const file = (await db.select().from(engagementFiles).where(eq15(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file || file.taskId !== null || file.deliverableId !== null) throw notFound4();
   await requireStaffEngagement(db, actor, file.engagementId);
   const wanted = Array.from(new Set(input.taskIds));
-  const requests = wanted.length ? await db.select().from(engagementTasks).where(and7(inArray3(engagementTasks.id, wanted), eq12(engagementTasks.engagementId, file.engagementId), eq12(engagementTasks.kind, "data_request"))) : [];
-  if (requests.length !== wanted.length) throw new TRPCError11({ code: "BAD_REQUEST", message: "Match the file to this engagement's Data Requests only." });
+  const requests = wanted.length ? await db.select().from(engagementTasks).where(and9(inArray3(engagementTasks.id, wanted), eq15(engagementTasks.engagementId, file.engagementId), eq15(engagementTasks.kind, "data_request"))) : [];
+  if (requests.length !== wanted.length) throw new TRPCError14({ code: "BAD_REQUEST", message: "Match the file to this engagement's Data Requests only." });
   return db.transaction(async (tx) => {
-    await tx.delete(engagementFileMatches).where(eq12(engagementFileMatches.fileId, file.id));
+    await tx.delete(engagementFileMatches).where(eq15(engagementFileMatches.fileId, file.id));
     if (wanted.length) await tx.insert(engagementFileMatches).values(wanted.map((taskId) => ({ fileId: file.id, taskId, matchedByUserId: actor.id })));
     const waiting = requests.filter((task) => task.status === "open" || task.status === "needs_more" || task.status === "not_available").map((task) => task.id);
     if (waiting.length) await tx.update(engagementTasks).set({ status: "received", statusNote: "From the files you sent" }).where(inArray3(engagementTasks.id, waiting));
@@ -10179,13 +10685,13 @@ async function matchFile(db, actor, input) {
 }
 async function requireStaffTarget(db, actor, engagementId, target) {
   await requireStaffEngagement(db, actor, engagementId);
-  const exists = target.kind === "task" ? await db.select({ id: engagementTasks.id }).from(engagementTasks).where(and7(eq12(engagementTasks.id, target.id), eq12(engagementTasks.engagementId, engagementId))).limit(1) : await db.select({ id: engagementDeliverables.id }).from(engagementDeliverables).where(and7(eq12(engagementDeliverables.id, target.id), eq12(engagementDeliverables.engagementId, engagementId))).limit(1);
-  if (!exists.length) throw notFound2();
+  const exists = target.kind === "task" ? await db.select({ id: engagementTasks.id }).from(engagementTasks).where(and9(eq15(engagementTasks.id, target.id), eq15(engagementTasks.engagementId, engagementId))).limit(1) : await db.select({ id: engagementDeliverables.id }).from(engagementDeliverables).where(and9(eq15(engagementDeliverables.id, target.id), eq15(engagementDeliverables.engagementId, engagementId))).limit(1);
+  if (!exists.length) throw notFound4();
 }
 function requireUploader(actor, target, audience) {
   if (authorityAllows(actor.authority, "manage_engagements")) return;
   if (!canContribute(actor)) return requireManage2(actor);
-  if (target.kind !== "deliverable" || audience !== null && audience !== "team") throw new TRPCError11({ code: "FORBIDDEN", message: "You can add draft files to a Deliverable, for IP Factory only. The lead shares them with the client." });
+  if (target.kind !== "deliverable" || audience !== null && audience !== "team") throw new TRPCError14({ code: "FORBIDDEN", message: "You can add draft files to a Deliverable, for IP Factory only. The lead shares them with the client." });
 }
 async function staffRequestUpload(db, actor, input) {
   requireUploads();
@@ -10201,8 +10707,8 @@ async function staffConfirmUpload(db, actor, input) {
   requireUploader(actor, input.target, input.audience);
   validateUpload(input);
   await requireStaffTarget(db, actor, input.engagementId, input.target);
-  if (!isTargetStorageKey(input.storageKey, keyPrefix(input.engagementId, input.target))) throw notFound2();
-  if (!await objectExists(input.storageKey)) throw new TRPCError11({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
+  if (!isTargetStorageKey(input.storageKey, keyPrefix(input.engagementId, input.target))) throw notFound4();
+  if (!await objectExists(input.storageKey)) throw new TRPCError14({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
   return db.transaction(async (tx) => {
     const [file] = await tx.insert(engagementFiles).values({
       engagementId: input.engagementId,
@@ -10221,31 +10727,31 @@ async function staffConfirmUpload(db, actor, input) {
 }
 async function shareTeamFile(db, actor, input) {
   requireManage2(actor);
-  const file = (await db.select().from(engagementFiles).where(eq12(engagementFiles.id, input.fileId)).limit(1))[0];
-  if (!file) throw notFound2();
+  const file = (await db.select().from(engagementFiles).where(eq15(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file) throw notFound4();
   await requireStaffEngagement(db, actor, file.engagementId);
-  if (file.audience !== "team") throw new TRPCError11({ code: "BAD_REQUEST", message: "This file is already shared." });
+  if (file.audience !== "team") throw new TRPCError14({ code: "BAD_REQUEST", message: "This file is already shared." });
   await db.transaction(async (tx) => {
-    await tx.update(engagementFiles).set({ audience: input.audience }).where(eq12(engagementFiles.id, file.id));
+    await tx.update(engagementFiles).set({ audience: input.audience }).where(eq15(engagementFiles.id, file.id));
     await recordAudit(tx, { action: "engagement_file_shared", actorUserId: actor.id, details: { engagementId: file.engagementId, fileId: file.id, audience: input.audience } });
   });
   return { success: true };
 }
 async function staffFileLink(db, actor, input) {
   requireUploads();
-  const file = (await db.select().from(engagementFiles).where(eq12(engagementFiles.id, input.fileId)).limit(1))[0];
-  if (!file) throw notFound2();
+  const file = (await db.select().from(engagementFiles).where(eq15(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file) throw notFound4();
   await requireStaffEngagement(db, actor, file.engagementId);
   return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
 }
 var asNumber = (value) => value === null ? null : Number(value);
 var asNumeric = (value) => value === null ? null : String(value);
 async function measureOf(db, engagementId) {
-  const row = (await db.select().from(engagementMeasures).where(eq12(engagementMeasures.engagementId, engagementId)).limit(1))[0];
+  const row = (await db.select().from(engagementMeasures).where(eq15(engagementMeasures.engagementId, engagementId)).limit(1))[0];
   return row ? { ...row, baselineValue: asNumber(row.baselineValue), targetValue: asNumber(row.targetValue) } : null;
 }
 async function checkinsOf(db, engagementId) {
-  const rows = await db.select().from(engagementCheckins).where(eq12(engagementCheckins.engagementId, engagementId)).orderBy(asc2(engagementCheckins.weekNumber));
+  const rows = await db.select().from(engagementCheckins).where(eq15(engagementCheckins.engagementId, engagementId)).orderBy(asc3(engagementCheckins.weekNumber));
   return rows.map((row) => ({ ...row, measureReading: asNumber(row.measureReading), hoursLead: asNumber(row.hoursLead), hoursAnalyst: asNumber(row.hoursAnalyst), hoursPartner: asNumber(row.hoursPartner) }));
 }
 function clientMeasure(measure, checkins) {
@@ -10267,8 +10773,8 @@ async function saveCheckin(db, actor, input) {
   requireManage2(actor);
   await requireStaffEngagement(db, actor, input.engagementId);
   if (input.weekNumber > 1) {
-    const previous = await db.select({ id: engagementCheckins.id }).from(engagementCheckins).where(and7(eq12(engagementCheckins.engagementId, input.engagementId), eq12(engagementCheckins.weekNumber, input.weekNumber - 1))).limit(1);
-    if (!previous.length) throw new TRPCError11({ code: "CONFLICT", message: `Record week ${input.weekNumber - 1} first: a Weekly Check-in cannot start without last week's record.` });
+    const previous = await db.select({ id: engagementCheckins.id }).from(engagementCheckins).where(and9(eq15(engagementCheckins.engagementId, input.engagementId), eq15(engagementCheckins.weekNumber, input.weekNumber - 1))).limit(1);
+    if (!previous.length) throw new TRPCError14({ code: "CONFLICT", message: `Record week ${input.weekNumber - 1} first: a Weekly Check-in cannot start without last week's record.` });
   }
   const values2 = {
     heldOn: input.heldOn,
@@ -10291,11 +10797,11 @@ async function saveCheckin(db, actor, input) {
 }
 async function requestService(db, session, input) {
   const business = session.activeBusiness;
-  if (!business) throw notFound2();
+  if (!business) throw notFound4();
   const product2 = PRODUCTS.find((item2) => item2.id === input.service && item2.id !== "business_health_check");
-  if (!product2) throw new TRPCError11({ code: "BAD_REQUEST", message: "Choose a service." });
+  if (!product2) throw new TRPCError14({ code: "BAD_REQUEST", message: "Choose a service." });
   if (input.engagementId) await requireClientRoomEngagement(db, session, input.engagementId);
-  const open = (await db.select({ id: serviceRequests.id }).from(serviceRequests).where(and7(eq12(serviceRequests.businessId, business.businessId), eq12(serviceRequests.service, product2.id), eq12(serviceRequests.status, "open"))).limit(1))[0];
+  const open = (await db.select({ id: serviceRequests.id }).from(serviceRequests).where(and9(eq15(serviceRequests.businessId, business.businessId), eq15(serviceRequests.service, product2.id), eq15(serviceRequests.status, "open"))).limit(1))[0];
   if (open) return { success: true, requestId: open.id, already: true };
   const [created] = await db.insert(serviceRequests).values({ businessId: business.businessId, engagementId: input.engagementId ?? null, requestedByUserId: session.user.id, service: product2.id, note: input.note?.trim() || null }).returning({ id: serviceRequests.id });
   await recordAudit(db, { action: "service_requested", actorUserId: session.user.id, details: { requestId: created.id, businessId: business.businessId, service: product2.id } });
@@ -10317,7 +10823,7 @@ Confirm it with them, send the payment link, then open the engagement from the r
 }
 async function listServiceRequests(db, actor) {
   if (!canStart(actor)) return [];
-  const rows = await db.select({ id: serviceRequests.id, businessId: serviceRequests.businessId, businessName: businesses.name, service: serviceRequests.service, note: serviceRequests.note, createdAt: serviceRequests.createdAt, requestedBy: users.name }).from(serviceRequests).innerJoin(businesses, eq12(serviceRequests.businessId, businesses.id)).innerJoin(users, eq12(serviceRequests.requestedByUserId, users.id)).where(eq12(serviceRequests.status, "open")).orderBy(asc2(serviceRequests.id));
+  const rows = await db.select({ id: serviceRequests.id, businessId: serviceRequests.businessId, businessName: businesses.name, service: serviceRequests.service, note: serviceRequests.note, createdAt: serviceRequests.createdAt, requestedBy: users.name }).from(serviceRequests).innerJoin(businesses, eq15(serviceRequests.businessId, businesses.id)).innerJoin(users, eq15(serviceRequests.requestedByUserId, users.id)).where(eq15(serviceRequests.status, "open")).orderBy(asc3(serviceRequests.id));
   return rows.map((row) => {
     const product2 = PRODUCTS.find((item2) => item2.id === row.service);
     const type = row.service === "six_week_fix" ? "six_week_fix" : row.service === "business_review" ? "business_review" : product2?.way === "assessment" ? "assessment" : product2?.way === "monthly_service" ? "monthly_service" : "done_for_you";
@@ -10326,35 +10832,35 @@ async function listServiceRequests(db, actor) {
 }
 async function handleServiceRequest(db, actor, input) {
   requireStart(actor);
-  const updated = await db.update(serviceRequests).set({ status: input.status, handledByUserId: actor.id, handledAt: /* @__PURE__ */ new Date() }).where(and7(eq12(serviceRequests.id, input.requestId), eq12(serviceRequests.status, "open"))).returning({ id: serviceRequests.id });
-  if (!updated.length) throw notFound2();
+  const updated = await db.update(serviceRequests).set({ status: input.status, handledByUserId: actor.id, handledAt: /* @__PURE__ */ new Date() }).where(and9(eq15(serviceRequests.id, input.requestId), eq15(serviceRequests.status, "open"))).returning({ id: serviceRequests.id });
+  if (!updated.length) throw notFound4();
   await recordAudit(db, { action: "service_request_handled", actorUserId: actor.id, details: { requestId: input.requestId, status: input.status } });
   return { success: true };
 }
 async function listClientBusinesses(db, actor) {
   if (!canStart(actor)) return [];
-  const rows = await db.selectDistinct({ id: businesses.id, name: businesses.name }).from(businesses).innerJoin(engagements, eq12(engagements.businessId, businesses.id)).orderBy(asc2(businesses.name));
+  const rows = await db.selectDistinct({ id: businesses.id, name: businesses.name }).from(businesses).innerJoin(engagements, eq15(engagements.businessId, businesses.id)).orderBy(asc3(businesses.name));
   return rows;
 }
 
 // server/clientOnboarding.ts
 import { randomBytes as randomBytes9, randomUUID as randomUUID4 } from "crypto";
-import { and as and9, count, desc as desc6, eq as eq14, gt as gt7, isNull as isNull8 } from "drizzle-orm";
-import { TRPCError as TRPCError13 } from "@trpc/server";
+import { and as and11, count, desc as desc6, eq as eq17, gt as gt7, isNull as isNull9 } from "drizzle-orm";
+import { TRPCError as TRPCError16 } from "@trpc/server";
 import { z as z8 } from "zod";
 
 // server/accountRecovery.ts
 import { randomBytes as randomBytes8, randomUUID as randomUUID3 } from "node:crypto";
-import { and as and8, eq as eq13, gt as gt6, isNull as isNull7 } from "drizzle-orm";
-import { TRPCError as TRPCError12 } from "@trpc/server";
+import { and as and10, eq as eq16, gt as gt6, isNull as isNull8 } from "drizzle-orm";
+import { TRPCError as TRPCError15 } from "@trpc/server";
 var RESET_PATH = "/reset";
 var isSuperAdmin = (authority) => authority.roles.includes("super_admin");
-var unavailable2 = () => new TRPCError12({ code: "NOT_FOUND", message: PASSWORD_RESET_ERRORS.unavailable });
-var notSetUp = () => new TRPCError12({ code: "PRECONDITION_FAILED", message: PASSWORD_RESET_ERRORS.notSetUp });
-var tooMany = () => new TRPCError12({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+var unavailable2 = () => new TRPCError15({ code: "NOT_FOUND", message: PASSWORD_RESET_ERRORS.unavailable });
+var notSetUp = () => new TRPCError15({ code: "PRECONDITION_FAILED", message: PASSWORD_RESET_ERRORS.notSetUp });
+var tooMany = () => new TRPCError15({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
 var requestIp2 = (req) => (req.ip || "unknown").trim().toLowerCase();
 async function listPeople(db) {
-  const rows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, lastSignedIn: users.lastSignedIn, jobTitle: users.jobTitle }).from(users).innerJoin(userCredentials, eq13(userCredentials.userId, users.id)).orderBy(users.name, users.id).limit(500);
+  const rows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, lastSignedIn: users.lastSignedIn, jobTitle: users.jobTitle }).from(users).innerJoin(userCredentials, eq16(userCredentials.userId, users.id)).orderBy(users.name, users.id).limit(500);
   const roles2 = await db.select({ userId: userPlatformRoles.userId, role: userPlatformRoles.role, expiresAt: userPlatformRoles.expiresAt }).from(userPlatformRoles);
   const twoStep = await listTwoStepStatus(db);
   const endsOf = /* @__PURE__ */ new Map();
@@ -10362,7 +10868,7 @@ async function listPeople(db) {
     const earlier = endsOf.get(row.userId);
     if (row.expiresAt && (!earlier || row.expiresAt < earlier)) endsOf.set(row.userId, row.expiresAt);
   }
-  const memberships = await db.select({ userId: businessMemberships.userId }).from(businessMemberships).where(eq13(businessMemberships.status, "active"));
+  const memberships = await db.select({ userId: businessMemberships.userId }).from(businessMemberships).where(eq16(businessMemberships.status, "active"));
   const rolesOf = /* @__PURE__ */ new Map();
   for (const row of roles2) rolesOf.set(row.userId, [...rolesOf.get(row.userId) ?? [], row.role]);
   const businessesOf = /* @__PURE__ */ new Map();
@@ -10398,8 +10904,8 @@ function buildResetEmail(input) {
   };
 }
 async function personWithPassword(db, userId) {
-  const person = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status }).from(users).innerJoin(userCredentials, eq13(userCredentials.userId, users.id)).where(eq13(users.id, userId)).limit(1))[0];
-  if (!person) throw new TRPCError12({ code: "NOT_FOUND", message: "That person does not have a password account." });
+  const person = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status }).from(users).innerJoin(userCredentials, eq16(userCredentials.userId, users.id)).where(eq16(users.id, userId)).limit(1))[0];
+  if (!person) throw new TRPCError15({ code: "NOT_FOUND", message: "That person does not have a password account." });
   return person;
 }
 async function protectedPerson(db, person) {
@@ -10407,20 +10913,20 @@ async function protectedPerson(db, person) {
 }
 async function issuePasswordReset(db, input) {
   const target = await personWithPassword(db, input.targetUserId);
-  if (!target.email) throw new TRPCError12({ code: "BAD_REQUEST", message: "This account has no email address to send the link to." });
-  if (target.status !== "active") throw new TRPCError12({ code: "CONFLICT", message: "Reinstate the account before issuing a reset link." });
+  if (!target.email) throw new TRPCError15({ code: "BAD_REQUEST", message: "This account has no email address to send the link to." });
+  if (target.status !== "active") throw new TRPCError15({ code: "CONFLICT", message: "Reinstate the account before issuing a reset link." });
   if (await protectedPerson(db, target) && !isSuperAdmin(input.actor.authority)) {
-    throw new TRPCError12({ code: "FORBIDDEN", message: "Only a Super Admin can issue a reset link for a Super Admin." });
+    throw new TRPCError15({ code: "FORBIDDEN", message: "Only a Super Admin can issue a reset link for a Super Admin." });
   }
   return sendResetLink(db, { target: { id: target.id, name: target.name, email: target.email }, actorUserId: input.actor.id });
 }
 async function issueClientReset(db, input) {
-  const target = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status }).from(users).innerJoin(userCredentials, eq13(userCredentials.userId, users.id)).where(eq13(users.id, input.targetUserId)).limit(1))[0];
-  if (!target || !target.email) throw new TRPCError12({ code: "NOT_FOUND", message: "This client does not have a password account yet." });
-  if (target.status !== "active") throw new TRPCError12({ code: "CONFLICT", message: "This client's account is suspended. Reinstate it in People first." });
-  const roles2 = await db.select({ id: userPlatformRoles.id }).from(userPlatformRoles).where(eq13(userPlatformRoles.userId, target.id)).limit(1);
+  const target = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status }).from(users).innerJoin(userCredentials, eq16(userCredentials.userId, users.id)).where(eq16(users.id, input.targetUserId)).limit(1))[0];
+  if (!target || !target.email) throw new TRPCError15({ code: "NOT_FOUND", message: "This client does not have a password account yet." });
+  if (target.status !== "active") throw new TRPCError15({ code: "CONFLICT", message: "This client's account is suspended. Reinstate it in People first." });
+  const roles2 = await db.select({ id: userPlatformRoles.id }).from(userPlatformRoles).where(eq16(userPlatformRoles.userId, target.id)).limit(1);
   if (roles2.length || await protectedPerson(db, target)) {
-    throw new TRPCError12({ code: "FORBIDDEN", message: "This person is also on the IP Factory team. Send their link from People." });
+    throw new TRPCError15({ code: "FORBIDDEN", message: "This person is also on the IP Factory team. Send their link from People." });
   }
   return sendResetLink(db, { target: { id: target.id, name: target.name, email: target.email }, actorUserId: input.actorUserId });
 }
@@ -10431,7 +10937,7 @@ async function sendResetLink(db, input) {
   let resetId;
   try {
     resetId = await db.transaction(async (tx) => {
-      await tx.update(userPasswordResetTokens).set({ revokedAt: databaseNow() }).where(and8(eq13(userPasswordResetTokens.userId, target.id), isNull7(userPasswordResetTokens.consumedAt), isNull7(userPasswordResetTokens.revokedAt)));
+      await tx.update(userPasswordResetTokens).set({ revokedAt: databaseNow() }).where(and10(eq16(userPasswordResetTokens.userId, target.id), isNull8(userPasswordResetTokens.consumedAt), isNull8(userPasswordResetTokens.revokedAt)));
       const [row] = await tx.insert(userPasswordResetTokens).values({ userId: target.id, tokenHash: sha256(token3), expiresAt, issuedByUserId: input.actorUserId }).returning({ id: userPasswordResetTokens.id });
       await recordAudit(tx, {
         action: input.actorUserId === null ? "account_password_reset_requested" : "account_password_reset_issued",
@@ -10448,17 +10954,17 @@ async function sendResetLink(db, input) {
   const resetUrl = `${getTrustedApplicationOrigin()}${RESET_PATH}/${encodeURIComponent(token3)}`;
   const message = buildResetEmail({ name: target.name ?? "", url: resetUrl, requested: input.actorUserId === null, firstPassword: input.firstPassword });
   const delivery = await deliverEmail({ to: target.email, subject: message.subject, body: message.body, sender: "business_support", idempotencyKey: `user_password_reset_tokens:${resetId}` });
-  await db.update(userPasswordResetTokens).set({ deliveryStatus: delivery.status }).where(eq13(userPasswordResetTokens.id, resetId));
+  await db.update(userPasswordResetTokens).set({ deliveryStatus: delivery.status }).where(eq16(userPasswordResetTokens.id, resetId));
   return { resetId, resetUrl, expiresAt, deliveryStatus: delivery.status };
 }
 async function requestPasswordReset(db, req, rawInput) {
   assertSameOrigin(req);
   const parsed = requestPasswordResetInputSchema.safeParse(rawInput);
-  if (!parsed.success) throw new TRPCError12({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Enter the email address you sign in with." });
+  if (!parsed.success) throw new TRPCError15({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Enter the email address you sign in with." });
   const email = parsed.data.email;
   if (!await consumeLimit(LIMITS.resetRequest, `ip:${requestIp2(req)}`) || !await consumeLimit(LIMITS.resetRequest, `email:${email}`)) throw tooMany();
   const owner = isOwnerAdmin({ email });
-  let person = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, credentialId: userCredentials.id }).from(users).leftJoin(userCredentials, eq13(userCredentials.userId, users.id)).where(emailEquals(users.email, email)).limit(1))[0];
+  let person = (await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, credentialId: userCredentials.id }).from(users).leftJoin(userCredentials, eq16(userCredentials.userId, users.id)).where(emailEquals(users.email, email)).limit(1))[0];
   if (!person && owner) {
     const [created] = await db.insert(users).values({ openId: `local:${randomUUID3()}`, name: "Super Admin", email, loginMethod: "password", role: "admin", status: "active" }).returning({ id: users.id, name: users.name, email: users.email, status: users.status });
     person = { ...created, credentialId: null };
@@ -10470,10 +10976,10 @@ async function requestPasswordReset(db, req, rawInput) {
 }
 async function openReset(db, token3) {
   if (!token3 || token3.length > 200) return null;
-  return (await db.select({ id: userPasswordResetTokens.id, userId: users.id, email: users.email, status: users.status }).from(userPasswordResetTokens).innerJoin(users, eq13(users.id, userPasswordResetTokens.userId)).where(and8(
-    eq13(userPasswordResetTokens.tokenHash, sha256(token3)),
-    isNull7(userPasswordResetTokens.consumedAt),
-    isNull7(userPasswordResetTokens.revokedAt),
+  return (await db.select({ id: userPasswordResetTokens.id, userId: users.id, email: users.email, status: users.status }).from(userPasswordResetTokens).innerJoin(users, eq16(users.id, userPasswordResetTokens.userId)).where(and10(
+    eq16(userPasswordResetTokens.tokenHash, sha256(token3)),
+    isNull8(userPasswordResetTokens.consumedAt),
+    isNull8(userPasswordResetTokens.revokedAt),
     gt6(userPasswordResetTokens.expiresAt, /* @__PURE__ */ new Date())
   )).limit(1))[0] ?? null;
 }
@@ -10490,29 +10996,29 @@ async function previewPasswordReset(db, req, token3) {
 async function confirmPasswordReset(db, req, rawInput) {
   assertSameOrigin(req);
   const parsed = resetPasswordInputSchema.safeParse(rawInput);
-  if (!parsed.success) throw new TRPCError12({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
+  if (!parsed.success) throw new TRPCError15({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
   if (!await consumeLimit(LIMITS.publicLookup, requestIp2(req))) throw tooMany();
   const passwordHash = hashAdminPassword(parsed.data.password);
   try {
     return await db.transaction(async (tx) => {
-      const [claimed] = await tx.update(userPasswordResetTokens).set({ consumedAt: databaseNow() }).where(and8(
-        eq13(userPasswordResetTokens.tokenHash, sha256(parsed.data.token)),
-        isNull7(userPasswordResetTokens.consumedAt),
-        isNull7(userPasswordResetTokens.revokedAt),
+      const [claimed] = await tx.update(userPasswordResetTokens).set({ consumedAt: databaseNow() }).where(and10(
+        eq16(userPasswordResetTokens.tokenHash, sha256(parsed.data.token)),
+        isNull8(userPasswordResetTokens.consumedAt),
+        isNull8(userPasswordResetTokens.revokedAt),
         gt6(userPasswordResetTokens.expiresAt, /* @__PURE__ */ new Date())
       )).returning({ userId: userPasswordResetTokens.userId });
       if (!claimed) throw unavailable2();
-      const person = (await tx.select({ id: users.id, email: users.email, status: users.status }).from(users).where(eq13(users.id, claimed.userId)).limit(1))[0];
+      const person = (await tx.select({ id: users.id, email: users.email, status: users.status }).from(users).where(eq16(users.id, claimed.userId)).limit(1))[0];
       if (!person || person.status !== "active") throw unavailable2();
-      const [credential] = await tx.update(userCredentials).set({ passwordHash, failedAttempts: 0, lockedUntil: null }).where(eq13(userCredentials.userId, person.id)).returning({ id: userCredentials.id });
+      const [credential] = await tx.update(userCredentials).set({ passwordHash, failedAttempts: 0, lockedUntil: null }).where(eq16(userCredentials.userId, person.id)).returning({ id: userCredentials.id });
       const owner = isOwnerAdmin({ email: person.email });
       if (!credential && !owner) throw unavailable2();
       if (!credential) await tx.insert(userCredentials).values({ userId: person.id, passwordHash });
       if (owner) {
-        await tx.update(users).set({ role: "admin" }).where(eq13(users.id, person.id));
+        await tx.update(users).set({ role: "admin" }).where(eq16(users.id, person.id));
         await tx.insert(userPlatformRoles).values({ userId: person.id, role: "super_admin", grantedByUserId: person.id }).onConflictDoNothing();
       }
-      await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and8(eq13(userSessions.userId, person.id), isNull7(userSessions.revokedAt)));
+      await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and10(eq16(userSessions.userId, person.id), isNull8(userSessions.revokedAt)));
       await recordAudit(tx, { action: "account_password_reset_completed", actorUserId: person.id, targetEmail: person.email, ...credential ? {} : { details: { firstPassword: true } } });
       return { success: true, email: person.email ?? "" };
     });
@@ -10522,21 +11028,21 @@ async function confirmPasswordReset(db, req, rawInput) {
   }
 }
 async function setAccountStatus(db, input) {
-  if (input.targetUserId === input.actor.id) throw new TRPCError12({ code: "CONFLICT", message: "You cannot suspend or reinstate your own account." });
-  const target = (await db.select({ id: users.id, email: users.email, status: users.status }).from(users).where(eq13(users.id, input.targetUserId)).limit(1))[0];
-  if (!target) throw new TRPCError12({ code: "NOT_FOUND", message: "That person does not exist." });
-  if (target.status === "disabled") throw new TRPCError12({ code: "CONFLICT", message: "This account is disabled and is not managed here." });
+  if (input.targetUserId === input.actor.id) throw new TRPCError15({ code: "CONFLICT", message: "You cannot suspend or reinstate your own account." });
+  const target = (await db.select({ id: users.id, email: users.email, status: users.status }).from(users).where(eq16(users.id, input.targetUserId)).limit(1))[0];
+  if (!target) throw new TRPCError15({ code: "NOT_FOUND", message: "That person does not exist." });
+  if (target.status === "disabled") throw new TRPCError15({ code: "CONFLICT", message: "This account is disabled and is not managed here." });
   if (target.status === input.status) return { success: true, changed: false, status: target.status };
   const superAdmins = await listSuperAdminIds(db);
   if (superAdmins.has(target.id) || isOwnerAdmin({ email: target.email })) {
-    if (!isSuperAdmin(input.actor.authority)) throw new TRPCError12({ code: "FORBIDDEN", message: "Only a Super Admin can suspend or reinstate a Super Admin." });
-    if (input.status === "suspended" && isOwnerAdmin({ email: target.email })) throw new TRPCError12({ code: "CONFLICT", message: "The permanent Super Admin cannot be suspended." });
-    if (input.status === "suspended" && superAdmins.size <= 1) throw new TRPCError12({ code: "CONFLICT", message: "The last Super Admin cannot be suspended." });
+    if (!isSuperAdmin(input.actor.authority)) throw new TRPCError15({ code: "FORBIDDEN", message: "Only a Super Admin can suspend or reinstate a Super Admin." });
+    if (input.status === "suspended" && isOwnerAdmin({ email: target.email })) throw new TRPCError15({ code: "CONFLICT", message: "The permanent Super Admin cannot be suspended." });
+    if (input.status === "suspended" && superAdmins.size <= 1) throw new TRPCError15({ code: "CONFLICT", message: "The last Super Admin cannot be suspended." });
   }
   const reason = input.reason?.trim() || "";
   await db.transaction(async (tx) => {
-    await tx.update(users).set({ status: input.status }).where(eq13(users.id, target.id));
-    if (input.status === "suspended") await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and8(eq13(userSessions.userId, target.id), isNull7(userSessions.revokedAt)));
+    await tx.update(users).set({ status: input.status }).where(eq16(users.id, target.id));
+    if (input.status === "suspended") await tx.update(userSessions).set({ revokedAt: databaseNow() }).where(and10(eq16(userSessions.userId, target.id), isNull8(userSessions.revokedAt)));
     await recordAudit(tx, {
       action: input.status === "suspended" ? "account_suspended" : "account_reinstated",
       actorUserId: input.actor.id,
@@ -10548,10 +11054,10 @@ async function setAccountStatus(db, input) {
 }
 async function setJobTitle(db, input) {
   const title = input.jobTitle?.trim() || null;
-  const target = (await db.select({ id: users.id, email: users.email }).from(users).where(eq13(users.id, input.targetUserId)).limit(1))[0];
-  if (!target) throw new TRPCError12({ code: "NOT_FOUND", message: "That person does not exist." });
+  const target = (await db.select({ id: users.id, email: users.email }).from(users).where(eq16(users.id, input.targetUserId)).limit(1))[0];
+  if (!target) throw new TRPCError15({ code: "NOT_FOUND", message: "That person does not exist." });
   await db.transaction(async (tx) => {
-    await tx.update(users).set({ jobTitle: title }).where(eq13(users.id, target.id));
+    await tx.update(users).set({ jobTitle: title }).where(eq16(users.id, target.id));
     await recordAudit(tx, { action: "account_profile_updated", actorUserId: input.actor.id, targetEmail: target.email, details: { targetUserId: target.id, fields: ["jobTitle"] } });
   });
   return { success: true, jobTitle: title };
@@ -10562,10 +11068,10 @@ var emailSchema = z8.string().trim().email().max(320);
 function effectiveInvitationStatus(invitation, now = /* @__PURE__ */ new Date()) {
   return invitation.status === "pending" && invitation.expiresAt.getTime() <= now.getTime() ? "expired" : invitation.status;
 }
-var unavailable3 = () => new TRPCError13({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.unavailable });
+var unavailable3 = () => new TRPCError16({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.unavailable });
 async function requireDatabase() {
   const db = await getDb();
-  if (!db) throw new TRPCError13({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 async function identityConflict(db, email) {
@@ -10592,7 +11098,7 @@ function buildOnboardingEmail(input) {
 }
 async function assessmentPaid(db, businessCheckId) {
   try {
-    const paid = await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and9(eq14(paymentRequests.businessCheckId, businessCheckId), eq14(paymentRequests.item, "current_state"), eq14(paymentRequests.status, "confirmed"))).limit(1);
+    const paid = await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and11(eq17(paymentRequests.businessCheckId, businessCheckId), eq17(paymentRequests.item, "current_state"), eq17(paymentRequests.status, "confirmed"))).limit(1);
     return paid.length > 0;
   } catch (error) {
     if (isUndefinedTable(error)) return false;
@@ -10601,20 +11107,20 @@ async function assessmentPaid(db, businessCheckId) {
 }
 async function createOnboardingInvitation(input) {
   const createdBy = input.actorUserId ?? input.createdByUserId ?? null;
-  if (createdBy === null) throw new TRPCError13({ code: "PRECONDITION_FAILED", message: "Nobody on the team is named to send this invitation. Send it from Client Onboarding." });
+  if (createdBy === null) throw new TRPCError16({ code: "PRECONDITION_FAILED", message: "Nobody on the team is named to send this invitation. Send it from Client Onboarding." });
   const db = await requireDatabase();
-  const check = (await db.select().from(businessChecks).where(eq14(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError13({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
+  const check = (await db.select().from(businessChecks).where(eq17(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError16({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
   const email = normaliseAccountEmail(check.email);
-  if (!emailSchema.safeParse(email).success) throw new TRPCError13({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.invalidCheckEmail });
-  if (await identityConflict(db, email)) throw new TRPCError13({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccountAdmin });
+  if (!emailSchema.safeParse(email).success) throw new TRPCError16({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.invalidCheckEmail });
+  if (await identityConflict(db, email)) throw new TRPCError16({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccountAdmin });
   const paid = await assessmentPaid(db, check.id);
   const override = input.overrideReason?.trim() ?? "";
-  if (!paid && !override) throw new TRPCError13({ code: "PRECONDITION_FAILED", message: ONBOARDING_ERRORS.unpaid });
+  if (!paid && !override) throw new TRPCError16({ code: "PRECONDITION_FAILED", message: ONBOARDING_ERRORS.unpaid });
   const token3 = randomBytes9(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ONBOARDING_INVITATION_TTL_MS);
   const invitation = await db.transaction(async (tx) => {
-    await tx.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and9(eq14(clientOnboardingInvitations.businessCheckId, check.id), eq14(clientOnboardingInvitations.status, "pending")));
+    await tx.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and11(eq17(clientOnboardingInvitations.businessCheckId, check.id), eq17(clientOnboardingInvitations.status, "pending")));
     const [row] = await tx.insert(clientOnboardingInvitations).values({
       businessCheckId: check.id,
       email,
@@ -10632,7 +11138,7 @@ async function createOnboardingInvitation(input) {
   await db.update(clientOnboardingInvitations).set({
     deliveryStatus: delivery.status,
     deliveryMessageId: delivery.status === "Sent" ? delivery.providerMessageId || null : null
-  }).where(eq14(clientOnboardingInvitations.id, invitation.id));
+  }).where(eq17(clientOnboardingInvitations.id, invitation.id));
   await db.insert(adminAccessAuditEvents).values({
     actorUserId: input.actorUserId,
     action: "client_onboarding_invitation_created",
@@ -10643,19 +11149,19 @@ async function createOnboardingInvitation(input) {
 }
 async function sendClientSignInLink(input) {
   const db = await requireDatabase();
-  const accepted = (await db.select({ userId: clientOnboardingInvitations.acceptedByUserId, email: clientOnboardingInvitations.email }).from(clientOnboardingInvitations).where(and9(eq14(clientOnboardingInvitations.businessCheckId, input.businessCheckId), eq14(clientOnboardingInvitations.status, "accepted"))).orderBy(desc6(clientOnboardingInvitations.id)).limit(1))[0];
+  const accepted = (await db.select({ userId: clientOnboardingInvitations.acceptedByUserId, email: clientOnboardingInvitations.email }).from(clientOnboardingInvitations).where(and11(eq17(clientOnboardingInvitations.businessCheckId, input.businessCheckId), eq17(clientOnboardingInvitations.status, "accepted"))).orderBy(desc6(clientOnboardingInvitations.id)).limit(1))[0];
   if (accepted?.userId) {
     const reset = await issueClientReset(db, { actorUserId: input.actorUserId, targetUserId: accepted.userId });
     return { kind: "reset", email: accepted.email, url: reset.resetUrl, expiresAt: reset.expiresAt, deliveryStatus: reset.deliveryStatus };
   }
   const invitation = await createOnboardingInvitation({ businessCheckId: input.businessCheckId, actorUserId: input.actorUserId });
-  const email = (await db.select({ email: clientOnboardingInvitations.email }).from(clientOnboardingInvitations).where(eq14(clientOnboardingInvitations.id, invitation.invitationId)).limit(1))[0]?.email ?? "";
+  const email = (await db.select({ email: clientOnboardingInvitations.email }).from(clientOnboardingInvitations).where(eq17(clientOnboardingInvitations.id, invitation.invitationId)).limit(1))[0]?.email ?? "";
   return { kind: "invitation", email, url: invitation.invitationUrl, expiresAt: invitation.expiresAt, deliveryStatus: invitation.deliveryStatus };
 }
 async function revokeOnboardingInvitation(input) {
   const db = await requireDatabase();
-  const revoked = await db.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and9(eq14(clientOnboardingInvitations.id, input.invitationId), eq14(clientOnboardingInvitations.status, "pending"))).returning({ id: clientOnboardingInvitations.id, email: clientOnboardingInvitations.email });
-  if (revoked.length !== 1) throw new TRPCError13({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
+  const revoked = await db.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and11(eq17(clientOnboardingInvitations.id, input.invitationId), eq17(clientOnboardingInvitations.status, "pending"))).returning({ id: clientOnboardingInvitations.id, email: clientOnboardingInvitations.email });
+  if (revoked.length !== 1) throw new TRPCError16({ code: "CONFLICT", message: "Only a pending invitation can be revoked." });
   await db.insert(adminAccessAuditEvents).values({
     actorUserId: input.actorUserId,
     action: "client_onboarding_invitation_revoked",
@@ -10665,27 +11171,27 @@ async function revokeOnboardingInvitation(input) {
   return { success: true };
 }
 async function previewOnboardingInvitation(req, token3) {
-  if (!await consumeRateLimit("onboarding", req, "preview", 60)) throw new TRPCError13({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!await consumeRateLimit("onboarding", req, "preview", 60)) throw new TRPCError16({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const db = await requireDatabase();
-  const invitation = (await db.select().from(clientOnboardingInvitations).where(eq14(clientOnboardingInvitations.tokenHash, sha256(token3))).limit(1))[0];
+  const invitation = (await db.select().from(clientOnboardingInvitations).where(eq17(clientOnboardingInvitations.tokenHash, sha256(token3))).limit(1))[0];
   if (!invitation || effectiveInvitationStatus(invitation) !== "pending") return { available: false };
   return { available: true, email: invitation.email, fullName: invitation.fullNameSnapshot, businessName: invitation.businessNameSnapshot };
 }
 async function acceptOnboardingInvitation(req, res, rawInput) {
   assertSameOrigin(req);
   const parsed = onboardingAcceptInputSchema.safeParse(rawInput);
-  if (!parsed.success) throw new TRPCError13({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
+  if (!parsed.success) throw new TRPCError16({ code: "BAD_REQUEST", message: parsed.error.issues[0]?.message ?? "Check the details and try again." });
   const input = parsed.data;
-  if (!await consumeRateLimit("onboarding", req, "accept", 10)) throw new TRPCError13({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
+  if (!await consumeRateLimit("onboarding", req, "accept", 10)) throw new TRPCError16({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
   const db = await requireDatabase();
   const passwordHash = hashAdminPassword(input.password);
   let created;
   try {
     created = await db.transaction(async (tx) => {
-      const invitation = (await tx.select().from(clientOnboardingInvitations).where(eq14(clientOnboardingInvitations.tokenHash, sha256(input.token))).limit(1))[0];
+      const invitation = (await tx.select().from(clientOnboardingInvitations).where(eq17(clientOnboardingInvitations.tokenHash, sha256(input.token))).limit(1))[0];
       if (!invitation || effectiveInvitationStatus(invitation) !== "pending") throw unavailable3();
-      if (input.email !== invitation.email) throw new TRPCError13({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
-      if (await identityConflict(tx, invitation.email)) throw new TRPCError13({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
+      if (input.email !== invitation.email) throw new TRPCError16({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.emailMismatch });
+      if (await identityConflict(tx, invitation.email)) throw new TRPCError16({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
       const [user] = await tx.insert(users).values({
         openId: `local:${randomUUID4()}`,
         name: input.fullName,
@@ -10707,17 +11213,17 @@ async function acceptOnboardingInvitation(req, res, rawInput) {
         acceptedAt: databaseNow(),
         acceptedByUserId: user.id,
         businessId: business.id
-      }).where(and9(
-        eq14(clientOnboardingInvitations.id, invitation.id),
-        eq14(clientOnboardingInvitations.status, "pending"),
+      }).where(and11(
+        eq17(clientOnboardingInvitations.id, invitation.id),
+        eq17(clientOnboardingInvitations.status, "pending"),
         gt7(clientOnboardingInvitations.expiresAt, /* @__PURE__ */ new Date()),
-        isNull8(clientOnboardingInvitations.acceptedAt)
+        isNull9(clientOnboardingInvitations.acceptedAt)
       )).returning({ id: clientOnboardingInvitations.id });
       if (claimed.length !== 1) throw unavailable3();
       return { userId: user.id, email: invitation.email, business, session, businessCheckId: invitation.businessCheckId };
     });
   } catch (error) {
-    if (isUniqueViolation(error)) throw new TRPCError13({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
+    if (isUniqueViolation(error)) throw new TRPCError16({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccount });
     throw error;
   }
   await linkEngagementToBusiness(db, { businessCheckId: created.businessCheckId, businessId: created.business.id }).catch((error) => {
@@ -10786,13 +11292,10 @@ async function onboardingMetrics() {
     businesses: await one(db.select({ n: count() }).from(businesses)),
     memberships: await one(db.select({ n: count() }).from(businessMemberships)),
     platformRoleAssignments: await one(db.select({ n: count() }).from(userPlatformRoles)),
-    pendingInvitations: await one(db.select({ n: count() }).from(clientOnboardingInvitations).where(and9(eq14(clientOnboardingInvitations.status, "pending"), gt7(clientOnboardingInvitations.expiresAt, /* @__PURE__ */ new Date())))),
-    activeSessions: await one(db.select({ n: count() }).from(userSessions).where(and9(isNull8(userSessions.revokedAt), gt7(userSessions.expiresAt, /* @__PURE__ */ new Date()))))
+    pendingInvitations: await one(db.select({ n: count() }).from(clientOnboardingInvitations).where(and11(eq17(clientOnboardingInvitations.status, "pending"), gt7(clientOnboardingInvitations.expiresAt, /* @__PURE__ */ new Date())))),
+    activeSessions: await one(db.select({ n: count() }).from(userSessions).where(and11(isNull9(userSessions.revokedAt), gt7(userSessions.expiresAt, /* @__PURE__ */ new Date()))))
   };
 }
-
-// server/lagosTime.ts
-var lagosTime = (date2) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(date2);
 
 // server/payments.ts
 var firstName = (fullName) => fullName.trim().split(/\s+/)[0] || "there";
@@ -10898,21 +11401,21 @@ async function paymentStatusesByCheck(db, businessCheckIds) {
   return byCheck;
 }
 async function loadCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, publicToken: businessChecks.publicToken, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq15(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError14({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  const check = (await db.select({ id: businessChecks.id, publicToken: businessChecks.publicToken, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq18(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError17({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   return check;
 }
 var BEFORE_OPPORTUNITY = ["lead", "qualified_lead", "call_booked"];
 async function requestPayment(db, input) {
   const check = await loadCheck(db, input.businessCheckId);
-  const existing = (await db.select().from(paymentRequests).where(and10(eq15(paymentRequests.businessCheckId, check.id), eq15(paymentRequests.item, input.item))).limit(1))[0];
-  if (existing?.status === "confirmed") throw new TRPCError14({ code: "CONFLICT", message: "This has already been paid." });
+  const existing = (await db.select().from(paymentRequests).where(and12(eq18(paymentRequests.businessCheckId, check.id), eq18(paymentRequests.item, input.item))).limit(1))[0];
+  if (existing?.status === "confirmed") throw new TRPCError17({ code: "CONFLICT", message: "This has already been paid." });
   const reference2 = paymentReference(input.item, check.id);
   const { amountNaira, lowPriceTesting } = resolveBusinessSupportPrice(input.item);
   const stageTo = input.item === "current_state" && BEFORE_OPPORTUNITY.includes(check.pipelineStage) ? "opportunity" : check.pipelineStage;
   const request = await db.transaction(async (tx) => {
     const [row] = await tx.insert(paymentRequests).values({ businessCheckId: check.id, item: input.item, amountNaira, reference: reference2, requestedByUserId: input.actorUserId }).onConflictDoUpdate({ target: [paymentRequests.businessCheckId, paymentRequests.item], set: { amountNaira, requestedByUserId: input.actorUserId, requestedAt: /* @__PURE__ */ new Date() } }).returning();
-    if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq15(businessChecks.id, check.id));
+    if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq18(businessChecks.id, check.id));
     await recordAudit(tx, {
       action: "payment_details_sent",
       actorUserId: input.actorUserId,
@@ -10923,13 +11426,13 @@ async function requestPayment(db, input) {
   });
   const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference: reference2, deadline: paymentDeadline(request.requestedAt), amountNaira: request.amountNaira, online: onlinePaymentOffer(check.publicToken, input.item) });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check.id, idempotencyKey: `payment_requests:${request.id}:details:${request.requestedAt.getTime()}` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
-  await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq15(paymentRequests.id, request.id));
+  await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq18(paymentRequests.id, request.id));
   const deliveryProblem = delivery.status === "Failed" ? delivery.reason : null;
   return { paymentRequestId: request.id, reference: reference2, status: request.status, deliveryStatus: delivery.status, deliveryProblem, pipelineStage: stageTo };
 }
 async function loadRequest(db, paymentRequestId) {
-  const request = (await db.select().from(paymentRequests).where(eq15(paymentRequests.id, paymentRequestId)).limit(1))[0];
-  if (!request) throw new TRPCError14({ code: "NOT_FOUND", message: "That payment request does not exist." });
+  const request = (await db.select().from(paymentRequests).where(eq18(paymentRequests.id, paymentRequestId)).limit(1))[0];
+  if (!request) throw new TRPCError17({ code: "NOT_FOUND", message: "That payment request does not exist." });
   return request;
 }
 var NOT_CONFIRMED = { success: true, changed: false, invitation: null, engagement: null };
@@ -10949,9 +11452,9 @@ async function confirmPayment(db, input) {
   let outcome;
   try {
     outcome = await db.transaction(async (tx) => {
-      const [claimed] = await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note }).where(and10(eq15(paymentRequests.id, request.id), ne3(paymentRequests.status, "confirmed"))).returning({ id: paymentRequests.id });
+      const [claimed] = await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note }).where(and12(eq18(paymentRequests.id, request.id), ne3(paymentRequests.status, "confirmed"))).returning({ id: paymentRequests.id });
       if (!claimed) return null;
-      if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq15(businessChecks.id, check.id));
+      if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq18(businessChecks.id, check.id));
       await recordAudit(tx, {
         action: "payment_confirmed",
         actorUserId: input.actorUserId,
@@ -10962,7 +11465,7 @@ async function confirmPayment(db, input) {
       return { reportLink };
     });
   } catch (error) {
-    if (isMissingPaymentTable(error)) throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "The Full Report table is not set up yet (migration 0007). Nothing was confirmed." });
+    if (isMissingPaymentTable(error)) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "The Full Report table is not set up yet (migration 0007). Nothing was confirmed." });
     throw error;
   }
   if (!outcome) return NOT_CONFIRMED;
@@ -10979,8 +11482,8 @@ async function confirmPayment(db, input) {
 }
 async function resendPaymentConfirmation(db, input) {
   const request = await loadRequest(db, input.paymentRequestId);
-  if (request.status !== "confirmed") throw new TRPCError14({ code: "CONFLICT", message: "This payment is not confirmed yet." });
-  if (request.item !== "current_state") throw new TRPCError14({ code: "CONFLICT", message: "For the Full Report, send the Report Intake link again instead." });
+  if (request.status !== "confirmed") throw new TRPCError17({ code: "CONFLICT", message: "This payment is not confirmed yet." });
+  if (request.item !== "current_state") throw new TRPCError17({ code: "CONFLICT", message: "For the Full Report, send the Report Intake link again instead." });
   const check = await loadCheck(db, request.businessCheckId);
   const testMode = request.confirmedByUserId === null && Boolean(request.note?.startsWith(`${TEST_NOTE}${ONLINE_NOTE}`));
   const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: null, amountNaira: request.amountNaira, testMode });
@@ -10989,7 +11492,7 @@ async function resendPaymentConfirmation(db, input) {
   return { success: true, deliveryStatus: delivery.status };
 }
 async function inviteToClientAccount(db, businessCheckId, actor) {
-  const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt }).from(clientOnboardingInvitations).where(eq15(clientOnboardingInvitations.businessCheckId, businessCheckId)).orderBy(desc7(clientOnboardingInvitations.id)).limit(1))[0];
+  const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt }).from(clientOnboardingInvitations).where(eq18(clientOnboardingInvitations.businessCheckId, businessCheckId)).orderBy(desc7(clientOnboardingInvitations.id)).limit(1))[0];
   const status = latest ? effectiveInvitationStatus(latest) : null;
   if (status === "accepted") return "has_account";
   if (status === "pending") return "already_invited";
@@ -10997,52 +11500,14 @@ async function inviteToClientAccount(db, businessCheckId, actor) {
     await createOnboardingInvitation({ businessCheckId, ...actor });
     return "sent";
   } catch (error) {
-    if (error instanceof TRPCError14 && error.code === "CONFLICT") return "has_account";
+    if (error instanceof TRPCError17 && error.code === "CONFLICT") return "has_account";
     console.error("[Payments] Payment confirmed, but the client account invitation could not be sent:", error instanceof Error ? error.message : error);
     return "failed";
   }
 }
 
-// server/fullReportRequest.ts
-import { TRPCError as TRPCError15 } from "@trpc/server";
-import { eq as eq16 } from "drizzle-orm";
-var PAY_LINK_NOTE = "Started paying online from the link in their Business Health Check summary email.";
-async function askForFullReport(db, check, input) {
-  const first = !check.reportRequestedAt;
-  if (!first && input.source === "result_page") return;
-  if (first) await db.update(businessChecks).set({ reportRequestedAt: databaseNow() }).where(eq16(businessChecks.id, check.id));
-  let payment;
-  try {
-    const sent = await requestPayment(db, { businessCheckId: check.id, item: "full_report", actorUserId: null });
-    payment = sent.deliveryStatus === "Failed" ? `Payment details: ${sent.reference}, but the email to the owner failed (${sent.deliveryProblem ?? "no reason given"}). Send them again from admin once that is fixed.` : `Payment details sent: ${sent.reference}`;
-  } catch (error) {
-    const paid = error instanceof TRPCError15 && error.code === "CONFLICT";
-    if (!paid) console.error("[BusinessCheck] Could not send the report payment details:", error instanceof Error ? error.message : error);
-    payment = paid ? "Payment: already paid" : "Payment details: NOT SENT. Send them from the admin console.";
-  }
-  if (!first) return;
-  const note = input.note || (input.source === "pay_link" ? PAY_LINK_NOTE : "None");
-  await deliverEmail({
-    sender: "business_support",
-    idempotencyKey: `business_checks:${check.id}:report:office`,
-    to: BUSINESS_SUPPORT_MAILBOX,
-    subject: `Business Health Check: ${check.businessName || check.fullName} asked for the Full Report`,
-    body: [
-      `${check.fullName} asked for the Full Report.`,
-      "",
-      `Email: ${check.email}`,
-      `WhatsApp: ${check.whatsapp || "Not given"}`,
-      `Business: ${check.businessName || "Not given"}`,
-      `Note: ${note}`,
-      payment,
-      "",
-      `Business Health Check #${check.id}${check.completedAt ? `, completed ${lagosTime(check.completedAt)} (Lagos time)` : ""}.`
-    ].join("\n")
-  });
-}
-
 // server/routers/businessCheck.ts
-var tooMany2 = (message) => new TRPCError16({ code: "TOO_MANY_REQUESTS", message });
+var tooMany2 = (message) => new TRPCError18({ code: "TOO_MANY_REQUESTS", message });
 var answerValue = z9.union([z9.string().max(300), z9.array(z9.string().max(64)).max(10)]);
 var answersInput = z9.record(z9.string().max(32), answerValue.optional()).refine((value) => Object.keys(value).length <= 80);
 var tokenInput = z9.string().min(16).max(64);
@@ -11053,15 +11518,15 @@ var businessCheckStartInput = z9.object({
   whatsapp: z9.string().trim().regex(INTERNATIONAL_PHONE, "Kindly check the WhatsApp number.").optional(),
   heardFrom: z9.string().trim().max(64).optional()
 });
-var unavailable4 = (what) => new TRPCError16({ code: "INTERNAL_SERVER_ERROR", message: `We could not ${what} just now. Kindly try again shortly.` });
+var unavailable4 = (what) => new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: `We could not ${what} just now. Kindly try again shortly.` });
 async function database(what) {
   const db = await getDb();
   if (!db) throw unavailable4(what);
   return db;
 }
 async function findCheck(db, token3) {
-  const [check] = await db.select().from(businessChecks).where(eq17(businessChecks.publicToken, token3)).limit(1);
-  if (!check) throw new TRPCError16({ code: "NOT_FOUND", message: "We could not find that Business Health Check. Kindly start again." });
+  const [check] = await db.select().from(businessChecks).where(eq19(businessChecks.publicToken, token3)).limit(1);
+  if (!check) throw new TRPCError18({ code: "NOT_FOUND", message: "We could not find that Business Health Check. Kindly start again." });
   return check;
 }
 function answerColumns(answers) {
@@ -11101,7 +11566,7 @@ var businessCheckRouter = router({
     const db = await database("save your progress");
     const check = await findCheck(db, input.token);
     if (check.completedAt) return { saved: false };
-    await db.update(businessChecks).set(answerColumns(cleanAnswers(input.answers))).where(eq17(businessChecks.id, check.id));
+    await db.update(businessChecks).set(answerColumns(cleanAnswers(input.answers))).where(eq19(businessChecks.id, check.id));
     return { saved: true };
   }),
   /** Finishes the check: works out the result on the server, writes the summary and emails both sides once. */
@@ -11114,7 +11579,7 @@ var businessCheckRouter = router({
     }
     const answers = cleanAnswers(input.answers);
     if (!isComplete(answers)) {
-      throw new TRPCError16({ code: "BAD_REQUEST", message: "Some questions are still unanswered. Kindly go back and complete them." });
+      throw new TRPCError18({ code: "BAD_REQUEST", message: "Some questions are still unanswered. Kindly go back and complete them." });
     }
     const result = evaluate(answers);
     const contact = contactOf(check, answers);
@@ -11129,7 +11594,7 @@ var businessCheckRouter = router({
       summaryJson: JSON.stringify(summary),
       summarySource: source,
       completedAt: databaseNow()
-    }).where(and11(eq17(businessChecks.id, check.id), isNull9(businessChecks.completedAt))).returning({ id: businessChecks.id });
+    }).where(and13(eq19(businessChecks.id, check.id), isNull10(businessChecks.completedAt))).returning({ id: businessChecks.id });
     if (!claimed) {
       const recorded = await findCheck(db, input.token);
       return { token: recorded.publicToken, result: JSON.parse(recorded.resultJson ?? "null") ?? result, summary: JSON.parse(recorded.summaryJson ?? "null") ?? summary, summarySource: recorded.summarySource ?? source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: recorded.notificationStatus };
@@ -11141,7 +11606,7 @@ var businessCheckRouter = router({
       deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, subject: office.subject, body: office.body, sender: "business_support", businessCheckId: check.id, idempotencyKey: `business_checks:${check.id}:summary:office` }).catch(() => failed),
       deliverEmail({ to: check.email, subject: owner.subject, body: owner.body, sender: "business_support", businessCheckId: check.id, idempotencyKey: `business_checks:${check.id}:summary:owner` }).catch(() => failed)
     ]);
-    await db.update(businessChecks).set({ notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent" }).where(eq17(businessChecks.id, check.id));
+    await db.update(businessChecks).set({ notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent" }).where(eq19(businessChecks.id, check.id));
     return { token: check.publicToken, result, summary, summarySource: source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: ownerDelivery.status === "Sent" ? "Sent" : ownerDelivery.status === "Failed" ? "Failed" : "Simulated" };
   }),
   /** The owner asks for the free call or the full report from the result screen. */
@@ -11155,19 +11620,19 @@ var businessCheckRouter = router({
     if (!await consumeLimit(LIMITS.checkNext, input.token)) throw tooMany2("Your request has been recorded. Kindly wait before sending another.");
     const db = await database("record your request");
     const check = await findCheck(db, input.token);
-    if (!check.completedAt) throw new TRPCError16({ code: "BAD_REQUEST", message: "Kindly finish the Business Health Check first." });
+    if (!check.completedAt) throw new TRPCError18({ code: "BAD_REQUEST", message: "Kindly finish the Business Health Check first." });
     if (input.choice === "report") {
       await askForFullReport(db, check, { source: "result_page", note: input.note });
       return { success: true, choice: input.choice };
     }
     const bookedFor = input.choice === "call" && input.calendlyEventUri ? await bookedCallTime(input.calendlyEventUri, check.email) ?? await findBookedCall(check.email) : null;
     if (bookedFor) {
-      await db.update(businessChecks).set({ callScheduledFor: bookedFor }).where(eq17(businessChecks.id, check.id));
+      await db.update(businessChecks).set({ callScheduledFor: bookedFor }).where(eq19(businessChecks.id, check.id));
       await recordAudit(db, { action: "business_check_call_booked", targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: bookedFor.toISOString(), source: "calendly" } });
     }
     const already = check.callRequestedAt;
     if (!already) {
-      await db.update(businessChecks).set({ callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq17(businessChecks.id, check.id));
+      await db.update(businessChecks).set({ callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq19(businessChecks.id, check.id));
       const what = "a free Discovery Call";
       await deliverEmail({
         sender: "business_support",
@@ -11193,10 +11658,10 @@ var businessCheckRouter = router({
 
 // server/routers/account.ts
 import { z as z10 } from "zod";
-import { TRPCError as TRPCError17 } from "@trpc/server";
+import { TRPCError as TRPCError19 } from "@trpc/server";
 async function database2() {
   const db = await getDb();
-  if (!db) throw new TRPCError17({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 var accountRouter = router({
@@ -11238,7 +11703,7 @@ var accountRouter = router({
 
 // server/routers/clientOnboarding.ts
 import { z as z11 } from "zod";
-import { TRPCError as TRPCError18 } from "@trpc/server";
+import { TRPCError as TRPCError20 } from "@trpc/server";
 var manage = adminPermissionProcedure("manage_client_onboarding");
 var clientOnboardingRouter = router({
   // ---- the invited client (public, token-gated) ----
@@ -11251,12 +11716,12 @@ var clientOnboardingRouter = router({
   metrics: manage.query(() => onboardingMetrics()),
   /** Before the Business Review payment is confirmed, a reason is required and recorded with the invitation. */
   invite: manage.input(z11.object({ businessCheckId: z11.number().int().positive(), overrideReason: z11.string().trim().min(5, "Give the reason for inviting before payment.").max(500).optional() })).mutation(async ({ ctx, input }) => {
-    if (!await consumeLimit(LIMITS.onboardingEmail, `actor:${ctx.user.id}`)) throw new TRPCError18({ code: "TOO_MANY_REQUESTS", message: "Too many invitation emails. Kindly try again later." });
+    if (!await consumeLimit(LIMITS.onboardingEmail, `actor:${ctx.user.id}`)) throw new TRPCError20({ code: "TOO_MANY_REQUESTS", message: "Too many invitation emails. Kindly try again later." });
     return createOnboardingInvitation({ businessCheckId: input.businessCheckId, actorUserId: ctx.user.id, overrideReason: input.overrideReason });
   }),
   /** One button on the client's record: a fresh invitation if they have no account yet, else a password reset link. */
   sendSignInLink: manage.input(z11.object({ businessCheckId: z11.number().int().positive() })).mutation(async ({ ctx, input }) => {
-    if (!await consumeLimit(LIMITS.onboardingEmail, `actor:${ctx.user.id}`)) throw new TRPCError18({ code: "TOO_MANY_REQUESTS", message: "Too many sign-in links. Kindly try again later." });
+    if (!await consumeLimit(LIMITS.onboardingEmail, `actor:${ctx.user.id}`)) throw new TRPCError20({ code: "TOO_MANY_REQUESTS", message: "Too many sign-in links. Kindly try again later." });
     return sendClientSignInLink({ businessCheckId: input.businessCheckId, actorUserId: ctx.user.id });
   }),
   revoke: manage.input(z11.object({ invitationId: z11.number().int().positive() })).mutation(({ ctx, input }) => revokeOnboardingInvitation({ invitationId: input.invitationId, actorUserId: ctx.user.id }))
@@ -11264,14 +11729,14 @@ var clientOnboardingRouter = router({
 
 // server/routers/platformRoles.ts
 import { z as z12 } from "zod";
-import { TRPCError as TRPCError19 } from "@trpc/server";
+import { TRPCError as TRPCError21 } from "@trpc/server";
 var manageRoles = adminPermissionProcedure("manage_roles");
 var roleInput = z12.object({ userId: z12.number().int().positive(), role: z12.enum(PLATFORM_ROLES) });
 var grantInput = roleInput.extend({ expiresOn: z12.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional() });
 var endOfDay = (day) => /* @__PURE__ */ new Date(`${day}T23:59:59+01:00`);
 async function database3() {
   const db = await getDb();
-  if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 var platformRolesRouter = router({
@@ -11286,11 +11751,11 @@ var platformRolesRouter = router({
 import { z as z13 } from "zod";
 
 // server/businessSupportAdmin.ts
-import { and as and12, desc as desc8, eq as eq18, inArray as inArray5, isNotNull as isNotNull2, isNull as isNull10, sql as sql6 } from "drizzle-orm";
-import { TRPCError as TRPCError20 } from "@trpc/server";
+import { and as and14, desc as desc8, eq as eq20, inArray as inArray5, isNotNull as isNotNull2, isNull as isNull11, sql as sql6 } from "drizzle-orm";
+import { TRPCError as TRPCError22 } from "@trpc/server";
 async function requireDatabase2() {
   const db = await getDb();
-  if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 var CHECK_COLUMNS = {
@@ -11327,7 +11792,7 @@ async function syncCalendlyBookings(db, rows) {
     const time = await findBookedCall(row.email);
     if (!time) return;
     const stage = advancePipeline(row.pipelineStage, "call_booked");
-    const [saved] = await db.update(businessChecks).set({ callScheduledFor: time, callRequestedAt: row.callRequestedAt ?? databaseNow(), pipelineStage: stage }).where(and12(eq18(businessChecks.id, row.id), isNull10(businessChecks.callScheduledFor))).returning({ id: businessChecks.id });
+    const [saved] = await db.update(businessChecks).set({ callScheduledFor: time, callRequestedAt: row.callRequestedAt ?? databaseNow(), pipelineStage: stage }).where(and14(eq20(businessChecks.id, row.id), isNull11(businessChecks.callScheduledFor))).returning({ id: businessChecks.id });
     if (!saved) return;
     await recordAudit(db, { action: "business_check_call_booked", targetEmail: row.email, details: { businessCheckId: row.id, scheduledFor: time.toISOString(), source: "calendly_lookup", ...row.callRequestedAt ? {} : { requested: "calendly" } } });
     found.set(row.id, time);
@@ -11383,8 +11848,8 @@ async function getBusinessCheckDetail(db, businessCheckId) {
     heardFrom: businessChecks.heardFrom,
     resultJson: businessChecks.resultJson,
     summaryJson: businessChecks.summaryJson
-  }).from(businessChecks).where(eq18(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!row) throw new TRPCError20({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  }).from(businessChecks).where(eq20(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!row) throw new TRPCError22({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   const { resultJson, summaryJson, ...fields } = row;
   const result = parseJson2(resultJson);
   const summary = parseJson2(summaryJson);
@@ -11402,7 +11867,7 @@ async function getBusinessCheckDetail(db, businessCheckId) {
 }
 var HISTORY_ACTIONS = ["business_check_stage_changed", "business_check_call_outcome", "business_check_call_scheduled", "business_check_call_booked", "payment_details_sent", "payment_proof_received", "payment_confirmed", "payment_confirmation_sent", "full_report_link_sent", "full_report_delivered"];
 async function stageHistoryFor(db, businessCheckId) {
-  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq18(users.id, adminAccessAuditEvents.actorUserId)).where(and12(inArray5(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql6`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc8(adminAccessAuditEvents.createdAt), desc8(adminAccessAuditEvents.id)).limit(100);
+  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq20(users.id, adminAccessAuditEvents.actorUserId)).where(and14(inArray5(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql6`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc8(adminAccessAuditEvents.createdAt), desc8(adminAccessAuditEvents.id)).limit(100);
   return events.map((event) => {
     const details = parseJson2(event.details) ?? {};
     return { id: event.id, action: event.action, from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, delivery: details.delivery ?? null, via: details.via === "paystack" ? "paystack" : null, by: event.by ?? null, at: event.at };
@@ -11410,12 +11875,12 @@ async function stageHistoryFor(db, businessCheckId) {
 }
 var SETTABLE_STAGES = PIPELINE_STAGES.filter((stage) => stage !== "lead" && stage !== "won");
 async function setPipelineStage(db, input) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq18(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError20({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq20(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError22({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   if (check.pipelineStage === input.stage) return { success: true, pipelineStage: check.pipelineStage, changed: false };
-  if (check.pipelineStage === "won") throw new TRPCError20({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
+  if (check.pipelineStage === "won") throw new TRPCError22({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ pipelineStage: input.stage }).where(eq18(businessChecks.id, check.id));
+    await tx.update(businessChecks).set({ pipelineStage: input.stage }).where(eq20(businessChecks.id, check.id));
     await recordAudit(tx, {
       action: "business_check_stage_changed",
       actorUserId: input.actorUserId,
@@ -11426,19 +11891,19 @@ async function setPipelineStage(db, input) {
   return { success: true, pipelineStage: input.stage, changed: true };
 }
 async function requestedCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq18(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError20({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
-  if (!check.callRequestedAt) throw new TRPCError20({ code: "BAD_REQUEST", message: "This Business Health Check has not asked for a Discovery Call." });
-  if (check.pipelineStage === "won") throw new TRPCError20({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call outcome can no longer be changed here." });
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq20(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError22({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  if (!check.callRequestedAt) throw new TRPCError22({ code: "BAD_REQUEST", message: "This Business Health Check has not asked for a Discovery Call." });
+  if (check.pipelineStage === "won") throw new TRPCError22({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call outcome can no longer be changed here." });
   return check;
 }
 async function scheduleDiscoveryCall(db, input) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt }).from(businessChecks).where(eq18(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError20({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
-  if (!check.completedAt) throw new TRPCError20({ code: "BAD_REQUEST", message: "This Business Health Check is not finished yet, so there is no Discovery Call to schedule." });
-  if (check.pipelineStage === "won") throw new TRPCError20({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call can no longer be changed here." });
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt }).from(businessChecks).where(eq20(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError22({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  if (!check.completedAt) throw new TRPCError22({ code: "BAD_REQUEST", message: "This Business Health Check is not finished yet, so there is no Discovery Call to schedule." });
+  if (check.pipelineStage === "won") throw new TRPCError22({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call can no longer be changed here." });
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, callRequestedAt: check.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq18(businessChecks.id, check.id));
+    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, callRequestedAt: check.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq20(businessChecks.id, check.id));
     await recordAudit(tx, { action: "business_check_call_scheduled", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: input.scheduledFor.toISOString(), ...check.callRequestedAt ? {} : { requested: "by_hand" } } });
   });
   return { success: true };
@@ -11449,7 +11914,7 @@ async function recordDiscoveryCallOutcome(db, input) {
   const check = await requestedCheck(db, input.businessCheckId);
   const stage = OUTCOME_STAGE[input.outcome];
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ pipelineStage: stage }).where(eq18(businessChecks.id, check.id));
+    await tx.update(businessChecks).set({ pipelineStage: stage }).where(eq20(businessChecks.id, check.id));
     await recordAudit(tx, { action: "business_check_call_outcome", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, outcome: input.outcome, from: check.pipelineStage, to: stage } });
   });
   return { success: true, pipelineStage: stage };
@@ -11467,7 +11932,7 @@ async function listClients(db) {
     membershipStatus: businessMemberships.status,
     joinedAt: businessMemberships.createdAt,
     businessCreatedAt: businesses.createdAt
-  }).from(businessMemberships).innerJoin(businesses, eq18(businessMemberships.businessId, businesses.id)).innerJoin(users, eq18(businessMemberships.userId, users.id)).orderBy(desc8(businesses.createdAt), businessMemberships.id).limit(500);
+  }).from(businessMemberships).innerJoin(businesses, eq20(businessMemberships.businessId, businesses.id)).innerJoin(users, eq20(businessMemberships.userId, users.id)).orderBy(desc8(businesses.createdAt), businessMemberships.id).limit(500);
 }
 async function businessSupportDb() {
   return requireDatabase2();
@@ -11528,15 +11993,15 @@ var businessSupportRouter = router({
 
 // server/routers/fullReport.ts
 import { z as z14 } from "zod";
-import { TRPCError as TRPCError21 } from "@trpc/server";
+import { TRPCError as TRPCError23 } from "@trpc/server";
 async function database4() {
   const db = await getDb();
-  if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach your report just now. Please try again in a minute." });
+  if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach your report just now. Please try again in a minute." });
   return db;
 }
 var token = z14.string().trim().min(1).max(200);
 async function allow(rule, link) {
-  if (!await consumeLimit(rule, link)) throw new TRPCError21({ code: "TOO_MANY_REQUESTS", message: "Too many requests for this report. Kindly try again later." });
+  if (!await consumeLimit(rule, link)) throw new TRPCError23({ code: "TOO_MANY_REQUESTS", message: "Too many requests for this report. Kindly try again later." });
 }
 var fullReportRouter = router({
   form: publicProcedure.input(z14.object({ token })).query(async ({ input }) => {
@@ -11555,15 +12020,15 @@ var fullReportRouter = router({
 });
 
 // server/routers/engagement.ts
-import { TRPCError as TRPCError23 } from "@trpc/server";
+import { TRPCError as TRPCError25 } from "@trpc/server";
 import { z as z15 } from "zod";
 
 // server/finance.ts
-import { TRPCError as TRPCError22 } from "@trpc/server";
-import { asc as asc3, desc as desc10, eq as eq19 } from "drizzle-orm";
+import { TRPCError as TRPCError24 } from "@trpc/server";
+import { asc as asc4, desc as desc10, eq as eq21 } from "drizzle-orm";
 var lagosToday = (now) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date(now));
 async function listFinance(db, actor, now = Date.now()) {
-  if (!authorityAllows(actor.authority, "view_financials")) throw new TRPCError22({ code: "FORBIDDEN", message: "Your role does not include finance." });
+  if (!authorityAllows(actor.authority, "view_financials")) throw new TRPCError24({ code: "FORBIDDEN", message: "Your role does not include finance." });
   const today = lagosToday(now);
   const requestRows = await db.select({
     id: paymentRequests.id,
@@ -11575,7 +12040,7 @@ async function listFinance(db, actor, now = Date.now()) {
     confirmedAt: paymentRequests.confirmedAt,
     fullName: businessChecks.fullName,
     businessName: businessChecks.businessName
-  }).from(paymentRequests).innerJoin(businessChecks, eq19(paymentRequests.businessCheckId, businessChecks.id)).orderBy(desc10(paymentRequests.id));
+  }).from(paymentRequests).innerJoin(businessChecks, eq21(paymentRequests.businessCheckId, businessChecks.id)).orderBy(desc10(paymentRequests.id));
   const feeRows = await db.select({
     id: engagementFeeLines.id,
     engagementId: engagementFeeLines.engagementId,
@@ -11588,7 +12053,7 @@ async function listFinance(db, actor, now = Date.now()) {
     businessName: businesses.name,
     contactName: engagements.contactName,
     checkBusinessName: businessChecks.businessName
-  }).from(engagementFeeLines).innerJoin(engagements, eq19(engagementFeeLines.engagementId, engagements.id)).leftJoin(businesses, eq19(engagements.businessId, businesses.id)).leftJoin(businessChecks, eq19(engagements.businessCheckId, businessChecks.id)).orderBy(asc3(engagementFeeLines.dueOn), asc3(engagementFeeLines.id));
+  }).from(engagementFeeLines).innerJoin(engagements, eq21(engagementFeeLines.engagementId, engagements.id)).leftJoin(businesses, eq21(engagements.businessId, businesses.id)).leftJoin(businessChecks, eq21(engagements.businessCheckId, businessChecks.id)).orderBy(asc4(engagementFeeLines.dueOn), asc4(engagementFeeLines.id));
   const requests = requestRows.map((row) => ({ ...row, title: PAYMENT_ITEM_TITLES[row.item], client: row.businessName || row.fullName, paid: row.status === "confirmed" }));
   const fees = feeRows.map((row) => ({
     id: row.id,
@@ -11617,7 +12082,7 @@ async function listFinance(db, actor, now = Date.now()) {
 
 // server/routers/engagement.ts
 async function enforceLimit(rule, subject) {
-  if (!await consumeLimit(rule, subject)) throw new TRPCError23({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Kindly try again later." });
+  if (!await consumeLimit(rule, subject)) throw new TRPCError25({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Kindly try again later." });
 }
 var id = z15.number().int().positive();
 var text3 = (max) => z15.string().trim().max(max);
@@ -11633,14 +12098,14 @@ async function guarded(work) {
   try {
     return await work();
   } catch (error) {
-    if (isMissingEngagementTable(error)) throw new TRPCError23({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
+    if (isMissingEngagementTable(error)) throw new TRPCError25({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
     throw error;
   }
 }
 var staff = adminProcedure.use(async ({ ctx, next }) => {
   const authority = await loadAuthority(await engagementDb(), ctx.user);
   if (!authorityAllows(authority, "view_all_businesses") && !authorityAllows(authority, "view_assigned_businesses")) {
-    throw new TRPCError23({ code: "FORBIDDEN", message: "Your role does not include engagements." });
+    throw new TRPCError25({ code: "FORBIDDEN", message: "Your role does not include engagements." });
   }
   return next({ ctx: { ...ctx, actor: { id: ctx.user.id, authority } } });
 });
@@ -11742,6 +12207,8 @@ var staffRouter = router({
     engagementId: id,
     feeLines: z15.array(z15.object({ label: text3(AGREEMENT_LIMITS.label), amount: z15.number().int().positive().max(AGREEMENT_LIMITS.amount), dueOn: z15.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable() })).max(AGREEMENT_LIMITS.feeLines)
   })).mutation(async ({ ctx, input }) => guarded(async () => saveFees(await engagementDb(), ctx.actor, input))),
+  sendFeeLink: staff.input(z15.object({ feeLineId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffSendFeeLink(await engagementDb(), ctx.actor, input))),
+  openRoomNow: staff.input(z15.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => openRoomNow(await engagementDb(), ctx.actor, input))),
   setFeePaid: staff.input(z15.object({ feeLineId: id, paid: z15.boolean() })).mutation(async ({ ctx, input }) => guarded(async () => setFeePaid(await engagementDb(), ctx.actor, input))),
   /** "Fix the next problem": the clients' requests for another service, and handling one. Desk only. */
   serviceRequests: staff.query(async ({ ctx }) => listServiceRequests(await engagementDb(), ctx.actor)),
@@ -11835,14 +12302,14 @@ var financeRouter = router({
 var engagementRouter = router({ staff: staffRouter, client: clientRouter, finance: financeRouter });
 
 // server/routers/invitations.ts
-import { TRPCError as TRPCError24 } from "@trpc/server";
+import { TRPCError as TRPCError26 } from "@trpc/server";
 import { z as z16 } from "zod";
 var id2 = z16.number().int().positive();
 async function guarded2(work) {
   try {
     return await work();
   } catch (error) {
-    if (isMissingEngagementTable(error)) throw new TRPCError24({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
+    if (isMissingEngagementTable(error)) throw new TRPCError26({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
     throw error;
   }
 }
@@ -11875,12 +12342,12 @@ var invitationsRouter = router({
 
 // server/routers/people.ts
 import { z as z17 } from "zod";
-import { TRPCError as TRPCError25 } from "@trpc/server";
+import { TRPCError as TRPCError27 } from "@trpc/server";
 var manageUsers = adminPermissionProcedure("manage_users");
 var userInput = z17.object({ userId: z17.number().int().positive() });
 async function database5() {
   const db = await getDb();
-  if (!db) throw new TRPCError25({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 var peopleRouter = router({
@@ -11896,259 +12363,19 @@ var peopleRouter = router({
 });
 
 // server/routers/onlinePayment.ts
-import { TRPCError as TRPCError27 } from "@trpc/server";
+import { TRPCError as TRPCError28 } from "@trpc/server";
 import { z as z18 } from "zod";
-
-// server/onlinePayment.ts
-import { TRPCError as TRPCError26 } from "@trpc/server";
-import { and as and13, eq as eq20 } from "drizzle-orm";
-var notFound3 = () => new TRPCError26({ code: "NOT_FOUND", message: "We could not find this payment. Use the link in your payment email." });
-var ONLINE_PAYMENT_OFF_MESSAGE = "Online payment is not open yet. Please try again later, or reply to your payment email and we will send you a link when it is.";
-function requireOnlinePayment() {
-  const mode = paystackMode();
-  if (mode === "off") throw new TRPCError26({ code: "PRECONDITION_FAILED", message: ONLINE_PAYMENT_OFF_MESSAGE });
-  return mode;
-}
-async function lookup(db, token3, item2) {
-  const check = (await db.select().from(businessChecks).where(eq20(businessChecks.publicToken, token3)).limit(1))[0];
-  if (!check) throw notFound3();
-  const request = (await db.select().from(paymentRequests).where(and13(eq20(paymentRequests.businessCheckId, check.id), eq20(paymentRequests.item, item2))).limit(1))[0];
-  return { check, request };
-}
-var ownerMayStart = (check, item2) => item2 === "full_report" && Boolean(check.completedAt);
-var requestByReference = async (db, reference2) => (await db.select().from(paymentRequests).where(eq20(paymentRequests.reference, reference2)).limit(1))[0];
-var PAGE_STATE = { requested: "open", expired: "expired", proof_received: "open", confirmed: "paid" };
-async function onlinePaymentPage(db, input) {
-  const { check, request } = await lookup(db, input.token, input.item);
-  if (!request) {
-    if (!ownerMayStart(check, input.item)) throw notFound3();
-    return { item: input.item, name: PAYMENT_ITEM_TITLES[input.item], amountNaira: getBusinessSupportPrice(input.item), mode: paystackMode(), state: "open" };
-  }
-  const display = effectivePaymentStatus(request);
-  return {
-    item: request.item,
-    name: PAYMENT_ITEM_TITLES[request.item],
-    amountNaira: request.amountNaira,
-    mode: paystackMode(),
-    // An owner's own Full Report link never dead-ends: pressing pay starts a new 48 hours.
-    state: display === "expired" && ownerMayStart(check, request.item) ? "open" : PAGE_STATE[display]
-  };
-}
-async function startOnlinePayment(db, input) {
-  requireOnlinePayment();
-  const found = await lookup(db, input.token, input.item);
-  const { check } = found;
-  let request = found.request;
-  if (!request) {
-    if (!ownerMayStart(check, input.item)) throw notFound3();
-    await askForFullReport(db, check, { source: "pay_link" });
-    request = (await lookup(db, input.token, input.item)).request;
-    if (!request) throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute, or reply to your summary email." });
-  }
-  if (request.status === "confirmed") return { alreadyPaid: true };
-  if (effectivePaymentStatus(request) === "expired") {
-    if (!ownerMayStart(check, request.item)) {
-      throw new TRPCError26({ code: "PRECONDITION_FAILED", message: "This payment link has passed its 48 hours. Reply to your payment email and we will send you a new one." });
-    }
-    await requestPayment(db, { businessCheckId: check.id, item: request.item, actorUserId: null });
-    request = (await lookup(db, input.token, input.item)).request ?? request;
-  }
-  assertAmountAllowed(request.amountNaira);
-  const email = check.email;
-  const reference2 = onlineReference(request.reference);
-  try {
-    const { authorizationUrl } = await initializeTransaction({
-      email,
-      amountKobo: request.amountNaira * 100,
-      reference: reference2,
-      callbackUrl: `${getTrustedApplicationOrigin()}${PAY_RETURN_PATH}`,
-      metadata: { paymentRequestId: request.id, businessCheckId: request.businessCheckId, item: request.item }
-    });
-    return { alreadyPaid: false, url: authorizationUrl };
-  } catch (error) {
-    console.error(`[Paystack] Could not open a payment for ${request.reference}:`, error instanceof Error ? error.message : "unknown error");
-    throw new TRPCError26({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute." });
-  }
-}
-function transactionProblem(request, transaction) {
-  if (!transaction.reference.startsWith(`${request.reference}-`)) return "reference";
-  if (transaction.status !== "success") return "status";
-  if (transaction.currency !== "NGN") return "currency";
-  if (!amountMatches(transaction, request.amountNaira * 100)) return "amount";
-  return null;
-}
-function amountMatches(transaction, expectedKobo) {
-  if (transaction.amount === expectedKobo) return true;
-  return transaction.requestedAmount === expectedKobo && Number.isFinite(transaction.amount) && transaction.amount >= expectedKobo;
-}
-var STILL_OPEN = /* @__PURE__ */ new Set(["ongoing", "pending", "processing", "queued"]);
-var paidBy = (request, reference2) => Boolean(request.note?.includes(reference2));
-async function checkOf(db, businessCheckId) {
-  return (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, businessName: businessChecks.businessName }).from(businessChecks).where(eq20(businessChecks.id, businessCheckId)).limit(1))[0];
-}
-var PROBLEM_TEXT = {
-  reference: () => "The Paystack reference does not belong to this payment.",
-  currency: (transaction) => `The payment was not in naira (${transaction.currency || "no currency given"}).`,
-  amount: (transaction, request) => `The amount does not match: ${Number.isFinite(transaction.amount) ? formatNaira(transaction.amount / 100) : "no amount"} paid, ${formatNaira(request.amountNaira)} expected.`,
-  paid_twice: () => "This item was already paid, so this may be a second payment for it."
-};
-async function needsALook(db, request, transaction, problem, source) {
-  const reason = PROBLEM_TEXT[problem](transaction, request);
-  console.error(`[Paystack] ${source}: ${transaction.reference} was not confirmed for ${request.reference}: ${problem}.`);
-  const check = await checkOf(db, request.businessCheckId);
-  await recordAudit(db, {
-    action: "payment_online_refused",
-    actorUserId: null,
-    targetEmail: check?.email ?? null,
-    details: { businessCheckId: request.businessCheckId, item: request.item, reference: request.reference, via: "paystack", paystackReference: transaction.reference, mode: paystackMode(), problem, amountKobo: transaction.amount, currency: transaction.currency }
-  });
-  await deliverEmail({
-    to: BUSINESS_SUPPORT_MAILBOX,
-    sender: "business_support",
-    idempotencyKey: `paystack:${transaction.reference}:${problem}:office`,
-    subject: `Paystack payment needs a look: ${request.reference}`,
-    body: [
-      "A payment on Paystack was not confirmed automatically. Check it in Paystack, then confirm it by hand in the admin console or refund it.",
-      "",
-      `Reason: ${reason}`,
-      `Reference: ${request.reference}`,
-      `Paystack reference: ${transaction.reference}`,
-      `Owner: ${check ? `${check.fullName} (${check.email})` : "Not found"}`,
-      `Item: ${PAYMENT_ITEM_TITLES[request.item]}`,
-      "",
-      `Business Health Check #${request.businessCheckId}.`
-    ].join("\n")
-  }).catch((error) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
-}
-async function tellOfficePaid(db, request, online, result) {
-  const check = await checkOf(db, request.businessCheckId);
-  const test = online.mode === "test";
-  const next = request.item === "full_report" ? ["The payment confirmation with the Report Intake link has been emailed to the owner."] : [
-    "The business is now Won.",
-    `Engagement: ${result.engagement === "started" || result.engagement === "exists" ? "started" : "NOT STARTED. Start it from Engagements."}`,
-    `Client account invitation: ${result.invitation === "sent" ? "sent" : result.invitation === "already_invited" ? "already out" : result.invitation === "has_account" ? "they already have an account" : "NOT SENT. Send it from Client Onboarding."}`
-  ];
-  await deliverEmail({
-    to: BUSINESS_SUPPORT_MAILBOX,
-    sender: "business_support",
-    idempotencyKey: `payment_requests:${request.id}:paid_online:office`,
-    subject: `${test ? "TEST: " : ""}Paid online: ${check?.businessName || check?.fullName || request.reference}, ${PAYMENT_ITEM_TITLES[request.item]}`,
-    body: [
-      ...test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : [],
-      `${check?.fullName ?? "The owner"} paid ${formatNaira(request.amountNaira)} for the ${PAYMENT_ITEM_TITLES[request.item]} with Paystack. It is confirmed: nothing to do in the admin console.`,
-      "",
-      `Email: ${check?.email ?? "Not found"}`,
-      `Business: ${check?.businessName || "Not given"}`,
-      `Reference: ${request.reference}`,
-      `Paystack reference: ${online.reference}`,
-      `Confirmed: ${lagosTime(/* @__PURE__ */ new Date())} (Lagos time)`,
-      "",
-      ...next,
-      "",
-      `Business Health Check #${request.businessCheckId}. ${BRAND.organisationName}`
-    ].join("\n")
-  }).catch((error) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
-}
-async function settle(db, request, reference2, source) {
-  if (request.status === "confirmed" && paidBy(request, reference2)) return "already_paid";
-  const transaction = await verifyTransaction(reference2);
-  if (!transaction || transaction.reference !== reference2) {
-    console.warn(`[Paystack] ${source}: Paystack does not know ${reference2}; nothing was confirmed.`);
-    return "failed";
-  }
-  const problem = transactionProblem(request, transaction);
-  if (problem === "status") return STILL_OPEN.has(transaction.status) ? "pending" : "failed";
-  if (problem) {
-    await needsALook(db, request, transaction, problem, source);
-    return "refused";
-  }
-  const mode = paystackMode();
-  if (mode === "off") throw new Error("Paystack was switched off while a payment was being confirmed.");
-  const online = { provider: "paystack", reference: reference2, mode };
-  if (request.status !== "confirmed") {
-    const result = await confirmPayment(db, { paymentRequestId: request.id, actorUserId: null, online });
-    if (result.changed) {
-      await tellOfficePaid(db, request, online, result);
-      return "confirmed";
-    }
-  }
-  const now = await requestByReference(db, request.reference);
-  if (now && !paidBy(now, reference2)) await needsALook(db, now, transaction, "paid_twice", source);
-  return "already_paid";
-}
-async function settleOnlinePayment(db, reference2, source) {
-  const prefix = paymentReferenceOf(reference2);
-  const request = prefix ? await requestByReference(db, prefix) : void 0;
-  if (!request) return "unknown";
-  return settle(db, request, reference2, source);
-}
-function itemOfReference(paymentReference2) {
-  const code = /^TS-([A-Z]{1,3})-/.exec(paymentReference2)?.[1];
-  return PAYMENT_ITEMS.find((item2) => PAYMENT_ITEM_DETAILS[item2].code === code) ?? null;
-}
-async function onlinePaymentStatus(db, reference2) {
-  const prefix = paymentReferenceOf(reference2);
-  const item2 = prefix ? itemOfReference(prefix) : null;
-  if (!prefix || !item2) throw notFound3();
-  const mode = paystackMode();
-  const answer2 = (status) => ({ status, item: item2, mode });
-  const request = await requestByReference(db, prefix);
-  if (!request) return answer2(mode === "off" ? "pending" : "failed");
-  const paidByThis = request.status === "confirmed" && paidBy(request, reference2);
-  if (mode === "off") return answer2(paidByThis ? "paid" : "pending");
-  let settlement;
-  try {
-    settlement = await settle(db, request, reference2, "return");
-  } catch (error) {
-    console.error(`[Paystack] Could not check ${reference2} for the return page:`, error instanceof Error ? error.message : "unknown error");
-    return answer2(paidByThis ? "paid" : "pending");
-  }
-  if (settlement === "confirmed" || settlement === "already_paid") return answer2("paid");
-  if (settlement === "failed") return answer2("failed");
-  return answer2("pending");
-}
-function parseEvent(raw) {
-  try {
-    const parsed = JSON.parse(raw.toString("utf8"));
-    return { event: typeof parsed?.event === "string" ? parsed.event : "", reference: typeof parsed?.data?.reference === "string" ? parsed.data.reference : null };
-  } catch {
-    return null;
-  }
-}
-async function handlePaystackWebhook(req, res) {
-  const raw = Buffer.isBuffer(req.body) ? req.body : null;
-  if (!raw || !isValidPaystackSignature(raw, req.headers["x-paystack-signature"])) {
-    res.status(401).json({ message: "Invalid signature." });
-    return;
-  }
-  const event = parseEvent(raw);
-  if (event?.event !== "charge.success" || !event.reference) {
-    res.status(200).json({ received: true });
-    return;
-  }
-  try {
-    const db = await getDb();
-    if (!db) throw new Error("the database is not available");
-    const settlement = await settleOnlinePayment(db, event.reference, "webhook");
-    if (settlement === "unknown") console.warn(`[Paystack] webhook: ${event.reference} is not a payment of ours; ignored.`);
-    res.status(200).json({ received: true });
-  } catch (error) {
-    console.error("[Paystack] webhook not processed; Paystack will send it again:", error instanceof Error ? error.message : "unknown error");
-    res.status(500).json({ message: "Not processed. Please send it again." });
-  }
-}
-
-// server/routers/onlinePayment.ts
 async function database6() {
   const db = await getDb();
-  if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach your payment just now. Please try again in a minute." });
+  if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach your payment just now. Please try again in a minute." });
   return db;
 }
 async function allow2(rule, subject) {
-  if (!await consumeLimit(rule, subject)) throw new TRPCError27({ code: "TOO_MANY_REQUESTS", message: "Too many requests for this payment. Kindly try again later." });
+  if (!await consumeLimit(rule, subject)) throw new TRPCError28({ code: "TOO_MANY_REQUESTS", message: "Too many requests for this payment. Kindly try again later." });
 }
 var token2 = z18.string().trim().min(16).max(64);
 var item = z18.enum(PAYMENT_ITEMS);
+var feeToken = z18.string().trim().min(16).max(64);
 var reference = z18.string().trim().min(1).max(64);
 var onlinePaymentRouter = router({
   /** Public: the pay page, opened from the payment details email. Answers the item, its amount, the mode and where it stands. */
@@ -12161,6 +12388,17 @@ var onlinePaymentRouter = router({
     await allow2(LIMITS.paymentStart, input.token);
     requireOnlinePayment();
     return startOnlinePayment(await database6(), input);
+  }),
+  /** Public: an engagement fee's pay page (server/feePayments.ts), keyed by the fee and its signed token. */
+  feePage: publicProcedure.input(z18.object({ feeLineId: z18.number().int().positive(), token: feeToken })).query(async ({ input }) => {
+    await allow2(LIMITS.paymentPage, `fee:${input.feeLineId}`);
+    return feePayPage(await database6(), input);
+  }),
+  /** Public: "Pay securely with Paystack" for an engagement fee: the amount comes from the fee line. */
+  feeStart: publicProcedure.input(z18.object({ feeLineId: z18.number().int().positive(), token: feeToken })).mutation(async ({ input }) => {
+    await allow2(LIMITS.paymentStart, `fee:${input.feeLineId}`);
+    requireOnlinePayment();
+    return startFeePayment(await database6(), input);
   }),
   /** Public: the return page after Paystack. Confirms through the shared path if the webhook has not yet; answers paid, pending or failed. */
   status: publicProcedure.input(z18.object({ reference })).mutation(async ({ ctx, input }) => {
@@ -12199,7 +12437,7 @@ var appRouter = router({
 });
 
 // server/_core/context.ts
-import { eq as eq21 } from "drizzle-orm";
+import { eq as eq22 } from "drizzle-orm";
 async function createContext(opts) {
   let user = null;
   let authChannel;
@@ -12214,7 +12452,7 @@ async function createContext(opts) {
       const session = await resolveAccountSession(opts.req);
       if (session && session.authority.roles.length > 0) {
         const db = await getDb();
-        const row = db ? (await db.select().from(users).where(eq21(users.id, session.user.id)).limit(1))[0] : void 0;
+        const row = db ? (await db.select().from(users).where(eq22(users.id, session.user.id)).limit(1))[0] : void 0;
         if (row && row.status === "active") {
           user = row;
           authChannel = "account";
@@ -12237,8 +12475,8 @@ function healthReport(settings = ENV) {
 }
 
 // server/resendWebhook.ts
-import { createHmac as createHmac3, timingSafeEqual as timingSafeEqual4 } from "node:crypto";
-import { and as and14, eq as eq22, sql as sql7 } from "drizzle-orm";
+import { createHmac as createHmac4, timingSafeEqual as timingSafeEqual5 } from "node:crypto";
+import { and as and15, eq as eq23, sql as sql7 } from "drizzle-orm";
 var SUPPORTED = /* @__PURE__ */ new Set(["email.sent", "email.delivered", "email.delivery_delayed", "email.bounced", "email.complained", "email.failed", "email.suppressed"]);
 var MAX_SKEW_SECONDS = 5 * 60;
 function verifyResendWebhookSignature(input) {
@@ -12253,12 +12491,12 @@ function verifyResendWebhookSignature(input) {
     return false;
   }
   if (key.length === 0) return false;
-  const expected = createHmac3("sha256", key).update(`${input.id}.${input.timestamp}.${input.rawBody.toString("utf8")}`).digest();
+  const expected = createHmac4("sha256", key).update(`${input.id}.${input.timestamp}.${input.rawBody.toString("utf8")}`).digest();
   return input.signature.split(" ").some((candidate) => {
     const match = /^v1,([A-Za-z0-9+/=]+)$/.exec(candidate);
     if (!match) return false;
     const supplied = Buffer.from(match[1], "base64");
-    return supplied.length === expected.length && timingSafeEqual4(supplied, expected);
+    return supplied.length === expected.length && timingSafeEqual5(supplied, expected);
   });
 }
 function recipientOf(value) {
@@ -12294,7 +12532,7 @@ async function handleResendWebhook(req, res) {
     await db.transaction(async (tx) => {
       const [inserted] = await tx.insert(resendEmailEvents).values({ eventId, providerMessageId, eventType: state, recipientEmail, happenedAt }).onConflictDoNothing({ target: resendEmailEvents.eventId }).returning({ id: resendEmailEvents.id });
       if (!inserted) return;
-      await tx.update(businessSupportEmailDeliveries).set({ latestState: state, lastEventAt: happenedAt }).where(and14(eq22(businessSupportEmailDeliveries.providerMessageId, providerMessageId), sql7`(${businessSupportEmailDeliveries.lastEventAt} is null or ${businessSupportEmailDeliveries.lastEventAt} < ${happenedAt})`));
+      await tx.update(businessSupportEmailDeliveries).set({ latestState: state, lastEventAt: happenedAt }).where(and15(eq23(businessSupportEmailDeliveries.providerMessageId, providerMessageId), sql7`(${businessSupportEmailDeliveries.lastEventAt} is null or ${businessSupportEmailDeliveries.lastEventAt} < ${happenedAt})`));
     });
     return res.status(200).json({ received: true });
   } catch (error) {

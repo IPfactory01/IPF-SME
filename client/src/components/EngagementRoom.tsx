@@ -215,6 +215,7 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
       { id: "founder", label: "Founder", group: "What we found", content: <FounderPanel insight={room.insight} /> },
     ] : []),
     { id: "deliverables", label: METHOD.deliverables, group: "What you receive", content: <DeliverablesView room={room} isOwner={isOwner} /> },
+    ...(room.fees.length ? [{ id: "payments", label: "Payments", group: "What you receive", count: dueCount(room) ? { value: dueCount(room), label: `${dueCount(room)} to pay` } : undefined, content: <PaymentsView room={room} /> }] : []),
   ];
 
   const header = (
@@ -246,13 +247,81 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
 
   return (
     <div className="flex min-h-screen bg-paper text-ink">
-      {wide && <RoomSidebar room={room} tabs={tabs} account={account} />}
+      {wide && <RoomSidebar room={room} tabs={room.awaitingPayment ? [] : tabs} account={account} />}
       <div className="min-w-0 flex-1">
         <div aria-hidden className="h-[3px] bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight" />
         {!wide && <RoomTopBar account={account} />}
         {header}
-        <RoomTabs label="Your engagement" initial="overview" tabs={tabs} />
+        {room.awaitingPayment ? <PaymentGate room={room} /> : <RoomTabs label="Your engagement" initial="overview" tabs={tabs} />}
       </div>
+    </div>
+  );
+}
+
+const dueCount = (room: Room) => room.fees.filter(fee => !fee.paid).length;
+
+// ---- Payments (R11) --------------------------------------------------------------------------------------------------
+
+/** The engagement's fees: what is paid, what is due, and a Pay button for each unpaid fee (Paystack). */
+function PaymentsView({ room }: { room: Room }) {
+  const preview = useRoomPreview();
+  const total = room.fees.reduce((sum, fee) => sum + fee.amount, 0);
+  const paid = room.fees.filter(fee => fee.paid).reduce((sum, fee) => sum + fee.amount, 0);
+  return (
+    <div className="grid items-start gap-5 lg:grid-cols-3">
+      <section aria-label="Fees" className={`${CARD} lg:col-span-2`}>
+        <h3 className="font-sans text-base font-semibold text-ink">Fees</h3>
+        <ul className="mt-3 divide-y divide-line-soft">
+          {room.fees.map(fee => (
+            <li key={fee.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <span className="min-w-0">
+                <span className="block text-sm text-ink">{fee.label}</span>
+                <span className="block text-xs text-ink-muted">{fee.dueOn ? `Due ${dateOnly(fee.dueOn)}` : "Due as agreed"} · {fee.reference}</span>
+              </span>
+              <span className="flex items-center gap-3">
+                <span className="text-sm font-medium tabular-nums text-ink">{formatNaira(fee.amount)}</span>
+                {fee.paid
+                  ? <span className="rounded-full bg-health-clear-tint px-2.5 py-0.5 text-xs font-medium text-health-clear-strong">Paid</span>
+                  : fee.payPath && !preview
+                    ? <a href={fee.payPath} className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-deep-hover">Pay</a>
+                    : <span className="text-xs text-ink-muted">To pay</span>}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section aria-label="Summary" className={CARD}>
+        <dl className="space-y-2 text-sm">
+          <div className="flex justify-between"><dt className="text-ink-muted">Total</dt><dd className="font-semibold tabular-nums">{formatNaira(total)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">Paid</dt><dd className="tabular-nums text-health-clear-strong">{formatNaira(paid)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">To pay</dt><dd className="tabular-nums">{formatNaira(total - paid)}</dd></div>
+        </dl>
+        <p className="mt-3 text-xs text-ink-muted">Paystack takes card, bank transfer or USSD. A receipt comes by email.</p>
+      </section>
+    </div>
+  );
+}
+
+/** Before the first payment: the room opens once the first fee is paid. Limited-access staff see only that it is waiting. */
+function PaymentGate({ room }: { room: Room }) {
+  const preview = useRoomPreview();
+  const first = room.fees.find(fee => !fee.paid);
+  return (
+    <div className="px-4 py-8 sm:px-7">
+      <section aria-label="First payment" className={`${CARD} mx-auto max-w-xl space-y-3 text-center`}>
+        <p className="text-xs font-semibold uppercase tracking-wider text-brand">{room.title}</p>
+        <h2 className="font-sans text-xl font-semibold tracking-tight text-ink">Your room opens once the first payment is made</h2>
+        {first ? (
+          <>
+            <p className="text-sm text-ink-600">{first.label}</p>
+            <p className="font-sans text-4xl font-semibold tabular-nums text-ink">{formatNaira(first.amount)}</p>
+            {first.payPath && !preview
+              ? <a href={first.payPath} className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-deep-hover">Pay securely with Paystack<ArrowRight className="h-4 w-4" aria-hidden /></a>
+              : <p className="text-sm text-ink-muted">Use the payment link in your email, or reply to it for help.</p>}
+            <p className="text-xs text-ink-muted">Card, bank transfer or USSD. Reference {first.reference}.</p>
+          </>
+        ) : <p className="text-sm text-ink-600">The owner of the business makes the first payment. Everything opens here once it is made.</p>}
+      </section>
     </div>
   );
 }

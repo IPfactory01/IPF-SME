@@ -97,7 +97,7 @@ The spine of the product. Every requirement in section 6 belongs to one stage.
 | 2 | **Diagnose** | Takes the free Business Health Check | Reads the lead | Scores and routes by rule; emails the summary; suggests the first product |
 | 3 | **Talk** | Books the 20-minute Discovery Call | Holds the call; records the outcome | Books through Calendly; moves the pipeline stage |
 | 4 | **Agree** | Agrees on the Discovery Call, or by paying, under the Terms and Conditions | Opens the engagement | Loads the Data Request, Work Plan, Sessions and fee schedule for the type, without a click |
-| 5 | **Pay** | Pays each fee | Records payments not made online | Paystack for the Full Report and the Business Review; tracks every fee |
+| 5 | **Pay** | Pays each fee online, from the email or the room | Records payments not made online | Paystack for the Full Report, the Business Review and every engagement fee; marks each paid and sends the receipt |
 | 6 | **Onboard** | Accepts the account invitation; sends records | Staffs the engagement | Invites the owner; dates each request by priority |
 | 7 | **Deliver** | Uploads, comments, approves reels and Deliverables | Does the work; Specialists hand in drafts; the lead approves and shares | Keeps files private; tells the owner when something is shared |
 | 8 | **Measure** | Sees the one number each week | Records the weekly check-in | Shows where the number started, where it is and where it is going |
@@ -169,8 +169,8 @@ automatic refund. Management accounts only; the monthly tax note states record r
 | # | Requirement | P | Acceptance | Status |
 |---|---|---|---|---|
 | R10 | Paystack for the Full Report and the Business Review; the payment confirms itself | M | The amount comes from the server, never the browser | Built; live keys to confirm (dependency) |
-| R11 | Every engagement fee payable online, with its own Paystack link; the first payment opens the room, as the Business Review's does today | S | A fee is marked paid without the team touching it | To build (next) |
-| R12 | Instalments: the Six-Week Fix stages and the Monthly Service quarters billed when due | S | The owner is emailed a link on each due date | To build |
+| R11 | Every engagement fee payable online, with its own Paystack link (emailed by the team, or **Pay** in the room's Payments tab); the first payment opens the room, as the Business Review's does | S | A fee is marked paid without the team touching it; the client gets a receipt | Built (6 November 2026, migration 0020) |
+| R12 | Instalments: each later fee (a Six-Week Fix stage, a Digital marketing month, a Monthly Service quarter) emailed to the client with its pay link a few days before it is due, without the team sending it | S | No fee reaches its date without its link having gone out | Partly built: every fee has a pay link; sending it on a schedule is to build |
 | R35 | Digital marketing on the public menu, with its own page (ET: yes, 6 November 2026) | S | Shown under the need it answers; previewed before it goes live | To build (next) |
 | R13 | Online ordering for the Done for You products that start without a call | C | Order, pay, then the intake, with no call | To build (`ONLINE_ORDERS_OPEN`) |
 | R14 | Invitation-only client accounts; the owner adds staff as full access or contributor | M | A client can never reach another business by changing an id | Built |

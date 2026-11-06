@@ -246,8 +246,11 @@ for (const target of targets) {
         await desk.engagement.staff.saveFees({ engagementId, feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-11-10" }, { label: "With the Findings", amount: 350000, dueOn: null }] });
         expect((await desk.engagement.staff.fees({ engagementId })).feeLines.map(line => [line.label, line.amount, line.paidAt !== null])).toEqual([["To start", 300000, true], ["With the Findings", 350000, false]]);
 
-        // The client's room has nothing to sign, and the client cannot reach the team's fees.
-        expect(JSON.stringify(await (await owner.call()).engagement.client.room())).not.toContain("With the Findings");
+        // The client sees the fees on the room's Payments tab, with the paid one marked, and has nothing to sign; the
+        // team's fee screen stays the team's.
+        const ownerRoom = (await (await owner.call()).engagement.client.room())!;
+        expect(ownerRoom.fees.map(fee => [fee.label, fee.amount, fee.paid])).toEqual([["To start", 300000, true], ["With the Findings", 350000, false]]);
+        expect(ownerRoom.awaitingPayment).toBe(false);
         await expect((await owner.call()).engagement.staff.fees({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });
         // Another engagement's team cannot read them.
         const outsider = await signIn(await person(["analyst"]), true);

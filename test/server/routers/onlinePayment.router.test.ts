@@ -30,12 +30,12 @@ afterEach(() => {
 });
 
 describe("online payment routes", () => {
-  it("are exactly the pay page, start and the return page's status, all public and registered", () => {
+  it("are exactly the pay page, start and the return page's status, and a fee's pay page and start, all public and registered", () => {
     const procedures = Object.keys((appRouter as unknown as { _def: { procedures: Record<string, unknown> } })._def.procedures).filter(name => name.startsWith("onlinePayment.")).sort();
-    expect(procedures).toEqual(["onlinePayment.page", "onlinePayment.start", "onlinePayment.status"]);
-    for (const name of ["page", "start", "status"]) expect(procedure(name), name).toContain(`${name}: publicProcedure`);
+    expect(procedures).toEqual(["onlinePayment.feePage", "onlinePayment.feeStart", "onlinePayment.page", "onlinePayment.start", "onlinePayment.status"]);
+    for (const name of ["page", "start", "status", "feePage", "feeStart"]) expect(procedure(name), name).toContain(`${name}: publicProcedure`);
     // Each says why it is public.
-    expect(source.match(/\/\*\* Public: /g)).toHaveLength(3);
+    expect(source.match(/\/\*\* Public: /g)).toHaveLength(5);
   });
 
   it("rate-limit each procedure through the shared counters, keyed by what the owner holds, before anything else", () => {
@@ -43,6 +43,9 @@ describe("online payment routes", () => {
     expect(procedure("start")).toContain("await allow(LIMITS.paymentStart, input.token)");
     expect(procedure("status")).toContain("await allow(LIMITS.paymentStatusAddress, ctx.req.ip || \"unknown\")");
     expect(procedure("status")).toContain("await allow(LIMITS.paymentStatus, input.reference)");
+    // A fee's pay page and start are counted per fee, before the token is even checked.
+    expect(procedure("feePage")).toContain("await allow(LIMITS.paymentPage, `fee:${input.feeLineId}`)");
+    expect(procedure("feeStart")).toContain("await allow(LIMITS.paymentStart, `fee:${input.feeLineId}`)");
     expect(source).toContain("consumeLimit(rule, subject)");
   });
 

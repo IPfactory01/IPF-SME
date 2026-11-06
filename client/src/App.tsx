@@ -30,6 +30,7 @@ const JoinPage = lazy(() => import("./pages/JoinPage"));
 const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const FullReportPage = lazy(() => import("./pages/FullReportPage"));
 const PayPage = lazy(() => import("./pages/PayPage"));
+const FeePayPage = lazy(() => import("./pages/FeePayPage"));
 const PayReturnPage = lazy(() => import("./pages/PayReturnPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const AccountDashboard = lazy(() => import("./pages/AccountDashboard"));
@@ -66,6 +67,7 @@ function Router() {
       <Route path="/report/:token" component={FullReportPage} />
       {/* Paying online with Paystack: the return page first, so it is never read as a token. */}
       <Route path="/pay/return" component={PayReturnPage} />
+      <Route path="/pay/fee/:feeLineId/:token" component={FeePayPage} />
       <Route path="/pay/:token/:item" component={PayPage} />
       <Route path="/login" component={LoginPage} />
       <Route path="/dashboard" component={AccountDashboard} />

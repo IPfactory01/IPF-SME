@@ -22,7 +22,7 @@ import {
 import { authorityAllows } from "../../shared/platformPermissions";
 import { AGREEMENT_LIMITS } from "../../shared/agreement";
 import { listFinance } from "../finance";
-import { saveFees, setFeePaid, staffFees } from "../agreements";
+import { openRoomNow, saveFees, setFeePaid, staffFees, staffSendFeeLink } from "../agreements";
 import {
   acceptDeliverable,
   approveDeliverable,
@@ -207,6 +207,8 @@ const staffRouter = router({
     engagementId: id,
     feeLines: z.array(z.object({ label: text(AGREEMENT_LIMITS.label), amount: z.number().int().positive().max(AGREEMENT_LIMITS.amount), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable() })).max(AGREEMENT_LIMITS.feeLines),
   })).mutation(async ({ ctx, input }) => guarded(async () => saveFees(await engagementDb(), ctx.actor, input))),
+  sendFeeLink: staff.input(z.object({ feeLineId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffSendFeeLink(await engagementDb(), ctx.actor, input))),
+  openRoomNow: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => openRoomNow(await engagementDb(), ctx.actor, input))),
   setFeePaid: staff.input(z.object({ feeLineId: id, paid: z.boolean() })).mutation(async ({ ctx, input }) => guarded(async () => setFeePaid(await engagementDb(), ctx.actor, input))),
   /** "Fix the next problem": the clients' requests for another service, and handling one. Desk only. */
   serviceRequests: staff.query(async ({ ctx }) => listServiceRequests(await engagementDb(), ctx.actor)),

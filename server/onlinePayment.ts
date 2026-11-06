@@ -18,6 +18,7 @@ import { askForFullReport } from "./fullReportRequest";
 import { confirmPayment, requestPayment, type OnlineConfirmation } from "./payments";
 import { initializeTransaction, isValidPaystackSignature, onlineReference, paymentReferenceOf, paystackMode, verifyTransaction, type VerifiedTransaction } from "./paystack";
 import { getTrustedApplicationOrigin } from "./security";
+import { feeIdOfReference, feePaymentStatus, settleFee } from "./feePayments";
 
 /**
  * Paying online with Paystack's hosted checkout. The owner opens the pay page from the payment details email (keyed by
@@ -277,6 +278,9 @@ async function settle(db: Database, request: PaymentRequest, reference: string, 
 /** Confirms from a Paystack reference (the webhook). "unknown" when the reference is not one of ours. */
 export async function settleOnlinePayment(db: Database, reference: string, source: "webhook" | "return"): Promise<Settlement> {
   const prefix = paymentReferenceOf(reference);
+  // An engagement fee (TS-F-…): settled against its fee line (server/feePayments.ts).
+  const feeLineId = prefix ? feeIdOfReference(prefix) : null;
+  if (feeLineId !== null) return settleFee(db, feeLineId, reference, source);
   const request = prefix ? await requestByReference(db, prefix) : undefined;
   if (!request) return "unknown";
   return settle(db, request, reference, source);
@@ -297,8 +301,10 @@ function itemOfReference(paymentReference: string): PaymentItem | null {
  * therefore answered only for the attempt that paid (its reference is on the confirmation, or Paystack confirms it as a
  * success); an invented one answers exactly as it would for an unpaid request, or for no request at all.
  */
-export async function onlinePaymentStatus(db: Database, reference: string): Promise<{ status: OnlinePaymentStatus; item: PaymentItem; mode: OnlinePaymentMode }> {
+export async function onlinePaymentStatus(db: Database, reference: string): Promise<{ status: OnlinePaymentStatus; item: PaymentItem | "fee"; mode: OnlinePaymentMode }> {
   const prefix = paymentReferenceOf(reference);
+  const feeLineId = prefix ? feeIdOfReference(prefix) : null;
+  if (feeLineId !== null) return feePaymentStatus(db, feeLineId, reference);
   const item = prefix ? itemOfReference(prefix) : null;
   if (!prefix || !item) throw notFound();
   const mode = paystackMode();

@@ -15,6 +15,8 @@ import { AGREEMENT_LIMITS, defaultFees, feeTotal, type FeeLineDraft } from "../s
 import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { canSeeFees, requireStaffEngagement, type StaffActor } from "./engagements";
+import { feeReference, openRoomIfFirstPayment, sendFeeLink } from "./feePayments";
+import { paystackMode } from "./paystack";
 import { authorityAllows } from "../shared/platformPermissions";
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND", message: "Not found." });
@@ -32,10 +34,13 @@ export async function staffFees(db: Database, actor: StaffActor, engagementId: n
   if (!canSeeFees(actor)) throw new TRPCError({ code: "FORBIDDEN", message: "Fees are for the team leading the engagement and Finance." });
   const feeLines = await feeLinesOf(db, engagementId);
   return {
-    feeLines: feeLines.map(line => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn, paidAt: line.paidAt })),
+    feeLines: feeLines.map(line => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn, paidAt: line.paidAt, paidOnline: line.paidReference !== null, reference: feeReference(line.id) })),
     total: feeTotal(feeLines),
     suggested: feeLines.length ? null : defaultFees(engagement.type, engagement.service),
-    can: { edit: authorityAllows(actor.authority, "manage_engagements") },
+    /** Waiting for its first payment: the client sees only the fee to pay until one is paid. */
+    opensOnPayment: engagement.opensOnPayment,
+    online: paystackMode() !== "off",
+    can: { edit: authorityAllows(actor.authority, "manage_engagements"), sendLink: canSendLinks(actor) },
   };
 }
 
@@ -73,7 +78,31 @@ export async function setFeePaid(db: Database, actor: StaffActor, input: { feeLi
   const [line] = await db.select().from(engagementFeeLines).where(eq(engagementFeeLines.id, input.feeLineId)).limit(1);
   if (!line) throw notFound();
   await requireStaffEngagement(db, actor, line.engagementId);
-  await db.update(engagementFeeLines).set({ paidAt: input.paid ? new Date() : null }).where(eq(engagementFeeLines.id, line.id));
+  // Recorded by hand: a payment Paystack did not take (or confirm). Its online reference, if any, is cleared on undo.
+  await db.update(engagementFeeLines).set({ paidAt: input.paid ? new Date() : null, ...(input.paid ? {} : { paidReference: null }) }).where(eq(engagementFeeLines.id, line.id));
   await recordAudit(db, { action: "engagement_fee_paid", actorUserId: actor.id, details: { engagementId: line.engagementId, feeLineId: line.id, paid: input.paid, amount: line.amount } });
-  return { success: true } as const;
+  // The first payment opens a room that waited for it, whether it came online or by hand.
+  const opened = input.paid ? await openRoomIfFirstPayment(db, line.engagementId) : false;
+  return { success: true, opened } as const;
+}
+
+/** Sending a pay link is commercial: the team on the engagement, or Finance. */
+const canSendLinks = (actor: StaffActor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "manage_payments");
+
+/** "Send the payment link": emails the client the fee's pay page, and returns the link once in case email fails. */
+export async function staffSendFeeLink(db: Database, actor: StaffActor, input: { feeLineId: number }) {
+  if (!canSendLinks(actor)) throw new TRPCError({ code: "FORBIDDEN", message: "Your role does not include sending payment links." });
+  const [line] = await db.select().from(engagementFeeLines).where(eq(engagementFeeLines.id, input.feeLineId)).limit(1);
+  if (!line) throw notFound();
+  await requireStaffEngagement(db, actor, line.engagementId);
+  return sendFeeLink(db, { feeLineId: line.id, actorUserId: actor.id });
+}
+
+/** "Open the room now": the lead lets a client in before the first payment (a payment arranged another way). */
+export async function openRoomNow(db: Database, actor: StaffActor, input: { engagementId: number }) {
+  requireManage(actor);
+  await requireStaffEngagement(db, actor, input.engagementId);
+  const opened = await openRoomIfFirstPayment(db, input.engagementId);
+  if (opened) await recordAudit(db, { action: "engagement_room_opened", actorUserId: actor.id, details: { engagementId: input.engagementId, before: "first payment" } });
+  return { success: true, opened } as const;
 }

@@ -721,7 +721,10 @@ function FeesAdmin({ engagementId }: { engagementId: number }) {
   const [draft, setDraft] = useState<FeeLineDraft[] | null>(null);
   const done = (message: string) => ({ onSuccess: () => { void utils.engagement.staff.fees.invalidate({ engagementId }); toast.success(message); }, onError: (error: { message: string }) => toast.error(error.message) });
   const save = trpc.engagement.staff.saveFees.useMutation(done("Fees saved."));
-  const paid = trpc.engagement.staff.setFeePaid.useMutation(done("Payment recorded."));
+  const paid = trpc.engagement.staff.setFeePaid.useMutation({ onSuccess: result => { void utils.engagement.staff.fees.invalidate({ engagementId }); toast.success(result.opened ? "Payment recorded. The client's room is now open." : "Payment recorded."); }, onError: error => toast.error(error.message) });
+  const [sentLink, setSentLink] = useState<{ feeLineId: number; url: string } | null>(null);
+  const sendLink = trpc.engagement.staff.sendFeeLink.useMutation({ onSuccess: (result, input) => { setSentLink({ feeLineId: input.feeLineId, url: result.url }); toast.success(result.deliveryStatus === "Failed" ? "The email did not go. Copy the link below and send it yourself." : "Payment link emailed to the client."); }, onError: error => toast.error(error.message) });
+  const openNow = trpc.engagement.staff.openRoomNow.useMutation(done("The client's room is open."));
   if (query.error) return <DetailSection title="Fees"><p role="alert" className="text-sm text-danger">{query.error.message}</p></DetailSection>;
   const data = query.data;
   if (!data) return <DetailSection title="Fees"><p className="text-sm text-ink-muted">Loading…</p></DetailSection>;
@@ -733,17 +736,26 @@ function FeesAdmin({ engagementId }: { engagementId: number }) {
   const fees = current.filter(line => line.label.trim() && line.amount > 0);
   return (
     <DetailSection title="Fees">
-      <p className="text-xs text-ink-muted">{data.suggested ? "Filled in from the service's price. Check the amounts and dates, then save." : "Finance counts each fee as owed, and as late once its date passes. Tick Paid when the money arrives."}</p>
+      <p className="text-xs text-ink-muted">{data.suggested ? "Filled in from the service's price. Check the amounts and dates, then save." : data.online ? "Send each fee's payment link; Paystack marks it Paid when the client pays. Tick Paid yourself only for money that came another way." : "Online payment is off, so tick Paid when the money arrives. Finance counts each fee as owed, and as late once its date passes."}</p>
+      {data.opensOnPayment && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-2 border border-brand-line bg-brand-tint p-2 text-xs text-ink">
+          <span>The client's room opens once the first fee is paid. Until then they see only the fee to pay.</span>
+          {data.can.edit && <button type="button" className="font-semibold text-brand underline" disabled={openNow.isPending} onClick={() => openNow.mutate({ engagementId })}>Open the room now</button>}
+        </div>
+      )}
       <ul aria-label="Fee lines" className="space-y-1">
         {current.map((line, index) => {
           const stored = !unsaved ? data.feeLines[index] : undefined;
           return (
-            <li key={stored?.id ?? `new-${index}`} className="grid grid-cols-[minmax(0,1fr)_7rem_8.5rem_auto] items-center gap-1">
-              <input aria-label={`Fee ${index + 1}`} className={FIELD} disabled={!data.can.edit} value={line.label} onChange={event => setLine(index, { label: event.target.value })} />
+            <li key={stored?.id ?? `new-${index}`} className="grid grid-cols-[minmax(0,1fr)_7rem_8.5rem_10rem] items-center gap-1">
+              <input aria-label={`Fee ${index + 1}`} title={stored?.reference} className={FIELD} disabled={!data.can.edit} value={line.label} onChange={event => setLine(index, { label: event.target.value })} />
               <input aria-label={`Amount ${index + 1}`} type="number" min={1} className={FIELD} disabled={!data.can.edit} value={line.amount || ""} onChange={event => setLine(index, { amount: Math.round(Number(event.target.value) || 0) })} />
               <input aria-label={`Due ${index + 1}`} type="date" className={FIELD} disabled={!data.can.edit} value={line.dueOn ?? ""} onChange={event => setLine(index, { dueOn: event.target.value || null })} />
               {stored ? (
-                <label className="flex items-center gap-1 text-xs text-ink-muted"><input type="checkbox" checked={Boolean(stored.paidAt)} disabled={!data.can.edit || paid.isPending} onChange={event => paid.mutate({ feeLineId: stored.id, paid: event.target.checked })} />Paid</label>
+                <span className="flex items-center gap-2 text-xs text-ink-muted">
+                  <label className="flex items-center gap-1"><input type="checkbox" checked={Boolean(stored.paidAt)} disabled={!data.can.edit || paid.isPending} onChange={event => paid.mutate({ feeLineId: stored.id, paid: event.target.checked })} />{stored.paidAt && stored.paidOnline ? "Paid online" : "Paid"}</label>
+                  {!stored.paidAt && data.online && data.can.sendLink && <button type="button" className="font-semibold text-brand underline" disabled={sendLink.isPending} onClick={() => sendLink.mutate({ feeLineId: stored.id })}>Send link</button>}
+                </span>
               ) : data.can.edit ? (
                 <button type="button" className="text-xs text-danger underline" aria-label={`Remove fee ${index + 1}`} onClick={() => setDraft(current.filter((_, at) => at !== index))}>Remove</button>
               ) : <span />}
@@ -751,6 +763,13 @@ function FeesAdmin({ engagementId }: { engagementId: number }) {
           );
         })}
       </ul>
+      {sentLink && (
+        <div className="space-y-1 border border-line bg-paper-raised p-2 text-xs">
+          <p className="font-medium text-ink">Payment link for {data.feeLines.find(line => line.id === sentLink.feeLineId)?.reference}</p>
+          <p className="break-all font-mono">{sentLink.url}</p>
+          <p className="text-ink-muted">Emailed to the client. Shown here in case the email does not arrive.</p>
+        </div>
+      )}
       {data.can.edit && <button type="button" className="text-xs font-semibold text-brand underline" onClick={() => setDraft([...current, { label: "", amount: 0, dueOn: null }])}>Add a fee</button>}
       <p className="text-sm font-semibold">Total {formatNaira(feeTotal(unsaved ? fees : data.feeLines))}</p>
       {data.can.edit && unsaved && (

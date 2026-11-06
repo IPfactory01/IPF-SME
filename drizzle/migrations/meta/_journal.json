@@ -141,6 +141,13 @@
       "when": 1793986767999,
       "tag": "0019_engagement_agreements",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1794003276368,
+      "tag": "0020_engagement_fee_payments",
+      "breakpoints": true
     }
   ]
 }

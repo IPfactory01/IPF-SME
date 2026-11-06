@@ -66,6 +66,7 @@ import { slugify } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { DUE_DAYS } from "../shared/dataRequestTemplates";
 import { initialFeeRows } from "./agreements";
+import { clientFees } from "./feePayments";
 import { defaultFees } from "../shared/agreement";
 import { sharedDebriefFor } from "./debriefs";
 import { getDb } from "./db";
@@ -212,8 +213,10 @@ type Starter = Pick<DatedEngagementType, "dataRequests" | "clientActions" | "tea
 
 /** The engagement row and where it begins: the type's (or the service's) Work Plan, Data Request and Sessions. */
 async function insertDirect(tx: Pick<Database, "insert">, actor: StaffActor, input: DirectEngagementInput, at: { businessId: number; service: string | null; starter: Starter | null; dueFor: (week: number) => string; contactName: string | null; contactEmail: string | null }) {
+  // An engagement with fees opens to the client once its first fee is paid (R11), online or recorded by hand.
+  const feeLines = defaultFees(input.type, at.service);
   const [created] = await tx.insert(engagements).values({
-    businessId: at.businessId, type: input.type, service: at.service, startedOn: input.startedOn, contactName: at.contactName, contactEmail: at.contactEmail,
+    businessId: at.businessId, type: input.type, service: at.service, startedOn: input.startedOn, contactName: at.contactName, contactEmail: at.contactEmail, opensOnPayment: feeLines.length > 0,
     // The Six-Week Fix starts in the fix; every other direct engagement is getting set up.
     stage: input.type === "six_week_fix" ? "fix" : "setting_up", fixStartedAt: input.type === "six_week_fix" ? new Date() : null,
   }).returning({ id: engagements.id });
@@ -232,7 +235,7 @@ async function insertDirect(tx: Pick<Database, "insert">, actor: StaffActor, inp
   const sessions = starter ? starter.sessions : ASSESSMENT_TEMPLATE.sessions;
   if (sessions.length) await tx.insert(engagementSessions).values(sessions.map(item => ({ engagementId: created.id, kind: item.kind, title: item.title, durationMinutes: item.durationMinutes, agenda: item.agenda, weekNumber: item.week, sortOrder: item.order, createdByUserId: actor.id })));
   // The fee schedule, from the service's price or the type's monthly fee; the team adjusts it on the engagement.
-  const fees = initialFeeRows(created.id, defaultFees(input.type, at.service));
+  const fees = initialFeeRows(created.id, feeLines);
   if (fees.length) await tx.insert(engagementFeeLines).values(fees);
   await recordAudit(tx, { action: "engagement_started", actorUserId: actor.id, targetEmail: at.contactEmail, details: { engagementId: created.id, type: input.type, service: at.service, direct: true, businessId: at.businessId } });
   return created.id;
@@ -963,6 +966,10 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
   const notesVisible = (item: (typeof sessions)[number]) => Boolean(item.notesSharedAt && item.clientNotes && clientCanSee(item.notesAudience, viewer));
   return {
     engagementId: engagement.id,
+    /** The engagement's fees, each with its status and pay link while unpaid: for the owner and full-access staff. */
+    fees: fullView ? await clientFees(db, engagement.id) : [],
+    /** Waiting for its first payment (R11): the room shows only the fee to pay until one is paid. */
+    awaitingPayment: engagement.opensOnPayment,
     // The content board (Digital marketing): the owner and full-access staff see it and approve.
     content: fullView ? (await contentOf(db, engagement.id)).map(clientContent) : [],
     contentTargets: DATED_TYPES[engagement.type]?.monthly ?? [],

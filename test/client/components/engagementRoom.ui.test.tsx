@@ -56,6 +56,8 @@ const { default: EngagementRoom, dueFlag } = await import("@/components/Engageme
 
 const room = (over: Record<string, unknown> = {}) => ({
   engagementId: 4,
+  fees: [] as { id: number; label: string; amount: number; dueOn: string | null; paid: boolean; reference: string; payPath: string | null }[],
+  awaitingPayment: false,
   content: [] as { id: number; kind: "reel" | "post" | "story"; kindLabel: string; title: string; month: number; status: "planned" | "in_edit" | "for_approval" | "changes_requested" | "approved" | "published"; statusLabel: string; dueOn: string | null; link: string | null; clientNote: string | null; approvedAt: Date | null; publishedAt: Date | null }[],
   contentTargets: [] as { label: string; count: number }[],
   service: null as string | null,
@@ -797,6 +799,37 @@ describe("Fix the next problem", () => {
   it("shows what the client has already asked for", () => {
     render(<EngagementRoom room={room({ requests: [{ id: 1, service: "pitch_deck", serviceName: "Pitch Deck", createdAt: new Date("2026-11-06T10:00:00Z") }] })} />);
     expect(within(screen.getByRole("list", { name: "Your requests" })).getByText("Pitch Deck")).toBeTruthy();
+  });
+});
+
+describe("payments", () => {
+  const fees = [
+    { id: 11, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-09", paid: true, reference: "TS-F-000011", payPath: null },
+    { id: 12, label: "Month 2 service fee, payable before day 31", amount: 470000, dueOn: "2026-12-09", paid: false, reference: "TS-F-000012", payPath: "/pay/fee/12/abcdefghijklmnopqrstuvwxyz012345" },
+  ];
+
+  it("lists the fees with what is paid and a Pay button for each fee due", () => {
+    render(<EngagementRoom room={room({ fees })} />);
+    fireEvent.click(screen.getByRole("tab", { name: /^Payments/ }));
+    const list = within(screen.getByRole("region", { name: "Fees" }));
+    expect(list.getByText("Paid")).toBeTruthy();
+    expect(list.getByRole("link", { name: "Pay" }).getAttribute("href")).toBe("/pay/fee/12/abcdefghijklmnopqrstuvwxyz012345");
+    expect(within(screen.getByRole("region", { name: "Summary" })).getByText("₦940,000")).toBeTruthy();
+  });
+
+  it("shows only the first fee to pay until it is paid, and no tabs", () => {
+    render(<EngagementRoom room={room({ fees: fees.map(fee => ({ ...fee, paid: false, payPath: `/pay/fee/${fee.id}/abcdefghijklmnopqrstuvwxyz012345` })), awaitingPayment: true })} />);
+    const gate = within(screen.getByRole("region", { name: "First payment" }));
+    expect(gate.getByText("Your room opens once the first payment is made")).toBeTruthy();
+    expect(gate.getByText("₦470,000")).toBeTruthy();
+    expect(gate.getByRole("link", { name: /Pay securely with Paystack/ }).getAttribute("href")).toBe("/pay/fee/11/abcdefghijklmnopqrstuvwxyz012345");
+    expect(screen.queryByRole("tab", { name: /^Overview/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /^Work Plan/ })).toBeNull();
+  });
+
+  it("has no Payments tab when there are no fees", () => {
+    render(<EngagementRoom room={room()} />);
+    expect(screen.queryByRole("tab", { name: /^Payments/ })).toBeNull();
   });
 });
 

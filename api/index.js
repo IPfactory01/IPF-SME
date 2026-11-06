@@ -1023,6 +1023,7 @@ var PLATFORM_PERMISSIONS = [
   "manage_engagements",
   "assign_engagements",
   "review_engagements",
+  "contribute_engagements",
   "manage_payments",
   "view_financials",
   "manage_scheduling",
@@ -1039,7 +1040,9 @@ var PLATFORM_ROLE_PERMISSIONS = {
   desk_lead: ["view_all_businesses", "manage_engagements", "assign_engagements", "review_engagements", "manage_scheduling", "manage_communications", "view_financials"],
   analyst: ["view_assigned_businesses", "manage_engagements"],
   partner: ["view_assigned_businesses", "review_engagements", "view_financials"],
-  subject_matter_expert: ["view_assigned_businesses"],
+  // Specialists hand in work on their own engagements (ET, 6 November 2026): team-side Work Plan items and draft files on
+  // a Deliverable, seen by IP Factory only until the lead shares them. They do not see internal notes or the agreement.
+  subject_matter_expert: ["view_assigned_businesses", "contribute_engagements"],
   finance: ["manage_payments", "view_financials"]
 };
 var LEGACY_CAPABILITY_TO_PLATFORM = {
@@ -6539,6 +6542,7 @@ async function agreementRows(db, engagementId) {
 }
 async function staffAgreement(db, actor, engagementId) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
+  if (!canSeeAgreement(actor)) throw new TRPCError8({ code: "FORBIDDEN", message: "The agreement and fees are for the lead, the desk and Finance." });
   const { agreement, feeLines } = await agreementRows(db, engagementId);
   return {
     agreement: agreement ? { ...agreement, statusLabel: AGREEMENT_STATUS_LABELS[agreement.status] } : null,
@@ -9397,6 +9401,9 @@ function requirePermission(actor, permission, message) {
   if (!authorityAllows(actor.authority, permission)) throw new TRPCError11({ code: "FORBIDDEN", message });
 }
 var requireManage2 = (actor) => requirePermission(actor, "manage_engagements", "Your role does not include working on engagements.");
+var canContribute = (actor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "contribute_engagements");
+var canSeeInternal = (actor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "review_engagements");
+var canSeeAgreement = (actor) => canSeeInternal(actor) || authorityAllows(actor.authority, "view_financials");
 function engagementStageLabel(row, now) {
   if (!STAGED_TYPES.includes(row.type) && !DATED_TYPES[row.type]) return row.stage === "closed" ? "Closed" : "Open";
   const dated = DATED_TYPES[row.type];
@@ -9496,7 +9503,8 @@ async function getStaffEngagement(db, actor, engagementId) {
     hasAccount: business !== null,
     team: team.map((member) => ({ ...member, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
     clientPeople,
-    sessions,
+    // Internal notes stay with those who work on or approve engagements.
+    sessions: canSeeInternal(actor) ? sessions : sessions.map((item2) => ({ ...item2, internalNotes: null })),
     tasks: tasks.map((task) => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id) })),
     // The drop box: every file the client sent without saying what it answers, with the requests it has been matched to.
     // Unsorted files come first.
@@ -9509,7 +9517,10 @@ async function getStaffEngagement(db, actor, engagementId) {
       manage: authorityAllows(actor.authority, "manage_engagements"),
       assign: authorityAllows(actor.authority, "assign_engagements"),
       review: await canReviewEngagement(db, actor, engagementId),
-      sendSignIn: authorityAllows(actor.authority, "manage_client_onboarding")
+      sendSignIn: authorityAllows(actor.authority, "manage_client_onboarding"),
+      contribute: canContribute(actor),
+      seeInternal: canSeeInternal(actor),
+      seeAgreement: canSeeAgreement(actor)
     }
   };
 }
@@ -9669,7 +9680,11 @@ async function shareSessionNotes(db, actor, input) {
   return { success: true };
 }
 async function saveTask(db, actor, input) {
-  requireManage2(actor);
+  if (!authorityAllows(actor.authority, "manage_engagements")) {
+    if (!canContribute(actor)) requireManage2(actor);
+    if (input.taskId || input.side !== "ipf") throw new TRPCError11({ code: "FORBIDDEN", message: "You can add team items to the Work Plan. The lead changes the rest." });
+    if (input.assigneeUserId !== null && input.assigneeUserId !== actor.id) throw new TRPCError11({ code: "FORBIDDEN", message: "Add the item for yourself; the lead assigns others." });
+  }
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   if (input.assigneeUserId !== null) {
     const allowed = input.side === "client" ? engagement.businessId !== null && (await clientPeopleOf(db, engagement.businessId)).some((person) => person.userId === input.assigneeUserId) : (await db.select({ userId: engagementTeam.userId }).from(engagementTeam).where(and8(eq12(engagementTeam.engagementId, engagement.id), eq12(engagementTeam.userId, input.assigneeUserId))).limit(1)).length === 1;
@@ -10278,9 +10293,14 @@ async function requireStaffTarget(db, actor, engagementId, target) {
   const exists = target.kind === "task" ? await db.select({ id: engagementTasks.id }).from(engagementTasks).where(and8(eq12(engagementTasks.id, target.id), eq12(engagementTasks.engagementId, engagementId))).limit(1) : await db.select({ id: engagementDeliverables.id }).from(engagementDeliverables).where(and8(eq12(engagementDeliverables.id, target.id), eq12(engagementDeliverables.engagementId, engagementId))).limit(1);
   if (!exists.length) throw notFound2();
 }
+function requireUploader(actor, target, audience) {
+  if (authorityAllows(actor.authority, "manage_engagements")) return;
+  if (!canContribute(actor)) return requireManage2(actor);
+  if (target.kind !== "deliverable" || audience !== null && audience !== "team") throw new TRPCError11({ code: "FORBIDDEN", message: "You can add draft files to a Deliverable, for IP Factory only. The lead shares them with the client." });
+}
 async function staffRequestUpload(db, actor, input) {
   requireUploads();
-  requireManage2(actor);
+  requireUploader(actor, input.target, null);
   validateUpload(input);
   await requireStaffTarget(db, actor, input.engagementId, input.target);
   const storageKey2 = newStorageKey(input.engagementId, input.target, input.fileName);
@@ -10289,7 +10309,7 @@ async function staffRequestUpload(db, actor, input) {
 }
 async function staffConfirmUpload(db, actor, input) {
   requireUploads();
-  requireManage2(actor);
+  requireUploader(actor, input.target, input.audience);
   validateUpload(input);
   await requireStaffTarget(db, actor, input.engagementId, input.target);
   if (!isTargetStorageKey(input.storageKey, keyPrefix(input.engagementId, input.target))) throw notFound2();
@@ -10309,6 +10329,18 @@ async function staffConfirmUpload(db, actor, input) {
     await recordAudit(tx, { action: "engagement_file_uploaded", actorUserId: actor.id, details: { engagementId: input.engagementId, [input.target.kind === "task" ? "taskId" : "deliverableId"]: input.target.id, fileId: file.id, audience: input.audience } });
     return { success: true, fileId: file.id };
   });
+}
+async function shareTeamFile(db, actor, input) {
+  requireManage2(actor);
+  const file = (await db.select().from(engagementFiles).where(eq12(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file) throw notFound2();
+  await requireStaffEngagement(db, actor, file.engagementId);
+  if (file.audience !== "team") throw new TRPCError11({ code: "BAD_REQUEST", message: "This file is already shared." });
+  await db.transaction(async (tx) => {
+    await tx.update(engagementFiles).set({ audience: input.audience }).where(eq12(engagementFiles.id, file.id));
+    await recordAudit(tx, { action: "engagement_file_shared", actorUserId: actor.id, details: { engagementId: file.engagementId, fileId: file.id, audience: input.audience } });
+  });
+  return { success: true };
 }
 async function staffFileLink(db, actor, input) {
   requireUploads();
@@ -11801,8 +11833,9 @@ var staffRouter = router({
     await enforceLimit(LIMITS.fileUpload, `staff:${ctx.actor.id}`);
     return guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input));
   }),
-  confirmUpload: staff.input(z15.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
+  confirmUpload: staff.input(z15.object({ engagementId: id, target: uploadTarget, storageKey, audience: z15.enum(["team", "owner", "business"]), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z15.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
+  shareFile: staff.input(z15.object({ fileId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareTeamFile(await engagementDb(), ctx.actor, input))),
   /** A whole Data Request in one step: a template, or rows pasted from Excel. */
   loadDataRequest: staff.input(z15.object({
     engagementId: id,

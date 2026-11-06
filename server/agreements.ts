@@ -13,7 +13,7 @@ import { BRAND } from "../shared/brand";
 import type { AccountSession, Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { deliverEmail } from "./email";
-import { canReviewEngagement, clientViewerFor, requireStaffEngagement, type StaffActor } from "./engagements";
+import { canReviewEngagement, canSeeAgreement, clientViewerFor, requireStaffEngagement, type StaffActor } from "./engagements";
 import { authorityAllows } from "../shared/platformPermissions";
 import { getTrustedApplicationOrigin } from "./security";
 
@@ -34,6 +34,7 @@ async function agreementRows(db: Pick<Database, "select">, engagementId: number)
 /** The team's view: the agreement and fees, or, before the first save, the draft the service suggests. */
 export async function staffAgreement(db: Database, actor: StaffActor, engagementId: number) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
+  if (!canSeeAgreement(actor)) throw new TRPCError({ code: "FORBIDDEN", message: "The agreement and fees are for the lead, the desk and Finance." });
   const { agreement, feeLines } = await agreementRows(db, engagementId);
   return {
     agreement: agreement ? { ...agreement, statusLabel: AGREEMENT_STATUS_LABELS[agreement.status] } : null,

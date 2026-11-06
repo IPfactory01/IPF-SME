@@ -37,7 +37,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         agreement: { useQuery: () => ({ data: api.agreement, error: null }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "handleRequest", "saveAgreement", "sendAgreement", "loadDataRequest", "reviseAgreement", "setFeePaid", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "handleRequest", "saveAgreement", "sendAgreement", "loadDataRequest", "reviseAgreement", "setFeePaid", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -50,7 +50,7 @@ const row = { id: 4, stage: "setting_up", stageLabel: "Getting set up", business
 const task = (over: Record<string, unknown>) => ({ id: 51, engagementId: 4, kind: "data_request", side: "client", title: "Your price list", detail: null, assigneeUserId: null, dueOn: "2026-10-21", status: "open", statusLabel: "To do", statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 4, factor: "internal", createdByUserId: 1, completedAt: null, createdAt: new Date(), updatedAt: new Date(), files: [], ...over });
 const session = { id: 31, engagementId: 4, kind: "assessment_call", title: "Business Review call 1", scheduledFor: null, durationMinutes: 90, meetingLink: null, agenda: null, status: "planned", weekNumber: 1, sortOrder: 7, clientNotes: "Pricing first.", internalNotes: "Watch cash sales.", notesAudience: "owner", notesSharedAt: null, notesSharedByUserId: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() };
 const deliverable = (over: Record<string, unknown>) => ({ id: 41, engagementId: 4, kind: "prescription", kindLabel: "Prescription", title: "Daily cash count", summary: "Count every evening.", status: "draft", audience: "owner", approvedByUserId: null, approvedAt: null, sharedByUserId: null, sharedAt: null, clientAcceptedByUserId: null, clientAcceptedAt: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date(), needsApproval: true, comments: [], files: [], ...over });
-const detail = (can: { manage: boolean; assign: boolean; review: boolean; sendSignIn?: boolean }, deliverables = [deliverable({})], tasks: unknown[] = []) => ({
+const detail = (given: { manage: boolean; assign: boolean; review: boolean; sendSignIn?: boolean; contribute?: boolean; seeInternal?: boolean; seeAgreement?: boolean }, deliverables = [deliverable({})], tasks: unknown[] = []) => ({
   uploadsEnabled: true,
   engagement: { id: 4, businessCheckId: 1, businessId: 7, paymentRequestId: 2, stage: "setting_up", stageLabel: "Getting set up", problemArea: null, subProblem: null, problemStatement: null, assessmentStartedAt: null, fixStartedAt: null, closedAt: null, createdAt: new Date(), updatedAt: new Date() },
   owner: { name: "Ada Okafor", email: "ada@example.test", whatsapp: "+234 800 000 0001" },
@@ -65,7 +65,7 @@ const detail = (can: { manage: boolean; assign: boolean; review: boolean; sendSi
   checkins: [] as unknown[],
   inbox: [] as unknown[],
   content: [] as unknown[],
-  can,
+  can: { contribute: given.manage, seeInternal: given.manage || given.review, seeAgreement: given.manage || given.review, ...given },
 });
 
 beforeEach(() => {
@@ -482,8 +482,67 @@ describe("the agreement on the team's side", () => {
     fireEvent.change(section.getByLabelText("Fee 2"), { target: { value: "Travel to Abuja" } });
     fireEvent.change(section.getByLabelText("Amount 2"), { target: { value: "50000" } });
     expect(section.getByText("Total ₦650,000")).toBeTruthy();
-    fireEvent.click(section.getByRole("button", { name: "Save" }));
+    fireEvent.click(section.getByRole("button", { name: "Save the draft" }));
     expect(api.calls.saveAgreement).toEqual([{ engagementId: row.id, scope: "Two weeks and two Sessions.", outOfScope: "Anything not listed above.", clientCommitments: "Send the records.", terms: "Our Terms apply.", feeLines: [{ label: "Business Review", amount: 600000, dueOn: null }, { label: "Travel to Abuja", amount: 50000, dueOn: null }] }]);
+  });
+
+  it("sends the suggested draft in one click: saved and sent together", async () => {
+    api.list = { setUp: true, items: [row], canStart: true, seesAll: true } as never;
+    api.calls = {};
+    api.detail = detail({ manage: true, assign: true, review: true });
+    render(<EngagementsView />);
+    fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
+    const section = within(within(screen.getByRole("dialog")).getByText("Agreement and fees").closest("section")!);
+    fireEvent.click(section.getByRole("button", { name: "Send to the owner" }));
+    await waitFor(() => expect(api.calls.sendAgreement).toEqual([{ engagementId: row.id }]));
+    expect(api.calls.saveAgreement).toEqual([expect.objectContaining({ engagementId: row.id, feeLines: [{ label: "Business Review", amount: 600000, dueOn: null }] })]);
+  });
+
+  it("asks for the fees before it can be sent", () => {
+    api.list = { setUp: true, items: [row], canStart: true, seesAll: true } as never;
+    const saved = api.agreement;
+    api.agreement = { ...(saved as object), suggested: { scope: "A 90-day content programme.", outOfScope: "", clientCommitments: "", terms: "", feeLines: [] } };
+    api.detail = detail({ manage: true, assign: true, review: true });
+    render(<EngagementsView />);
+    fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
+    const section = within(within(screen.getByRole("dialog")).getByText("Agreement and fees").closest("section")!);
+    expect((section.getByRole("button", { name: "Send to the owner" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(section.getByText("Add the fees to send it.")).toBeTruthy();
+    api.agreement = saved;
+  });
+});
+
+describe("a Specialist on the engagement", () => {
+  it("sees no internal notes and no agreement, adds team items only, and hands in files for IP Factory only", () => {
+    api.calls = {};
+    api.detail = detail({ manage: false, assign: false, review: false, contribute: true }, [deliverable({ files: [] })]);
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const drawer = within(screen.getByRole("dialog"));
+    expect(drawer.queryByText("Agreement and fees")).toBeNull();
+    expect(drawer.queryByLabelText(/Internal notes/)).toBeNull();
+    expect(drawer.getByText("IP Factory only: the lead shares it with the client")).toBeTruthy();
+    expect(drawer.queryByLabelText("Who sees the file")).toBeNull();
+    expect(drawer.queryByRole("button", { name: "Load a Data Request" })).toBeNull();
+    fireEvent.click(drawer.getByRole("button", { name: "Add a team item" }));
+    const card = within(drawer.getByLabelText("New request or action"));
+    expect((card.getByLabelText("Whose job") as HTMLSelectElement).value).toBe("ipf");
+    expect((card.getByLabelText("Whose job") as HTMLSelectElement).disabled).toBe(true);
+    fireEvent.change(card.getByLabelText("What"), { target: { value: "Draft the competitor scan" } });
+    fireEvent.click(card.getByRole("button", { name: "Save" }));
+    expect(api.calls.saveTask).toEqual([expect.objectContaining({ side: "ipf", title: "Draft the competitor scan", assigneeUserId: null })]);
+  });
+
+  it("lets the lead share a Specialist's draft with the owner", () => {
+    api.calls = {};
+    api.detail = detail({ manage: true, assign: true, review: true }, [deliverable({ files: [{ id: 77, fileName: "calendar.pdf", contentType: "application/pdf", sizeBytes: 1000, audience: "team", uploadedByName: "Sola Specialist", createdAt: new Date() }] })]);
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const drawer = within(screen.getByRole("dialog"));
+    const files = within(drawer.getAllByRole("list", { name: "Files" }).find(list => within(list).queryByText("calendar.pdf"))!);
+    expect(files.getByText(/ip factory only/)).toBeTruthy();
+    fireEvent.click(files.getByRole("button", { name: "Share with the owner" }));
+    expect(api.calls.shareFile).toEqual([{ fileId: 77, audience: "owner" }]);
   });
 });
 

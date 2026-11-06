@@ -491,7 +491,7 @@ for (const target of targets) {
         expect((await (await analyst.call()).engagement.staff.list()).items.map(item => item.id)).toEqual([engagementId]);
         const detail = await (await analyst.call()).engagement.staff.detail({ engagementId });
         expect(detail.team).toEqual([expect.objectContaining({ name: "Ola Analyst", role: "analyst", roleLabel: "Analyst" })]);
-        expect(detail.can).toEqual({ manage: true, assign: false, review: false, sendSignIn: false });
+        expect(detail.can).toEqual({ manage: true, assign: false, review: false, sendSignIn: false, contribute: true, seeInternal: true, seeAgreement: true });
       });
 
       it("lets only people with assign_engagements change the team, and only to IP Factory staff", async () => {
@@ -826,6 +826,33 @@ for (const target of targets) {
         await expect((await owner.call()).engagement.client.setNotAvailable({ taskId: request.id, unavailable: true, note: null })).rejects.toMatchObject({ code: "CONFLICT" });
       });
 
+      it("takes a Specialist's file on a Deliverable as an IP Factory draft, which reaches the client only when the lead shares it", async () => {
+        configure();
+        storage();
+        const { owner, engagementId } = await client("files-specialist");
+        const desk = await superAdmin.call();
+        const { deliverableId } = await desk.engagement.staff.saveDeliverable({ engagementId, kind: "tools", title: "Content calendar", summary: "Month 1." });
+        const { taskId } = { taskId: (await desk.engagement.staff.detail({ engagementId })).tasks[0].id };
+        const specialistUser = await person(["subject_matter_expert"]);
+        await desk.engagement.staff.assign({ engagementId, userId: specialistUser.id, role: "expert" });
+        const specialist = await (await signIn(specialistUser, true)).call();
+        const target = { kind: "deliverable" as const, id: deliverableId };
+        const file = pdf("calendar.pdf");
+        await expect(specialist.engagement.staff.requestUpload({ engagementId, target: { kind: "task", id: taskId }, ...file })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        const ticket = await specialist.engagement.staff.requestUpload({ engagementId, target, ...file });
+        await expect(specialist.engagement.staff.confirmUpload({ engagementId, target, storageKey: ticket.storageKey, audience: "owner", ...file })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        const { fileId } = await specialist.engagement.staff.confirmUpload({ engagementId, target, storageKey: ticket.storageKey, audience: "team", ...file });
+
+        // Shared deliverable or not, the draft stays with IP Factory until the lead shares the file itself.
+        await desk.engagement.staff.shareDeliverable({ deliverableId, audience: "owner" });
+        expect((await (await owner.call()).engagement.client.room())!.deliverables[0].files).toEqual([]);
+        await expect((await owner.call()).engagement.client.fileLink({ fileId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await expect(specialist.engagement.staff.shareFile({ fileId, audience: "owner" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await desk.engagement.staff.shareFile({ fileId, audience: "owner" });
+        expect((await (await owner.call()).engagement.client.room())!.deliverables[0].files).toEqual([expect.objectContaining({ fileName: "calendar.pdf", fromTeam: true })]);
+        await expect(desk.engagement.staff.shareFile({ fileId, audience: "owner" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      });
+
       it("shows the team's file on a deliverable only once the deliverable is shared, and to the audience chosen", async () => {
         configure();
         storage();
@@ -842,6 +869,41 @@ for (const target of targets) {
         expect((await (await owner.call()).engagement.client.room())!.deliverables[0].files).toEqual([expect.objectContaining({ fileName: "cash-template.xlsx", fromTeam: true, mine: false })]);
         expect((await (await full.browser.call()).engagement.client.fileLink({ fileId })).url).toContain("download=cash-template.xlsx");
         await expect((await contributor.browser.call()).engagement.client.fileLink({ fileId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+      });
+    });
+
+    describe("Specialists: read less, hand in drafts", () => {
+      it("hides internal notes and the agreement from a Specialist, and lets them add team items only", async () => {
+        const { engagementId } = await client("specialist-read");
+        const desk = await superAdmin.call();
+        const sessionId = (await desk.engagement.staff.detail({ engagementId })).sessions[0].id;
+        await desk.engagement.staff.saveNotes({ sessionId, clientNotes: "Pricing first.", internalNotes: "Owner may be under-reporting cash sales." });
+        const specialistUser = await person(["subject_matter_expert"], "Sola Specialist");
+        const partnerUser = await person(["partner"], "Pat Partner");
+        await desk.engagement.staff.assign({ engagementId, userId: specialistUser.id, role: "expert" });
+        await desk.engagement.staff.assign({ engagementId, userId: partnerUser.id, role: "partner" });
+        const specialist = await (await signIn(specialistUser, true)).call();
+        const partner = await (await signIn(partnerUser, true)).call();
+
+        const seen = await specialist.engagement.staff.detail({ engagementId });
+        expect(seen.can).toMatchObject({ manage: false, contribute: true, seeInternal: false, seeAgreement: false });
+        expect(seen.sessions.find(item => item.id === sessionId)).toMatchObject({ clientNotes: "Pricing first.", internalNotes: null });
+        expect(JSON.stringify(seen)).not.toContain("under-reporting");
+        await expect(specialist.engagement.staff.agreement({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        // A partner keeps both.
+        expect((await partner.engagement.staff.detail({ engagementId })).sessions.find(item => item.id === sessionId)!.internalNotes).toContain("under-reporting");
+        expect((await partner.engagement.staff.agreement({ engagementId })).suggested).not.toBeNull();
+
+        const item = { engagementId, kind: "action" as const, title: "Draft the competitor scan", detail: null, assigneeUserId: null, dueOn: null, status: "open" as const, statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 9, factor: null };
+        const { taskId } = await specialist.engagement.staff.saveTask({ ...item, side: "ipf" });
+        expect((await desk.engagement.staff.detail({ engagementId })).tasks.find(task => task.id === taskId)).toMatchObject({ side: "ipf", title: "Draft the competitor scan" });
+        await expect(specialist.engagement.staff.saveTask({ ...item, side: "client", title: "Send your bank statements" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await expect(specialist.engagement.staff.saveTask({ ...item, side: "ipf", taskId, title: "Changed" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await expect(specialist.engagement.staff.saveTask({ ...item, side: "ipf", assigneeUserId: partnerUser.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await expect(specialist.engagement.staff.loadDataRequest({ engagementId, items: [{ section: null, ref: null, title: "Anything", detail: null, informs: null, format: null, priority: null, dueOn: null }] })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        // Not on another engagement.
+        const other = await client("specialist-other");
+        await expect(specialist.engagement.staff.saveTask({ ...item, engagementId: other.engagementId, side: "ipf" })).rejects.toMatchObject({ code: "NOT_FOUND" });
       });
     });
 

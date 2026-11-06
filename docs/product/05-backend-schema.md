@@ -153,7 +153,7 @@ authority is the union of their roles, any profile the Super Admin set, and the 
 | desk_lead | view_all_businesses, manage_engagements, assign_engagements, review_engagements, manage_scheduling, manage_communications, view_financials |
 | analyst | view_assigned_businesses, manage_engagements |
 | partner | view_assigned_businesses, review_engagements, view_financials |
-| subject_matter_expert | view_assigned_businesses |
+| subject_matter_expert | view_assigned_businesses, contribute_engagements |
 | finance | manage_payments, view_financials |
 
 **Privileged access (migration 0012).** Everyone with an internal role signs in with a password and a six-digit code
@@ -184,7 +184,7 @@ procedure grants assigned-only access.
 | Business profile | — | ⚪ view; owner and business_admin edit | — | — | ✅ `view_all_businesses` (Clients tab) | — | ✅ |
 | Roles and permissions | — | — | — | — | — | — | ✅ `manage_roles` |
 | People: password reset links, suspend and reinstate | ⚪ the reset link, once | — | — | — | — | — | ✅ `manage_users` |
-| Engagement room: the team's side | — | — | Assigned only (`view_assigned_businesses`); works on it (`manage_engagements`) | Assigned only; partners approve (`review_engagements`) | ✅ all; assigns the team, approves prescriptions and plans | — | ✅ |
+| Engagement room: the team's side | — | — | Assigned only (`view_assigned_businesses`); works on it (`manage_engagements`); Specialists hand in team items and IP Factory only drafts (`contribute_engagements`), no internal notes or agreement | Assigned only; partners approve (`review_engagements`) | ✅ all; assigns the team, approves prescriptions and plans | — | ✅ |
 | Engagement room: the client's side | — | ⚪ owner: everything shared; full staff: what the owner shares with them; contributors: their own requests and actions | — | — | — | — | — |
 | Session notes and findings | — | ⚪ owner by default; the owner widens to their staff | ✅ when assigned | ✅ when assigned | ✅ | — | ✅ |
 

@@ -96,7 +96,7 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
         <div className="border-t border-line-soft pt-2"><PreviewAsClient engagementId={engagementId} /></div>
       </DetailSection>
       <StageAndTeam data={data} engagementId={engagementId} />
-      <AgreementAdmin engagementId={engagementId} />
+      {data.can.seeAgreement && <AgreementAdmin engagementId={engagementId} />}
       <Problem data={data} engagementId={engagementId} />
       <Sessions data={data} engagementId={engagementId} />
       {data.engagement.type === "digital_marketing" && <ContentAdmin data={data} engagementId={engagementId} />}
@@ -140,13 +140,18 @@ function SendSignInLink({ businessCheckId, hasAccount }: { businessCheckId: numb
   );
 }
 
-/** Files on a request or deliverable: open any; attach one (owner-only or the owner and their team) when storage is set up. */
-function StaffFiles({ files, engagementId, target, canUpload }: { files: StaffFile[]; engagementId: number; target: UploadTarget; canUpload: boolean }) {
+/**
+ * Files on a request or deliverable: open any; attach one when storage is set up. The lead chooses who sees it; a
+ * Specialist's file is for IP Factory only, a draft the lead shares with the client when it is ready.
+ */
+function StaffFiles({ files, engagementId, target, canUpload, canManage }: { files: StaffFile[]; engagementId: number; target: UploadTarget; canUpload: boolean; canManage: boolean }) {
   const refresh = useRefresh(engagementId);
   const link = trpc.engagement.staff.fileLink.useMutation({ onError: error => toast.error(error.message) });
   const request = trpc.engagement.staff.requestUpload.useMutation();
   const confirm = trpc.engagement.staff.confirmUpload.useMutation();
-  const [audience, setAudience] = useState<Exclude<EngagementAudience, "team">>("owner");
+  const [chosen, setAudience] = useState<EngagementAudience>("owner");
+  const audience: EngagementAudience = canManage ? chosen : "team";
+  const shareFile = trpc.engagement.staff.shareFile.useMutation({ onSuccess: () => { refresh.onSuccess(); toast.success("Shared with the client."); }, onError: error => toast.error(error.message) });
   const [busy, setBusy] = useState(false);
   const send = async (file: File) => {
     setBusy(true);
@@ -157,7 +162,7 @@ function StaffFiles({ files, engagementId, target, canUpload }: { files: StaffFi
       if (!put.ok) throw new Error("The upload did not finish. Try again.");
       await confirm.mutateAsync({ engagementId, target, storageKey: ticket.storageKey, audience, ...meta });
       refresh.onSuccess();
-      toast.success("File attached.");
+      toast.success(audience === "team" ? "Draft attached, for IP Factory only. The lead shares it with the client." : "File attached.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "The upload did not finish.");
     } finally {
@@ -173,6 +178,7 @@ function StaffFiles({ files, engagementId, target, canUpload }: { files: StaffFi
               <span>{file.fileName}</span>
               <span className="text-xs text-ink-muted">{formatFileSize(file.sizeBytes)} · {file.uploadedByName || "unknown"} · {ENGAGEMENT_AUDIENCE_LABELS[file.audience].toLowerCase()}</span>
               <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>Open</button>
+              {canManage && file.audience === "team" && <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" disabled={shareFile.isPending} onClick={() => shareFile.mutate({ fileId: file.id, audience: "owner" })}>Share with the owner</button>}
             </li>
           ))}
         </ul>
@@ -183,10 +189,13 @@ function StaffFiles({ files, engagementId, target, canUpload }: { files: StaffFi
             {busy ? "Uploading…" : "Attach a file"}
             <input type="file" className="sr-only" accept={UPLOAD_ACCEPT} disabled={busy} aria-label={`Attach a file to ${target.kind} ${target.id}`} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void send(file); }} />
           </label>
-          <select aria-label="Who sees the file" className={`${FIELD} w-auto`} value={audience} onChange={event => setAudience(event.target.value as typeof audience)}>
-            <option value="owner">{ENGAGEMENT_AUDIENCE_LABELS.owner}</option>
-            <option value="business">{ENGAGEMENT_AUDIENCE_LABELS.business}</option>
-          </select>
+          {canManage ? (
+            <select aria-label="Who sees the file" className={`${FIELD} w-auto`} value={chosen} onChange={event => setAudience(event.target.value as EngagementAudience)}>
+              <option value="owner">{ENGAGEMENT_AUDIENCE_LABELS.owner}</option>
+              <option value="business">{ENGAGEMENT_AUDIENCE_LABELS.business}</option>
+              <option value="team">{ENGAGEMENT_AUDIENCE_LABELS.team}</option>
+            </select>
+          ) : <span className="text-xs text-ink-muted">{ENGAGEMENT_AUDIENCE_LABELS.team}: the lead shares it with the client</span>}
         </div>
       )}
     </div>
@@ -279,13 +288,13 @@ function Sessions({ data, engagementId }: { data: Detail; engagementId: number }
   return (
     <DetailSection title="Sessions">
       <p className="text-xs text-ink-muted">Book on Calendly or by hand, then record the time here so the client sees it. Notes reach the client only when you share them.</p>
-      {data.sessions.map(session => <SessionCard key={session.id} session={session} engagementId={engagementId} canManage={data.can.manage} />)}
-      {adding ? <SessionCard engagementId={engagementId} canManage={data.can.manage} onDone={() => setAdding(false)} /> : data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add a Session</Button>}
+      {data.sessions.map(session => <SessionCard key={session.id} session={session} engagementId={engagementId} canManage={data.can.manage} seeInternal={data.can.seeInternal} />)}
+      {adding ? <SessionCard engagementId={engagementId} canManage={data.can.manage} seeInternal={data.can.seeInternal} onDone={() => setAdding(false)} /> : data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add a Session</Button>}
     </DetailSection>
   );
 }
 
-function SessionCard({ session, engagementId, canManage, onDone }: { session?: Session; engagementId: number; canManage: boolean; onDone?: () => void }) {
+function SessionCard({ session, engagementId, canManage, seeInternal, onDone }: { session?: Session; engagementId: number; canManage: boolean; seeInternal: boolean; onDone?: () => void }) {
   const refresh = useRefresh(engagementId);
   const [kind, setKind] = useState<EngagementSessionKind>(session?.kind ?? "check_in");
   const [title, setTitle] = useState(session?.title ?? "");
@@ -328,8 +337,12 @@ function SessionCard({ session, engagementId, canManage, onDone }: { session?: S
         <div className="space-y-2 border-t border-line-soft pt-2">
           <label className={LABEL} htmlFor={`client-notes-${id}`}>Notes for the client</label>
           <textarea id={`client-notes-${id}`} className={FIELD} rows={4} disabled={!canManage} value={clientNotes} onChange={event => setClientNotes(event.target.value)} />
-          <label className={LABEL} htmlFor={`internal-notes-${id}`}>Internal notes (never shown to the client)</label>
-          <textarea id={`internal-notes-${id}`} className={FIELD} rows={3} disabled={!canManage} value={internalNotes} onChange={event => setInternalNotes(event.target.value)} />
+          {seeInternal && (
+            <>
+              <label className={LABEL} htmlFor={`internal-notes-${id}`}>Internal notes (never shown to the client)</label>
+              <textarea id={`internal-notes-${id}`} className={FIELD} rows={3} disabled={!canManage} value={internalNotes} onChange={event => setInternalNotes(event.target.value)} />
+            </>
+          )}
           <p className="text-xs text-ink-muted">{session.notesSharedAt ? `Shared ${formatDateTime(session.notesSharedAt)}: ${ENGAGEMENT_AUDIENCE_LABELS[session.notesAudience].toLowerCase()}.` : "Not shared yet."}</p>
           {canManage && (
             <div className="flex flex-wrap gap-2">
@@ -469,10 +482,10 @@ function Tasks({ data, engagementId }: { data: Detail; engagementId: number }) {
           {inWeek(week).map(task => <TaskCard key={task.id} task={task} data={data} engagementId={engagementId} />)}
         </div>
       ))}
-      {adding ? <TaskCard data={data} engagementId={engagementId} onDone={() => setAdding(false)} /> : data.can.manage && (
+      {adding ? <TaskCard data={data} engagementId={engagementId} onDone={() => setAdding(false)} /> : (data.can.manage || data.can.contribute) && (
         <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add to the Work Plan</Button>
-          {!loading && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setLoading(true)}>Load a Data Request</Button>}
+          <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>{data.can.manage ? "Add to the Work Plan" : "Add a team item"}</Button>
+          {data.can.manage && !loading && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setLoading(true)}>Load a Data Request</Button>}
         </div>
       )}
       {loading && <LoadDataRequest engagementId={engagementId} onDone={() => setLoading(false)} />}
@@ -483,7 +496,8 @@ function Tasks({ data, engagementId }: { data: Detail; engagementId: number }) {
 function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Detail; engagementId: number; onDone?: () => void }) {
   const refresh = useRefresh(engagementId);
   const [kind, setKind] = useState<EngagementTaskKind>(task?.kind ?? "action");
-  const [side, setSide] = useState<EngagementTaskSide>(task?.side ?? "client");
+  // A Specialist adds team items only; the lead decides what the client is asked for.
+  const [side, setSide] = useState<EngagementTaskSide>(task?.side ?? (data.can.manage ? "client" : "ipf"));
   const [title, setTitle] = useState(task?.title ?? "");
   const [detail, setDetail] = useState(task?.detail ?? "");
   const [assignee, setAssignee] = useState(task?.assigneeUserId ? String(task.assigneeUserId) : "");
@@ -501,19 +515,21 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
   const save = trpc.engagement.staff.saveTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Saved."); onDone?.(); } });
   const people = side === "client" ? data.clientPeople.map(person => ({ userId: person.userId, name: person.name })) : data.team.map(member => ({ userId: member.userId, name: member.name ?? "" }));
   const id = task?.id ?? "new";
-  const canManage = data.can.manage;
+  // Editable by the lead; a Specialist fills in a new team item, and the lead changes the rest.
+  const canManage = data.can.manage || (!task && data.can.contribute);
+  const lead = data.can.manage;
   return (
     <div className="space-y-2 border border-line bg-paper-raised p-3" aria-label={task?.title ?? "New request or action"}>
       <div className="grid gap-2 sm:grid-cols-2">
         <div><label className={LABEL} htmlFor={`task-kind-${id}`}>Kind</label><select id={`task-kind-${id}`} className={FIELD} disabled={!canManage} value={kind} onChange={event => setKind(event.target.value as EngagementTaskKind)}>{(["data_request", "action"] as const).map(item => <option key={item} value={item}>{KIND_LABELS[item]}</option>)}</select></div>
-        <div><label className={LABEL} htmlFor={`task-side-${id}`}>Whose job</label><select id={`task-side-${id}`} className={FIELD} disabled={!canManage} value={side} onChange={event => { setSide(event.target.value as EngagementTaskSide); setAssignee(""); }}>{(["client", "ipf"] as const).map(item => <option key={item} value={item}>{SIDE_LABELS[item]}</option>)}</select></div>
+        <div><label className={LABEL} htmlFor={`task-side-${id}`}>Whose job</label><select id={`task-side-${id}`} className={FIELD} disabled={!lead} value={side} onChange={event => { setSide(event.target.value as EngagementTaskSide); setAssignee(""); }}>{(["client", "ipf"] as const).map(item => <option key={item} value={item}>{SIDE_LABELS[item]}</option>)}</select></div>
       </div>
       <label className={LABEL} htmlFor={`task-title-${id}`}>What</label>
       <input id={`task-title-${id}`} className={FIELD} disabled={!canManage} value={title} onChange={event => setTitle(event.target.value)} />
       <label className={LABEL} htmlFor={`task-detail-${id}`}>Detail</label>
       <textarea id={`task-detail-${id}`} className={FIELD} rows={2} disabled={!canManage} value={detail} onChange={event => setDetail(event.target.value)} />
       <div className="grid gap-2 sm:grid-cols-3">
-        <div><label className={LABEL} htmlFor={`task-person-${id}`}>Person</label><select id={`task-person-${id}`} className={FIELD} disabled={!canManage} value={assignee} onChange={event => setAssignee(event.target.value)}><option value="">{side === "client" ? "The business" : "The team"}</option>{people.map(person => <option key={person.userId} value={person.userId}>{person.name}</option>)}</select></div>
+        <div><label className={LABEL} htmlFor={`task-person-${id}`}>Person</label><select id={`task-person-${id}`} className={FIELD} disabled={!lead} value={assignee} onChange={event => setAssignee(event.target.value)}><option value="">{side === "client" ? "The business" : "The team"}</option>{people.map(person => <option key={person.userId} value={person.userId}>{person.name}</option>)}</select></div>
         <div><label className={LABEL} htmlFor={`task-due-${id}`}>Due</label><input id={`task-due-${id}`} type="date" className={FIELD} disabled={!canManage} value={dueOn} onChange={event => setDueOn(event.target.value)} /></div>
         <div><label className={LABEL} htmlFor={`task-status-${id}`}>Status</label><select id={`task-status-${id}`} className={FIELD} disabled={!canManage} value={status} onChange={event => setStatus(event.target.value as EngagementTaskStatus)}>{ENGAGEMENT_TASK_STATUSES.map(item => <option key={item} value={item}>{ENGAGEMENT_TASK_STATUS_LABELS[item]}</option>)}</select></div>
       </div>
@@ -533,7 +549,7 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
       <div><label className={LABEL} htmlFor={`task-priority-${id}`}>Priority</label><select id={`task-priority-${id}`} className={FIELD} disabled={!canManage} value={priority} onChange={event => setPriority(event.target.value as EngagementTaskPriority | "")}><option value="">Not set</option>{ENGAGEMENT_TASK_PRIORITIES.map(item => <option key={item} value={item}>{ENGAGEMENT_TASK_PRIORITY_LABELS[item]}</option>)}</select></div>
       <label className={LABEL} htmlFor={`task-note-${id}`}>Note (the client sees it)</label>
       <input id={`task-note-${id}`} className={FIELD} disabled={!canManage} placeholder={status === "needs_more" ? "Say what else you need" : ""} value={note} onChange={event => setNote(event.target.value)} />
-      {task && <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && canManage} />}
+      {task && <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && canManage} canManage={canManage} />}
       {canManage && (
         <div className="flex gap-2">
           <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !title.trim()} onClick={() => save.mutate({
@@ -599,7 +615,7 @@ function DeliverableCard({ item, data, engagementId, onDone }: { item?: Delivera
           </>
         )}
       </div>
-      {item && <StaffFiles files={item.files} engagementId={engagementId} target={{ kind: "deliverable", id: item.id }} canUpload={data.uploadsEnabled && data.can.manage} />}
+      {item && <StaffFiles files={item.files} engagementId={engagementId} target={{ kind: "deliverable", id: item.id }} canUpload={data.uploadsEnabled && (data.can.manage || data.can.contribute)} canManage={data.can.manage} />}
       {item && needsApproval && !approved && <p className="text-xs text-ink-muted">The desk lead approves this before it can be shared.</p>}
       {item && (
         <div className="space-y-1 border-t border-line-soft pt-2">
@@ -718,6 +734,17 @@ function AgreementAdmin({ engagementId }: { engagementId: number }) {
     : data.suggested!;
   const edit = (patch: Partial<AgreementDraft>) => setDraft({ ...current, ...patch, loadedFor: agreement?.updatedAt ? new Date(agreement.updatedAt).getTime() : 0 });
   const setLine = (index: number, patch: Partial<AgreementDraft["feeLines"][number]>) => edit({ feeLines: current.feeLines.map((line, at) => (at === index ? { ...line, ...patch } : line)) });
+  const fees = current.feeLines.filter(line => line.label.trim() && line.amount > 0);
+  const payload = { engagementId, scope: current.scope, outOfScope: current.outOfScope, clientCommitments: current.clientCommitments, terms: current.terms, feeLines: fees };
+  const sending = save.isPending || send.isPending;
+  const saveAndSend = async () => {
+    try {
+      // Unsaved changes, or the suggested draft never saved: save first, then send.
+      if (draft !== null || agreement === null) await save.mutateAsync(payload);
+      setDraft(null);
+      await send.mutateAsync({ engagementId });
+    } catch { /* each mutation shows its own error */ }
+  };
   const area = (key: "scope" | "outOfScope" | "clientCommitments" | "terms", label: string, rows: number) => (
     <div className="space-y-1">
       <label className={LABEL} htmlFor={`agreement-${key}`}>{label}</label>
@@ -726,7 +753,7 @@ function AgreementAdmin({ engagementId }: { engagementId: number }) {
   );
   return (
     <DetailSection title="Agreement and fees">
-      <p className="text-xs text-ink-muted">{agreement ? `${agreement.statusLabel}${agreement.version ? ` · version ${agreement.version}` : ""}${agreement.status === "accepted" && agreement.acceptedName ? ` · accepted by ${agreement.acceptedName} on ${formatDate(agreement.acceptedAt)}` : ""}` : "Not drafted yet: this is what the service suggests. Change anything, then save."}</p>
+      <p className="text-xs text-ink-muted">{agreement ? `${agreement.statusLabel}${agreement.version ? ` · version ${agreement.version}` : ""}${agreement.status === "accepted" && agreement.acceptedName ? ` · accepted by ${agreement.acceptedName} on ${formatDate(agreement.acceptedAt)}` : ""}` : "Drafted from the service and its price on the website. Check it, change anything, then send."}</p>
       {area("scope", "What we will do", 6)}
       {area("outOfScope", "Not included", 2)}
       {area("clientCommitments", "What the client does", 2)}
@@ -751,8 +778,10 @@ function AgreementAdmin({ engagementId }: { engagementId: number }) {
         <p className="text-sm font-semibold">Total {formatNaira(locked ? data.total : feeTotal(current.feeLines))}</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        {!locked && data.can.edit && <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !current.scope.trim()} onClick={() => save.mutate({ engagementId, scope: current.scope, outOfScope: current.outOfScope, clientCommitments: current.clientCommitments, terms: current.terms, feeLines: current.feeLines.filter(line => line.label.trim() && line.amount > 0) }, { onSuccess: () => setDraft(null) })}>Save</Button>}
-        {agreement?.status === "draft" && data.can.send && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={send.isPending || draft !== null} title={draft ? "Save your changes first" : undefined} onClick={() => send.mutate({ engagementId })}>Send to the owner</Button>}
+        {/* One click: the draft is saved and sent together, so the lead checks it and sends; nothing to save first. */}
+        {!locked && data.can.send && data.can.edit && <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={sending || !current.scope.trim() || !fees.length} title={!fees.length ? "Add the fees first" : undefined} onClick={() => void saveAndSend()}>Send to the owner</Button>}
+        {!locked && data.can.edit && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={save.isPending || sending || !current.scope.trim() || (agreement !== null && draft === null)} onClick={() => save.mutate(payload, { onSuccess: () => setDraft(null) })}>Save the draft</Button>}
+        {!locked && data.can.send && !fees.length && <p className="w-full text-xs text-ink-muted">Add the fees to send it.</p>}
         {locked && data.can.send && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={revise.isPending} onClick={() => revise.mutate({ engagementId })}>Revise</Button>}
       </div>
     </DetailSection>

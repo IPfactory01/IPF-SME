@@ -322,6 +322,12 @@ function requirePermission(actor: StaffActor, permission: Parameters<typeof auth
   if (!authorityAllows(actor.authority, permission)) throw new TRPCError({ code: "FORBIDDEN", message });
 }
 const requireManage = (actor: StaffActor) => requirePermission(actor, "manage_engagements", "Your role does not include working on engagements.");
+/** Hands in work (ET, 6 November 2026): team-side Work Plan items and draft files, seen by IP Factory only. */
+export const canContribute = (actor: StaffActor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "contribute_engagements");
+/** Internal Session notes: for whoever works on or approves engagements, never a Specialist. */
+export const canSeeInternal = (actor: StaffActor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "review_engagements");
+/** The agreement and fees: as for internal notes, plus Finance. */
+export const canSeeAgreement = (actor: StaffActor) => canSeeInternal(actor) || authorityAllows(actor.authority, "view_financials");
 
 /** The engagements this person may see, newest first, with what the desk needs at a glance. */
 /** The stage in words: a dated engagement's current stage from its start date, else the stored stage. */
@@ -401,7 +407,7 @@ export async function listStaffEngagements(db: Database, actor: StaffActor) {
   });
 }
 
-/** Everything about one engagement, for the team. Internal notes included: this never reaches a client. */
+/** Everything about one engagement, for the team: this never reaches a client. Internal notes only for canSeeInternal. */
 export async function getStaffEngagement(db: Database, actor: StaffActor, engagementId: number) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
   // A direct engagement (no Business Health Check) names its contact on the engagement itself.
@@ -435,7 +441,8 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     hasAccount: business !== null,
     team: team.map(member => ({ ...member, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
     clientPeople,
-    sessions,
+    // Internal notes stay with those who work on or approve engagements.
+    sessions: canSeeInternal(actor) ? sessions : sessions.map(item => ({ ...item, internalNotes: null })),
     tasks: tasks.map(task => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id) })),
     // The drop box: every file the client sent without saying what it answers, with the requests it has been matched to.
     // Unsorted files come first.
@@ -451,6 +458,9 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
       assign: authorityAllows(actor.authority, "assign_engagements"),
       review: await canReviewEngagement(db, actor, engagementId),
       sendSignIn: authorityAllows(actor.authority, "manage_client_onboarding"),
+      contribute: canContribute(actor),
+      seeInternal: canSeeInternal(actor),
+      seeAgreement: canSeeAgreement(actor),
     },
   };
 }
@@ -659,7 +669,12 @@ export async function shareSessionNotes(db: Database, actor: StaffActor, input: 
 export type TaskInput = { engagementId: number; taskId?: number; kind: EngagementTaskKind; title: string; detail: string | null; side: EngagementTaskSide; assigneeUserId: number | null; dueOn: string | null; status: EngagementTaskStatus; statusNote: string | null; sessionId: number | null; weekNumber: number | null; sortOrder: number; factor: EngagementTaskFactor | null; section?: string | null; ref?: string | null; informs?: string | null; format?: string | null; priority?: EngagementTaskPriority | null };
 
 export async function saveTask(db: Database, actor: StaffActor, input: TaskInput) {
-  requireManage(actor);
+  // A contributor (a Specialist) adds team-side items only, and changes nothing already there.
+  if (!authorityAllows(actor.authority, "manage_engagements")) {
+    if (!canContribute(actor)) requireManage(actor);
+    if (input.taskId || input.side !== "ipf") throw new TRPCError({ code: "FORBIDDEN", message: "You can add team items to the Work Plan. The lead changes the rest." });
+    if (input.assigneeUserId !== null && input.assigneeUserId !== actor.id) throw new TRPCError({ code: "FORBIDDEN", message: "Add the item for yourself; the lead assigns others." });
+  }
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   if (input.assigneeUserId !== null) {
     const allowed = input.side === "client"
@@ -1364,9 +1379,16 @@ async function requireStaffTarget(db: Pick<Database, "select">, actor: StaffActo
 }
 
 /** The team attaches a file to a request (what we owe the client) or a deliverable. Audience as for notes: owner by default. */
+/** A contributor (a Specialist) uploads only to a Deliverable, and only for IP Factory: the lead shares it with the client. */
+function requireUploader(actor: StaffActor, target: UploadTarget, audience: EngagementAudience | null) {
+  if (authorityAllows(actor.authority, "manage_engagements")) return;
+  if (!canContribute(actor)) return requireManage(actor);
+  if (target.kind !== "deliverable" || (audience !== null && audience !== "team")) throw new TRPCError({ code: "FORBIDDEN", message: "You can add draft files to a Deliverable, for IP Factory only. The lead shares them with the client." });
+}
+
 export async function staffRequestUpload(db: Database, actor: StaffActor, input: UploadInput & { engagementId: number; target: UploadTarget }) {
   requireUploads();
-  requireManage(actor);
+  requireUploader(actor, input.target, null);
   validateUpload(input);
   await requireStaffTarget(db, actor, input.engagementId, input.target);
   const storageKey = newStorageKey(input.engagementId, input.target, input.fileName);
@@ -1374,9 +1396,9 @@ export async function staffRequestUpload(db: Database, actor: StaffActor, input:
   return { storageKey, uploadUrl: upload.url, headers: upload.headers };
 }
 
-export async function staffConfirmUpload(db: Database, actor: StaffActor, input: UploadInput & { engagementId: number; target: UploadTarget; storageKey: string; audience: Exclude<EngagementAudience, "team"> }) {
+export async function staffConfirmUpload(db: Database, actor: StaffActor, input: UploadInput & { engagementId: number; target: UploadTarget; storageKey: string; audience: EngagementAudience }) {
   requireUploads();
-  requireManage(actor);
+  requireUploader(actor, input.target, input.audience);
   validateUpload(input);
   await requireStaffTarget(db, actor, input.engagementId, input.target);
   if (!isTargetStorageKey(input.storageKey, keyPrefix(input.engagementId, input.target))) throw notFound();
@@ -1389,6 +1411,20 @@ export async function staffConfirmUpload(db: Database, actor: StaffActor, input:
     await recordAudit(tx, { action: "engagement_file_uploaded", actorUserId: actor.id, details: { engagementId: input.engagementId, [input.target.kind === "task" ? "taskId" : "deliverableId"]: input.target.id, fileId: file.id, audience: input.audience } });
     return { success: true, fileId: file.id } as const;
   });
+}
+
+/** The lead shares a draft a Specialist handed in (IP Factory only) with the owner, or the owner and their team. */
+export async function shareTeamFile(db: Database, actor: StaffActor, input: { fileId: number; audience: Exclude<EngagementAudience, "team"> }) {
+  requireManage(actor);
+  const file = (await db.select().from(engagementFiles).where(eq(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file) throw notFound();
+  await requireStaffEngagement(db, actor, file.engagementId);
+  if (file.audience !== "team") throw new TRPCError({ code: "BAD_REQUEST", message: "This file is already shared." });
+  await db.transaction(async tx => {
+    await tx.update(engagementFiles).set({ audience: input.audience }).where(eq(engagementFiles.id, file.id));
+    await recordAudit(tx, { action: "engagement_file_shared", actorUserId: actor.id, details: { engagementId: file.engagementId, fileId: file.id, audience: input.audience } });
+  });
+  return { success: true } as const;
 }
 
 /** The team opens any file on an engagement in scope. */

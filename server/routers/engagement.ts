@@ -71,6 +71,7 @@ import {
   staffComment,
   staffConfirmUpload,
   staffFileLink,
+  shareTeamFile,
   staffRequestUpload,
   startAwaitingEngagement,
 } from "../engagements";
@@ -189,8 +190,9 @@ const staffRouter = router({
   shareDeliverable: staff.input(z.object({ deliverableId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareDeliverable(await engagementDb(), ctx.actor, input))),
   comment: staff.input(z.object({ deliverableId: id, body: text(4000).min(1) })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.engagementComment, `staff:${ctx.actor.id}`); return guarded(async () => staffComment(await engagementDb(), ctx.actor, input)); }),
   requestUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, ...upload })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileUpload, `staff:${ctx.actor.id}`); return guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input)); }),
-  confirmUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
+  confirmUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, storageKey, audience: z.enum(["team", "owner", "business"]), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
+  shareFile: staff.input(z.object({ fileId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareTeamFile(await engagementDb(), ctx.actor, input))),
   /** A whole Data Request in one step: a template, or rows pasted from Excel. */
   loadDataRequest: staff.input(z.object({
     engagementId: id,

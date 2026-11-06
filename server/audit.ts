@@ -56,6 +56,7 @@ export const AUDIT_ACTIONS = [
   "account_invitation_accepted",
   "business_member_removed",
   "engagement_file_uploaded",
+  "engagement_file_shared",
   "engagement_measure_saved",
   "engagement_checkin_recorded",
   "two_step_setup_started",

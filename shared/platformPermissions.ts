@@ -21,6 +21,7 @@ export const PLATFORM_PERMISSIONS = [
   "manage_engagements",
   "assign_engagements",
   "review_engagements",
+  "contribute_engagements",
   "manage_payments",
   "view_financials",
   "manage_scheduling",
@@ -51,7 +52,9 @@ export const PLATFORM_ROLE_PERMISSIONS: Record<PlatformRole, readonly PlatformPe
   desk_lead: ["view_all_businesses", "manage_engagements", "assign_engagements", "review_engagements", "manage_scheduling", "manage_communications", "view_financials"],
   analyst: ["view_assigned_businesses", "manage_engagements"],
   partner: ["view_assigned_businesses", "review_engagements", "view_financials"],
-  subject_matter_expert: ["view_assigned_businesses"],
+  // Specialists hand in work on their own engagements (ET, 6 November 2026): team-side Work Plan items and draft files on
+  // a Deliverable, seen by IP Factory only until the lead shares them. They do not see internal notes or the agreement.
+  subject_matter_expert: ["view_assigned_businesses", "contribute_engagements"],
   finance: ["manage_payments", "view_financials"],
 };
 
@@ -185,7 +188,7 @@ export const LEVEL_ACCESS: Record<FirmLevel, string> = {
   Associate: "Engagements they are on; approves when leading one",
   "Senior Business Analyst": "Engagements they are on",
   "Business Analyst": "Engagements they are on",
-  Specialist: "Engagements they are on, until an end date",
+  Specialist: "Engagements they are on, until an end date; hands in drafts for the lead",
   Finance: "Payments only",
 };
 export const isFirmLevel = (value: string | null | undefined): value is FirmLevel => (FIRM_LEVELS as readonly string[]).includes(value ?? "");

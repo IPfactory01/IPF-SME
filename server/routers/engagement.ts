@@ -34,6 +34,7 @@ import {
   engagementDb,
   getClientRoom,
   previewClientRoom,
+  loadDataRequest,
   requestService,
   listServiceRequests,
   handleServiceRequest,
@@ -190,6 +191,14 @@ const staffRouter = router({
   requestUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, ...upload })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.fileUpload, `staff:${ctx.actor.id}`); return guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input)); }),
   confirmUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
+  /** A whole Data Request in one step: a template, or rows pasted from Excel. */
+  loadDataRequest: staff.input(z.object({
+    engagementId: id,
+    items: z.array(z.object({
+      section: optionalText(120), ref: optionalText(32), title: text(200).min(1), detail: optionalText(2000), informs: optionalText(300), format: optionalText(120),
+      priority: z.enum(ENGAGEMENT_TASK_PRIORITIES).nullable(), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
+    })).min(1).max(120),
+  })).mutation(async ({ ctx, input }) => guarded(async () => loadDataRequest(await engagementDb(), ctx.actor, input))),
   /** The agreement and fees: draft, save, send, revise, record payments. */
   agreement: staff.input(z.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => staffAgreement(await engagementDb(), ctx.actor, input.engagementId))),
   saveAgreement: staff.input(z.object({

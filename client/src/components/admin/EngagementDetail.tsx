@@ -1,4 +1,5 @@
 import { STAGED_TYPES } from "@shared/engagementTypes";
+import { DATA_REQUEST_TEMPLATES, parsePastedDataRequest, templateById } from "@shared/dataRequestTemplates";
 import { feeTotal, type AgreementDraft } from "@shared/agreement";
 import { formatNaira } from "@shared/businessSupport";
 import { Button } from "@/components/ui/button";
@@ -455,6 +456,7 @@ function InboxRow({ file, data, engagementId }: { file: InboxFile; data: Detail;
 
 function Tasks({ data, engagementId }: { data: Detail; engagementId: number }) {
   const [adding, setAdding] = useState(false);
+  const [loading, setLoading] = useState(false);
   const weekOf = (task: Task) => task.weekNumber ?? null;
   const weeks = Array.from(new Set(data.tasks.map(weekOf))).sort((a, b) => (a ?? 99) - (b ?? 99));
   const inWeek = (week: number | null) => data.tasks.filter(task => weekOf(task) === week).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
@@ -467,7 +469,13 @@ function Tasks({ data, engagementId }: { data: Detail; engagementId: number }) {
           {inWeek(week).map(task => <TaskCard key={task.id} task={task} data={data} engagementId={engagementId} />)}
         </div>
       ))}
-      {adding ? <TaskCard data={data} engagementId={engagementId} onDone={() => setAdding(false)} /> : data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add to the Work Plan</Button>}
+      {adding ? <TaskCard data={data} engagementId={engagementId} onDone={() => setAdding(false)} /> : data.can.manage && (
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add to the Work Plan</Button>
+          {!loading && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setLoading(true)}>Load a Data Request</Button>}
+        </div>
+      )}
+      {loading && <LoadDataRequest engagementId={engagementId} onDone={() => setLoading(false)} />}
     </DetailSection>
   );
 }
@@ -748,5 +756,55 @@ function AgreementAdmin({ engagementId }: { engagementId: number }) {
         {locked && data.can.send && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={revise.isPending} onClick={() => revise.mutate({ engagementId })}>Revise</Button>}
       </div>
     </DetailSection>
+  );
+}
+
+/**
+ * Load a whole Data Request in one step: a template (the Small business baseline, the Business Review's list) or rows
+ * pasted from a client's own Excel sheet. A preview shows what will be added, by section; items already on the
+ * engagement are skipped, and dates follow the priority when the sheet gives none.
+ */
+function LoadDataRequest({ engagementId, onDone }: { engagementId: number; onDone: () => void }) {
+  const refresh = useRefresh(engagementId);
+  const [source, setSource] = useState<string>(DATA_REQUEST_TEMPLATES[0]!.id);
+  const [pasted, setPasted] = useState("");
+  const load = trpc.engagement.staff.loadDataRequest.useMutation({
+    onSuccess: result => { refresh.onSuccess(); toast.success(`${result.added} ${result.added === 1 ? "item" : "items"} added to the Data Request${result.skipped ? `; ${result.skipped} already there` : ""}.`); onDone(); },
+    onError: error => toast.error(error.message),
+  });
+  const items = source === "paste"
+    ? parsePastedDataRequest(pasted)
+    : (templateById(source)?.items ?? []).map(item => ({ ...item, dueOn: null }));
+  const sections = Array.from(new Set(items.map(item => item.section ?? "")));
+  return (
+    <section aria-label="Load a Data Request" className="space-y-2 border border-brand-line bg-brand-tint p-3">
+      <div className="space-y-1">
+        <label className={LABEL} htmlFor="data-request-source">Load from</label>
+        <select id="data-request-source" className={FIELD} value={source} onChange={event => setSource(event.target.value)}>
+          {DATA_REQUEST_TEMPLATES.map(template => <option key={template.id} value={template.id}>{template.name} ({template.items.length} items)</option>)}
+          <option value="paste">Paste from Excel</option>
+        </select>
+        <p className="text-xs text-ink-muted">{source === "paste" ? "Copy the rows of the client's Data Request sheet (with its header row if you can) and paste them here. Section rows are kept." : templateById(source)?.description}</p>
+      </div>
+      {source === "paste" && <textarea aria-label="Rows pasted from Excel" rows={6} className={`${FIELD} font-mono text-xs`} value={pasted} onChange={event => setPasted(event.target.value)} placeholder={"ID\tItem requested\tDetail\tWhat it informs\tFormat\tPriority\tDate required"} />}
+      {items.length > 0 && (
+        <div aria-label="Preview" className="max-h-64 space-y-2 overflow-y-auto border border-line bg-white p-2 text-sm">
+          {sections.map(section => (
+            <div key={section || "none"}>
+              {section && <p className="text-xs font-semibold text-ink-muted">{section}</p>}
+              <ul className="space-y-0.5">
+                {items.filter(item => (item.section ?? "") === section).map((item, index) => (
+                  <li key={`${item.ref ?? ""}-${index}`} className="flex justify-between gap-2"><span>{item.ref && <span className="mr-1 font-mono text-xs text-ink-muted">{item.ref}</span>}{item.title}</span>{item.priority && <span className="shrink-0 text-xs text-ink-muted">{ENGAGEMENT_TASK_PRIORITY_LABELS[item.priority]}</span>}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={!items.length || load.isPending} onClick={() => load.mutate({ engagementId, items })}>{items.length ? `Add ${items.length} ${items.length === 1 ? "item" : "items"}` : "Nothing to add yet"}</Button>
+        <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={onDone}>Cancel</Button>
+      </div>
+    </section>
   );
 }

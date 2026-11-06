@@ -281,6 +281,32 @@ for (const target of targets) {
       });
     });
 
+    describe("loading a Data Request in one step", () => {
+      it("adds every item after the existing ones, dates them by priority, skips what is already there, and is the team's alone", async () => {
+        const { owner, engagementId } = await client("load-data-request");
+        const desk = await superAdmin.call();
+        const before = (await desk.engagement.staff.detail({ engagementId })).tasks.length;
+        const items = [
+          { section: "1 Sales", ref: "1.1", title: "Sales by month", detail: "Last 12 months.", informs: "How the business is doing", format: "Excel", priority: "high" as const, dueOn: null },
+          { section: "1 Sales", ref: "1.2", title: "Top customers", detail: null, informs: null, format: null, priority: null, dueOn: "2026-12-01" },
+          { section: "2 Costs", ref: "2.1", title: "What you spend each month", detail: null, informs: null, format: null, priority: "low" as const, dueOn: null },
+        ];
+        // "What you spend each month" is already on a Business Review, so it is skipped.
+        expect(await desk.engagement.staff.loadDataRequest({ engagementId, items })).toEqual({ added: 2, skipped: 1 });
+        const tasks = (await desk.engagement.staff.detail({ engagementId })).tasks;
+        expect(tasks.length).toBe(before + 2);
+        const sales = tasks.find(task => task.title === "Sales by month")!;
+        expect(sales).toMatchObject({ kind: "data_request", side: "client", status: "open", section: "1 Sales", ref: "1.1", priority: "high", informs: "How the business is doing", format: "Excel" });
+        expect(sales.dueOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(tasks.find(task => task.title === "Top customers")!.dueOn).toBe("2026-12-01");
+        // Loading again adds nothing.
+        expect(await desk.engagement.staff.loadDataRequest({ engagementId, items })).toEqual({ added: 0, skipped: 3 });
+        // The client sees the new items in their Data Request; a client cannot load anything.
+        expect((await (await owner.call()).engagement.client.room())!.tasks.some(task => task.title === "Sales by month")).toBe(true);
+        await expect((await owner.call()).engagement.staff.loadDataRequest({ engagementId, items })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      });
+    });
+
     describe("Finance: money across every client", () => {
       it("lists payment requests and agreement fees, counts a fee as owed only once its agreement is accepted, and is for finance only", async () => {
         const { owner, engagementId } = await client("finance");

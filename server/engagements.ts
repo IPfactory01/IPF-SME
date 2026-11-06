@@ -63,6 +63,7 @@ import { PRODUCTS } from "../shared/products";
 import { inviteBusinessOwner } from "./accountInvitations";
 import { slugify } from "./accountAuth";
 import { recordAudit } from "./audit";
+import { DUE_DAYS } from "../shared/dataRequestTemplates";
 import { clientAgreement } from "./agreements";
 import { sharedDebriefFor } from "./debriefs";
 import { getDb } from "./db";
@@ -676,6 +677,42 @@ export async function saveTask(db: Database, actor: StaffActor, input: TaskInput
   }
   const [created] = await db.insert(engagementTasks).values({ engagementId: engagement.id, ...values, createdByUserId: actor.id }).returning({ id: engagementTasks.id });
   return { taskId: created.id } as const;
+}
+
+export type DataRequestItemInput = { section: string | null; ref: string | null; title: string; detail: string | null; informs: string | null; format: string | null; priority: EngagementTaskPriority | null; dueOn: string | null };
+
+/**
+ * Load a whole Data Request in one step (a template, or rows pasted from Excel): each item becomes a client-side Data
+ * Request after the ones already there. An item already on the engagement (same title) is skipped, so loading twice adds
+ * nothing. A missing date is set from the priority (high in four days, medium in six, low in seven).
+ */
+export async function loadDataRequest(db: Database, actor: StaffActor, input: { engagementId: number; items: DataRequestItemInput[]; today?: string }) {
+  requireManage(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (!input.items.length) throw new TRPCError({ code: "BAD_REQUEST", message: "There is nothing to add." });
+  const existing = await db.select({ title: engagementTasks.title, sortOrder: engagementTasks.sortOrder }).from(engagementTasks).where(eq(engagementTasks.engagementId, engagement.id));
+  const seen = new Set(existing.map(row => row.title.trim().toLowerCase()));
+  const today = input.today ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date());
+  let order = existing.reduce((max, row) => Math.max(max, row.sortOrder ?? 0), 0);
+  const rows: (typeof engagementTasks.$inferInsert)[] = [];
+  for (const item of input.items) {
+    const key = item.title.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    order += 1;
+    rows.push({
+      engagementId: engagement.id, kind: "data_request" as const, side: "client" as const, title: item.title.trim().slice(0, 200), detail: item.detail, status: "open" as const,
+      section: item.section, ref: item.ref, informs: item.informs, format: item.format, priority: item.priority,
+      dueOn: item.dueOn ?? (item.priority ? addDays(today, DUE_DAYS[item.priority]) : null), weekNumber: 1, sortOrder: order, createdByUserId: actor.id,
+    });
+  }
+  if (rows.length) {
+    await db.transaction(async tx => {
+      await tx.insert(engagementTasks).values(rows);
+      await recordAudit(tx, { action: "engagement_data_request_loaded", actorUserId: actor.id, details: { engagementId: engagement.id, added: rows.length } });
+    });
+  }
+  return { added: rows.length, skipped: input.items.length - rows.length } as const;
 }
 
 export type DeliverableInput = { engagementId: number; deliverableId?: number; kind: EngagementDeliverableKind; title: string; summary: string | null };

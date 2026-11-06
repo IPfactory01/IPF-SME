@@ -37,7 +37,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         agreement: { useQuery: () => ({ data: api.agreement, error: null }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "handleRequest", "saveAgreement", "sendAgreement", "reviseAgreement", "setFeePaid", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "handleRequest", "saveAgreement", "sendAgreement", "loadDataRequest", "reviseAgreement", "setFeePaid", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -484,5 +484,26 @@ describe("the agreement on the team's side", () => {
     expect(section.getByText("Total ₦650,000")).toBeTruthy();
     fireEvent.click(section.getByRole("button", { name: "Save" }));
     expect(api.calls.saveAgreement).toEqual([{ engagementId: row.id, scope: "Two weeks and two Sessions.", outOfScope: "Anything not listed above.", clientCommitments: "Send the records.", terms: "Our Terms apply.", feeLines: [{ label: "Business Review", amount: 600000, dueOn: null }, { label: "Travel to Abuja", amount: 50000, dueOn: null }] }]);
+  });
+});
+
+describe("loading a Data Request in one step", () => {
+  it("loads the Small business baseline after a preview by section, or rows pasted from Excel", () => {
+    api.list = { setUp: true, items: [row], canStart: true, seesAll: true } as never;
+    api.detail = detail({ manage: true, assign: true, review: true });
+    api.calls = {};
+    render(<EngagementsView />);
+    fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Load a Data Request" }));
+    const panel = within(screen.getByRole("region", { name: "Load a Data Request" }));
+    expect(panel.getByText("3 Money")).toBeTruthy();
+    fireEvent.click(panel.getByRole("button", { name: "Add 18 items" }));
+    expect((api.calls.loadDataRequest as { items: unknown[] }[])[0]!.items).toHaveLength(18);
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Load a Data Request" }));
+    const again = within(screen.getByRole("region", { name: "Load a Data Request" }));
+    fireEvent.change(again.getByLabelText("Load from"), { target: { value: "paste" } });
+    fireEvent.change(again.getByLabelText("Rows pasted from Excel"), { target: { value: "ID\tItem requested\tPriority\n1.1\tSales by month\tHigh\n1.2\tTop customers\tLow" } });
+    fireEvent.click(again.getByRole("button", { name: "Add 2 items" }));
+    expect((api.calls.loadDataRequest as { items: { title: string }[] }[])[1]!.items.map(item => item.title)).toEqual(["Sales by month", "Top customers"]);
   });
 });

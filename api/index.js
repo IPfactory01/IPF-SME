@@ -6510,6 +6510,18 @@ async function inviteBusinessOwner(db, input) {
   return issue(db, { kind: "business_owner", email: input.email, fullName: input.fullName, businessId: input.businessId, businessName: input.businessName, actorUserId: input.actorUserId, inviterName: input.inviterName });
 }
 
+// shared/dataRequestTemplates.ts
+var DUE_DAYS = { high: 4, medium: 6, low: 7 };
+var BUSINESS_REVIEW = ASSESSMENT_TEMPLATE.dataRequests.map((item2, index2) => ({
+  section: item2.week === 1 ? "Week 1" : "Week 2",
+  ref: String(index2 + 1),
+  title: item2.title,
+  detail: item2.detail,
+  informs: "",
+  format: "Any",
+  priority: item2.week === 1 ? "high" : "medium"
+}));
+
 // server/agreements.ts
 import { TRPCError as TRPCError8 } from "@trpc/server";
 import { and as and6, asc, eq as eq9 } from "drizzle-orm";
@@ -9674,6 +9686,46 @@ async function saveTask(db, actor, input) {
   const [created] = await db.insert(engagementTasks).values({ engagementId: engagement.id, ...values2, createdByUserId: actor.id }).returning({ id: engagementTasks.id });
   return { taskId: created.id };
 }
+async function loadDataRequest(db, actor, input) {
+  requireManage2(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (!input.items.length) throw new TRPCError11({ code: "BAD_REQUEST", message: "There is nothing to add." });
+  const existing = await db.select({ title: engagementTasks.title, sortOrder: engagementTasks.sortOrder }).from(engagementTasks).where(eq12(engagementTasks.engagementId, engagement.id));
+  const seen = new Set(existing.map((row) => row.title.trim().toLowerCase()));
+  const today = input.today ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(/* @__PURE__ */ new Date());
+  let order = existing.reduce((max, row) => Math.max(max, row.sortOrder ?? 0), 0);
+  const rows = [];
+  for (const item2 of input.items) {
+    const key = item2.title.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    order += 1;
+    rows.push({
+      engagementId: engagement.id,
+      kind: "data_request",
+      side: "client",
+      title: item2.title.trim().slice(0, 200),
+      detail: item2.detail,
+      status: "open",
+      section: item2.section,
+      ref: item2.ref,
+      informs: item2.informs,
+      format: item2.format,
+      priority: item2.priority,
+      dueOn: item2.dueOn ?? (item2.priority ? addDays(today, DUE_DAYS[item2.priority]) : null),
+      weekNumber: 1,
+      sortOrder: order,
+      createdByUserId: actor.id
+    });
+  }
+  if (rows.length) {
+    await db.transaction(async (tx) => {
+      await tx.insert(engagementTasks).values(rows);
+      await recordAudit(tx, { action: "engagement_data_request_loaded", actorUserId: actor.id, details: { engagementId: engagement.id, added: rows.length } });
+    });
+  }
+  return { added: rows.length, skipped: input.items.length - rows.length };
+}
 async function saveDeliverable(db, actor, input) {
   requireManage2(actor);
   await requireStaffEngagement(db, actor, input.engagementId);
@@ -11751,6 +11803,20 @@ var staffRouter = router({
   }),
   confirmUpload: staff.input(z15.object({ engagementId: id, target: uploadTarget, storageKey, audience: sharedAudience, ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z15.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
+  /** A whole Data Request in one step: a template, or rows pasted from Excel. */
+  loadDataRequest: staff.input(z15.object({
+    engagementId: id,
+    items: z15.array(z15.object({
+      section: optionalText2(120),
+      ref: optionalText2(32),
+      title: text3(200).min(1),
+      detail: optionalText2(2e3),
+      informs: optionalText2(300),
+      format: optionalText2(120),
+      priority: z15.enum(ENGAGEMENT_TASK_PRIORITIES).nullable(),
+      dueOn: z15.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable()
+    })).min(1).max(120)
+  })).mutation(async ({ ctx, input }) => guarded(async () => loadDataRequest(await engagementDb(), ctx.actor, input))),
   /** The agreement and fees: draft, save, send, revise, record payments. */
   agreement: staff.input(z15.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => staffAgreement(await engagementDb(), ctx.actor, input.engagementId))),
   saveAgreement: staff.input(z15.object({

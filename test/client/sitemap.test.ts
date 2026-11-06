@@ -37,3 +37,10 @@ describe("search engines and shared links", () => {
     expect(read("index.html")).toMatch(/Plus\+Jakarta\+Sans:wght@[\d;]*800/);
   });
 });
+
+describe("Google Search Console", () => {
+  it("serves the ownership file Google asked for at the site's root, exactly as Google wrote it, and keeps it", () => {
+    // Google checks this file at https://www.ipfactory.co/google704018ec5987b5fe.html; removing it unverifies the site.
+    expect(read("public/google704018ec5987b5fe.html")).toBe("google-site-verification: google704018ec5987b5fe.html");
+  });
+});

@@ -8,7 +8,7 @@ the product changes.
 |---|---|---|---|
 | 1 | [Product requirements (PRD)](01-prd.md) | The problem, the users and their jobs, the journey, the products, requirements by stage with priority and status, measures, risks, open decisions | Deciding what to build or change |
 | 2 | [Technical requirements](02-technical-requirements.md) | Stack, hosting, database, configuration, integrations, security, AI use, testing | Choosing how to build |
-| 3 | [App flow](03-app-flow.md) | Every page, what each click does, the emails sent, status models, the admin console | Changing a screen or a step |
+| 3 | [App flow](03-app-flow.md) | Who arrives where, the two front doors, payment terms, every journey as a service blueprint, status models, emails, exceptions; then the pages, the admin console and the room | Changing a screen or a step |
 | 4 | [Design brief](04-design-brief.md) | Brand, colours, fonts, components, motion, words, email and PDF look | Building or changing anything people see |
 | 5 | [Backend schema](05-backend-schema.md) | Where client data lives, who can see it, the planned engagement layer, findings to fix | Touching data, permissions or access |
 | 6 | [Implementation plan](06-implementation-plan.md) | What gets built next, in what order, with acceptance criteria | Planning the next piece of work |

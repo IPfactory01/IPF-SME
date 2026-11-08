@@ -4,10 +4,19 @@ The history behind The Shift: what was decided, by whom and when. The [PRD](01-p
 log keeps how we got there. Newest first. Names in older entries are as they were then: the Current State Assessment is
 now the Business Review (₦600,000), and the JUMP programme views have been removed.
 
-## 1. Decisions from 22 October to 6 November 2026
+## 1. Decisions from 22 October to 8 November 2026
 
 | Decision | Taken by |
 |---|---|
+| Nothing is built before it is described in the PRD and the App flow; the six documents are reviewed in full before more building | ET, 8 November 2026 |
+| Two engines on one platform: fixed-price products bought online, and relationships that start with a call | ET, 8 November 2026 |
+| Two front doors on every page that sells: Buy now (fixed-price products) and Talk to an expert (a call or WhatsApp) | ET, 8 November 2026 |
+| Payment terms on every engagement: in advance (the default, always for online purchases) or in arrears (a partner approves; fees at 30, 60 and 90 days from kickoff; the room open from kickoff). Marcelle's Digital marketing is in arrears | ET, 8 November 2026 |
+| One payment model for everything (order or engagement, fees, payments); the Business Review moves onto it | ET, 8 November 2026 |
+| The platform chases: fee and Data Request reminders by email, WhatsApp later; the team is told only what is still outstanding | ET, 8 November 2026 |
+| Close records whether the number moved and books the Day-30 Review; the room then offers the next fix to buy or talk about | ET, 8 November 2026 |
+| A trust layer where money changes hands (named expert, office, WhatsApp, what happens next, receipt); tracking from search to payment; search markup and a Google Business Profile | ET, 8 November 2026 |
+| Clients sign in with a link; staff keep a password and the two-step code | ET, 8 November 2026 |
 | R11 built: each engagement fee has its own Paystack pay link (emailed by the team or paid from the room's Payments tab); Paystack marks it paid and the client gets a receipt; an engagement opened with fees opens to the client on the first payment, online or by hand, or when the lead opens it early (migration 0020) | ET, 6 November 2026 |
 | The PRD is rewritten from scratch around the journey, with priorities, acceptance and measures; this log holds the history | ET, 6 November 2026 |
 | The Shift is a service business today and a self-serve platform over time; clients keep their access throughout; the platform does the routine work | ET, 6 November 2026 |

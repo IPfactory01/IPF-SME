@@ -1,331 +1,328 @@
 # 3. App flow
 
-**What happens when someone clicks, and which page comes next.** Last reviewed 22 October 2026, against the code on the
-working branch. Diagrams use Mermaid, which GitHub renders.
+**How The Shift works for each person who uses it, step by step.** Rebuilt on 8 November 2026 from the
+[PRD](01-prd.md) review, as service blueprints: for every step, what the client does, what the platform does on its own,
+what a person on the team does, the email that goes out, and the status that changes. Each step says whether it is
+**Built** or **To build** (with the PRD requirement, R1 to R42). Diagrams use Mermaid, which GitHub renders.
 
-Every route listed in `client/src/App.tsx` appears in section 1. Every public page carries the same header (Services,
-How we work, About, Questions, Contact, Client sign in and the free check; a menu button on phones) and footer
-(`SITE_PAGES`, `client/src/components/SiteShell.tsx`), which also prints the office address. `test/docs/productDocs.test.ts` fails if a route is
-added without being documented here.
+How to read it. Sections 1 to 4 are the design: who arrives where, the two rules that shape everything after (the
+front doors and the payment terms), and the journeys. Sections 5 to 7 are the reference for building and testing: every
+status, every email and every exception. Section 8 maps the pages, the admin console and the room as they are today.
+`test/docs/productDocs.test.ts` fails if a route is added to `client/src/App.tsx` without appearing here.
+
+**The rule for this document (ET, 8 November 2026):** nothing is built before it is described here and in the PRD. A
+new need changes this document first.
 
 ---
 
-## 1. Page map
+## 1. Who arrives, and where
 
-### The Shift (current platform)
-
-| Route | Page | Who can reach it | What it does | Next |
+| Arrives as | Usually from | Lands on | Wants | Leaves through |
 |---|---|---|---|---|
-| `/` | `Home.tsx` | Anyone | The home page, problem-led since 6 November 2026 (a prospect's feedback; the page before is commit `0de5a75`): the hero ("Find it. Fix it. See the shift.", one line from today to the shift, the free check straight under it, the owners' words turning every five seconds), the problem with three sourced figures, "What problem are you facing right now?" with the fix under each problem (`NEED_LEAD`), how we fix it in three steps, why us (the record in four figures), three services most owners start with, the free check. The header keeps a short "Free check" button below 1,536 pixels wide and shows the full menu from 1,280 (the menu button below that, so a zoomed-in laptop never scrolls sideways) | A problem or a service → `/services/:slug`; "See all services" → `/services`; "How we work" → `/how-we-work`; "See our experience" → `/experience`; "Free Business Health Check" → `/check` |
-| `/services` | `ServicesPage.tsx` | Anyone | The services, laid out as a store: one tile per product with a drawing of what it hands over, its promise and price (`shared/productStories.ts`), filtered by way to buy ("All" runs from the cheapest start to the dearest; a single way keeps the menu order); the free check for owners who are not sure; the three promises; work for a project team goes to Enzo Krypton & Co. | "Learn more" → `/services/:slug`; "Book a call" (Calendly) or "Start" → `/check` |
-| `/services/:slug` | `ProductPage.tsx` | Anyone | One product: what it is, who it is for, what you get, what we need from you, the price and how it is paid, delivery and the refund promise, what usually comes next. A slug that is not on the menu says so and links the menu | "Book a free 20-minute call" (Calendly) for products that start with a call, and for every product until online ordering opens; "Take the free Business Health Check" for the check and the Full Report |
-| `/how-we-work` | `HowWeWorkPage.tsx` | Anyone | The master consulting method (Enzo Operational Business Plan, slide 9): Define, Structure, Prioritise, Analyse, Synthesise, Recommend, Implement, each with what it produces and The Shift's stages on it, then the outcome standard (Day-30 Review) (`CONSULTING_METHOD` in `shared/method.ts`); the four ways to work with us, each product with its price and how that way is paid; the three promises; the ten places businesses get stuck | A product → `/services/:slug`; "See every service" → `/services`; questions → `/questions`; the free check → `/check` |
-| `/experience` | `ExperiencePage.tsx` | Anyone | The record behind The Shift (moved off the home page, 6 November 2026): the track record and client logos, the experience behind The Shift, the research | The firm's site (new tab); the free check → `/check` |
-| `/guides` | `GuidesPage.tsx` (`GuidesIndex`) | Anyone | Guides (6 November 2026): answers to what Nigerian owners search for, from Google's suggestions for Nigeria, one card each. Linked from the home page ("Owners also ask") and the footer | A guide → `/guides/:slug`; the free check → `/check` |
-| `/guides/:slug` | `GuidesPage.tsx` | Anyone | One guide (`shared/guides.ts`): the owner's question as the headline and the search title, a plain answer in sections, "The fix, here" (the free check and the services that fix it, with prices from `shared/products.ts`), questions owners ask (FAQ structured data). Search titles for the home page and each service are in owners' words (`HOME_META`, `SERVICE_SEARCH_TITLES` in `shared/seo.ts`); the page headings do not change | The free check → `/check`; a service → `/services/:slug`; "Guides" → `/guides` |
-| `/about` | `AboutPage.tsx` | Anyone | IP Factory and Enzo Krypton & Co., what we are and are not, who it is for, who you work with; a line to Experience | `/experience`; the free check → `/check` |
-| `/questions` | `QuestionsPage.tsx` | Anyone | Every question in one place: before you buy, then each service's own questions in menu order, with a topic list | "More about …" → `/services/:slug`; "Talk to us" → `/contact`; the mailbox |
-| `/contact` | `ContactPage.tsx` | Anyone | Book a free 20-minute call, write to the mailbox, the office (5 C&I Leasing Drive, Lekki Phase 1, shared with Enzo Krypton & Co.; `BRAND.officeAddress`), businesses across Nigeria, mostly online | Calendly (new tab); `mailto:`; Google Maps (new tab); "Client sign in" → `/login`; the free check → `/check` |
-| `/check` | `BusinessCheck.tsx` | Anyone | The free Business Health Check, from contact details to the result, which names the first product to buy and the one after it (`shared/businessCheck/routing.ts`). The Start button says what is missing; focus moves to each new screen's heading; "Talk to us first" on the first step opens the calendar and scrolls it into view | Book a call (Calendly), ask for the Full Report, or open the first product's page |
-| `/terms` | `LegalPage.tsx` | Anyone | The approved Terms & Conditions (`docs/legal/terms.md`, from the approved Word document), a plain reading page with no sign-in | Back to the site |
-| `/privacy` | `LegalPage.tsx` | Anyone | The approved Privacy Policy (`docs/legal/privacy.md`, from the approved Word document), a plain reading page with no sign-in | Back to the site |
-| `/report/:token` | `FullReportPage.tsx` | Link in the "payment received" email | The 17-question report form, then the download. Answers are kept on the device as the owner types (cleared once sent); sending with a gap takes the owner to that question | Report emailed; download on the page |
-| `/pay/:token/:item` | `PayPage.tsx` | The "Pay online" button in a payment details email, or "Pay for your Full Report" in the Business Check summary email (Full Report only, before or after asking) (`:token` is the Business Check's token, `:item` is `full_report` or `current_state`) | The item, its amount from the payment request (₦100,000 or ₦500,000), "Pay ₦… securely with Paystack" (card, bank transfer or USSD on Paystack; no bank details on the site). "TEST MODE: NO REAL MONEY MOVES" while Paystack is on its test keys; "Already paid" once confirmed; no button while online payment is off or after the 48 hours | Paystack's checkout, then `/pay/return` |
-| `/pay/return` | `PayReturnPage.tsx` | Paystack sends the owner back here with `?reference=` | Asks the server how the payment stands (section 4): "Payment received" with what happens next, "Still confirming" with "Check again", or "Payment not completed" with "Try again" (back to the pay page this tab came from) | — |
-| `/pay/fee/:feeLineId/:token` | `FeePayPage.tsx` | "Pay online" in a fee's payment email, or **Pay** on the room's Payments tab (R11, 6 November 2026) | One engagement fee: the business, the engagement, the fee, its amount and reference; **Pay ₦… securely with Paystack** opens Paystack for the fee line's amount (never one from the browser). The token is an HMAC of the fee's id under the server secret, so a link cannot be made for another fee. Paystack's webhook or `/pay/return` (a `TS-F-` reference) confirms it once; the client is emailed a receipt and Business Support a notice; the first fee paid opens a room that waited for it |
-| `/onboarding/:token` | `OnboardingPage.tsx` | Link in the client account invitation | Create the client account | `/dashboard` |
-| `/join/:token` | `JoinPage.tsx` | Link in a staff invitation or an owner's seat invitation | Set a password; staff land on `/admin` with their role, the owner's staff on `/dashboard` in that business | `/admin`, `/dashboard` |
-| `/reset/:token` | `ResetPasswordPage.tsx` | Link in a password reset email, issued by the IP Factory team from Admin Team → People | Choose a new password; the link works once, for 20 minutes, and signs the person out everywhere | `/login` |
-| `/login` | `LoginPage.tsx` | Anyone | Client sign-in with email and password: the brand and "Back to the site", show or hide the password, "Reset your password" in place; visitors who are not clients are pointed to the free check and the services | The landing page (section 6); `/`, `/check`, `/services`; programme participants to `/portal` |
-| `/signup` | Redirect | Anyone | No public sign-up | `/login` |
-| `/dashboard` | `AccountDashboard.tsx` | Signed-in account | The engagement room once the Current State Assessment is paid (section 9). A client with several projects (0018) sees **Your projects** at the top of the Overview and moves between them (`?project=ID` keeps the choice in the address; none opens the newest still open); each keeps its own Work Plan, Data Request, drop box and Deliverables, and a later project still shows the Business Health Check. A service project (Assessment, Done for You, Monthly Service) walks four steps read from its work: Records in, In progress, Delivered, Sign-off. There is no proposal or agreement to sign (ET, 6 November 2026): the client agrees on the call or by paying, under the Terms and Conditions. **Payments** (R11; the owner and full-access staff, when the engagement has fees): each fee with its due date and reference, Paid or a **Pay** button to its pay page, and the total, paid and to pay. An engagement opened directly with fees (`opensOnPayment`) shows only **Your room opens once the first payment is made**, the first fee and its Pay button until a fee is paid; limited-access staff see that it is waiting. **Fix the next problem**, under the Overview: ask your team for another service with a note (it reaches the desk and info@; nothing is charged in the room), what you have already asked for, and a link to every service and its price. as the room brief (document 07) describes: now (the stage, its week and day), the next action (one Data Request or Sign-off, with its button), the next Session with Join, the Engagement timeline numbered 1 to 7 (Business Check, Discovery Call, Full Report, Current State Assessment with the Work Plan by week, Findings, The Fix with the Measure of Success, Day-30 Review) with the current step open, the team and the owner's seat card. Before that: a welcome, when the room opens, and a prompt to finish the business profile. Staff: a link to the internal area | `/settings/business`, `/admin` |
-| `/settings/business` | `BusinessSettingsPage.tsx` | Signed-in account (owners and business admins can save) | Business name, description, year founded, sector, website | — |
-| `/settings/account` | `AccountSettingsPage.tsx` | Signed-in account | Name and password | — |
-| `/admin/login` | `AdminLoginPage.tsx` | Staff | Staff sign-in with email and password | `/admin` |
-| `/admin/reset` | `AdminPasswordResetPage.tsx` | Link in a reset email | Reset the administrator password | `/admin/login` |
-| `/admin` | `Admin.tsx` | Staff with a verified session | The admin console (section 7) | — |
-| `/404`, anything else | `NotFound.tsx` | Anyone | Not found | `/` |
+| **Searcher** | Google: a problem ("how to price my products in Nigeria"), a product ("business plan writer Lagos price") or the firm's name | A guide (`/guides/:slug`), a product page (`/services/:slug`) or the home page (`/`) | To know whether we can fix it, what it costs, and whether we can be trusted | One of the two front doors (section 2): **Buy now** or **Talk to an expert**; or the free check |
+| **Referral** | A WhatsApp message, a past client, Enzo Krypton & Co. | The home page, a product page or `/contact` | To talk to someone | **Talk to an expert** (a call or WhatsApp) |
+| **Check taker** | Any page | `/check` | A free reading of what holds the business back | The result: the first product with its front door, the Full Report, or a call |
+| **Client** | The invitation, a sign-in link, a payment or reminder email, a bookmark | `/dashboard` (the room) | Where the work stands, what is needed from them, what to pay | The room's next action |
+| **IP Factory staff** | `/admin/login` | `/admin` | Their projects, the pipeline, the money | Their tab in the admin console (section 8.3) |
 
-### JUMP
+## 2. The two front doors
 
-The JUMP programme (participant portal, registration, scheduling, its administrator system and legacy Google sign-in)
-was removed on 6 November 2026: its pages, routes, endpoints and emails are gone. Its database tables and records stay,
-unreachable from the site, until a decision is made about the data.
+Every page that sells ends in one of two doors, chosen by the product (`buy` in `shared/products.ts`). Both open the
+same kind of engagement, so everything after the door works the same way.
 
-The server receives Paystack's signed notifications at `POST /api/paystack/webhook` (section 4).
+| | **Buy now** | **Talk to an expert** |
+|---|---|---|
+| For | Fixed-price products a client can scope alone: the Full Report, the Funding Readiness Assessment, Strategy and 90-Day Plan, Business Model, Financial Model, Pitch Deck, Bookkeeping Catch-Up, 13-Week Cash Flow Forecast, Hiring Toolkit | The Business Review, Business Plan, Pricing and Unit Cost Review, Funding Application Pack, the Six-Week Fix, the Monthly Services, Digital marketing |
+| The buyer does | Gives name, business, email and WhatsApp; pays on Paystack | Books a 20-minute Discovery Call, or messages on WhatsApp |
+| Then | The platform opens the engagement, invites the owner and shows what happens next | The lead opens the engagement and sets its payment terms |
+| Payment terms | Always in advance | In advance, or in arrears with a partner's approval |
+| Status | **To build (R13).** Online ordering is off today (`ONLINE_ORDERS_OPEN`): every Buy-now product shows Talk to an expert until R13 ships. The Full Report is the exception and is bought from the check today | **Built** (Calendly, then New engagement) |
 
-## 2. The journey, end to end
+**On every page with a door (R38, partly built):** the expert behind the work by name, the office address, "Talk to an
+expert on WhatsApp", what happens after paying, the Terms. Today the Terms link and the Calendly call are there; the
+named expert, the WhatsApp line and the "what happens next" block are to build.
+
+## 3. Payment terms, and when the room opens
+
+Set on every engagement (R36, **to build**; today every engagement is in advance).
+
+```mermaid
+flowchart LR
+  O[Engagement opened] --> T{Payment terms}
+  T -->|In advance| A1[Owner invited at once]
+  A1 --> A2[Room shows only the first fee to pay]
+  A2 -->|First fee paid, online or by hand| A3[Room opens]
+  T -->|In arrears, partner approved| B1[Owner invited at once]
+  B1 --> B2[Room open from kickoff]
+  B2 --> B3[Fees fall due 30, 60, 90 days after kickoff]
+```
+
+| | In advance | In arrears |
+|---|---|---|
+| Fee dates | Fixed price: before work starts. Monthly: day 0, 30, 60 from kickoff. Six-Week Fix: start, mid-point, result | Monthly: day 30, 60, 90 from kickoff. Others as the lead sets |
+| Room | Opens on the first payment (built, R11) | Open from kickoff |
+| Finance | A fee is owed from when it is set, late after its date | A fee is owed from its date, late after it |
+| Late fee | Reminders (R12); the lead told at 7 days | The same; work pauses at 7 days (decision D6), with the client told at 3 |
+| Who sets it | Default; always for Buy now | The lead, with a partner's approval recorded on the engagement |
+
+Today's clients: **Marcelle (Digital marketing) is in arrears**, at 30, 60 and 90 days from her kickoff. Until R36 is
+built, her lead sets those dates by hand in the engagement's Fees; her room is already open.
+
+## 4. The journeys
+
+Columns: **Client** does · **Platform** does on its own · **Team** does · **Email** (to whom) · **Status** after · **Built?**
+
+### 4.1 Prospect to client, by the free check (Built)
 
 ```mermaid
 flowchart TD
-  A[Home /] -->|Free business check| B[/check: contact details/]
-  B -->|Start the check: lead saved| C[Questions, one per screen]
-  C --> D[Reading your answers]
-  D --> E[Result: outline, gap, summary]
-  E -->|Book my free call| F[Calendly booking]
-  E -->|Get my full report| GP[Paystack checkout: card, bank transfer or USSD]
-  E -->|Pay for your Full Report, in the summary email| GP
-  GP -->|Paystack confirms| G3[Report form link emailed]
-  G3 --> G4[/report/:token: 17 questions/]
-  G4 -->|Submit| G5[PDF emailed at once and downloadable]
-  F --> H[Discovery call, 20 minutes]
-  H -->|Team records Opportunity| I[Current State Assessment payment link emailed]
-  H -->|Refer| R[Referred]
-  H -->|Lost| L[Lost]
-  I -->|Pay online| IP[/pay/:token/current_state: Paystack/]
-  IP -->|Paystack confirms| J[Won: client account invitation emailed]
-  J --> K[/onboarding/:token: create account/]
-  K --> M[/dashboard/]
-  M --> N[Engagement room: Current State Assessment, fix, plan]
+  S[Search or referral] --> P[Guide, product page or home]
+  P --> C[/check: contact details, then questions/]
+  C --> R[Result: outline, gap, first product with its front door]
+  R -->|Buy now, or Full Report| B[Paystack]
+  R -->|Talk to an expert| K[Calendly: Discovery Call]
+  K --> D[Call held; outcome recorded]
+  D -->|Opportunity| E[Engagement opened, terms set]
+  B --> E2[Engagement opened by the platform]
+  E --> F[Room]
+  E2 --> F
 ```
 
-## 3. The free business check, screen by screen
+| # | Client | Platform | Team | Email | Status | Built? |
+|---|---|---|---|---|---|---|
+| 1 | Gives name, email, WhatsApp, how they heard; "Start the check" | Saves a lead before any business question | — | — | Pipeline **Lead** | Built |
+| 2 | Answers one question per screen (about 30 at most; the path depends on the answers) | Saves on the device and the server about once a second; resumes where they stopped | — | — | — | Built |
+| 3 | Sees the result: the outline (clear, watch, stuck), the gap, founder readiness, the first product and the next | Scores and routes by fixed rule; AI writes the summary only, checked against the catalogue | Reads the lead in Pipeline | Owner: the summary. Office: every answer | **Qualified lead** | Built |
+| 4a | Buys the Full Report | Opens Paystack; on payment, emails the Report Intake link | — | Owner: *Payment received: your Full Report*. Office: *Paid online: …* | Payment **paid**; report **awaiting form** | Built |
+| 4b | Answers the 17-question Report Intake | Builds the Full Report by fixed rule and emails the PDF at once | — | Owner: *Your Full Report: {business}* (PDF). Office: *Full Report sent* | Report **delivered** | Built |
+| 5 | Books the Discovery Call in the embedded calendar | Records the booking only when Calendly confirms; picks up bookings made from the email | — | Office: *… asked for a free discovery call*. Calendly confirms to the owner | **Call booked** | Built |
+| 6 | Joins the 20-minute call | — | Holds it; writes up the Discovery Call summary; records Opportunity, Refer or Lost; shares the summary with the owner as a separate step | — | **Opportunity**, **Referred** or **Lost** | Built |
+| 7 | — | — | Opens the engagement (4.3), or for the Business Review today sends its payment link | Owner: *Payment details for your Business Review* | Payment **requested** (48 hours) | Built (moves onto fees with R37) |
 
-Source: `client/src/pages/BusinessCheck.tsx`; rules in `shared/businessCheck/engine.ts`.
+### 4.2 Prospect to client, by Buy now (To build, R13 and R38)
 
-1. **Intro.** "Take the check". A returning owner sees "Continue where you left off" and "Start again". Progress is kept
-   on the device (`localStorage` key `ipf-business-check-v1`) and saved to the server about once a second.
-2. **Contact details** ("First, who are we talking to?"): full name, email, WhatsApp (optional, Nigeria by default),
-   how they heard. "Start the check" calls `businessCheck.start`, which saves a **Lead**.
-3. **Section intros.** Before each section: what it means and an example for the owner's sector.
-4. **Questions,** one per screen, with a progress rail and the outline filling in on the side. The path depends on the
-   answers (PRD F2). Typed answers (business name, one-line description) are required. Trading businesses end with
-   **The problem to fix**: what they have tried (optional), what it costs each month, and who decides.
-   "Back" and "Next" step through the questions in order, so every earlier answer can be opened and changed; after a
-   change, "Next" moves to the following question, not past it. The phone's back gesture (and the browser's back
-   button) does the same as "Back": one question back, never out of the check.
-5. **Reading your answers** while `businessCheck.submit` runs. If it fails: "Try again".
-6. **Result:** the tally (stuck, watch, clear), "What we found", "What we think it is", the outline with "Start here"
-   and the greyed "Not assessed" areas, founder readiness in words, "Where we could help", and **Your next steps**.
+| # | Client | Platform | Team | Email | Status | Built? |
+|---|---|---|---|---|---|---|
+| 1 | On a Buy-now product page: sees the price, the delivery date promise, the expert, WhatsApp; presses **Buy now** | — | — | — | — | To build |
+| 2 | Gives name, business name, email, WhatsApp; ticks the Terms; pays on Paystack (card, transfer or USSD) | Opens Paystack for the catalogue price; never a price from the browser | — | — | Order **awaiting payment** | To build |
+| 3 | Returns to "What happens next": the room link, the first records to send, a button to book the kickoff | On Paystack's confirmation: creates the business, the engagement (in advance), its fee (paid), its Data Request and Sessions from the product's intake; invites the owner | — | Owner: receipt; the invitation. Office: *New order: {product}, {business}* | Engagement **open**; fee **paid** | To build |
+| 4 | Opens the room from the invitation or a sign-in link (R41) | — | The desk assigns the team (the office email is the prompt) | Team member: *You are on {business} as {role}* | — | To build (assignment built) |
 
-On submit, the stage moves to **Qualified lead**; the owner is emailed their summary and the office gets a notice with
-every answer.
+### 4.3 Prospect to client, by a call (relationship)
 
-## 4. From the result to a paid report
+| # | Client | Platform | Team | Email | Status | Built? |
+|---|---|---|---|---|---|---|
+| 1 | Agrees the work and the terms on the call | — | The lead opens **New engagement**: client (new or existing), type and service, start date | — | — | Built |
+| 2 | — | Loads the type's Data Request, Work Plan, Sessions and fee schedule, dated from the start; invites the owner (an existing client's project joins their account) | Sets the **payment terms**; in arrears needs a partner's approval, recorded | Owner: *Your The Shift room for {business}* | Engagement **open**; **awaiting first payment** (in advance) or room open (in arrears) | Built, except payment terms (R36) |
+| 3 | In advance: pays the first fee from the room or the email. In arrears: starts at once | Confirms the payment; opens the room; sends the receipt | Records money that came another way (ticks Paid), or **Open the room now** | Owner: receipt. Office: *Paid online: …* | Fee **paid**; room open | Built (in advance) |
 
-| Step | Who | What happens | Email | Stage or status |
-|---|---|---|---|---|
-| "Get my full report" | Owner | Opens Paystack's checkout straight away: `onlinePayment.start({ item: "full_report" })` files the request the first time (`askForFullReport`, `server/fullReportRequest.ts`) and returns Paystack's page. "Already paid" if it is | Owner: *Payment details for your Full Report* (the amount, the reference and a "Pay online" button, to come back to); office: *… asked for the Full Report* | Payment: **requested** |
-| "Pay for your Full Report" in the summary email | Owner | The summary email links to `/pay/:token/full_report`. The page offers ₦100,000 before the owner has asked; pressing pay files the request exactly as "Get my full report" does, then opens Paystack. An expired Full Report link opens again with a new 48 hours. The Current State Assessment is never started from the owner's side | As for "Get my full report", once; office note: *Started paying online from the link in their Business Check summary email.* | Payment: **requested**, then paid as below |
-| "Pay online" in the email | Owner | Opens `/pay/:token/full_report`; `onlinePayment.page` shows the item, the amount and the mode | — | — |
-| "Pay ₦100,000 securely with Paystack" | Owner | `onlinePayment.start`: the server opens a Paystack transaction for the amount on the payment request, with its own reference (`TS-R-000123-1a2b3c4d`), and sends the owner to Paystack's checkout | — | — |
-| Pays on Paystack | Owner | Paystack posts a signed `charge.success` to `/api/paystack/webhook` and sends the owner to `/pay/return`, which calls `onlinePayment.status`. Whichever comes first asks Paystack about the transaction again and, if the reference, status, currency and amount all match, confirms it through `confirmPayment`, with Paystack as the actor | Owner: *Payment received: your Full Report* (with the form link); office: *Paid online: …* | Payment: **paid**; report: **awaiting form** |
-| "Confirm by hand" → "Yes, Paystack shows it paid" (fallback only) | Finance or Super Admin | `businessSupport.confirmPayment`, for a payment Paystack shows as paid that has not confirmed itself; the report link is issued in the same transaction, and two people confirming together confirm once | Owner: *Payment received: your Full Report* (with the form link) | Payment: **paid**; report: **awaiting form** |
-| Form submitted | Owner | `fullReport.submit`; the report is built and rendered at once | Owner: *Your full business check report: {business}* (PDF attached); office: *Full report sent: {business}* | Report: **delivered** |
-| "Send the form link again" | Finance or Super Admin | `businessSupport.resendReportLink`; the old link stops working; a confirmed payment with no link yet gets its first | Owner: *Your report form* | — |
-| "Download the report" | Staff with `manage_client_onboarding` | `businessSupport.downloadReport` | — | — |
+### 4.4 The client during delivery
 
-The form can be submitted once. After that the same link shows "Your report has been sent" with a download button.
+| # | Client | Platform | Team | Email | Status | Built? |
+|---|---|---|---|---|---|---|
+| 1 | Opens the room: sees where things stand, the next action, the next Session | Shows one next action at a time: a fee to pay, records to send, a Sign-off | — | — | — | Built |
+| 2 | Books the kickoff and Sessions on Calendly from the room | Copies each booking's time and link onto the next Session without one | Holds the Session; saves client notes and internal notes; shares client notes the same day | Owner (and the people the notes are shared with): *Engagement update: {title}* | Session **held** | Built |
+| 3 | Sends records: uploads into the drop box, marks an item sent another way, or "Not available" with a note | Keeps files private; reminds two days before an item's date and two days after it if still open | Matches each file to the items it answers; marks an item received or asks for more | Owner: reminders (to build). Lead: what is still outstanding after the reminders (to build) | Item **Sent, we are checking** → **Received**, **We need a bit more**, **Not available** | Built, except reminders (R16) |
+| 4 | Approves reels, posts and stories, or asks for changes (Digital marketing) | Counts the month's pieces once approved | Plans, edits, sends for approval, publishes | — | Content **For your approval** → **Approved** or **Changes requested** → **Published** | Built |
+| 5 | Reads a shared Deliverable; comments; gives Sign-off | — | Drafts; a lead approves prescriptions and plans; shares with the owner or the owner and their team; Specialists hand in drafts the lead shares | Owner: *Engagement update: {title}* | Deliverable **draft** → **approved** → **shared**; Sign-off given | Built |
+| 6 | Sees the one number each week | Shows where it started, this week, where it is going | Records the weekly check-in: five questions, the reading, hours by role, AI used | — | — | Built |
+| 7 | Pays each later fee from the reminder or the Payments tab | Sends each fee's link 5 days before its date, on the day, and 3 and 7 days after if unpaid; confirms payment; sends the receipt | Told at 7 days late; for in arrears, work pauses (D6) | Owner: reminders and receipt (reminders to build). Lead: 7 days late (to build) | Fee **due** → **paid** or **late** | Built, except reminders (R12) |
+| 8 | Adds their own staff (one seat): full access or contributor | Sends the seat invitation | — | Staff member: invitation | — | Built |
 
-**Paystack only, one confirmation.** Paystack is the only way to pay; its checkout takes card, bank transfer or USSD,
-and there are no bank details and no proof of payment. The payment confirms itself through `confirmPayment`
-(`server/payments.ts`), the path the team's "Confirm by hand" fallback uses too, so the emails, the Report Intake link,
-the stage and the audit are the same. A Paystack confirmation is recorded with no person as the actor, the note "Paid
-online with Paystack, reference …" ("TEST: " in front in test mode) and `via: "paystack"` in the audit; the stage
-history shows "Paystack (paid online)". The same applies to the Current State Assessment payment in section 5.
+### 4.5 Close, the Day-30 Review and the next fix (To build, R26 to R28)
 
-**Online payment, in detail** (`server/onlinePayment.ts`, `server/paystack.ts`):
+| # | Client | Platform | Team | Email | Status | Built? |
+|---|---|---|---|---|---|---|
+| 1 | Signs off the last Deliverable | — | The lead closes the engagement: final value of the number, whether it moved, the plan delivered, the next problem and the product suggested | Owner: *Your {engagement} is complete* | Engagement **closed**; Day-30 Review booked | To build |
+| 2 | At Day 30: says what is still in use, in the room | Asks on day 30; records the answer | Reads it; follows up where nothing is in use | Owner: *Day-30 Review: is it still working?* | Day-30 **done** | To build |
+| 3 | Sees the next fix with its price: **Buy now**, or **Talk to an expert** | Offers the product suggested at close | Opens the next engagement in the same room when asked | Office: *{business} asked for the {product}* | New engagement | Asking built; buying in the room with R13 |
 
-- **Off, test or live** from `PAYSTACK_SECRET_KEY`, which production requires (`/api/health` answers 503 without it):
-  unset is off (nothing can be paid; `onlinePayment.start` refuses with "Online payment is not open yet…" and the
-  emails say a link is coming), `sk_test_` is test (every pay page and payment email says "TEST MODE:
-  NO REAL MONEY MOVES"), `sk_live_` is live.
-- **The Current State Assessment link holds for 48 hours.** After that the pay page offers nothing and says to reply
-  for a new link; the team sending it again opens it again. The Full Report link opens again by itself. A paid item
-  shows "Already paid" and Paystack is not called.
-- **Repeats and races confirm once.** A second webhook delivery, or the webhook and the return page together, send one
-  owner email. A payment the team already confirmed by hand is left as it is.
-- **What does not match is never confirmed.** A different amount or currency, a reference that is not the request's
-  own, or a status other than success changes nothing. When money moved but does not match (wrong amount or currency,
-  or an item already paid), the office gets *Paystack payment needs a look: …* and the audit records
-  `payment_online_refused`; the return page shows "Still confirming" so the owner does not pay again.
-- **Webhook answers:** 401 for a missing or wrong signature (nothing happens); 200 for every signed event handled or
-  ignored; 500 only when Paystack or the database cannot be reached, so Paystack sends it again.
+### 4.6 The delivery team
 
-## 5. From the call to a client account
-
-| Step | Who | What happens | Email | Stage |
-|---|---|---|---|---|
-| "Book my free call" | Owner | Calendly opens inline with name and email filled in. The call counts as booked only when Calendly confirms; "open in a new tab" also records the request. With no booking page, the button records a request | Office: *… asked for a free discovery call* (Calendly sends the owner its own confirmation) | **Call booked** |
-| "Save the Discovery Call time" | Desk lead | Records the agreed time for any finished check, from Discovery Calls or the check's record. For an owner who booked from the link in the summary email or agreed a time another way it counts as the request. Calendly bookings are also picked up on each console load: for Discovery Calls asked for on the page, and for checks finished in the last 14 days | — | **Call booked** if earlier |
-| "Record call outcome" | Desk lead | **Opportunity** (fit), **Refer** or **Lost** | — | **Opportunity**, **Referred** or **Lost** |
-| "Move to" | Desk lead | Any other stage except **Won**, with a note (for example **Nurture**); Won comes only from a confirmed payment | — | As chosen |
-| "Send the payment link" (Current State Assessment) | Finance or Super Admin | Payment request for ₦500,000 | Owner: *Payment details for your Current State Assessment* (the amount, the reference, the pay-by time and "Pay online") | Moves to **Opportunity** if earlier |
-| "Pay ₦500,000 securely with Paystack" | Owner | As for the Full Report (section 4): `/pay/:token/current_state`, Paystack, then the webhook or `/pay/return` confirms through the shared path. The invitation is recorded against the person who sent the payment link, and audited with Paystack as the actor | Owner: *Payment received: your Current State Assessment starts* and *Set up your client account on The Shift*; office: *Paid online: …* (says whether the engagement started and the invitation went) | **Won** |
-| "Confirm by hand" (fallback only) | Finance or Super Admin | For a payment Paystack shows as paid that has not confirmed itself: confirmed; an invitation is created unless one is pending or accepted; what happened to the confirmation email is recorded in the stage history | Owner: *Payment received: your Current State Assessment starts* and *Set up your client account on The Shift* | **Won** |
-| "Send the confirmation again" | Finance or Super Admin | `businessSupport.resendPaymentConfirmation`: the "payment received" email again, for an owner who lost it (a paid Full Report gets its Report Intake link again instead) | Owner: *Payment received: your Current State Assessment starts* | — |
-| "Create account" | Owner | `onboarding.accept`: person, credential, business, owner membership and session in one transaction | — | Invitation: **accepted** |
-
-**The 48-hour window:** every payment details email says when to pay by, 48 hours after it was sent (Lagos time).
-After that the payment shows "48 hours passed": the team sends the details again (a new window) or moves the business
-to Lost. Nothing moves on its own, and money that still arrives can be confirmed.
-
-**Relation to the locked flow in `Instruction.md`:** that flow goes Fit → onboarding invitation. The automatic
-invitation follows the Current State Assessment payment instead (the concept note's pay-then-set-up order); a manual invitation
-at Fit is still possible.
-
-The desk lead can also send an invitation by hand from **Client Onboarding** ("Invite to onboard") and revoke a pending
-one. Before the Current State Assessment payment is confirmed the server refuses the invitation unless a reason is
-given; the reason is recorded in the audit log with the invitation.
-
-## 6. Signing in and where people land
-
-- **Clients** sign in at `/login`. **Staff** sign in at `/admin/login`.
-- **Two-step sign-in** (staff, specialists and anyone with an internal role, on either page): after a correct password
-  the page asks for the six-digit code from their authenticator app; nothing is signed in until the code is right.
-  The first time, the page shows a QR code and the key to type in, "Turn on and sign in", then the eight recovery codes
-  once ("I have saved them. Continue"). "Start again" goes back to the password. A recovery code works in the code box.
-- Landing rule (`landingPathFor`, `shared/auth.ts`): a person with no business membership and at least one platform role
-  goes to `/admin`; everyone else goes to `/dashboard`.
-- `/dashboard` and the settings pages send a signed-out visitor to `/login`.
-- **Invitation link while signed in as someone else:** the page names both email addresses and offers "Sign out and
-  continue"; it never sends them to their own area or creates the account under their session. Signed in as the invited
-  person: straight to `/dashboard`.
-- **Invitation unavailable** (expired, used or revoked): "Invitation unavailable" with a link to `/login`.
-- **Forgot your password?** (built 14 October) on both `/login` and `/admin/login`: the person types their email and
-  "Send the reset link" emails a single-use link to `/reset/<link>`, valid for 20 minutes. The page always answers "If
-  an account uses that email, we have sent it a link…", whether or not one does, and never shows the link. At most 5
-  requests an hour per email and per address. A new link revokes the one still out. Suspended accounts and accounts
-  without a password get nothing.
-- **First password for the Super Admin:** for the address in `OWNER_ADMIN_EMAIL` the same form works even when the
-  database has no account or password for the owner yet: it creates the owner's account and the email says "Set your
-  password". Using the link sets the first password and stores the Super Admin role, so the owner can sign in at
-  `/admin/login` without anyone running `pnpm owner:bootstrap`. Control of the owner's mailbox is the proof.
-
-## 7. The admin console
-
-`/admin` has five sections, one job each, in the order work flows (6 November 2026): prospects, delivery, clients, money,
-our own people. Nothing appears in two of them. A person sees only the sections their permissions allow
-(`client/src/lib/adminSections.ts`), and the server checks every action again. Under the signed-in person's name is their
-**level**, never their roles.
-
-| Tab | Permission | What it holds | Actions |
+| Person | Starts from | Daily work | Cannot |
 |---|---|---|---|
-| **Pipeline** | `manage_client_onboarding` | Prospects, in three stages: **Business Health Checks** (Metrics (total, completed, call requested, ready to onboard, reports requested); stage filter; search; table with payment chips); **Discovery Calls** (Discovery Call requests and booked Discovery Calls); **Client Onboarding** (Metrics (checks, portal users, businesses, memberships, pending links); every check; invitations) | Row → detail drawer: contact, the check, findings, outline, recommended support, funnel, **Payments** (send the payment link, confirm by hand as a fallback), **Full report** (resend link, download), **Move to** a stage, stage history, next step · Schedule or reschedule the Discovery Call; **Discovery Call summary** (the guide's five parts: what we heard, the problem in the owner's words, what success looks like, what they tried, next steps), "Write up the Discovery Call" / "Save the Discovery Call", then "Share with the owner" or "Keep it internal" as a separate step (needs migration 0009); record the outcome (Opportunity, Refer, Lost); "Continue to Client Onboarding" · "Invite to onboard" (a recorded reason is required before payment); copy the link once; revoke a pending invitation |
-| **Engagements** | `view_all_businesses`, or `view_assigned_businesses` for the engagements a person is on | **Specialists** (6 November 2026, `contribute_engagements`): on their own engagements they add team-side Work Plan items and attach files to a Deliverable as **IP Factory only** drafts; the lead shares a draft with **Share with the owner**; they never see internal Session notes or fees (those need `manage_engagements` or `review_engagements`, and fees also `view_financials`). **No proposals** (ET, 6 November 2026): the client agrees on the call or by paying. Each type's Data Request, Work Plan, Sessions and fees load when the engagement opens; **Load a Data Request** is only for adding more. **Load a Data Request** in the Work Plan (6 November 2026, `shared/dataRequestTemplates.ts`): in one step, the **Small business baseline** (18 items in six sections written for an owner-run business: what you sell, sales and customers, money, prices, people, plans), the Business Review's own list, or rows **pasted from Excel** from a client's own sheet (header row read; section rows kept; dates like 12 Nov 2026 or 12/11/2026); a preview by section first; items already there are skipped; a missing date follows the priority (high 4 days, medium 6, low 7). **Fees** in each engagement's record (`engagement_fee_lines`; R11 online payment, 6 November 2026: **Send link** on each unpaid fee emails the client its pay page and shows the link once; a fee Paystack confirms reads **Paid online**; while the engagement waits for its first payment a line says so, with **Open the room now** for a payment arranged another way; ticking Paid by hand also opens it): filled in when the engagement opens from the service's price, or for Digital marketing ₦470,000 for each of three months; a paid Business Review starts with the service's price suggested until the team saves; changed and saved with `manage_engagements`, **Paid** on each line; seen by those who work on or approve engagements and by Finance, never by a Specialist or the client. **Clients asking for another service** (the desk, 0018): each request from a client's room with the service, who asked and their note; "Open the engagement" fills in the client, type and service, and marks the request done; "Decline". **New engagement** is for a new client or an existing one (an existing client's business: the project joins their account, nobody is invited); the types follow how the site sells (Business Review, Assessment, Done for You, Six-Week Fix, Monthly Service, Digital marketing), and a service type names the service, whose records and questions become the Data Request, with a Kick-off and a Handover. The Stage follows the type: a Business Review or Six-Week Fix moves through the method; any other type is Open or Closed. the line at the top and the empty list speak to every engagement type and to the viewer: the desk (`view_all_businesses`) reads that a Business Review starts when it is paid and any other type opens with New engagement; anyone else reads "The projects you are on" and, with none, "You are not on any project yet. When a lead adds you to one, it appears here and you get an email." (6 November 2026); a file storage line (uploads on, or exactly which Vercel setting or the private bucket is still missing); "Paid, but no engagement yet" (desk lead: a paid assessment with no engagement, with "Start engagement"); every engagement in scope: business, stage, team, what the client still owes (overdue in red), next call or calls not booked | **New engagement** (the desk: every engagement in view and `manage_engagements`): for a client who did not come through the Business Health Check, by type (Business Review, Digital marketing), business, client name and email, start date; the type's starting Work Plan, Data Request and Sessions are created, and the client's owner invitation link is shown once (an existing client account becomes the owner at once). Digital marketing rooms show the type's stages (Onboarding, Month 1, Month 1 review, Month 2, Month 3, Quarter review) dated from the start, and "Day N of 90". **My projects** first: a card for each engagement the person is on, with their role there, what is with the client, overdue, files to sort and the next Session. Row or card → drawer: the client, with **Send sign-in link** (`manage_client_onboarding`, built 14 October): a client with an account is emailed a password reset link, one without a fresh invitation (the one still out stops working; the payment rule still applies); the link shows once for WhatsApp; never a staff account or a suspended one; **Preview as client** (anyone who can open the engagement, built 6 November): the client's room full screen, exactly as the owner sees it, with every action off (no Sign-off, comment, sharing, upload, approval or download); Escape or Close preview returns to the record; each preview is logged (`engagement_room_previewed`); stage; team (`assign_engagements`: several people per engagement, each with a role; add lists only staff not already on it, a member's role changes on their own row, remove; the person is emailed when added or when their role changes, unless they made the change; only people with a staff account appear, so colleagues are first invited from Admin Team); the one problem; calls (time, link, agenda, client and internal notes, share with the owner or the owner and their team); the Work Plan (whose side, person, week, order, factor, due date, status, note); deliverables (save, approve: `review_engagements`, or the engagement's own Engagement Manager, Lead Consultant or Partner on that engagement only, `ENGAGEMENT_REVIEW_ROLES`; share, comment); files on requests and deliverables (open any; attach one as owner-only or for the owner and their team, when storage is set up); the fix (the one number with where it starts and should get to; one check-in a week, in order, with the five questions, the reading, hours by role and AI used). Changes need `manage_engagements` |
-| **Clients** | `view_all_businesses` | Onboarded businesses and their members, then **Client accounts**: each client who signs in, once, with status, two-step and last sign-in | Reset link, suspend, reinstate, reset two-step, remove access (`manage_users`) |
-| **Finance** | `view_financials` (Finance; Partner, Vice President and Senior Associate, since 6 November 2026; Super Admin) | Money across every client: totals (paid, owed, late), every engagement fee (client, engagement, due, paid, late; owed once set, late once its date passes) and every payment request from the Business Health Check route | Read only: a payment is recorded where it belongs (the check's record, the engagement's Fees) |
-| **Team** | Super Admin (`manage_roles`) | **IP Factory team**: everyone once, with their **Level** (set in place; never the system role behind it; no level yet reads "Level not set yet: choose one"), status, two-step, access ends, last sign-in; **Invite someone** by level and the invitations out; **System status**: file uploads and Business Support email | Invite by **level** (Partner, Vice President, Senior Associate: every engagement, assign and approve; Associate, Senior Business Analyst, Business Analyst: their engagements; Specialist: their engagements until an end date, handing in drafts the lead shares; Finance: payments only; `LEVEL_ROLES`), below your own (never Super Admin), copy the link once, revoke; the list shows when each person's access ends and roles that have ended; legacy: invite, revoke, edit powers People (`manage_users`): two tables, the IP Factory team (each person's **level**, which sets their title and access in one step, `manage_roles`; the function on a project is set per engagement) and Clients; everyone with a password, whether two-step sign-in is on, when access ends, a reset link emailed and shown once (people can also ask for their own from the sign-in page, §6), suspend with a recorded reason, reinstate, **Reset two-step** (lost phone), **Remove access** (asks for a reason; every role, engagement and session gone, account suspended, Super Admins told; never offered for a Super Admin) |
+| **Lead** (Engagement Manager or Lead Consultant on the engagement; Partner, Vice President, Senior Associate, or an Associate leading it) | **My projects** in Engagements | Opens engagements and sets terms; staffs them; approves Deliverables; shares notes; sends fee links; opens a room early | Approve on an engagement they do not lead, unless their level approves everywhere |
+| **Analyst** (Senior Business Analyst, Business Analyst) | **My projects** | Keeps the Work Plan and Data Request current; matches files; drafts Deliverables; records check-ins; records payments by hand | Approve, staff, or see engagements they are not on |
+| **Specialist** | **My projects**, until their end date | Adds team items; attaches drafts to Deliverables for the lead to share | See internal notes or fees; change anything already there; reach the client directly |
 
-## 8. Status models
+What the team should never do by hand once R12, R16 and R36 are built: chase a Data Request, chase a fee, work out a
+fee date, or send a payment link on a schedule.
 
-```mermaid
-stateDiagram-v2
-  [*] --> lead: details given
-  lead --> qualified_lead: check finished
-  qualified_lead --> call_booked: call booked or requested
-  call_booked --> opportunity: outcome Opportunity, or Current State Assessment details sent
-  call_booked --> referred: outcome Refer
-  call_booked --> lost: outcome Lost
-  opportunity --> won: Current State Assessment payment confirmed
-  opportunity --> lost
-  lead --> nurture: Move to
-  qualified_lead --> nurture: Move to
-```
+### 4.7 Finance
 
-- The first three stages move automatically and only forward; they never overwrite a stage the team has set
-  (`advancePipeline`, `shared/businessCheck/pipeline.ts`). The team can move a check to any stage except Won with "Move to";
-  Won is set only by confirming the Current State Assessment payment.
-- **Payment request:** requested → confirmed (`shared/payments.ts`; "proof received" survives only on records from before
-  Paystack only). A request still awaiting payment 48 hours after the link went out shows as "48 hours passed" (worked
-  out, not stored).
-- **Full report:** awaiting form → delivered (`full_reports.status`).
-- **Client invitation:** pending → accepted, revoked or expired (`client_onboarding_invitations`).
+| Step | Finance | Platform | Built? |
+|---|---|---|---|
+| 1 | Opens **Finance**: paid, owed, late; every fee and every payment request | Counts each fee by its terms (section 3) | Built (terms with R36) |
+| 2 | Sees a payment that needs a look (wrong amount, paid twice) | Emails the office with the Paystack reference | Built |
+| 3 | Checks it in Paystack; confirms by hand or refunds | Records who confirmed and why | Built (refunds recorded with R37) |
+| 4 | Reconciles Paystack's settlements against payments | One payment row per Paystack transaction | To build (R37) |
 
-## 9. The engagement room
+### 4.8 The Super Admin
 
-Built on 9 October for the Current State Assessment; live once migration 0008 is applied. The template (data requests, the six
-pre-call questions, both call agendas and the findings outline) follows IP Factory's own assessment proposals, cut down
-for two weeks and two calls (`shared/engagement.ts`, 10 October). The fix's measure and weekly
-check-in screens come next (implementation plan, phase 4).
+Invites people by **level** (Team tab), sets levels, suspends and restores access, resets two-step sign-in, removes
+access with a recorded reason, and watches System status (file storage, email). Built.
 
-```mermaid
-flowchart TD
-  P[Current State Assessment payment confirmed] --> E1[Engagement created from the template as a Work Plan: nine Data Requests and two team actions placed in week 1 and week 2, in order, tagged internal or external; week 1 due in three working days, week 2 in eight; both calls with their agendas]
-  E1 --> E2[Desk lead names the team in Engagements]
-  E1 --> A[Owner accepts the invitation: the engagement joins their business]
-  A --> R[Client room on /dashboard]
-  E2 --> B[Calls booked on Calendly, recorded with time, link and agenda]
-  B --> R
-  R -->|I have sent this| T[Team marks it received, or asks for more]
-  B --> N[Notes saved: client version and internal version]
-  N -->|Share with the owner| R
-  D[Deliverable saved as a draft] -->|prescription or plan: desk lead approves| S[Shared with the owner, or the owner and their team]
-  D -->|findings, problem statement| S
-  S --> R
-  R -->|owner| SO[Sign off, comment, share with my team]
-```
+## 5. Status models
 
-**The same frame for every client** (5 November, modelled on the IPF project-folder shell: each view answers one
-question a client folder answers). Laid out like the approved prototype (Marcelle's room): the room fills the screen with its own left rail (the product, Home, My tasks, Files, the client's space with its views, and the account links), a white header (business / stage, the title, Day N of M with the logo-coloured bar, team avatars) and the views as tabs, in the order of the client's three questions: **Overview**; the work (**Work Plan · Data Request · Sessions**); what we found (**Business · Founder**, when a Business Check or Full Report is behind it); what they receive (**Deliverables**). The rail lists them in that order, grouped by spacing without headings; IP Factory's initials are always IPF,
-(Business and Founder are for the owner and full-access staff only.) It opens on Overview: a dashboard first (a stage band across the seven steps, then four figures: stages complete, items outstanding with the client, overdue, and the next Session; each opens the view behind it), then the next action (for Data Requests, one card with the number outstanding and a link to the list) and the next meeting, then the timeline beside Waiting on you, Deliverables and
-the team (each person's role on this engagement and firm title). Phones get a slim top bar instead of the rail.
+| Object | States | Moves on its own | Moved by a person |
+|---|---|---|---|
+| **Pipeline** (a business check) | Lead → Qualified lead → Call booked → Opportunity → Won; Lost, Nurture, Referred | The first three, forward only, never over a stage the team set; Won on a confirmed Business Review payment | Opportunity, Refer, Lost; "Move to" any stage except Won |
+| **Order** (Buy now) | Awaiting payment → Paid → Engagement opened; Abandoned | All of them (R13) | — |
+| **Engagement** | Getting set up → (Business Review, Six-Week Fix) Business Review, The Fix, Your Plan → Closed; other types Open → Closed (a dated type also shows its stage from the start date); plus **awaiting first payment** (in advance) | Awaiting first payment clears on the first fee paid; a dated type's stage follows its start date | The stage; Close (R26); Open the room now |
+| **Fee** | Set → Due → Paid, or Late | Due and Late by date and terms; Paid on Paystack's confirmation | Paid by hand (money that came another way); undo |
+| **Payment** (one Paystack transaction) | Started → Paid, Failed, Needs a look, Refunded | Paid and Failed from Paystack | Needs a look resolved; Refunded recorded (R37) |
+| **Data Request item / action** | To do → Sent, we are checking → Received, or We need a bit more; Not available; Done; No longer needed | Sent when the client uploads or marks it | Received, We need a bit more, Done, No longer needed |
+| **Deliverable** | Draft → Awaiting approval → Approved → Shared; Sign-off given | — | Each step; editing a shared one returns it to Draft |
+| **Content piece** | Planned → In edit → For your approval → Approved or Changes requested → Published | — | The team, except the owner's Approved or Changes requested |
+| **Session** | Planned → Held, or Cancelled | Booked time copied from Calendly | Held, Cancelled; notes shared |
+| **Full Report** | Awaiting form → Delivered | Delivered when the intake is sent | Form link sent again |
+| **Invitation** (client or staff) | Pending → Accepted, Revoked or Expired | Expired by date | Revoked; a new one replaces the one out |
+| **Day-30 Review** | Booked → Done, or Missed | Asked on day 30 (R27) | Follow-up |
 
-- **List:** every task grouped Waiting on you / With IP Factory / Sent, we are checking / Done, with who owns it, a due
-  flag ("Due in 2 days", "Due today", "Overdue by 3 days", "Done", in Lagos days) and the type. A task opens in a panel
-  beside the list with its detail, files and the client's buttons (upload, mark as submitted or done). On a phone the
-  owner and due flag sit under each title.
-- **Schedule:** every Session in date order with a date tile, Held / Next / Booked / To be booked, the Join link
-  before it and the notes once shared.
-- **Content** (Digital marketing only, first in the work): the month's reels, posts and stories against the programme
-  (15, 5 and 20 a month), counted once approved; a board of For your approval, In progress, Approved and Published by
-  month; the owner and full-access staff approve or ask for changes with a note. The dashboard leads with the month's
-  counts. The team adds and moves pieces in the engagement record's Content section.
-- **Your team** (Overview): IP Factory first (name, role on the engagement, firm title), then the business's own people (name and Owner, Administrator, Full access or Contributor access; the viewer marked "you"), seen by everyone in the room.
-- **The timeline's current step** shows the Work Plan as one line per item (number or tick, title, who, due date or
-  status), grouped by week with "N of M done". A line opens the item in the List (`#task-N`), a Session in Schedule;
-  the detail, buttons, agendas and Session notes live there, not in the timeline. Schedule folds each agenda and holds
-  the owner's choice of who sees the notes.
-- **Data requests:** shown only when there are any. Requested, received (a part-received item counts as half),
-  outstanding and overdue above the Data Request itself: a checklist by section, open items first, each with its
-  reference, status, due flag and priority, and, when opened, its purpose, format and files. The client answers an item
-  by uploading, by "Not available" (with an optional note, which they can undo) or by "Submitted another way". Uploads
-  go to one drop box beside the list: many files at once, in any order, without naming the item. The team matches each
-  file to one or more items in the engagement record ("Files the client sent"); the client sees each file under
-  "Documents received" with its match, or "Under review".
-- **Documents:** the Full Report and every shared Deliverable, with comments and Sign-off.
+## 6. Emails
 
-A link to `#overview`, `#plan`, `#meetings`, `#data`, `#deliverables`, `#founder` or `#business` opens that view, and a
-link into the timeline (`#step-5`) opens Overview first.
+All from the IP Factory address with the brand layout; failures recorded and shown to the office (R32). "Office" is
+info@ipfactory.co.
 
-| The client clicks | What happens | Who can |
+| Trigger | To | Subject | Built? |
+|---|---|---|---|
+| Check finished | Owner; office | The summary; every answer | Built |
+| Full Report asked for | Owner; office | *Payment details for your Full Report*; *… asked for the Full Report* | Built |
+| Business Review link sent | Owner | *Payment details for your Business Review* | Built (moves to fee reminders with R37) |
+| Business Review or Full Report paid | Owner; office | *Payment received: …*; *Paid online: …* | Built |
+| Report Intake sent again | Owner | *Your Report Intake* | Built |
+| Full Report built | Owner; office | *Your Full Report: {business}* (PDF); *Full Report sent* | Built |
+| Discovery Call asked for | Office | *… asked for a free discovery call* | Built |
+| Engagement opened for a new client | Owner | *Your The Shift room for {business}* | Built |
+| Business Review paid (account) | Owner | *Set up your client account on The Shift* | Built |
+| Notes or a Deliverable shared | Those who can see it | *Engagement update: {title}* | Built |
+| Added to an engagement, or role changed | Team member | *You are on {business} as {role}*; *Your role on {business}: {role}* | Built |
+| Fee link sent by the team | Owner | *{fee}: ₦{amount} for the {engagement}* | Built |
+| Fee paid online | Owner; office | *Payment received: {fee}*; *Paid online: {business}, {fee}* | Built |
+| Payment needs a look | Office | *Paystack payment needs a look: {reference}* | Built |
+| Client asks for another service | Office | *{business} asked for the {product}* | Built |
+| Password reset | The person | *Reset your password on The Shift* | Built |
+| Staff invited, role given, access removed, two-step reset, security alerts | Super Admins | As named | Built |
+| Fee due in 5 days, due today, 3 and 7 days late | Owner; lead at 7 days | To write | To build (R12) |
+| Data Request item due in 2 days, 2 days late | Owner or assigned staff; lead after | To write | To build (R16) |
+| Buy-now order paid | Owner; office | Receipt and invitation; *New order: {product}, {business}* | To build (R13) |
+| Engagement closed; Day-30 Review | Owner | *Your {engagement} is complete*; *Day-30 Review: is it still working?* | To build (R26, R27) |
+| Sign-in link | Client | *Your sign-in link* | To build (R41) |
+
+## 7. Exceptions and recovery
+
+| What goes wrong | What the client sees | What the platform does | What the team does | Built? |
+|---|---|---|---|---|
+| Paystack is off (no key) | "Online payment is not open yet"; no Pay button | Refuses to open a payment; emails say a link is coming | Ticks Paid for money that came another way | Built |
+| A payment is abandoned or fails | "Payment not completed", with Try again | Nothing is marked paid | — | Built |
+| Paid the wrong amount, or paid twice | "Still confirming" (so they do not pay again) | Marks nothing paid; emails the office with the reference | Checks Paystack; confirms by hand or refunds | Built |
+| Paystack's notification fails | The return page confirms it instead | Answers 500 so Paystack sends it again | Alerted the same day (R42) | Built, except the alert |
+| An email does not arrive | — | Records the failure; shows it to the office | Copies the link shown once (invitations, fee links, resets) and sends it on WhatsApp | Built |
+| An invitation expires or is revoked | "Invitation unavailable", with sign-in | — | **Send sign-in link** from the engagement | Built |
+| A client forgets their password | "Forgot your password?" on `/login` | Emails a 20-minute single-use link; same answer whether or not the account exists | — | Built (sign-in links replace this with R41) |
+| A fee goes unpaid | Reminders; the Payments tab shows it late | Reminds at 5 days before, on the day, at 3 and 7 days after | Told at 7 days; in arrears, work pauses (D6) | To build (R12) |
+| A client goes quiet on records | Reminders | Reminds before and after each date | Told what is still outstanding | To build (R16) |
+| A client should get in before paying | — | — | **Open the room now** (recorded) | Built |
+| A Specialist's access ends | — | Their role ends at the end of the day, Lagos time | — | Built |
+
+## 8. Reference: pages, admin console, room, sign-in
+
+### 8.1 Pages
+
+| Route | Page | Reached from | What it does |
+|---|---|---|---|
+| `/` | `Home.tsx` | Anywhere | Problem-led home: "Find it. Fix it. See the shift.", the free check, owners' problems with the fix under each, how we fix it, the record, three starting services |
+| `/services` | `ServicesPage.tsx` | The menu | Every product as a tile with its price and promise, filtered by way to buy |
+| `/services/:slug` | `ProductPage.tsx` | Services, guides, the check's result | One product: what it is, who it is for, what you get, what we need, the price and how it is paid, delivery, what comes next; its front door (section 2) |
+| `/how-we-work` | `HowWeWorkPage.tsx` | The menu | The method, the four ways to buy, the promises, the ten problem areas |
+| `/experience` | `ExperiencePage.tsx` | Home, About | The record: figures, client logos, the firm behind The Shift |
+| `/guides` | `GuidesPage.tsx` | Home, the footer | Answers to what Nigerian owners search for |
+| `/guides/:slug` | `GuidesPage.tsx` | Search, Guides | One guide, its fix and the services with prices; FAQ structured data |
+| `/about` | `AboutPage.tsx` | The menu | IP Factory and Enzo Krypton & Co. |
+| `/questions` | `QuestionsPage.tsx` | The menu | Every question, before buying and per service |
+| `/contact` | `ContactPage.tsx` | The menu | "Talk to an expert": the call, the mailbox, the office |
+| `/check` | `BusinessCheck.tsx` | Every page | The free Business Health Check (4.1) |
+| `/terms` | `LegalPage.tsx` | Footer, forms, pay pages | The Terms and Conditions |
+| `/privacy` | `LegalPage.tsx` | Footer, forms, pay pages | The Privacy Policy |
+| `/report/:token` | `FullReportPage.tsx` | *Payment received: your Full Report* | The Report Intake, then the download |
+| `/pay/:token/:item` | `PayPage.tsx` | The Full Report or Business Review payment email | Pay for the Full Report or the Business Review (₦600,000) on Paystack |
+| `/pay/fee/:feeLineId/:token` | `FeePayPage.tsx` | A fee's email, the room's Payments tab | Pay one engagement fee on Paystack; the token is an HMAC of the fee's id |
+| `/pay/return` | `PayReturnPage.tsx` | Paystack | Paid, still confirming, or not completed |
+| `/onboarding/:token` | `OnboardingPage.tsx` | The Business Review account invitation | Create the client account |
+| `/join/:token` | `JoinPage.tsx` | A client, seat or staff invitation | Set a password; land in the room or the admin |
+| `/reset/:token` | `ResetPasswordPage.tsx` | A reset email | Choose a new password |
+| `/login` | `LoginPage.tsx` | "Client sign in" | Client sign-in; forgotten password |
+| `/signup` | Redirect | Old links | No public sign-up: goes to `/login` |
+| `/dashboard` | `AccountDashboard.tsx` | Sign-in, every client email | The room (8.4) |
+| `/settings/business` | `BusinessSettingsPage.tsx` | The room | Business name, description, year founded, sector, website |
+| `/settings/account` | `AccountSettingsPage.tsx` | The room | Name and password |
+| `/admin/login` | `AdminLoginPage.tsx` | Staff | Staff sign-in, with the two-step code |
+| `/admin/reset` | `AdminPasswordResetPage.tsx` | A reset email | Reset the administrator password |
+| `/admin` | `Admin.tsx` | Staff sign-in | The admin console (8.3) |
+| `/404` | `NotFound.tsx` | Anything else | Not found |
+
+Paystack's signed notifications arrive at `POST /api/paystack/webhook`.
+
+### 8.2 Signing in
+
+- Clients at `/login`, staff at `/admin/login`. Everyone with an internal role uses a six-digit code from an
+  authenticator app after the password; recovery codes work in the code box.
+- A person with no business and at least one internal role lands on `/admin`; everyone else on `/dashboard`.
+- An invitation opened while signed in as someone else names both addresses and offers "Sign out and continue".
+- Forgotten password: a single-use link for 20 minutes; the page never says whether the account exists.
+- **To build (R41):** clients sign in with a link sent to their email (WhatsApp later); no password.
+
+### 8.3 The admin console
+
+Five tabs, one job each, in the order work flows. A person sees only the tabs their permissions allow, and the server
+checks every action again. Under the person's name is their level.
+
+| Tab | Permission | For | Holds |
+|---|---|---|---|
+| **Pipeline** | `manage_client_onboarding` | Prospects | Business Health Checks (metrics, stage filter, search); Discovery Calls (requests, bookings, the call summary, outcome); Client Onboarding (invitations) |
+| **Engagements** | `view_all_businesses`, or `view_assigned_businesses` for one's own | Delivery | My projects; Clients asking for another service; New engagement; Paid but no engagement yet; every engagement in scope; the engagement record (below) |
+| **Clients** | `view_all_businesses` | Accounts | Businesses and their members; client accounts (reset link, suspend, reinstate, reset two-step, remove access) |
+| **Finance** | `view_financials` | Money | Paid, owed, late; every fee and payment request; read only |
+| **Team** | `manage_roles` | Our people | Everyone by level; invite by level; access ends; System status |
+
+**The engagement record** (the drawer in Engagements), top to bottom:
+
+| Section | What the team does there | Who |
 |---|---|---|
-| A view (tab, or the left rail on a laptop), or swipes sideways on a phone | The view changes; a flick moves one view, a slow drag springs back. Arrow keys, Home and End move between tabs | Everyone who sees the room (Founder and Business: owner and full-access staff) |
-| A line in **Waiting on you** or **Deliverables** (laptop and desktop only, beside the timeline) | Opens the timeline step that holds it: the Work Plan for a Data Request or action, the Findings, The Fix or Your Plan for a Deliverable, the Full Report step for the report | Everyone who sees the room; the owner's Sign-offs are listed for the owner only |
-| An area on the Business tab | A sheet rises from below (a panel from the right on a laptop or desktop) with what the answers show, what it means, the Recommendation (First move, This week, Number to watch) and the benchmark bars. Drag it down, tap outside, press Escape or Close to dismiss; focus returns to the area. Areas with nothing more to show do not open | Owner and full-access staff, once the Full Report is delivered |
-| "Upload a file" on a request | The browser sends the file straight to the private bucket with a one-off link, then the server records it and the request shows "Sent, we are checking"; a file that did not arrive is not recorded | Owner, full staff, and a contributor for their own requests; only when storage is set up |
-| "Download" on a file | The server checks who is asking and issues a five-minute link | Whoever may see the item it sits on, or who uploaded it |
-| "Mark as submitted" / "Sent another way" (with how they sent it), in the next action or on the Work Plan row | The Data Request shows "Sent, we are checking" for the client and the team | Owner, full staff, and a contributor for their own requests |
-| "Mark as done" | The action is done | As above |
-| "Sign off the Findings" (or the Prescription, or Your Plan) | The Deliverable shows Sign-off given for the team; audited. Until then it is the next action once nothing else is outstanding | Owner (and business admin) only |
-| "Send" a comment | The comment shows under the deliverable for both sides | Anyone who can see the deliverable |
-| "Share with my team" / "Keep this to myself" | The owner's staff with full access see it, or stop seeing it | Owner (and business admin) only |
-| "Join the Session" | Opens the meeting link, from the next Session line or the Work Plan row | Anyone who sees the Session |
-| "Book Current State Assessment Session 1" (then Session 2) | Opens the Session booking page on Calendly in a new tab with the owner's name and email filled in. When the room or the team's record next opens, the booking's time, length and meeting link are copied onto the next Session still without a time, in order (built 14 October; needs `CALENDLY_SESSION_URL` and `CALENDLY_API_TOKEN`) | Owner only; shown while a Session has no time |
-| A step in the timeline | Opens that step: the Business Check's main finding and readiness; the Discovery Call once shared; the Full Report's delivery; the Work Plan by week with who (You, IP Factory, Together), when, status and the Session notes; the Findings and the Problem Statement; the Measure of Success week by week; Your Plan. The current step is open on load | Everyone who sees the room; the Discovery Call and the Problem Statement only the owner and full-access staff |
-| The Measure of Success (no click: shown in The Fix once the team sets it) | This week's reading, large, in the health colour of its direction; where it started and where it is going; each week's reading with the next step; never the hours or the team's notes | Owner and full-access staff |
-| "Invite" in Your team | Emails a single-use link (shown once when email is not set up); the seat counts as used | Owner (and business admin) only; one seat included |
-| Change "What they can see" / "Remove" | Full or Contributor at once; Remove ends their access to the business straight away | Owner (and business admin) only |
+| The client | Owner, email, WhatsApp, account; **Send sign-in link**; **Preview as client** (read only, logged) | Anyone on it; sign-in link with `manage_client_onboarding` |
+| Stage and team | Stage; people and their role on the engagement (each emailed when added) | Stage: `manage_engagements`; team: `assign_engagements` |
+| Fees | Each fee: amount, date, Paid or Paid online; **Send link**; **Open the room now** while it waits for its first payment; payment terms (R36, to build) | `manage_engagements`; links also `manage_payments`; never a Specialist |
+| The problem | The one problem and its statement | `manage_engagements` |
+| Sessions | Time, link, agenda; client notes and internal notes; share the client notes | `manage_engagements`; internal notes never to a Specialist |
+| Content (Digital marketing) | Reels, posts, stories by month and status | `manage_engagements` |
+| Files the client sent | Match each file to the items it answers | `manage_engagements` |
+| Work Plan | Requests and actions by week; **Load a Data Request** (a template or rows pasted from Excel); Specialists add team items | `manage_engagements`; `contribute_engagements` for team items |
+| Deliverables | Draft, approve, share, comment; files (Specialist drafts are IP Factory only until shared) | Approve: `review_engagements` or the engagement's lead |
+| The fix | The one number; one check-in a week | `manage_engagements` |
+| Close (R26, to build) | The final value, whether it moved, the next product | The lead |
 
-## 10. Known gaps in today's flow
+### 8.4 The room
 
-Found while writing this document. Each is small and listed in the implementation plan.
+The client's room fills the screen: a left rail (phones: a slim top bar), a header (business, stage, title, day N of M,
+the team) and the views as tabs.
 
-| Gap | Effect | Fix |
+| Tab | Shows | Who sees it |
 |---|---|---|
-| ~~Home's "Client sign in" opens the JUMP participant sign-in~~ | Fixed 9 October: it goes to `/login`; JUMP participants reach their sign-in from `/portal` or the link on `/login` | Done |
-| ~~Staff invitations use the legacy Google flow~~ | Fixed 9 October: Admin Team → Staff invites by email with one role; the person sets a password at `/join/:token` | Done (once migration 0008 is applied) |
-| The `/admin` gate and side menu still say "Registration Desk" and Gmail | Old wording | Rebrand the labels |
-| ~~"Invite to onboard" invites at any stage without a question~~ | Fixed 11 October: before Won the server requires a reason, which is recorded; "Move to" no longer offers Won | Done |
-| ~~The JUMP "Email selected" button opens nothing~~ | Removed with JUMP, 6 November 2026 | — |
+| **Overview** | The stage band, four figures, the next action, the next meeting, the timeline, Waiting on you, the team, Your projects, Fix the next problem | Everyone in the room |
+| **Content** (Digital marketing) | The month's pieces against the programme; approve or ask for changes | Owner and full access |
+| **Work Plan** | Every request and action by week, with who and when | Everyone; contributors their own |
+| **Data Request** | The checklist by section, the drop box, documents received | Everyone; contributors their own |
+| **Sessions** | Every Session with its time, Join link, agenda, shared notes; booking on Calendly | Everyone |
+| **Business**, **Founder** | The Business Health Check or Full Report, area by area | Owner and full access |
+| **Deliverables** | Findings, the Problem Statement, the Prescription, tools, the plan, the Full Report; comments; Sign-off | By audience; Sign-off by the owner |
+| **Payments** | Each fee with its date, reference and Pay button; total, paid, to pay | Owner and full access |
 
-## Terms & Conditions and Privacy Policy (14 October 2026)
+While an engagement in advance waits for its first payment, the room shows only "Your room opens once the first payment
+is made", the fee and **Pay securely with Paystack**.
 
-The approved wording lives in `docs/legal/` (the Word documents are the source of truth; `terms.md` and `privacy.md` are
-faithful conversions that the site renders at `/terms` and `/privacy`). The links appear: in the home page footer; under
-the contact details at the start of the Business Check ("By continuing, you agree to our Terms & Conditions and
-acknowledge our Privacy Policy"); beside every button that sends the owner to Paystack (the result page and the pay
-page: "By proceeding with payment, you agree…"); above "Create account" on `/onboarding/<token>` and `/join/<token>`;
-as a quiet line on sign-in, password reset, the Full Report intake, the pay pages, the Business Check and the signed-in
-pages; and in the footer of every Business Support email (absolute links on `APP_ORIGIN`). In the middle of a form or a
-payment the links open in a new tab so nothing typed is lost. No consent is stored; there is no consent column.
+## 9. Legal links
+
+The approved Terms and Privacy Policy live in `docs/legal/` and are shown at `/terms` and `/privacy`. They are linked in
+the footer, at the start of the check, beside every button that leads to Paystack, on account creation, and in every
+email's footer; mid-form they open in a new tab. No consent is stored today; tracking (R39) needs a consent notice
+first (PRD K9).

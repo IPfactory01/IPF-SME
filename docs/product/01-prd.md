@@ -2,8 +2,9 @@
 
 **Product:** The Shift, by IP Factory (`BRAND.productEndorsement` in `shared/brand.ts`)
 **Promise:** Find it. Fix it. See the shift.
-**Status:** live at https://www.ipfactory.co with paying clients. Rewritten from scratch on 6 November 2026 (ET); the
-history of how we got here is in the [decision log](08-decision-log.md).
+**Status:** live at https://www.ipfactory.co with paying clients. Rewritten from scratch on 6 November 2026 (ET), and
+reviewed on 8 November 2026 through five lenses (the business, the client, search, product management and engineering);
+the history of how we got here is in the [decision log](08-decision-log.md).
 **Sources:** *Business Support Concept Note and Launch Blueprint v0.8.1* (6 October 2026), "the concept note"; the *IPF
 The Shift Operational Business Plan* (22 October 2026), "the operational plan"; ET's decisions since.
 
@@ -29,6 +30,17 @@ Four things stand in the way, and the product answers each:
 Clients keep their access throughout. Each release moves routine work from people to the platform, so the team spends
 its time on judgement: the diagnosis, the price, the approval. This is the test every requirement below is held to.
 
+**How The Shift makes money (8 November 2026).** Two engines share one platform:
+
+| Engine | Products | How it sells | What the platform must do |
+|---|---|---|---|
+| **Fixed-price products** | The Full Report, the Funding Readiness Assessment and the Done for You products a client can scope alone (`buy: "self"` in `shared/products.ts`) | Found through search and the free check, bought online at a stated price | Let a visitor buy without waiting for us, then start the work at once |
+| **Relationships** | The Business Review, the Six-Week Fix, the Monthly Services, Digital marketing and the larger Done for You products (`buy: "after_call"`) | A Discovery Call, then an engagement the lead sets up | Make setting up, collecting and delivering cost the team as little time as possible |
+
+Four numbers decide whether either engine works: the **cost of winning a client** (kept low by search and the free
+check), **conversion** (check or page to paid), **cash collected on time**, and **delivery hours per engagement**
+(the margin). Clients buying the next fix (lifetime value) joins the two engines: a fixed-price buyer becomes a
+relationship client, and a relationship client buys fixed-price work along the way.
 ## 2. Product principles
 
 1. **The platform does the routine work; people make the judgements.** Anything that follows from a choice already
@@ -42,6 +54,11 @@ its time on judgement: the diagnosis, the price, the approval. This is the test 
    dates, plain English, records accepted as they are.
 6. **Each person sees what their job needs, and no more.** Enforced on the server by named permissions, never by
    hiding a button.
+7. **Trust where money changes hands.** Nigerian business owners buy from people and are wary of paying online. Every
+   page that takes money names the expert behind the work, shows the office address and a WhatsApp line to a person,
+   says what happens after paying, and sends a receipt at once.
+8. **What we sell, we can count.** Every step from a search to a payment is measured, so each page, product and
+   release can be judged by what it earns, not by opinion.
 
 ## 3. Users and their jobs
 
@@ -93,15 +110,15 @@ The spine of the product. Every requirement in section 6 belongs to one stage.
 
 | # | Stage | The client | IP Factory | The platform does |
 |---|---|---|---|---|
-| 1 | **Find** | Searches Google or hears of us; reads a page or a guide | — | Ranks the pages; routes every page to the check or a call |
+| 1 | **Find** | Searches Google, sees a recommendation or hears of us; reads a guide or a product page | — | Ranks the pages with their prices; every page ends in one of two front doors: **Buy now** (fixed-price products) or **Talk to an expert** (a call, or WhatsApp) |
 | 2 | **Diagnose** | Takes the free Business Health Check | Reads the lead | Scores and routes by rule; emails the summary; suggests the first product |
 | 3 | **Talk** | Books the 20-minute Discovery Call | Holds the call; records the outcome | Books through Calendly; moves the pipeline stage |
-| 4 | **Agree** | Agrees on the Discovery Call, or by paying, under the Terms and Conditions | Opens the engagement | Loads the Data Request, Work Plan, Sessions and fee schedule for the type, without a click |
-| 5 | **Pay** | Pays each fee online, from the email or the room | Records payments not made online | Paystack for the Full Report, the Business Review and every engagement fee; marks each paid and sends the receipt |
-| 6 | **Onboard** | Accepts the account invitation; sends records | Staffs the engagement | Invites the owner; dates each request by priority |
+| 4 | **Agree** | Buys online, or agrees the work and the payment terms on the call, under the Terms and Conditions | For a relationship: opens the engagement and sets its payment terms (in advance, or in arrears with a partner's approval) | For a purchase: opens the engagement itself. For both: loads the Data Request, Work Plan, Sessions and fee schedule for the type, dated from the start and the payment terms |
+| 5 | **Pay** | Pays each fee online, from the reminder email or the room | Records only money that came another way | One payment model for everything (order, engagement, fees, payments); sends each fee's link before it is due and reminds when it is late; marks it paid and sends the receipt |
+| 6 | **Onboard** | Opens the room from the invitation or a sign-in link; books the kickoff; sends the first records | Staffs the engagement | Invites the owner when the engagement opens; opens the room by the payment terms; shows what happens next within minutes of paying; dates each request and reminds before and after its date |
 | 7 | **Deliver** | Uploads, comments, approves reels and Deliverables | Does the work; Specialists hand in drafts; the lead approves and shares | Keeps files private; tells the owner when something is shared |
 | 8 | **Measure** | Sees the one number each week | Records the weekly check-in | Shows where the number started, where it is and where it is going |
-| 9 | **Close and next** | Signs off; asks to fix the next problem | Closes; proposes the next product | Opens the next project in the same room |
+| 9 | **Close and next** | Signs off; at Day 30 says what is still in use; buys the next fix in the room | Closes with the result; proposes the next product | Records whether the number moved; books the Day-30 Review; offers the next fix with its price, to buy online or to talk about |
 
 ## 5. Products and how each is bought
 
@@ -112,29 +129,40 @@ catalogue and the code in step.
 
 **Ways to buy:** Assessment (free, or paid before work); Done for You (a fixed price, paid before work); Six-Week Fix
 (50% at the start, 25% at the mid-point, 25% at the result, or in full at 5% off); Monthly Service (paid a quarter at a
-time, the price held for twelve months, stop at any quarter end). **Online ordering is off** (`ONLINE_ORDERS_OPEN`):
-until it opens, every paid product starts with a call or the check.
+time, the price held for twelve months, stop at any quarter end).
 
-| Product | Way to buy | Price | Delivery |
+**Two front doors (8 November 2026).** A product marked **Buy now** can be bought online, then the work starts with no
+call; a product marked **Talk to an expert** starts with a Discovery Call. Every page offers WhatsApp as well, because
+some buyers will only pay after speaking to someone. **Online ordering is off today** (`ONLINE_ORDERS_OPEN`), so every
+paid product starts with a call or the check until R13 is built.
+
+**Payment terms (8 November 2026).** Every engagement is paid **in advance** or **in arrears**:
+
+| Terms | When each fee falls due | When the room opens | Who can choose it |
 |---|---|---|---|
-| Free Business Health Check | Assessment | Free | At once |
-| Full Report | Assessment | ₦100,000 | When the Report Intake is finished |
-| Funding Readiness Assessment | Assessment | ₦150,000 | Three working days from complete records |
-| Business Review | Assessment | ₦600,000 | Two weeks, two Sessions |
-| Strategy and 90-Day Plan | Done for You | ₦450,000 | Seven working days |
-| Business Model | Done for You | ₦300,000 | Seven working days |
-| Financial Model | Done for You | ₦350,000 | Seven working days |
-| Business Plan | Done for You | ₦750,000 | Fifteen working days |
-| Pitch Deck | Done for You | ₦300,000 | Seven working days |
-| Pricing and Unit Cost Review | Done for You | ₦400,000 | Seven working days |
-| Bookkeeping Catch-Up | Done for You | ₦100,000 a month of records | Five working days for three months |
-| 13-Week Cash Flow Forecast | Done for You | ₦300,000 | Five working days |
-| Funding Application Pack | Done for You | ₦900,000 | Ten working days |
-| Hiring Toolkit | Done for You | ₦300,000 | Five working days |
-| Six-Week Fix (Margin, Sales, Cash and Pricing, Delegation and Structure) | Six-Week Fix | ₦1,500,000 | Six weeks |
-| Monthly Accounts and Cash Report | Monthly Service | ₦600,000 a quarter | By the 10th of each month |
-| Monthly Adviser Review | Monthly Service | ₦450,000 a quarter | One Session a month |
-| **Digital marketing** (ET, 6 November 2026; the structure of the first client's engagement) | Monthly service fee, for 90 days, with milestones and a quarter review | ₦470,000 a month, each month paid before it starts, the first at signing | 15 reels, 5 posts and 20 stories a month; nothing published without the owner's approval |
+| **In advance** (the default) | Before the work it pays for: a monthly fee at day 0, 30 and 60; a fixed price before work starts | On the first payment | Always the terms of an online purchase |
+| **In arrears** | After the work it pays for: a monthly fee 30, 60 and 90 days after kickoff | At kickoff | The lead, with a partner's approval, recorded on the engagement; work pauses when a fee is 7 days late (decision D6; section 22 of the Terms allows IP Factory to suspend for unresolved payment issues) |
+
+| Product | Way to buy | Price | Delivery | Front door |
+|---|---|---|---|---|
+| Free Business Health Check | Assessment | Free | At once | Free check |
+| Full Report | Assessment | ₦100,000 | When the Report Intake is finished | Buy now (from the check) |
+| Funding Readiness Assessment | Assessment | ₦150,000 | Three working days from complete records | Buy now |
+| Business Review | Assessment | ₦600,000 | Two weeks, two Sessions | Talk to an expert |
+| Strategy and 90-Day Plan | Done for You | ₦450,000 | Seven working days | Buy now |
+| Business Model | Done for You | ₦300,000 | Seven working days | Buy now |
+| Financial Model | Done for You | ₦350,000 | Seven working days | Buy now |
+| Business Plan | Done for You | ₦750,000 | Fifteen working days | Talk to an expert |
+| Pitch Deck | Done for You | ₦300,000 | Seven working days | Buy now |
+| Pricing and Unit Cost Review | Done for You | ₦400,000 | Seven working days | Talk to an expert |
+| Bookkeeping Catch-Up | Done for You | ₦100,000 a month of records | Five working days for three months | Buy now |
+| 13-Week Cash Flow Forecast | Done for You | ₦300,000 | Five working days | Buy now |
+| Funding Application Pack | Done for You | ₦900,000 | Ten working days | Talk to an expert |
+| Hiring Toolkit | Done for You | ₦300,000 | Five working days | Buy now |
+| Six-Week Fix (Margin, Sales, Cash and Pricing, Delegation and Structure) | Six-Week Fix | ₦1,500,000 | Six weeks | Talk to an expert |
+| Monthly Accounts and Cash Report | Monthly Service | ₦600,000 a quarter | By the 10th of each month | Talk to an expert |
+| Monthly Adviser Review | Monthly Service | ₦450,000 a quarter | One Session a month | Talk to an expert |
+| **Digital marketing** (ET, 6 November 2026; the structure of the first client's engagement) | Monthly service fee, for 90 days, with milestones and a quarter review | ₦470,000 a month, in advance (day 0, 30, 60) or in arrears (day 30, 60, 90) | 15 reels, 5 posts and 20 stories a month; nothing published without the owner's approval | Talk to an expert |
 
 **Delivery promise:** we confirm the delivery date once the records are complete; if we cannot deliver as agreed, we make
 it right in line with the Terms (a refund, a service credit or an agreed alternative). The site never promises an
@@ -150,6 +178,8 @@ automatic refund. Management accounts only; the monthly tax note states record r
 | # | Requirement | P | Acceptance | Status |
 |---|---|---|---|---|
 | R1 | A problem-led public site, in Nigerian plain English, with the free check one tap from every page | M | Every page leads to the check or a call; works at phone width | Built |
+| R40 | Search: product and service pages marked up for Google with their price in naira and their questions (Product, Offer and FAQ structured data), the business marked up as a local business in Lekki with its hours, a Google Business Profile with reviews, and a page for every product including Digital marketing | S | Each product page passes Google's Rich Results Test; the business shows in local results for its services | To build |
+| R39 | Tracking: every step from a search or a referral to a page, the check, a call booked and a payment recorded as an event, with the page and product it came from, and consent asked before any tracking cookie | S | Every measure in section 7 can be counted, by page and by product | To build (decision D5) |
 | R2 | Pages and guides found on Google for the problems owners search | S | Titles and descriptions per page; sitemap submitted; guides indexed | Built; indexing being checked |
 | R3 | The Business Health Check: a decision tree of at most about 30 questions, saved on the device and the server | M | A returning owner resumes; scoring and routes never changed by AI | Built |
 | R4 | The result: the problem areas by colour, the gap, the first product and the next one, the call booking | M | Same answers, same result | Built |
@@ -161,6 +191,7 @@ automatic refund. Management accounts only; the monthly tax note states record r
 |---|---|---|---|---|
 | R6 | Book the Discovery Call from the result; record the outcome on the pipeline | M | A booking counts only when Calendly confirms | Built |
 | R7 | Open an engagement of any type for a new or existing client; many projects per client | M | The type's Data Request, Work Plan and Sessions load without a click | Built |
+| R36 | Payment terms on every engagement: in advance (the default, and always for an online purchase) or in arrears (chosen by the lead with a partner's approval, recorded with who approved it); the fee dates and when the room opens follow from the terms and the kickoff date | M | Marcelle's fees fall at day 30, 60 and 90 and her room is open; a new in-advance client sees only the first fee until it is paid; Finance counts an in-arrears fee as owed only from its date | To build (next) |
 | R8 | No proposals or agreements to sign (ET, 6 November 2026): a client agrees on the call or by paying, under the Terms and Conditions; each engagement keeps a fee schedule filled in from the service's price or the type's monthly fee | M | Nothing for the client to sign; the fees are set when the engagement opens | Built |
 | R9 | The legal entity that contracts with clients named in the Terms and Conditions and on invoices and receipts | M | One entity, stated once | To build (decision D1) |
 
@@ -169,13 +200,17 @@ automatic refund. Management accounts only; the monthly tax note states record r
 | # | Requirement | P | Acceptance | Status |
 |---|---|---|---|---|
 | R10 | Paystack for the Full Report and the Business Review; the payment confirms itself | M | The amount comes from the server, never the browser | Built; live keys to confirm (dependency) |
-| R11 | Every engagement fee payable online, with its own Paystack link (emailed by the team, or **Pay** in the room's Payments tab); the first payment opens the room, as the Business Review's does | S | A fee is marked paid without the team touching it; the client gets a receipt | Built (6 November 2026, migration 0020) |
-| R12 | Instalments: each later fee (a Six-Week Fix stage, a Digital marketing month, a Monthly Service quarter) emailed to the client with its pay link a few days before it is due, without the team sending it | S | No fee reaches its date without its link having gone out | Partly built: every fee has a pay link; sending it on a schedule is to build |
+| R37 | One payment model for everything: an order or engagement holds fees, and each Paystack transaction is a payment against a fee (attempts, failures, part payments and refunds recorded); the Business Review moves onto it; old payment requests stay as history | M | Finance reads one source; every naira paid traces to one fee and one Paystack reference | To build |
+| R42 | Alerts: a Paystack notification or an email that fails, or a payment that needs a look, reaches the office the same day | S | No failure lives only in a log | Partly built (payments that need a look are emailed) |
+| R11 | Every engagement fee payable online, with its own Paystack link (emailed by the team, or **Pay** in the room's Payments tab); for an engagement in advance, the first payment opens the room | S | A fee is marked paid without the team touching it; the client gets a receipt | Built (6 November 2026, migration 0020); the in-arrears case comes with R36 |
+| R12 | Fee reminders: each fee's pay link emailed five days before its date, on the day, and three and seven days after if unpaid; the lead told at seven days; WhatsApp later (R41) | M | No fee reaches its date without its link having gone out, and nobody on the team chases a fee by hand | Partly built: every fee has a pay link; sending on a schedule is to build |
 | R35 | Digital marketing on the public menu, with its own page (ET: yes, 6 November 2026) | S | Shown under the need it answers; previewed before it goes live | To build (next) |
-| R13 | Online ordering for the Done for You products that start without a call | C | Order, pay, then the intake, with no call | To build (`ONLINE_ORDERS_OPEN`) |
-| R14 | Invitation-only client accounts; the owner adds staff as full access or contributor | M | A client can never reach another business by changing an id | Built |
+| R13 | **Buy now** for the products marked so in section 5: the product page takes the buyer's name, business, email and WhatsApp, opens Paystack, and on payment opens the engagement, invites the owner and shows what happens next (the room, the first records, a kickoff to book), with no call | S | A visitor buys and receives the first Data Request without anyone on the team acting | To build (`ONLINE_ORDERS_OPEN`) |
+| R38 | Trust where money changes hands: every product page and pay page names the expert behind the work, shows the office address and a WhatsApp line to a person, says what happens after paying, and links the Terms; a receipt follows every payment | M | No page that takes money lacks a person to talk to | Partly built (receipts, Terms links) |
+| R14 | Invitation-only client accounts, the invitation sent when the engagement opens; the owner adds staff as full access or contributor | M | A client can never reach another business by changing an id | Built |
+| R41 | Client sign-in by a link sent to their email (and WhatsApp later), so a client never needs a password; staff keep a password and the two-step code | S | A client opens their room from a link in under a minute | To build |
 | R15 | Data Requests dated by priority, loaded from the type or a template, or pasted from Excel | M | Each request shows why we ask and what format is fine | Built |
-| R16 | Reminders: the owner (and the assigned staff member) is reminded of a request before and after its due date | S | No request passes its date without a reminder | To build |
+| R16 | Data Request reminders: the owner (and the staff member it is assigned to) reminded two days before an item's date and two days after it if still open; the lead told only what is outstanding after the reminders | M | No request passes its date without a reminder | To build |
 
 ### Stage 7–8: Deliver and Measure
 
@@ -188,16 +223,16 @@ automatic refund. Management accounts only; the monthly tax note states record r
 | R21 | Specialists hand in team items and drafts; the lead shares them | M | A Specialist's file reaches no client until the lead shares it | Built |
 | R22 | Deliverables approved by a lead before the client sees them; the owner signs off | M | Server-enforced | Built |
 | R23 | The one number and the weekly check-in (five questions, the reading, hours by role, AI used) | M | Recorded one week at a time, in order | Built |
-| R24 | A new Digital marketing engagement's fees fill in at ₦470,000 for each of three months, each payable before it begins | M | The team only checks the dates | Built |
+| R24 | A new Digital marketing engagement's fees fill in at ₦470,000 for each of three months, dated by its payment terms | M | The team only checks the dates | Built for in advance; in arrears comes with R36 |
 | R25 | Preview as client: staff see the room exactly as the owner does, read only, logged | S | The preview equals the owner's view | Built |
 
 ### Stage 9: Close and next
 
 | # | Requirement | P | Acceptance | Status |
 |---|---|---|---|---|
-| R26 | Close an engagement: final value, whether the number moved, the plan delivered, the next problem | M | The pass marks in section 7 come from the record | To build |
-| R27 | The day-30 check: are the outputs still in use | S | Recorded on the engagement | To build |
-| R28 | Fix the next problem: the owner asks from the room; the team opens the next project in the same room | M | One business, many projects, one history | Built |
+| R26 | Close an engagement: final value, whether the number moved, the plan delivered, the next problem; closing books the Day-30 Review | M | The pass marks in section 7 come from the record | To build |
+| R27 | The Day-30 Review: the owner says what is still in use; the room then offers the next fix with its price | S | Recorded on the engagement; the offer follows the product suggested at close | To build |
+| R28 | Fix the next problem: the owner asks from the room, or buys a Buy-now product there; the team opens the next project in the same room | M | One business, many projects, one history | Built (asking); buying in the room comes with R13 |
 
 ### Across the journey
 
@@ -217,11 +252,15 @@ halves are already recorded (confirmed payments and paid fees; the measure and i
 
 | Measure | Target | Source |
 |---|---|---|
+| Search sessions and where they land, by page | Trending up | Google Search Console, analytics (R39) |
+| Page to free check or Buy now, by page and product | Trending up | Analytics (R39) |
 | Free checks completed | 150 by 10 December 2026 (pilot) | `business_checks` |
 | Check → Discovery Call booked | Trending up | Pipeline stage, Calendly |
 | Call → first payment | 1 in 3 | Payments and `engagement_fee_lines` |
 | Paying clients | 20 by 10 December 2026 (pilot) | Confirmed payments and paid fees |
 | Days from the first payment to the first records in | 3 or fewer | Fees and files |
+| Fees paid by their due date | 90% or more | Fees and payments |
+| Money owed more than 7 days late | Under 10% of what is owed | Finance |
 | Data Requests in by their date | 80% or more | `engagement_tasks` |
 | Days from a Deliverable shared to the owner's sign-off | 5 or fewer | `engagement_deliverables` |
 | Fixes whose number moved by week 6 | 70% or more | The measure and check-ins |
@@ -242,6 +281,10 @@ engagement without hurting the results above it.
 5. **Copy:** British English, Nigerian plain English, second person, short sentences, naira in full (₦100,000),
    "expert" over "person", the problem stated before the fix.
 6. **Every change ships with tests and updated product documents**, and `pnpm verify` passes before any push (`AGENTS.md`).
+7. **Money is exact and traceable:** amounts come from the server, never the browser; every naira paid traces to a fee
+   and a Paystack reference; nothing is marked paid without Paystack's confirmation or a named person.
+8. **Nothing is built before it is in these documents.** A new need goes into the PRD and the App flow first, then the
+   implementation plan, then the code (ET, 8 November 2026).
 
 ## 9. Assumptions, risks and dependencies
 
@@ -249,6 +292,9 @@ engagement without hurting the results above it.
 |---|---|---|---|---|
 | A1 | Owners will send records as photos, voice notes and bank-app PDFs if we ask plainly | Assumption | Desk | Holding so far |
 | A2 | Business owners will pay online without a meeting once the call has set the work | Assumption | ET | To test with the first Digital marketing client |
+| A3 | Visitors will buy a fixed-price product online with no call, if the page shows the price, a named expert and WhatsApp | Assumption | ET | To test once R13 and R38 are built |
+| K8 | Payment in arrears: we deliver a month before we are paid, and late payment is common; inflation erodes a price held for twelve months | Risk | Partners | Each in-arrears engagement approved by a partner; work pauses at 7 days late (R36) |
+| K9 | Tracking needs consent under the Nigeria Data Protection Act 2023, and a cookie notice the site does not have yet | Dependency | ET | With R39 |
 | K1 | Paystack live keys and the live webhook in Vercel | Dependency | ET, Lewis | To confirm |
 | K2 | The sending domain verified in Resend, so emails reach outside inboxes | Dependency | DG, Lewis | To confirm |
 | K3 | Supabase on a paid plan with daily backups | Dependency | ET | To do |
@@ -261,7 +307,23 @@ engagement without hurting the results above it.
 
 A self-serve portal with no expert involved (the direction, not this release); programme sponsors, referral partners
 and lender access; an in-platform message thread (conversation stays on WhatsApp); paid client seats; training as a
-product; the AI tool as a separate product.
+product; the AI tool as a separate product; WhatsApp messages sent by the platform (after R12, R16 and R41 work by
+email).
+
+## 10a. Release order (8 November 2026)
+
+Ordered by what each moves first: cash, then growth, then hours, then retention. The
+[implementation plan](06-implementation-plan.md) turns each into tasks with acceptance criteria.
+
+| # | Release | Requirements | Moves |
+|---|---|---|---|
+| 1 | Payment terms and one payment model | R36, R37, R24, R42 | Cash collected on time |
+| 2 | Fee and Data Request reminders | R12, R16 | Delivery hours; cash |
+| 3 | Buy now and the trust layer | R13, R38, R35 | Conversion; cost of winning a client |
+| 4 | Close, the Day-30 Review and the next fix | R26, R27, R28 | Lifetime value; the pass marks |
+| 5 | Tracking and the measures page | R39, R34 | Every decision after this one |
+| 6 | Sign-in links | R41 | Support time; the client's experience |
+| Alongside | Search | R40, R2 | Cost of winning a client |
 
 ## 11. Open decisions
 
@@ -270,6 +332,9 @@ product; the AI tool as a separate product.
 | D1 | Which legal entity contracts with clients, and who owns the P&L | Name the entity once, in the Terms and on invoices | ET |
 | D2 | Full Session transcripts in the room | Reviewed notes by default; the transcript on request (as built) | ET |
 | D3 | Ongoing support after a fix: content and price | Offer a Monthly Service at close | ET |
+| D4 | How much payment in arrears IP Factory will carry | In arrears only for clients a partner approves; at most [number] engagements or [₦ amount] owed in arrears at any time | ET |
+| D5 | The analytics tool | Google Analytics 4 linked to Search Console for the journey from search to page; payment and engagement measures from our own database | ET |
+| D6 | When work pauses for a late fee | Seven days after the due date, with the client told at three days. The Terms allow suspension for unresolved payment issues but set no period; counsel should confirm the period is stated to clients (K5) | ET |
 
 ## 12. Glossary
 
@@ -285,3 +350,6 @@ product; the AI tool as a separate product.
 | Measure | The one number watched together each week |
 | Fees | An engagement's fee schedule: each fee, its amount, its due date and whether it is paid. Set when the engagement opens; Finance reads it |
 | Fix | Up to six weeks of weekly work on one problem. Never "sprint" |
+| Payment terms | In advance (each fee before the work it pays for) or in arrears (after it); set per engagement |
+| Payment | One Paystack transaction (or one recorded by hand) against a fee |
+| Front door | How a product starts: Buy now (online) or Talk to an expert (a call or WhatsApp) |

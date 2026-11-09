@@ -199,8 +199,9 @@ export default function EngagementRoom({ room, aside, account, notice, now = Dat
     </section>
   );
 
-  // The first visit (R46): until the first Session is held, who the experts are, the first three things this week (the
-  // first Session, the first records, any fee) and what happens next. Each line opens the place where it is done.
+  // The first visit (R46), "Getting started": until the first Session is held, who the experts are, the first three
+  // things to do (the first Session, the first records, any fee) and what happens next. Each line opens where it is done.
+  // Not "Your first week": the first Session can fall in week two.
   const firstRecords = room.tasks.filter(task => task.side === "client" && task.kind === "data_request" && (task.status === "open" || task.status === "needs_more"));
   const firstFee = room.fees.find(fee => !fee.paid);
   const firstWeekSteps: { text: string; done: boolean; href?: string; external?: boolean }[] = [
@@ -213,13 +214,13 @@ export default function EngagementRoom({ room, aside, account, notice, now = Dat
   const nextLine = DATED_TYPES[room.type]?.stages[0]?.summary ?? (room.type === "business_review" ? CURRENT_STATE.start : room.serviceStep !== null ? "Once your records are in, we do the work. A consultant checks it before you see it." : here.line);
   const firstWeek = !room.sessions.some(session => session.status === "held") && room.stage !== "closed" ? (
     <section aria-labelledby="first-week-title" className={`${card} border-brand-line bg-brand-tint`}>
-      <h2 id="first-week-title" className="font-sans text-base font-semibold text-ink">Your first week</h2>
+      <h2 id="first-week-title" className="font-sans text-base font-semibold text-ink">Getting started</h2>
       {room.team.length > 0 && (
         <ul className="mt-3 space-y-3" aria-label="Your experts">
           {room.team.map(member => person(`first-${member.name}-${member.roleLabel}`, member.name, member.roleLabel, false, member.whatsapp ?? null))}
         </ul>
       )}
-      <ol className="mt-4 space-y-2 text-sm" aria-label="This week">
+      <ol className="mt-4 space-y-2 text-sm" aria-label="First things to do">
         {firstWeekSteps.map((step, index) => (
           <li key={step.text} className="flex items-start gap-3">
             <span aria-hidden className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium tabular-nums ${step.done ? "bg-health-clear text-white" : "border border-brand-line bg-white text-brand"}`}>{step.done ? <Check className="h-3.5 w-3.5" /> : index + 1}</span>
@@ -258,8 +259,8 @@ export default function EngagementRoom({ room, aside, account, notice, now = Dat
       <ProjectSwitcher room={room} />
       {firstWeek}
       <RoomDashboard room={room} steps={steps} now={now} contentMonth={contentMonth?.month ?? null} />
-      <div className="grid gap-5 lg:grid-cols-3">{nextAction}{nextMeeting}</div>
-      <div className="grid items-start gap-5 lg:grid-cols-3">
+      <div className="grid gap-5 lg:grid-cols-3 [&>*]:min-w-0">{nextAction}{nextMeeting}</div>
+      <div className="grid items-start gap-5 lg:grid-cols-3 [&>*]:min-w-0">
         <div className={`${card} lg:col-span-2`}>{timeline}</div>
         <aside aria-label="At a glance" className="space-y-5">
           <WaitingOnYou room={room} isOwner={isOwner} onOpen={setOpen} />
@@ -358,7 +359,7 @@ function PaymentsView({ room }: { room: Room }) {
   const total = room.fees.reduce((sum, fee) => sum + fee.amount, 0);
   const paid = room.fees.filter(fee => fee.paid).reduce((sum, fee) => sum + fee.amount, 0);
   return (
-    <div className="grid items-start gap-5 lg:grid-cols-3">
+    <div className="grid items-start gap-5 lg:grid-cols-3 [&>*]:min-w-0">
       <section aria-label="Fees" className={`${CARD} lg:col-span-2`}>
         <h3 className="font-sans text-base font-semibold text-ink">Fees</h3>
         <ul className="mt-3 divide-y divide-line-soft">
@@ -1333,7 +1334,7 @@ function DataRequestsView({ room, now }: { room: Room; now: number }) {
   return (
     <div className="space-y-5">
       <RequestSummary items={items} now={now} />
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] [&>*]:min-w-0">
         <section aria-labelledby="asked-title" className="rounded-xl border border-line-soft bg-white p-5">
           <div className="flex items-center justify-between gap-3">
             <h3 id="asked-title" className="font-sans text-base font-semibold tracking-tight">{METHOD.dataRequest}</h3>

@@ -93,7 +93,7 @@ function previewInsight() {
 /** A client on day four of the Business Review: what an owner sees in their room. Sample data only. */
 const SAMPLE_ROOM = {
   engagementId: 1,
-  fees: [],
+  fees: [{ id: 1, label: "Business Review, payable before work begins", amount: 600_000, dueOn: null, paid: true, reference: "TS-F-000001", payPath: null }],
   awaitingPayment: false,
   content: [],
   contentTargets: [],
@@ -122,7 +122,8 @@ const SAMPLE_ROOM = {
   booking: null,
   measure: null,
   people: [{ name: "Ada Okafor", label: "Owner", you: true }, { name: "Bola Ade", label: "Contributor access", you: false }],
-  team: [{ name: "Femi Adebayo", roleLabel: "Lead Consultant", jobTitle: "Senior Associate" }, { name: "Ngozi Eze", roleLabel: "Analyst", jobTitle: "Senior Business Analyst" }],
+  // A made-up number: in the room a WhatsApp button shows only for someone who added a number and agreed (R44).
+  team: [{ name: "Femi Adebayo", roleLabel: "Lead Consultant", jobTitle: "Senior Associate", whatsapp: "2348000000001" }, { name: "Ngozi Eze", roleLabel: "Analyst", jobTitle: "Senior Business Analyst", whatsapp: null }],
   nextSession: { id: 1, title: "Business Review Session 1", scheduledFor: day(0), durationMinutes: 90, meetingLink: "https://zoom.us/" },
   sessions: [
     { id: 1, title: "Business Review Session 1", scheduledFor: day(0), durationMinutes: 90, meetingLink: "https://zoom.us/", status: "planned", weekNumber: 1, sortOrder: 7, agenda: "Your business today: your six answers, the numbers, and how a normal week runs.", notes: null, notesSharedAt: null, notesAudience: null },

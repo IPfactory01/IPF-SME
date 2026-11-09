@@ -249,17 +249,17 @@ describe("the first visit (R46) and What we will do (R47)", () => {
   const planned = [{ id: 1, title: "Business Review Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: null, status: "planned" as const, weekNumber: 1, sortOrder: 1, agenda: null, notes: null, notesSharedAt: null, notesAudience: null }];
   const unpaid = { id: 31, label: "Business Review, payable before work begins", amount: 600000, dueOn: "2026-10-20", paid: false, reference: "IPF-F-31", payPath: "/pay/fee/31" };
 
-  it("welcomes the owner until the first Session is held: the experts with WhatsApp, three things this week, each linked to its place, and what happens next", () => {
+  it("welcomes the owner until the first Session is held: the experts with WhatsApp, three things to do first, each linked to its place, and what happens next", () => {
     const team = [{ name: "Lewis Lead", roleLabel: "Engagement Manager", jobTitle: null, whatsapp: "2348030000001" }, { name: "Ola Analyst", roleLabel: "Analyst", jobTitle: null, whatsapp: null }];
     const { unmount } = render(<EngagementRoom room={room({ sessions: planned, nextSession: null, booking: { sessionId: 1, title: "Business Review Session 1", url: "https://calendly.example.test/ipf/session-1" }, fees: [unpaid], team })} />);
-    const welcome = within(screen.getByRole("region", { name: "Your first week" }));
+    const welcome = within(screen.getByRole("region", { name: "Getting started" }));
     const experts = within(welcome.getByRole("list", { name: "Your experts" }));
     expect(experts.getByText("Lewis Lead")).toBeTruthy();
     expect(experts.getByText("Ola Analyst")).toBeTruthy();
     // Only the expert who agreed to share a number has a WhatsApp button.
     expect(experts.getByRole("link", { name: "WhatsApp Lewis" }).getAttribute("href")).toMatch(/^https:\/\/wa\.me\/2348030000001\?text=/);
     expect(experts.queryByRole("link", { name: "WhatsApp Ola" })).toBeNull();
-    const week = within(welcome.getByRole("list", { name: "This week" }));
+    const week = within(welcome.getByRole("list", { name: "First things to do" }));
     expect(week.getByRole("link", { name: "Book your first Session" }).getAttribute("href")).toBe("https://calendly.example.test/ipf/session-1");
     expect(week.getByRole("link", { name: "Send your first records: 2 on the Data Request" }).getAttribute("href")).toBe("#data");
     expect(week.getByRole("link", { name: "Pay Business Review, payable before work begins: ₦600,000" }).getAttribute("href")).toBe("/pay/fee/31");
@@ -268,13 +268,13 @@ describe("the first visit (R46) and What we will do (R47)", () => {
 
     // Once the first Session is held, the welcome has done its job.
     render(<EngagementRoom room={room()} />);
-    expect(screen.queryByRole("region", { name: "Your first week" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Getting started" })).toBeNull();
   });
 
   it("marks the first Session as booked, and the records as in, once they are", () => {
     const tasks = room().tasks.map(task => ({ ...task, status: "accepted" as const }));
     render(<EngagementRoom room={room({ sessions: [{ ...planned[0]!, scheduledFor: new Date("2026-10-23T09:00:00Z") }], tasks })} />);
-    const week = within(screen.getByRole("list", { name: "This week" }));
+    const week = within(screen.getByRole("list", { name: "First things to do" }));
     expect(week.getByText("Your first Session is booked: Fri 23 Oct, 10:00 am")).toBeTruthy();
     expect(week.getByText("Your records on the Data Request are in")).toBeTruthy();
     expect(week.getAllByText("(done)")).toHaveLength(2);
@@ -283,10 +283,10 @@ describe("the first visit (R46) and What we will do (R47)", () => {
 
   it("says the team sends a time when nothing can be booked yet, and shows nothing once the engagement is closed", () => {
     const { unmount } = render(<EngagementRoom room={room({ sessions: [], nextSession: null, booking: null })} />);
-    expect(within(screen.getByRole("list", { name: "This week" })).getByText("Your team sends you a time for your first Session")).toBeTruthy();
+    expect(within(screen.getByRole("list", { name: "First things to do" })).getByText("Your team sends you a time for your first Session")).toBeTruthy();
     unmount();
     render(<EngagementRoom room={room({ sessions: [], nextSession: null, stage: "closed", stageLabel: "Closed", journey: journeyOf("closed"), closedAt: new Date("2026-11-01T10:00:00Z") })} />);
-    expect(screen.queryByRole("region", { name: "Your first week" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "Getting started" })).toBeNull();
   });
 
   it("shows what we will do, the team, the start and each fee with its date, with nothing to sign", () => {
@@ -670,6 +670,16 @@ describe("the room on a laptop or desktop", () => {
     for (const tab of within(screen.getByRole("tablist", { name: "Your engagement" })).getAllByRole("tab")) expect(tab.className).toContain("min-h-11");
     expect(screen.getByRole("link", { name: "Account" }).className).toContain("min-h-11");
     expect(screen.getByRole("button", { name: "Sign out" }).className).toContain("min-h-11");
+  });
+
+  it("lets every card in the Overview's and Payments' grids shrink to a phone's width, so a long Work Plan row cannot cut off the cards beside it", () => {
+    // A grid item is as wide as its widest line unless it may shrink: the open timeline step made the one phone column
+    // 669 px on a 390 px screen, and the panels' clip cut off What we will do and the seat card under it.
+    render(<EngagementRoom room={room({ fees: [{ id: 31, label: "Business Review, payable before work begins", amount: 600000, dueOn: null, paid: false, reference: "IPF-F-31", payPath: "/pay/fee/31" }] })} />);
+    const panels = screen.getAllByRole("tabpanel", { hidden: true });
+    const grids = panels.flatMap(panel => [...panel.querySelectorAll<HTMLElement>(".grid")]).filter(grid => /\bgap-5\b/.test(grid.className));
+    expect(grids.length).toBeGreaterThanOrEqual(3);
+    for (const grid of grids) expect(grid.className).toContain("[&>*]:min-w-0");
   });
 
   it("reads every timeline step at full strength and names the team for screen readers (design review B4)", () => {

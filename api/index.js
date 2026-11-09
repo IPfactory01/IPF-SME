@@ -1114,10 +1114,12 @@ var ENGAGEMENT_STAGE_SUMMARIES = {
   plan: "The plan in your hands, and what support looks like from here.",
   closed: "This engagement is closed."
 };
-var ENGAGEMENT_TEAM_ROLES = ["manager", "lead", "analyst", "partner", "expert"];
-var ENGAGEMENT_TEAM_ROLE_LABELS = { manager: "Engagement Manager", lead: "Lead Consultant", analyst: "Analyst", partner: "Partner", expert: "Specialist" };
+var ENGAGEMENT_TEAM_ROLES = ["manager", "lead", "analyst", "partner", "expert", "digital_marketer", "content_producer"];
+var ENGAGEMENT_TEAM_ROLE_LABELS = { manager: "Engagement Manager", lead: "Lead Consultant", analyst: "Analyst", partner: "Partner", expert: "Specialist", digital_marketer: "Digital Marketer", content_producer: "Content Producer" };
+var DIGITAL_MARKETING_ROLES = ["digital_marketer", "content_producer"];
+var teamRolesFor = (type) => ENGAGEMENT_TEAM_ROLES.filter((role) => type === "digital_marketing" || !DIGITAL_MARKETING_ROLES.includes(role));
 var ENGAGEMENT_REVIEW_ROLES = ["manager", "lead", "partner"];
-var ENGAGEMENT_TEAM_ROLE_ORDER = { partner: 0, manager: 1, lead: 2, analyst: 3, expert: 4 };
+var ENGAGEMENT_TEAM_ROLE_ORDER = { partner: 0, manager: 1, lead: 2, digital_marketer: 3, content_producer: 4, analyst: 5, expert: 6 };
 var JOB_TITLE_MAX_LENGTH = 80;
 var ENGAGEMENT_AUDIENCES = ["team", "owner", "business"];
 var ENGAGEMENT_AUDIENCE_LABELS = { team: "IP Factory only", owner: "Owner only", business: "Owner and their team" };
@@ -1253,7 +1255,13 @@ var users = pgTable("users", {
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
   lastSignedIn: timestamp("lastSignedIn", { withTimezone: true }).defaultNow().notNull(),
   /** Firm title (Partner, Senior Associate, ...), shown to clients beside the person's role on their engagement. 0013. */
-  jobTitle: varchar("jobTitle", { length: 80 })
+  jobTitle: varchar("jobTitle", { length: 80 }),
+  /**
+   * A staff member's WhatsApp number in international form (+2348031234567), and when they agreed to it being shown to
+   * the clients they work with (R44, 0021). A number is shown only once agreed, and only to clients of their engagements.
+   */
+  whatsapp: varchar("whatsapp", { length: 20 }),
+  whatsappConsentAt: timestamp("whatsappConsentAt", { withTimezone: true })
 }, (table2) => [uniqueIndex("users_email_lower_unique").on(sql`lower(${table2.email})`)]);
 var userCredentials = pgTable("user_credentials", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
@@ -1951,6 +1959,9 @@ var engagementTasks = pgTable("engagement_tasks", {
   priority: engagementTasksPriorityEnum("priority"),
   /** Why more is needed, or how the client sent it ("by WhatsApp"). */
   statusNote: varchar("statusNote", { length: 500 }),
+  /** A link that answers the item: a shared folder of footage or records (Google Drive, Dropbox, WeTransfer, iCloud). The
+   *  file itself is never stored (R43, 0021). */
+  responseLink: varchar("responseLink", { length: 2048 }),
   /** The session the action came out of. */
   sessionId: integer("sessionId").references(() => engagementSessions.id, { onDelete: "set null" }),
   createdByUserId: integer("createdByUserId").references(() => users.id),
@@ -9933,7 +9944,8 @@ async function notifyShared(db, engagementId, audience, what, title) {
 }
 async function assignTeamMember(db, actor, input) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
-  await requireStaffEngagement(db, actor, input.engagementId);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (!teamRolesFor(engagement.type).includes(input.role)) throw new TRPCError14({ code: "BAD_REQUEST", message: "The Digital Marketer and Content Producer roles are for Digital marketing engagements." });
   const staff2 = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq15(userPlatformRoles.userId, users.id)).where(and9(eq15(userPlatformRoles.userId, input.userId), eq15(users.status, "active"))).limit(1))[0];
   if (!staff2) throw new TRPCError14({ code: "BAD_REQUEST", message: "Only IP Factory staff can join an engagement team." });
   const existing = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and9(eq15(engagementTeam.engagementId, input.engagementId), eq15(engagementTeam.userId, input.userId))).limit(1))[0];

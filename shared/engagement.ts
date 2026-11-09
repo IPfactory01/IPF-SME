@@ -37,9 +37,18 @@ export const ENGAGEMENT_STAGE_SUMMARIES: Record<EngagementStage, string> = {
 /** Roles on an engagement team. Separate from platform roles: a role says what kind of person, this says which job here. */
 // Anyone on the team can hold any of these on a given engagement; their firm title (users.jobTitle) does not change.
 // "manager" was added in migration 0013; the stored values keep their old names so no row changes.
-export const ENGAGEMENT_TEAM_ROLES = ["manager", "lead", "analyst", "partner", "expert"] as const;
+/** Stored in this order (new roles are added at the end); shown in ENGAGEMENT_TEAM_ROLE_ORDER. */
+export const ENGAGEMENT_TEAM_ROLES = ["manager", "lead", "analyst", "partner", "expert", "digital_marketer", "content_producer"] as const;
 export type EngagementTeamRole = (typeof ENGAGEMENT_TEAM_ROLES)[number];
-export const ENGAGEMENT_TEAM_ROLE_LABELS: Record<EngagementTeamRole, string> = { manager: "Engagement Manager", lead: "Lead Consultant", analyst: "Analyst", partner: "Partner", expert: "Specialist" };
+export const ENGAGEMENT_TEAM_ROLE_LABELS: Record<EngagementTeamRole, string> = { manager: "Engagement Manager", lead: "Lead Consultant", analyst: "Analyst", partner: "Partner", expert: "Specialist", digital_marketer: "Digital Marketer", content_producer: "Content Producer" };
+/**
+ * The two Digital marketing roles (R45, 0021): the Digital Marketer owns the plan, the numbers and is the client's main
+ * contact; the Content Producer takes the footage and makes the edits. Approval follows the person's level, as for any role.
+ */
+export const DIGITAL_MARKETING_ROLES: readonly EngagementTeamRole[] = ["digital_marketer", "content_producer"];
+/** The project roles an engagement of this type can have: the Digital marketing roles only on Digital marketing. */
+export const teamRolesFor = (type: string): readonly EngagementTeamRole[] =>
+  ENGAGEMENT_TEAM_ROLES.filter(role => type === "digital_marketing" || !DIGITAL_MARKETING_ROLES.includes(role));
 /** The order a team is shown in: who runs it first. */
 /**
  * Who leads an engagement (ET, 5 November 2026): the Engagement Manager, Lead Consultant and Partner on it may approve
@@ -47,7 +56,7 @@ export const ENGAGEMENT_TEAM_ROLE_LABELS: Record<EngagementTeamRole, string> = {
  */
 export const ENGAGEMENT_REVIEW_ROLES: readonly EngagementTeamRole[] = ["manager", "lead", "partner"];
 
-export const ENGAGEMENT_TEAM_ROLE_ORDER: Record<EngagementTeamRole, number> = { partner: 0, manager: 1, lead: 2, analyst: 3, expert: 4 };
+export const ENGAGEMENT_TEAM_ROLE_ORDER: Record<EngagementTeamRole, number> = { partner: 0, manager: 1, lead: 2, digital_marketer: 3, content_producer: 4, analyst: 5, expert: 6 };
 
 /** Firm titles: the levels, which decide access (shared/platformPermissions.ts, FIRM_LEVELS). */
 export { FIRM_LEVELS as FIRM_TITLES } from "./platformPermissions";

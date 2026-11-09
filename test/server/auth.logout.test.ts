@@ -25,6 +25,8 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
     updatedAt: new Date(),
     lastSignedIn: new Date(),
     jobTitle: null,
+    whatsapp: null,
+    whatsappConsentAt: null,
   };
 
   const ctx: TrpcContext = {

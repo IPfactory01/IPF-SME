@@ -27,7 +27,7 @@ import {
   ENGAGEMENT_TASK_PRIORITY_LABELS,
   type EngagementTaskPriority,
   ENGAGEMENT_TEAM_ROLE_LABELS,
-  ENGAGEMENT_TEAM_ROLES,
+  teamRolesFor,
   CHECKIN_QUESTIONS,
   FINDINGS_OUTLINE,
   FIX_WEEKS,
@@ -232,7 +232,7 @@ function StageAndTeam({ data, engagementId }: { data: Detail; engagementId: numb
             {data.can.assign ? (
               <span className="flex items-center gap-2">
                 <select aria-label={`Role of ${member.name || member.email}`} className={`${FIELD} w-auto`} disabled={assign.isPending} value={member.role} onChange={event => assign.mutate({ engagementId, userId: member.userId, role: event.target.value as EngagementTeamRole })}>
-                  {ENGAGEMENT_TEAM_ROLES.map(item => <option key={item} value={item}>{ENGAGEMENT_TEAM_ROLE_LABELS[item]}</option>)}
+                  {teamRolesFor(data.engagement.type).map(item => <option key={item} value={item}>{ENGAGEMENT_TEAM_ROLE_LABELS[item]}</option>)}
                 </select>
                 <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={remove.isPending} onClick={() => remove.mutate({ engagementId, userId: member.userId })}>Remove</Button>
               </span>
@@ -252,7 +252,7 @@ function StageAndTeam({ data, engagementId }: { data: Detail; engagementId: numb
               </select>
             </div>
             <select aria-label="Role on the engagement" className={`${FIELD} w-auto`} value={role} onChange={event => setRole(event.target.value as EngagementTeamRole)}>
-              {ENGAGEMENT_TEAM_ROLES.map(item => <option key={item} value={item}>{ENGAGEMENT_TEAM_ROLE_LABELS[item]}</option>)}
+              {teamRolesFor(data.engagement.type).map(item => <option key={item} value={item}>{ENGAGEMENT_TEAM_ROLE_LABELS[item]}</option>)}
             </select>
             <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={!person || assign.isPending} onClick={() => { assign.mutate({ engagementId, userId: Number(person), role }); setPerson(""); }}>Add</Button>
           </div>

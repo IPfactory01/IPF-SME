@@ -22,3 +22,17 @@ describe("numbered questions in a task's detail", () => {
     expect(splitNumberedList("Sales for the last 12 months. Month by month.")).toBeNull();
   });
 });
+
+describe("project roles by type of engagement (R45)", () => {
+  it("offers the Digital Marketer and the Content Producer on Digital marketing only, and shows them after the lead", async () => {
+    const { teamRolesFor, ENGAGEMENT_TEAM_ROLE_LABELS, ENGAGEMENT_TEAM_ROLE_ORDER, ENGAGEMENT_REVIEW_ROLES } = await import("@shared/engagement");
+    expect(teamRolesFor("digital_marketing")).toEqual(expect.arrayContaining(["digital_marketer", "content_producer"]));
+    expect(teamRolesFor("business_review")).not.toContain("digital_marketer");
+    expect(teamRolesFor("business_review")).not.toContain("content_producer");
+    expect([ENGAGEMENT_TEAM_ROLE_LABELS.digital_marketer, ENGAGEMENT_TEAM_ROLE_LABELS.content_producer]).toEqual(["Digital Marketer", "Content Producer"]);
+    expect(ENGAGEMENT_TEAM_ROLE_ORDER.lead).toBeLessThan(ENGAGEMENT_TEAM_ROLE_ORDER.digital_marketer);
+    expect(ENGAGEMENT_TEAM_ROLE_ORDER.content_producer).toBeLessThan(ENGAGEMENT_TEAM_ROLE_ORDER.analyst);
+    // Approval follows the person's level, as for every role (App flow 4.6).
+    expect(ENGAGEMENT_REVIEW_ROLES).not.toContain("digital_marketer");
+  });
+});

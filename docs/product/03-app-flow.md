@@ -147,8 +147,8 @@ flowchart TD
 | **Lead** (Engagement Manager or Lead Consultant on the engagement; Partner, Vice President, Senior Associate, or an Associate leading it) | **My projects** in Engagements | Opens engagements and sets terms; staffs them; approves Deliverables; shares notes; sends fee links; opens a room early | Approve on an engagement they do not lead, unless their level approves everywhere |
 | **Analyst** (Senior Business Analyst, Business Analyst) | **My projects** | Keeps the Work Plan and Data Request current; matches files; drafts Deliverables; records check-ins; records payments by hand | Approve, staff, or see engagements they are not on |
 | **Specialist** | Invited by the Super Admin at Specialist level with an end date; then **added to an engagement** by a lead with `assign_engagements` (Partner, Vice President, Senior Associate), who sets the role Specialist; the Specialist is emailed *You are on {business} as Specialist* and it appears in **My projects**; one step from the engagement with R58 | Adds team items; attaches drafts to Deliverables for the lead to share | See internal notes or fees; change anything already there; reach the client directly |
-| **Digital Marketer** (a project role on a Digital marketing engagement; R45, to build) | **My projects** | The content plan, publishing, the monthly numbers; the client's main contact, on WhatsApp | As their level allows |
-| **Content Producer** (a project role; R45, to build) | **My projects** | Receives footage (by link or WhatsApp), edits, sends pieces for the owner's approval | As their level allows |
+| **Digital Marketer** (a project role on a Digital marketing engagement; R45) | **My projects** | The content plan, publishing, the monthly numbers; the client's main contact, on WhatsApp | As their level allows |
+| **Content Producer** (a project role on a Digital marketing engagement; R45) | **My projects** | Receives footage (by link or WhatsApp), edits, sends pieces for the owner's approval | As their level allows |
 
 Every team member has a WhatsApp number on their profile (R44); the room shows it beside them, and an item meant for
 one of them offers **Send on WhatsApp to {name}**. Each person agrees to their number being shown (PRD K11).
@@ -413,6 +413,8 @@ person does on that one engagement, not what they may see across the platform.
 | Partner | Oversees it; approves its Deliverables |
 | Analyst | Does the work; may not approve |
 | Specialist | Hands in work in one area until their end date; may not approve; never sees internal notes or fees |
+| Digital Marketer | On a Digital marketing engagement only: the content plan, publishing, the monthly numbers; the client's main contact. Approval follows their level |
+| Content Producer | On a Digital marketing engagement only: receives the footage, makes the edits, sends pieces for the owner's approval. Approval follows their level |
 
 ## 9. Legal links
 

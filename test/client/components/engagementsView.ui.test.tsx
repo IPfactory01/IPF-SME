@@ -82,6 +82,23 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("the team's engagements", () => {
+  it("offers the Digital Marketer and the Content Producer only on a Digital marketing engagement (R45)", async () => {
+    const options = async () => {
+      render(<EngagementsView />);
+      fireEvent.click(screen.getByText("Ada Foods"));
+      const select = await screen.findByLabelText("Role on the engagement");
+      const labels = Array.from((select as HTMLSelectElement).options).map(option => option.textContent);
+      cleanup();
+      return labels;
+    };
+    api.detail = detail({ manage: true, assign: true, review: true }, [], []);
+    expect(await options()).not.toContain("Digital Marketer");
+    const marketing = detail({ manage: true, assign: true, review: true }, [], []) as { engagement: Record<string, unknown> };
+    marketing.engagement = { ...marketing.engagement, type: "digital_marketing" };
+    api.detail = marketing;
+    expect(await options()).toEqual(expect.arrayContaining(["Digital Marketer", "Content Producer"]));
+  });
+
   it("says when the list could not load, with Try again, instead of an empty list (R69)", () => {
     api.failed.list = true;
     render(<EngagementsView />);

@@ -57,6 +57,7 @@ import {
   CLIENT_ACCESS_LABELS,
   ENGAGEMENT_REVIEW_ROLES,
   type ClientAccessLevel,
+  teamRolesFor,
 } from "../shared/engagement";
 import type { AccountSession, Database } from "./accountAuth";
 import { CONTENT_KIND_LABELS, CONTENT_STATUS_LABELS, DATED_TYPES, datedProgress, engagementTitle, ENGAGEMENT_TYPE_LABELS, SERVICE_TYPES, serviceStarter, servicesFor, serviceStep, SERVICE_STEPS, STAGED_TYPES, type ContentKind, type ContentStatus, type DatedEngagementType, type EngagementType } from "../shared/engagementTypes";
@@ -546,7 +547,9 @@ async function notifyShared(db: Pick<Database, "select">, engagementId: number, 
 
 export async function assignTeamMember(db: Database, actor: StaffActor, input: { engagementId: number; userId: number; role: EngagementTeamRole }) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
-  await requireStaffEngagement(db, actor, input.engagementId);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  // The Digital Marketer and Content Producer belong to Digital marketing engagements only (R45).
+  if (!teamRolesFor(engagement.type).includes(input.role)) throw new TRPCError({ code: "BAD_REQUEST", message: "The Digital Marketer and Content Producer roles are for Digital marketing engagements." });
   const staff = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq(userPlatformRoles.userId, users.id))
     .where(and(eq(userPlatformRoles.userId, input.userId), eq(users.status, "active"))).limit(1))[0];
   if (!staff) throw new TRPCError({ code: "BAD_REQUEST", message: "Only IP Factory staff can join an engagement team." });

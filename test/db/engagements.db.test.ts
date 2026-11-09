@@ -265,6 +265,22 @@ for (const target of targets) {
       });
     });
 
+    describe("the Digital marketing roles (R45, migration 0021)", () => {
+      it("puts a Digital Marketer and a Content Producer on a Digital marketing engagement, and on no other kind", async () => {
+        const desk = await superAdmin.call();
+        const opened = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Reel Studio", contactName: "Remi Reel", contactEmail: uniqueEmail("reel-studio"), startedOn: "2026-11-09" });
+        const marketer = await person(["analyst"], "Dami Marketer");
+        const producer = await person(["subject_matter_expert"], "Kunle Producer");
+        await desk.engagement.staff.assign({ engagementId: opened.engagementId, userId: marketer.id, role: "digital_marketer" });
+        await desk.engagement.staff.assign({ engagementId: opened.engagementId, userId: producer.id, role: "content_producer" });
+        const team = (await desk.engagement.staff.detail({ engagementId: opened.engagementId })).team;
+        expect(team.map(member => [member.name, member.roleLabel])).toEqual(expect.arrayContaining([["Dami Marketer", "Digital Marketer"], ["Kunle Producer", "Content Producer"]]));
+
+        const { engagementId } = await client("not-marketing");
+        await expect(desk.engagement.staff.assign({ engagementId, userId: marketer.id, role: "digital_marketer" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: "The Digital Marketer and Content Producer roles are for Digital marketing engagements." });
+      });
+    });
+
     describe("loading a Data Request in one step", () => {
       it("adds every item after the existing ones, dates them by priority, skips what is already there, and is the team's alone", async () => {
         const { owner, engagementId } = await client("load-data-request");

@@ -47,6 +47,12 @@ export const users = pgTable("users", {
   lastSignedIn: timestamp("lastSignedIn", { withTimezone: true }).defaultNow().notNull(),
   /** Firm title (Partner, Senior Associate, ...), shown to clients beside the person's role on their engagement. 0013. */
   jobTitle: varchar("jobTitle", { length: 80 }),
+  /**
+   * A staff member's WhatsApp number in international form (+2348031234567), and when they agreed to it being shown to
+   * the clients they work with (R44, 0021). A number is shown only once agreed, and only to clients of their engagements.
+   */
+  whatsapp: varchar("whatsapp", { length: 20 }),
+  whatsappConsentAt: timestamp("whatsappConsentAt", { withTimezone: true }),
 }, table => [uniqueIndex("users_email_lower_unique").on(sql`lower(${table.email})`)]);
 
 /** Password credential for a universal account: one row per user. */
@@ -1007,6 +1013,9 @@ export const engagementTasks = pgTable("engagement_tasks", {
   priority: engagementTasksPriorityEnum("priority"),
   /** Why more is needed, or how the client sent it ("by WhatsApp"). */
   statusNote: varchar("statusNote", { length: 500 }),
+  /** A link that answers the item: a shared folder of footage or records (Google Drive, Dropbox, WeTransfer, iCloud). The
+   *  file itself is never stored (R43, 0021). */
+  responseLink: varchar("responseLink", { length: 2048 }),
   /** The session the action came out of. */
   sessionId: integer("sessionId").references(() => engagementSessions.id, { onDelete: "set null" }),
   createdByUserId: integer("createdByUserId").references(() => users.id),

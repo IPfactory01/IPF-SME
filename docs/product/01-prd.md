@@ -235,6 +235,25 @@ channels Nigerian owners use, the phone). G1 to G16 are the gaps found; each is 
 | R56 | **Weak networks (G15).** Photos compressed before upload; an interrupted upload resumes | C | An upload on mobile data succeeds or says clearly what to do | To build |
 | R57 | **Quiet hours (G16).** No reminder or message between 9pm and 7am Lagos time; a client can choose email, WhatsApp or both once WhatsApp messages exist | C | Nobody is messaged at night | To build |
 
+### From the coverage matrix (9 November 2026)
+
+The [coverage matrix](09-coverage-matrix.md) checks every object, every stage of its life and who acts, against the code
+and the App flow. It is run again at every review. It found 13 gaps, numbered C1 to C17; C1 was a documentation gap, fixed.
+
+| # | Requirement | P | Acceptance | Status |
+|---|---|---|---|---|
+| R58 | **Invite and add (C2).** From an engagement's team, a lead with `assign_engagements` can invite a colleague or a Specialist (with an end date) and add them to that engagement in one step; the Super Admin is told and still controls every other level | S | Staffing an engagement never waits on the Super Admin | To build |
+| R59 | **Session reminders (C3).** The client and the team are reminded the day before and an hour before each Session, with the time in Lagos, the Join link and a WhatsApp button; the unused JUMP-era template is removed (C12) | S | No Session is missed for want of a reminder | To build (with the reminder engine, R12) |
+| R60 | **The client hears back on the next fix (C4).** When the desk opens the engagement or declines the request, the client is told, with the reason when declined | S | No request to buy goes unanswered | To build |
+| R61 | **Removing a file (C5).** A client can remove a file they sent until the team has matched it; the team can remove any file, with a reason recorded; the stored object is deleted | S | A wrong or private file can be taken back | To build |
+| R62 | **A person's data on request (C6).** The Super Admin can export everything held about a person, and erase or anonymise it where no legal duty requires keeping it, under the Nigeria Data Protection Act 2023; each request is recorded | S | A request is answered within the period the Act allows | To build (counsel to confirm the periods, K5) |
+| R63 | **Archiving an engagement (C7).** The desk can archive an engagement opened by mistake; it leaves every list and the client's projects, and stays in the record | C | Mistakes do not clutter the lists | To build |
+| R64 | **Follow-up alerts for the desk (C8).** A finished check with no call recorded after two working days, or a booked call with no outcome the day after, is flagged to the desk | S | Every lead is acted on | To build |
+| R65 | **Referrals (C9).** Marking a lead Referred sends its summary to the firm it is referred to, with the owner's consent recorded | C | A referral reaches someone | To build |
+| R66 | **Who did what (C10).** The Super Admin can read the audit log, filtered by person, client, engagement and action | C | Any change can be traced to a person or to Paystack | To build |
+| R67 | **A new owner (C15).** The owner can hand the business to another person, who accepts; the old owner keeps the access the new owner gives them | C | A business that changes hands keeps its history | To build |
+| R68 | **Access ending (C17).** The lead and the Specialist are told seven days before a Specialist's access ends, with a way to extend it (Super Admin) | C | No one loses access mid-work without warning | To build |
+
 ### Stage 7–8: Deliver and Measure
 
 | # | Requirement | P | Acceptance | Status |
@@ -343,14 +362,14 @@ Ordered by what each moves first: cash, then growth, then hours, then retention.
 
 | # | Release | Requirements | Moves |
 |---|---|---|---|
-| 0 | The first client's experience (the P1 gaps of the design review) | R43, R44, R45, R46, R47 | Time to first value; trust; records in on time |
+| 0 | The first client's experience (the P1 gaps of the design review) | R43, R44, R45, R46, R47, R61 | Time to first value; trust; records in on time |
 | 1 | Payment terms and one payment model | R36, R37, R24, R42; the pause screen of R51; the groundwork for R53 | Cash collected on time |
-| 2 | Fee and Data Request reminders | R12, R16, R48, R57; every reminder carries a WhatsApp button (R44) | Delivery hours; cash; conversion |
+| 2 | Fee, Data Request and Session reminders | R12, R16, R48, R57, R59, R64; every reminder carries a WhatsApp button (R44) | Delivery hours; cash; conversion |
 | 3 | Buy now and the trust layer | R13, R38, R35 | Conversion; cost of winning a client |
 | 4 | Close, the Day-30 Review and the next fix | R26, R27, R28 | Lifetime value; the pass marks |
 | 5 | The room and the team's day, after the usability test | R49, R50, R52, R54, the rest of R51 | Delivery hours; the client's experience |
 | 6 | Tracking, the measures page, receipts | R39, R34, R53 | Every decision after this one; trust |
-| 7 | Sign-in links and the rest | R41, R55, R56 | Support time |
+| 7 | Sign-in links and the rest | R41, R55, R56, R58, R60, R62, R63, R65 to R68 | Support time; legal duties |
 | Alongside | Search | R40, R2 | Cost of winning a client |
 
 ## 11. Open decisions

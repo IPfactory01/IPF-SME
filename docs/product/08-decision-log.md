@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Completeness is checked, not remembered: a coverage matrix built from the code (every procedure, audit action and table) is run at every review; its 13 gaps (numbered C1 to C17) become R58 to R68, and C1 (the Specialist's added-to-an-engagement step) is fixed in the App flow and on the board | ET, 9 November 2026 |
 | The product design review of the flows: 16 gaps (G1 to G16) written into the PRD as R43 to R57, with a new Release 0 for the first client's experience | ET, 9 November 2026 |
 | Raw footage moves by WhatsApp or a Drive link and is never stored on the platform; voice notes can be uploaded | ET, 9 November 2026 |
 | Clients send WhatsApp messages to the person doing the work (the Digital Marketer or the Content Producer), not a central line; two new project roles for Digital marketing | ET, 9 November 2026 |

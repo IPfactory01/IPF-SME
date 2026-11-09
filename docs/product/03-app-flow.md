@@ -3,7 +3,7 @@
 **How The Shift works for each person who uses it, step by step.** Rebuilt on 8 November 2026 from the
 [PRD](01-prd.md) review, as service blueprints: for every step, what the client does, what the platform does on its own,
 what a person on the team does, the email that goes out, and the status that changes. Each step says whether it is
-**Built** or **To build** (with the PRD requirement, R1 to R57). Diagrams use Mermaid, which GitHub renders.
+**Built** or **To build** (with the PRD requirement, R1 to R68). The [coverage matrix](09-coverage-matrix.md) checks this document against the code. Diagrams use Mermaid, which GitHub renders.
 
 How to read it. Sections 1 to 4 are the design: who arrives where, the two rules that shape everything after (the
 front doors and the payment terms), and the journeys. Sections 5 to 7 are the reference for building and testing: every
@@ -146,7 +146,7 @@ flowchart TD
 |---|---|---|---|
 | **Lead** (Engagement Manager or Lead Consultant on the engagement; Partner, Vice President, Senior Associate, or an Associate leading it) | **My projects** in Engagements | Opens engagements and sets terms; staffs them; approves Deliverables; shares notes; sends fee links; opens a room early | Approve on an engagement they do not lead, unless their level approves everywhere |
 | **Analyst** (Senior Business Analyst, Business Analyst) | **My projects** | Keeps the Work Plan and Data Request current; matches files; drafts Deliverables; records check-ins; records payments by hand | Approve, staff, or see engagements they are not on |
-| **Specialist** | **My projects**, until their end date | Adds team items; attaches drafts to Deliverables for the lead to share | See internal notes or fees; change anything already there; reach the client directly |
+| **Specialist** | Invited by the Super Admin at Specialist level with an end date; then **added to an engagement** by a lead with `assign_engagements` (Partner, Vice President, Senior Associate), who sets the role Specialist; the Specialist is emailed *You are on {business} as Specialist* and it appears in **My projects**; one step from the engagement with R58 | Adds team items; attaches drafts to Deliverables for the lead to share | See internal notes or fees; change anything already there; reach the client directly |
 | **Digital Marketer** (a project role on a Digital marketing engagement; R45, to build) | **My projects** | The content plan, publishing, the monthly numbers; the client's main contact, on WhatsApp | As their level allows |
 | **Content Producer** (a project role; R45, to build) | **My projects** | Receives footage (by link or WhatsApp), edits, sends pieces for the owner's approval | As their level allows |
 

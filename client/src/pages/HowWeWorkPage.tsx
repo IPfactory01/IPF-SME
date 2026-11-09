@@ -13,7 +13,8 @@ import { PRODUCTS, servicePath, WAY_DETAILS, WAYS_TO_BUY } from "@shared/product
 import { ArrowRight } from "lucide-react";
 import React from "react";
 import { Link } from "wouter";
-import { PAGE_META } from "@shared/seo";
+import { PROMISE } from "@shared/businessSupport";
+import { PAGE_META } from "@shared/pageMeta";
 import { CONSULTING_METHOD, OUTCOME_STANDARD } from "@shared/method";
 
 export default function HowWeWorkPage() {
@@ -24,7 +25,8 @@ export default function HowWeWorkPage() {
 
   return (
     <SiteShell>
-      <PageHero eyebrow="How we work" title="Find it. Fix it. See the shift." sub="Every piece of work starts with the real problem and ends with a number that moved. A consultant checks it before you see it." />
+      {/* Its own main heading (R73): the promise is the home page's heading, and the line above this one. */}
+      <PageHero eyebrow={PROMISE.join(" ")} title="How we work with your business." sub="Every piece of work starts with the real problem and ends with a number that moved. A consultant checks it before you see it." />
 
       <MethodSection />
 

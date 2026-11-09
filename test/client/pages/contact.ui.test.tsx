@@ -45,10 +45,11 @@ describe("Contact (/contact)", () => {
     window.history.replaceState({}, "", "/");
   });
 
-  it("adds its structured data to the page itself, once, whichever file the host served", () => {
+  it("adds its structured data to the page itself, once, whichever file the host served", async () => {
     renderAt("/contact", ContactPage);
-    const scripts = Array.from(document.head.querySelectorAll('script[type="application/ld+json"]'), (script) => JSON.parse(script.textContent!) as { "@type": string });
-    expect(scripts.map((data) => data["@type"])).toEqual(["ProfessionalService", "BreadcrumbList"]);
+    // Every page's data together is large, so it loads after the page is up (R70).
+    const types = () => Array.from(document.head.querySelectorAll('script[type="application/ld+json"]'), (script) => (JSON.parse(script.textContent!) as { "@type": string })["@type"]);
+    await vi.waitFor(() => expect(types()).toEqual(["ProfessionalService", "BreadcrumbList"]));
     cleanup();
     expect(document.head.querySelectorAll('script[type="application/ld+json"]')).toHaveLength(0);
   });

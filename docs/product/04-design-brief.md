@@ -172,9 +172,16 @@ the link is wrong, and only then does the page say so. A signed-in person whose 
 ## 8. Motion
 
 - One easing everywhere: `EASE = [0.22, 1, 0.36, 1]` (`client/src/components/motion.tsx`).
+- **The public site moves in CSS, with no animation library** (R70): `Reveal`, `Stagger` and `ScrollProgress` in
+  `client/src/components/motion.tsx`, the states in `client/src/index.css`.
 - Reveal on scroll: fade up 24 px over 0.7 s, once, **below the first screen only**. Nothing in the first screen waits on
-  an animation to appear (R70). Lists stagger by 0.07 s.
-- The app respects the device's reduced-motion setting (`MotionConfig reducedMotion="user"`): with it on, nothing moves by
+  an animation to appear (R70): the reveal is set on the element by script after the page is up, never in the HTML, so a
+  page rendered at build time shows everything at once. Lists stagger by 0.07 s. An opened answer or step rises in
+  (0.4 s); the home page's sentence under the headline changes every 5 s and rises in.
+- Press feedback on the public buttons is CSS: they lift 2 px on hover and give (`scale(0.97)`) on the press.
+- The Business Health Check's questions and the client room keep Framer Motion, loaded with their own code; each sets
+  `MotionConfig reducedMotion="user"` itself.
+- The app respects the device's reduced-motion setting: with it on, nothing moves by
   itself. Nothing loops when it is not live. Glass headers turn solid under "reduce transparency" and gain a firm edge
   under "increase contrast" (`client/src/index.css`).
 - **The Business Health Check** moves like a native app: a chosen answer shows its tick on the press and the next question
@@ -349,16 +356,21 @@ be previewed as the client sees it (**Preview as client**, read only).
 Owners arrive on a phone, often on mobile data, from a link on WhatsApp or Instagram. A blank screen loses them, and
 Google ranks on how fast the main content appears.
 
-| Measure | Budget | 9 November 2026 |
-|---|---|---|
-| Largest content shown (LCP) on Lighthouse's mobile profile (1.6 Mbit/s, 150 ms, a 4 × slower processor): Home, the check, a guide | 2.5 s or less | Home 4.3 s, the check 2.5 s, a guide 2.6 s (on a faster 4G profile: 2.6 s, 0.8 s, 0.8 s) |
-| First content shown | Before the site's code runs | After it: the pre-built page holds text for search engines only, so the screen stays blank until the code runs (2.7 s on the mobile profile) |
-| JavaScript for a public page, compressed | 170 KB or less | 270 KB, the same bundle for every public page |
+| Measure | Budget | Before (9 November 2026) | After batch D (9 November 2026) |
+|---|---|---|---|
+| Largest content shown (LCP) on Lighthouse's mobile profile (1.6 Mbit/s, 150 ms, a 4 × slower processor): Home, the check, a guide | 2.5 s or less | Home 4.3 s, the check 2.5 s, a guide 2.5 s | Home 0.9 s, the check 0.8 s, a guide 0.9 s |
+| First content shown | Before the site's code runs | After it: the pre-built page held text for search engines only, so the screen stayed blank until the code ran (2.7 s) | Before it: 0.9 s, the page rendered at build time |
+| JavaScript for a public page, compressed | 170 KB or less, checked by `pnpm build` | 276 KB, the same bundle for every public page | 123 KB (the check) to 142 KB (Experience); Home 141 KB |
 
-Measured on the production build served locally with compression, in Chromium with Pixel 5 emulation.
+Measured on the production build served locally with compression, in Chromium with Pixel 5 emulation, the same script
+before and after.
 
-- Public pages are pre-rendered as the real page, so the content shows before the code runs.
-- Each public page loads its own code; the room and the admin console load separately, so a visitor never downloads them.
+- Public pages are rendered at build time as the real page (`client/src/entry-server.tsx`, `scripts/prerender.ts`), so
+  the content shows before the code runs; the browser takes the HTML over as it stands (hydration) instead of drawing it
+  again (`client/src/main.tsx`).
+- Each public page loads its own code (`lazyPage` in `client/src/App.tsx`); the room and the admin console load
+  separately, so a visitor never downloads them. The build fails when a public page passes the budget
+  (`scripts/jsBudget.ts`, `shared/performance.ts`).
 - Nothing in the first screen fades in; images below the first screen load lazily.
 
 ## 15. Tests that guard the brand

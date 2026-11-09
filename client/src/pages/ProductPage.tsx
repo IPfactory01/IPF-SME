@@ -18,7 +18,7 @@ import {
 import { ArrowRight, Check, Minus } from "lucide-react";
 import React from "react";
 import { Link, useParams } from "wouter";
-import { productMeta } from "@shared/seo";
+import { productMeta } from "@shared/pageMeta";
 
 /** How the service runs, in three steps, from how it starts to what the owner receives. */
 export function stepsFor(product: Product, price: PriceModel): { title: string; body: string }[] {

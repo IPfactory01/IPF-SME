@@ -4,7 +4,8 @@
  * what comes next (shared/businessCheck/engine.ts). Every area opens with what it means and an
  * example for the kind of business the owner described. The result is written on the server.
  */
-import { LegalFooterLinks, PrivacyLink, TermsLink } from "@/components/LegalLinks";
+import { PrivacyLink, TermsLink } from "@/components/LegalLinks";
+import { CheckFrame, Intro, PrimaryButton } from "@/components/check/CheckIntro";
 import { usePageMeta, useStructuredData } from "@/components/SiteShell";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,7 +35,7 @@ import {
 } from "@shared/businessCheck/engine";
 import { AREA_NAMES, GAP_LABELS, SECTIONS, stageOf, type Answers, type Health, type Question, type SectionId } from "@shared/businessCheck/questions";
 import { useServicePrices } from "@/lib/servicePrices";
-import { FULL_REPORT, formatNaira, PROMISE } from "@shared/businessSupport";
+import { FULL_REPORT, formatNaira } from "@shared/businessSupport";
 import { bookingTarget, calendlyEventUri, isCalendlyBooking } from "@shared/booking";
 import { describeFounder, STRENGTH_LABELS, type Strength } from "@shared/businessCheck/founderNarrative";
 import { cleanNationalNumber, DEFAULT_COUNTRY, phoneProblem, toInternational } from "@shared/phone";
@@ -42,10 +43,10 @@ import PhoneField from "@/components/PhoneField";
 import { ArrowLeft, ArrowRight, BriefcaseBusiness, CalendarDays, Check, CheckCircle2, Clock3, FileText, Lightbulb, LockKeyhole, Mail, PencilLine, RotateCcw, type LucideIcon } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { EASE } from "@/components/motion";
-import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion, useTransform, type Variants } from "framer-motion";
+import { AnimatePresence, animate, motion, MotionConfig, useMotionValue, useReducedMotion, useTransform, type Variants } from "framer-motion";
 import { Link } from "wouter";
 import type { BusinessCheckResponse } from "../../../server/routers/businessCheck";
-import { PAGE_META } from "@shared/seo";
+import { PAGE_META } from "@shared/pageMeta";
 
 const STORAGE_KEY = "ipf-business-check-v1";
 
@@ -131,10 +132,19 @@ const HEALTH_STYLE: Record<Health | "pending", { dot: string; row: string; label
   pending: { dot: "bg-line-strong", row: "border-line bg-paper-raised text-ink-faint", label: "To come" },
 };
 
-export default function BusinessCheck() {
+/** The check moves with Framer Motion; with "reduce motion" on, nothing slides (design brief §8). */
+export default function BusinessCheck({ startNow = false }: { startNow?: boolean }) {
+  return <MotionConfig reducedMotion="user"><BusinessCheckFlow startNow={startNow} /></MotionConfig>;
+}
+
+/** `startNow`: the owner already pressed the first screen's button while this code was loading (pages/CheckPage.tsx). */
+function BusinessCheckFlow({ startNow }: { startNow: boolean }) {
   usePageMeta(PAGE_META.check.title, PAGE_META.check.description);
   useStructuredData("/check");
-  const [state, setState] = useState<Saved>(load);
+  const [state, setState] = useState<Saved>(() => {
+    const saved = load();
+    return startNow && !saved.response ? { ...saved, started: true } : saved;
+  });
   const [editing, setEditing] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [direction, setDirection] = useState(1);
@@ -312,48 +322,30 @@ export default function BusinessCheck() {
   const showOutline = state.started && state.token && !state.response && stageOf(answers);
 
   return (
-    <div className="min-h-screen bg-paper text-ink font-sans flex flex-col">
-      <header className="border-b border-line bg-paper/90 backdrop-blur sticky top-0 z-40">
-        <div className="container flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-3" aria-label={`${BRAND.organisationName} home`}>
-            <img src={BRAND.markUrl} alt={BRAND.organisationName} className="h-9 w-auto" />
-            <span className="border-l border-line pl-3 text-sm font-semibold text-ink-muted">Business Health Check</span>
-          </Link>
-          <Link href="/" className="text-sm font-semibold text-brand hover:text-brand-deep">Back to site</Link>
-        </div>
-        {showOutline && (
-          <SectionRail
-            answers={answers}
-            current={step?.section.id}
-            onChangeStage={step?.question.id === "p_stage" ? undefined : () => { setDirection(-1); setEditing("p_stage"); }}
-          />
-        )}
-      </header>
-
-      <main className="flex-1 py-8 md:py-12">
-        <div className={`container ${showOutline ? "grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px] max-w-6xl" : "max-w-3xl"} mx-auto`}>
-          <div className="relative min-w-0">
-            <AnimatePresence mode="popLayout" initial={false} custom={direction}>
-              <motion.div
-                key={screenKey}
-                data-screen={screenKey}
-                custom={direction}
-                variants={screenMotion}
-                initial="enter"
-                animate="centre"
-                exit="leave"
-              >
-                {screen}
-              </motion.div>
-            </AnimatePresence>
-          </div>
-          {showOutline && <OutlinePanel answers={answers} />}
-        </div>
-      </main>
-      <footer className="border-t border-line py-4">
-        <LegalFooterLinks />
-      </footer>
-    </div>
+    <CheckFrame
+      rail={showOutline && (
+        <SectionRail
+          answers={answers}
+          current={step?.section.id}
+          onChangeStage={step?.question.id === "p_stage" ? undefined : () => { setDirection(-1); setEditing("p_stage"); }}
+        />
+      )}
+      aside={showOutline && <OutlinePanel answers={answers} />}
+    >
+      <AnimatePresence mode="popLayout" initial={false} custom={direction}>
+        <motion.div
+          key={screenKey}
+          data-screen={screenKey}
+          custom={direction}
+          variants={screenMotion}
+          initial="enter"
+          animate="centre"
+          exit="leave"
+        >
+          {screen}
+        </motion.div>
+      </AnimatePresence>
+    </CheckFrame>
   );
 }
 
@@ -408,53 +400,6 @@ function SectionRail({ answers, current, onChangeStage }: { answers: Answers; cu
         )}
       </div>
     </div>
-  );
-}
-
-function Intro({ hasProgress, onStart, onRestart }: { hasProgress: boolean; onStart: () => void; onRestart: () => void }) {
-  return (
-    <motion.div className="space-y-10" variants={listMotion} initial="hidden" animate="show">
-      <motion.div variants={itemMotion}>
-        <h1 className="font-serif text-4xl font-normal leading-[1.08] sm:text-6xl">
-          {PROMISE[0]} {PROMISE[1]} <span className="font-normal italic">{PROMISE[2]}</span>
-        </h1>
-        <p className="mt-4 text-sm font-semibold text-brand">The free Business Health Check</p>
-        <p className="mt-6 text-lg leading-relaxed text-ink-600">
-          Some owners know exactly what is wrong. Many can only feel it: busy every day, money in and out, and no clear picture of why it isn't working. This check is for both.
-        </p>
-        {/* Running text in the body face, never italic serif (B11); the result's headings named as they appear there. */}
-        <p className="mt-4 text-lg leading-relaxed text-ink-600">
-          It starts with you, the founder, then walks through the parts of the business that apply to you. Each answer determines the next question, so you only see what is relevant. At the end you get a short read: your Findings, what we think the real problem is, and where to start.
-        </p>
-      </motion.div>
-
-      <ol className="grid gap-3 sm:grid-cols-3">
-        {[
-          { title: "Your business", body: "Stage, size and how you make money." },
-          { title: "Founder readiness", body: "How you lead, what you know, the time you have." },
-          { title: "The areas that apply", body: "From strategic intent to financials, chosen by your answers." },
-        ].map((item, index) => (
-          <motion.li key={item.title} variants={itemMotion} whileHover={{ y: -4 }} className="border border-line bg-paper-raised p-5 transition-shadow hover:shadow-lg">
-            <span className="font-serif text-2xl font-normal text-brand">{index + 1}</span>
-            <p className="mt-2 font-semibold">{item.title}</p>
-            <p className="mt-1 text-sm leading-relaxed text-ink-muted">{item.body}</p>
-          </motion.li>
-        ))}
-      </ol>
-
-      <motion.div variants={itemMotion} className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <PrimaryButton onClick={onStart} large>{hasProgress ? "Continue where you left off" : "Take the Business Health Check"}</PrimaryButton>
-        {hasProgress && (
-          <button type="button" onClick={onRestart} className="text-sm font-semibold text-brand underline underline-offset-4">Start again</button>
-        )}
-        <p className="text-sm text-ink-muted">About ten minutes. Free. Ranges are fine.</p>
-      </motion.div>
-
-      <motion.p variants={itemMotion} className="flex items-start gap-3 border border-brand-line bg-brand-tint p-4 text-xs leading-relaxed text-brand">
-        <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0" />
-        <span>Your answers are private to {BRAND.organisationName}. Progress is kept on this device until you send it, so you can stop and come back.</span>
-      </motion.p>
-    </motion.div>
   );
 }
 
@@ -1101,23 +1046,6 @@ function SummaryCard({ title, body, accent }: { title: string; body: string; acc
       <p className="text-sm font-semibold text-ink-muted">{title}</p>
       <p className="mt-3 leading-relaxed text-ink-700">{body}</p>
     </motion.div>
-  );
-}
-
-function PrimaryButton({ children, onClick, disabled, type = "button", large, "aria-describedby": describedBy }: { children: React.ReactNode; onClick?: () => void; disabled?: boolean; type?: "button" | "submit"; large?: boolean; "aria-describedby"?: string }) {
-  return (
-    <motion.button
-      type={type}
-      onClick={onClick}
-      disabled={disabled}
-      aria-describedby={describedBy}
-      whileHover={disabled ? undefined : { y: -2 }}
-      whileTap={disabled ? undefined : { scale: 0.97 }}
-      className={`group inline-flex items-center justify-center bg-ink font-semibold text-paper shadow-[0_14px_30px_-16px_rgba(18,50,79,0.8)] transition-colors hover:bg-charcoal disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none ${large ? "h-14 px-8 text-sm" : "h-12 px-7 text-xs"}`}
-    >
-      {children}
-      <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-    </motion.button>
   );
 }
 

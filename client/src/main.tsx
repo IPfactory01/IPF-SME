@@ -1,12 +1,13 @@
 import { readRetryDelay, retryRead } from "@/lib/readPolicy";
 import { trpc } from "@/lib/trpc";
 import { COOKIE_NAME, UNAUTHED_ERR_MSG } from '@shared/const';
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient } from "@tanstack/react-query";
 import { httpBatchLink, TRPCClientError } from "@trpc/client";
-import { createRoot } from "react-dom/client";
+import { createRoot, hydrateRoot } from "react-dom/client";
 import superjson from "superjson";
-import App from "./App";
-import { ADMIN_LOGIN_PATH } from "./const";
+import { preloadPage } from "./App";
+import { Root } from "./Root";
+import { ADMIN_LOGIN_PATH } from "./adminLoginPath";
 import "./index.css";
 
 // Every read retries twice on a failed request, never on a refusal (lib/readPolicy.ts, design brief §5).
@@ -76,10 +77,14 @@ const trpcClient = trpc.createClient({
   ],
 });
 
-createRoot(document.getElementById("root")!).render(
-  <trpc.Provider client={trpcClient} queryClient={queryClient}>
-    <QueryClientProvider client={queryClient}>
-      <App />
-    </QueryClientProvider>
-  </trpc.Provider>
-);
+/*
+ * A public page arrives already rendered (scripts/prerender.ts, R70): load that page's code, then take the HTML over
+ * as it stands (hydrate) instead of drawing it again. Every other address starts from the empty shell.
+ */
+const container = document.getElementById("root")!;
+const app = <Root queryClient={queryClient} trpcClient={trpcClient} />;
+if (container.hasAttribute("data-prerendered")) {
+  void preloadPage(window.location.pathname).then(() => hydrateRoot(container, app));
+} else {
+  createRoot(container).render(app);
+}

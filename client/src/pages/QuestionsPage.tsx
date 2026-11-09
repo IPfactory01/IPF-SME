@@ -11,7 +11,7 @@ import { BRAND } from "@shared/brand";
 import { ArrowRight } from "lucide-react";
 import React from "react";
 import { Link } from "wouter";
-import { PAGE_META } from "@shared/seo";
+import { PAGE_META } from "@shared/pageMeta";
 
 /** The groups on the page, kept in shared/siteQuestions.ts. */
 export { QUESTION_GROUPS };

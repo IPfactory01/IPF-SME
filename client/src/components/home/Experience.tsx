@@ -2,10 +2,9 @@
  * Trust without names: the track record strip under the hero, the evidence for the problem, and the experience behind
  * The Shift. Figures come from BRAND.trackRecord; the research figures from concept note v0.8.1, sections 2 and 3.
  */
-import { Reveal, Stagger, staggerChild } from "@/components/motion";
+import { Reveal, Stagger } from "@/components/motion";
 import { logoWidth } from "@/lib/logoSize";
 import { BRAND } from "@shared/brand";
-import { motion } from "framer-motion";
 import { ArrowRight, BookOpenCheck, Scale, UserCheck } from "lucide-react";
 import { Link } from "wouter";
 import React from "react";
@@ -33,11 +32,11 @@ export function TrackRecord() {
     <section aria-label="Our track record" className="border-b border-line bg-paper-raised">
       <Stagger className="container mx-auto grid max-w-5xl grid-cols-2 gap-y-8 py-10 md:grid-cols-4">
         {TRACK_RECORD.map((item) => (
-          <motion.div key={item.label} variants={staggerChild} className="px-4 text-center md:border-l md:border-line md:first:border-l-0">
+          <div key={item.label} className="px-4 text-center md:border-l md:border-line md:first:border-l-0">
             
             <p className="font-serif text-3xl font-normal text-brand sm:text-4xl">{item.value}</p>
             <p className="mt-1 text-sm font-semibold text-ink-muted">{item.label}</p>
-          </motion.div>
+          </div>
         ))}
       </Stagger>
       {RECORD.clientLogos.length > 0 && (
@@ -75,12 +74,12 @@ export function WhyStuck() {
       </Reveal>
       <Stagger className="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-3">
         {EVIDENCE.map((item) => (
-          <motion.div key={item.label} variants={staggerChild} className="border-l-2 border-highlight-ink pl-4">
+          <div key={item.label} className="border-l-2 border-highlight-ink pl-4">
             
             <p className="font-serif text-3xl font-normal text-ink">{item.value}</p>
             <p className="mt-1 text-sm text-ink-600">{item.label}</p>
             <p className="mt-2 text-xs text-ink-muted">{item.source}</p>
-          </motion.div>
+          </div>
         ))}
       </Stagger>
     </div>
@@ -120,11 +119,11 @@ export function ExperienceBehind() {
         </Reveal>
         <Stagger className="grid grid-cols-1 gap-6 md:grid-cols-3">
           {POINTS.map(({ icon: Icon, title, text }) => (
-            <motion.div key={title} variants={staggerChild} className="border border-line bg-paper-raised p-6">
+            <div key={title} className="border border-line bg-paper-raised p-6">
               <Icon className="mb-4 h-6 w-6 text-brand" />
               <h3 className="mb-2 font-semibold text-ink">{title}</h3>
               <p className="text-ink-600 leading-relaxed">{text}</p>
-            </motion.div>
+            </div>
           ))}
         </Stagger>
       </div>
@@ -147,11 +146,11 @@ export function TheProblem() {
         </Reveal>
         <Stagger className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-3">
           {EVIDENCE.map((item) => (
-            <motion.div key={item.label} variants={staggerChild} className="border-l-2 border-highlight-ink pl-4">
+            <div key={item.label} className="border-l-2 border-highlight-ink pl-4">
               <p className="font-serif text-3xl font-normal text-ink">{item.value}</p>
               <p className="mt-1 text-sm text-ink-600">{item.label}</p>
               <p className="mt-2 text-xs text-ink-muted">{item.source}</p>
-            </motion.div>
+            </div>
           ))}
         </Stagger>
         <p className="mt-8 max-w-3xl text-ink-600">The last figure is the point: owners who get expert help on their own business make more profit. That is the shift we work for.</p>
@@ -173,10 +172,10 @@ export function WhyUs() {
         </Reveal>
         <Stagger as="ul" className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-gradient-to-br from-brand-plum via-highlight-ink to-highlight p-px">
           {TRACK_RECORD.map((item) => (
-            <motion.li key={item.label} variants={staggerChild} className="bg-paper-raised p-5">
+            <li key={item.label} className="bg-paper-raised p-5">
               <p className="bg-gradient-to-r from-brand-plum to-highlight-ink bg-clip-text font-serif text-3xl font-normal text-transparent">{item.value}</p>
               <p className="mt-1 text-sm font-semibold text-ink-muted">{item.label}</p>
-            </motion.li>
+            </li>
           ))}
         </Stagger>
       </div>

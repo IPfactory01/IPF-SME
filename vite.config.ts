@@ -194,6 +194,8 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    // The list of chunks each page loads, read by scripts/jsBudget.ts (R70).
+    manifest: true,
   },
   server: {
     host: true,

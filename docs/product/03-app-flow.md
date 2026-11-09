@@ -289,7 +289,7 @@ info@ipfactory.co.
 | `/about` | `AboutPage.tsx` | The menu | IP Factory and Enzo Krypton & Co. |
 | `/questions` | `QuestionsPage.tsx` | The menu | Every question, before buying and per service |
 | `/contact` | `ContactPage.tsx` | The menu | "Talk to an expert": the call, the mailbox, the office |
-| `/check` | `BusinessCheck.tsx` | Every page | The free Business Health Check (4.1) |
+| `/check` | `CheckPage.tsx`, then `BusinessCheck.tsx` | Every page | The free Business Health Check (4.1). The first screen opens alone; the questions load in the background and take over (R70) |
 | `/terms` | `LegalPage.tsx` | Footer, forms, pay pages | The Terms and Conditions |
 | `/privacy` | `LegalPage.tsx` | Footer, forms, pay pages | The Privacy Policy |
 | `/report/:token` | `FullReportPage.tsx` | *Payment received: your Full Report* | The Report Intake, then the download |

@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { MotionConfig } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { READINESS_LABELS } from "@shared/businessCheck/engine";
 import { AREA_NAMES } from "@shared/businessCheck/questions";
@@ -53,7 +54,14 @@ const isOpen = (task: Task) => OPEN_TASK_STATUSES.includes(task.status);
  * this person; this screen decides nothing about access.
  */
 /** `notice` sits above the room, e.g. that a refresh failed and the room shows the last copy (R69). */
-export default function EngagementRoom({ room, aside, account, notice, now = Date.now() }: { room: Room; aside?: React.ReactNode; account?: RoomAccount; notice?: React.ReactNode; now?: number }) {
+type RoomProps = { room: Room; aside?: React.ReactNode; account?: RoomAccount; notice?: React.ReactNode; now?: number };
+
+/** The room's tabs and readings move with Framer Motion; with "reduce motion" on, nothing slides (design brief §8). */
+export default function EngagementRoom(props: RoomProps) {
+  return <MotionConfig reducedMotion="user"><RoomView {...props} /></MotionConfig>;
+}
+
+function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps) {
   const [open, setOpen] = useState<number | null>(null);
   const isOwner = room.viewer.kind === "owner";
   const here = nowOf(room, now);

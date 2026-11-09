@@ -3,17 +3,16 @@
  * clients and research are on Experience (/experience) since 6 November 2026.
  */
 import { CheckCta, useStartCheck } from "@/components/home/HomeSections";
-import { Reveal, Stagger, staggerChild } from "@/components/motion";
+import { Reveal, Stagger } from "@/components/motion";
 import { PageHero, SectionHeading } from "@/components/PageHero";
 import { SiteShell, usePageMeta, useScrollToTop } from "@/components/SiteShell";
 import { BRAND } from "@shared/brand";
 import { formatNaira } from "@shared/businessSupport";
 import { startingPriceOf } from "@shared/products";
-import { motion } from "framer-motion";
 import { CheckCircle2, X } from "lucide-react";
 import React from "react";
 import { Link } from "wouter";
-import { PAGE_META } from "@shared/seo";
+import { PAGE_META } from "@shared/pageMeta";
 
 const WHO_YOU_WORK_WITH = [
   `A named ${BRAND.organisationName} consultant checks every piece of work before you get it.`,
@@ -65,7 +64,7 @@ export default function AboutPage() {
             <Reveal><SectionHeading id="team-heading" eyebrow="Who you work with" title="People, with AI behind them." /></Reveal>
             <Stagger as="ul" className="mt-6 space-y-3 text-lg text-ink-600">
               {WHO_YOU_WORK_WITH.map((line) => (
-                <motion.li key={line} variants={staggerChild} className="flex items-start gap-3"><CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-brand" aria-hidden />{line}</motion.li>
+                <li key={line} className="flex items-start gap-3"><CheckCircle2 className="mt-1 h-5 w-5 shrink-0 text-brand" aria-hidden />{line}</li>
               ))}
             </Stagger>
           </div>

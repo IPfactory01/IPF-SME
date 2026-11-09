@@ -7,7 +7,7 @@ import { PageHero } from "@/components/PageHero";
 import { SiteShell, usePageMeta, useScrollToTop } from "@/components/SiteShell";
 import { GUIDES, guideBySlug, guidePath } from "@shared/guides";
 import { priceLabel, productById, servicePath } from "@shared/products";
-import { PAGE_META } from "@shared/seo";
+import { PAGE_META } from "@shared/pageMeta";
 import { ArrowRight, Check } from "lucide-react";
 import React from "react";
 import { Link, useParams } from "wouter";

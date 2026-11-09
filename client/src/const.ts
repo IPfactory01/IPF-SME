@@ -3,8 +3,7 @@ import { toast } from "sonner";
 
 export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
-/** The sign-in page for the IPF administrator area (universal email and password). */
-export const ADMIN_LOGIN_PATH = "/admin/login";
+export { ADMIN_LOGIN_PATH } from "./adminLoginPath";
 
 type OAuthEnv = Record<string, unknown>;
 

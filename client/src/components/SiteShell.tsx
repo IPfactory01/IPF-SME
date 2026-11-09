@@ -4,7 +4,7 @@
  */
 import { LegalFooterLinks } from "@/components/LegalLinks";
 import { BRAND } from "@shared/brand";
-import { pageTitle, SITE_ORIGIN, structuredDataFor } from "@shared/seo";
+import { pageTitle, SITE_ORIGIN } from "@shared/pageMeta";
 import { ArrowRight, Menu, X } from "lucide-react";
 import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -40,15 +40,23 @@ export function usePageMeta(title: string, description: string) {
  */
 export function useStructuredData(path: string) {
   useEffect(() => {
-    const data = structuredDataFor(path);
-    document.head.querySelectorAll('script[type="application/ld+json"]').forEach((script) => script.remove());
-    const added = data.map((item) => {
-      const script = Object.assign(document.createElement("script"), { type: "application/ld+json", textContent: JSON.stringify(item) });
-      script.dataset.page = path;
-      document.head.appendChild(script);
-      return script;
+    // Every page's data together is large; it loads after the page is up (R70). The page built for this address
+    // already carries its own in the HTML.
+    let added: HTMLScriptElement[] = [];
+    let gone = false;
+    void import("@shared/seo").then(({ structuredDataFor }) => {
+      if (gone) return;
+      const data = structuredDataFor(path);
+      document.head.querySelectorAll('script[type="application/ld+json"]').forEach((script) => script.remove());
+      added = data.map((item) => {
+        const script = Object.assign(document.createElement("script"), { type: "application/ld+json", textContent: JSON.stringify(item) });
+        script.dataset.page = path;
+        document.head.appendChild(script);
+        return script;
+      });
     });
     return () => {
+      gone = true;
       for (const script of added) script.remove();
     };
   }, [path]);

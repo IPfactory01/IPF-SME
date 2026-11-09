@@ -64,7 +64,8 @@ describe("product documents", () => {
   });
 
   it("documents every page route in the app flow", () => {
-    const routes = Array.from(read("client/src/App.tsx").matchAll(/<Route path="([^"]+)"/g), (match) => match[1]);
+    // The route table ({ path: "/x", page: X }) and the routes written out in the Switch.
+    const routes = Array.from(read("client/src/App.tsx").matchAll(/(?:<Route path="|\{ path: ")([^"]+)"/g), (match) => match[1]);
     expect(routes.length).toBeGreaterThan(10);
     const flow = read(`${DOCS}/03-app-flow.md`);
     for (const route of routes) expect(flow, route).toContain(`\`${route}\``);

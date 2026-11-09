@@ -81,14 +81,14 @@ one line; D can run alongside.
 |---|---|---|---|---|
 | C1 | **Every pay page** (`/pay/:token/:item`, `/pay/fee/...`), the pay-page part of R38, shows before **Pay**: who is paid (the legal name on the statement), what for, the amount in full, the reference, that the receipt comes by email, and a WhatsApp button to the lead or the office. The Pay button uses the gradient and the page moves to 8 px corners (Design brief, section 4) | R72 | UI tests on both pay pages | I2 (the name), I3 (the office number) |
 
-### Batch D: speed and search (about 6 days, alongside)
+### Batch D: speed and search (about 6 days, alongside): built 9 November 2026
 
 | # | Task | Builds | Acceptance and test |
 |---|---|---|---|
-| D1 | **Each public page loads its own code;** the room and the admin console stay separate. A budget check at the end of `pnpm build` fails it when a public page's JavaScript passes 170 KB compressed | R70 | The budget check in the build |
-| D2 | **Pre-render the real page:** `scripts/prerender.ts` renders each public page as it looks (today it writes text for search engines only), and the browser takes it over without redrawing; nothing in the first screen fades in | R70 | A test that each pre-rendered page holds its visible heading and first section; Lighthouse's mobile profile: Home, the check and a guide show their main content within 2.5 s (Home 4.3 s today) |
-| D3 | **One heading per page:** How we work and the check get their own main heading; the promise stays the home page's heading and a line elsewhere | R73 | A test over every public page: no two share an `h1` |
-| D4 | **A share card for each guide and service** (1,200 × 630, its title on the brand card), made by a script and kept in `client/public/share/`; each page points to its own | R73 | A test: every guide and service has its card and uses it |
+| D1 | **Each public page loads its own code;** the room and the admin console stay separate. A budget check at the end of `pnpm build` fails it when a public page's JavaScript passes 170 KB compressed | R70 | The budget check in the build. Built 9 November 2026: 123 to 142 KB per public page (276 KB before) |
+| D2 | **Pre-render the real page:** `scripts/prerender.ts` renders each public page as it looks (today it writes text for search engines only), and the browser takes it over without redrawing; nothing in the first screen fades in | R70 | A test that each pre-rendered page holds its visible heading and first section; Lighthouse's mobile profile: Home, the check and a guide show their main content within 2.5 s (Home 4.3 s today). Built 9 November 2026: Home 0.9 s, the check 0.8 s, a guide 0.9 s; the hydration test renders and takes over every public page |
+| D3 | **One heading per page:** How we work and the check get their own main heading; the promise stays the home page's heading and a line elsewhere | R73 | A test over every public page: no two share an `h1`. Built 9 November 2026: How we work with your business; Free Business Health Check |
+| D4 | **A share card for each guide and service** (1,200 × 630, its title on the brand card), made by a script and kept in `client/public/share/`; each page points to its own | R73 | A test: every guide and service has its card and uses it. Built 9 November 2026: a card for every public page (31), not only guides and services, so none shares one (R73); the brand card now says See the shift |
 
 **Release 0 in total:** about 22 build days. The order: A, then B once 0021 is applied and I1 is in, then C, with D
 alongside. Each batch is previewed at phone and laptop width before ET says "push it".

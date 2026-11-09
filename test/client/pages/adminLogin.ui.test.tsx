@@ -163,7 +163,7 @@ describe("JUMP and its separate administrator system are gone", () => {
     }
     const app = readFileSync(resolve(process.cwd(), "client/src/App.tsx"), "utf8");
     expect(app).not.toMatch(/\/admin\/login\/legacy|\/admin\/invite|\/portal|\/schedule/);
-    expect(app).toMatch(/<Route path="\/admin\/login" component=\{AdminLoginPage\} \/>/);
+    expect(app).toMatch(/\{ path: "\/admin\/login", page: AdminLoginPage \}/);
   });
 });
 

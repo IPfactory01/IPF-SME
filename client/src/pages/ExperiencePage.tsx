@@ -8,7 +8,7 @@ import { CheckCta, useStartCheck } from "@/components/home/HomeSections";
 import { PageHero, SectionHeading } from "@/components/PageHero";
 import { SiteShell, usePageMeta, useScrollToTop } from "@/components/SiteShell";
 import { BRAND } from "@shared/brand";
-import { PAGE_META } from "@shared/seo";
+import { PAGE_META } from "@shared/pageMeta";
 import React from "react";
 
 export default function ExperiencePage() {

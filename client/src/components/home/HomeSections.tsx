@@ -3,7 +3,7 @@
  * picker (How we work), the questions (Questions) and the closing band. Copy comes from shared/businessSupport.ts
  * (concept note v0.8.1, section 16) and shared/products.ts.
  */
-import { EASE, Reveal } from "@/components/motion";
+import { Reveal, Stagger } from "@/components/motion";
 import { onSectionLinkClick } from "@/lib/scrollToSection";
 import { BRAND } from "@shared/brand";
 import { buildJourney, PROBLEM_AREAS, PROMISE } from "@shared/businessSupport";
@@ -12,7 +12,6 @@ import { DELIVERY_PROMISE, MENU_PRODUCTS, NEED_DETAILS, NEED_LEAD, NEEDS, produc
 import { DeliveryPromise } from "@/components/store/StoreBits";
 import { ServiceTile } from "@/components/store/ServiceTile";
 import { useServicePricesOrDefault } from "@/lib/servicePrices";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowDown, ArrowRight, Plus } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
@@ -32,36 +31,27 @@ export function useStartCheck() {
 export function CtaButton({ onClick, tone = "dark", children, className = "" }: { onClick: () => void; tone?: "dark" | "light"; children: React.ReactNode; className?: string }) {
   const colours = tone === "dark" ? "bg-gradient-to-r from-brand-plum to-highlight-ink text-white hover:brightness-110 shadow-[0_18px_40px_-18px_rgba(203,55,86,0.75)]" : "bg-highlight text-brand-deep hover:bg-highlight-hover shadow-[0_18px_40px_-18px_rgba(87,195,189,0.8)]";
   return (
-    <motion.button
+    <button
       type="button"
       onClick={onClick}
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.97 }}
-      transition={{ type: "spring", stiffness: 400, damping: 25 }}
-      className={`group inline-flex h-14 items-center justify-center rounded-xl px-8 text-base font-semibold transition-colors ${colours} ${className}`}
+      className={`group inline-flex h-14 items-center justify-center rounded-xl px-8 text-base font-semibold transition-[color,background-color,filter,transform] duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.97] active:duration-75 ${colours} ${className}`}
     >
       {children}
       <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-    </motion.button>
+    </button>
   );
 }
-
-const word = {
-  hidden: { opacity: 0, y: "0.4em", filter: "blur(8px)" },
-  show: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.8, ease: EASE } },
-};
 
 export function Hero({ onStart }: { onStart: () => void }) {
   const [lead1, lead2, close] = PROMISE;
   const sentences = PROBLEM_AREAS.filter((area) => area.siteSentence).map((area) => area.siteSentence!);
   const [index, setIndex] = useState(0);
-  // With "reduce motion" on, nothing on the page moves by itself: the sentence stays put and the colour stays still.
-  const calm = useReducedMotion();
+  // With "reduce motion" on, nothing on the page moves by itself: the sentence stays put.
   useEffect(() => {
-    if (calm) return;
+    if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const timer = window.setInterval(() => setIndex((current) => (current + 1) % sentences.length), 5000);
     return () => window.clearInterval(timer);
-  }, [sentences.length, calm]);
+  }, [sentences.length]);
 
   return (
     <section id="top" className="relative overflow-hidden border-b border-line pt-10 pb-16 sm:pt-20 md:pt-28 md:pb-24">
@@ -72,21 +62,22 @@ export function Hero({ onStart }: { onStart: () => void }) {
       </div>
 
       <div className="relative container mx-auto max-w-5xl px-4 text-center">
-        <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }} className="mx-auto mb-6 inline-flex items-center gap-2 border border-brand-line sm:mb-8 bg-paper-raised/70 px-4 py-1.5 text-xs font-semibold text-brand backdrop-blur">
+        {/* The first screen is all there at once (R70): nothing here waits on an animation. */}
+        <p className="mx-auto mb-6 inline-flex items-center gap-2 border border-brand-line sm:mb-8 bg-paper-raised/70 px-4 py-1.5 text-xs font-semibold text-brand backdrop-blur">
           <span aria-hidden className="inline-flex h-2 w-2 rounded-full bg-brand" />
           {BRAND.productEndorsement}
-        </motion.p>
+        </p>
 
-        <motion.h1 initial="hidden" animate="show" transition={{ staggerChildren: 0.18 }} className="mb-6 font-serif text-[2.75rem] font-normal leading-[1.05] tracking-tight text-ink sm:text-7xl md:text-8xl">
-          <motion.span variants={word} className="inline-block">{lead1}</motion.span>{" "}
-          <motion.span variants={word} className="inline-block">{lead2}</motion.span>{" "}
-          <motion.span variants={word} className="relative inline-block font-normal">
+        <h1 className="mb-6 font-serif text-[2.75rem] font-normal leading-[1.05] tracking-tight text-ink sm:text-7xl md:text-8xl">
+          <span className="inline-block">{lead1}</span>{" "}
+          <span className="inline-block">{lead2}</span>{" "}
+          <span className="relative inline-block font-normal">
             {close}
-            <motion.span aria-hidden className="absolute -bottom-1 left-0 h-[0.08em] w-full origin-left bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ delay: 1.1, duration: 0.9, ease: EASE }} />
-          </motion.span>
-        </motion.h1>
+            <span aria-hidden className="absolute -bottom-1 left-0 h-[0.08em] w-full bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight" />
+          </span>
+        </h1>
 
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.8, ease: EASE }}>
+        <div>
           <p className="mx-auto mb-8 max-w-2xl text-lg leading-relaxed text-ink-600 sm:text-xl">
             Today, your business is busy but the money is not showing. We find the real problem, fix it with you on your own numbers, and stay until you see the shift.
           </p>
@@ -95,37 +86,30 @@ export function Hero({ onStart }: { onStart: () => void }) {
             <p className="text-sm text-ink-muted">Free. Ten minutes on your phone. Your result straight away.</p>
             <p className="text-sm text-ink-muted">Know what you need? <Link href="/services" className="font-semibold text-brand underline underline-offset-4">See our services</Link>.</p>
           </div>
-        </motion.div>
+        </div>
 
-        <motion.button
+        <button
           type="button"
           onClick={onStart}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.4, duration: 0.8 }}
           className="group mx-auto mt-12 flex w-full max-w-xl flex-col items-center gap-2"
           aria-label="Start the Business Health Check"
         >
           <span className="text-xs font-semibold text-ink-muted">Sound familiar?</span>
           <span className="relative block h-24 w-full overflow-hidden sm:h-10">
-            <AnimatePresence mode="wait" initial={false}>
-              <motion.span
-                key={index}
-                initial={{ opacity: 0, y: 18 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -18 }}
-                transition={{ duration: 0.45, ease: EASE }}
-                className="absolute inset-0 flex items-center justify-center px-2 font-serif text-lg italic leading-snug text-ink-700 transition-colors group-hover:text-brand"
-              >
-                &ldquo;{sentences[index]}&rdquo;
-              </motion.span>
-            </AnimatePresence>
+            {/* The first sentence is there from the start; each next one rises in. */}
+            <span
+              key={index}
+              style={{ "--rise-from": "18px" } as React.CSSProperties}
+              className={`absolute inset-0 flex items-center justify-center px-2 font-serif text-lg italic leading-snug text-ink-700 transition-colors group-hover:text-brand ${index ? "rise-in" : ""}`}
+            >
+              &ldquo;{sentences[index]}&rdquo;
+            </span>
           </span>
-        </motion.button>
+        </button>
 
-        <motion.a href="#problem" onClick={onSectionLinkClick} aria-label="Scroll down" className="mx-auto mt-6 flex h-10 w-10 items-center justify-center rounded-full border border-line text-ink-faint hover:border-brand hover:text-brand">
+        <a href="#problem" onClick={onSectionLinkClick} aria-label="Scroll down" className="mx-auto mt-6 flex h-10 w-10 items-center justify-center rounded-full border border-line text-ink-faint hover:border-brand hover:text-brand">
           <ArrowDown className="h-4 w-4" />
-        </motion.a>
+        </a>
       </div>
     </section>
   );
@@ -268,28 +252,21 @@ export function Journey({ heading = "How it works", sub = "From the free check t
               <li key={step.id} className="relative pb-3 last:pb-0">
                 {index < journey.length - 1 && (
                   <span aria-hidden className="absolute left-[36px] top-[56px] -bottom-4 w-px bg-line sm:left-[40px] sm:top-[60px] sm:-bottom-5">
-                    <motion.span className="absolute inset-0 origin-top bg-brand" initial={false} animate={{ scaleY: done ? 1 : 0 }} transition={{ duration: 0.5, ease: EASE }} />
+                    <span className={`absolute inset-0 origin-top bg-brand transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${done ? "scale-y-100" : "scale-y-0"}`} />
                   </span>
                 )}
                 <button type="button" onClick={() => choose(index)} aria-expanded={open} className={`relative flex w-full items-start gap-5 border p-4 text-left transition-colors duration-300 sm:p-5 ${open ? "border-brand bg-paper-raised shadow-[0_20px_50px_-30px_rgba(18,50,79,0.6)]" : "border-transparent hover:bg-paper-raised/70"}`}>
-                  <motion.span
-                    animate={{ scale: open ? 1.1 : 1 }}
-                    className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center font-mono text-sm font-semibold transition-colors duration-300 ${open || done ? "bg-brand text-paper" : "border border-line-strong bg-paper text-ink-muted"}`}
-                  >
+                  <span className={`relative z-10 flex h-10 w-10 shrink-0 items-center justify-center font-mono text-sm font-semibold transition-[color,background-color,transform] duration-300 ${open ? "scale-110" : ""} ${open || done ? "bg-brand text-paper" : "border border-line-strong bg-paper text-ink-muted"}`}>
                     {index + 1}
-                  </motion.span>
+                  </span>
                   <span className="min-w-0 flex-1">
                     <span className={`block font-sans text-lg font-semibold tracking-[-0.01em] transition-colors ${open ? "text-ink" : "text-ink-600"}`}>{step.name}</span>
-                    <AnimatePresence initial={false}>
-                      {open && (
-                        <motion.span key="body" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.4, ease: EASE }} className="block overflow-hidden">
-                          <span className="block pt-2 leading-relaxed text-ink-soft">{step.body}</span>
-                          {auto && inView && (
-                            <motion.span key={`timer-${index}`} aria-hidden className="mt-4 block h-0.5 origin-left bg-highlight" initial={{ scaleX: 0 }} animate={{ scaleX: 1 }} transition={{ duration: 4.5, ease: "linear" }} />
-                          )}
-                        </motion.span>
-                      )}
-                    </AnimatePresence>
+                    {open && (
+                      <span key="body" className="rise-in block overflow-hidden">
+                        <span className="block pt-2 leading-relaxed text-ink-soft">{step.body}</span>
+                        {auto && inView && <span key={`timer-${index}`} aria-hidden className="grow-x mt-4 block h-0.5 bg-highlight" />}
+                      </span>
+                    )}
                   </span>
                 </button>
               </li>
@@ -313,28 +290,19 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
           <h2 className="font-display text-[clamp(2.1rem,5vw,3.5rem)] font-semibold leading-[1.04] tracking-[-0.035em] text-ink">Pick yours.</h2>
           <p className="mt-3 text-ink-muted">Not sure which one it is? That is what the free Business Health Check finds out.</p>
         </Reveal>
-        <motion.div layout className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
-          {areas.map((area, index) => {
+        <Stagger className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+          {areas.map((area) => {
             const isOpen = open === area.number;
             return (
-              <motion.div
-                key={area.number}
-                layout
-                initial={{ opacity: 0, y: 18 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-40px" }}
-                transition={{ duration: 0.5, ease: EASE, delay: (index % 2) * 0.06, layout: { duration: 0.45, ease: EASE } }}
-                className={`border bg-paper transition-colors duration-300 ${isOpen ? "border-brand shadow-[0_24px_60px_-35px_rgba(18,50,79,0.7)]" : "border-line hover:border-brand"}`}
-              >
-                <motion.button layout="position" type="button" onClick={() => setOpen(isOpen ? null : area.number)} aria-expanded={isOpen} className="group flex w-full items-center justify-between gap-4 p-5 text-left">
+              <div key={area.number} className={`border bg-paper transition-colors duration-300 ${isOpen ? "border-brand shadow-[0_24px_60px_-35px_rgba(18,50,79,0.7)]" : "border-line hover:border-brand"}`}>
+                <button type="button" onClick={() => setOpen(isOpen ? null : area.number)} aria-expanded={isOpen} className="group flex w-full items-center justify-between gap-4 p-5 text-left">
                   <span className="font-serif text-lg italic leading-snug text-ink-750">&ldquo;{area.siteSentence}&rdquo;</span>
-                  <motion.span animate={{ rotate: isOpen ? 45 : 0 }} transition={{ duration: 0.3 }} className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-colors ${isOpen ? "border-brand bg-brand text-paper" : "border-line text-ink-faint group-hover:border-brand group-hover:text-brand"}`}>
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-[color,background-color,border-color,transform] duration-300 ${isOpen ? "rotate-45 border-brand bg-brand text-paper" : "border-line text-ink-faint group-hover:border-brand group-hover:text-brand"}`}>
                     <Plus className="h-4 w-4" />
-                  </motion.span>
-                </motion.button>
-                <AnimatePresence initial={false}>
-                  {isOpen && (
-                    <motion.div key="detail" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.4, ease: EASE }} className="overflow-hidden">
+                  </span>
+                </button>
+                {isOpen && (
+                    <div key="detail" className="rise-in overflow-hidden">
                       <div className="grid gap-4 border-t border-line px-5 pb-6 pt-5">
                         <div>
                           <p className="text-xs font-semibold text-brand">{area.name} · what we do together</p>
@@ -348,13 +316,12 @@ export function StuckPicker({ onStart }: { onStart: () => void }) {
                           Check this <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
                         </button>
                       </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
+                    </div>
+                )}
+              </div>
             );
           })}
-        </motion.div>
+        </Stagger>
       </div>
     </section>
   );
@@ -376,15 +343,13 @@ export function Faq({ id, heading, items }: { id: string; heading: string; items
               <div key={item.q}>
                 <button type="button" onClick={() => setOpen(isOpen ? null : index)} aria-expanded={isOpen} className="group flex w-full items-center justify-between gap-4 py-5 text-left font-semibold text-ink">
                   <span className="transition-colors group-hover:text-brand">{item.q}</span>
-                  <motion.span animate={{ rotate: isOpen ? 45 : 0 }} transition={{ duration: 0.3 }} className="text-xl leading-none text-brand" aria-hidden>+</motion.span>
+                  <span className={`text-xl leading-none text-brand transition-transform duration-300 ${isOpen ? "rotate-45" : ""}`} aria-hidden>+</span>
                 </button>
-                <AnimatePresence initial={false}>
-                  {isOpen && (
-                    <motion.div key="answer" initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.35, ease: EASE }} className="overflow-hidden">
-                      <p className="pb-5 leading-relaxed text-ink-soft">{item.a}</p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                {isOpen && (
+                  <div key="answer" className="rise-in overflow-hidden">
+                    <p className="pb-5 leading-relaxed text-ink-soft">{item.a}</p>
+                  </div>
+                )}
               </div>
             );
           })}

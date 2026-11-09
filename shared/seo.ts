@@ -10,64 +10,8 @@ import { MENU_PRODUCTS, priceLabel, servicePath, startingAmount, type Product } 
 import { QUESTION_GROUPS } from "./siteQuestions";
 import { GUIDES, guidePath } from "./guides";
 
-/** The site's public address. Every canonical link, sitemap entry and share card points here. */
-export const SITE_ORIGIN = "https://www.ipfactory.co";
-
-export const pageTitle = (title: string) => `${title} | ${BRAND.productEndorsement}`;
-
-type Meta = { title: string; description: string };
-
-/**
- * The home page's title and description, in the words Nigerian owners search with (Google's suggestions for Nigeria,
- * 6 November 2026: "business consultant in lagos", "small business consultant", "my business is struggling what can i
- * do"). client/index.html carries the same title and description, so the app shell matches the ready-made page.
- */
-export const HOME_META: Meta = {
-  title: `Small Business Consultant in Lagos, Nigeria | ${BRAND.productEndorsement}`,
-  description: "Is your business struggling? Find the real problem in ten minutes with a free Business Health Check, then fix it with consultants in Lagos who work on your own numbers. The Shift, by IP Factory.",
-};
-
-/**
- * What Google shows as each service's title: the service in the owner's words, not only its name. The page's own
- * heading does not change. Keyed by product id; a service without one shows its name.
- */
-export const SERVICE_SEARCH_TITLES: Partial<Record<Product["id"], string>> = {
-  business_health_check: "Free Business Health Check: what is wrong with my business?",
-  funding_readiness_assessment: "Funding Readiness Assessment: am I ready for a business loan in Nigeria?",
-  business_review: "Business Review: find what is holding your business back",
-  strategy_90_day_plan: "Strategy and 90-Day Plan: where is my business going?",
-  business_model: "Business Model: how your business makes money",
-  financial_model: "Financial Model for a business in Nigeria",
-  business_plan: "Business Plan Writer in Nigeria: fixed price, on your own numbers",
-  pitch_deck: "Pitch Deck for investors in Nigeria",
-  pricing_unit_cost_review: "Pricing and Unit Cost Review: price your products for profit",
-  bookkeeping_catch_up: "Bookkeeping Catch-Up for small businesses in Nigeria",
-  cash_flow_forecast: "13-Week Cash Flow Forecast: fix cash flow problems before they land",
-  funding_application_pack: "Funding Application Pack: business loan and grant applications in Nigeria",
-  hiring_toolkit: "Hiring Toolkit: hire the right staff for your small business",
-  six_week_fix: "Six-Week Fix: one business problem fixed in six weeks",
-  monthly_accounts: "Monthly Accounts and Cash Report for small businesses",
-  monthly_adviser_review: "Monthly Adviser Review: a business adviser every month",
-};
-
-export const PAGE_META = {
-  services: { title: "Services", description: `Every service of ${BRAND.productEndorsement}, with its price and delivery time: assessments, Done for You work, the Six-Week Fix and Monthly Services, for businesses across Nigeria.` },
-  howWeWork: { title: "How we work", description: `How ${BRAND.productName} works: the free Business Health Check, the four ways to work with us and how each is paid, and what every piece of work comes with.` },
-  experience: { title: "Experience", description: `The record behind ${BRAND.productName}: ${BRAND.trackRecord.clients} clients advised since ${BRAND.trackRecord.since}, the businesses we have worked with, and the research behind the method.` },
-  guides: { title: "Guides for small business owners in Nigeria", description: "Plain answers to what owners search for: my business is struggling, how to get a business loan in Nigeria, what a business plan costs, cash flow problems and pricing for profit." },
-  about: { title: "About", description: `${BRAND.productName} is run by ${BRAND.organisationName}, the delivery and method arm of ${BRAND.trackRecord.groupName}. What we are and are not, who it is for, and who you work with.` },
-  questions: { title: "Questions", description: `Answers to the questions owners ask about ${BRAND.productName}: paying, delivery dates, refunds, your information, and each service.` },
-  contact: { title: "Contact", description: `Book a free 20-minute call with ${BRAND.productName}, or write to ${BRAND.businessSupportMailbox}. Our office is at ${BRAND.officeAddress.oneLine}.` },
-  check: { title: "Free Business Health Check", description: "Ten minutes on your phone. See where your business is stuck, area by area, and the first step that fits. Free, no card needed." },
-  login: { title: "Client sign in", description: `Sign in to your ${BRAND.productName} client room.` },
-  terms: { title: "Terms & Conditions", description: "The terms that apply when you use the IP Factory SME platform, pay for a service or create an account." },
-  privacy: { title: "Privacy Policy", description: "How IP Factory collects, uses, shares, stores and protects personal and business information on its SME platform." },
-} as const satisfies Record<string, Meta>;
-
-export function productMeta(product: Product): Meta {
-  const story = storyOf(product.id);
-  return { title: SERVICE_SEARCH_TITLES[product.id] ?? product.name, description: story ? `${story.sub} ${priceLabel(product.price)}. ${product.delivery}` : product.short };
-}
+export { HOME_META, PAGE_META, pageTitle, productMeta, SERVICE_SEARCH_TITLES, SITE_ORIGIN } from "./pageMeta";
+import { HOME_META, PAGE_META, pageTitle, productMeta, SITE_ORIGIN, type Meta } from "./pageMeta";
 
 const ORGANISATION_ID = `${SITE_ORIGIN}/#organisation`;
 
@@ -135,6 +79,19 @@ export type PublicPage = {
   heading: string;
   body: string[];
   jsonLd: object[];
+  /** How a shared link to the page looks on WhatsApp, LinkedIn and X (R73): its own 1200×630 card. */
+  card: ShareCard;
+};
+
+/** A page's share card: the file (made by scripts/shareCards.ts, kept in client/public) and what it says. */
+export type ShareCard = { image: string; eyebrow: string; lines: readonly string[]; line: string; badge: string };
+
+/** The card's file for an address: the brand card for the home page, its own for every other page. */
+export const shareCardImage = (path: string) => (path === "/" ? "/brand/share-card.png" : `/share/${path.slice(1).replace(/\//g, "-")}.jpg`);
+/** A card's line: the first sentence, or its first clause when that runs past two lines on the card (120 characters). */
+const firstSentence = (text: string) => {
+  const sentence = text.match(/^.*?[.?!](\s|$)/)?.[0].trim() ?? text;
+  return sentence.length > 120 && sentence.includes(":") ? `${sentence.split(":")[0]}.` : sentence;
 };
 
 let pagesCache: PublicPage[] | undefined;
@@ -146,27 +103,28 @@ export function publicPages(): PublicPage[] {
   const home = { name: "Home", path: "/" };
   const services = { name: "Services", path: "/services" };
   // Inner pages carry a breadcrumb back to the home page; service pages go through Services.
-  const page = (path: string, meta: Meta, heading: string, body: string[], extra: object[] = [], crumb = meta.title): PublicPage => {
+  const page = (path: string, meta: Meta, heading: string, body: string[], extra: object[] = [], crumb = meta.title, card: Partial<Omit<ShareCard, "image">> = {}): PublicPage => {
     const trail = path === "/" ? [] : path.startsWith("/services/") ? [home, services, { name: crumb, path }] : path.startsWith("/guides/") ? [home, { name: "Guides", path: "/guides" }, { name: crumb, path }] : [home, { name: crumb, path }];
-    return { path, title: meta.title, description: meta.description, heading, body, jsonLd: [org, ...(trail.length ? [breadcrumbJsonLd(trail)] : []), ...extra] };
+    const shareCard: ShareCard = { image: shareCardImage(path), eyebrow: card.eyebrow ?? meta.title, lines: card.lines ?? [heading], line: card.line ?? firstSentence(meta.description), badge: card.badge ?? "Free Business Health Check" };
+    return { path, title: meta.title, description: meta.description, heading, body, jsonLd: [org, ...(trail.length ? [breadcrumbJsonLd(trail)] : []), ...extra], card: shareCard };
   };
   pagesCache = [
-    page("/", HOME_META, "Find it. Fix it. See the shift.", [HOME_META.description]),
-    page("/services", PAGE_META.services, "Help that does the work.", [PAGE_META.services.description, ...MENU_PRODUCTS.map((product) => `${product.name}: ${priceLabel(product.price)}. ${product.short}`)]),
+    page("/", HOME_META, "Find it. Fix it. See the shift.", [HOME_META.description], [], HOME_META.title, { eyebrow: BRAND.productEndorsement, lines: ["Find it. Fix it.", "See the shift."], line: "Help for owner-run businesses in Nigeria. Finished work in days, or a fix in six weeks." }),
+    page("/services", PAGE_META.services, "Help that does the work.", [PAGE_META.services.description, ...MENU_PRODUCTS.map((product) => `${product.name}: ${priceLabel(product.price)}. ${product.short}`)], [], PAGE_META.services.title, { line: "Every service with its price and delivery time, for businesses across Nigeria." }),
     ...MENU_PRODUCTS.map((product) => {
       const story = storyOf(product.id);
-      return page(servicePath(product), productMeta(product), story ? story.headline.join(" ") : product.name, [productMeta(product).description, ...product.youGet], [serviceJsonLd(product), ...(story?.faq.length ? [faqJsonLd(story.faq)] : [])], product.name);
+      return page(servicePath(product), productMeta(product), story ? story.headline.join(" ") : product.name, [productMeta(product).description, ...product.youGet], [serviceJsonLd(product), ...(story?.faq.length ? [faqJsonLd(story.faq)] : [])], product.name, { eyebrow: product.name, lines: story ? story.headline : [product.name], line: product.short, badge: priceLabel(product.price) });
     }),
-    page("/how-we-work", PAGE_META.howWeWork, "Find it. Fix it. See the shift.", [PAGE_META.howWeWork.description]),
-    page("/experience", PAGE_META.experience, "We have done this before, many times.", [PAGE_META.experience.description]),
+    page("/how-we-work", PAGE_META.howWeWork, "How we work with your business.", [PAGE_META.howWeWork.description], [], PAGE_META.howWeWork.title, { line: "The free check, four ways to work with us, and what every piece of work comes with." }),
+    page("/experience", PAGE_META.experience, "We have done this before, many times.", [PAGE_META.experience.description], [], PAGE_META.experience.title, { line: `${BRAND.trackRecord.clients} clients advised since ${BRAND.trackRecord.since}, and the research behind the method.` }),
     page("/about", PAGE_META.about, "Consulting experience, at the size of your business.", [PAGE_META.about.description]),
-    page("/guides", PAGE_META.guides, "Answers to what owners ask.", [PAGE_META.guides.description, ...GUIDES.map((guide) => `${guide.h1} ${guide.description}`)]),
-    ...GUIDES.map((guide) => page(guidePath(guide), { title: guide.title, description: guide.description }, guide.h1, [guide.lede, ...guide.sections.flatMap((section) => [section.heading, ...(section.paragraphs ?? []), ...(section.points ?? [])])], [faqJsonLd(guide.faq)], guide.h1)),
-    page("/questions", PAGE_META.questions, "Questions owners ask.", QUESTION_GROUPS.flatMap((group) => group.items.map((item) => `${item.q} ${item.a}`)), [faqJsonLd(QUESTION_GROUPS.flatMap((group) => group.items))]),
+    page("/guides", PAGE_META.guides, "Answers to what owners ask.", [PAGE_META.guides.description, ...GUIDES.map((guide) => `${guide.h1} ${guide.description}`)], [], PAGE_META.guides.title, { eyebrow: "Guides", line: "Plain answers to what owners in Nigeria search for." }),
+    ...GUIDES.map((guide) => page(guidePath(guide), { title: guide.title, description: guide.description }, guide.h1, [guide.lede, ...guide.sections.flatMap((section) => [section.heading, ...(section.paragraphs ?? []), ...(section.points ?? [])])], [faqJsonLd(guide.faq)], guide.h1, { eyebrow: "A guide for owners in Nigeria", line: firstSentence(guide.lede) })),
+    page("/questions", PAGE_META.questions, "Questions owners ask.", QUESTION_GROUPS.flatMap((group) => group.items.map((item) => `${item.q} ${item.a}`)), [faqJsonLd(QUESTION_GROUPS.flatMap((group) => group.items))], PAGE_META.questions.title, { line: "Paying, delivery dates, refunds, your information, and each service." }),
     page("/contact", PAGE_META.contact, "Talk to an expert.", [PAGE_META.contact.description]),
-    page("/check", PAGE_META.check, "Free Business Health Check", [PAGE_META.check.description]),
-    page("/terms", PAGE_META.terms, "Terms & Conditions", [PAGE_META.terms.description]),
-    page("/privacy", PAGE_META.privacy, "Privacy Policy", [PAGE_META.privacy.description]),
+    page("/check", PAGE_META.check, "Free Business Health Check", [PAGE_META.check.description], [], PAGE_META.check.title, { eyebrow: "Ten minutes on your phone", line: "See where your business is stuck, area by area, and the first step that fits.", badge: "Free, no card needed" }),
+    page("/terms", PAGE_META.terms, "IP Factory Terms & Conditions", [PAGE_META.terms.description]),
+    page("/privacy", PAGE_META.privacy, "IP Factory Privacy Policy", [PAGE_META.privacy.description]),
   ];
   return pagesCache;
 }
@@ -188,7 +146,11 @@ const NAV = [["/", "Home"], ["/services", "Services"], ["/how-we-work", "How we 
  * data in the head, and its words inside #root for readers without JavaScript. React replaces #root as it starts, so
  * visitors see the normal page; the words are visually hidden meanwhile, so nothing flashes.
  */
-export function pageHtml(template: string, page: PublicPage): string {
+/**
+ * `rendered`: the page itself, rendered at build time (client/src/entry-server.tsx, R70), and the code files it loads
+ * first, to fetch at once. Without it the page carries its words for search engines only, hidden.
+ */
+export function pageHtml(template: string, page: PublicPage, rendered?: { html: string; preload: readonly string[] }): string {
   const url = `${SITE_ORIGIN}${page.path === "/" ? "/" : page.path}`;
   const title = page.path === "/" ? page.title : pageTitle(page.title);
   const replace = (html: string, pattern: RegExp, value: string) => {
@@ -201,7 +163,13 @@ export function pageHtml(template: string, page: PublicPage): string {
   html = replace(html, /<meta property="og:title" content="[^"]*" \/>/, `<meta property="og:title" content="${escapeHtml(title)}" />`);
   html = replace(html, /<meta property="og:description" content="[^"]*" \/>/, `<meta property="og:description" content="${escapeHtml(page.description)}" />`);
   html = replace(html, /<meta property="og:url" content="[^"]*" \/>/, `<meta property="og:url" content="${url}" />`);
-  const head = [`<link rel="canonical" href="${url}" />`, ...page.jsonLd.map((data) => `<script type="application/ld+json">${scriptJson(data)}</script>`)].join("\n    ");
+  // Each page's own share card (R73).
+  const image = `${SITE_ORIGIN}${page.card.image}`;
+  html = replace(html, /<meta property="og:image" content="[^"]*" \/>/, `<meta property="og:image" content="${image}" />`);
+  html = replace(html, /<meta property="og:image:alt" content="[^"]*" \/>/, `<meta property="og:image:alt" content="${escapeHtml(`${page.card.lines.join(" ")} ${BRAND.productEndorsement}.`)}" />`);
+  html = replace(html, /<meta name="twitter:image" content="[^"]*" \/>/, `<meta name="twitter:image" content="${image}" />`);
+  const preload = (rendered?.preload ?? []).filter((file) => !template.includes(`/${file}"`)).map((file) => `<link rel="modulepreload" crossorigin href="/${file}" />`);
+  const head = [`<link rel="canonical" href="${url}" />`, ...preload, ...page.jsonLd.map((data) => `<script type="application/ld+json">${scriptJson(data)}</script>`)].join("\n    ");
   html = replace(html, /<\/head>/, `    ${head}\n  </head>`);
   const words = [
     `<h1>${escapeHtml(page.heading)}</h1>`,
@@ -209,6 +177,7 @@ export function pageHtml(template: string, page: PublicPage): string {
     `<nav aria-label="Site">${NAV.map(([href, label]) => `<a href="${href}">${escapeHtml(label)}</a>`).join(" ")}</nav>`,
     `<p>${escapeHtml(`${BRAND.organisationName}, ${BRAND.officeAddress.oneLine}. ${BRAND.businessSupportMailbox}`)}</p>`,
   ].join("");
-  html = replace(html, /<div id="root"><\/div>/, `<div id="root"><div class="sr-only">${words}</div></div>`);
+  // The rendered page goes in as it is; the browser takes it over without drawing it again (main.tsx).
+  html = replace(html, /<div id="root"><\/div>/, rendered ? `<div id="root" data-prerendered>${rendered.html}</div>` : `<div id="root"><div class="sr-only">${words}</div></div>`);
   return html;
 }

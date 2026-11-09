@@ -179,6 +179,29 @@
 }
 
 /*
+ * The public site's motion (components/motion.tsx, design brief §8). A reveal is set by script on what starts below the
+ * first screen: it waits hidden, then fades up 24 px over 0.7 s; a list's items follow 0.07 s apart. An accordion's
+ * opened part and the hero's next sentence rise in. With reduced motion nothing waits or moves.
+ */
+@keyframes rise-in { from { opacity: 0; transform: translateY(var(--rise-from, 8px)); } to { opacity: 1; transform: none; } }
+@keyframes grow-x { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+[data-reveal="waiting"]:not([data-stagger]), [data-reveal="waiting"][data-stagger] > * { opacity: 0; transform: translateY(24px); }
+[data-reveal="shown"]:not([data-stagger]), [data-reveal="shown"][data-stagger] > * {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay, 0s), transform 0.7s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay, 0s);
+}
+[data-reveal="shown"][data-stagger] > * { transition-duration: 0.55s; }
+.rise-in { animation: rise-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.grow-x { animation: grow-x var(--grow-for, 4.5s) linear both; transform-origin: left; }
+[data-scroll-progress] { transition: transform 0.12s linear; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal], [data-reveal][data-stagger] > * { opacity: 1 !important; transform: none !important; transition: none !important; }
+  .rise-in, .grow-x { animation: none; }
+}
+
+/*
  * The console's record drawer and the scrim behind it. The drawer slides in from the right on an ease-out curve that
  * settles without overshoot, and leaves the way it came on the mirrored curve, a little faster. Radix waits for the
  * exit animation before removing it. With reduced motion both only fade.

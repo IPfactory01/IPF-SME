@@ -15,6 +15,6 @@ describe("administrator password reset confirmation page", () => {
   it("returns to normal secure Gmail sign-in after a successful password reset", () => {
     expect(source).toContain('setLocation("/admin/login")');
     expect(source).toContain("Kindly sign in again");
-    expect(routerSource).toContain('path="/admin/reset"');
+    expect(routerSource).toContain('{ path: "/admin/reset", page: AdminPasswordResetPage }');
   });
 });

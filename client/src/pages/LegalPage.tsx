@@ -1,6 +1,6 @@
 import { SiteShell, usePageMeta } from "@/components/SiteShell";
 import { LegalDocument } from "@/lib/legalDocument";
-import { PAGE_META } from "@shared/seo";
+import { PAGE_META } from "@shared/pageMeta";
 import React from "react";
 import privacySource from "../../../docs/legal/privacy.md?raw";
 import termsSource from "../../../docs/legal/terms.md?raw";

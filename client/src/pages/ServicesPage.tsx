@@ -14,7 +14,7 @@ import { displayPrice } from "@/lib/productPrice";
 import { ArrowRight } from "lucide-react";
 import React, { useState } from "react";
 import { Link } from "wouter";
-import { PAGE_META } from "@shared/seo";
+import { PAGE_META } from "@shared/pageMeta";
 
 /** The eyebrow over a page or section heading: small crimson capitals. */
 export const EYEBROW = "text-sm font-semibold text-brand";

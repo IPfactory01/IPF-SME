@@ -12,7 +12,7 @@ import { usePageMeta } from "@/components/SiteShell";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
 import React, { useEffect, useState, type FormEvent } from "react";
 import { Link, useLocation } from "wouter";
-import { PAGE_META } from "@shared/seo";
+import { PAGE_META } from "@shared/pageMeta";
 import { isTwoStepChallenge, type AccountSessionView, type TwoStepChallenge } from "@shared/auth";
 
 /**

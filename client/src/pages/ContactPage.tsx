@@ -9,7 +9,7 @@ import { BRAND } from "@shared/brand";
 import { ArrowRight, CalendarCheck, Mail, MapPin } from "lucide-react";
 import React from "react";
 import { Link } from "wouter";
-import { PAGE_META } from "@shared/seo";
+import { PAGE_META } from "@shared/pageMeta";
 
 export default function ContactPage() {
   useScrollToTop();

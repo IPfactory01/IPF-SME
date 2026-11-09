@@ -300,7 +300,7 @@ describe("no public registration", () => {
     const app = read("client/src/App.tsx");
     expect(app).not.toMatch(/SignUpPage/);
     expect(app).toMatch(/<Route path="\/signup">\{\(\) => <Redirect to="\/login" \/>\}<\/Route>/);
-    expect(app).toMatch(/<Route path="\/onboarding\/:token" component=\{OnboardingPage\} \/>/);
+    expect(app).toMatch(/\{ path: "\/onboarding\/:token", page: OnboardingPage \}/);
   });
 
   it("does not offer account creation on the sign-in page", () => {

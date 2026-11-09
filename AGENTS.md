@@ -27,7 +27,8 @@ what is built next. When a change alters what a document says, update the docume
 | `pnpm check` | Typecheck the app |
 | `pnpm check:tests` | Typecheck the tests |
 | `pnpm test` | All unit, UI and in-memory database tests (no network or secrets needed) |
-| `pnpm build` | Production bundle; also regenerates `api/index.js` for Vercel. Commit the regenerated file: CI fails if it is stale |
+| `pnpm build` | Production bundle; renders the public pages at build time, fails if a public page's JavaScript passes 170 KB compressed (R70), and regenerates `api/index.js` for Vercel. Commit the regenerated file: CI fails if it is stale |
+| `pnpm share-cards` | Remakes each public page's share card in `client/public/share/` after a heading, price or brand change (needs Chromium) |
 | `pnpm build:preview` | Static clickable preview in `dist/preview` with a simulated server |
 | `pnpm test:db` | Database contract tests against a real PostgreSQL (`TEST_DATABASE_URL`, disposable database only) |
 | `pnpm db:generate` / `pnpm db:migrate` | Create / apply a migration (`MIGRATION_DATABASE_URL`) |

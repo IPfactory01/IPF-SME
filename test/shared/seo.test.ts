@@ -65,9 +65,21 @@ describe("what search engines and link previews read", () => {
     expect(faqJsonLd([{ q: "A?", a: "One." }, { q: "A?", a: "Two." }]).mainEntity).toHaveLength(1);
   });
 
+  it("carries the page itself when it was rendered at build time, and fetches that page's own code at once (R70)", () => {
+    const page = publicPages().find((item) => item.path === "/about")!;
+    const entry = template.match(/src="\/(assets\/[^"]+\.js)"/)?.[1] ?? "assets/index.js";
+    const html = pageHtml(template, page, { html: "<main><h1>Consulting experience</h1></main>", preload: [entry, "assets/AboutPage-x.js"] });
+    expect(html).toContain('<div id="root" data-prerendered><main><h1>Consulting experience</h1></main></div>');
+    expect(html).not.toContain('class="sr-only"');
+    expect(html).toContain('<link rel="modulepreload" crossorigin href="/assets/AboutPage-x.js" />');
+    expect(html.match(/modulepreload" crossorigin href="\/assets\/AboutPage-x\.js"/g)).toHaveLength(1);
+  });
+
   it("cannot be broken out of by the words it carries", () => {
-    const html = pageHtml(template, { path: "/x", title: 'A "quoted" <title>', description: "</script><script>alert(1)</script>", heading: "<b>", body: [], jsonLd: [{ text: "</script><!--" }] });
+    const card = { image: "/share/x.jpg", eyebrow: "", lines: ['"><script>alert(2)</script>'], line: "", badge: "" };
+    const html = pageHtml(template, { path: "/x", title: 'A "quoted" <title>', description: "</script><script>alert(1)</script>", heading: "<b>", body: [], jsonLd: [{ text: "</script><!--" }], card });
     expect(html).not.toContain("<script>alert(1)");
+    expect(html).not.toContain("<script>alert(2)");
     expect(html).toContain("&lt;b&gt;");
     expect(html).toContain("\\u003c/script>\\u003c!--");
     expect(html).toContain('content="A &quot;quoted&quot; &lt;title&gt; | The Shift, by IP Factory"');
@@ -84,7 +96,8 @@ describe("what search engines and link previews read", () => {
 describe("how the build and the host serve those pages", () => {
   it("writes the ready-made pages after the client build, and serves every other address from the untouched app shell", () => {
     const pkg = JSON.parse(readFileSync(resolve(process.cwd(), "package.json"), "utf8")) as { scripts: Record<string, string> };
-    expect(pkg.scripts.build).toMatch(/^vite build && tsx scripts\/prerender\.ts && /);
+    // The pages are rendered at build time (vite.ssr.config.ts) and written once the speed budget passes.
+    expect(pkg.scripts.build).toMatch(/^vite build && vite build --config vite\.ssr\.config\.ts && tsx scripts\/jsBudget\.ts && tsx scripts\/prerender\.ts && /);
     const vercel = JSON.parse(readFileSync(resolve(process.cwd(), "vercel.json"), "utf8")) as { rewrites: { source: string; destination: string }[] };
     expect(vercel.rewrites.at(-1)).toEqual({ source: "/(.*)", destination: "/app.html" });
     // Each public address is sent to its ready-made page by name, before the catch-all, so the host never has to guess.

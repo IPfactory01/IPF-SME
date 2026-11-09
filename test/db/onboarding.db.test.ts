@@ -132,7 +132,8 @@ for (const target of targets) {
         const procedures = Object.keys((appRouter as unknown as { _def: { procedures: Record<string, unknown> } })._def.procedures);
         // The reset pair is keyed by an emailed link (test/db/accountRecovery.db.test.ts); "Forgot your password?" only
         // emails one, and creates an account solely for the owner's address (test/db/forgotPassword.db.test.ts). Still no sign-up.
-        expect(procedures.filter(name => name.startsWith("account.")).sort()).toEqual(["account.business", "account.changePassword", "account.me", "account.requestReset", "account.resetPassword", "account.resetPreview", "account.signIn", "account.signInInternal", "account.signOut", "account.switchWorkspace", "account.updateBusiness", "account.updateProfile", "account.verifyTwoStep", "account.workspace"]);
+        // account.whatsapp and account.setWhatsapp are for a signed-in staff member (R44, 9 November 2026).
+        expect(procedures.filter(name => name.startsWith("account.")).sort()).toEqual(["account.business", "account.changePassword", "account.me", "account.requestReset", "account.resetPassword", "account.resetPreview", "account.setWhatsapp", "account.signIn", "account.signInInternal", "account.signOut", "account.switchWorkspace", "account.updateBusiness", "account.updateProfile", "account.verifyTwoStep", "account.whatsapp", "account.workspace"]);
         expect(procedures.filter(name => /sign-?up|register/i.test(name))).toEqual([]);
         // Calling the old procedure by name does not create anything: there is nothing to call.
         const before = await total(schema.users);

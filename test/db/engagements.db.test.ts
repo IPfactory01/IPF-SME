@@ -265,6 +265,58 @@ for (const target of targets) {
       });
     });
 
+    describe("WhatsApp for the team (R44, migration 0021)", () => {
+      it("shows a team member's number to their clients only once they agree, never to another client, and logs no number", async () => {
+        const a = await client("wa-a");
+        const b = await client("wa-b");
+        const desk = await superAdmin.call();
+        const femiUser = await person(["analyst"], "Femi Adebayo");
+        await desk.engagement.staff.assign({ engagementId: a.engagementId, userId: femiUser.id, role: "analyst" });
+        const femi = await signIn(femiUser, true);
+        await expect((await a.owner.call()).account.setWhatsapp({ whatsapp: "+2348031234567", agree: true })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        expect(await (await a.owner.call()).account.whatsapp()).toMatchObject({ staff: false });
+        await expect((await femi.call()).account.setWhatsapp({ whatsapp: "0803", agree: true })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+
+        // Saved without agreeing: not shown to the client.
+        await (await femi.call()).account.setWhatsapp({ whatsapp: "+234 803 123 4567", agree: false });
+        expect(await (await femi.call()).account.whatsapp()).toMatchObject({ staff: true, whatsapp: "+2348031234567", agreedAt: null });
+        const femiIn = async (owner: typeof a.owner) => (await (await owner.call()).engagement.client.room())!.team.find(member => member.name === "Femi Adebayo");
+        expect((await femiIn(a.owner))!.whatsapp).toBeNull();
+
+        // Agreed: shown to this client only.
+        await (await femi.call()).account.setWhatsapp({ whatsapp: "+2348031234567", agree: true });
+        expect((await femiIn(a.owner))!.whatsapp).toBe("+2348031234567");
+        expect(JSON.stringify(await (await b.owner.call()).engagement.client.room())).not.toContain("2348031234567");
+
+        // A manager correcting it puts it back to waiting for Femi's own agreement.
+        await desk.people.setWhatsapp({ userId: femiUser.id, whatsapp: "+2348099999999" });
+        expect((await femiIn(a.owner))!.whatsapp).toBeNull();
+        expect((await desk.people.list()).find(row => row.id === femiUser.id)).toMatchObject({ whatsapp: "+2348099999999", whatsappAgreedAt: null });
+
+        const events = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "staff_whatsapp_set"));
+        expect(events.length).toBeGreaterThanOrEqual(3);
+        for (const event of events) expect(event.details).not.toMatch(/\d{7,}/);
+      });
+
+      it("sends a client item on WhatsApp to the team member who asked for it, or else the engagement's main contact", async () => {
+        const a = await client("wa-items");
+        const desk = await superAdmin.call();
+        const leadUser = await person(["desk_lead"], "Tola Lead");
+        const analystUser = await person(["analyst"], "Ngozi Analyst");
+        await desk.engagement.staff.assign({ engagementId: a.engagementId, userId: leadUser.id, role: "lead" });
+        await desk.engagement.staff.assign({ engagementId: a.engagementId, userId: analystUser.id, role: "analyst" });
+        const lead = await signIn(leadUser, true);
+        const analyst = await signIn(analystUser, true);
+        await (await lead.call()).account.setWhatsapp({ whatsapp: "+2348030000001", agree: true });
+        await (await analyst.call()).account.setWhatsapp({ whatsapp: "+2348030000002", agree: true });
+        await (await analyst.call()).engagement.staff.saveTask({ engagementId: a.engagementId, kind: "data_request", side: "client", title: "Your shop's opening hours", detail: null, assigneeUserId: null, dueOn: null, status: "open", statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 99, factor: null });
+        const tasks = (await (await a.owner.call()).engagement.client.room())!.tasks;
+        expect(tasks.find(task => task.title === "Your shop's opening hours")!.sendTo).toEqual({ name: "Ngozi Analyst", whatsapp: "+2348030000002" });
+        // An item from the standard Work Plan (asked by nobody in particular) goes to the lead.
+        expect(tasks.find(task => task.side === "client" && task.title !== "Your shop's opening hours")!.sendTo).toEqual({ name: "Tola Lead", whatsapp: "+2348030000001" });
+      });
+    });
+
     describe("the Digital marketing roles (R45, migration 0021)", () => {
       it("puts a Digital Marketer and a Content Producer on a Digital marketing engagement, and on no other kind", async () => {
         const desk = await superAdmin.call();

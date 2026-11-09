@@ -129,7 +129,7 @@ export default function PeoplePanel({ scope }: { scope: "team" | "clients" }) {
             <tbody>
               {rows.map(person => (
                 <tr key={person.id} className="border-b border-line-soft">
-                  <td className={TD}><span className="block font-medium">{person.name || "-"}</span><span className="block text-xs text-ink-muted">{person.email}</span></td>
+                  <td className={TD}><span className="block font-medium">{person.name || "-"}</span><span className="block text-xs text-ink-muted">{person.email}</span>{staff && <WhatsappCell userId={person.id} name={person.name || person.email || "this person"} whatsapp={person.whatsapp ?? null} agreed={Boolean(person.whatsappAgreedAt)} onChanged={refresh} />}</td>
                   <td className={TD}>
                     {person.roles.length || !person.businesses ? <LevelEditor userId={person.id} name={person.name || person.email || "this person"} level={person.jobTitle ?? null} roles={person.roles} onChanged={refresh} /> : person.businesses ? "Client" : "-"}
                 </td>
@@ -162,7 +162,31 @@ export default function PeoplePanel({ scope }: { scope: "team" | "clients" }) {
  * A staff member's level, which sets their firm title and their access in one step (LEVEL_ROLES). A Specialist needs
  * the date their access ends. The access it gives is shown under it; Super Admin stays as it is.
  */
-export function LevelEditor({ userId, name, level, roles, onChanged }: { userId: number; name: string; level: string | null; roles: string[]; onChanged: () => void }) {
+export /**
+ * A staff member's WhatsApp number (R44). A manager sets or corrects it; only the person can agree to clients seeing it,
+ * in their Account settings, so a changed number shows as "Not agreed yet" until they do.
+ */
+function WhatsappCell({ userId, name, whatsapp, agreed, onChanged }: { userId: number; name: string; whatsapp: string | null; agreed: boolean; onChanged: () => void }) {
+  const [value, setValue] = useState<string | null>(null);
+  const save = trpc.people.setWhatsapp.useMutation({ onSuccess: () => { setValue(null); onChanged(); toast.success("WhatsApp number saved. They agree to it being shown in their Account settings."); }, onError: error => toast.error(error.message) });
+  if (value !== null) {
+    return (
+      <span className="mt-1 flex flex-wrap items-center gap-2" role="group" aria-label={`Change the WhatsApp number of ${name}`}>
+        <input aria-label={`WhatsApp number of ${name}`} className="w-44 border border-line bg-white px-2 py-1 text-xs" placeholder="+234 803 123 4567" value={value} maxLength={24} onChange={event => setValue(event.target.value)} />
+        <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" disabled={save.isPending} onClick={() => save.mutate({ userId, whatsapp: value.trim() || null })}>Save</button>
+        <button type="button" className="text-xs text-ink-muted underline underline-offset-2" onClick={() => setValue(null)}>Cancel</button>
+      </span>
+    );
+  }
+  return (
+    <span className="mt-1 block text-xs text-ink-muted">
+      WhatsApp: {whatsapp ? <>{whatsapp} · {agreed ? "shown to their clients" : <span className="text-health-watch-strong">not agreed yet</span>}</> : "none"}{" "}
+      <button type="button" className="font-semibold text-brand underline underline-offset-2" onClick={() => setValue(whatsapp ?? "")}>{whatsapp ? "Change" : "Add"}</button>
+    </span>
+  );
+}
+
+function LevelEditor({ userId, name, level, roles, onChanged }: { userId: number; name: string; level: string | null; roles: string[]; onChanged: () => void }) {
   const [choice, setChoice] = useState<string>(isFirmLevel(level) ? level : "");
   const [endsOn, setEndsOn] = useState("");
   const save = trpc.platformRoles.setLevel.useMutation({ onSuccess: result => { toast.success(`Level set: ${result.level}.`); setEndsOn(""); onChanged(); }, onError: error => toast.error(error.message) });

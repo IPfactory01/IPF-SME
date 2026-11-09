@@ -26,6 +26,7 @@ vi.mock("@/lib/trpc", () => ({
       removeAccess: { useMutation: mutation("removeAccess", () => ({ success: true, sessionsEnded: 2 })) },
       resetTwoStep: { useMutation: mutation("resetTwoStep") },
       setJobTitle: { useMutation: mutation("setJobTitle") },
+      setWhatsapp: { useMutation: mutation("setWhatsapp") },
     },
     platformRoles: {
       grant: { useMutation: mutation("grant") },
@@ -53,6 +54,18 @@ describe("the People panel", () => {
     api.calls = {};
   });
   afterEach(cleanup);
+
+  it("shows each team member's WhatsApp number and whether they agreed to clients seeing it, and lets a manager correct it (R44)", () => {
+    api.people = [{ ...lewis, whatsapp: "+2348031234567", whatsappAgreedAt: null }, { ...kemi, whatsapp: null, whatsappAgreedAt: null }, ada];
+    render(<Both />);
+    expect(rowOf("Lewis Desk").getByText(/\+2348031234567/).textContent).toContain("not agreed yet");
+    expect(rowOf("Kemi Contractor").getByText(/WhatsApp: none/)).toBeTruthy();
+    expect(rowOf("Ada Okafor").queryByText(/WhatsApp:/)).toBeNull();
+    fireEvent.click(rowOf("Lewis Desk").getByRole("button", { name: "Change" }));
+    fireEvent.change(rowOf("Lewis Desk").getByLabelText("WhatsApp number of Lewis Desk"), { target: { value: "+234 809 999 9999" } });
+    fireEvent.click(rowOf("Lewis Desk").getByRole("button", { name: "Save" }));
+    expect(api.calls.setWhatsapp).toEqual([{ userId: 2, whatsapp: "+234 809 999 9999" }]);
+  });
 
   it("lists everyone with a password account, their roles, status and last sign-in", () => {
     render(<Both />);

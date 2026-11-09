@@ -16,6 +16,7 @@ import { useRoomProject } from "@/lib/roomProject";
 import ContentBoard from "./room/ContentBoard";
 import { toast } from "sonner";
 import { useWide } from "@/hooks/useWide";
+import { firstNameOf, whatsappLink } from "@shared/whatsapp";
 import { BusinessPanel, FounderPanel } from "./room/RoomInsight";
 import RoomDashboard from "./room/RoomDashboard";
 import RoomTabs from "./room/RoomTabs";
@@ -169,10 +170,12 @@ export default function EngagementRoom({ room, aside, account, notice, now = Dat
     </section>
   );
 
-  const person = (key: string, name: string, line: string, you = false) => (
+  const person = (key: string, name: string, line: string, you = false, whatsapp: string | null = null) => (
     <li key={key} className="flex items-center gap-3">
       <span aria-hidden className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${avatarColour(name)}`}>{initials(name)}</span>
-      <span className="min-w-0"><span className="block font-medium text-ink">{name}{you && <span className="ml-1.5 text-xs font-normal text-ink-muted">(you)</span>}</span><span className="block text-xs text-ink-muted">{line}</span></span>
+      <span className="min-w-0 flex-1"><span className="block font-medium text-ink">{name}{you && <span className="ml-1.5 text-xs font-normal text-ink-muted">(you)</span>}</span><span className="block text-xs text-ink-muted">{line}</span></span>
+      {/* R44: a chat with this person, the business and project named; only when they agreed to share their number. */}
+      {whatsapp && <a href={whatsappLink(whatsapp, `Hello ${firstNameOf(name)}, this is ${room.businessName} about ${room.title}.`)} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 shrink-0 items-center rounded-lg border border-brand-line px-3 text-xs font-semibold text-brand hover:bg-brand-tint">WhatsApp {firstNameOf(name)}</a>}
     </li>
   );
   const team = (
@@ -181,7 +184,7 @@ export default function EngagementRoom({ room, aside, account, notice, now = Dat
       <h3 className="mt-3 font-sans text-xs font-semibold text-ink">IP Factory</h3>
       {room.team.length ? (
         <ul className="mt-2 space-y-3" aria-label="IP Factory">
-          {room.team.map(member => person(`${member.name}-${member.roleLabel}`, member.name, `${member.roleLabel}${member.jobTitle ? ` · ${member.jobTitle}` : ""}`))}
+          {room.team.map(member => person(`${member.name}-${member.roleLabel}`, member.name, `${member.roleLabel}${member.jobTitle ? ` · ${member.jobTitle}` : ""}`, false, member.whatsapp ?? null))}
         </ul>
       ) : <p className="mt-1 text-sm text-ink-600">We are naming your team now.</p>}
       {room.people.length > 0 && (
@@ -845,6 +848,7 @@ function RequestControls({ task }: { task: Task }) {
     <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
       <a href="#drop" className="inline-flex items-center gap-1 font-medium text-brand underline underline-offset-2"><UploadCloud className="h-3.5 w-3.5" aria-hidden />Upload</a>
       <button type="button" className="font-medium text-brand underline underline-offset-2" onClick={() => setMode("link")}>Send a link</button>
+      {task.sendTo && <a href={whatsappLink(task.sendTo.whatsapp, `Hello ${firstNameOf(task.sendTo.name)}, here is ${task.ref ? `${task.ref} ` : ""}${task.title}.`)} target="_blank" rel="noopener noreferrer" className="font-medium text-brand underline underline-offset-2">Send on WhatsApp to {firstNameOf(task.sendTo.name)}</a>}
       <button type="button" className="font-medium text-ink-600 underline underline-offset-2 hover:text-ink" onClick={() => setMode("missing")}>Not available</button>
       <button type="button" className="text-ink-muted underline underline-offset-2 hover:text-ink" onClick={() => setMode("other")}>Submitted another way</button>
     </div>

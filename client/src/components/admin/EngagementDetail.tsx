@@ -1,3 +1,5 @@
+import { firstNameOf } from "@shared/whatsapp";
+import WhatsAppShare from "./WhatsAppShare";
 import { Failed, Loading } from "@/components/states";
 import { isRefusal } from "@/lib/readPolicy";
 import { STAGED_TYPES } from "@shared/engagementTypes";
@@ -94,11 +96,11 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
         <DetailField label="Email">{data.owner?.email ?? "-"}</DetailField>
         <DetailField label="WhatsApp">{data.owner?.whatsapp ? <a className="text-brand underline" href={whatsappLink(data.owner.whatsapp) ?? undefined} target="_blank" rel="noreferrer">{data.owner.whatsapp}</a> : "-"}</DetailField>
         <DetailField label="Client account">{data.hasAccount ? `Yes${data.clientPeople.length > 1 ? `, ${data.clientPeople.length} people` : ""}` : "Not yet: the invitation is out"}</DetailField>
-        {data.can.sendSignIn && data.engagement.businessCheckId !== null && <SendSignInLink businessCheckId={data.engagement.businessCheckId} hasAccount={data.hasAccount} />}
+        {data.can.sendSignIn && data.engagement.businessCheckId !== null && <SendSignInLink businessCheckId={data.engagement.businessCheckId} hasAccount={data.hasAccount} owner={data.owner} />}
         <div className="border-t border-line-soft pt-2"><PreviewAsClient engagementId={engagementId} /></div>
       </DetailSection>
       <StageAndTeam data={data} engagementId={engagementId} />
-      {data.can.seeFees && <FeesAdmin engagementId={engagementId} />}
+      {data.can.seeFees && <FeesAdmin engagementId={engagementId} owner={data.owner} />}
       <Problem data={data} engagementId={engagementId} />
       <Sessions data={data} engagementId={engagementId} />
       {data.engagement.type === "digital_marketing" && <ContentAdmin data={data} engagementId={engagementId} />}
@@ -114,7 +116,7 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
  * "Send sign-in link": a client who lost their way in gets the right link by email, a password reset if they have an
  * account, a fresh invitation if not. The link shows here once, for WhatsApp, in case the email does not arrive.
  */
-function SendSignInLink({ businessCheckId, hasAccount }: { businessCheckId: number; hasAccount: boolean }) {
+function SendSignInLink({ businessCheckId, hasAccount, owner }: { businessCheckId: number; hasAccount: boolean; owner?: { name: string; whatsapp: string | null } | null }) {
   const [sent, setSent] = useState<{ kind: "reset" | "invitation"; email: string; url: string; deliveryStatus: string } | null>(null);
   const send = trpc.onboarding.sendSignInLink.useMutation({
     onSuccess: result => {
@@ -136,6 +138,9 @@ function SendSignInLink({ businessCheckId, hasAccount }: { businessCheckId: numb
           <p className="font-semibold">{sent.kind === "reset" ? "Password reset link" : "Account invitation"} for {sent.email} · {sent.deliveryStatus === "Sent" ? "emailed" : "not emailed: send it yourself"}</p>
           <p className="break-all font-mono">{sent.url}</p>
           <p className="text-ink-muted">Shown once. Share it only with the client.</p>
+          <WhatsAppShare number={owner?.whatsapp} message={sent.kind === "reset"
+            ? `Hello ${firstNameOf(owner?.name ?? "")}, here is your link to choose a new password for your room on The Shift. It works once, for 20 minutes: ${sent.url}`
+            : `Hello ${firstNameOf(owner?.name ?? "")}, here is your link to set up your account for your room on The Shift: ${sent.url}`} />
         </div>
       )}
     </div>
@@ -736,7 +741,7 @@ function CheckinCard({ checkin, weekNumber, engagementId, canManage, unit, onDon
  * and each payment recorded with Paid. There is no proposal to send: a client agrees by paying, or on the call, under the
  * Terms and Conditions (ET, 6 November 2026). Finance counts a fee as owed once it is saved here.
  */
-function FeesAdmin({ engagementId }: { engagementId: number }) {
+function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { name: string; whatsapp: string | null } | null }) {
   const utils = trpc.useUtils();
   const query = trpc.engagement.staff.fees.useQuery({ engagementId });
   const [draft, setDraft] = useState<FeeLineDraft[] | null>(null);
@@ -789,6 +794,10 @@ function FeesAdmin({ engagementId }: { engagementId: number }) {
           <p className="font-medium text-ink">Payment link for {data.feeLines.find(line => line.id === sentLink.feeLineId)?.reference}</p>
           <p className="break-all font-mono">{sentLink.url}</p>
           <p className="text-ink-muted">Emailed to the client. Shown here in case the email does not arrive.</p>
+          {(() => {
+            const line = data.feeLines.find(item => item.id === sentLink.feeLineId);
+            return <WhatsAppShare number={owner?.whatsapp} message={`Hello ${firstNameOf(owner?.name ?? "")}, here is the payment link for ${line?.label ?? "your fee"}${line ? ` (${formatNaira(line.amount)})` : ""}: ${sentLink.url}`} />;
+          })()}
         </div>
       )}
       {data.can.edit && <button type="button" className="text-xs font-semibold text-brand underline" onClick={() => setDraft([...current, { label: "", amount: 0, dueOn: null }])}>Add a fee</button>}

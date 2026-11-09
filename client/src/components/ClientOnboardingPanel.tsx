@@ -1,3 +1,5 @@
+import WhatsAppShare from "@/components/admin/WhatsAppShare";
+import { firstNameOf } from "@shared/whatsapp";
 import { Failed, Loading } from "@/components/states";
 import { isRefusal } from "@/lib/readPolicy";
 import { Button } from "@/components/ui/button";
@@ -21,7 +23,7 @@ export default function ClientOnboardingPanel() {
   const candidates = trpc.onboarding.candidates.useQuery(undefined);
   const invitations = trpc.onboarding.invitations.useQuery(undefined);
   const metrics = trpc.onboarding.metrics.useQuery(undefined);
-  const [issued, setIssued] = useState<{ url: string; email: string; delivery: string } | null>(null);
+  const [issued, setIssued] = useState<{ url: string; email: string; delivery: string; name: string; whatsapp: string | null; business: string } | null>(null);
   /** A candidate who has not paid, waiting for the reason to invite them anyway. */
   const [early, setEarly] = useState<{ id: number; fullName: string; stage: string } | null>(null);
   const [reason, setReason] = useState("");
@@ -33,7 +35,7 @@ export default function ClientOnboardingPanel() {
   const invite = trpc.onboarding.invite.useMutation({
     onSuccess: (result, variables) => {
       const lead = candidates.data?.find(item => item.id === variables.businessCheckId);
-      setIssued({ url: result.invitationUrl, email: lead?.email ?? "", delivery: result.deliveryStatus });
+      setIssued({ url: result.invitationUrl, email: lead?.email ?? "", delivery: result.deliveryStatus, name: lead?.fullName ?? "", whatsapp: lead?.whatsapp ?? null, business: lead?.businessName ?? "your business" });
       toast.success(result.deliveryStatus === "Sent" ? "Onboarding link emailed." : "Onboarding link created. Copy it to send it yourself.");
       refresh();
     },
@@ -85,6 +87,7 @@ export default function ClientOnboardingPanel() {
             <Button type="button" variant="outline" className="rounded-none text-xs" onClick={() => { void navigator.clipboard?.writeText(issued.url); toast.success("Link copied."); }}>Copy</Button>
             <Button type="button" variant="outline" className="rounded-none text-xs" onClick={() => setIssued(null)}>Hide</Button>
           </div>
+          <WhatsAppShare number={issued.whatsapp} message={`Hello ${firstNameOf(issued.name)}, here is your link to set up your room on The Shift for ${issued.business}: ${issued.url}`} />
         </div>
       )}
 

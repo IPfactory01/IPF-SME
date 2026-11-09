@@ -928,6 +928,19 @@ export async function previewClientRoom(db: Database, actor: StaffActor, input: 
   return buildClientRoom(db, engagement, { kind: "owner" } as ClientViewer, owner?.userId ?? 0, businessName);
 }
 
+/** A staff member's WhatsApp number for clients: only once they agreed to it being shown (R44, K11). */
+const agreedWhatsapp = (member: { whatsapp: string | null; whatsappConsentAt: Date | null }) => (member.whatsapp && member.whatsappConsentAt ? member.whatsapp : null);
+
+/** Whom a client item goes to on WhatsApp: the team member who asked for it, else the main contact, with an agreed number. */
+const MAIN_CONTACT_ORDER: readonly EngagementTeamRole[] = ["digital_marketer", "manager", "lead", "partner", "content_producer", "analyst", "expert"];
+function recipientOf(team: { userId: number; name: string | null; role: EngagementTeamRole; whatsapp: string | null; whatsappConsentAt: Date | null }[], askedBy: number | null) {
+  const reachable = team.filter(member => agreedWhatsapp(member));
+  const asker = reachable.find(member => member.userId === askedBy);
+  const main = [...reachable].sort((a, b) => MAIN_CONTACT_ORDER.indexOf(a.role) - MAIN_CONTACT_ORDER.indexOf(b.role))[0];
+  const chosen = asker ?? main;
+  return chosen ? { name: chosen.name ?? "", whatsapp: agreedWhatsapp(chosen)! } : null;
+}
+
 async function buildClientRoom(db: Database, engagement: typeof engagements.$inferSelect, viewer: ClientViewer, viewerUserId: number, businessName: string) {
   // Sessions the owner booked on Calendly since the last visit appear with their time before anything is read.
   const owner = engagement.businessCheckId !== null
@@ -935,7 +948,7 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
     : engagement.contactEmail ? { email: engagement.contactEmail, fullName: engagement.contactName ?? "" } : undefined;
   if (owner) await syncSessionBookings(db, engagement, owner.email);
   const [team, sessions, tasks, deliverables, comments, files, measure, checkins, matches] = await Promise.all([
-    db.select({ name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
+    db.select({ userId: engagementTeam.userId, name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle, whatsapp: users.whatsapp, whatsappConsentAt: users.whatsappConsentAt }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagement.id)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq(engagementSessions.engagementId, engagement.id)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq(engagementTasks.engagementId, engagement.id)).orderBy(asc(engagementTasks.id)),
     db.select().from(engagementDeliverables).where(and(eq(engagementDeliverables.engagementId, engagement.id), eq(engagementDeliverables.status, "shared"))).orderBy(asc(engagementDeliverables.id)),
@@ -1013,8 +1026,9 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
     // The one number: the business's own result, so the owner and their full-access staff; never the hours behind it.
     measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,
     // Who runs it first (partner, Engagement Manager, Lead Consultant), then analysts and specialists; each with their firm title.
+    // A WhatsApp number only when its owner agreed to clients seeing it (R44, K11); never their email.
     team: [...team].sort((a, b) => ENGAGEMENT_TEAM_ROLE_ORDER[a.role] - ENGAGEMENT_TEAM_ROLE_ORDER[b.role])
-      .map(member => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role], jobTitle: member.jobTitle ?? null })),
+      .map(member => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role], jobTitle: member.jobTitle ?? null, whatsapp: agreedWhatsapp(member) })),
     // The client's own people on the engagement, owner first, with what each can see. Names only: no email or phone.
     people: (await clientPeopleOf(db, engagement.businessId!)).map(person => ({
       name: person.name, you: person.userId === viewerUserId,
@@ -1044,6 +1058,8 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
       weekNumber: task.weekNumber, sortOrder: task.sortOrder, factor: task.factor,
       section: task.section, ref: task.ref, informs: task.informs, format: task.format, priority: task.priority,
       responseLink: task.responseLink,
+      // Who on the team receives it on WhatsApp: the person who asked, or the engagement's main contact (R44).
+      sendTo: task.side === "client" ? recipientOf(team, task.createdByUserId) : null,
       files: clientFiles("taskId", task.id),
     })),
     // What the client's side dropped into the room, newest first, and which visible requests each file was matched to.

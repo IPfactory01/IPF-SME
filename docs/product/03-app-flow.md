@@ -265,7 +265,7 @@ info@ipfactory.co.
 | A client should get in before paying | — | — | **Open the room now** (recorded) | Built |
 | Footage is too large to upload | **Send a link** on the item: "A link to a shared folder on Google Drive, Dropbox, WeTransfer or iCloud. Videos always come this way, or on WhatsApp." A video file is refused with the same advice | Stores the link, never the video | The Content Producer opens it from the item (**Open the link**) | Built (R43); Send on WhatsApp to {name} with R44 |
 | A wrong or private file was sent | **Remove** beside their own file until the team has matched it or accepted its item; after that, they ask the team | Deletes the stored file and the record; an item back to "To do" if that file was its only answer | Remove any file with a reason, recorded | Built (R61) |
-| The client does not know whom to message | Each team member with **Message on WhatsApp** | — | — | To build (R44, R45) |
+| The client does not know whom to message | Each team member with **WhatsApp {first name}**, once that person agreed in their Account settings; an item offers **Send on WhatsApp to {name}** (the person who asked for it, or the main contact) | Shows a number only once agreed, and only to clients of that person's engagements | Each person adds their number and agrees in Account settings | Built (R44, R45); numbers wait on each person |
 | A team member leaves mid-engagement | The team list changes; nothing else | Moves their open items to the lead | The lead reassigns | To build (R51) |
 | An upload fails on a weak network | "The upload did not finish. Try again." (today); resumes on its own (R56) | Photos compressed first (R56) | — | Partly built |
 | The connection drops while a screen loads | "We could not load this. Check your connection and try again.", with **Try again**; when the screen already had something, it stays with "We could not refresh this. Showing what we had at 10:42 am." A signed-in person is never sent to sign in, and a pay or invitation link is never called invalid, because a request failed | Retries twice by itself before saying so | — | Built (R69) |
@@ -303,7 +303,7 @@ info@ipfactory.co.
 | `/signup` | Redirect | Old links | No public sign-up: goes to `/login` |
 | `/dashboard` | `AccountDashboard.tsx` | Sign-in, every client email | The room (8.4) |
 | `/settings/business` | `BusinessSettingsPage.tsx` | The room | Business name, description, year founded, sector, website |
-| `/settings/account` | `AccountSettingsPage.tsx` | The room | Name and password |
+| `/settings/account` | `AccountSettingsPage.tsx` | The room | Name and password; for staff, their WhatsApp number and their agreement to clients seeing it (R44) |
 | `/admin/login` | `AdminLoginPage.tsx` | Staff | Staff sign-in, with the two-step code |
 | `/admin/reset` | `AdminPasswordResetPage.tsx` | A reset email | Reset the administrator password |
 | `/admin` | `Admin.tsx` | Staff sign-in | The admin console (8.3) |
@@ -368,9 +368,9 @@ the team) and the views as tabs.
 While an engagement in advance waits for its first payment, the room shows only "Your room opens once the first payment
 is made", the fee and **Pay securely with Paystack**.
 
-**To come:** the first-visit welcome and **Your plan** on Overview (R46, R47); each team member with **Message on
-WhatsApp** (R44); voice notes, links and **Send on WhatsApp to {name}** on Data Request items (R43); and, after a
-usability test, fewer places: Home, To do, Sessions, Results, Payments, so no task appears twice (R49).
+**Built 9 November 2026:** each team member with **WhatsApp {first name}** once they agreed (R44); voice notes, links and
+**Send on WhatsApp to {name}** on Data Request items (R43). **To come:** the first-visit welcome and **Your plan** on
+Overview (R46, R47); and, after a usability test, fewer places: Home, To do, Sessions, Results, Payments, so no task appears twice (R49).
 
 **Built 9 November 2026:** on a phone the header is one line off the Overview, a one-line bar replaces it at the top once it
 scrolls away on the Overview, and the tab bar keeps the selected tab in view and fades where more tabs sit (R71). Every

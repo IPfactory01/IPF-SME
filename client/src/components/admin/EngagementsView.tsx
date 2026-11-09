@@ -1,3 +1,5 @@
+import { firstNameOf } from "@shared/whatsapp";
+import WhatsAppShare from "./WhatsAppShare";
 import { Failed, Loading, StaleLine } from "@/components/states";
 import { isRefusal } from "@/lib/readPolicy";
 import { Button } from "@/components/ui/button";
@@ -180,7 +182,7 @@ function NewEngagement({ onCreated, prefill = null, onDone }: { onCreated: (id: 
   const [open, setOpen] = useState(Boolean(prefill));
   const blank = { client: prefill ? "existing" : "new", businessId: prefill ? String(prefill.businessId) : "", type: (prefill?.type ?? "digital_marketing") as EngagementType, service: prefill?.service ?? "", businessName: "", contactName: "", contactEmail: "", startedOn: new Date().toISOString().slice(0, 10) };
   const [form, setForm] = useState(blank);
-  const [issued, setIssued] = useState<{ url: string | null; sent: boolean; engagementId: number; name: string } | null>(null);
+  const [issued, setIssued] = useState<{ url: string | null; sent: boolean; engagementId: number; name: string; contact: string } | null>(null);
   const clients = trpc.engagement.staff.clientBusinesses.useQuery(undefined, { enabled: open });
   const handle = trpc.engagement.staff.handleRequest.useMutation({ onSuccess: () => void utils.engagement.staff.serviceRequests.invalidate() });
   const create = trpc.engagement.staff.createDirect.useMutation({
@@ -189,7 +191,7 @@ function NewEngagement({ onCreated, prefill = null, onDone }: { onCreated: (id: 
       // Opened from a client's request: the request is done.
       if (prefill) handle.mutate({ requestId: prefill.requestId, status: "done" });
       const name = form.client === "existing" ? clients.data?.find(item => String(item.id) === form.businessId)?.name ?? "The engagement" : form.businessName;
-      setIssued({ url: result.invitationUrl, sent: result.deliveryStatus === "Sent", engagementId: result.engagementId, name });
+      setIssued({ url: result.invitationUrl, sent: result.deliveryStatus === "Sent", engagementId: result.engagementId, name, contact: form.contactName });
       toast.success("Engagement opened.");
     },
     onError: error => toast.error(error.message),
@@ -218,6 +220,7 @@ function NewEngagement({ onCreated, prefill = null, onDone }: { onCreated: (id: 
             <>
               <p className="text-ink-muted">{issued.sent ? "The invitation was emailed. The link is shown once here as well." : "Email is not set up yet: copy this link and send it to the client yourself. It is shown once."}</p>
               <div className="flex items-center gap-2"><input readOnly aria-label="Client invitation link" className={`${field} text-xs`} value={issued.url} /><CopyButton value={issued.url} label="Copy the client invitation link" /></div>
+              <WhatsAppShare message={`Hello ${firstNameOf(issued.contact)}, here is your link to set up your room on The Shift for ${issued.name}: ${issued.url}`} />
             </>
           ) : <p className="text-ink-muted">The client already has an account; the project is in their room now.</p>}
           <div className="flex gap-2">

@@ -4,7 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
+import PhoneField from "@/components/PhoneField";
+import { Failed, Loading } from "@/components/states";
 import { validateAccountPassword } from "@shared/auth";
+import { fromInternational, phoneProblem, toInternational } from "@shared/phone";
 import React, { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -79,12 +82,64 @@ function PasswordForm() {
   );
 }
 
+/**
+ * A staff member's WhatsApp number (R44): clients of their engagements see "WhatsApp {name}" only once they agree here.
+ * Shown only to people with an internal role; a client's number is in their business profile.
+ */
+function WhatsappForm() {
+  const utils = trpc.useUtils();
+  const read = trpc.account.whatsapp.useQuery(undefined, { refetchOnWindowFocus: false });
+  const [phone, setPhone] = useState<{ iso: string; national: string } | null>(null);
+  const [agree, setAgree] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const save = trpc.account.setWhatsapp.useMutation({
+    onSuccess: result => {
+      void utils.account.whatsapp.invalidate();
+      setPhone(null);
+      setAgree(null);
+      toast.success(result.agreedAt ? "Saved. Your clients can message you on WhatsApp." : "Saved. Clients do not see your number until you agree.");
+    },
+    onError: failure => setError(failure.message),
+  });
+  if (read.data === undefined) return read.error ? <Failed error={read.error} onRetry={() => void read.refetch()} retrying={read.isFetching} /> : read.isLoading ? <Loading label="Loading your WhatsApp number" rows={1} /> : null;
+  if (!read.data.staff) return null;
+  const shown = phone ?? fromInternational(read.data.whatsapp);
+  const agreed = agree ?? Boolean(read.data.agreedAt);
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const problem = phoneProblem(shown.iso, shown.national);
+    if (problem) return setError(problem);
+    setError(null);
+    save.mutate({ whatsapp: toInternational(shown.iso, shown.national) || null, agree: agreed });
+  };
+  return (
+    <Card role="region" aria-label="WhatsApp" className="rounded-none border-line-soft bg-white shadow-sm">
+      <CardHeader className="space-y-1 pb-3">
+        <CardTitle className="text-lg font-semibold">WhatsApp</CardTitle>
+        <CardDescription>{read.data.agreedAt ? "Your clients see a WhatsApp button beside your name in their room." : "Your clients see a WhatsApp button beside your name once you agree. Use a work number if you have one."}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form className="space-y-4" noValidate onSubmit={submit}>
+          {error && <div role="alert" className="border border-danger-line bg-danger-tint px-4 py-3 text-sm text-danger-strong">{error}</div>}
+          <PhoneField label="WhatsApp number" iso={shown.iso} national={shown.national} onChange={value => { setPhone(value); setError(null); }} />
+          <label className="flex min-h-11 items-start gap-3 text-sm text-ink">
+            <input type="checkbox" className="mt-1 h-4 w-4" checked={agreed} onChange={event => setAgree(event.target.checked)} />
+            <span>My number may be shown to the clients I work with, so they can message me about their engagement.</span>
+          </label>
+          <Button disabled={save.isPending} type="submit" className="rounded-none bg-brand text-sm text-white">{save.isPending ? "Saving…" : "Save"}</Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AccountSettingsPage() {
   return (
     <AccountLayout heading="Account settings">
       {account => (
         <>
           <ProfileForm key={account.user.id} fullName={account.user.fullName} email={account.user.email} />
+          {account.platformRoles.length > 0 && <WhatsappForm />}
           <PasswordForm />
         </>
       )}

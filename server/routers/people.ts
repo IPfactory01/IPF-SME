@@ -4,6 +4,7 @@ import { issuePasswordReset, listPeople, setAccountStatus, setJobTitle } from ".
 import { JOB_TITLE_MAX_LENGTH } from "../../shared/engagement";
 import { getDb } from "../db";
 import { removeAccess, removeAccessInputSchema, resetTwoStep } from "../platformAccess";
+import { setStaffWhatsapp } from "../staffWhatsapp";
 import { adminPermissionProcedure, router } from "../_core/trpc";
 
 const manageUsers = adminPermissionProcedure("manage_users");
@@ -27,6 +28,9 @@ export const peopleRouter = router({
     .input(z.object({ userId: z.number().int().positive(), status: z.enum(["active", "suspended"]), reason: z.string().trim().max(500).optional() }))
     .mutation(async ({ ctx, input }) =>
       setAccountStatus(await database(), { actor: { id: ctx.user.id, email: ctx.user.email ?? null, authority: ctx.authority }, targetUserId: input.userId, status: input.status, reason: input.reason })),
+  /** Sets or corrects a staff member's WhatsApp number; a changed number waits for their own agreement (R44). */
+  setWhatsapp: manageUsers.input(z.object({ userId: z.number().int().positive(), whatsapp: z.string().trim().max(24).nullable() })).mutation(async ({ ctx, input }) =>
+    setStaffWhatsapp(await database(), { id: ctx.user.id }, input)),
   /** The firm title clients see beside the person's role on their engagement. */
   setJobTitle: manageUsers.input(z.object({ userId: z.number().int().positive(), jobTitle: z.string().trim().max(JOB_TITLE_MAX_LENGTH).nullable() })).mutation(async ({ ctx, input }) =>
     setJobTitle(await database(), { actor: { id: ctx.user.id, email: ctx.user.email ?? null, authority: ctx.authority }, targetUserId: input.userId, jobTitle: input.jobTitle })),

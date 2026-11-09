@@ -14,6 +14,7 @@ import {
 } from "../accountAuth";
 import { confirmPasswordReset, previewPasswordReset, requestPasswordReset } from "../accountRecovery";
 import { getDb } from "../db";
+import { ownWhatsapp, setOwnWhatsapp } from "../staffWhatsapp";
 import { accountProcedure, publicProcedure, router } from "../_core/trpc";
 import { TRPCError } from "@trpc/server";
 
@@ -67,6 +68,10 @@ export const accountRouter = router({
   updateProfile: accountProcedure.input(z.unknown()).mutation(({ ctx, input }) => updateAccountProfile(ctx.req, ctx.account, input)),
 
   changePassword: accountProcedure.input(z.unknown()).mutation(({ ctx, input }) => changeAccountPassword(ctx.req, ctx.account, input)),
+  /** A staff member's own WhatsApp number and whether clients may see it (R44). */
+  whatsapp: accountProcedure.query(async ({ ctx }) => ownWhatsapp(await database(), ctx.account)),
+  /** Sets it, with the person's own agreement to it being shown to the clients of their engagements. Staff only. */
+  setWhatsapp: accountProcedure.input(z.object({ whatsapp: z.string().trim().max(24).nullable(), agree: z.boolean() })).mutation(async ({ ctx, input }) => setOwnWhatsapp(await database(), ctx.account, input)),
 
   /** "Forgot your password?": emails a reset link if an account uses the address. Public; always the same answer. */
   requestReset: publicProcedure.input(z.unknown()).mutation(async ({ ctx, input }) => requestPasswordReset(await database(), ctx.req, input)),

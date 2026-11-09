@@ -202,6 +202,7 @@ trusted browser origin.
 | `account.signIn`, `account.signInInternal`, `account.verifyTwoStep`, `account.signOut`, `account.me` | Signs in a client, or staff with two-step; checks the code; signs out; who is signed in | Public; rate-limited; locked after five wrong passwords | Account |
 | `account.requestReset`, `account.resetPreview`, `account.resetPassword` | "Forgot your password?": the email, the link checked, the new password | Public, by a single-use link; the same answer whether or not the account exists | Account |
 | `account.workspace`, `account.switchWorkspace`, `account.business`, `account.updateBusiness`, `account.updateProfile`, `account.changePassword` | The businesses the person belongs to and the one in use; the business; the profile; the password | Signed in; a business is changed by its owner or business admin | Account, Business |
+| `account.whatsapp`, `account.setWhatsapp` | A staff member's own WhatsApp number, and their agreement to it being shown to the clients of their engagements (R44) | Signed in, with an internal role | Account |
 | `onboarding.preview`, `onboarding.accept` | The invited client opens and accepts the link; their account and business are created | Public, by a single-use link bound to the email | Client invitation |
 | `onboarding.candidates`, `onboarding.invitations`, `onboarding.metrics`, `onboarding.invite`, `onboarding.sendSignInLink`, `onboarding.revoke` | Who may be invited; the invitations and their state; invite (with a reason before payment); send a sign-in link; revoke | `manage_client_onboarding` | Client invitation |
 | `invitations.preview`, `invitations.accept` | Opens and accepts a staff, owner or seat invitation | Public, by a single-use link bound to the email | Staff invitation, Seat |
@@ -209,6 +210,7 @@ trusted browser origin.
 | `invitations.seats.list`, `invitations.seats.invite`, `invitations.seats.revoke`, `invitations.seats.remove`, `invitations.seats.setAccess` | The owner's staff: list, invite, revoke, remove, full access or contributor | Signed in as the owner or a business admin of the business in use; within the seats included | Seat |
 | `platformRoles.list`, `platformRoles.grant`, `platformRoles.setLevel`, `platformRoles.revoke` | Roles and levels: list, give (with an end date), set a level, take away | `manage_roles`; only roles below one's own | Level and role |
 | `people.list`, `people.issuePasswordReset`, `people.setStatus`, `people.setJobTitle`, `people.removeAccess`, `people.resetTwoStep` | Accounts: list, a reset link, suspend or reinstate, the firm title, remove access, reset two-step | `manage_users` | Account |
+| `people.setWhatsapp` | Set or correct a staff member's WhatsApp number; a changed number waits for their own agreement (R44) | `manage_users` | Account |
 
 ### The Pipeline and payment requests
 

@@ -1,3 +1,5 @@
+import { firstNameOf } from "@shared/whatsapp";
+import WhatsAppShare from "./WhatsAppShare";
 import { Failed } from "@/components/states";
 import { isRefusal } from "@/lib/readPolicy";
 import { Button } from "@/components/ui/button";
@@ -22,14 +24,14 @@ export default function StaffPanel() {
   const [level, setLevel] = useState<FirmLevel>("Business Analyst");
   const [expiresOn, setExpiresOn] = useState("");
   const needsEnd = level === "Specialist";
-  const [issued, setIssued] = useState<{ email: string; url: string; sent: boolean } | null>(null);
+  const [issued, setIssued] = useState<{ email: string; url: string; sent: boolean; name: string } | null>(null);
   const refresh = () => {
     void utils.invitations.staff.list.invalidate();
     void utils.people.list.invalidate();
   };
   const invite = trpc.invitations.staff.invite.useMutation({
     onSuccess: result => {
-      setIssued({ email, url: result.invitationUrl, sent: result.deliveryStatus === "Sent" });
+      setIssued({ email, url: result.invitationUrl, sent: result.deliveryStatus === "Sent", name: fullName });
       setFullName("");
       setEmail("");
       setExpiresOn("");
@@ -58,6 +60,7 @@ export default function StaffPanel() {
           <p className="font-semibold">Invitation for {issued.email}</p>
           <p className="text-ink-muted">{issued.sent ? "It was emailed. The link is shown once here as well." : "Email is not set up yet: copy this link and send it to them yourself. It is shown once."}</p>
           <div className="flex items-center gap-2"><input readOnly aria-label="Invitation link" className="w-full border border-line bg-white px-2 py-1 text-xs" value={issued.url} /><CopyButton value={issued.url} label="Copy the invitation link" /></div>
+          <WhatsAppShare message={`Hello ${firstNameOf(issued.name)}, here is your invitation to join the IP Factory team on The Shift: ${issued.url}`} />
         </div>
       )}
       {invitations.error && !isRefusal(invitations.error) && invitations.data === undefined && <Failed error={invitations.error} onRetry={() => void invitations.refetch()} retrying={invitations.isFetching} />}

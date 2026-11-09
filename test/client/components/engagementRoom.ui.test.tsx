@@ -88,17 +88,17 @@ const room = (over: Record<string, unknown> = {}) => ({
   insight: null as RoomInsight | null,
   booking: null as null | { sessionId: number; title: string; url: string },
   measure: null,
-  team: [{ name: "Lewis Lead", roleLabel: "Engagement Manager", jobTitle: null as string | null }, { name: "Ola Analyst", roleLabel: "Analyst", jobTitle: null as string | null }],
+  team: [{ name: "Lewis Lead", roleLabel: "Engagement Manager", jobTitle: null as string | null, whatsapp: null as string | null }, { name: "Ola Analyst", roleLabel: "Analyst", jobTitle: null as string | null, whatsapp: null as string | null }],
   nextSession: { id: 1, title: "Business Review Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1" },
   sessions: [
     { id: 1, title: "Business Review Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1", status: "planned" as const, weekNumber: 1, sortOrder: 7, agenda: null, notes: null, notesSharedAt: null, notesAudience: null },
     { id: 2, title: "Kick-off", scheduledFor: new Date("2026-10-16T09:00:00Z"), durationMinutes: 30, meetingLink: null, status: "held" as const, weekNumber: null, sortOrder: 0, agenda: null, notes: "We agreed to start with pricing.", notesSharedAt: new Date("2026-10-16T12:00:00Z"), notesAudience: "owner" as const },
   ],
   tasks: [
-    { id: 11, responseLink: null as string | null, kind: "data_request" as const, side: "client" as const, title: "Your last 12 months of sales", detail: "Monthly totals are enough.", dueOn: "2026-10-14", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 1, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
-    { id: 12, responseLink: null as string | null, kind: "data_request" as const, side: "client" as const, title: "Your price list", detail: null, dueOn: "2026-10-14", status: "needs_more" as const, statusLabel: "We need a bit more", statusNote: "the delivery prices too", mine: true, weekNumber: 1, sortOrder: 2, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
-    { id: 13, responseLink: null as string | null, kind: "data_request" as const, side: "client" as const, title: "Who works in the business", detail: null, dueOn: null, status: "accepted" as const, statusLabel: "Received", statusNote: null, mine: false, weekNumber: 1, sortOrder: 3, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
-    { id: 14, responseLink: null as string | null, kind: "action" as const, side: "ipf" as const, title: "Send the cash template", detail: null, dueOn: "2026-10-20", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 2, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
+    { id: 11, responseLink: null as string | null, sendTo: null as { name: string; whatsapp: string } | null, kind: "data_request" as const, side: "client" as const, title: "Your last 12 months of sales", detail: "Monthly totals are enough.", dueOn: "2026-10-14", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 1, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
+    { id: 12, responseLink: null as string | null, sendTo: null as { name: string; whatsapp: string } | null, kind: "data_request" as const, side: "client" as const, title: "Your price list", detail: null, dueOn: "2026-10-14", status: "needs_more" as const, statusLabel: "We need a bit more", statusNote: "the delivery prices too", mine: true, weekNumber: 1, sortOrder: 2, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
+    { id: 13, responseLink: null as string | null, sendTo: null as { name: string; whatsapp: string } | null, kind: "data_request" as const, side: "client" as const, title: "Who works in the business", detail: null, dueOn: null, status: "accepted" as const, statusLabel: "Received", statusNote: null, mine: false, weekNumber: 1, sortOrder: 3, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
+    { id: 14, responseLink: null as string | null, sendTo: null as { name: string; whatsapp: string } | null, kind: "action" as const, side: "ipf" as const, title: "Send the cash template", detail: null, dueOn: "2026-10-20", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 2, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
   ],
   deliverables: [
     { id: 21, kind: "findings" as const, kindLabel: "Findings", title: "What we found", summary: "Cash leaks at the till.", sharedAt: new Date("2026-10-30T12:00:00Z"), audience: "owner" as const, audienceLabel: "Owner only", accepted: false, files: [], comments: [{ body: "Is this every day?", createdAt: new Date(), authorName: "Ada" }] },
@@ -837,6 +837,24 @@ describe("the due flag", () => {
 });
 
 describe("the team on the room", () => {
+  it("puts a WhatsApp button beside each team member who agreed to share their number, the business and project named (R44)", () => {
+    render(<EngagementRoom room={room({ team: [{ name: "Lewis Lead", roleLabel: "Engagement Manager", jobTitle: null, whatsapp: "+2348031234567" }, { name: "Ola Analyst", roleLabel: "Analyst", jobTitle: null, whatsapp: null }] })} />);
+    const team = within(screen.getByRole("list", { name: "IP Factory" }));
+    const chat = team.getByRole("link", { name: "WhatsApp Lewis" });
+    expect(chat.getAttribute("href")).toBe(`https://wa.me/2348031234567?text=${encodeURIComponent("Hello Lewis, this is Ada Foods about Business Review.")}`);
+    expect(chat.getAttribute("target")).toBe("_blank");
+    expect(team.queryByRole("link", { name: "WhatsApp Ola" })).toBeNull();
+  });
+
+  it("offers to send an item on WhatsApp to the person it goes to (R44)", () => {
+    const base = room();
+    render(<EngagementRoom room={room({ tasks: base.tasks.map(task => (task.id === 11 ? { ...task, ref: "B1", sendTo: { name: "Femi Adebayo", whatsapp: "+2348030000002" } } : task)) })} />);
+    fireEvent.click(screen.getByRole("tab", { name: /^Data Request/ }));
+    const sales = within(screen.getByRole("listitem", { name: "Your last 12 months of sales" }));
+    fireEvent.click(sales.getByRole("button", { name: /Your last 12 months of sales/ }));
+    expect(sales.getByRole("link", { name: "Send on WhatsApp to Femi" }).getAttribute("href")).toBe(`https://wa.me/2348030000002?text=${encodeURIComponent("Hello Femi, here is B1 Your last 12 months of sales.")}`);
+  });
+
   beforeEach(() => { window.history.replaceState(null, "", "/dashboard"); });
   it("shows each person's role on this engagement and their firm title", () => {
     render(<EngagementRoom room={room({ team: [{ name: "Tola Manager", roleLabel: "Engagement Manager", jobTitle: "Senior Associate" }, { name: "Ola Analyst", roleLabel: "Analyst", jobTitle: null }] })} />);

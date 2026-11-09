@@ -44,6 +44,7 @@ export const AUDIT_ACTIONS = [
   "platform_role_granted",
   "platform_role_revoked",
   "staff_level_set",
+  "staff_whatsapp_set",
   "engagement_started",
   "engagement_team_assigned",
   "engagement_team_removed",

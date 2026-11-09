@@ -3760,12 +3760,12 @@ function base32Encode(bytes) {
   return out;
 }
 function base32Decode(text4) {
-  const clean = text4.replace(/[\s=-]/g, "").toUpperCase();
+  const clean2 = text4.replace(/[\s=-]/g, "").toUpperCase();
   let bits = 0;
   let value = 0;
   const out = [];
-  for (let i = 0; i < clean.length; i++) {
-    const index2 = BASE32.indexOf(clean[i]);
+  for (let i = 0; i < clean2.length; i++) {
+    const index2 = BASE32.indexOf(clean2[i]);
     if (index2 < 0) throw new Error("Not a base32 secret");
     value = value << 5 | index2;
     bits += 5;
@@ -3791,14 +3791,14 @@ function totpCode(secret3, step2) {
   return String(binary % 10 ** TOTP_DIGITS).padStart(TOTP_DIGITS, "0");
 }
 function matchTotp(secret3, code, lastUsedStep, now = Date.now()) {
-  const clean = code.replace(/\s/g, "");
-  if (!/^\d{6}$/.test(clean)) return null;
+  const clean2 = code.replace(/\s/g, "");
+  if (!/^\d{6}$/.test(clean2)) return null;
   const current = totpStep(now);
   for (let drift = -TOTP_DRIFT_STEPS; drift <= TOTP_DRIFT_STEPS; drift++) {
     const step2 = current + drift;
     if (lastUsedStep !== null && step2 <= lastUsedStep) continue;
     const expected = Buffer.from(totpCode(secret3, step2));
-    if (timingSafeEqual3(expected, Buffer.from(clean))) return step2;
+    if (timingSafeEqual3(expected, Buffer.from(clean2))) return step2;
   }
   return null;
 }
@@ -5537,14 +5537,14 @@ function validValue(question, value, answers) {
   return typeof value === "string" && allowed.has(value) ? value : void 0;
 }
 function cleanAnswers(answers) {
-  const clean = {};
+  const clean2 = {};
   const visited = /* @__PURE__ */ new Set();
   for (; ; ) {
-    const step2 = questionPath(clean).find(({ question }) => !visited.has(question.id));
-    if (!step2) return clean;
+    const step2 = questionPath(clean2).find(({ question }) => !visited.has(question.id));
+    if (!step2) return clean2;
     visited.add(step2.question.id);
-    const value = validValue(step2.question, answers[step2.question.id], clean);
-    if (value !== void 0) clean[step2.question.id] = value;
+    const value = validValue(step2.question, answers[step2.question.id], clean2);
+    if (value !== void 0) clean2[step2.question.id] = value;
   }
 }
 var DISC_STYLES = {
@@ -10268,11 +10268,20 @@ async function previewClientRoom(db, actor, input) {
   await recordAudit(db, { action: "engagement_room_previewed", actorUserId: actor.id, details: { engagementId: engagement.id } });
   return buildClientRoom(db, engagement, { kind: "owner" }, owner?.userId ?? 0, businessName);
 }
+var agreedWhatsapp = (member) => member.whatsapp && member.whatsappConsentAt ? member.whatsapp : null;
+var MAIN_CONTACT_ORDER = ["digital_marketer", "manager", "lead", "partner", "content_producer", "analyst", "expert"];
+function recipientOf(team, askedBy) {
+  const reachable = team.filter((member) => agreedWhatsapp(member));
+  const asker = reachable.find((member) => member.userId === askedBy);
+  const main = [...reachable].sort((a, b) => MAIN_CONTACT_ORDER.indexOf(a.role) - MAIN_CONTACT_ORDER.indexOf(b.role))[0];
+  const chosen = asker ?? main;
+  return chosen ? { name: chosen.name ?? "", whatsapp: agreedWhatsapp(chosen) } : null;
+}
 async function buildClientRoom(db, engagement, viewer, viewerUserId, businessName) {
   const owner = engagement.businessCheckId !== null ? (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq15(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { email: engagement.contactEmail, fullName: engagement.contactName ?? "" } : void 0;
   if (owner) await syncSessionBookings(db, engagement, owner.email);
   const [team, sessions, tasks, deliverables, comments, files, measure, checkins, matches] = await Promise.all([
-    db.select({ name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq15(engagementTeam.userId, users.id)).where(eq15(engagementTeam.engagementId, engagement.id)).orderBy(asc3(engagementTeam.id)),
+    db.select({ userId: engagementTeam.userId, name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle, whatsapp: users.whatsapp, whatsappConsentAt: users.whatsappConsentAt }).from(engagementTeam).innerJoin(users, eq15(engagementTeam.userId, users.id)).where(eq15(engagementTeam.engagementId, engagement.id)).orderBy(asc3(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq15(engagementSessions.engagementId, engagement.id)).orderBy(asc3(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq15(engagementTasks.engagementId, engagement.id)).orderBy(asc3(engagementTasks.id)),
     db.select().from(engagementDeliverables).where(and9(eq15(engagementDeliverables.engagementId, engagement.id), eq15(engagementDeliverables.status, "shared"))).orderBy(asc3(engagementDeliverables.id)),
@@ -10342,7 +10351,8 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
     // The one number: the business's own result, so the owner and their full-access staff; never the hours behind it.
     measure: measure && (viewer.kind === "owner" || viewer.access === "full") ? clientMeasure(measure, checkins) : null,
     // Who runs it first (partner, Engagement Manager, Lead Consultant), then analysts and specialists; each with their firm title.
-    team: [...team].sort((a, b) => ENGAGEMENT_TEAM_ROLE_ORDER[a.role] - ENGAGEMENT_TEAM_ROLE_ORDER[b.role]).map((member) => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role], jobTitle: member.jobTitle ?? null })),
+    // A WhatsApp number only when its owner agreed to clients seeing it (R44, K11); never their email.
+    team: [...team].sort((a, b) => ENGAGEMENT_TEAM_ROLE_ORDER[a.role] - ENGAGEMENT_TEAM_ROLE_ORDER[b.role]).map((member) => ({ name: member.name ?? "", roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role], jobTitle: member.jobTitle ?? null, whatsapp: agreedWhatsapp(member) })),
     // The client's own people on the engagement, owner first, with what each can see. Names only: no email or phone.
     people: (await clientPeopleOf(db, engagement.businessId)).map((person) => ({
       name: person.name,
@@ -10388,6 +10398,8 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
       format: task.format,
       priority: task.priority,
       responseLink: task.responseLink,
+      // Who on the team receives it on WhatsApp: the person who asked, or the engagement's main contact (R44).
+      sendTo: task.side === "client" ? recipientOf(team, task.createdByUserId) : null,
       files: clientFiles("taskId", task.id)
     })),
     // What the client's side dropped into the room, newest first, and which visible requests each file was matched to.
@@ -10923,7 +10935,7 @@ var notSetUp = () => new TRPCError15({ code: "PRECONDITION_FAILED", message: PAS
 var tooMany = () => new TRPCError15({ code: "TOO_MANY_REQUESTS", message: ACCOUNT_AUTH_ERRORS.tooManyRequests });
 var requestIp2 = (req) => (req.ip || "unknown").trim().toLowerCase();
 async function listPeople(db) {
-  const rows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, lastSignedIn: users.lastSignedIn, jobTitle: users.jobTitle }).from(users).innerJoin(userCredentials, eq16(userCredentials.userId, users.id)).orderBy(users.name, users.id).limit(500);
+  const rows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, lastSignedIn: users.lastSignedIn, jobTitle: users.jobTitle, whatsapp: users.whatsapp, whatsappAgreedAt: users.whatsappConsentAt }).from(users).innerJoin(userCredentials, eq16(userCredentials.userId, users.id)).orderBy(users.name, users.id).limit(500);
   const roles2 = await db.select({ userId: userPlatformRoles.userId, role: userPlatformRoles.role, expiresAt: userPlatformRoles.expiresAt }).from(userPlatformRoles);
   const twoStep = await listTwoStepStatus(db);
   const endsOf = /* @__PURE__ */ new Map();
@@ -11721,10 +11733,52 @@ var businessCheckRouter = router({
 
 // server/routers/account.ts
 import { z as z10 } from "zod";
+
+// server/staffWhatsapp.ts
 import { TRPCError as TRPCError19 } from "@trpc/server";
+import { eq as eq20 } from "drizzle-orm";
+var clean = (value) => value.replace(/[\s()-]/g, "");
+function numberOf(value) {
+  if (value === null || !value.trim()) return null;
+  const number = clean(value);
+  if (!INTERNATIONAL_PHONE.test(number)) throw new TRPCError19({ code: "BAD_REQUEST", message: "Enter the number with its country code, for example +234 803 123 4567." });
+  return number;
+}
+var requireStaff = (session) => {
+  if (session.platformRoles.length === 0) throw new TRPCError19({ code: "FORBIDDEN", message: "A WhatsApp number on your profile is for the IP Factory team." });
+};
+async function ownWhatsapp(db, session) {
+  if (session.platformRoles.length === 0) return { staff: false, whatsapp: null, agreedAt: null };
+  const row = (await db.select({ whatsapp: users.whatsapp, agreedAt: users.whatsappConsentAt }).from(users).where(eq20(users.id, session.user.id)).limit(1))[0];
+  return { staff: true, whatsapp: row?.whatsapp ?? null, agreedAt: row?.agreedAt ?? null };
+}
+async function setOwnWhatsapp(db, session, input) {
+  requireStaff(session);
+  const whatsapp = numberOf(input.whatsapp);
+  const agreedAt = whatsapp && input.agree ? /* @__PURE__ */ new Date() : null;
+  await db.transaction(async (tx) => {
+    await tx.update(users).set({ whatsapp, whatsappConsentAt: agreedAt }).where(eq20(users.id, session.user.id));
+    await recordAudit(tx, { action: "staff_whatsapp_set", actorUserId: session.user.id, targetEmail: session.user.email, details: { targetUserId: session.user.id, by: "self", number: whatsapp !== null, agreed: agreedAt !== null } });
+  });
+  return { success: true, whatsapp, agreedAt };
+}
+async function setStaffWhatsapp(db, actor, input) {
+  const whatsapp = numberOf(input.whatsapp);
+  const target = (await db.select({ id: users.id, email: users.email, whatsapp: users.whatsapp, agreedAt: users.whatsappConsentAt }).from(users).where(eq20(users.id, input.userId)).limit(1))[0];
+  if (!target) throw new TRPCError19({ code: "NOT_FOUND", message: "That person does not exist." });
+  const agreedAt = whatsapp !== null && whatsapp === target.whatsapp ? target.agreedAt : null;
+  await db.transaction(async (tx) => {
+    await tx.update(users).set({ whatsapp, whatsappConsentAt: agreedAt }).where(eq20(users.id, target.id));
+    await recordAudit(tx, { action: "staff_whatsapp_set", actorUserId: actor.id, targetEmail: target.email, details: { targetUserId: target.id, by: "manager", number: whatsapp !== null, agreed: agreedAt !== null } });
+  });
+  return { success: true, whatsapp, agreedAt };
+}
+
+// server/routers/account.ts
+import { TRPCError as TRPCError20 } from "@trpc/server";
 async function database2() {
   const db = await getDb();
-  if (!db) throw new TRPCError19({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError20({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 var accountRouter = router({
@@ -11756,6 +11810,10 @@ var accountRouter = router({
   /** The signed-in person's own name. Never another person, never the email. */
   updateProfile: accountProcedure.input(z10.unknown()).mutation(({ ctx, input }) => updateAccountProfile(ctx.req, ctx.account, input)),
   changePassword: accountProcedure.input(z10.unknown()).mutation(({ ctx, input }) => changeAccountPassword(ctx.req, ctx.account, input)),
+  /** A staff member's own WhatsApp number and whether clients may see it (R44). */
+  whatsapp: accountProcedure.query(async ({ ctx }) => ownWhatsapp(await database2(), ctx.account)),
+  /** Sets it, with the person's own agreement to it being shown to the clients of their engagements. Staff only. */
+  setWhatsapp: accountProcedure.input(z10.object({ whatsapp: z10.string().trim().max(24).nullable(), agree: z10.boolean() })).mutation(async ({ ctx, input }) => setOwnWhatsapp(await database2(), ctx.account, input)),
   /** "Forgot your password?": emails a reset link if an account uses the address. Public; always the same answer. */
   requestReset: publicProcedure.input(z10.unknown()).mutation(async ({ ctx, input }) => requestPasswordReset(await database2(), ctx.req, input)),
   /** The reset page: whether a reset link is usable, and for which address. Public, keyed by the link alone. */
@@ -11766,7 +11824,7 @@ var accountRouter = router({
 
 // server/routers/clientOnboarding.ts
 import { z as z11 } from "zod";
-import { TRPCError as TRPCError20 } from "@trpc/server";
+import { TRPCError as TRPCError21 } from "@trpc/server";
 var manage = adminPermissionProcedure("manage_client_onboarding");
 var clientOnboardingRouter = router({
   // ---- the invited client (public, token-gated) ----
@@ -11779,12 +11837,12 @@ var clientOnboardingRouter = router({
   metrics: manage.query(() => onboardingMetrics()),
   /** Before the Business Review payment is confirmed, a reason is required and recorded with the invitation. */
   invite: manage.input(z11.object({ businessCheckId: z11.number().int().positive(), overrideReason: z11.string().trim().min(5, "Give the reason for inviting before payment.").max(500).optional() })).mutation(async ({ ctx, input }) => {
-    if (!await consumeLimit(LIMITS.onboardingEmail, `actor:${ctx.user.id}`)) throw new TRPCError20({ code: "TOO_MANY_REQUESTS", message: "Too many invitation emails. Kindly try again later." });
+    if (!await consumeLimit(LIMITS.onboardingEmail, `actor:${ctx.user.id}`)) throw new TRPCError21({ code: "TOO_MANY_REQUESTS", message: "Too many invitation emails. Kindly try again later." });
     return createOnboardingInvitation({ businessCheckId: input.businessCheckId, actorUserId: ctx.user.id, overrideReason: input.overrideReason });
   }),
   /** One button on the client's record: a fresh invitation if they have no account yet, else a password reset link. */
   sendSignInLink: manage.input(z11.object({ businessCheckId: z11.number().int().positive() })).mutation(async ({ ctx, input }) => {
-    if (!await consumeLimit(LIMITS.onboardingEmail, `actor:${ctx.user.id}`)) throw new TRPCError20({ code: "TOO_MANY_REQUESTS", message: "Too many sign-in links. Kindly try again later." });
+    if (!await consumeLimit(LIMITS.onboardingEmail, `actor:${ctx.user.id}`)) throw new TRPCError21({ code: "TOO_MANY_REQUESTS", message: "Too many sign-in links. Kindly try again later." });
     return sendClientSignInLink({ businessCheckId: input.businessCheckId, actorUserId: ctx.user.id });
   }),
   revoke: manage.input(z11.object({ invitationId: z11.number().int().positive() })).mutation(({ ctx, input }) => revokeOnboardingInvitation({ invitationId: input.invitationId, actorUserId: ctx.user.id }))
@@ -11792,14 +11850,14 @@ var clientOnboardingRouter = router({
 
 // server/routers/platformRoles.ts
 import { z as z12 } from "zod";
-import { TRPCError as TRPCError21 } from "@trpc/server";
+import { TRPCError as TRPCError22 } from "@trpc/server";
 var manageRoles = adminPermissionProcedure("manage_roles");
 var roleInput = z12.object({ userId: z12.number().int().positive(), role: z12.enum(PLATFORM_ROLES) });
 var grantInput = roleInput.extend({ expiresOn: z12.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional() });
 var endOfDay = (day) => /* @__PURE__ */ new Date(`${day}T23:59:59+01:00`);
 async function database3() {
   const db = await getDb();
-  if (!db) throw new TRPCError21({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 var platformRolesRouter = router({
@@ -11814,11 +11872,11 @@ var platformRolesRouter = router({
 import { z as z13 } from "zod";
 
 // server/businessSupportAdmin.ts
-import { and as and14, desc as desc8, eq as eq20, inArray as inArray5, isNotNull as isNotNull2, isNull as isNull11, sql as sql6 } from "drizzle-orm";
-import { TRPCError as TRPCError22 } from "@trpc/server";
+import { and as and14, desc as desc8, eq as eq21, inArray as inArray5, isNotNull as isNotNull2, isNull as isNull11, sql as sql6 } from "drizzle-orm";
+import { TRPCError as TRPCError23 } from "@trpc/server";
 async function requireDatabase2() {
   const db = await getDb();
-  if (!db) throw new TRPCError22({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 var CHECK_COLUMNS = {
@@ -11855,7 +11913,7 @@ async function syncCalendlyBookings(db, rows) {
     const time = await findBookedCall(row.email);
     if (!time) return;
     const stage = advancePipeline(row.pipelineStage, "call_booked");
-    const [saved] = await db.update(businessChecks).set({ callScheduledFor: time, callRequestedAt: row.callRequestedAt ?? databaseNow(), pipelineStage: stage }).where(and14(eq20(businessChecks.id, row.id), isNull11(businessChecks.callScheduledFor))).returning({ id: businessChecks.id });
+    const [saved] = await db.update(businessChecks).set({ callScheduledFor: time, callRequestedAt: row.callRequestedAt ?? databaseNow(), pipelineStage: stage }).where(and14(eq21(businessChecks.id, row.id), isNull11(businessChecks.callScheduledFor))).returning({ id: businessChecks.id });
     if (!saved) return;
     await recordAudit(db, { action: "business_check_call_booked", targetEmail: row.email, details: { businessCheckId: row.id, scheduledFor: time.toISOString(), source: "calendly_lookup", ...row.callRequestedAt ? {} : { requested: "calendly" } } });
     found.set(row.id, time);
@@ -11911,8 +11969,8 @@ async function getBusinessCheckDetail(db, businessCheckId) {
     heardFrom: businessChecks.heardFrom,
     resultJson: businessChecks.resultJson,
     summaryJson: businessChecks.summaryJson
-  }).from(businessChecks).where(eq20(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!row) throw new TRPCError22({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  }).from(businessChecks).where(eq21(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!row) throw new TRPCError23({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   const { resultJson, summaryJson, ...fields } = row;
   const result = parseJson2(resultJson);
   const summary = parseJson2(summaryJson);
@@ -11930,7 +11988,7 @@ async function getBusinessCheckDetail(db, businessCheckId) {
 }
 var HISTORY_ACTIONS = ["business_check_stage_changed", "business_check_call_outcome", "business_check_call_scheduled", "business_check_call_booked", "payment_details_sent", "payment_proof_received", "payment_confirmed", "payment_confirmation_sent", "full_report_link_sent", "full_report_delivered"];
 async function stageHistoryFor(db, businessCheckId) {
-  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq20(users.id, adminAccessAuditEvents.actorUserId)).where(and14(inArray5(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql6`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc8(adminAccessAuditEvents.createdAt), desc8(adminAccessAuditEvents.id)).limit(100);
+  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq21(users.id, adminAccessAuditEvents.actorUserId)).where(and14(inArray5(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql6`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc8(adminAccessAuditEvents.createdAt), desc8(adminAccessAuditEvents.id)).limit(100);
   return events.map((event) => {
     const details = parseJson2(event.details) ?? {};
     return { id: event.id, action: event.action, from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, delivery: details.delivery ?? null, via: details.via === "paystack" ? "paystack" : null, by: event.by ?? null, at: event.at };
@@ -11938,12 +11996,12 @@ async function stageHistoryFor(db, businessCheckId) {
 }
 var SETTABLE_STAGES = PIPELINE_STAGES.filter((stage) => stage !== "lead" && stage !== "won");
 async function setPipelineStage(db, input) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq20(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError22({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq21(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError23({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   if (check.pipelineStage === input.stage) return { success: true, pipelineStage: check.pipelineStage, changed: false };
-  if (check.pipelineStage === "won") throw new TRPCError22({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
+  if (check.pipelineStage === "won") throw new TRPCError23({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ pipelineStage: input.stage }).where(eq20(businessChecks.id, check.id));
+    await tx.update(businessChecks).set({ pipelineStage: input.stage }).where(eq21(businessChecks.id, check.id));
     await recordAudit(tx, {
       action: "business_check_stage_changed",
       actorUserId: input.actorUserId,
@@ -11954,19 +12012,19 @@ async function setPipelineStage(db, input) {
   return { success: true, pipelineStage: input.stage, changed: true };
 }
 async function requestedCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq20(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError22({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
-  if (!check.callRequestedAt) throw new TRPCError22({ code: "BAD_REQUEST", message: "This Business Health Check has not asked for a Discovery Call." });
-  if (check.pipelineStage === "won") throw new TRPCError22({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call outcome can no longer be changed here." });
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq21(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError23({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  if (!check.callRequestedAt) throw new TRPCError23({ code: "BAD_REQUEST", message: "This Business Health Check has not asked for a Discovery Call." });
+  if (check.pipelineStage === "won") throw new TRPCError23({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call outcome can no longer be changed here." });
   return check;
 }
 async function scheduleDiscoveryCall(db, input) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt }).from(businessChecks).where(eq20(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError22({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
-  if (!check.completedAt) throw new TRPCError22({ code: "BAD_REQUEST", message: "This Business Health Check is not finished yet, so there is no Discovery Call to schedule." });
-  if (check.pipelineStage === "won") throw new TRPCError22({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call can no longer be changed here." });
+  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt }).from(businessChecks).where(eq21(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  if (!check) throw new TRPCError23({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  if (!check.completedAt) throw new TRPCError23({ code: "BAD_REQUEST", message: "This Business Health Check is not finished yet, so there is no Discovery Call to schedule." });
+  if (check.pipelineStage === "won") throw new TRPCError23({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call can no longer be changed here." });
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, callRequestedAt: check.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq20(businessChecks.id, check.id));
+    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, callRequestedAt: check.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq21(businessChecks.id, check.id));
     await recordAudit(tx, { action: "business_check_call_scheduled", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: input.scheduledFor.toISOString(), ...check.callRequestedAt ? {} : { requested: "by_hand" } } });
   });
   return { success: true };
@@ -11977,7 +12035,7 @@ async function recordDiscoveryCallOutcome(db, input) {
   const check = await requestedCheck(db, input.businessCheckId);
   const stage = OUTCOME_STAGE[input.outcome];
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ pipelineStage: stage }).where(eq20(businessChecks.id, check.id));
+    await tx.update(businessChecks).set({ pipelineStage: stage }).where(eq21(businessChecks.id, check.id));
     await recordAudit(tx, { action: "business_check_call_outcome", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, outcome: input.outcome, from: check.pipelineStage, to: stage } });
   });
   return { success: true, pipelineStage: stage };
@@ -11995,7 +12053,7 @@ async function listClients(db) {
     membershipStatus: businessMemberships.status,
     joinedAt: businessMemberships.createdAt,
     businessCreatedAt: businesses.createdAt
-  }).from(businessMemberships).innerJoin(businesses, eq20(businessMemberships.businessId, businesses.id)).innerJoin(users, eq20(businessMemberships.userId, users.id)).orderBy(desc8(businesses.createdAt), businessMemberships.id).limit(500);
+  }).from(businessMemberships).innerJoin(businesses, eq21(businessMemberships.businessId, businesses.id)).innerJoin(users, eq21(businessMemberships.userId, users.id)).orderBy(desc8(businesses.createdAt), businessMemberships.id).limit(500);
 }
 async function businessSupportDb() {
   return requireDatabase2();
@@ -12056,15 +12114,15 @@ var businessSupportRouter = router({
 
 // server/routers/fullReport.ts
 import { z as z14 } from "zod";
-import { TRPCError as TRPCError23 } from "@trpc/server";
+import { TRPCError as TRPCError24 } from "@trpc/server";
 async function database4() {
   const db = await getDb();
-  if (!db) throw new TRPCError23({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach your report just now. Please try again in a minute." });
+  if (!db) throw new TRPCError24({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach your report just now. Please try again in a minute." });
   return db;
 }
 var token = z14.string().trim().min(1).max(200);
 async function allow(rule, link) {
-  if (!await consumeLimit(rule, link)) throw new TRPCError23({ code: "TOO_MANY_REQUESTS", message: "Too many requests for this report. Kindly try again later." });
+  if (!await consumeLimit(rule, link)) throw new TRPCError24({ code: "TOO_MANY_REQUESTS", message: "Too many requests for this report. Kindly try again later." });
 }
 var fullReportRouter = router({
   form: publicProcedure.input(z14.object({ token })).query(async ({ input }) => {
@@ -12083,15 +12141,15 @@ var fullReportRouter = router({
 });
 
 // server/routers/engagement.ts
-import { TRPCError as TRPCError25 } from "@trpc/server";
+import { TRPCError as TRPCError26 } from "@trpc/server";
 import { z as z15 } from "zod";
 
 // server/finance.ts
-import { TRPCError as TRPCError24 } from "@trpc/server";
-import { asc as asc4, desc as desc10, eq as eq21 } from "drizzle-orm";
+import { TRPCError as TRPCError25 } from "@trpc/server";
+import { asc as asc4, desc as desc10, eq as eq22 } from "drizzle-orm";
 var lagosToday = (now) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date(now));
 async function listFinance(db, actor, now = Date.now()) {
-  if (!authorityAllows(actor.authority, "view_financials")) throw new TRPCError24({ code: "FORBIDDEN", message: "Your role does not include finance." });
+  if (!authorityAllows(actor.authority, "view_financials")) throw new TRPCError25({ code: "FORBIDDEN", message: "Your role does not include finance." });
   const today = lagosToday(now);
   const requestRows = await db.select({
     id: paymentRequests.id,
@@ -12103,7 +12161,7 @@ async function listFinance(db, actor, now = Date.now()) {
     confirmedAt: paymentRequests.confirmedAt,
     fullName: businessChecks.fullName,
     businessName: businessChecks.businessName
-  }).from(paymentRequests).innerJoin(businessChecks, eq21(paymentRequests.businessCheckId, businessChecks.id)).orderBy(desc10(paymentRequests.id));
+  }).from(paymentRequests).innerJoin(businessChecks, eq22(paymentRequests.businessCheckId, businessChecks.id)).orderBy(desc10(paymentRequests.id));
   const feeRows = await db.select({
     id: engagementFeeLines.id,
     engagementId: engagementFeeLines.engagementId,
@@ -12116,7 +12174,7 @@ async function listFinance(db, actor, now = Date.now()) {
     businessName: businesses.name,
     contactName: engagements.contactName,
     checkBusinessName: businessChecks.businessName
-  }).from(engagementFeeLines).innerJoin(engagements, eq21(engagementFeeLines.engagementId, engagements.id)).leftJoin(businesses, eq21(engagements.businessId, businesses.id)).leftJoin(businessChecks, eq21(engagements.businessCheckId, businessChecks.id)).orderBy(asc4(engagementFeeLines.dueOn), asc4(engagementFeeLines.id));
+  }).from(engagementFeeLines).innerJoin(engagements, eq22(engagementFeeLines.engagementId, engagements.id)).leftJoin(businesses, eq22(engagements.businessId, businesses.id)).leftJoin(businessChecks, eq22(engagements.businessCheckId, businessChecks.id)).orderBy(asc4(engagementFeeLines.dueOn), asc4(engagementFeeLines.id));
   const requests = requestRows.map((row) => ({ ...row, title: PAYMENT_ITEM_TITLES[row.item], client: row.businessName || row.fullName, paid: row.status === "confirmed" }));
   const fees = feeRows.map((row) => ({
     id: row.id,
@@ -12145,7 +12203,7 @@ async function listFinance(db, actor, now = Date.now()) {
 
 // server/routers/engagement.ts
 async function enforceLimit(rule, subject) {
-  if (!await consumeLimit(rule, subject)) throw new TRPCError25({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Kindly try again later." });
+  if (!await consumeLimit(rule, subject)) throw new TRPCError26({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Kindly try again later." });
 }
 var id = z15.number().int().positive();
 var text3 = (max) => z15.string().trim().max(max);
@@ -12161,14 +12219,14 @@ async function guarded(work) {
   try {
     return await work();
   } catch (error) {
-    if (isMissingEngagementTable(error)) throw new TRPCError25({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
+    if (isMissingEngagementTable(error)) throw new TRPCError26({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
     throw error;
   }
 }
 var staff = adminProcedure.use(async ({ ctx, next }) => {
   const authority = await loadAuthority(await engagementDb(), ctx.user);
   if (!authorityAllows(authority, "view_all_businesses") && !authorityAllows(authority, "view_assigned_businesses")) {
-    throw new TRPCError25({ code: "FORBIDDEN", message: "Your role does not include engagements." });
+    throw new TRPCError26({ code: "FORBIDDEN", message: "Your role does not include engagements." });
   }
   return next({ ctx: { ...ctx, actor: { id: ctx.user.id, authority } } });
 });
@@ -12371,14 +12429,14 @@ var financeRouter = router({
 var engagementRouter = router({ staff: staffRouter, client: clientRouter, finance: financeRouter });
 
 // server/routers/invitations.ts
-import { TRPCError as TRPCError26 } from "@trpc/server";
+import { TRPCError as TRPCError27 } from "@trpc/server";
 import { z as z16 } from "zod";
 var id2 = z16.number().int().positive();
 async function guarded2(work) {
   try {
     return await work();
   } catch (error) {
-    if (isMissingEngagementTable(error)) throw new TRPCError26({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
+    if (isMissingEngagementTable(error)) throw new TRPCError27({ code: "PRECONDITION_FAILED", message: MIGRATION_MISSING_MESSAGE });
     throw error;
   }
 }
@@ -12411,18 +12469,20 @@ var invitationsRouter = router({
 
 // server/routers/people.ts
 import { z as z17 } from "zod";
-import { TRPCError as TRPCError27 } from "@trpc/server";
+import { TRPCError as TRPCError28 } from "@trpc/server";
 var manageUsers = adminPermissionProcedure("manage_users");
 var userInput = z17.object({ userId: z17.number().int().positive() });
 async function database5() {
   const db = await getDb();
-  if (!db) throw new TRPCError27({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+  if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
   return db;
 }
 var peopleRouter = router({
   list: manageUsers.query(async () => listPeople(await database5())),
   issuePasswordReset: manageUsers.input(userInput).mutation(async ({ ctx, input }) => issuePasswordReset(await database5(), { actor: { id: ctx.user.id, email: ctx.user.email ?? null, authority: ctx.authority }, targetUserId: input.userId })),
   setStatus: manageUsers.input(z17.object({ userId: z17.number().int().positive(), status: z17.enum(["active", "suspended"]), reason: z17.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => setAccountStatus(await database5(), { actor: { id: ctx.user.id, email: ctx.user.email ?? null, authority: ctx.authority }, targetUserId: input.userId, status: input.status, reason: input.reason })),
+  /** Sets or corrects a staff member's WhatsApp number; a changed number waits for their own agreement (R44). */
+  setWhatsapp: manageUsers.input(z17.object({ userId: z17.number().int().positive(), whatsapp: z17.string().trim().max(24).nullable() })).mutation(async ({ ctx, input }) => setStaffWhatsapp(await database5(), { id: ctx.user.id }, input)),
   /** The firm title clients see beside the person's role on their engagement. */
   setJobTitle: manageUsers.input(z17.object({ userId: z17.number().int().positive(), jobTitle: z17.string().trim().max(JOB_TITLE_MAX_LENGTH).nullable() })).mutation(async ({ ctx, input }) => setJobTitle(await database5(), { actor: { id: ctx.user.id, email: ctx.user.email ?? null, authority: ctx.authority }, targetUserId: input.userId, jobTitle: input.jobTitle })),
   /** One click: every role, engagement and session gone, account suspended, reason recorded, Super Admins told. */
@@ -12432,15 +12492,15 @@ var peopleRouter = router({
 });
 
 // server/routers/onlinePayment.ts
-import { TRPCError as TRPCError28 } from "@trpc/server";
+import { TRPCError as TRPCError29 } from "@trpc/server";
 import { z as z18 } from "zod";
 async function database6() {
   const db = await getDb();
-  if (!db) throw new TRPCError28({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach your payment just now. Please try again in a minute." });
+  if (!db) throw new TRPCError29({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach your payment just now. Please try again in a minute." });
   return db;
 }
 async function allow2(rule, subject) {
-  if (!await consumeLimit(rule, subject)) throw new TRPCError28({ code: "TOO_MANY_REQUESTS", message: "Too many requests for this payment. Kindly try again later." });
+  if (!await consumeLimit(rule, subject)) throw new TRPCError29({ code: "TOO_MANY_REQUESTS", message: "Too many requests for this payment. Kindly try again later." });
 }
 var token2 = z18.string().trim().min(16).max(64);
 var item = z18.enum(PAYMENT_ITEMS);
@@ -12506,7 +12566,7 @@ var appRouter = router({
 });
 
 // server/_core/context.ts
-import { eq as eq22 } from "drizzle-orm";
+import { eq as eq23 } from "drizzle-orm";
 async function createContext(opts) {
   let user = null;
   let authChannel;
@@ -12521,7 +12581,7 @@ async function createContext(opts) {
       const session = await resolveAccountSession(opts.req);
       if (session && session.authority.roles.length > 0) {
         const db = await getDb();
-        const row = db ? (await db.select().from(users).where(eq22(users.id, session.user.id)).limit(1))[0] : void 0;
+        const row = db ? (await db.select().from(users).where(eq23(users.id, session.user.id)).limit(1))[0] : void 0;
         if (row && row.status === "active") {
           user = row;
           authChannel = "account";
@@ -12545,7 +12605,7 @@ function healthReport(settings = ENV) {
 
 // server/resendWebhook.ts
 import { createHmac as createHmac4, timingSafeEqual as timingSafeEqual5 } from "node:crypto";
-import { and as and15, eq as eq23, sql as sql7 } from "drizzle-orm";
+import { and as and15, eq as eq24, sql as sql7 } from "drizzle-orm";
 var SUPPORTED = /* @__PURE__ */ new Set(["email.sent", "email.delivered", "email.delivery_delayed", "email.bounced", "email.complained", "email.failed", "email.suppressed"]);
 var MAX_SKEW_SECONDS = 5 * 60;
 function verifyResendWebhookSignature(input) {
@@ -12568,7 +12628,7 @@ function verifyResendWebhookSignature(input) {
     return supplied.length === expected.length && timingSafeEqual5(supplied, expected);
   });
 }
-function recipientOf(value) {
+function recipientOf2(value) {
   const address = Array.isArray(value) ? value[0] : value;
   return typeof address === "string" && address.length <= 320 ? address : null;
 }
@@ -12593,7 +12653,7 @@ async function handleResendWebhook(req, res) {
   if (!providerMessageId) return res.status(400).json({ message: "Webhook message ID is missing." });
   const happenedAt = typeof event.created_at === "string" ? new Date(event.created_at) : /* @__PURE__ */ new Date();
   if (Number.isNaN(happenedAt.getTime())) return res.status(400).json({ message: "Webhook timestamp is invalid." });
-  const recipientEmail = recipientOf(event.data?.to);
+  const recipientEmail = recipientOf2(event.data?.to);
   const state = event.type.slice("email.".length);
   try {
     const db = await getDb();
@@ -12601,7 +12661,7 @@ async function handleResendWebhook(req, res) {
     await db.transaction(async (tx) => {
       const [inserted] = await tx.insert(resendEmailEvents).values({ eventId, providerMessageId, eventType: state, recipientEmail, happenedAt }).onConflictDoNothing({ target: resendEmailEvents.eventId }).returning({ id: resendEmailEvents.id });
       if (!inserted) return;
-      await tx.update(businessSupportEmailDeliveries).set({ latestState: state, lastEventAt: happenedAt }).where(and15(eq23(businessSupportEmailDeliveries.providerMessageId, providerMessageId), sql7`(${businessSupportEmailDeliveries.lastEventAt} is null or ${businessSupportEmailDeliveries.lastEventAt} < ${happenedAt})`));
+      await tx.update(businessSupportEmailDeliveries).set({ latestState: state, lastEventAt: happenedAt }).where(and15(eq24(businessSupportEmailDeliveries.providerMessageId, providerMessageId), sql7`(${businessSupportEmailDeliveries.lastEventAt} is null or ${businessSupportEmailDeliveries.lastEventAt} < ${happenedAt})`));
     });
     return res.status(200).json({ received: true });
   } catch (error) {

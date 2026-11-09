@@ -30,7 +30,7 @@ const STAFF: AccountSessionView = {
 };
 
 const api = vi.hoisted(() => {
-  const state = { room: null as unknown, switchCalls: [] as unknown[], updateBusinessCalls: [] as unknown[], updateProfileCalls: [] as unknown[], changePasswordCalls: [] as unknown[], businessProfile: undefined as unknown, me: null as unknown, loading: false, preview: undefined as unknown, previewLoading: false, acceptCalls: [] as unknown[], signInCalls: [] as unknown[], resetCalls: [] as unknown[], signOutCalls: 0, setData: [] as unknown[], meError: undefined as unknown, roomError: undefined as unknown, roomLoading: false, retried: 0, previewError: undefined as unknown };
+  const state = { room: null as unknown, switchCalls: [] as unknown[], updateBusinessCalls: [] as unknown[], updateProfileCalls: [] as unknown[], changePasswordCalls: [] as unknown[], businessProfile: undefined as unknown, me: null as unknown, loading: false, preview: undefined as unknown, previewLoading: false, acceptCalls: [] as unknown[], signInCalls: [] as unknown[], resetCalls: [] as unknown[], signOutCalls: 0, setData: [] as unknown[], meError: undefined as unknown, roomError: undefined as unknown, roomLoading: false, retried: 0, previewError: undefined as unknown, whatsapp: undefined as unknown, whatsappCalls: [] as unknown[] };
   const replies: { switchTo?: unknown; businessError?: string; passwordError?: string; accept?: unknown; signIn?: unknown; acceptError?: string; signInError?: string } = {};
   return { state, replies };
 });
@@ -52,10 +52,12 @@ vi.mock("@/lib/trpc", () => ({
         }),
       },
     },
-    useUtils: () => ({ account: { me: { setData: (_: unknown, value: unknown) => api.state.setData.push(value), invalidate: () => undefined }, business: { invalidate: () => undefined } } }),
+    useUtils: () => ({ account: { me: { setData: (_: unknown, value: unknown) => api.state.setData.push(value), invalidate: () => undefined }, business: { invalidate: () => undefined }, whatsapp: { invalidate: () => undefined } } }),
     // The room has its own tests; here it is null (no engagement yet) unless a test sets one.
     engagement: { client: { room: { useQuery: () => ({ data: (api.state.roomError && !api.state.room) || api.state.roomLoading ? undefined : api.state.room ?? null, error: api.state.roomError, isLoading: api.state.roomLoading ?? false, dataUpdatedAt: Date.parse("2026-11-09T09:42:00Z"), refetch: () => { api.state.retried += 1; } }) }, requestService: { useMutation: () => ({ isPending: false, mutate: () => undefined }) } } },
     account: {
+      whatsapp: { useQuery: () => ({ data: api.state.whatsapp, isLoading: false, error: null }) },
+      setWhatsapp: { useMutation: (options: { onSuccess?: (value: unknown) => void }) => ({ isPending: false, mutate: (input: { whatsapp: string | null; agree: boolean }) => { api.state.whatsappCalls.push(input); options.onSuccess?.({ success: true, whatsapp: input.whatsapp, agreedAt: input.agree ? new Date() : null }); } }) },
       me: { useQuery: () => ({ data: api.state.meError ? undefined : api.state.me, error: api.state.meError, isLoading: api.state.loading, refetch: () => { api.state.retried += 1; } }) },
       requestReset: {
         useMutation: (options: { onSuccess?: () => void }) => ({ isPending: false, mutate: (input: unknown) => { api.state.resetCalls.push(input); options.onSuccess?.(); } }),
@@ -143,6 +145,8 @@ beforeEach(() => {
   api.state.roomLoading = false;
   api.state.retried = 0;
   api.state.previewError = undefined;
+  api.state.whatsapp = undefined;
+  api.state.whatsappCalls = [];
   api.state.resetCalls = [];
   api.state.me = null;
   api.state.loading = false;
@@ -628,6 +632,22 @@ describe("business settings", () => {
 });
 
 describe("account settings", () => {
+  it("asks a staff member for their WhatsApp number and their own agreement to show it to clients; a client is not asked (R44)", () => {
+    api.state.me = STAFF;
+    api.state.whatsapp = { staff: true, whatsapp: null, agreedAt: null };
+    renderAt("/settings/account", <AccountSettingsPage />);
+    const card = screen.getByRole("region", { name: "WhatsApp" });
+    expect(within(card).getByText(/once you agree/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("WhatsApp number"), { target: { value: "0803 123 4567" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /My number may be shown to the clients I work with/ }));
+    fireEvent.click(within(card).getByRole("button", { name: "Save" }));
+    expect(api.state.whatsappCalls).toEqual([{ whatsapp: "+2348031234567", agree: true }]);
+    cleanup();
+    api.state.me = SESSION;
+    renderAt("/settings/account", <AccountSettingsPage />);
+    expect(screen.queryByLabelText("WhatsApp number")).toBeNull();
+  });
+
   it("shows the email read-only and saves only the person's own name", () => {
     api.state.me = SESSION;
     renderAt("/settings/account", <AccountSettingsPage />);

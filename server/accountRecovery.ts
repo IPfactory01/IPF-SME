@@ -38,7 +38,7 @@ const requestIp = (req: Request) => (req.ip || "unknown").trim().toLowerCase();
 
 /** Everyone who can sign in with a password, with their roles and whether they are a Super Admin. For `manage_users`. */
 export async function listPeople(db: Pick<Database, "select">) {
-  const rows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, lastSignedIn: users.lastSignedIn, jobTitle: users.jobTitle })
+  const rows = await db.select({ id: users.id, name: users.name, email: users.email, status: users.status, lastSignedIn: users.lastSignedIn, jobTitle: users.jobTitle, whatsapp: users.whatsapp, whatsappAgreedAt: users.whatsappConsentAt })
     .from(users).innerJoin(userCredentials, eq(userCredentials.userId, users.id)).orderBy(users.name, users.id).limit(500);
   const roles = await db.select({ userId: userPlatformRoles.userId, role: userPlatformRoles.role, expiresAt: userPlatformRoles.expiresAt }).from(userPlatformRoles);
   const twoStep = await listTwoStepStatus(db);

@@ -9,8 +9,14 @@
  * see this screen. The engagement_agreements table from 0019 is kept, unused, so nothing recorded is lost.
  */
 import { TRPCError } from "@trpc/server";
-import { asc, eq } from "drizzle-orm";
-import { engagementFeeLines } from "../drizzle/schema";
+import { and, asc, eq } from "drizzle-orm";
+import { businessMemberships, engagementFeeLines, users } from "../drizzle/schema";
+import { BRAND } from "../shared/brand";
+import { formatNaira } from "../shared/businessSupport";
+import { engagementTitle } from "../shared/engagementTypes";
+import { dayLabel } from "../shared/engagementWork";
+import { deliverEmail } from "./email";
+import { getTrustedApplicationOrigin } from "./security";
 import { AGREEMENT_LIMITS, defaultFees, feeTotal, type FeeLineDraft } from "../shared/agreement";
 import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
@@ -52,13 +58,15 @@ export function initialFeeRows(engagementId: number, lines: readonly FeeLineDraf
 /** Replace the schedule. A line already paid keeps its payment when its label and amount are unchanged. */
 export async function saveFees(db: Database, actor: StaffActor, input: { engagementId: number; feeLines: FeeLineDraft[] }) {
   requireManage(actor);
-  await requireStaffEngagement(db, actor, input.engagementId);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   if (input.feeLines.length > AGREEMENT_LIMITS.feeLines) throw new TRPCError({ code: "BAD_REQUEST", message: "Too many fee lines." });
   for (const line of input.feeLines) {
     if (!line.label.trim()) throw new TRPCError({ code: "BAD_REQUEST", message: "Name every fee." });
     if (!Number.isInteger(line.amount) || line.amount <= 0 || line.amount > AGREEMENT_LIMITS.amount) throw new TRPCError({ code: "BAD_REQUEST", message: "Every fee needs an amount in naira." });
   }
   const existing = await feeLinesOf(db, input.engagementId);
+  const same = (a: readonly FeeLineDraft[], b: readonly FeeLineDraft[]) => a.length === b.length && a.every((line, index) => line.label.trim() === b[index]!.label.trim() && line.amount === b[index]!.amount && (line.dueOn || null) === (b[index]!.dueOn || null));
+  const changed = !same(existing, input.feeLines);
   await db.transaction(async tx => {
     await tx.delete(engagementFeeLines).where(eq(engagementFeeLines.engagementId, input.engagementId));
     if (input.feeLines.length) {
@@ -69,7 +77,48 @@ export async function saveFees(db: Database, actor: StaffActor, input: { engagem
     }
     await recordAudit(tx, { action: "engagement_fees_saved", actorUserId: actor.id, details: { engagementId: input.engagementId, total: feeTotal(input.feeLines), lines: input.feeLines.length } });
   });
-  return { success: true } as const;
+  // The owner is told when the fees change once they have the room (R47): the schedule as it now stands.
+  const notified = changed ? await tellOwnerFeesChanged(db, engagement, input.feeLines) : false;
+  return { success: true, notified } as const;
+}
+
+/** "Your fees have changed": to the business's owner, only when they have an account (the room). */
+export function feesChangedEmail(input: { name: string; title: string; feeLines: readonly FeeLineDraft[]; url: string }) {
+  const first = input.name.trim().split(/\s+/)[0] || "there";
+  return {
+    subject: `Your fees have changed: ${input.title}`,
+    body: [
+      `Hello ${first},`,
+      "",
+      `The fees for your ${input.title} have changed. This is the schedule now:`,
+      "",
+      ...input.feeLines.map(line => `• ${line.label.trim()}: ${formatNaira(line.amount)}${line.dueOn ? `, due ${dayLabel(line.dueOn)}` : ""}`),
+      "",
+      `Total: ${formatNaira(feeTotal(input.feeLines))}`,
+      "",
+      `See them in your room: ${input.url}`,
+      "",
+      "If this is not what you agreed with us, reply to this email.",
+      "",
+      BRAND.organisationName,
+    ].join("\n"),
+  };
+}
+
+async function tellOwnerFeesChanged(db: Database, engagement: { id: number; businessId: number | null; type: Parameters<typeof engagementTitle>[0]; service: string | null }, feeLines: readonly FeeLineDraft[]) {
+  if (engagement.businessId === null) return false;
+  const owner = (await db.select({ email: users.email, name: users.name }).from(businessMemberships).innerJoin(users, eq(businessMemberships.userId, users.id))
+    .where(and(eq(businessMemberships.businessId, engagement.businessId), eq(businessMemberships.role, "owner"), eq(businessMemberships.status, "active"))).limit(1))[0];
+  if (!owner?.email) return false;
+  const message = feesChangedEmail({ name: owner.name ?? "", title: engagementTitle(engagement.type, engagement.service), feeLines, url: `${getTrustedApplicationOrigin()}/dashboard#payments` });
+  // The fees are saved whatever happens to the email; a failed send is logged with the delivery.
+  try {
+    const delivery = await deliverEmail({ to: owner.email, subject: message.subject, body: message.body, sender: "business_support" });
+    return delivery.status !== "Failed";
+  } catch (error) {
+    console.error("[Fees] The owner could not be told:", error instanceof Error ? error.message : "unknown error");
+    return false;
+  }
 }
 
 /** Record a fee as paid, or take it back. */

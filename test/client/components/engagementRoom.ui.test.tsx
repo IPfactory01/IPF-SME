@@ -245,6 +245,74 @@ describe("the client's room", () => {
   });
 });
 
+describe("the first visit (R46) and What we will do (R47)", () => {
+  const planned = [{ id: 1, title: "Business Review Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: null, status: "planned" as const, weekNumber: 1, sortOrder: 1, agenda: null, notes: null, notesSharedAt: null, notesAudience: null }];
+  const unpaid = { id: 31, label: "Business Review, payable before work begins", amount: 600000, dueOn: "2026-10-20", paid: false, reference: "IPF-F-31", payPath: "/pay/fee/31" };
+
+  it("welcomes the owner until the first Session is held: the experts with WhatsApp, three things this week, each linked to its place, and what happens next", () => {
+    const team = [{ name: "Lewis Lead", roleLabel: "Engagement Manager", jobTitle: null, whatsapp: "2348030000001" }, { name: "Ola Analyst", roleLabel: "Analyst", jobTitle: null, whatsapp: null }];
+    const { unmount } = render(<EngagementRoom room={room({ sessions: planned, nextSession: null, booking: { sessionId: 1, title: "Business Review Session 1", url: "https://calendly.example.test/ipf/session-1" }, fees: [unpaid], team })} />);
+    const welcome = within(screen.getByRole("region", { name: "Your first week" }));
+    const experts = within(welcome.getByRole("list", { name: "Your experts" }));
+    expect(experts.getByText("Lewis Lead")).toBeTruthy();
+    expect(experts.getByText("Ola Analyst")).toBeTruthy();
+    // Only the expert who agreed to share a number has a WhatsApp button.
+    expect(experts.getByRole("link", { name: "WhatsApp Lewis" }).getAttribute("href")).toMatch(/^https:\/\/wa\.me\/2348030000001\?text=/);
+    expect(experts.queryByRole("link", { name: "WhatsApp Ola" })).toBeNull();
+    const week = within(welcome.getByRole("list", { name: "This week" }));
+    expect(week.getByRole("link", { name: "Book your first Session" }).getAttribute("href")).toBe("https://calendly.example.test/ipf/session-1");
+    expect(week.getByRole("link", { name: "Send your first records: 2 on the Data Request" }).getAttribute("href")).toBe("#data");
+    expect(week.getByRole("link", { name: "Pay Business Review, payable before work begins: ₦600,000" }).getAttribute("href")).toBe("/pay/fee/31");
+    expect(welcome.getByText("We take three working days to get set up; the review starts at your first Session.")).toBeTruthy();
+    unmount();
+
+    // Once the first Session is held, the welcome has done its job.
+    render(<EngagementRoom room={room()} />);
+    expect(screen.queryByRole("region", { name: "Your first week" })).toBeNull();
+  });
+
+  it("marks the first Session as booked, and the records as in, once they are", () => {
+    const tasks = room().tasks.map(task => ({ ...task, status: "accepted" as const }));
+    render(<EngagementRoom room={room({ sessions: [{ ...planned[0]!, scheduledFor: new Date("2026-10-23T09:00:00Z") }], tasks })} />);
+    const week = within(screen.getByRole("list", { name: "This week" }));
+    expect(week.getByText("Your first Session is booked: Fri 23 Oct, 10:00 am")).toBeTruthy();
+    expect(week.getByText("Your records on the Data Request are in")).toBeTruthy();
+    expect(week.getAllByText("(done)")).toHaveLength(2);
+    expect(week.queryAllByRole("link")).toEqual([]);
+  });
+
+  it("says the team sends a time when nothing can be booked yet, and shows nothing once the engagement is closed", () => {
+    const { unmount } = render(<EngagementRoom room={room({ sessions: [], nextSession: null, booking: null })} />);
+    expect(within(screen.getByRole("list", { name: "This week" })).getByText("Your team sends you a time for your first Session")).toBeTruthy();
+    unmount();
+    render(<EngagementRoom room={room({ sessions: [], nextSession: null, stage: "closed", stageLabel: "Closed", journey: journeyOf("closed"), closedAt: new Date("2026-11-01T10:00:00Z") })} />);
+    expect(screen.queryByRole("region", { name: "Your first week" })).toBeNull();
+  });
+
+  it("shows what we will do, the team, the start and each fee with its date, with nothing to sign", () => {
+    render(<EngagementRoom room={room({ startedOn: "2026-10-19", fees: [unpaid, { ...unpaid, id: 32, label: "With the Findings", amount: 300000, dueOn: null, paid: true }] })} />);
+    const work = within(screen.getByRole("region", { name: "What we will do" }));
+    expect(work.getByText("Two weeks and two Sessions that test your whole business, to find the one problem to fix first and what to do about it.")).toBeTruthy();
+    expect(work.getByText("The one problem to fix first, in your words")).toBeTruthy();
+    expect(work.getByText("Lewis Lead, Engagement Manager; Ola Analyst, Analyst")).toBeTruthy();
+    expect(work.getByText("Mon 19 Oct")).toBeTruthy();
+    expect(work.getByText("₦600,000")).toBeTruthy();
+    expect(work.getByText(", due Tue 20 Oct")).toBeTruthy();
+    expect(work.getByText("₦300,000")).toBeTruthy();
+    expect(work.getByText("Nothing to sign. If anything here is not what you agreed, message your team.")).toBeTruthy();
+    expect(work.queryByRole("button")).toBeNull();
+  });
+
+  it("describes a Digital marketing engagement by its monthly content, and leaves out the fees a contributor cannot see", () => {
+    render(<EngagementRoom room={room({ type: "digital_marketing", typeLabel: "Digital marketing", title: "Digital marketing", startedOn: "2026-11-02", fees: [], team: [] })} />);
+    const work = within(screen.getByRole("region", { name: "What we will do" }));
+    expect(work.getByText("15 reels a month")).toBeTruthy();
+    expect(work.getByText("20 stories a month")).toBeTruthy();
+    expect(work.queryByText("Fees")).toBeNull();
+    expect(work.queryByText("Your team")).toBeNull();
+  });
+});
+
 describe("files in the room", () => {
   const openData = () => fireEvent.click(screen.getByRole("tab", { name: /^Data Request/ }));
 

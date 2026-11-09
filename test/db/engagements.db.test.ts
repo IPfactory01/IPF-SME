@@ -228,13 +228,23 @@ for (const target of targets) {
 
     describe("fees (there are no proposals)", () => {
       it("suggests the service's price, saves the schedule, records payments, and shows the client nothing to sign", async () => {
-        const { owner, engagementId } = await client("fees");
+        const { owner, email: ownerEmail, engagementId } = await client("fees");
         const desk = await superAdmin.call();
         // A paid Business Review has no fee lines yet; the team sees what the service suggests.
         const fresh = await desk.engagement.staff.fees({ engagementId });
         expect(fresh).toMatchObject({ feeLines: [], suggested: [{ label: "Business Review, payable before work begins", amount: 600000, dueOn: null }], can: { edit: true } });
         await expect(desk.engagement.staff.saveFees({ engagementId, feeLines: [{ label: " ", amount: 1000, dueOn: null }] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-        await desk.engagement.staff.saveFees({ engagementId, feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-11-10" }, { label: "With the Findings", amount: 300000, dueOn: null }] });
+        mocked.deliverEmail.mockClear();
+        await expect(desk.engagement.staff.saveFees({ engagementId, feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-11-10" }, { label: "With the Findings", amount: 300000, dueOn: null }] })).resolves.toEqual({ success: true, notified: true });
+        // The owner is told the schedule as it now stands (R47); saving it again unchanged tells nobody.
+        const notice = emails().find(sent => sent.subject === "Your fees have changed: Business Review")!;
+        expect(notice.to).toBe(ownerEmail);
+        expect(notice.body).toContain("• To start: ₦300,000, due Tue 10 Nov 2026");
+        expect(notice.body).toContain("Total: ₦600,000");
+        expect(notice.body).toContain("/dashboard#payments");
+        mocked.deliverEmail.mockClear();
+        await expect(desk.engagement.staff.saveFees({ engagementId, feeLines: [{ label: "To start ", amount: 300000, dueOn: "2026-11-10" }, { label: "With the Findings", amount: 300000, dueOn: null }] })).resolves.toEqual({ success: true, notified: false });
+        expect(emails()).toEqual([]);
         const saved = await desk.engagement.staff.fees({ engagementId });
         expect(saved).toMatchObject({ total: 600000, suggested: null, feeLines: [{ label: "To start", paidAt: null }, { label: "With the Findings" }] });
 
@@ -447,7 +457,13 @@ for (const target of targets) {
         const email = uniqueEmail("crown");
         const opened = await (await superAdmin.call()).engagement.staff.createDirect({ type: "digital_marketing", businessName: "Crown Studio", contactName: "Marie Tiogo", contactEmail: email, startedOn: "2026-11-02" });
         expect(opened).toMatchObject({ hasAccount: false, invitationUrl: expect.stringContaining("/join/") });
-        expect(emails().find(sent => sent.to === email)!.subject).toBe("Your The Shift room for Crown Studio");
+        const welcome = emails().find(sent => sent.to === email)!;
+        expect(welcome.subject).toBe("Your The Shift room for Crown Studio");
+        // The welcome says what we will do, when it starts and each fee, before the link (R47).
+        expect(welcome.body).toContain("WHAT WE WILL DO\nThree months of content for your business");
+        expect(welcome.body).toContain("Starts: Mon 2 Nov 2026");
+        expect(welcome.body).toContain("• Month 1 service fee, payable on starting: ₦470,000");
+        expect(welcome.body.indexOf("WHAT WE WILL DO")).toBeLessThan(welcome.body.indexOf("Create your account:"));
 
         const listed = (await (await superAdmin.call()).engagement.staff.list()).items.find(item => item.id === opened.engagementId)!;
         expect(listed).toMatchObject({ businessName: "Crown Studio", ownerName: "Marie Tiogo", ownerEmail: email, type: "digital_marketing", typeLabel: "Digital marketing", hasAccount: true });

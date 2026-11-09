@@ -11,12 +11,13 @@ import { useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
 import { DATED_TYPES, datedProgress, monthOfDay, SERVICE_STEPS } from "@shared/engagementTypes";
 import { MENU_PRODUCTS } from "@shared/products";
-import { formatNaira } from "@shared/businessSupport";
+import { CURRENT_STATE, formatNaira } from "@shared/businessSupport";
 import { useRoomProject } from "@/lib/roomProject";
 import ContentBoard from "./room/ContentBoard";
 import { toast } from "sonner";
 import { useWide } from "@/hooks/useWide";
 import { firstNameOf, whatsappLink } from "@shared/whatsapp";
+import { workOf, WORK_TITLE } from "@shared/engagementWork";
 import { BusinessPanel, FounderPanel } from "./room/RoomInsight";
 import RoomDashboard from "./room/RoomDashboard";
 import RoomTabs from "./room/RoomTabs";
@@ -198,9 +199,64 @@ export default function EngagementRoom({ room, aside, account, notice, now = Dat
     </section>
   );
 
+  // The first visit (R46): until the first Session is held, who the experts are, the first three things this week (the
+  // first Session, the first records, any fee) and what happens next. Each line opens the place where it is done.
+  const firstRecords = room.tasks.filter(task => task.side === "client" && task.kind === "data_request" && (task.status === "open" || task.status === "needs_more"));
+  const firstFee = room.fees.find(fee => !fee.paid);
+  const firstWeekSteps: { text: string; done: boolean; href?: string; external?: boolean }[] = [
+    room.booking ? { text: `Book your first ${METHOD.session}`, done: false, href: room.booking.url, external: true }
+      : room.nextSession ? { text: `Your first ${METHOD.session} is booked: ${lagos(room.nextSession.scheduledFor)}`, done: true }
+      : { text: `Your team sends you a time for your first ${METHOD.session}`, done: false },
+    ...(counts.dataRequests ? [firstRecords.length ? { text: `Send your first records: ${firstRecords.length} on the ${METHOD.dataRequest}`, done: false, href: "#data" } : { text: `Your records on the ${METHOD.dataRequest} are in`, done: true }] : []),
+    ...(firstFee ? [{ text: `Pay ${firstFee.label}: ${formatNaira(firstFee.amount)}`, done: false, href: firstFee.payPath ?? "#payments" }] : []),
+  ];
+  const nextLine = DATED_TYPES[room.type]?.stages[0]?.summary ?? (room.type === "business_review" ? CURRENT_STATE.start : room.serviceStep !== null ? "Once your records are in, we do the work. A consultant checks it before you see it." : here.line);
+  const firstWeek = !room.sessions.some(session => session.status === "held") && room.stage !== "closed" ? (
+    <section aria-labelledby="first-week-title" className={`${card} border-brand-line bg-brand-tint`}>
+      <h2 id="first-week-title" className="font-sans text-base font-semibold text-ink">Your first week</h2>
+      {room.team.length > 0 && (
+        <ul className="mt-3 space-y-3" aria-label="Your experts">
+          {room.team.map(member => person(`first-${member.name}-${member.roleLabel}`, member.name, member.roleLabel, false, member.whatsapp ?? null))}
+        </ul>
+      )}
+      <ol className="mt-4 space-y-2 text-sm" aria-label="This week">
+        {firstWeekSteps.map((step, index) => (
+          <li key={step.text} className="flex items-start gap-3">
+            <span aria-hidden className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-medium tabular-nums ${step.done ? "bg-health-clear text-white" : "border border-brand-line bg-white text-brand"}`}>{step.done ? <Check className="h-3.5 w-3.5" /> : index + 1}</span>
+            {step.href ? <a href={step.href} {...(step.external ? { target: "_blank", rel: "noopener noreferrer" } : {})} className="min-h-6 font-medium text-brand underline underline-offset-2">{step.text}</a> : <span className={step.done ? "text-ink-600" : "text-ink"}>{step.text}{step.done ? <span className="sr-only"> (done)</span> : null}</span>}
+          </li>
+        ))}
+      </ol>
+      {nextLine && <p className="mt-4 border-t border-brand-line pt-3 text-sm text-ink-600"><span className="font-medium text-ink">What happens next: </span>{nextLine}</p>}
+    </section>
+  ) : null;
+
+  // What we will do (R47): the work, the team, the start and each fee, read-only. Fees only reach the owner and full access.
+  const work = workOf({ type: room.type, service: room.service });
+  const startsLine = room.startedOn ? dateOnly(room.startedOn) : room.assessmentStartedAt ? lagos(room.assessmentStartedAt, false) : `At your first ${METHOD.session}`;
+  const workCard = work.what ? (
+    <section aria-labelledby="work-title" className={card}>
+      <h2 id="work-title" className={`font-sans ${label}`}>{WORK_TITLE}</h2>
+      <p className="mt-2 text-sm text-ink">{work.what}</p>
+      {work.youGet.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-ink-600">{work.youGet.map(item => <li key={item}>{item}</li>)}</ul>}
+      <dl className="mt-4 space-y-3 border-t border-line-soft pt-3 text-sm">
+        {room.team.length > 0 && <div><dt className={label}>Your team</dt><dd className="mt-0.5 text-ink">{room.team.map(member => `${member.name}, ${member.roleLabel}`).join("; ")}</dd></div>}
+        <div><dt className={label}>Starts</dt><dd className="mt-0.5 text-ink">{startsLine}</dd></div>
+        {room.fees.length > 0 && (
+          <div>
+            <dt className={label}>Fees</dt>
+            <dd className="mt-0.5"><ul className="space-y-0.5 text-ink">{room.fees.map(fee => <li key={fee.id} className="flex justify-between gap-3"><span>{fee.label}{fee.dueOn ? <span className="text-ink-muted">, due {dateOnly(fee.dueOn)}</span> : null}</span><span className="shrink-0 tabular-nums">{formatNaira(fee.amount)}</span></li>)}</ul></dd>
+          </div>
+        )}
+      </dl>
+      <p className="mt-3 text-xs text-ink-muted">Nothing to sign. If anything here is not what you agreed, message your team.</p>
+    </section>
+  ) : null;
+
   const overview = (
     <div className="space-y-5">
       <ProjectSwitcher room={room} />
+      {firstWeek}
       <RoomDashboard room={room} steps={steps} now={now} contentMonth={contentMonth?.month ?? null} />
       <div className="grid gap-5 lg:grid-cols-3">{nextAction}{nextMeeting}</div>
       <div className="grid items-start gap-5 lg:grid-cols-3">
@@ -209,6 +265,7 @@ export default function EngagementRoom({ room, aside, account, notice, now = Dat
           <WaitingOnYou room={room} isOwner={isOwner} onOpen={setOpen} />
           <DeliverablesCard room={room} isOwner={isOwner} onOpen={setOpen} />
           {team}
+          {workCard}
           {aside}
         </aside>
       </div>

@@ -72,7 +72,8 @@ async function identityTaken(db: Pick<Database, "select">, email: string) {
   return (await db.select({ id: users.id }).from(users).where(emailEquals(users.email, email)).limit(1)).length > 0 || (await emailIsReserved(db, email));
 }
 
-export function buildInvitationEmail(input: { kind: "staff" | "business_member" | "business_owner"; fullName: string; url: string; inviterName: string; businessName?: string | null; access?: ClientAccessLevel | null }) {
+/** `work`: for an owner, the lines of "What we will do" (shared/engagementWork.ts), shown before the link (R47). */
+export function buildInvitationEmail(input: { kind: "staff" | "business_member" | "business_owner"; fullName: string; url: string; inviterName: string; businessName?: string | null; access?: ClientAccessLevel | null; work?: readonly string[] }) {
   const name = input.fullName.split(" ")[0] || "there";
   const staff = input.kind === "staff";
   return {
@@ -85,6 +86,7 @@ export function buildInvitationEmail(input: { kind: "staff" | "business_member" 
         : input.kind === "business_owner"
           ? `Your room for ${input.businessName ?? "your business"} on ${BRAND.productName} is ready: your engagement with ${BRAND.organisationName}, what we need from you, your Sessions and what we hand over, in one place.`
           : `${input.inviterName} has invited you to work with them and ${BRAND.organisationName} on ${input.businessName ?? "their business"}. ${input.access ? CLIENT_ACCESS_LABELS[input.access].detail : ""}`.trim(),
+      ...(input.kind === "business_owner" && input.work?.length ? ["", ...input.work, ""] : []),
       "Use the secure link below to set your password. It works once and expires in seven days.",
       "",
       `Create your account: ${input.url}`,
@@ -96,7 +98,7 @@ export function buildInvitationEmail(input: { kind: "staff" | "business_member" 
   };
 }
 
-async function issue(db: Database, input: { kind: "staff" | "business_member" | "business_owner"; email: string; fullName: string; platformRole?: PlatformRole; roleExpiresAt?: Date | null; jobTitle?: string | null; businessId?: number; access?: ClientAccessLevel; actorUserId: number; inviterName: string; businessName?: string }) {
+async function issue(db: Database, input: { kind: "staff" | "business_member" | "business_owner"; email: string; fullName: string; platformRole?: PlatformRole; roleExpiresAt?: Date | null; jobTitle?: string | null; businessId?: number; access?: ClientAccessLevel; actorUserId: number; inviterName: string; businessName?: string; work?: readonly string[] }) {
   const token = randomBytes(32).toString("base64url");
   let invitation: { id: number };
   try {
@@ -115,7 +117,7 @@ async function issue(db: Database, input: { kind: "staff" | "business_member" | 
     throw error;
   }
   const invitationUrl = `${getTrustedApplicationOrigin()}${JOIN_PATH}/${encodeURIComponent(token)}`;
-  const message = buildInvitationEmail({ kind: input.kind, fullName: input.fullName, url: invitationUrl, inviterName: input.inviterName, businessName: input.businessName, access: input.access });
+  const message = buildInvitationEmail({ kind: input.kind, fullName: input.fullName, url: invitationUrl, inviterName: input.inviterName, businessName: input.businessName, access: input.access, work: input.work });
   const delivery = await deliverEmail({ to: input.email, subject: message.subject, body: message.body, sender: "business_support", invitationId: invitation.id, idempotencyKey: `account_invitations:${invitation.id}` });
   await db.update(accountInvitations).set({ deliveryStatus: delivery.status }).where(eq(accountInvitations.id, invitation.id));
   // The link is shown once to whoever invited, because outbound email may not be set up yet.
@@ -343,8 +345,8 @@ export async function acceptAccountInvitation(db: Database, req: Request, res: R
  * The owner of a business the team opened directly (an engagement that did not start from a Business Health Check):
  * the invitation makes them the owner when they accept. The link is returned once, as for staff.
  */
-export async function inviteBusinessOwner(db: Database, input: { email: string; fullName: string; businessId: number; businessName: string; actorUserId: number; inviterName: string }) {
-  return issue(db, { kind: "business_owner", email: input.email, fullName: input.fullName, businessId: input.businessId, businessName: input.businessName, actorUserId: input.actorUserId, inviterName: input.inviterName });
+export async function inviteBusinessOwner(db: Database, input: { email: string; fullName: string; businessId: number; businessName: string; actorUserId: number; inviterName: string; work?: readonly string[] }) {
+  return issue(db, { kind: "business_owner", email: input.email, fullName: input.fullName, businessId: input.businessId, businessName: input.businessName, actorUserId: input.actorUserId, inviterName: input.inviterName, work: input.work });
 }
 
 export { identityTaken as accountExistsFor };

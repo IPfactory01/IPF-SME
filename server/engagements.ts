@@ -71,6 +71,7 @@ import { DUE_DAYS } from "../shared/dataRequestTemplates";
 import { initialFeeRows } from "./agreements";
 import { clientFees } from "./feePayments";
 import { defaultFees } from "../shared/agreement";
+import { workLines } from "../shared/engagementWork";
 import { sharedDebriefFor } from "./debriefs";
 import { getDb } from "./db";
 import { deliverEmail } from "./email";
@@ -208,7 +209,9 @@ export async function createDirectEngagement(db: Database, actor: StaffActor & {
     return { engagementId: id, businessId: business.id };
   });
   if (existing) return { engagementId, invitationUrl: null, deliveryStatus: null, hasAccount: true } as const;
-  const invitation = await inviteBusinessOwner(db, { email, fullName: contactName, businessId, businessName, actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName });
+  // The welcome email says what we will do, when it starts and each fee (R47).
+  const work = workLines({ type: input.type, service, startsOn: input.startedOn, fees: defaultFees(input.type, service) });
+  const invitation = await inviteBusinessOwner(db, { email, fullName: contactName, businessId, businessName, actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName, work });
   return { engagementId, invitationUrl: invitation.invitationUrl, deliveryStatus: invitation.deliveryStatus, hasAccount: false } as const;
 }
 

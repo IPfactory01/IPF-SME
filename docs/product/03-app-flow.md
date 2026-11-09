@@ -114,14 +114,14 @@ flowchart TD
 | # | Client | Platform | Team | Email | Status | Built? |
 |---|---|---|---|---|---|---|
 | 1 | Agrees the work and the terms on the call | — | The lead opens **New engagement**: client (new or existing), type and service, start date | — | — | Built |
-| 2 | — | Loads the type's Data Request, Work Plan, Sessions and fee schedule, dated from the start; invites the owner (an existing client's project joins their account) | Sets the **payment terms**; in arrears needs a partner's approval, recorded | Owner: *Your The Shift room for {business}*, with **Your plan** (what we will do, the team, the start date, the terms, each fee and its date; R47, to build) | Engagement **open**; **awaiting first payment** (in advance) or room open (in arrears) | Built, except payment terms (R36) and Your plan (R47) |
+| 2 | — | Loads the type's Data Request, Work Plan, Sessions and fee schedule, dated from the start; invites the owner (an existing client's project joins their account) | Sets the **payment terms**; in arrears needs a partner's approval, recorded | Owner: *Your The Shift room for {business}*, with **What we will do** (the work, the start date, each fee and its date; R47); the payment terms join it with R36 | Engagement **open**; **awaiting first payment** (in advance) or room open (in arrears) | Built, except payment terms (R36) |
 | 3 | In advance: pays the first fee from the room or the email. In arrears: starts at once | Confirms the payment; opens the room; sends the receipt | Records money that came another way (ticks Paid), or **Open the room now** | Owner: receipt. Office: *Paid online: …* | Fee **paid**; room open | Built (in advance) |
 
 ### 4.4 The client during delivery
 
 | # | Client | Platform | Team | Email | Status | Built? |
 |---|---|---|---|---|---|---|
-| 0 | Opens the project for the first time | Welcome: the expert or experts with **Message on WhatsApp**, the first three things to do this week (book the kickoff, the first records, any fee), what happens next, and **Your plan**; it stays on Overview until the kickoff is held | — | — | — | To build (R46, R47) |
+| 0 | Opens the project for the first time | **Your first week**: the expert or experts with **WhatsApp {first name}**, the first three things to do this week (book the first Session, the first records, any fee), each linked to where it is done, and what happens next; **What we will do** sits beside the team. Your first week stays on Overview until the first Session is held | — | — | — | Built (R46, R47) |
 | 1 | Opens the room: sees where things stand, the next action, the next Session | Shows one next action, chosen by rule: a fee the room waits for, approvals that hold up publishing, records past their date, records due this week, a Sign-off (R50) | — | — | — | Built (the rule to build, R50) |
 | 2 | Books the kickoff and Sessions on Calendly from the room | Copies each booking's time and link onto the next Session without one | Holds the Session; saves client notes and internal notes; shares client notes the same day | Owner (and the people the notes are shared with): *Engagement update: {title}* | Session **held** | Built |
 | 3 | Sends records: uploads files and voice notes into the drop box; for raw video, pastes a Drive (or Dropbox, WeTransfer, iCloud) link, or presses **Send on WhatsApp to {name}** and marks it sent another way; or "Not available" with a note | Keeps files private; never stores raw video; reminds two days before an item's date and two days after it if still open | The person it is for (the Content Producer for footage) opens the link or the WhatsApp; matches each file to the items it answers; marks an item received or asks for more | Owner: reminders (to build). Lead: what is still outstanding after the reminders (to build) | Item **Sent, we are checking** → **Received**, **We need a bit more**, **Not available** | Files, voice notes and links built (R43); a client can take back a file until it is taken in (R61); WhatsApp to build (R44); reminders (R16) |
@@ -182,7 +182,7 @@ receiving it, and a time it should take.
 |---|---|---|---|---|---|
 | Visitor → desk | A lead and the check's answers | Check finished | The office email; Pipeline | Same working day | Built |
 | Visitor → lead | A booked Discovery Call | Calendly confirms | Calendly; Discovery Calls | — | Built |
-| Lead → client | The engagement, Your plan, the first fee | New engagement | The invitation email (and WhatsApp, R44) | At once | Partly built (Your plan, WhatsApp to build) |
+| Lead → client | The engagement, What we will do, the first fee | New engagement | The invitation email, with What we will do, and **Send on WhatsApp** beside the link (R44) | At once | Built |
 | Desk → team member | A project and a role | Assigned | *You are on {business} as {role}* | At once | Built |
 | Client → team | Records, footage, approvals | Upload, link, WhatsApp, approve | Files to sort; the item's status; Today (R52) | Matched within a working day | Partly built |
 | Specialist → lead | A draft | Attached to a Deliverable | The Deliverable's files; Today (R52) | Reviewed within two working days | Partly built |
@@ -221,7 +221,8 @@ info@ipfactory.co.
 | Report Intake sent again | Owner | *Your Report Intake* | Built |
 | Full Report built | Owner; office | *Your Full Report: {business}* (PDF); *Full Report sent* | Built |
 | Discovery Call asked for | Office | *… asked for a free discovery call* | Built |
-| Engagement opened for a new client | Owner | *Your The Shift room for {business}* | Built |
+| Engagement opened for a new client | Owner | *Your The Shift room for {business}*, with **What we will do**: the work, the start date and each fee with its date, before the link (R47) | Built |
+| Fees changed once the owner has an account | Owner | *Your fees have changed: {engagement}*: the schedule as it now stands, the total and a link to Payments. Saving the same fees again sends nothing | Built (R47) |
 | Business Review paid (account) | Owner | *Set up your client account on The Shift* | Built |
 | Notes or a Deliverable shared | Those who can see it | *Engagement update: {title}* | Built |
 | Added to an engagement, or role changed | Team member | *You are on {business} as {role}*; *Your role on {business}: {role}* | Built |
@@ -239,7 +240,6 @@ info@ipfactory.co.
 | Wrong two-step codes in a row | Super Admins | *[The Shift security] Wrong two-step codes: {email}* | Built |
 | Signed in with a recovery code, or from a new device | Super Admins | *[The Shift security] Recovery code used: {email}*; *… New device: {email}* | Built |
 | Administrator password reset (the older admin password) | The administrator | *Reset your administrator password on The Shift* | Built |
-| Engagement opened: the welcome with Your plan | Owner | *Your The Shift room for {business}*, with the plan | Partly built (the plan, R47) |
 | Fee due in 5 days, due today, 3 and 7 days late | Owner; lead at 7 days | To write; each with a WhatsApp button | To build (R12) |
 | Work paused; work resumed | Owner; lead | *Work on {engagement} is paused*; *… has resumed* | To build (R51) |
 | Payment received, with the receipt and invoice as PDFs | Owner | *Payment received: {fee}* (PDFs attached) | Email built; PDFs to build (R53) |
@@ -356,7 +356,7 @@ the team) and the views as tabs.
 
 | Tab | Shows | Who sees it |
 |---|---|---|
-| **Overview** | The stage band, four figures, the next action, the next meeting, the timeline, Waiting on you, the team, Your projects, Fix the next problem | Everyone in the room |
+| **Overview** | Your first week (until the first Session is held), the stage band, four figures, the next action, the next meeting, the timeline, Waiting on you, the team, What we will do, Your projects, Fix the next problem | Everyone in the room; the fees in What we will do, owner and full access |
 | **Content** (Digital marketing) | The month's pieces against the programme; approve or ask for changes | Owner and full access |
 | **Work Plan** | Every request and action by week, with who and when | Everyone; contributors their own |
 | **Data Request** | The checklist by section, the drop box, documents received | Everyone; contributors their own |
@@ -369,8 +369,13 @@ While an engagement in advance waits for its first payment, the room shows only 
 is made", the fee and **Pay securely with Paystack**.
 
 **Built 9 November 2026:** each team member with **WhatsApp {first name}** once they agreed (R44); voice notes, links and
-**Send on WhatsApp to {name}** on Data Request items (R43). **To come:** the first-visit welcome and **Your plan** on
-Overview (R46, R47); and, after a usability test, fewer places: Home, To do, Sessions, Results, Payments, so no task appears twice (R49).
+**Send on WhatsApp to {name}** on Data Request items (R43). **Your first week** on Overview until the first Session is
+held: the experts with their WhatsApp buttons, then up to three steps, each linked to where it is done (book the first
+Session or see it booked; send the first records, to the Data Request; pay the first fee, to its Pay page), and what
+happens next (R46). **What we will do**, read-only, nothing to sign: the work and what the owner receives, the team, the
+start date and each fee with its date (R47). It is not called Your plan, because Your Plan is the method's plan handed
+over at the end. **To come:** after a usability test, fewer places: Home, To do, Sessions, Results, Payments, so no task
+appears twice (R49).
 
 **Built 9 November 2026:** on a phone the header is one line off the Overview, a one-line bar replaces it at the top once it
 scrolls away on the Overview, and the tab bar keeps the selected tab in view and fades where more tabs sit (R71). Every

@@ -16,7 +16,7 @@ export default function SystemStatus() {
         <p className="text-sm text-ink-muted">File uploads and email, checked live.</p>
       </div>
       {storage.data && <StorageLine status={storage.data} onCheck={() => void storage.refetch()} />}
-      {storage.error && <p role="status" aria-label="File uploads" className="border border-health-watch bg-health-watch-tint p-3 text-sm text-health-watch">Could not check file storage: {storage.error.message}</p>}
+      {storage.error && <p role="status" aria-label="File uploads" className="border border-health-watch bg-health-watch-tint p-3 text-sm text-health-watch-strong">Could not check file storage: {storage.error.message}</p>}
       <section aria-labelledby="business-support-email-status" className="border border-line bg-white">
         <div className="border-b border-line px-4 py-3">
           <h2 id="business-support-email-status" className="font-serif text-lg font-normal">Business Support email status</h2>

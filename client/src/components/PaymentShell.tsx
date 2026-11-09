@@ -25,9 +25,9 @@ export function PaymentShell({ children }: { children: React.ReactNode }) {
 export function TestModeBanner() {
   return (
     <div role="note" aria-label="Test mode" className="mb-6 flex items-start gap-3 border border-health-watch bg-health-watch-tint p-4 text-sm text-ink-700">
-      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-health-watch" aria-hidden />
+      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-health-watch-strong" aria-hidden />
       <div>
-        <p className="font-semibold text-health-watch">{ONLINE_TEST_NOTICE}</p>
+        <p className="font-semibold text-health-watch-strong">{ONLINE_TEST_NOTICE}</p>
         <p className="mt-1">Online payment is in Paystack's test mode while we test it. Use Paystack's test card. Nothing you pay here is real money.</p>
       </div>
     </div>

@@ -57,25 +57,26 @@ export default function AdminLoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-paper p-6 text-ink">
       <div className="w-full max-w-md space-y-6">
         <div className="flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2 text-sm text-brand hover:underline"><ArrowLeft className="h-4 w-4" /> Back to Public Home</Link>
+          <Link href="/" className="inline-flex min-h-11 items-center gap-2 text-sm text-brand hover:underline"><ArrowLeft className="h-4 w-4" aria-hidden /> Back to the site</Link>
           <img src={BRAND.logoUrl} alt={BRAND.organisationName} className="h-14 w-auto shrink-0" />
         </div>
         <Card className="rounded-none border-line-soft bg-white shadow-sm">
           <CardHeader className="space-y-3 pb-6">
-            <div className="flex h-10 w-10 items-center justify-center bg-brand-tint text-brand"><Lock className="h-5 w-5" /></div>
-            <CardTitle className="font-serif text-2xl font-normal tracking-tight">Admin sign in</CardTitle>
-            <CardDescription className="text-sm text-ink-muted">Sign in with your IPF administrator account.</CardDescription>
+            <div className="flex h-10 w-10 items-center justify-center bg-brand-tint text-brand"><Lock className="h-5 w-5" aria-hidden /></div>
+            {/* The page's one heading (B12): everyone at IP Factory signs in here, not only administrators. */}
+            <CardTitle><h1 className="font-serif text-2xl font-normal tracking-tight">Staff sign in</h1></CardTitle>
+            <CardDescription className="text-sm text-ink-muted">Sign in with your IP Factory staff account.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             {loading ? <p className="text-sm text-ink-muted">Checking your secure sign-in…</p> : challenge ? <TwoStepStep id="admin" challenge={challenge} onSignedIn={() => void enter()} onCancel={() => { setChallenge(null); setPassword(""); }} /> : forgot ? <ForgotPassword id="admin" initialEmail={email} onBack={() => setForgot(false)} /> : (
               <form className="space-y-4" noValidate onSubmit={submit}>
-                {error && <div role="alert" className="border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{error}</div>}
-                <div className="space-y-2"><Label htmlFor="admin-email">Email</Label><Input id="admin-email" type="email" autoComplete="email" value={email} onChange={event => { setEmail(event.target.value); setError(null); }} /></div>
-                <div className="space-y-2"><Label htmlFor="admin-password">Password</Label><Input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={event => { setPassword(event.target.value); setError(null); }} /></div>
+                {error && <div role="alert" className="border border-danger-line bg-danger-tint px-4 py-3 text-sm text-danger-strong">{error}</div>}
+                <div className="space-y-2"><Label htmlFor="admin-email">Email</Label><Input id="admin-email" type="email" autoComplete="email" className="h-11" value={email} onChange={event => { setEmail(event.target.value); setError(null); }} /></div>
+                <div className="space-y-2"><Label htmlFor="admin-password">Password</Label><Input id="admin-password" type="password" autoComplete="current-password" className="h-11" value={password} onChange={event => { setPassword(event.target.value); setError(null); }} /></div>
                 <Button disabled={signIn.isPending} type="submit" size="lg" className="h-12 w-full rounded-none bg-brand text-sm text-white hover:bg-brand-deep-hover">
                   {signIn.isPending ? "Signing in…" : "Sign in"}
                 </Button>
-                <button type="button" onClick={() => setForgot(true)} className="text-sm font-semibold text-brand underline underline-offset-2">Forgot your password?</button>
+                <button type="button" onClick={() => setForgot(true)} className="inline-flex min-h-11 items-center text-sm font-semibold text-brand underline underline-offset-2">Forgot your password?</button>
               </form>
             )}
           </CardContent>

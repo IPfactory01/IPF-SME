@@ -77,7 +77,8 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
                 <li key={step.n} id={`step-${step.n}`} aria-current={step.state === "now" ? "step" : undefined} className="relative flex gap-4 scroll-mt-24">
                   {!last && <span aria-hidden className={`absolute left-[15px] top-8 h-full w-px ${step.state === "done" ? "bg-health-clear" : "bg-line"}`} />}
                   <span className={`relative z-10 mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-medium tabular-nums ${tone}`}>{step.state === "done" ? <Check className="h-4 w-4" aria-hidden /> : step.n}</span>
-                  <div className={`min-w-0 flex-1 pb-6 ${step.state === "next" ? "opacity-80" : ""}`}>
+                  {/* A step still to come is muted by its grey title alone: fading it as well took its text below 4.5:1 (B4). */}
+                  <div className="min-w-0 flex-1 pb-6">
                     <button type="button" aria-expanded={shown(step.n)} onClick={() => setOpen(shown(step.n) ? -1 : step.n)} className="flex w-full items-start justify-between gap-3 text-left">
                       <span>
                         <span className="flex flex-wrap items-center gap-2">
@@ -236,7 +237,7 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
             </div>
           )}
           {room.team.length > 0 && (
-            <div className="flex" aria-label={`Team: ${room.team.map(member => member.name).join(", ")}`}>
+            <div role="img" className="flex" aria-label={`Team: ${room.team.map(member => member.name).join(", ")}`}>
               {room.team.map(member => <span key={`${member.name}-${member.roleLabel}`} title={`${member.name}, ${member.roleLabel}`} aria-hidden className={`-ml-1.5 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[11px] font-medium text-white first:ml-0 ${avatarColour(member.name)}`}>{initials(member.name)}</span>)}
             </div>
           )}
@@ -644,7 +645,7 @@ function trendOf(measure: NonNullable<Room["measure"]>) {
   if (!Number.isFinite(diff) || diff === 0) return { tone: "", text: "No change yet since the start." };
   const wantUp = measure.targetValue === null || measure.targetValue === undefined ? diff > 0 : Number(measure.targetValue) >= Number(base);
   const good = wantUp ? diff > 0 : diff < 0;
-  return { tone: good ? "text-health-clear" : "text-health-watch", text: `${diff > 0 ? "Up" : "Down"} ${formatMeasure(Math.abs(diff), measure.unit)} since the start.` };
+  return { tone: good ? "text-health-clear" : "text-health-watch-strong", text: `${diff > 0 ? "Up" : "Down"} ${formatMeasure(Math.abs(diff), measure.unit)} since the start.` };
 }
 
 function MeasureCard({ measure }: { measure: NonNullable<Room["measure"]> }) {
@@ -932,12 +933,13 @@ function RoomSidebar({ room, tabs, account }: { room: Room; tabs: RoomTab[]; acc
 /** On a phone: the product and the account links in one slim bar; the views are the tabs under the header. */
 function RoomTopBar({ account }: { account?: RoomAccount }) {
   return (
-    <div className="flex items-center justify-between gap-3 border-b border-line-soft bg-white px-4 py-3">
-      <a href="/dashboard" className="flex items-center gap-2" aria-label={BRAND.productEndorsement}><img src={BRAND.markUrl} alt="" className="h-7 w-auto" /><span className="text-sm font-semibold">{BRAND.productName}</span></a>
+    <div className="flex items-center justify-between gap-3 border-b border-line-soft bg-white px-4 py-1">
+      {/* Each link a full 44 px tall, as the design brief asks of owner screens (B10). */}
+      <a href="/dashboard" className="flex min-h-11 items-center gap-2" aria-label={BRAND.productEndorsement}><img src={BRAND.markUrl} alt="" className="h-7 w-auto" /><span className="text-sm font-semibold">{BRAND.productName}</span></a>
       {account && (
-        <div className="flex items-center gap-4 text-sm">
-          <a href="/settings/account" className="text-ink-600">Account</a>
-          <SignOutButton className="text-ink-600" />
+        <div className="flex items-center gap-2 text-sm">
+          <a href="/settings/account" className="inline-flex min-h-11 items-center px-2 text-ink-600">Account</a>
+          <SignOutButton className="inline-flex min-h-11 items-center px-2 text-ink-600" />
         </div>
       )}
     </div>
@@ -962,7 +964,7 @@ const PLAN_GROUPS: { id: string; name: string; dot: string; pill: string; test: 
   { id: "you", name: "Waiting on you", dot: "border-brand-plum bg-white", pill: "bg-brand-plum text-white", test: isClientOpen },
   { id: "us", name: "With IP Factory", dot: "border-brand bg-white", pill: "bg-brand text-white", test: task => task.side !== "client" && OPEN_TASK_STATUSES.includes(task.status) },
   { id: "checking", name: "Sent, we are checking", dot: "border-highlight bg-white", pill: "bg-brand-tint text-brand-deep", test: task => task.status === "received" },
-  { id: "done", name: "Done", dot: "border-health-clear bg-health-clear", pill: "bg-health-clear-tint text-health-clear", test: task => task.status === "accepted" || task.status === "done" || task.status === "not_available" },
+  { id: "done", name: "Done", dot: "border-health-clear bg-health-clear", pill: "bg-health-clear-tint text-health-clear-strong", test: task => task.status === "accepted" || task.status === "done" || task.status === "not_available" },
 ];
 
 /** Every task in the engagement, grouped by where it stands, with who owns it and when it is due. Open one to act on it. */
@@ -1234,7 +1236,7 @@ function MeetingsView({ room, now, isOwner }: { room: Room; now: number; isOwner
         const part = (type: string) => day?.find(item => item.type === type)?.value ?? "";
         return (
           <li key={session.id} className="grid grid-cols-[4rem_minmax(0,1fr)] gap-4 rounded-xl border border-line-soft bg-white p-4" aria-label={session.title}>
-            <div className={`flex flex-col items-center justify-center rounded-lg py-1.5 text-center ${isNext ? "bg-brand text-white" : held ? "bg-health-clear-tint text-health-clear" : "bg-brand-tint text-brand-deep"}`}>
+            <div className={`flex flex-col items-center justify-center rounded-lg py-1.5 text-center ${isNext ? "bg-brand text-white" : held ? "bg-health-clear-tint text-health-clear-strong" : "bg-brand-tint text-brand-deep"}`}>
               {when ? <><span className="text-xs">{part("weekday")}</span><span className="text-lg font-medium tabular-nums leading-tight">{part("day")}</span><span className="text-xs">{part("month")}</span></> : <span className="px-1 text-xs">No date</span>}
             </div>
             <div className="min-w-0">

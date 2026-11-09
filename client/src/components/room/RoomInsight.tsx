@@ -17,8 +17,8 @@ const CARD = "min-w-0 rounded-xl border border-line-soft bg-white p-5";
 const KICKER = "text-sm font-medium text-ink-muted";
 const HEALTH: Record<ReportHealth, { label: string; chip: string; bar: string }> = {
   stuck: { label: "Stuck", chip: "bg-health-stuck-tint text-health-stuck", bar: "bg-health-stuck" },
-  watch: { label: "Watch", chip: "bg-health-watch-tint text-health-watch", bar: "bg-health-watch" },
-  clear: { label: "Clear", chip: "bg-health-clear-tint text-health-clear", bar: "bg-health-clear" },
+  watch: { label: "Watch", chip: "bg-health-watch-tint text-health-watch-strong", bar: "bg-health-watch" },
+  clear: { label: "Clear", chip: "bg-health-clear-tint text-health-clear-strong", bar: "bg-health-clear" },
   not_assessed: { label: "Not assessed", chip: "bg-paper-sunken text-ink-muted", bar: "bg-line" },
 };
 const ZONE: Record<"stuck" | "watch" | "clear", string> = { stuck: "bg-health-stuck-tint", watch: "bg-health-watch-tint", clear: "bg-health-clear-tint" };

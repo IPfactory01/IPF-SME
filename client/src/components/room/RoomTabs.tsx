@@ -125,7 +125,7 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
               aria-selected={k === index}
               tabIndex={k === index ? 0 : -1}
               onClick={() => select(k)}
-              className={`relative flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors ${k === index ? "border-brand font-medium text-ink" : "border-transparent text-ink-muted hover:text-ink"}`}
+              className={`relative flex min-h-11 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors ${k === index ? "border-brand font-medium text-ink" : "border-transparent text-ink-muted hover:text-ink"}`}
             >
               {tab.label}
               {tab.count && tab.count.value > 0 && <span className="text-xs font-normal text-ink-muted tabular-nums" aria-label={tab.count.label}>{tab.count.value}</span>}
@@ -134,9 +134,12 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
         </div>
       </div>
 
+      {/* relative: the clip's own box anchors absolutely placed controls inside the panels (a hidden file input), so
+          one in a hidden panel cannot widen the page and let a phone drag the room sideways (design review B1). */}
       <div
         ref={viewport}
-        className="overflow-clip transition-[height] duration-300 ease-out motion-reduce:transition-none"
+        data-room-panels
+        className="relative overflow-clip transition-[height] duration-300 ease-out motion-reduce:transition-none"
         style={{ height: height ?? undefined, touchAction: "pan-y" }}
         // Swiping is for touch. With a mouse, a sideways drag selects text as it always has; the control changes tab.
         onPointerDown={event => { if (event.pointerType !== "mouse" && width) controls.start(event); }}

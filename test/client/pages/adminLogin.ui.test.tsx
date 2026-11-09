@@ -83,8 +83,12 @@ afterEach(cleanup);
 describe("admin sign-in page", () => {
   it("asks for email and password with plain copy, and has no Google button", () => {
     renderPage();
-    expect(screen.getByText("Admin sign in")).toBeTruthy();
-    expect(screen.getByText("Sign in with your IPF administrator account.")).toBeTruthy();
+    // Intended change (design review B12, 9 November 2026): one page heading, named for everyone at IP Factory.
+    expect(screen.getByRole("heading", { level: 1, name: "Staff sign in" })).toBeTruthy();
+    expect(screen.getByText("Sign in with your IP Factory staff account.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Back to the site" }).className).toContain("min-h-11");
+    for (const field of [screen.getByLabelText("Email"), screen.getByLabelText("Password")]) expect(field.className).toContain("h-11");
+    expect(screen.getByRole("button", { name: "Forgot your password?" }).className).toContain("min-h-11");
     expect(Array.from(document.querySelectorAll("label")).map(label => label.textContent)).toEqual(["Email", "Password"]);
     expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
     expect(document.body.textContent).not.toMatch(/Continue with authori[sz]ed Gmail|Step 1 of 2|Google/i);

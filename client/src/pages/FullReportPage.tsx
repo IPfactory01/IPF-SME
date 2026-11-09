@@ -153,7 +153,7 @@ function Options({ name, options, value, onChange }: { name: string; options: Ch
     <div role="radiogroup" aria-label={name} className="flex flex-wrap gap-2">
       {options.map((option) => (
         <button key={option.value} type="button" role="radio" aria-checked={value === option.value} onClick={() => onChange(option.value)}
-          className={`border px-3 py-2 text-left text-sm transition-colors ${value === option.value ? "border-brand bg-brand-tint text-ink" : "border-line bg-paper-raised text-ink-soft hover:border-brand-line-strong"}`}>
+          className={`min-h-11 border px-3 py-2 text-left text-sm transition-colors ${value === option.value ? "border-brand bg-brand-tint text-ink" : "border-line bg-paper-raised text-ink-soft hover:border-brand-line-strong"}`}>
           {option.label}
         </button>
       ))}
@@ -171,7 +171,7 @@ function Many({ name, options, values, onChange }: { name: string; options: Choi
     <div role="group" aria-label={name} className="flex flex-wrap gap-2">
       {options.map((option) => (
         <button key={option.value} type="button" role="checkbox" aria-checked={values.includes(option.value)} onClick={() => toggle(option.value)}
-          className={`border px-3 py-2 text-left text-sm transition-colors ${values.includes(option.value) ? "border-brand bg-brand-tint text-ink" : "border-line bg-paper-raised text-ink-soft hover:border-brand-line-strong"}`}>
+          className={`min-h-11 border px-3 py-2 text-left text-sm transition-colors ${values.includes(option.value) ? "border-brand bg-brand-tint text-ink" : "border-line bg-paper-raised text-ink-soft hover:border-brand-line-strong"}`}>
           {option.label}
         </button>
       ))}

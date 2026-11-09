@@ -130,7 +130,7 @@ function Measure({ visual }: { visual: Extract<Visual, { kind: "measure" }> }) {
 
 const STATE = {
   ready: { icon: Check, label: "Ready", tone: "text-health-clear-strong bg-health-clear-tint" },
-  nearly: { icon: Minus, label: "Nearly", tone: "text-health-watch bg-health-watch-tint" },
+  nearly: { icon: Minus, label: "Nearly", tone: "text-health-watch-strong bg-health-watch-tint" },
   missing: { icon: X, label: "Missing", tone: "text-health-stuck bg-health-stuck-tint" },
 } as const;
 

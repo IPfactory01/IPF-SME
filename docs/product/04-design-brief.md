@@ -50,12 +50,17 @@ became cyan so it stands out on every page.
 
 ### Health colours (the business outline)
 
-| State | Text, dots, borders | Background |
-|---|---|---|
-| Clear | `health-clear` #2E7D4F | `health-clear-tint` #E7F3EC |
-| Watch | `health-watch` #B26A00 | `health-watch-tint` #FBF0DD |
-| Stuck | `health-stuck` #B42318 | `health-stuck-tint` #FCE9E7 |
-| Not assessed | `ink-muted` on `paper`, dashed `line` border | — |
+| State | Dots, bars, borders, icons | Text | Background |
+|---|---|---|---|
+| Clear | `health-clear` #2E7D4F | `health-clear` on white; `health-clear-strong` #236A40 on its tint | `health-clear-tint` #E7F3EC |
+| Watch | `health-watch` #B26A00 | `health-watch-strong` #8F5500, always | `health-watch-tint` #FBF0DD |
+| Stuck | `health-stuck` #B42318 | `health-stuck` | `health-stuck-tint` #FCE9E7 |
+| Not assessed | `ink-muted` on `paper`, dashed `line` border | `ink-muted` | — |
+
+`health-watch` is 4.2:1 on white, below the 4.5:1 text rule, so Watch text always uses `health-watch-strong` (5.4:1 on
+its tint); Clear text on its tint uses `health-clear-strong` (design review B4, 9 November 2026). `test/client/contrast.test.ts`
+checks both ratios and fails if a component sets text in `health-watch`. Muted is a colour, never a fade: a step still to
+come is grey (`ink-muted`), not grey at reduced opacity.
 
 ### Supporting tokens
 
@@ -273,3 +278,5 @@ The room follows document 07, in the site's dress (`client/src/components/Accoun
 | `test/client/pages/payPage.ui.test.tsx` | The pay page names the amount in full ("Pay ₦100,000 securely with Paystack") and shows "TEST MODE: NO REAL MONEY MOVES" in test mode |
 | `test/server/interactiveAffordances.test.ts` | Pointer and not-allowed cursor rules are present |
 | `test/client/components/admin/adminCraft.test.ts` | The admin console uses theme colours only; drawers slide in and out along the same edge, with a fade for reduced motion; the ink scrim; buttons and rows answer on press |
+| `test/client/contrast.test.ts` | Watch and Clear text meet 4.5:1 on white, the page and their tint; no component sets text in the Watch dot colour |
+| `test/client/components/engagementRoom.ui.test.tsx` | The room fits a phone (hidden panels' controls stay inside the panels' clip), every tab and top-bar link is 44 px, no timeline step is faded, the team is named for screen readers |

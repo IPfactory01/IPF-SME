@@ -110,7 +110,7 @@ const SETTING_HELP: Record<StorageStatus["missing"][number], string> = {
 /** Whether clients can upload files, and if not the one thing to do next. Checked live, so it is right after a redeploy. */
 export function StorageLine({ status, onCheck }: { status: StorageStatus; onCheck: () => void }) {
   const on = status.configured && status.bucketFound === true && status.bucketPublic === false;
-  const tone = on ? "border-health-clear bg-health-clear-tint text-health-clear" : status.bucketPublic ? "border-danger-line bg-danger-tint text-danger" : "border-health-watch bg-health-watch-tint text-health-watch";
+  const tone = on ? "border-health-clear bg-health-clear-tint text-health-clear-strong" : status.bucketPublic ? "border-danger-line bg-danger-tint text-danger" : "border-health-watch bg-health-watch-tint text-health-watch-strong";
   return (
     <section role="status" aria-label="File uploads" className={`flex flex-wrap items-start justify-between gap-3 border p-3 text-sm ${tone}`}>
       <div className="space-y-1">

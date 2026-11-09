@@ -113,6 +113,13 @@ describe("the report form", () => {
     expect(screen.getByText("of 17 answered").textContent).toContain("0 of 17 answered");
   });
 
+  it("makes every answer button a full 44 px tap on a phone (design review B10)", () => {
+    renderPage();
+    const options = [...screen.getAllByRole("radio"), ...screen.queryAllByRole("checkbox")].filter(option => option.tagName === "BUTTON");
+    expect(options.length).toBeGreaterThan(10);
+    for (const option of options) expect(option.className, option.textContent ?? "").toContain("min-h-11");
+  });
+
   it("names the question to fix, and sends nothing until the form is complete", () => {
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: /send me my full report/i }));

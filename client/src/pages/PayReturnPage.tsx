@@ -92,7 +92,7 @@ export default function PayReturnPage() {
       <PaymentShell>
         {banner}
         <div className="space-y-4">
-          <Clock className="h-10 w-10 text-health-watch" aria-hidden />
+          <Clock className="h-10 w-10 text-health-watch-strong" aria-hidden />
           <h1 className="font-serif text-3xl font-normal">Still confirming</h1>
           <p className="text-ink-soft">Paystack has not confirmed your payment to us yet. This usually takes a moment.</p>
           <Button type="button" disabled={status.isPending} onClick={() => status.mutate({ reference })}

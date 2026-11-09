@@ -73,8 +73,8 @@ const SHORT_NAME: Record<PaymentItem, string> = { full_report: "Full Report", cu
 
 const CHIP: Record<PaymentDisplayStatus, string> = {
   requested: "border-highlight-ink/30 bg-highlight-ink/5 text-brand",
-  proof_received: "border-health-watch/30 bg-health-watch-tint text-health-watch",
-  confirmed: "border-health-clear/30 bg-health-clear-tint text-health-clear",
+  proof_received: "border-health-watch/30 bg-health-watch-tint text-health-watch-strong",
+  confirmed: "border-health-clear/30 bg-health-clear-tint text-health-clear-strong",
   expired: "border-danger-line bg-danger-tint text-danger",
 };
 

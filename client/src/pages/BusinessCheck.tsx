@@ -125,8 +125,8 @@ const itemMotion: Variants = { hidden: { opacity: 0 }, show: { opacity: 1, trans
 const STRENGTH_HEALTH: Record<Strength, Health> = { strong: "clear", building: "watch", gap: "stuck" };
 
 const HEALTH_STYLE: Record<Health | "pending", { dot: string; row: string; label: string }> = {
-  clear: { dot: "bg-health-clear", row: "border-health-clear/40 bg-health-clear-tint text-health-clear", label: "Clear" },
-  watch: { dot: "bg-health-watch", row: "border-health-watch/40 bg-health-watch-tint text-health-watch", label: "Watch" },
+  clear: { dot: "bg-health-clear", row: "border-health-clear/40 bg-health-clear-tint text-health-clear-strong", label: "Clear" },
+  watch: { dot: "bg-health-watch", row: "border-health-watch/40 bg-health-watch-tint text-health-watch-strong", label: "Watch" },
   stuck: { dot: "bg-health-stuck", row: "border-health-stuck/40 bg-health-stuck-tint text-health-stuck", label: "Stuck" },
   pending: { dot: "bg-line-strong", row: "border-line bg-paper-raised text-ink-faint", label: "To come" },
 };
@@ -422,8 +422,9 @@ function Intro({ hasProgress, onStart, onRestart }: { hasProgress: boolean; onSt
         <p className="mt-6 text-lg leading-relaxed text-ink-600">
           Some owners know exactly what is wrong. Many can only feel it: busy every day, money in and out, and no clear picture of why it isn't working. This check is for both.
         </p>
-        <p className="mt-4 font-serif text-lg italic leading-relaxed text-ink-soft">
-          It starts with you, the founder, then walks through the parts of the business that apply to you. Each answer determines the next question, so you only see what is relevant. At the end you get a short read: what we found, what we think the real problem is, and where to start.
+        {/* Running text in the body face, never italic serif (B11); the result's headings named as they appear there. */}
+        <p className="mt-4 text-lg leading-relaxed text-ink-600">
+          It starts with you, the founder, then walks through the parts of the business that apply to you. Each answer determines the next question, so you only see what is relevant. At the end you get a short read: your Findings, what we think the real problem is, and where to start.
         </p>
       </motion.div>
 

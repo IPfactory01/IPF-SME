@@ -98,6 +98,14 @@ describe("business check page", { timeout: 20_000 }, () => {
     expect(document.title).toBe("Free Business Health Check | The Shift, by IP Factory");
   });
 
+  it("sets the introduction in the body face, never italic serif, and names the Findings the result shows (design review B11)", () => {
+    render(React.createElement(BusinessCheck));
+    const intro = screen.getByText(/It starts with you, the founder/);
+    expect(intro.className).not.toMatch(/\b(italic|font-serif)\b/);
+    expect(intro.textContent).toContain("your Findings");
+    expect(intro.textContent).not.toMatch(/what we found/i);
+  });
+
   it("labels the name and email fields, and says what is missing instead of leaving Start grey", async () => {
     render(React.createElement(BusinessCheck));
     await pick(/take the business health check/i);

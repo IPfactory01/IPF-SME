@@ -73,7 +73,8 @@
   --color-health-clear: #2E7D4F; /* Clear: text, dots and borders */
   --color-health-clear-tint: #E7F3EC; /* Clear: background */
   --color-health-clear-strong: #236A40; /* Clear: small text on its tint */
-  --color-health-watch: #B26A00; /* Watch: text, dots and borders */
+  --color-health-watch: #B26A00; /* Watch: dots, bars, borders and icons */
+  --color-health-watch-strong: #8F5500; /* Watch: any text (5.4:1 on its tint, 6.1:1 on white; #B26A00 is 4.2:1 on white) */
   --color-health-watch-tint: #FBF0DD; /* Watch: background */
   --color-health-stuck: #B42318; /* Stuck: text, dots and borders */
   --color-health-stuck-tint: #FCE9E7; /* Stuck: background */

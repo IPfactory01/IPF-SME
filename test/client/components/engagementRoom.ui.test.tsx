@@ -13,7 +13,7 @@ import { WIDE_QUERY } from "@/hooks/useWide";
 import { businessCheckProfiles } from "../../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../../fixtures/reportIntake";
 
-const api = vi.hoisted(() => ({ calls: { respond: [] as unknown[], comment: [] as unknown[], accept: [] as unknown[], audience: [] as unknown[], requestUpload: [] as unknown[], confirmUpload: [] as unknown[], fileLink: [] as unknown[], requestDrop: [] as unknown[], confirmDrop: [] as unknown[], setNotAvailable: [] as unknown[], respondToContent: [] as unknown[], requestService: [] as unknown[], acceptAgreement: [] as unknown[] } }));
+const api = vi.hoisted(() => ({ calls: { respond: [] as unknown[], comment: [] as unknown[], accept: [] as unknown[], audience: [] as unknown[], requestUpload: [] as unknown[], confirmUpload: [] as unknown[], fileLink: [] as unknown[], requestDrop: [] as unknown[], confirmDrop: [] as unknown[], setNotAvailable: [] as unknown[], respondToContent: [] as unknown[], requestService: [] as unknown[], acceptAgreement: [] as unknown[], signOut: [] as unknown[] } }));
 const replies: Record<string, unknown> = {
   requestUpload: { storageKey: "engagements/4/tasks/11/abc-sales.pdf", uploadUrl: "https://example-project.supabase.co/storage/v1/object/upload/sign/engagement-files/engagements/4/tasks/11/abc-sales.pdf?token=up", headers: { "content-type": "application/pdf", "x-upsert": "false" } },
   confirmUpload: { success: true, fileId: 99, status: "received" },
@@ -31,7 +31,8 @@ const mutation = (bucket: keyof typeof api.calls) => (options?: { onSuccess?: (r
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    useUtils: () => ({ engagement: { client: { room: { invalidate: () => undefined } } } }),
+    useUtils: () => ({ engagement: { client: { room: { invalidate: () => undefined } } }, account: { me: { setData: () => undefined } } }),
+    account: { signOut: { useMutation: mutation("signOut") } },
     engagement: {
       client: {
         respondToTask: { useMutation: mutation("respond") },
@@ -106,7 +107,7 @@ const room = (over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
-  api.calls = { respond: [], comment: [], accept: [], audience: [], requestUpload: [], confirmUpload: [], fileLink: [], requestDrop: [], confirmDrop: [], setNotAvailable: [], respondToContent: [], requestService: [], acceptAgreement: [] };
+  api.calls = { respond: [], comment: [], accept: [], audience: [], requestUpload: [], confirmUpload: [], fileLink: [], requestDrop: [], confirmDrop: [], setNotAvailable: [], respondToContent: [], requestService: [], acceptAgreement: [], signOut: [] };
 });
 afterEach(() => {
   cleanup();
@@ -341,7 +342,7 @@ describe("the Measure of Success", () => {
   it("colours a move the wrong way as a watch, and says when there is no reading yet", () => {
     const measure = { name: "Debtors over 30 days", definition: null, unit: "₦", baselineValue: 900000, targetValue: 300000, latest: { weekNumber: 1, heldOn: "2026-11-13", reading: 950000, nextStep: null }, readings: [{ weekNumber: 1, heldOn: "2026-11-13", reading: 950000, nextStep: null }] };
     render(<EngagementRoom room={room({ stage: "fix", stageLabel: "Six-Week Fix", journey: journeyOf("fix"), measure })} />);
-    expect(screen.getByText("Up ₦50,000 since the start.").className).toContain("text-health-watch");
+    expect(screen.getByText("Up ₦50,000 since the start.").className).toContain("text-health-watch-strong");
     cleanup();
     render(<EngagementRoom room={room({ stage: "fix", stageLabel: "Six-Week Fix", journey: journeyOf("fix"), measure: { ...measure, latest: null, readings: [] } })} />);
     expect(screen.getByText("The first reading comes with the first Weekly Check-in.")).toBeTruthy();
@@ -474,6 +475,25 @@ describe("the room on a laptop or desktop", () => {
   beforeEach(() => {
     MotionGlobalConfig.skipAnimations = true;
     window.history.replaceState(null, "", "/dashboard");
+  });
+
+  it("fits a phone: hidden panels' controls stay inside the panels' clip, and every tab and top-bar link is a full 44 px (design review B1, B10)", () => {
+    render(<EngagementRoom room={room({ uploadsEnabled: true })} account={{ name: "Adunni Example", email: "adunni@example.com", role: "owner", internal: false }} />);
+    // The drop box's file input is visually hidden (absolute). It must sit inside a positioned clip, or a hidden panel's
+    // input widens the page to about 980 px and the owner can drag the room sideways on a phone.
+    const clip = screen.getAllByRole("tabpanel", { hidden: true })[0]!.closest("[data-room-panels]")!;
+    expect(clip.className).toMatch(/\brelative\b/);
+    expect(clip.className).toMatch(/\boverflow-clip\b/);
+    for (const tab of within(screen.getByRole("tablist", { name: "Your engagement" })).getAllByRole("tab")) expect(tab.className).toContain("min-h-11");
+    expect(screen.getByRole("link", { name: "Account" }).className).toContain("min-h-11");
+    expect(screen.getByRole("button", { name: "Sign out" }).className).toContain("min-h-11");
+  });
+
+  it("reads every timeline step at full strength and names the team for screen readers (design review B4)", () => {
+    render(<EngagementRoom room={room()} />);
+    const timeline = screen.getByRole("list", { name: "Engagement timeline" });
+    expect(timeline.querySelector(".opacity-80")).toBeNull();
+    expect(screen.getByRole("img", { name: /^Team: / })).toBeTruthy();
   });
 
   it("keeps one column on a phone, with no rail: the column of cards follows the timeline, the seat card once", () => {

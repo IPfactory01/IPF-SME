@@ -39,7 +39,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         fees: { useQuery: () => ({ data: api.failed.fees ? undefined : api.fees, error: api.failed.fees ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("fees"); } }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "loadDataRequest", "setFeePaid", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "loadDataRequest", "setFeePaid", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -282,6 +282,22 @@ describe("the team's engagements", () => {
 });
 
 describe("files on the team's side", () => {
+  it("opens the link a client sent for an item, and removes a file only with a reason (R43, R61)", () => {
+    const item = { id: 7, engagementId: 4, kind: "data_request", title: "Your price list", detail: null, side: "client", assigneeUserId: null, dueOn: "2026-10-27", status: "received", statusLabel: "Sent, we are checking", statusNote: "Sent a link to a folder", sessionId: null, weekNumber: null, sortOrder: 0, factor: null, responseLink: "https://drive.google.com/drive/folders/abc",
+      files: [{ id: 99, fileName: "prices.pdf", contentType: "application/pdf", sizeBytes: 120_000, audience: "owner", uploadedByName: "Ada Okafor", createdAt: new Date() }] };
+    api.detail = detail({ manage: true, assign: false, review: false }, [], [item]);
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const card = within(within(screen.getByRole("dialog")).getByLabelText("Your price list"));
+    expect(card.getByRole("link", { name: "Open the link" }).getAttribute("href")).toBe("https://drive.google.com/drive/folders/abc");
+    fireEvent.click(card.getByRole("button", { name: "Remove" }));
+    const confirm = card.getByRole("button", { name: "Remove the file" });
+    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(card.getByLabelText("Why prices.pdf is removed"), { target: { value: "Holds another customer's prices" } });
+    fireEvent.click(confirm);
+    expect(api.calls.removeFile).toEqual([{ fileId: 99, reason: "Holds another customer's prices" }]);
+  });
+
   it("lists a request's files with who sent them and who may see them, opens one, and offers to attach when storage is set up", async () => {
     const open = vi.fn();
     vi.stubGlobal("open", open);

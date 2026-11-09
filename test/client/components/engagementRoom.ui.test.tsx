@@ -13,7 +13,7 @@ import { WIDE_QUERY } from "@/hooks/useWide";
 import { businessCheckProfiles } from "../../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../../fixtures/reportIntake";
 
-const api = vi.hoisted(() => ({ calls: { respond: [] as unknown[], comment: [] as unknown[], accept: [] as unknown[], audience: [] as unknown[], requestUpload: [] as unknown[], confirmUpload: [] as unknown[], fileLink: [] as unknown[], requestDrop: [] as unknown[], confirmDrop: [] as unknown[], setNotAvailable: [] as unknown[], respondToContent: [] as unknown[], requestService: [] as unknown[], acceptAgreement: [] as unknown[], signOut: [] as unknown[] } }));
+const api = vi.hoisted(() => ({ calls: { respond: [] as unknown[], comment: [] as unknown[], accept: [] as unknown[], audience: [] as unknown[], requestUpload: [] as unknown[], confirmUpload: [] as unknown[], fileLink: [] as unknown[], requestDrop: [] as unknown[], confirmDrop: [] as unknown[], setNotAvailable: [] as unknown[], respondToContent: [] as unknown[], requestService: [] as unknown[], acceptAgreement: [] as unknown[], signOut: [] as unknown[], answerWithLink: [] as unknown[], removeFile: [] as unknown[] } }));
 const replies: Record<string, unknown> = {
   requestUpload: { storageKey: "engagements/4/tasks/11/abc-sales.pdf", uploadUrl: "https://example-project.supabase.co/storage/v1/object/upload/sign/engagement-files/engagements/4/tasks/11/abc-sales.pdf?token=up", headers: { "content-type": "application/pdf", "x-upsert": "false" } },
   confirmUpload: { success: true, fileId: 99, status: "received" },
@@ -48,6 +48,8 @@ vi.mock("@/lib/trpc", () => ({
         respondToContent: { useMutation: mutation("respondToContent") },
         requestService: { useMutation: mutation("requestService") },
         acceptAgreement: { useMutation: mutation("acceptAgreement") },
+        answerWithLink: { useMutation: mutation("answerWithLink") },
+        removeFile: { useMutation: mutation("removeFile") },
       },
     },
   },
@@ -93,10 +95,10 @@ const room = (over: Record<string, unknown> = {}) => ({
     { id: 2, title: "Kick-off", scheduledFor: new Date("2026-10-16T09:00:00Z"), durationMinutes: 30, meetingLink: null, status: "held" as const, weekNumber: null, sortOrder: 0, agenda: null, notes: "We agreed to start with pricing.", notesSharedAt: new Date("2026-10-16T12:00:00Z"), notesAudience: "owner" as const },
   ],
   tasks: [
-    { id: 11, kind: "data_request" as const, side: "client" as const, title: "Your last 12 months of sales", detail: "Monthly totals are enough.", dueOn: "2026-10-14", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 1, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
-    { id: 12, kind: "data_request" as const, side: "client" as const, title: "Your price list", detail: null, dueOn: "2026-10-14", status: "needs_more" as const, statusLabel: "We need a bit more", statusNote: "the delivery prices too", mine: true, weekNumber: 1, sortOrder: 2, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
-    { id: 13, kind: "data_request" as const, side: "client" as const, title: "Who works in the business", detail: null, dueOn: null, status: "accepted" as const, statusLabel: "Received", statusNote: null, mine: false, weekNumber: 1, sortOrder: 3, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
-    { id: 14, kind: "action" as const, side: "ipf" as const, title: "Send the cash template", detail: null, dueOn: "2026-10-20", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 2, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
+    { id: 11, responseLink: null as string | null, kind: "data_request" as const, side: "client" as const, title: "Your last 12 months of sales", detail: "Monthly totals are enough.", dueOn: "2026-10-14", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 1, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
+    { id: 12, responseLink: null as string | null, kind: "data_request" as const, side: "client" as const, title: "Your price list", detail: null, dueOn: "2026-10-14", status: "needs_more" as const, statusLabel: "We need a bit more", statusNote: "the delivery prices too", mine: true, weekNumber: 1, sortOrder: 2, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
+    { id: 13, responseLink: null as string | null, kind: "data_request" as const, side: "client" as const, title: "Who works in the business", detail: null, dueOn: null, status: "accepted" as const, statusLabel: "Received", statusNote: null, mine: false, weekNumber: 1, sortOrder: 3, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
+    { id: 14, responseLink: null as string | null, kind: "action" as const, side: "ipf" as const, title: "Send the cash template", detail: null, dueOn: "2026-10-20", status: "open" as const, statusLabel: "To do", statusNote: null, mine: false, weekNumber: 2, sortOrder: 1, factor: "internal" as const, section: null as string | null, ref: null as string | null, informs: null as string | null, format: null as string | null, priority: null as "high" | "medium" | "low" | null, assigneeName: null as string | null, files: [] },
   ],
   deliverables: [
     { id: 21, kind: "findings" as const, kindLabel: "Findings", title: "What we found", summary: "Cash leaks at the till.", sharedAt: new Date("2026-10-30T12:00:00Z"), audience: "owner" as const, audienceLabel: "Owner only", accepted: false, files: [], comments: [{ body: "Is this every day?", createdAt: new Date(), authorName: "Ada" }] },
@@ -107,7 +109,7 @@ const room = (over: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
-  api.calls = { respond: [], comment: [], accept: [], audience: [], requestUpload: [], confirmUpload: [], fileLink: [], requestDrop: [], confirmDrop: [], setNotAvailable: [], respondToContent: [], requestService: [], acceptAgreement: [], signOut: [] };
+  api.calls = { respond: [], comment: [], accept: [], audience: [], requestUpload: [], confirmUpload: [], fileLink: [], requestDrop: [], confirmDrop: [], setNotAvailable: [], respondToContent: [], requestService: [], acceptAgreement: [], signOut: [], answerWithLink: [], removeFile: [] };
 });
 afterEach(() => {
   cleanup();
@@ -279,6 +281,49 @@ describe("files in the room", () => {
     await waitFor(() => expect(api.calls.requestDrop).toHaveLength(1));
     await waitFor(() => expect(screen.getByText(/The upload did not finish/)).toBeTruthy());
     expect(api.calls.confirmDrop).toEqual([]);
+  });
+
+  it("answers an item with a link to a shared folder, and shows the link once sent (R43)", () => {
+    render(<EngagementRoom room={room()} />);
+    openData();
+    const sales = within(screen.getByRole("listitem", { name: "Your last 12 months of sales" }));
+    fireEvent.click(sales.getByRole("button", { name: /Your last 12 months of sales/ }));
+    fireEvent.click(sales.getByRole("button", { name: "Send a link" }));
+    expect(sales.getByText(/Google Drive, Dropbox, WeTransfer or iCloud/)).toBeTruthy();
+    fireEvent.change(sales.getByLabelText("Link to the folder for Your last 12 months of sales"), { target: { value: "https://drive.google.com/drive/folders/abc" } });
+    fireEvent.click(sales.getByRole("button", { name: "Send the link" }));
+    expect(api.calls.answerWithLink).toEqual([{ taskId: 11, url: "https://drive.google.com/drive/folders/abc" }]);
+    cleanup();
+    const base = room();
+    render(<EngagementRoom room={room({ tasks: base.tasks.map(task => (task.id === 12 ? { ...task, status: "received" as const, responseLink: "https://www.dropbox.com/scl/fo/xyz" } : task)) })} />);
+    openData();
+    const prices = within(screen.getByRole("listitem", { name: "Your price list" }));
+    fireEvent.click(prices.getByRole("button", { name: /Your price list/ }));
+    expect(prices.getByRole("link", { name: "dropbox.com" }).getAttribute("href")).toBe("https://www.dropbox.com/scl/fo/xyz");
+  });
+
+  it("lets the client take back a file until the team has taken it in (R61)", () => {
+    const mineFile = { id: 41, fileName: "wrong.pdf", sizeBytes: 2048, createdAt: new Date(), mine: true, fromTeam: false };
+    const base = room();
+    const tasks = base.tasks.map(task => (task.id === 11 ? { ...task, status: "received" as const, files: [mineFile] } : task.id === 13 ? { ...task, files: [{ ...mineFile, id: 42, fileName: "staff-list.pdf" }] } : task));
+    const sentFiles = [
+      { id: 43, fileName: "IMG_2041.jpg", sizeBytes: 90_000, createdAt: new Date(), mine: true, note: null, matchedTo: [] },
+      { id: 44, fileName: "Sales 2025.xlsx", sizeBytes: 9_000, createdAt: new Date(), mine: true, note: null, matchedTo: [{ taskId: 11, ref: "B1", title: "Your last 12 months of sales" }] },
+    ];
+    render(<EngagementRoom room={room({ tasks, sentFiles })} />);
+    openData();
+    const sales = within(screen.getByRole("listitem", { name: "Your last 12 months of sales" }));
+    fireEvent.click(sales.getByRole("button", { name: /Your last 12 months of sales/ }));
+    fireEvent.click(sales.getByRole("button", { name: "Remove" }));
+    fireEvent.click(sales.getByRole("button", { name: "Remove it" }));
+    expect(api.calls.removeFile).toEqual([{ fileId: 41 }]);
+    // Accepted by the team: no Remove; asked on WhatsApp instead.
+    const staffList = within(screen.getByRole("listitem", { name: "Who works in the business" }));
+    fireEvent.click(staffList.getByRole("button", { name: /Who works in the business/ }));
+    expect(staffList.queryByRole("button", { name: "Remove" })).toBeNull();
+    // In Documents received: the unmatched file can be taken back, the matched one cannot.
+    const received = within(screen.getByRole("region", { name: /Documents received/ }));
+    expect(received.getAllByRole("button", { name: "Remove" })).toHaveLength(1);
   });
 
   it("lets the client mark an item not available, with a note", () => {

@@ -60,6 +60,19 @@ export async function objectExists(key: string) {
   return false;
 }
 
+/**
+ * Removes a stored object for good (R61). An object that is already gone counts as removed; any other refusal throws, so
+ * the record is never deleted while the file stays in the bucket.
+ */
+export async function deleteObject(key: string) {
+  requireConfigured();
+  const res = await fetch(`${base()}/object/${bucket()}/${encodeKey(key)}`, { method: "DELETE", headers: authHeaders(), signal: AbortSignal.timeout(TIMEOUT_MS) });
+  if (res.ok || res.status === 404) return;
+  // Supabase answers 400 for a missing object on some versions: check before giving up.
+  if (res.status === 400 && !(await objectExists(key))) return;
+  throw new Error(`Storage refused to remove the file (${res.status}).`);
+}
+
 /** A link that opens the file for a few minutes, as a download under its own name. */
 export async function signedDownloadUrl(key: string, fileName: string, expiresInSeconds = 300) {
   requireConfigured();

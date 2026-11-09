@@ -240,7 +240,30 @@ export const UPLOAD_TYPES: Record<string, readonly string[]> = {
   docx: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
   doc: ["application/msword"],
   txt: ["text/plain"],
+  // Voice notes (R43): the formats phones record in. Video is never stored: it comes as a link or on WhatsApp.
+  m4a: ["audio/mp4", "audio/x-m4a", "audio/m4a", "audio/aac"],
+  mp3: ["audio/mpeg", "audio/mp3"],
+  ogg: ["audio/ogg", "application/ogg", "audio/opus"],
+  opus: ["audio/opus", "audio/ogg"],
+  aac: ["audio/aac", "audio/x-aac", "audio/mp4"],
+  wav: ["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"],
 };
+/** Video files: refused with a pointer to a link or WhatsApp, so footage never fills the store (R43, K10). */
+export const VIDEO_EXTENSIONS = ["mp4", "mov", "m4v", "avi", "mkv", "webm", "3gp", "wmv", "mts"] as const;
+export const isVideoFile = (fileName: string) => (VIDEO_EXTENSIONS as readonly string[]).includes(fileName.toLowerCase().split(".").pop() ?? "");
+/** The places a client may share a folder from; a link elsewhere is still taken, these are named on the screen. */
+export const FOLDER_HOSTS = ["Google Drive", "Dropbox", "WeTransfer", "iCloud"] as const;
+/** A link that answers an item: https only, at most 2,048 characters. Returns the cleaned link or null. */
+export function cleanResponseLink(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 2048) return null;
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "https:" && url.hostname.includes(".") ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
 export const UPLOAD_ACCEPT = Object.keys(UPLOAD_TYPES).map(extension => `.${extension}`).join(",");
 
 const extensionOf = (fileName: string) => fileName.toLowerCase().split(".").pop() ?? "";

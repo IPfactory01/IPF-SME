@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { READINESS_LABELS } from "@shared/businessCheck/engine";
 import { AREA_NAMES } from "@shared/businessCheck/questions";
-import { ASSESSMENT_DAYS, ASSESSMENT_WEEKS, ENGAGEMENT_TASK_PRIORITY_LABELS, FIX_WEEKS, formatFileSize, formatMeasure, OPEN_TASK_STATUSES, UPLOAD_ACCEPT, UPLOAD_MAX_MB } from "@shared/engagement";
+import { ASSESSMENT_DAYS, ASSESSMENT_WEEKS, ENGAGEMENT_TASK_PRIORITY_LABELS, FIX_WEEKS, FOLDER_HOSTS, formatFileSize, formatMeasure, OPEN_TASK_STATUSES, UPLOAD_ACCEPT, UPLOAD_MAX_MB } from "@shared/engagement";
 import { METHOD, METHOD_MEANING } from "@shared/method";
 import type { inferRouterOutputs } from "@trpc/server";
 import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlash, Download, FileText, Flag, Paperclip, UploadCloud } from "lucide-react";
@@ -744,8 +744,24 @@ function useDropUpload(engagementId: number) {
   return { send, busy, items };
 }
 
+/** A client takes back a file they sent, with a second tap to be sure (R61). */
+function RemoveFile({ fileId, fileName }: { fileId: number; fileName: string }) {
+  const refresh = useRoomRefresh();
+  const [asking, setAsking] = useState(false);
+  const remove = trpc.engagement.client.removeFile.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("File removed."); } });
+  if (useRoomPreview()) return null;
+  if (!asking) return <button type="button" className="text-xs font-medium text-ink-600 underline underline-offset-2 hover:text-ink" onClick={() => setAsking(true)}>Remove</button>;
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2 text-xs" role="group" aria-label={`Remove ${fileName}`}>
+      <span className="text-ink">Remove {fileName}?</span>
+      <button type="button" className="font-semibold text-danger-strong underline underline-offset-2" disabled={remove.isPending} onClick={() => remove.mutate({ fileId })}>{remove.isPending ? "Removing…" : "Remove it"}</button>
+      <button type="button" className="text-ink-muted underline underline-offset-2" onClick={() => setAsking(false)}>Keep it</button>
+    </span>
+  );
+}
+
 /** Files on an item, each opened through a short-lived link the server issues after checking who is asking. */
-function FileList({ files }: { files: RoomFile[] }) {
+function FileList({ files, canRemove }: { files: RoomFile[]; canRemove?: (file: RoomFile) => boolean }) {
   const preview = useRoomPreview();
   const link = trpc.engagement.client.fileLink.useMutation({ onError: error => toast.error(error.message) });
   if (!files.length) return null;
@@ -759,6 +775,7 @@ function FileList({ files }: { files: RoomFile[] }) {
           {!preview && <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>
             <Download className="h-3.5 w-3.5" aria-hidden />Download
           </button>}
+          {canRemove?.(file) && <RemoveFile fileId={file.id} fileName={file.fileName} />}
         </li>
       ))}
     </ul>
@@ -775,9 +792,36 @@ function TaskControls({ task, uploadsEnabled, due }: { task: Task; uploadsEnable
   return <ActionControls task={task} uploadsEnabled={uploadsEnabled} due={due} />;
 }
 
+/** Answer an item with a link to a shared folder: footage and anything too large to upload (R43). */
+function LinkAnswer({ task, onDone }: { task: Task; onDone: () => void }) {
+  const refresh = useRoomRefresh();
+  const [url, setUrl] = useState("");
+  const send = trpc.engagement.client.answerWithLink.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); onDone(); toast.success("Link sent. Your team will open it."); } });
+  return (
+    <div className="mt-3 space-y-2">
+      <p className="text-xs text-ink-muted">A link to a shared folder on {FOLDER_HOSTS.join(", ").replace(/, ([^,]*)$/, " or $1")}. Videos always come this way, or on WhatsApp.</p>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <input type="url" inputMode="url" aria-label={`Link to the folder for ${task.title}`} className="min-h-11 w-full rounded-lg border border-line bg-white px-3 text-sm" placeholder="https://drive.google.com/…" value={url} maxLength={2048} onChange={event => setUrl(event.target.value)} />
+        <div className="flex gap-2">
+          <Button type="button" size="sm" className="min-h-11 rounded-lg bg-brand text-xs text-white" disabled={send.isPending || !url.trim()} onClick={() => send.mutate({ taskId: task.id, url })}>{send.isPending ? "Sending…" : "Send the link"}</Button>
+          <Button type="button" size="sm" variant="outline" className="min-h-11 rounded-lg text-xs" onClick={onDone}>Cancel</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The link the client sent for an item, shown by its site so it can be checked at a glance. */
+function SentLink({ link }: { link: string | null }) {
+  if (!link) return null;
+  let host = link;
+  try { host = new URL(link).hostname.replace(/^www\./, ""); } catch { /* shown as sent */ }
+  return <p className="mt-2 text-xs text-ink-600">Link sent: <a href={link} target="_blank" rel="noopener noreferrer" className="font-medium text-brand underline underline-offset-2">{host}</a></p>;
+}
+
 function RequestControls({ task }: { task: Task }) {
   const refresh = useRoomRefresh();
-  const [mode, setMode] = useState<"none" | "missing" | "other">("none");
+  const [mode, setMode] = useState<"none" | "missing" | "other" | "link">("none");
   const [note, setNote] = useState("");
   const unavailable = trpc.engagement.client.setNotAvailable.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); setMode("none"); toast.success("Marked as not available."); } });
   const respond = trpc.engagement.client.respondToTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); setMode("none"); toast.success("Noted. We will confirm receipt."); } });
@@ -785,6 +829,7 @@ function RequestControls({ task }: { task: Task }) {
     return <button type="button" className="mt-2 text-xs font-medium text-brand underline underline-offset-2" disabled={unavailable.isPending} onClick={() => unavailable.mutate({ taskId: task.id, unavailable: false, note: null })}>Undo</button>;
   }
   if (!isOpen(task)) return null;
+  if (mode === "link") return <LinkAnswer task={task} onDone={() => setMode("none")} />;
   if (mode !== "none") {
     return (
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -799,6 +844,7 @@ function RequestControls({ task }: { task: Task }) {
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
       <a href="#drop" className="inline-flex items-center gap-1 font-medium text-brand underline underline-offset-2"><UploadCloud className="h-3.5 w-3.5" aria-hidden />Upload</a>
+      <button type="button" className="font-medium text-brand underline underline-offset-2" onClick={() => setMode("link")}>Send a link</button>
       <button type="button" className="font-medium text-ink-600 underline underline-offset-2 hover:text-ink" onClick={() => setMode("missing")}>Not available</button>
       <button type="button" className="text-ink-muted underline underline-offset-2 hover:text-ink" onClick={() => setMode("other")}>Submitted another way</button>
     </div>
@@ -810,7 +856,9 @@ function ActionControls({ task, due }: { task: Task; uploadsEnabled: boolean; du
   const refresh = useRoomRefresh();
   const [note, setNote] = useState("");
   const [asking, setAsking] = useState(false);
+  const [linking, setLinking] = useState(false);
   const respond = trpc.engagement.client.respondToTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Marked as done."); } });
+  if (linking) return <LinkAnswer task={task} onDone={() => setLinking(false)} />;
   if (asking) {
     return (
       <div className="mt-2 flex flex-col gap-2 sm:flex-row">
@@ -822,6 +870,7 @@ function ActionControls({ task, due }: { task: Task; uploadsEnabled: boolean; du
   return (
     <div className="mt-3 flex flex-wrap items-center gap-2">
       <Button type="button" size="sm" className="rounded-lg bg-brand text-xs text-white" onClick={() => setAsking(true)}>Mark as done</Button>
+      <button type="button" className="text-xs font-medium text-brand underline underline-offset-2" onClick={() => setLinking(true)}>Send a link</button>
       {due && task.dueOn && <span className="text-xs text-ink-muted">{dueText(task.dueOn)}</span>}
     </div>
   );
@@ -1059,7 +1108,8 @@ function PlanView({ room, now }: { room: Room; now: number }) {
           </dl>
           {task.detail && <TaskDetail text={task.detail} className="mt-3 text-sm text-ink-600" />}
           {task.status === "needs_more" && task.statusNote && <p className="mt-2 text-sm text-danger">We need a bit more: {task.statusNote}</p>}
-          <FileList files={task.files} />
+          <FileList files={task.files} canRemove={file => file.mine && !file.fromTeam && ["open", "received", "needs_more"].includes(task.status)} />
+          <SentLink link={task.responseLink} />
           {isClientOpen(task) && <TaskControls task={task} uploadsEnabled={room.uploadsEnabled} />}
         </aside>
       )}
@@ -1120,7 +1170,7 @@ function DropBox({ uploadsEnabled, engagementId }: { uploadsEnabled: boolean; en
             className={`mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors ${over ? "border-brand bg-brand-tint" : "border-brand-line-strong bg-brand-tint-softest hover:border-brand hover:bg-brand-tint"}`}>
             <UploadCloud className="h-8 w-8 text-brand" aria-hidden />
             <span className="text-sm font-semibold text-ink">{drop.busy ? "Uploading…" : "Drop files or browse"}</span>
-            <span className="text-xs text-ink-muted">PDF, Excel, Word or photos, up to {UPLOAD_MAX_MB} MB each</span>
+            <span className="text-xs text-ink-muted">PDF, Excel, Word, photos or voice notes, up to {UPLOAD_MAX_MB} MB each. Videos: send a link to the folder</span>
             <input type="file" multiple className="sr-only" accept={UPLOAD_ACCEPT} aria-label="Choose files to send" onChange={event => { take(event.target.files); event.target.value = ""; }} />
           </label>
           {drop.items.length > 0 && (
@@ -1160,6 +1210,8 @@ function SentFiles({ files }: { files: Room["sentFiles"] }) {
               {file.matchedTo.length ? file.matchedTo.map(match => <span key={match.taskId} className="rounded-md bg-health-clear-tint px-1.5 py-0.5 text-health-clear-strong">{match.ref && <span className="mr-1 font-mono">{match.ref}</span>}{match.title}</span>)
                 : <span className="text-ink-muted">Under review</span>}
             </p>
+            {/* Until the team has matched it, the person who sent it can take it back (R61). */}
+            {file.mine && file.matchedTo.length === 0 && <div className="mt-1 pl-5.5"><RemoveFile fileId={file.id} fileName={file.fileName} /></div>}
           </li>
         ))}
       </ul>
@@ -1203,7 +1255,8 @@ function RequestRow({ task, now }: { task: Task; now: number }) {
           {task.format && <p className="text-ink-600"><span className="text-ink-muted">Format: </span>{task.format}</p>}
           {task.status === "needs_more" && task.statusNote && <p className="text-danger">Further information required: {task.statusNote}</p>}
           {task.status === "not_available" && task.statusNote && <p className="text-ink-600"><span className="text-ink-muted">Your note: </span>{task.statusNote}</p>}
-          <FileList files={task.files} />
+          <FileList files={task.files} canRemove={file => file.mine && !file.fromTeam && ["open", "received", "needs_more"].includes(task.status)} />
+          <SentLink link={task.responseLink} />
           <RequestControls task={task} />
         </div>
       )}

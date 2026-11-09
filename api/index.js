@@ -1222,8 +1222,27 @@ var UPLOAD_TYPES = {
   csv: ["text/csv", "application/vnd.ms-excel", "text/plain"],
   docx: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
   doc: ["application/msword"],
-  txt: ["text/plain"]
+  txt: ["text/plain"],
+  // Voice notes (R43): the formats phones record in. Video is never stored: it comes as a link or on WhatsApp.
+  m4a: ["audio/mp4", "audio/x-m4a", "audio/m4a", "audio/aac"],
+  mp3: ["audio/mpeg", "audio/mp3"],
+  ogg: ["audio/ogg", "application/ogg", "audio/opus"],
+  opus: ["audio/opus", "audio/ogg"],
+  aac: ["audio/aac", "audio/x-aac", "audio/mp4"],
+  wav: ["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"]
 };
+var VIDEO_EXTENSIONS = ["mp4", "mov", "m4v", "avi", "mkv", "webm", "3gp", "wmv", "mts"];
+var isVideoFile = (fileName2) => VIDEO_EXTENSIONS.includes(fileName2.toLowerCase().split(".").pop() ?? "");
+function cleanResponseLink(value) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 2048) return null;
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === "https:" && url.hostname.includes(".") ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
 var UPLOAD_ACCEPT = Object.keys(UPLOAD_TYPES).map((extension) => `.${extension}`).join(",");
 var extensionOf = (fileName2) => fileName2.toLowerCase().split(".").pop() ?? "";
 function isAllowedUploadType(contentType, fileName2) {
@@ -2868,6 +2887,13 @@ async function objectExists(key) {
     if (res?.ok) return true;
   }
   return false;
+}
+async function deleteObject(key) {
+  requireConfigured();
+  const res = await fetch(`${base()}/object/${bucket()}/${encodeKey(key)}`, { method: "DELETE", headers: authHeaders(), signal: AbortSignal.timeout(TIMEOUT_MS) });
+  if (res.ok || res.status === 404) return;
+  if (res.status === 400 && !await objectExists(key)) return;
+  throw new Error(`Storage refused to remove the file (${res.status}).`);
 }
 async function signedDownloadUrl(key, fileName2, expiresInSeconds = 300) {
   requireConfigured();
@@ -10361,6 +10387,7 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
       informs: task.informs,
       format: task.format,
       priority: task.priority,
+      responseLink: task.responseLink,
       files: clientFiles("taskId", task.id)
     })),
     // What the client's side dropped into the room, newest first, and which visible requests each file was matched to.
@@ -10405,6 +10432,21 @@ async function respondToTask(db, session, input) {
   await db.transaction(async (tx) => {
     await tx.update(engagementTasks).set({ status, statusNote: input.note, completedAt: status === "done" ? /* @__PURE__ */ new Date() : null }).where(eq15(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status } });
+  });
+  return { success: true, status };
+}
+async function answerWithLink(db, session, input) {
+  const link = cleanResponseLink(input.url);
+  if (!link) throw new TRPCError14({ code: "BAD_REQUEST", message: "Paste the full link to the folder, starting with https://." });
+  const task = (await db.select().from(engagementTasks).where(eq15(engagementTasks.id, input.taskId)).limit(1))[0];
+  if (!task) throw notFound4();
+  const { viewer } = await requireClientEngagement(db, session, task.engagementId);
+  if (task.side !== "client" || !clientCanSeeTask(task, viewer)) throw notFound4();
+  if (task.status !== "open" && task.status !== "needs_more") throw new TRPCError14({ code: "CONFLICT", message: "This is already with us." });
+  const status = task.kind === "data_request" ? "received" : "done";
+  await db.transaction(async (tx) => {
+    await tx.update(engagementTasks).set({ status, responseLink: link, statusNote: "Sent a link to a folder", completedAt: status === "done" ? /* @__PURE__ */ new Date() : null }).where(eq15(engagementTasks.id, task.id));
+    await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status, via: "link" } });
   });
   return { success: true, status };
 }
@@ -10453,8 +10495,11 @@ function validateUpload(input) {
   if (!Number.isFinite(input.sizeBytes) || input.sizeBytes <= 0 || input.sizeBytes > UPLOAD_MAX_BYTES) {
     throw new TRPCError14({ code: "BAD_REQUEST", message: `Files up to ${UPLOAD_MAX_MB} MB.` });
   }
+  if (isVideoFile(input.fileName)) {
+    throw new TRPCError14({ code: "BAD_REQUEST", message: "Videos are not uploaded here. Paste a link to the folder (Google Drive, Dropbox, WeTransfer or iCloud), or send it on WhatsApp." });
+  }
   if (!isAllowedUploadType(input.contentType, input.fileName)) {
-    throw new TRPCError14({ code: "BAD_REQUEST", message: "PDF, photos, spreadsheets and Word documents only." });
+    throw new TRPCError14({ code: "BAD_REQUEST", message: "PDF, photos, spreadsheets, Word documents and voice notes only." });
   }
 }
 var keyPrefix = (engagementId, target) => `engagements/${engagementId}/${target.kind}s/${target.id}/`;
@@ -10715,6 +10760,45 @@ async function shareTeamFile(db, actor, input) {
     await recordAudit(tx, { action: "engagement_file_shared", actorUserId: actor.id, details: { engagementId: file.engagementId, fileId: file.id, audience: input.audience } });
   });
   return { success: true };
+}
+async function removeFile(db, file, by) {
+  try {
+    await deleteObject(file.storageKey);
+  } catch {
+    throw new TRPCError14({ code: "INTERNAL_SERVER_ERROR", message: "We could not remove the file just now. Try again in a moment." });
+  }
+  await db.transaction(async (tx) => {
+    await tx.delete(engagementFiles).where(eq15(engagementFiles.id, file.id));
+    if (file.taskId !== null) {
+      const task = (await tx.select().from(engagementTasks).where(eq15(engagementTasks.id, file.taskId)).limit(1))[0];
+      const left = await tx.select({ id: engagementFiles.id }).from(engagementFiles).where(eq15(engagementFiles.taskId, file.taskId)).limit(1);
+      if (task && task.status === "received" && left.length === 0 && !task.responseLink) {
+        await tx.update(engagementTasks).set({ status: "open", statusNote: null }).where(eq15(engagementTasks.id, task.id));
+      }
+    }
+    await recordAudit(tx, { action: "engagement_file_removed", actorUserId: by.userId, details: { engagementId: file.engagementId, fileId: file.id, by: by.side, ...by.reason ? { reason: by.reason } : {} } });
+  });
+  return { success: true };
+}
+async function clientRemoveFile(db, session, input) {
+  requireUploads();
+  const file = (await db.select().from(engagementFiles).where(eq15(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file) throw notFound4();
+  await requireClientEngagement(db, session, file.engagementId);
+  if (file.uploadedByUserId !== session.user.id || file.deliverableId !== null) throw notFound4();
+  const checked = file.taskId === null ? (await db.select({ taskId: engagementFileMatches.taskId }).from(engagementFileMatches).where(eq15(engagementFileMatches.fileId, file.id)).limit(1)).length > 0 : !["open", "received", "needs_more"].includes((await db.select({ status: engagementTasks.status }).from(engagementTasks).where(eq15(engagementTasks.id, file.taskId)).limit(1))[0]?.status ?? "");
+  if (checked) throw new TRPCError14({ code: "CONFLICT", message: "Your team has already taken this file in. Ask them on WhatsApp to remove it." });
+  return removeFile(db, file, { userId: session.user.id, side: "client" });
+}
+async function staffRemoveFile(db, actor, input) {
+  requireUploads();
+  requireManage2(actor);
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw new TRPCError14({ code: "BAD_REQUEST", message: "Say why the file is removed." });
+  const file = (await db.select().from(engagementFiles).where(eq15(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file) throw notFound4();
+  await requireStaffEngagement(db, actor, file.engagementId);
+  return removeFile(db, file, { userId: actor.id, side: "team", reason: reason.slice(0, 300) });
 }
 async function staffFileLink(db, actor, input) {
   requireUploads();
@@ -12166,6 +12250,8 @@ var staffRouter = router({
   confirmUpload: staff.input(z15.object({ engagementId: id, target: uploadTarget, storageKey, audience: z15.enum(["team", "owner", "business"]), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z15.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
   shareFile: staff.input(z15.object({ fileId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareTeamFile(await engagementDb(), ctx.actor, input))),
+  /** Remove any file on the engagement, with the reason recorded; the stored object is deleted (R61). */
+  removeFile: staff.input(z15.object({ fileId: id, reason: z15.string().trim().min(3, "Say why the file is removed.").max(300) })).mutation(async ({ ctx, input }) => guarded(async () => staffRemoveFile(await engagementDb(), ctx.actor, input))),
   /** A whole Data Request in one step: a template, or rows pasted from Excel. */
   loadDataRequest: staff.input(z15.object({
     engagementId: id,
@@ -12273,7 +12359,11 @@ var clientRouter = router({
   /** Approve a reel, post or story, or ask for changes with a note. */
   respondToContent: accountProcedure.input(z15.object({ itemId: id, approve: z15.boolean(), note: optionalText2(1e3) })).mutation(async ({ ctx, input }) => guarded(async () => respondToContent(await engagementDb(), ctx.account, input))),
   /** "We don't have this", or take it back. */
-  setNotAvailable: accountProcedure.input(z15.object({ taskId: id, unavailable: z15.boolean(), note: optionalText2(500) })).mutation(async ({ ctx, input }) => guarded(async () => setNotAvailable(await engagementDb(), ctx.account, input)))
+  setNotAvailable: accountProcedure.input(z15.object({ taskId: id, unavailable: z15.boolean(), note: optionalText2(500) })).mutation(async ({ ctx, input }) => guarded(async () => setNotAvailable(await engagementDb(), ctx.account, input))),
+  /** Answer an item with a link to a shared folder (footage, large records); only the link is kept (R43). */
+  answerWithLink: accountProcedure.input(z15.object({ taskId: id, url: z15.string().trim().min(1).max(2048) })).mutation(async ({ ctx, input }) => guarded(async () => answerWithLink(await engagementDb(), ctx.account, input))),
+  /** Take back a file the person sent, until the team has taken it in (R61). */
+  removeFile: accountProcedure.input(z15.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => clientRemoveFile(await engagementDb(), ctx.account, input)))
 });
 var financeRouter = router({
   list: adminProcedure.query(async ({ ctx }) => guarded(async () => listFinance(await engagementDb(), { authority: await loadAuthority(await engagementDb(), ctx.user) })))

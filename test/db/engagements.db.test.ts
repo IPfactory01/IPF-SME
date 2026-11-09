@@ -5,7 +5,7 @@
  * and by what was shared with them. Email and the language model are stubbed.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import * as schema from "../../drizzle/schema";
 import { createPgliteHarness, createRemoteHarness, type DbHarness } from "./harness";
 import { businessCheckProfiles } from "../fixtures/businessCheckProfiles";
@@ -694,12 +694,17 @@ for (const target of targets) {
     describe("files (a private bucket, reached only through the server)", () => {
       const saved = { url: ENV.supabaseUrl, key: ENV.supabaseServiceRoleKey, bucket: ENV.supabaseStorageBucket };
       /** Stands in for Supabase Storage: a signed upload "arrives" the object, info and sign answer for what arrived. */
-      const storage = () => {
+      const storage = (options: { failDelete?: boolean } = {}) => {
         const objects = new Set<string>();
         const fetchMock = vi.fn(async (url: string, init?: { method?: string }) => {
           const path = new URL(url).pathname;
           const key = decodeURIComponent(path.split("/engagement-files/")[1] ?? "");
           const has = objects.has(key);
+          if (init?.method === "DELETE") {
+            if (options.failDelete) return { ok: false, status: 500, json: async () => ({}) };
+            objects.delete(key);
+            return { ok: has, status: has ? 200 : 404, json: async () => ({}) };
+          }
           if (path.includes("/object/upload/sign/")) { objects.add(key); return { ok: true, status: 200, json: async () => ({ url: `/object/upload/sign/engagement-files/${key}?token=up` }) }; }
           if (path.includes("/object/info/") || path.includes("/object/authenticated/")) return { ok: has, status: has ? 200 : 404, json: async () => ({}) };
           if (path.includes("/object/sign/") && (init?.method ?? "GET") === "POST") return { ok: true, status: 200, json: async () => ({ signedURL: `/object/sign/engagement-files/${key}?token=down` }) };
@@ -767,6 +772,76 @@ for (const target of targets) {
         objects.delete(ticket.storageKey);
         await expect((await owner.call()).engagement.client.confirmUpload({ taskId, storageKey: ticket.storageKey, note: null, ...pdf("costs.pdf") })).rejects.toMatchObject({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
         expect((await (await owner.call()).engagement.client.room())!.tasks.find(item => item.id === taskId)!.status).toBe("open");
+      });
+
+      it("takes a voice note, refuses a video with where to send it instead, and takes a link to a folder as the answer (R43)", async () => {
+        configure();
+        storage();
+        const a = await client("footage-a");
+        const b = await client("footage-b");
+        const task = (await (await a.owner.call()).engagement.client.room())!.tasks.find(item => item.kind === "data_request" && item.status === "open")!;
+        await (await a.owner.call()).engagement.client.requestUpload({ taskId: task.id, fileName: "about-our-prices.m4a", contentType: "audio/mp4", sizeBytes: 3_000_000 });
+        await expect((await a.owner.call()).engagement.client.requestUpload({ taskId: task.id, fileName: "shop-tour.mp4", contentType: "video/mp4", sizeBytes: 9_000_000 }))
+          .rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("Paste a link to the folder") });
+
+        await expect((await a.owner.call()).engagement.client.answerWithLink({ taskId: task.id, url: "http://drive.google.com/x" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await expect((await b.owner.call()).engagement.client.answerWithLink({ taskId: task.id, url: "https://drive.google.com/drive/folders/abc" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        expect(await (await a.owner.call()).engagement.client.answerWithLink({ taskId: task.id, url: "https://drive.google.com/drive/folders/abc" })).toEqual({ success: true, status: "received" });
+        const answered = (await (await a.owner.call()).engagement.client.room())!.tasks.find(item => item.id === task.id)!;
+        expect(answered).toMatchObject({ status: "received", statusNote: "Sent a link to a folder", responseLink: "https://drive.google.com/drive/folders/abc" });
+        expect((await (await superAdmin.call()).engagement.staff.detail({ engagementId: a.engagementId })).tasks.find(item => item.id === task.id)!.responseLink).toBe("https://drive.google.com/drive/folders/abc");
+        await expect((await a.owner.call()).engagement.client.answerWithLink({ taskId: task.id, url: "https://www.dropbox.com/s/x" })).rejects.toMatchObject({ code: "CONFLICT" });
+        const [event] = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_task_answered")).orderBy(desc(schema.adminAccessAuditEvents.id)).limit(1);
+        expect(JSON.parse(event!.details!)).toMatchObject({ taskId: task.id, via: "link" });
+      });
+
+      it("lets the client take back a file until the team has taken it in, and the team remove any file with a reason; the stored file is deleted (R61)", async () => {
+        configure();
+        const { objects } = storage();
+        const a = await client("remove-a");
+        const b = await client("remove-b");
+        const tasks = (await (await a.owner.call()).engagement.client.room())!.tasks.filter(item => item.kind === "data_request" && item.status === "open");
+        const upload = async (taskId: number, name: string) => {
+          const ticket = await (await a.owner.call()).engagement.client.requestUpload({ taskId, ...pdf(name) });
+          return { ...(await (await a.owner.call()).engagement.client.confirmUpload({ taskId, storageKey: ticket.storageKey, note: null, ...pdf(name) })), storageKey: ticket.storageKey };
+        };
+        const wrong = await upload(tasks[0]!.id, "wrong-statement.pdf");
+        expect((await (await a.owner.call()).engagement.client.room())!.tasks.find(item => item.id === tasks[0]!.id)!.status).toBe("received");
+        // Another client cannot remove it; the owner can, and the item goes back to "To do".
+        await expect((await b.owner.call()).engagement.client.removeFile({ fileId: wrong.fileId })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        expect(await (await a.owner.call()).engagement.client.removeFile({ fileId: wrong.fileId })).toEqual({ success: true });
+        expect(objects.has(wrong.storageKey)).toBe(false);
+        const after = (await (await a.owner.call()).engagement.client.room())!.tasks.find(item => item.id === tasks[0]!.id)!;
+        expect(after).toMatchObject({ status: "open", files: [] });
+        const [removed] = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_file_removed")).orderBy(desc(schema.adminAccessAuditEvents.id)).limit(1);
+        expect(JSON.parse(removed!.details!)).toMatchObject({ fileId: wrong.fileId, by: "client" });
+
+        // Once the team has accepted the item, the client asks the team instead.
+        const kept = await upload(tasks[1]!.id, "bank-statement.pdf");
+        const desk = await superAdmin.call();
+        const full = (await desk.engagement.staff.detail({ engagementId: a.engagementId })).tasks.find(item => item.id === tasks[1]!.id)!;
+        await desk.engagement.staff.saveTask({ engagementId: a.engagementId, taskId: full.id, kind: full.kind, side: full.side, title: full.title, detail: full.detail, assigneeUserId: full.assigneeUserId, dueOn: full.dueOn, status: "accepted", statusNote: full.statusNote, sessionId: full.sessionId, weekNumber: full.weekNumber, sortOrder: full.sortOrder, factor: full.factor });
+        await expect((await a.owner.call()).engagement.client.removeFile({ fileId: kept.fileId })).rejects.toMatchObject({ code: "CONFLICT" });
+
+        // The team removes it, saying why; a Specialist cannot; a storage failure keeps the record.
+        await expect(desk.engagement.staff.removeFile({ fileId: kept.fileId, reason: "" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        const specialist = await signIn(await person(["subject_matter_expert"]), true);
+        await expect((await specialist.call()).engagement.staff.removeFile({ fileId: kept.fileId, reason: "Wrong client" })).rejects.toMatchObject({ code: expect.stringMatching(/FORBIDDEN|NOT_FOUND/) });
+        expect(await desk.engagement.staff.removeFile({ fileId: kept.fileId, reason: "Holds another customer's details" })).toEqual({ success: true });
+        expect(objects.has(kept.storageKey)).toBe(false);
+        const [byTeam] = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_file_removed")).orderBy(desc(schema.adminAccessAuditEvents.id)).limit(1);
+        expect(JSON.parse(byTeam!.details!)).toMatchObject({ fileId: kept.fileId, by: "team", reason: "Holds another customer's details" });
+      });
+
+      it("keeps the record when storage will not delete the file, and says to try again (R61)", async () => {
+        configure();
+        storage({ failDelete: true });
+        const { owner, engagementId } = await client("remove-fails");
+        const task = (await (await owner.call()).engagement.client.room())!.tasks.find(item => item.kind === "data_request" && item.status === "open")!;
+        const ticket = await (await owner.call()).engagement.client.requestUpload({ taskId: task.id, ...pdf("statement.pdf") });
+        const { fileId } = await (await owner.call()).engagement.client.confirmUpload({ taskId: task.id, storageKey: ticket.storageKey, note: null, ...pdf("statement.pdf") });
+        await expect((await owner.call()).engagement.client.removeFile({ fileId })).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR", message: "We could not remove the file just now. Try again in a moment." });
+        expect((await (await superAdmin.call()).engagement.staff.detail({ engagementId })).tasks.find(item => item.id === task.id)!.files.map(file => file.id)).toEqual([fileId]);
       });
 
       it("takes files into the drop box unsorted; the team matches each to Data Requests; only this client and the team see them", async () => {

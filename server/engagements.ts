@@ -58,6 +58,8 @@ import {
   ENGAGEMENT_REVIEW_ROLES,
   type ClientAccessLevel,
   teamRolesFor,
+  cleanResponseLink,
+  isVideoFile,
 } from "../shared/engagement";
 import type { AccountSession, Database } from "./accountAuth";
 import { CONTENT_KIND_LABELS, CONTENT_STATUS_LABELS, DATED_TYPES, datedProgress, engagementTitle, ENGAGEMENT_TYPE_LABELS, SERVICE_TYPES, serviceStarter, servicesFor, serviceStep, SERVICE_STEPS, STAGED_TYPES, type ContentKind, type ContentStatus, type DatedEngagementType, type EngagementType } from "../shared/engagementTypes";
@@ -72,7 +74,7 @@ import { defaultFees } from "../shared/agreement";
 import { sharedDebriefFor } from "./debriefs";
 import { getDb } from "./db";
 import { deliverEmail } from "./email";
-import { createSignedUpload, isFileStorageConfigured, objectExists, signedDownloadUrl } from "./fileStorage";
+import { createSignedUpload, deleteObject, isFileStorageConfigured, objectExists, signedDownloadUrl } from "./fileStorage";
 import { randomUUID } from "node:crypto";
 import { getTrustedApplicationOrigin } from "./security";
 import { BRAND } from "../shared/brand";
@@ -1041,6 +1043,7 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
       id: task.id, kind: task.kind, side: task.side, title: task.title, detail: task.detail, dueOn: task.dueOn, status: task.status, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], statusNote: task.statusNote, mine: task.assigneeUserId === viewerUserId,
       weekNumber: task.weekNumber, sortOrder: task.sortOrder, factor: task.factor,
       section: task.section, ref: task.ref, informs: task.informs, format: task.format, priority: task.priority,
+      responseLink: task.responseLink,
       files: clientFiles("taskId", task.id),
     })),
     // What the client's side dropped into the room, newest first, and which visible requests each file was matched to.
@@ -1076,6 +1079,26 @@ export async function respondToTask(db: Database, session: AccountSession, input
   await db.transaction(async tx => {
     await tx.update(engagementTasks).set({ status, statusNote: input.note, completedAt: status === "done" ? new Date() : null }).where(eq(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status } });
+  });
+  return { success: true, status } as const;
+}
+
+/**
+ * The client answers an item with a link to a shared folder (footage, records too large to upload): the team opens it
+ * from the item. Nothing is stored but the link (R43). A Data Request becomes "Sent, we are checking"; an action is done.
+ */
+export async function answerWithLink(db: Database, session: AccountSession, input: { taskId: number; url: string }) {
+  const link = cleanResponseLink(input.url);
+  if (!link) throw new TRPCError({ code: "BAD_REQUEST", message: "Paste the full link to the folder, starting with https://." });
+  const task = (await db.select().from(engagementTasks).where(eq(engagementTasks.id, input.taskId)).limit(1))[0];
+  if (!task) throw notFound();
+  const { viewer } = await requireClientEngagement(db, session, task.engagementId);
+  if (task.side !== "client" || !clientCanSeeTask(task, viewer)) throw notFound();
+  if (task.status !== "open" && task.status !== "needs_more") throw new TRPCError({ code: "CONFLICT", message: "This is already with us." });
+  const status: EngagementTaskStatus = task.kind === "data_request" ? "received" : "done";
+  await db.transaction(async tx => {
+    await tx.update(engagementTasks).set({ status, responseLink: link, statusNote: "Sent a link to a folder", completedAt: status === "done" ? new Date() : null }).where(eq(engagementTasks.id, task.id));
+    await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status, via: "link" } });
   });
   return { success: true, status } as const;
 }
@@ -1138,8 +1161,11 @@ function validateUpload(input: UploadInput) {
   if (!Number.isFinite(input.sizeBytes) || input.sizeBytes <= 0 || input.sizeBytes > UPLOAD_MAX_BYTES) {
     throw new TRPCError({ code: "BAD_REQUEST", message: `Files up to ${UPLOAD_MAX_MB} MB.` });
   }
+  if (isVideoFile(input.fileName)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Videos are not uploaded here. Paste a link to the folder (Google Drive, Dropbox, WeTransfer or iCloud), or send it on WhatsApp." });
+  }
   if (!isAllowedUploadType(input.contentType, input.fileName)) {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "PDF, photos, spreadsheets and Word documents only." });
+    throw new TRPCError({ code: "BAD_REQUEST", message: "PDF, photos, spreadsheets, Word documents and voice notes only." });
   }
 }
 
@@ -1438,6 +1464,56 @@ export async function shareTeamFile(db: Database, actor: StaffActor, input: { fi
     await recordAudit(tx, { action: "engagement_file_shared", actorUserId: actor.id, details: { engagementId: file.engagementId, fileId: file.id, audience: input.audience } });
   });
   return { success: true } as const;
+}
+
+/**
+ * Removing a file (R61): the stored object is deleted, then the record and its matches. An item that was "Sent, we are
+ * checking" only because of this file goes back to "To do". Recorded, with who removed it and, for the team, why.
+ */
+async function removeFile(db: Database, file: typeof engagementFiles.$inferSelect, by: { userId: number; side: "client" | "team"; reason?: string }) {
+  try {
+    await deleteObject(file.storageKey);
+  } catch {
+    throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "We could not remove the file just now. Try again in a moment." });
+  }
+  await db.transaction(async tx => {
+    await tx.delete(engagementFiles).where(eq(engagementFiles.id, file.id));
+    if (file.taskId !== null) {
+      const task = (await tx.select().from(engagementTasks).where(eq(engagementTasks.id, file.taskId)).limit(1))[0];
+      const left = await tx.select({ id: engagementFiles.id }).from(engagementFiles).where(eq(engagementFiles.taskId, file.taskId)).limit(1);
+      if (task && task.status === "received" && left.length === 0 && !task.responseLink) {
+        await tx.update(engagementTasks).set({ status: "open", statusNote: null }).where(eq(engagementTasks.id, task.id));
+      }
+    }
+    await recordAudit(tx, { action: "engagement_file_removed", actorUserId: by.userId, details: { engagementId: file.engagementId, fileId: file.id, by: by.side, ...(by.reason ? { reason: by.reason } : {}) } });
+  });
+  return { success: true } as const;
+}
+
+/** The client takes back a file they sent, until the team has matched it to a request or accepted the request. */
+export async function clientRemoveFile(db: Database, session: AccountSession, input: { fileId: number }) {
+  requireUploads();
+  const file = (await db.select().from(engagementFiles).where(eq(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file) throw notFound();
+  await requireClientEngagement(db, session, file.engagementId);
+  if (file.uploadedByUserId !== session.user.id || file.deliverableId !== null) throw notFound();
+  const checked = file.taskId === null
+    ? (await db.select({ taskId: engagementFileMatches.taskId }).from(engagementFileMatches).where(eq(engagementFileMatches.fileId, file.id)).limit(1)).length > 0
+    : !["open", "received", "needs_more"].includes((await db.select({ status: engagementTasks.status }).from(engagementTasks).where(eq(engagementTasks.id, file.taskId)).limit(1))[0]?.status ?? "");
+  if (checked) throw new TRPCError({ code: "CONFLICT", message: "Your team has already taken this file in. Ask them on WhatsApp to remove it." });
+  return removeFile(db, file, { userId: session.user.id, side: "client" });
+}
+
+/** The team removes any file on an engagement in scope (a wrong or private file), with the reason recorded. */
+export async function staffRemoveFile(db: Database, actor: StaffActor, input: { fileId: number; reason: string }) {
+  requireUploads();
+  requireManage(actor);
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw new TRPCError({ code: "BAD_REQUEST", message: "Say why the file is removed." });
+  const file = (await db.select().from(engagementFiles).where(eq(engagementFiles.id, input.fileId)).limit(1))[0];
+  if (!file) throw notFound();
+  await requireStaffEngagement(db, actor, file.engagementId);
+  return removeFile(db, file, { userId: actor.id, side: "team", reason: reason.slice(0, 300) });
 }
 
 /** The team opens any file on an engagement in scope. */

@@ -146,6 +146,21 @@ function SendSignInLink({ businessCheckId, hasAccount }: { businessCheckId: numb
  * Files on a request or deliverable: open any; attach one when storage is set up. The lead chooses who sees it; a
  * Specialist's file is for IP Factory only, a draft the lead shares with the client when it is ready.
  */
+/** The team removes a file (a wrong or private one), saying why; the stored file is deleted (R61). */
+function RemoveStaffFile({ fileId, fileName, engagementId }: { fileId: number; fileName: string; engagementId: number }) {
+  const refresh = useRefresh(engagementId);
+  const [reason, setReason] = useState<string | null>(null);
+  const remove = trpc.engagement.staff.removeFile.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); setReason(null); toast.success("File removed."); } });
+  if (reason === null) return <button type="button" className="text-xs font-semibold text-danger-strong underline underline-offset-2" onClick={() => setReason("")}>Remove</button>;
+  return (
+    <span className="flex w-full flex-wrap items-center gap-2" role="group" aria-label={`Remove ${fileName}`}>
+      <input aria-label={`Why ${fileName} is removed`} className={`${FIELD} w-auto min-w-48 flex-1`} placeholder="Why (recorded; the client is not told)" value={reason} maxLength={300} onChange={event => setReason(event.target.value)} />
+      <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-danger text-white`} disabled={remove.isPending || reason.trim().length < 3} onClick={() => remove.mutate({ fileId, reason })}>{remove.isPending ? "Removing…" : "Remove the file"}</Button>
+      <button type="button" className="text-xs text-ink-muted underline underline-offset-2" onClick={() => setReason(null)}>Cancel</button>
+    </span>
+  );
+}
+
 function StaffFiles({ files, engagementId, target, canUpload, canManage }: { files: StaffFile[]; engagementId: number; target: UploadTarget; canUpload: boolean; canManage: boolean }) {
   const refresh = useRefresh(engagementId);
   const link = trpc.engagement.staff.fileLink.useMutation({ onError: error => toast.error(error.message) });
@@ -181,6 +196,7 @@ function StaffFiles({ files, engagementId, target, canUpload, canManage }: { fil
               <span className="text-xs text-ink-muted">{formatFileSize(file.sizeBytes)} · {file.uploadedByName || "unknown"} · {ENGAGEMENT_AUDIENCE_LABELS[file.audience].toLowerCase()}</span>
               <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>Open</button>
               {canManage && file.audience === "team" && <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" disabled={shareFile.isPending} onClick={() => shareFile.mutate({ fileId: file.id, audience: "owner" })}>Share with the owner</button>}
+              {canManage && <RemoveStaffFile fileId={file.id} fileName={file.fileName} engagementId={engagementId} />}
             </li>
           ))}
         </ul>
@@ -466,6 +482,7 @@ function InboxRow({ file, data, engagementId }: { file: InboxFile; data: Detail;
         </div>
       </fieldset>
       {data.can.manage && <Button type="button" size="sm" className={`${SMALL_BUTTON} mt-2 bg-brand text-white`} disabled={match.isPending || !changed} onClick={() => match.mutate({ fileId: file.id, taskIds: picked })}>Save the match</Button>}
+      {data.can.manage && <div className="mt-2"><RemoveStaffFile fileId={file.id} fileName={file.fileName} engagementId={engagementId} /></div>}
     </div>
   );
 }
@@ -552,6 +569,7 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
       <div><label className={LABEL} htmlFor={`task-priority-${id}`}>Priority</label><select id={`task-priority-${id}`} className={FIELD} disabled={!canManage} value={priority} onChange={event => setPriority(event.target.value as EngagementTaskPriority | "")}><option value="">Not set</option>{ENGAGEMENT_TASK_PRIORITIES.map(item => <option key={item} value={item}>{ENGAGEMENT_TASK_PRIORITY_LABELS[item]}</option>)}</select></div>
       <label className={LABEL} htmlFor={`task-note-${id}`}>Note (the client sees it)</label>
       <input id={`task-note-${id}`} className={FIELD} disabled={!canManage} placeholder={status === "needs_more" ? "Say what else you need" : ""} value={note} onChange={event => setNote(event.target.value)} />
+      {task?.responseLink && <p className="text-xs text-ink-600">The client sent a link: <a href={task.responseLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand underline underline-offset-2">Open the link</a> <span className="text-ink-muted">({(() => { try { return new URL(task.responseLink).hostname.replace(/^www\./, ""); } catch { return "link"; } })()})</span></p>}
       {task && <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && canManage} canManage={canManage} />}
       {canManage && (
         <div className="flex gap-2">

@@ -87,13 +87,13 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 | | Reminded before it starts | — | Nothing | — | — | **C3** |
 | | Notes saved, shared; audience chosen | Lead; owner | `staff.saveNotes`, `shareNotes`; `client.setAudience` | 4.4 #2 | Lead: Shares notes the same day | Built |
 | Data Request item and action | Created | Platform, team, Specialist (team side) | Loaded with the type; `staff.saveTask`, `loadDataRequest` | 4.3 #2, 4.6 | Analyst: Keeps the Work Plan current | Built |
-| | Answered | Client | `client.respondToTask`, `setNotAvailable`, uploads | 4.4 #3 | Client: Sends records | Partly built (R43) |
+| | Answered | Client | `client.respondToTask`, `setNotAvailable`, `answerWithLink` (a shared-folder link), uploads (voice notes too) | 4.4 #3 | Client: Sends records | Built; Send on WhatsApp to {name} with R44 |
 | | Checked | Team | `staff.saveTask` (status) | 4.4 #3 | Analyst: Matches client files | Built |
 | | Reminded | Platform | — | 4.4 #3 | Client: Reminded before and after | To build (R16) |
 | File | Uploaded by the client (item or drop box) | Client | `client.requestUpload`, `confirmUpload`, `requestDrop`, `confirmDrop` | 4.4 #3 | Client: Sends records | Built |
 | | Uploaded by the team, a Specialist's draft | Team | `staff.requestUpload`, `confirmUpload` | 4.6 | Specialist: Hands in drafts | Built |
 | | Matched, shared, opened | Team; client | `staff.matchFile`, `shareFile`, `fileLink`; `client.fileLink` | 4.4 #3 | Analyst: Matches client files | Built |
-| | Removed (a wrong or private file) | — | Not possible, for anyone | — | — | **C5** |
+| | Removed (a wrong or private file) | Client (their own, until taken in); team with a reason | `client.removeFile`, `staff.removeFile`; the stored file is deleted | 7 Exceptions | — | Built (R61; C5 fixed) |
 | Deliverable | Drafted, approved, shared | Team, lead | `staff.saveDeliverable`, `approveDeliverable`, `shareDeliverable` | 4.4 #5 | Lead: Approves Deliverables | Built |
 | | Commented, signed off | Client, team | `client.comment`, `client.accept`; `staff.comment` | 4.4 #5 | Client: Approves the work | Built |
 | | Changes asked for | Client | — | 4.4 #5 | — | To build (R51) |
@@ -149,7 +149,7 @@ improves the product. **Effort:** S is days, M about a week.
 | C2 | A lead cannot invite a colleague or Specialist from the engagement: the Super Admin must invite first, then the lead adds them | A handoff that stalls staffing | P2 | S | R58 |
 | C3 | No Session reminders, to the client or the team | Missed Sessions cost the team's hours and the client's progress; weekly check-ins depend on them | P2 | S (with the reminder engine) | R59 |
 | C4 | A client who asks for the next fix is not told when it is handled or declined | Silence after asking to buy loses the sale | P2 | S | R60 |
-| C5 | Nobody can remove a file: a client who uploads the wrong file, or a private one, cannot take it back | Trust and data protection | P2 | S | R61 |
+| C5 | Nobody can remove a file: a client who uploads the wrong file, or a private one, cannot take it back | Trust and data protection | P2 | S | Fixed with R61 (9 November 2026) |
 | C6 | No way to export or erase a person's data when they ask | A duty under the Nigeria Data Protection Act 2023 | P2 | M | R62 |
 | C7 | An engagement opened by mistake cannot be archived or deleted | Clutter in the team's lists and the client's projects | P3 | S | R63 |
 | C8 | Nobody is alerted when a finished check or a booked call is not followed up | The "same working day" handoff has no signal | P2 | S | R64 |
@@ -233,6 +233,7 @@ person is not on is not found unless they see every engagement.
 | `engagement.staff.saveSession`, `engagement.staff.saveNotes`, `engagement.staff.shareNotes` | Sessions; their notes; share the client notes | `manage_engagements`; internal notes also need `manage_engagements` or `review_engagements` to read | Session |
 | `engagement.staff.saveTask`, `engagement.staff.loadDataRequest` | Work Plan items; load a Data Request | `manage_engagements`; team-side items also `contribute_engagements` | Data Request item |
 | `engagement.staff.requestUpload`, `engagement.staff.confirmUpload`, `engagement.staff.fileLink`, `engagement.staff.shareFile`, `engagement.staff.matchFile` | Upload (a signed address, then the record once the file exists); open; share with the client; match a drop-box file to its requests | `manage_engagements`; drafts also `contribute_engagements` | File |
+| `engagement.staff.removeFile` | Remove any file on the engagement (a wrong or private one), with the reason recorded; the stored file is deleted | `manage_engagements` | File |
 | `engagement.staff.saveDeliverable`, `engagement.staff.approveDeliverable`, `engagement.staff.shareDeliverable`, `engagement.staff.comment` | Draft, approve, share, comment | Draft and share: `manage_engagements`; approve: `review_engagements`, or leading the engagement | Deliverable |
 | `engagement.staff.saveContent`, `engagement.staff.deleteContent` | Plan, edit, send for approval, publish or delete a content piece | `manage_engagements` | Content piece |
 | `engagement.staff.saveMeasure`, `engagement.staff.saveCheckin` | The Measure of Success; the Weekly Check-in | `manage_engagements` | Measure and check-in |
@@ -250,6 +251,8 @@ was shared with the person; none accepts a business id. "The owner" includes a b
 | `engagement.client.room` | The room | Anyone in the business | Engagement |
 | `engagement.client.respondToTask`, `engagement.client.setNotAvailable`, `engagement.client.requestUpload`, `engagement.client.confirmUpload`, `engagement.client.fileLink` | Answer a request, mark a record not available, upload to it, open a file | Anyone in the business; a contributor, only their own items | Data Request item, File |
 | `engagement.client.requestDrop`, `engagement.client.confirmDrop` | Upload to the drop box | Anyone in the business | File |
+| `engagement.client.answerWithLink` | Answer an item with a link to a shared folder (footage, large records); only the link is kept | Anyone in the business; a contributor, only their own items | Data Request item |
+| `engagement.client.removeFile` | Take back a file the person sent, until the team has matched it or accepted its item; the stored file is deleted | The person who sent it | File |
 | `engagement.client.comment`, `engagement.client.accept` | Comment on a Deliverable; Sign-off | Those who can see it; Sign-off by the owner | Deliverable |
 | `engagement.client.respondToContent` | Approve a content piece or send it back | The owner and full access | Content piece |
 | `engagement.client.setAudience` | Choose who in the business sees an item | The owner | Session |

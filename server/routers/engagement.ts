@@ -47,6 +47,9 @@ import {
   MIGRATION_MISSING_MESSAGE,
   removeTeamMember,
   respondToTask,
+  answerWithLink,
+  clientRemoveFile,
+  staffRemoveFile,
   saveCheckin,
   saveDeliverable,
   saveMeasure,
@@ -193,6 +196,8 @@ const staffRouter = router({
   confirmUpload: staff.input(z.object({ engagementId: id, target: uploadTarget, storageKey, audience: z.enum(["team", "owner", "business"]), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
   fileLink: staff.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
   shareFile: staff.input(z.object({ fileId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareTeamFile(await engagementDb(), ctx.actor, input))),
+  /** Remove any file on the engagement, with the reason recorded; the stored object is deleted (R61). */
+  removeFile: staff.input(z.object({ fileId: id, reason: z.string().trim().min(3, "Say why the file is removed.").max(300) })).mutation(async ({ ctx, input }) => guarded(async () => staffRemoveFile(await engagementDb(), ctx.actor, input))),
   /** A whole Data Request in one step: a template, or rows pasted from Excel. */
   loadDataRequest: staff.input(z.object({
     engagementId: id,
@@ -274,6 +279,10 @@ const clientRouter = router({
   respondToContent: accountProcedure.input(z.object({ itemId: id, approve: z.boolean(), note: optionalText(1000) })).mutation(async ({ ctx, input }) => guarded(async () => respondToContent(await engagementDb(), ctx.account, input))),
   /** "We don't have this", or take it back. */
   setNotAvailable: accountProcedure.input(z.object({ taskId: id, unavailable: z.boolean(), note: optionalText(500) })).mutation(async ({ ctx, input }) => guarded(async () => setNotAvailable(await engagementDb(), ctx.account, input))),
+  /** Answer an item with a link to a shared folder (footage, large records); only the link is kept (R43). */
+  answerWithLink: accountProcedure.input(z.object({ taskId: id, url: z.string().trim().min(1).max(2048) })).mutation(async ({ ctx, input }) => guarded(async () => answerWithLink(await engagementDb(), ctx.account, input))),
+  /** Take back a file the person sent, until the team has taken it in (R61). */
+  removeFile: accountProcedure.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => clientRemoveFile(await engagementDb(), ctx.account, input))),
 });
 
 /** Finance: money across every client (payment requests and engagement fees). view_financials only; read only. */

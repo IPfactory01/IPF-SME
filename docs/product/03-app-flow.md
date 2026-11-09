@@ -214,7 +214,7 @@ info@ipfactory.co.
 
 | Trigger | To | Subject | Built? |
 |---|---|---|---|
-| Check finished | Owner; office | The summary; every answer | Built |
+| Check finished | Owner; office | *Your Business Health Check: Findings* (the summary); *Business Health Check: {business} ({path}, {area})* (every answer) | Built |
 | Full Report asked for | Owner; office | *Payment details for your Full Report*; *… asked for the Full Report* | Built |
 | Business Review link sent | Owner | *Payment details for your Business Review* | Built (moves to fee reminders with R37) |
 | Business Review or Full Report paid | Owner; office | *Payment received: …*; *Paid online: …* | Built |
@@ -230,7 +230,15 @@ info@ipfactory.co.
 | Payment needs a look | Office | *Paystack payment needs a look: {reference}* | Built |
 | Client asks for another service | Office | *{business} asked for the {product}* | Built |
 | Password reset | The person | *Reset your password on The Shift* | Built |
-| Staff invited, role given, access removed, two-step reset, security alerts | Super Admins | As named | Built |
+| Staff invited | The invitee; Super Admins | *Join the IP Factory team on The Shift*; *Staff invitation: {level} for {email}* | Built |
+| Owner invites a colleague (a seat) | The colleague | *{owner} invited you to {business} on The Shift* | Built |
+| A role or level given | Super Admins | *[The Shift security] {role} role given to {email}* | Built |
+| Access removed | Super Admins | *[The Shift security] Access removed: {email}* | Built |
+| Two-step sign-in reset by a manager | Super Admins | *[The Shift security] Two-step sign-in reset: {email}* | Built |
+| Staff account locked after wrong passwords | Super Admins | *[The Shift security] Account locked: {email}* | Built |
+| Wrong two-step codes in a row | Super Admins | *[The Shift security] Wrong two-step codes: {email}* | Built |
+| Signed in with a recovery code, or from a new device | Super Admins | *[The Shift security] Recovery code used: {email}*; *… New device: {email}* | Built |
+| Administrator password reset (the older admin password) | The administrator | *Reset your JUMP administrator password* | Built; the wording still says JUMP (to fix) |
 | Engagement opened: the welcome with Your plan | Owner | *Your The Shift room for {business}*, with the plan | Partly built (the plan, R47) |
 | Fee due in 5 days, due today, 3 and 7 days late | Owner; lead at 7 days | To write; each with a WhatsApp button | To build (R12) |
 | Work paused; work resumed | Owner; lead | *Work on {engagement} is paused*; *… has resumed* | To build (R51) |
@@ -359,6 +367,44 @@ is made", the fee and **Pay securely with Paystack**.
 **To come:** the first-visit welcome and **Your plan** on Overview (R46, R47); each team member with **Message on
 WhatsApp** (R44); voice notes, links and **Send on WhatsApp to {name}** on Data Request items (R43); and, after a
 usability test, fewer places: Home, To do, Sessions, Results, Payments, so no task appears twice (R49).
+
+### 8.5 Permissions and project roles
+
+A person's level gives them platform roles (`LEVEL_ROLES`), each role gives named permissions
+(`PLATFORM_ROLE_PERMISSIONS`, both in `shared/platformPermissions.ts`), and the server checks the permission on every
+action. An engagement action also checks that the person is on that engagement, unless they see every engagement. The
+Super Admin holds every permission. The [coverage matrix](09-coverage-matrix.md) (section 4) names the check on every
+server action.
+
+| Permission | What it allows | Held by default | Checked by |
+|---|---|---|---|
+| `view_all_businesses` | Every engagement and every client business | Partner, Vice President, Senior Associate | Engagements (all), Clients |
+| `view_assigned_businesses` | The engagements the person is on | Associate, Business Analysts, Partner, Specialist | Engagements (own) |
+| `manage_businesses` | Change a business itself (its details, its owner) from the console | Super Admin only | Nothing yet (C18) |
+| `manage_client_onboarding` | The Pipeline: checks, Discovery Calls, client invitations, sign-in links | Super Admin, or an administrator given it | Pipeline, `onboarding.*`, Send sign-in link |
+| `manage_engagements` | Work on an engagement: stage, problem, Sessions, Work Plan, drafts, content, files, measures, check-ins, fees; open one by hand (with `view_all_businesses`) | Partner, Vice President, Senior Associate, Associate, Business Analysts | Every change in an engagement |
+| `assign_engagements` | Put people on an engagement and take them off | Partner, Vice President, Senior Associate | `staff.assign`, `removeMember`, `assignableStaff` |
+| `review_engagements` | Approve Deliverables on any engagement in scope; see internal notes and fees | Partner, Vice President, Senior Associate | Approve, internal notes, fees |
+| `contribute_engagements` | Add team-side Work Plan items and draft files, seen by IP Factory only until shared | Specialist | Team items, draft uploads |
+| `manage_payments` | Payment requests, confirming money by hand, sending payment and fee links | Finance | `businessSupport` payment actions, Send link |
+| `view_financials` | Finance: paid, owed, late; fees on an engagement | Partner, Vice President, Senior Associate, Finance | Finance, fees |
+| `manage_scheduling` | Scheduling settings (the older admin scheduling capability) | Partner, Vice President, Senior Associate | Nothing yet (C18); calls are booked under `manage_client_onboarding` |
+| `manage_communications` | Communication settings (the older admin communications capability) | Partner, Vice President, Senior Associate | Nothing yet (C18) |
+| `manage_users` | Accounts: reset link, suspend, reinstate, job title, remove access, reset two-step | Super Admin only | `people.*` |
+| `manage_roles` | The Team tab: invite staff by level, set levels and end dates, revoke roles | Super Admin only | `platformRoles.*`, `invitations.staff.*` |
+| `manage_admins` | Give or take the Admin and Super Admin roles | Super Admin only | Nothing yet (C18); only a Super Admin may grant them, by rank |
+| `manage_platform_settings` | Platform settings | Super Admin only | Nothing yet (C18); no settings screen exists |
+
+**Project roles** are set per engagement (`ENGAGEMENT_TEAM_ROLE_LABELS` in `shared/engagement.ts`) and decide what a
+person does on that one engagement, not what they may see across the platform.
+
+| Project role | On the engagement |
+|---|---|
+| Engagement Manager | Runs it day to day; approves its Deliverables |
+| Lead Consultant | Leads the work; approves its Deliverables |
+| Partner | Oversees it; approves its Deliverables |
+| Analyst | Does the work; may not approve |
+| Specialist | Hands in work in one area until their end date; may not approve; never sees internal notes or fees |
 
 ## 9. Legal links
 

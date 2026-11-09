@@ -121,6 +121,33 @@ and the room says it is not set up. Vocabulary and the who-sees-what rules: `sha
 | `business_member_access` | The owner's staff: `full` or `contributor` | One per membership; no row means full (owners and business admins never have one) | — |
 | `account_invitations` | Invitations that create an account for the owner of a business opened directly (`business_owner`, 0016), for IP Factory staff (with a role, or by level, `jobTitle`, 0015, which gives the level's roles and title) or the owner's staff (with an access level) | Token stored as a hash; single use, expiring, revocable; one pending per email. Staff: `manage_roles` invites, never Super Admin. Seats: the owner of the business in use, within `TEAM_SEATS_INCLUDED` | Email and name |
 
+### The audit log: every action it records
+
+Each row of `admin_access_audit_events` names one of these actions (`AUDIT_ACTIONS` in `server/audit.ts`). Details hold
+identifiers, amounts and field names, never passwords, tokens or links. A null actor is the platform itself (Paystack,
+Calendly). `test/docs/productDocs.test.ts` fails if the server records an action that is not listed in `AUDIT_ACTIONS`,
+or one listed there is missing here.
+
+| Area | Actions | What each records |
+|---|---|---|
+| Signing in | `account_signed_in`, `account_signed_out`, `account_sign_in_failed`, `account_sign_in_locked`, `admin_sign_in_refused` | A sign-in (with two-step and new device), a sign-out, a wrong password and the count, a 15-minute lock, a staff sign-in refused |
+| Two-step sign-in | `two_step_setup_started`, `two_step_challenge_issued`, `two_step_failed`, `two_step_enabled`, `two_step_recovery_code_used`, `two_step_reset` | Setting up the authenticator, asking for a code, a wrong code, turning it on, a recovery code used, a manager resetting it |
+| The Super Admin's own access | `owner_credential_bootstrapped`, `owner_credential_reset`, `owner_password_enrolled`, `admin_password_reset_requested`, `admin_password_reset_completed` | The owner's password set up or reset, and the older administrator password reset |
+| Passwords and profiles | `account_password_changed`, `account_password_reset_issued`, `account_password_reset_requested`, `account_password_reset_completed`, `account_profile_updated`, `business_profile_updated`, `workspace_switched` | A password changed; a reset link issued by a manager or asked for by the person, and used; a profile or business changed; the business in use switched |
+| Accounts and roles | `account_suspended`, `account_reinstated`, `access_removed`, `platform_role_granted`, `platform_role_revoked`, `staff_level_set` | An account suspended, reinstated or removed; a role given (with its end date) or taken away; a level set with the roles it gives |
+| Invitations and seats | `account_invitation_created`, `account_invitation_revoked`, `account_invitation_accepted`, `business_member_removed`, `client_onboarding_invitation_created`, `client_onboarding_invitation_revoked` | A staff, owner or seat invitation made, revoked or accepted; a seat removed; a client onboarding invitation made (with the reason when the payment is not yet confirmed) or revoked |
+| Security | `security_alert` | A security email to the Super Admins: the event and how many received it |
+| The funnel | `business_check_stage_changed`, `business_check_call_scheduled`, `business_check_call_booked`, `business_check_call_outcome`, `debrief_saved`, `debrief_shared` | A pipeline stage moved (from, to, note); a Discovery Call set by the desk or booked on Calendly; its outcome; the call summary saved and shared |
+| Payment requests and the Full Report | `payment_details_sent`, `payment_confirmed`, `payment_confirmation_sent`, `payment_online_refused`, `full_report_link_sent`, `full_report_delivered` | Payment details sent; a payment confirmed (by hand or by Paystack); the receipt sent; an online payment refused (wrong amount, paid twice); the Report Intake link sent; the report delivered |
+| Engagements | `engagement_started`, `engagement_stage_changed`, `engagement_room_previewed`, `engagement_room_opened`, `engagement_team_assigned`, `engagement_team_removed` | An engagement opened; its stage moved; Preview as client; the room opened before the first payment; a person added (with role) or taken off |
+| Sessions and the Work Plan | `engagement_session_booked`, `engagement_notes_shared`, `engagement_audience_changed`, `engagement_data_request_loaded`, `engagement_task_answered` | A Session booked on Calendly; notes shared; the owner choosing who sees an item; a Data Request loaded; a request answered or marked not available |
+| Files | `engagement_file_uploaded`, `engagement_file_shared`, `engagement_file_dropped`, `engagement_file_matched` | A file uploaded to an item or a Deliverable; shared with the client; put in the drop box; matched to the requests it answers |
+| Deliverables and content | `engagement_deliverable_approved`, `engagement_deliverable_shared`, `engagement_deliverable_accepted`, `engagement_content_saved`, `engagement_content_deleted`, `engagement_content_approved`, `engagement_content_changes_requested` | A Deliverable approved, shared or signed off; a content piece saved or deleted by the team, approved or sent back by the owner |
+| The fix | `engagement_measure_saved`, `engagement_checkin_recorded` | The Measure of Success set; a Weekly Check-in recorded |
+| More work | `service_requested`, `service_request_handled` | A client asking for another service; the desk handling or declining it |
+| Fees | `engagement_fees_saved`, `engagement_fee_paid`, `engagement_fee_paid_online`, `engagement_fee_online_refused`, `engagement_fee_link_sent` | The fee schedule saved (total, lines); a fee marked paid or unpaid by hand; paid on Paystack; an online payment refused; a pay link sent |
+| Retired, kept so older rows still read | `payment_proof_received`, `engagement_agreement_saved`, `engagement_agreement_sent`, `engagement_agreement_revised`, `engagement_agreement_accepted` | Proof of payment uploads (before Paystack); proposals and their acceptance (removed 6 November 2026). Nothing writes them now |
+
 ## 3. JUMP-era tables (legacy)
 
 Kept so JUMP participants and history still work. The Shift's flow does not read or write them. Retire them only once

@@ -3,7 +3,8 @@
 **Every object in The Shift, every stage of its life, who acts, and where each step lives in the
 [App flow](03-app-flow.md) and on the Miro board ("The Shift: App flow by user").** Built on 9 November 2026 from the
 code: every server procedure in `server/routers/`, every audit action in `server/audit.ts` and every table in
-`drizzle/schema.ts`. Run again at every document review.
+`drizzle/schema.ts`. Run again at every document review. `test/docs/productDocs.test.ts` fails if a server action is
+added without appearing here (section 4 lists every one).
 
 **How to read it.** A row is one stage in the life of one object. **App flow** names the journey step (section 4) or the
 reference section (8); **Board** names the section and card. A row with nothing in App flow or Board, or no way to do it
@@ -48,9 +49,9 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 
 | Object | Stage | Who | How (in the code) | App flow | Board | Status |
 |---|---|---|---|---|---|---|
-| Client invitation | Created | Platform (on payment or New engagement), desk | `clientOnboarding.invite`; `inviteBusinessOwner` | 4.1 #7, 4.3 #2 | Client: Invited to the room | Built |
-| | Accepted | Client | `clientOnboarding.accept`, `invitations.accept` | 8.1 `/onboarding`, `/join` | Client: Invited to the room | Built |
-| | Revoked, expired, sent again | Desk | `clientOnboarding.revoke`, `sendSignInLink` | 7 Exceptions | — | Built |
+| Client invitation | Created | Platform (on payment or New engagement), desk | `onboarding.invite`; `inviteBusinessOwner` | 4.1 #7, 4.3 #2 | Client: Invited to the room | Built |
+| | Accepted | Client | `onboarding.accept`, `invitations.accept` | 8.1 `/onboarding`, `/join` | Client: Invited to the room | Built |
+| | Revoked, expired, sent again | Desk | `onboarding.revoke`, `sendSignInLink` | 7 Exceptions | — | Built |
 | Staff invitation | Created | Super Admin | `invitations.staff.invite` (by level) | 4.8 | Super Admin: Invites by level | Built |
 | | Created by a lead for their engagement | — | Not possible | 4.6 | Specialist: Invited with an end date | **C2** |
 | | Revoked, accepted | Super Admin, invitee | `invitations.staff.revoke`, `accept` | 4.8 | — | Built |
@@ -83,7 +84,7 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 | | Received by the person added | Team member | The email; My projects | 4.6 | Specialist journey has no step | **C1** |
 | | Removed | Lead | `staff.removeMember` | 4.6 | — | Built (their items move: R51) |
 | Session | Created, booked, held, cancelled | Lead; client on Calendly | `staff.saveSession`; Calendly sync | 4.4 #2 | Client: Books the kickoff | Built |
-| | Reminded before it starts | — | Nothing (a JUMP-era template exists, unused) | — | — | **C3** |
+| | Reminded before it starts | — | Nothing | — | — | **C3** |
 | | Notes saved, shared; audience chosen | Lead; owner | `staff.saveNotes`, `shareNotes`; `client.setAudience` | 4.4 #2 | Lead: Shares notes the same day | Built |
 | Data Request item and action | Created | Platform, team, Specialist (team side) | Loaded with the type; `staff.saveTask`, `loadDataRequest` | 4.3 #2, 4.6 | Analyst: Keeps the Work Plan current | Built |
 | | Answered | Client | `client.respondToTask`, `setNotAvailable`, uploads | 4.4 #3 | Client: Sends records | Partly built (R43) |
@@ -119,7 +120,7 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 
 | Object | Stage | Who | How (in the code) | App flow | Board | Status |
 |---|---|---|---|---|---|---|
-| Audit log | Written | Platform | `recordAudit`, 70 actions | — | — | Built |
+| Audit log | Written | Platform | `recordAudit`, 79 actions in use (5 more retired), each listed in the [Backend schema](05-backend-schema.md) | — | — | Built |
 | | Read | Desk (a check's history only) | `stageHistoryFor` in `server/businessSupportAdmin.ts` | 8.3 Pipeline | — | **C10** (no view of who did what elsewhere) |
 | Email delivery | Recorded, seen | Platform; desk | `businessSupport.emailDeliveryStatus` | 6 | Super Admin: Watches System status | Built |
 
@@ -134,7 +135,8 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 | Channels | WhatsApp: R44. Session reminders by any channel: **C3** |
 | Money | Owed, paid, late: built or R12. Refunded: R37 |
 | Day 0, weekly, day 30, after the end | Day 0: R46. Weekly: check-ins built, Session reminders **C3**. Day 30: R27 |
-| Code left over | A 24-hour "session reminder" email template from JUMP remains in `server/emailTemplates.ts` with programme wording, unused: **C12** |
+| Code left over | The unused JUMP email templates (the 24-hour Session reminder among them) were removed on 9 November 2026: **C12** fixed. The older administrator password reset still says *Reset your JUMP administrator password*: **C19** |
+| Permissions | Five permissions are declared but no action checks them (`manage_businesses`, `manage_scheduling`, `manage_communications`, `manage_admins`, `manage_platform_settings`): **C18** |
 
 ## 3. Gaps found
 
@@ -152,9 +154,103 @@ improves the product. **Effort:** S is days, M about a week.
 | C7 | An engagement opened by mistake cannot be archived or deleted | Clutter in the team's lists and the client's projects | P3 | S | R63 |
 | C8 | Nobody is alerted when a finished check or a booked call is not followed up | The "same working day" handoff has no signal | P2 | S | R64 |
 | C9 | A lead marked Referred (to Enzo Krypton & Co.) reaches nobody | A referral that goes nowhere | P3 | S | R65 |
-| C10 | The audit log is written for 70 actions but readable only as a check's history | The Super Admin cannot see who marked a fee paid by hand, opened a room early or removed access | P3 | M | R66 |
-| C12 | An unused JUMP-era session reminder template remains in the code | Dead code with the wrong wording | P3 | S | Remove with R59 |
+| C10 | The audit log is written for 79 actions but readable only as a check's history | The Super Admin cannot see who marked a fee paid by hand, opened a room early or removed access | P3 | M | R66 |
+| C12 | Unused JUMP-era email templates remained in the code | Dead code with the wrong wording | P3 | S | Fixed: removed on 9 November 2026 |
 | C15 | A business cannot change its owner | A sale or a handover locks the business to the first owner | P3 | M | R67 |
 | C17 | Nobody is told before a Specialist's access ends | Work stops mid-engagement without warning | P3 | S | R68 |
+| C18 | Five permissions are declared and granted but no action checks them | A permission that checks nothing reads as a control that is not there; `manage_admins` and `manage_platform_settings` are Super Admin only, so nothing is exposed today | P3 | S | To decide: wire each to its screen when built, or remove it |
+| C19 | The older administrator password reset email and its messages still say JUMP (`BRAND.programmeShortName`) | The wrong name in front of staff | P3 | S | Fix with the brand names (D1 to D4 of the migration checklist) |
 
 (C11, C13, C14 and C16 were checked and found covered; the numbers are kept so the register stays stable.)
+
+## 4. Every server action, and the check on it
+
+Every tRPC procedure in `appRouter` (`server/routers.ts`), grouped by what it acts on. **Who may call** is the server's
+own check: authentication, then the permission, then the scope (which business or engagement). Hiding a button is never
+the check. The last column names the object in section 1 it belongs to. `test/docs/productDocs.test.ts` fails if a
+procedure is added without appearing here.
+
+Outside tRPC: `GET /api/health`; `POST /api/paystack/webhook` and `POST /api/resend/webhook` (each checks the
+provider's signature); the storage proxy and the older OAuth callback. Every other `/api` request must come from a
+trusted browser origin.
+
+### Platform and the older admin password
+
+| Actions | What they do | Who may call | Object |
+|---|---|---|---|
+| `system.health` | Answers that the server is up | Public | — |
+| `system.notifyOwner` | Sends the platform owner a notice | The internal area | — |
+| `auth.me`, `auth.logout` | The older platform session: who is signed in; signs out of it and of the account session | Public | Account |
+| `adminAccess.status`, `adminAccess.enrollOwnerPassword`, `adminAccess.verifyPassword`, `adminAccess.requestPasswordReset`, `adminAccess.logoutPassword` | The older administrator password: its status, set by the owner, checked, a reset email (C19), sign out | A platform session; setting it, the owner's email only | Account |
+| `adminAccess.confirmPasswordReset` | Sets the new administrator password from the emailed link | Public, by a single-use link | Account |
+
+### The public funnel
+
+| Actions | What they do | Who may call | Object |
+|---|---|---|---|
+| `businessCheck.prices` | The prices the site shows, the same figures payments are created with | Public, read only | Business Health Check |
+| `businessCheck.start`, `businessCheck.saveProgress`, `businessCheck.submit` | Starts the check (a lead before the first question), saves it, finishes it and sends the emails | Public, by the check's token; rate-limited | Business Health Check |
+| `businessCheck.requestNext` | The owner asks for the free call or the Full Report from the result | Public, by the check's token | Discovery Call, Payment request |
+| `onlinePayment.page`, `onlinePayment.start`, `onlinePayment.status` | The pay page for the Full Report or Business Review; opens Paystack; the result on return | Public, by the check's token; rate-limited | Payment request |
+| `onlinePayment.feePage`, `onlinePayment.feeStart` | The pay page for one fee; opens Paystack | Public, by the fee's signed link; rate-limited | Fee |
+| `fullReport.form`, `fullReport.submit`, `fullReport.download` | The Report Intake, its answers, the report's download | Public, by the report's token | Full Report |
+
+### Accounts, invitations and people
+
+| Actions | What they do | Who may call | Object |
+|---|---|---|---|
+| `account.signIn`, `account.signInInternal`, `account.verifyTwoStep`, `account.signOut`, `account.me` | Signs in a client, or staff with two-step; checks the code; signs out; who is signed in | Public; rate-limited; locked after five wrong passwords | Account |
+| `account.requestReset`, `account.resetPreview`, `account.resetPassword` | "Forgot your password?": the email, the link checked, the new password | Public, by a single-use link; the same answer whether or not the account exists | Account |
+| `account.workspace`, `account.switchWorkspace`, `account.business`, `account.updateBusiness`, `account.updateProfile`, `account.changePassword` | The businesses the person belongs to and the one in use; the business; the profile; the password | Signed in; a business is changed by its owner or business admin | Account, Business |
+| `onboarding.preview`, `onboarding.accept` | The invited client opens and accepts the link; their account and business are created | Public, by a single-use link bound to the email | Client invitation |
+| `onboarding.candidates`, `onboarding.invitations`, `onboarding.metrics`, `onboarding.invite`, `onboarding.sendSignInLink`, `onboarding.revoke` | Who may be invited; the invitations and their state; invite (with a reason before payment); send a sign-in link; revoke | `manage_client_onboarding` | Client invitation |
+| `invitations.preview`, `invitations.accept` | Opens and accepts a staff, owner or seat invitation | Public, by a single-use link bound to the email | Staff invitation, Seat |
+| `invitations.staff.team`, `invitations.staff.list`, `invitations.staff.invite`, `invitations.staff.revoke` | Everyone by level; staff invitations; invite by level; revoke | `manage_roles`; never a Super Admin | Staff invitation |
+| `invitations.seats.list`, `invitations.seats.invite`, `invitations.seats.revoke`, `invitations.seats.remove`, `invitations.seats.setAccess` | The owner's staff: list, invite, revoke, remove, full access or contributor | Signed in as the owner or a business admin of the business in use; within the seats included | Seat |
+| `platformRoles.list`, `platformRoles.grant`, `platformRoles.setLevel`, `platformRoles.revoke` | Roles and levels: list, give (with an end date), set a level, take away | `manage_roles`; only roles below one's own | Level and role |
+| `people.list`, `people.issuePasswordReset`, `people.setStatus`, `people.setJobTitle`, `people.removeAccess`, `people.resetTwoStep` | Accounts: list, a reset link, suspend or reinstate, the firm title, remove access, reset two-step | `manage_users` | Account |
+
+### The Pipeline and payment requests
+
+| Actions | What they do | Who may call | Object |
+|---|---|---|---|
+| `businessSupport.checks`, `businessSupport.checkDetail`, `businessSupport.setStage`, `businessSupport.downloadReport`, `businessSupport.emailDeliveryStatus` | Every check; one check with its history; its stage; a report's file; email delivery | `manage_client_onboarding` | Business Health Check, Full Report, Email delivery |
+| `businessSupport.discoveryCalls`, `businessSupport.scheduleCall`, `businessSupport.recordOutcome`, `businessSupport.debrief`, `businessSupport.saveDebrief`, `businessSupport.shareDebrief` | Discovery Calls: list, set a time, record the outcome; the call summary, saved and shared | `manage_client_onboarding` | Discovery Call |
+| `businessSupport.clients` | Businesses and their members | `view_all_businesses` | Business |
+| `businessSupport.requestPayment`, `businessSupport.confirmPayment`, `businessSupport.resendReportLink`, `businessSupport.resendPaymentConfirmation` | Send payment details; confirm money by hand; send the Report Intake link or the receipt again | `manage_payments` | Payment request, Full Report |
+
+### Engagements: the team's side
+
+Every action here needs the internal area and `view_all_businesses` or `view_assigned_businesses`; an engagement the
+person is not on is not found unless they see every engagement.
+
+| Actions | What they do | Who may call | Object |
+|---|---|---|---|
+| `engagement.staff.list`, `engagement.staff.detail`, `engagement.staff.previewRoom`, `engagement.staff.storageStatus` | My projects and every engagement in scope; one engagement; Preview as client (logged); whether file storage is on | Entry only | Engagement |
+| `engagement.staff.awaitingStart`, `engagement.staff.start`, `engagement.staff.clientBusinesses`, `engagement.staff.createDirect` | Paid with no engagement yet, and starting it; the businesses a new engagement can be for; New engagement | `view_all_businesses` and `manage_engagements` | Engagement |
+| `engagement.staff.setStage`, `engagement.staff.saveProblem` | The stage; the one problem and its statement | `manage_engagements` | Engagement |
+| `engagement.staff.assignableStaff`, `engagement.staff.assign`, `engagement.staff.removeMember` | Who can be added; add with a project role (emailed); take off | `assign_engagements` | Team assignment |
+| `engagement.staff.saveSession`, `engagement.staff.saveNotes`, `engagement.staff.shareNotes` | Sessions; their notes; share the client notes | `manage_engagements`; internal notes also need `manage_engagements` or `review_engagements` to read | Session |
+| `engagement.staff.saveTask`, `engagement.staff.loadDataRequest` | Work Plan items; load a Data Request | `manage_engagements`; team-side items also `contribute_engagements` | Data Request item |
+| `engagement.staff.requestUpload`, `engagement.staff.confirmUpload`, `engagement.staff.fileLink`, `engagement.staff.shareFile`, `engagement.staff.matchFile` | Upload (a signed address, then the record once the file exists); open; share with the client; match a drop-box file to its requests | `manage_engagements`; drafts also `contribute_engagements` | File |
+| `engagement.staff.saveDeliverable`, `engagement.staff.approveDeliverable`, `engagement.staff.shareDeliverable`, `engagement.staff.comment` | Draft, approve, share, comment | Draft and share: `manage_engagements`; approve: `review_engagements`, or leading the engagement | Deliverable |
+| `engagement.staff.saveContent`, `engagement.staff.deleteContent` | Plan, edit, send for approval, publish or delete a content piece | `manage_engagements` | Content piece |
+| `engagement.staff.saveMeasure`, `engagement.staff.saveCheckin` | The Measure of Success; the Weekly Check-in | `manage_engagements` | Measure and check-in |
+| `engagement.staff.fees`, `engagement.staff.saveFees`, `engagement.staff.setFeePaid`, `engagement.staff.openRoomNow`, `engagement.staff.sendFeeLink` | Read the fees; change them; mark one paid by hand; open the room before payment; send a pay link | Read: `manage_engagements`, `review_engagements` or `view_financials`; change, mark paid, open: `manage_engagements`; link: `manage_engagements` or `manage_payments` | Fee |
+| `engagement.staff.serviceRequests`, `engagement.staff.handleRequest` | Clients asking for another service; handle or decline | `view_all_businesses` and `manage_engagements` | Service request |
+| `engagement.finance.list` | Finance: paid, owed and late across every client | `view_financials`; read only | Finance view |
+
+### Engagements: the client's side
+
+Every action here needs an account session and acts only on the engagement of the business in use, and only on what
+was shared with the person; none accepts a business id. "The owner" includes a business admin.
+
+| Actions | What they do | Who may call | Object |
+|---|---|---|---|
+| `engagement.client.room` | The room | Anyone in the business | Engagement |
+| `engagement.client.respondToTask`, `engagement.client.setNotAvailable`, `engagement.client.requestUpload`, `engagement.client.confirmUpload`, `engagement.client.fileLink` | Answer a request, mark a record not available, upload to it, open a file | Anyone in the business; a contributor, only their own items | Data Request item, File |
+| `engagement.client.requestDrop`, `engagement.client.confirmDrop` | Upload to the drop box | Anyone in the business | File |
+| `engagement.client.comment`, `engagement.client.accept` | Comment on a Deliverable; Sign-off | Those who can see it; Sign-off by the owner | Deliverable |
+| `engagement.client.respondToContent` | Approve a content piece or send it back | The owner and full access | Content piece |
+| `engagement.client.setAudience` | Choose who in the business sees an item | The owner | Session |
+| `engagement.client.requestService` | Ask for another service ("Fix the next problem") | Anyone in the business, for their own business | Service request |

@@ -239,6 +239,10 @@ channels Nigerian owners use, the phone). G1 to G16 are the gaps found; each is 
 
 The [coverage matrix](09-coverage-matrix.md) checks every object, every stage of its life and who acts, against the code
 and the App flow. It is run again at every review. It found 13 gaps, numbered C1 to C17; C1 was a documentation gap, fixed.
+Since 9 November 2026 the build checks it too: `test/docs/productDocs.test.ts` fails when a server action is missing from
+the matrix, a permission, project role or email from the App flow, or an audit action from the Backend schema. The first
+run found two more gaps: five permissions that no action checks (C18) and the older administrator password reset that
+still says JUMP (C19); C12, the unused JUMP email templates, was fixed by removing them. C18 and C19 wait on a decision.
 
 | # | Requirement | P | Acceptance | Status |
 |---|---|---|---|---|

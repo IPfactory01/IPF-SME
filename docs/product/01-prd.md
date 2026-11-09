@@ -205,12 +205,35 @@ automatic refund. Management accounts only; the monthly tax note states record r
 | R11 | Every engagement fee payable online, with its own Paystack link (emailed by the team, or **Pay** in the room's Payments tab); for an engagement in advance, the first payment opens the room | S | A fee is marked paid without the team touching it; the client gets a receipt | Built (6 November 2026, migration 0020); the in-arrears case comes with R36 |
 | R12 | Fee reminders: each fee's pay link emailed five days before its date, on the day, and three and seven days after if unpaid; the lead told at seven days; WhatsApp later (R41) | M | No fee reaches its date without its link having gone out, and nobody on the team chases a fee by hand | Partly built: every fee has a pay link; sending on a schedule is to build |
 | R35 | Digital marketing on the public menu, with its own page (ET: yes, 6 November 2026) | S | Shown under the need it answers; previewed before it goes live | To build (next) |
-| R13 | **Buy now** for the products marked so in section 5: the product page takes the buyer's name, business, email and WhatsApp, opens Paystack, and on payment opens the engagement, invites the owner and shows what happens next (the room, the first records, a kickoff to book), with no call | S | A visitor buys and receives the first Data Request without anyone on the team acting | To build (`ONLINE_ORDERS_OPEN`) |
+| R13 | **Buy now** for the products marked so in section 5: the product page takes the buyer's name, business, email and WhatsApp, opens Paystack, and on payment opens the engagement, invites the owner and shows what happens next (the room, the first records, a kickoff to book), with no call | S | A visitor buys and receives the first Data Request without anyone on the team acting; the product's intake follows at once; incomplete records stop the delivery clock, and the room counts down to the promised date once they are complete | To build (`ONLINE_ORDERS_OPEN`) |
 | R38 | Trust where money changes hands: every product page and pay page names the expert behind the work, shows the office address and a WhatsApp line to a person, says what happens after paying, and links the Terms; a receipt follows every payment | M | No page that takes money lacks a person to talk to | Partly built (receipts, Terms links) |
 | R14 | Invitation-only client accounts, the invitation sent when the engagement opens; the owner adds staff as full access or contributor | M | A client can never reach another business by changing an id | Built |
 | R41 | Client sign-in by a link sent to their email (and WhatsApp later), so a client never needs a password; staff keep a password and the two-step code | S | A client opens their room from a link in under a minute | To build |
 | R15 | Data Requests dated by priority, loaded from the type or a template, or pasted from Excel | M | Each request shows why we ask and what format is fine | Built |
 | R16 | Data Request reminders: the owner (and the staff member it is assigned to) reminded two days before an item's date and two days after it if still open; the lead told only what is outstanding after the reminders | M | No request passes its date without a reminder | To build |
+
+### From the product design review (9 November 2026)
+
+The flows were critiqued as a product designer would (the moments that matter, the handoffs, the unhappy paths, the
+channels Nigerian owners use, the phone). G1 to G16 are the gaps found; each is a requirement here.
+
+| # | Requirement | P | Acceptance | Status |
+|---|---|---|---|---|
+| R43 | **Footage and voice notes (G1).** Voice notes upload like any file (m4a, mp3, ogg and opus, aac, wav; up to 25 MB). Raw video is never stored on the platform: any Data Request item or action can be answered with a link to a shared folder (Google Drive, Dropbox, WeTransfer, iCloud), which the team opens; or the client sends it on WhatsApp to the person it is for (R44) and marks it sent another way | M | A Digital marketing client sends the week's footage from the room in under two minutes, from a phone | To build |
+| R44 | **WhatsApp to the right person (G2).** Every IP Factory team member has a WhatsApp number on their profile. In the room each person on the team has **Message on WhatsApp**; an item meant for one person (footage for the content producer) offers **Send on WhatsApp to {name}** with a message that names the item; every link the team sends (invitation, sign-in, pay link) has **Send on WhatsApp** beside it with the message filled in | M | No client has to look for a number; the team never retypes a link into WhatsApp | To build (a WhatsApp field for staff needs a migration) |
+| R45 | **Project roles for Digital marketing.** Two roles on an engagement: **Digital Marketer** (the plan, the numbers, the client's main contact) and **Content Producer** (footage, edits, reels), shown to the client with their WhatsApp | M | The client knows whom to send footage to and whom to ask about results | To build (migration) |
+| R46 | **The first visit (G3).** The first time an owner opens a project: a welcome naming their expert or experts with a WhatsApp button, the first three things to do this week (book the kickoff, the first records, any fee), and what happens next. It stays on Overview until the kickoff is held | M | A new client sends their first records or books the kickoff without asking how | To build |
+| R47 | **Your plan (G4).** A read-only card in the room, also in the welcome email: what we will do (the service's or type's description), the team, the start date, the payment terms, and each fee with its date. Nothing to sign. A change to fees or terms is recorded and the owner is told | M | The client and the team can point to the same written record of what was agreed | To build |
+| R48 | **Follow-up for prospects who are not ready (G5).** A check taker who neither books nor buys receives a follow-up on day 2 and day 7: the guide for their stuck area and the first product with its front door. A call outcome of Nurture adds one at day 30. Stops on a booking, a purchase or an unsubscribe | S | Conversion from check to call or purchase rises | To build (with the reminder engine, R12) |
+| R49 | **One place for each thing in the room (G6).** After a usability test with a client, the room is simplified so no task appears in two places: Home (now and next), To do (records, actions, approvals and fees due in one list), Sessions, Results (findings, Deliverables, the number), Payments | S | Each item has one home; the phone shows five places, not nine | To design (after the test, A4) |
+| R50 | **Which next action wins (G7).** In this order: a fee the room waits for; approvals that hold up publishing; records past their date; records due this week; a Sign-off; otherwise nothing outstanding | S | The room shows one next action, by rule | To build |
+| R51 | **When things go wrong (G8).** Work paused for a late fee: the room stays readable, uploads stay open, and a banner says what to pay to continue. Changes asked for on any Deliverable, not only content. A cancellation or refund recorded against the payment. When a team member leaves, their open items move to the lead | S | Each case has a designed screen, an email and a status | To build |
+| R52 | **Today, for the team (G9).** One list across a person's projects: approvals waiting, files to match, check-ins due, records overdue, fees late | S | A lead starts the day from one list | To build |
+| R53 | **Receipts and invoices as documents (G10).** A numbered PDF receipt for every payment and an invoice for every fee, in the Payments tab and by email, naming the legal entity (D1) | S | An owner can hand them to their accountant or lender | To build (after D1) |
+| R54 | **Approving content on a phone (G12).** Each piece opens with its preview; several can be approved at once; changes asked for in a line | S | A month's 40 pieces can be approved in minutes from a phone | To build |
+| R55 | **An upload link for one item (G14).** The owner can send a staff member (a bookkeeper) a link that answers one Data Request item, with no account | C | Records reach us from whoever holds them | To design (security review first) |
+| R56 | **Weak networks (G15).** Photos compressed before upload; an interrupted upload resumes | C | An upload on mobile data succeeds or says clearly what to do | To build |
+| R57 | **Quiet hours (G16).** No reminder or message between 9pm and 7am Lagos time; a client can choose email, WhatsApp or both once WhatsApp messages exist | C | Nobody is messaged at night | To build |
 
 ### Stage 7–8: Deliver and Measure
 
@@ -295,6 +318,9 @@ engagement without hurting the results above it.
 | A3 | Visitors will buy a fixed-price product online with no call, if the page shows the price, a named expert and WhatsApp | Assumption | ET | To test once R13 and R38 are built |
 | K8 | Payment in arrears: we deliver a month before we are paid, and late payment is common; inflation erodes a price held for twelve months | Risk | Partners | Each in-arrears engagement approved by a partner; work pauses at 7 days late (R36) |
 | K9 | Tracking needs consent under the Nigeria Data Protection Act 2023, and a cookie notice the site does not have yet | Dependency | ET | With R39 |
+| A4 | A 20-minute usability test with a live client (five tasks: send footage, approve a reel, find what is due, pay a fee, reach the expert) will show what to simplify in the room | Assumption | ET | Later (ET, 9 November 2026); R49 waits for it |
+| K10 | Raw footage is large; storing it would cost more than it is worth | Risk | Engineering | Video moves by link or WhatsApp, never stored (R43) |
+| K11 | WhatsApp numbers of team members shown to clients | Risk | ET | Each person agrees to their number being shown; a work number where they have one |
 | K1 | Paystack live keys and the live webhook in Vercel | Dependency | ET, Lewis | To confirm |
 | K2 | The sending domain verified in Resend, so emails reach outside inboxes | Dependency | DG, Lewis | To confirm |
 | K3 | Supabase on a paid plan with daily backups | Dependency | ET | To do |
@@ -317,12 +343,14 @@ Ordered by what each moves first: cash, then growth, then hours, then retention.
 
 | # | Release | Requirements | Moves |
 |---|---|---|---|
-| 1 | Payment terms and one payment model | R36, R37, R24, R42 | Cash collected on time |
-| 2 | Fee and Data Request reminders | R12, R16 | Delivery hours; cash |
+| 0 | The first client's experience (the P1 gaps of the design review) | R43, R44, R45, R46, R47 | Time to first value; trust; records in on time |
+| 1 | Payment terms and one payment model | R36, R37, R24, R42; the pause screen of R51; the groundwork for R53 | Cash collected on time |
+| 2 | Fee and Data Request reminders | R12, R16, R48, R57; every reminder carries a WhatsApp button (R44) | Delivery hours; cash; conversion |
 | 3 | Buy now and the trust layer | R13, R38, R35 | Conversion; cost of winning a client |
 | 4 | Close, the Day-30 Review and the next fix | R26, R27, R28 | Lifetime value; the pass marks |
-| 5 | Tracking and the measures page | R39, R34 | Every decision after this one |
-| 6 | Sign-in links | R41 | Support time; the client's experience |
+| 5 | The room and the team's day, after the usability test | R49, R50, R52, R54, the rest of R51 | Delivery hours; the client's experience |
+| 6 | Tracking, the measures page, receipts | R39, R34, R53 | Every decision after this one; trust |
+| 7 | Sign-in links and the rest | R41, R55, R56 | Support time |
 | Alongside | Search | R40, R2 | Cost of winning a client |
 
 ## 11. Open decisions

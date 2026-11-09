@@ -8,6 +8,10 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| The product design review of the flows: 16 gaps (G1 to G16) written into the PRD as R43 to R57, with a new Release 0 for the first client's experience | ET, 9 November 2026 |
+| Raw footage moves by WhatsApp or a Drive link and is never stored on the platform; voice notes can be uploaded | ET, 9 November 2026 |
+| Clients send WhatsApp messages to the person doing the work (the Digital Marketer or the Content Producer), not a central line; two new project roles for Digital marketing | ET, 9 November 2026 |
+| The usability test with a live client is for later; simplifying the room waits for it | ET, 9 November 2026 |
 | Nothing is built before it is described in the PRD and the App flow; the six documents are reviewed in full before more building | ET, 8 November 2026 |
 | Two engines on one platform: fixed-price products bought online, and relationships that start with a call | ET, 8 November 2026 |
 | Two front doors on every page that sells: Buy now (fixed-price products) and Talk to an expert (a call or WhatsApp) | ET, 8 November 2026 |

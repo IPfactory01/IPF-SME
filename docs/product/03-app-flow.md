@@ -3,7 +3,7 @@
 **How The Shift works for each person who uses it, step by step.** Rebuilt on 8 November 2026 from the
 [PRD](01-prd.md) review, as service blueprints: for every step, what the client does, what the platform does on its own,
 what a person on the team does, the email that goes out, and the status that changes. Each step says whether it is
-**Built** or **To build** (with the PRD requirement, R1 to R42). Diagrams use Mermaid, which GitHub renders.
+**Built** or **To build** (with the PRD requirement, R1 to R57). Diagrams use Mermaid, which GitHub renders.
 
 How to read it. Sections 1 to 4 are the design: who arrives where, the two rules that shape everything after (the
 front doors and the payment terms), and the journeys. Sections 5 to 7 are the reference for building and testing: every
@@ -93,10 +93,11 @@ flowchart TD
 | 1 | Gives name, email, WhatsApp, how they heard; "Start the check" | Saves a lead before any business question | — | — | Pipeline **Lead** | Built |
 | 2 | Answers one question per screen (about 30 at most; the path depends on the answers) | Saves on the device and the server about once a second; resumes where they stopped | — | — | — | Built |
 | 3 | Sees the result: the outline (clear, watch, stuck), the gap, founder readiness, the first product and the next | Scores and routes by fixed rule; AI writes the summary only, checked against the catalogue | Reads the lead in Pipeline | Owner: the summary. Office: every answer | **Qualified lead** | Built |
+| 3b | Neither books nor buys | Follows up on day 2 and day 7 with the guide for their stuck area and the first product with its front door; stops on a booking, a purchase or an unsubscribe | — | Owner: two follow-ups (to write) | Stays **Qualified lead**, or **Nurture** | To build (R48) |
 | 4a | Buys the Full Report | Opens Paystack; on payment, emails the Report Intake link | — | Owner: *Payment received: your Full Report*. Office: *Paid online: …* | Payment **paid**; report **awaiting form** | Built |
 | 4b | Answers the 17-question Report Intake | Builds the Full Report by fixed rule and emails the PDF at once | — | Owner: *Your Full Report: {business}* (PDF). Office: *Full Report sent* | Report **delivered** | Built |
 | 5 | Books the Discovery Call in the embedded calendar | Records the booking only when Calendly confirms; picks up bookings made from the email | — | Office: *… asked for a free discovery call*. Calendly confirms to the owner | **Call booked** | Built |
-| 6 | Joins the 20-minute call | — | Holds it; writes up the Discovery Call summary; records Opportunity, Refer or Lost; shares the summary with the owner as a separate step | — | **Opportunity**, **Referred** or **Lost** | Built |
+| 6 | Joins the 20-minute call | — | Holds it; writes up the Discovery Call summary; records Opportunity, Refer, Lost or Nurture; shares the summary with the owner as a separate step | A Nurture outcome: one follow-up at day 30 (R48, to build) | **Opportunity**, **Referred**, **Lost** or **Nurture** | Built (the day-30 follow-up to build) |
 | 7 | — | — | Opens the engagement (4.3), or for the Business Review today sends its payment link | Owner: *Payment details for your Business Review* | Payment **requested** (48 hours) | Built (moves onto fees with R37) |
 
 ### 4.2 Prospect to client, by Buy now (To build, R13 and R38)
@@ -113,21 +114,23 @@ flowchart TD
 | # | Client | Platform | Team | Email | Status | Built? |
 |---|---|---|---|---|---|---|
 | 1 | Agrees the work and the terms on the call | — | The lead opens **New engagement**: client (new or existing), type and service, start date | — | — | Built |
-| 2 | — | Loads the type's Data Request, Work Plan, Sessions and fee schedule, dated from the start; invites the owner (an existing client's project joins their account) | Sets the **payment terms**; in arrears needs a partner's approval, recorded | Owner: *Your The Shift room for {business}* | Engagement **open**; **awaiting first payment** (in advance) or room open (in arrears) | Built, except payment terms (R36) |
+| 2 | — | Loads the type's Data Request, Work Plan, Sessions and fee schedule, dated from the start; invites the owner (an existing client's project joins their account) | Sets the **payment terms**; in arrears needs a partner's approval, recorded | Owner: *Your The Shift room for {business}*, with **Your plan** (what we will do, the team, the start date, the terms, each fee and its date; R47, to build) | Engagement **open**; **awaiting first payment** (in advance) or room open (in arrears) | Built, except payment terms (R36) and Your plan (R47) |
 | 3 | In advance: pays the first fee from the room or the email. In arrears: starts at once | Confirms the payment; opens the room; sends the receipt | Records money that came another way (ticks Paid), or **Open the room now** | Owner: receipt. Office: *Paid online: …* | Fee **paid**; room open | Built (in advance) |
 
 ### 4.4 The client during delivery
 
 | # | Client | Platform | Team | Email | Status | Built? |
 |---|---|---|---|---|---|---|
-| 1 | Opens the room: sees where things stand, the next action, the next Session | Shows one next action at a time: a fee to pay, records to send, a Sign-off | — | — | — | Built |
+| 0 | Opens the project for the first time | Welcome: the expert or experts with **Message on WhatsApp**, the first three things to do this week (book the kickoff, the first records, any fee), what happens next, and **Your plan**; it stays on Overview until the kickoff is held | — | — | — | To build (R46, R47) |
+| 1 | Opens the room: sees where things stand, the next action, the next Session | Shows one next action, chosen by rule: a fee the room waits for, approvals that hold up publishing, records past their date, records due this week, a Sign-off (R50) | — | — | — | Built (the rule to build, R50) |
 | 2 | Books the kickoff and Sessions on Calendly from the room | Copies each booking's time and link onto the next Session without one | Holds the Session; saves client notes and internal notes; shares client notes the same day | Owner (and the people the notes are shared with): *Engagement update: {title}* | Session **held** | Built |
-| 3 | Sends records: uploads into the drop box, marks an item sent another way, or "Not available" with a note | Keeps files private; reminds two days before an item's date and two days after it if still open | Matches each file to the items it answers; marks an item received or asks for more | Owner: reminders (to build). Lead: what is still outstanding after the reminders (to build) | Item **Sent, we are checking** → **Received**, **We need a bit more**, **Not available** | Built, except reminders (R16) |
-| 4 | Approves reels, posts and stories, or asks for changes (Digital marketing) | Counts the month's pieces once approved | Plans, edits, sends for approval, publishes | — | Content **For your approval** → **Approved** or **Changes requested** → **Published** | Built |
-| 5 | Reads a shared Deliverable; comments; gives Sign-off | — | Drafts; a lead approves prescriptions and plans; shares with the owner or the owner and their team; Specialists hand in drafts the lead shares | Owner: *Engagement update: {title}* | Deliverable **draft** → **approved** → **shared**; Sign-off given | Built |
+| 3 | Sends records: uploads files and voice notes into the drop box; for raw video, pastes a Drive (or Dropbox, WeTransfer, iCloud) link, or presses **Send on WhatsApp to {name}** and marks it sent another way; or "Not available" with a note | Keeps files private; never stores raw video; reminds two days before an item's date and two days after it if still open | The person it is for (the Content Producer for footage) opens the link or the WhatsApp; matches each file to the items it answers; marks an item received or asks for more | Owner: reminders (to build). Lead: what is still outstanding after the reminders (to build) | Item **Sent, we are checking** → **Received**, **We need a bit more**, **Not available** | Files built; voice notes, links and WhatsApp to build (R43, R44); reminders (R16) |
+| 4 | Approves reels, posts and stories, or asks for changes (Digital marketing); on a phone, previews each piece and approves several at once | Counts the month's pieces once approved | The Content Producer edits and sends for approval; the Digital Marketer plans and publishes | — | Content **For your approval** → **Approved** or **Changes requested** → **Published** | Built; previews and approving several at once to build (R54) |
+| 5 | Reads a shared Deliverable; comments; gives Sign-off, or asks for changes (R51, to build) | — | Drafts; a lead approves prescriptions and plans; shares with the owner or the owner and their team; Specialists hand in drafts the lead shares | Owner: *Engagement update: {title}* | Deliverable **draft** → **approved** → **shared**; Sign-off given | Built |
 | 6 | Sees the one number each week | Shows where it started, this week, where it is going | Records the weekly check-in: five questions, the reading, hours by role, AI used | — | — | Built |
-| 7 | Pays each later fee from the reminder or the Payments tab | Sends each fee's link 5 days before its date, on the day, and 3 and 7 days after if unpaid; confirms payment; sends the receipt | Told at 7 days late; for in arrears, work pauses (D6) | Owner: reminders and receipt (reminders to build). Lead: 7 days late (to build) | Fee **due** → **paid** or **late** | Built, except reminders (R12) |
-| 8 | Adds their own staff (one seat): full access or contributor | Sends the seat invitation | — | Staff member: invitation | — | Built |
+| 7 | Pays each later fee from the reminder (by email, with a WhatsApp button) or the Payments tab; keeps the PDF receipt | Sends each fee's link 5 days before its date, on the day, and 3 and 7 days after if unpaid, never between 9pm and 7am; confirms payment; sends the receipt and invoice as PDFs | Told at 7 days late; for in arrears, work pauses (D6) | Owner: reminders, receipt, invoice (reminders and PDFs to build). Lead: 7 days late (to build) | Fee **due** → **paid** or **late** | Built, except reminders (R12), PDFs (R53) and quiet hours (R57) |
+| 7b | Work paused for a late fee: sees the room as before, a banner saying what to pay to continue, uploads still open | Pauses at 7 days late (in arrears); lifts the pause on payment | The lead decides whether to pause early or late | Owner: *Work on {engagement} is paused* (to write) | Engagement **paused** → **open** | To build (R51) |
+| 8 | Adds their own staff (one seat): full access or contributor; later, sends one staff member a link to answer one item without an account (R55) | Sends the seat invitation | — | Staff member: invitation | — | Built (the one-item link to design) |
 
 ### 4.5 Close, the Day-30 Review and the next fix (To build, R26 to R28)
 
@@ -144,6 +147,14 @@ flowchart TD
 | **Lead** (Engagement Manager or Lead Consultant on the engagement; Partner, Vice President, Senior Associate, or an Associate leading it) | **My projects** in Engagements | Opens engagements and sets terms; staffs them; approves Deliverables; shares notes; sends fee links; opens a room early | Approve on an engagement they do not lead, unless their level approves everywhere |
 | **Analyst** (Senior Business Analyst, Business Analyst) | **My projects** | Keeps the Work Plan and Data Request current; matches files; drafts Deliverables; records check-ins; records payments by hand | Approve, staff, or see engagements they are not on |
 | **Specialist** | **My projects**, until their end date | Adds team items; attaches drafts to Deliverables for the lead to share | See internal notes or fees; change anything already there; reach the client directly |
+| **Digital Marketer** (a project role on a Digital marketing engagement; R45, to build) | **My projects** | The content plan, publishing, the monthly numbers; the client's main contact, on WhatsApp | As their level allows |
+| **Content Producer** (a project role; R45, to build) | **My projects** | Receives footage (by link or WhatsApp), edits, sends pieces for the owner's approval | As their level allows |
+
+Every team member has a WhatsApp number on their profile (R44); the room shows it beside them, and an item meant for
+one of them offers **Send on WhatsApp to {name}**. Each person agrees to their number being shown (PRD K11).
+
+**Today** (R52, to build): one list across a person's projects (approvals waiting, files to match, check-ins due, records
+overdue, fees late), so nobody opens every project to find their work.
 
 What the team should never do by hand once R12, R16 and R36 are built: chase a Data Request, chase a fee, work out a
 fee date, or send a payment link on a schedule.
@@ -162,17 +173,34 @@ fee date, or send a payment link on a schedule.
 Invites people by **level** (Team tab), sets levels, suspends and restores access, resets two-step sign-in, removes
 access with a recorded reason, and watches System status (file storage, email). Built.
 
+### 4.9 Handoffs between people
+
+Most failures happen where work passes from one person to another. Each handoff has a trigger, a signal to the person
+receiving it, and a time it should take.
+
+| From → to | What passes | Trigger | The receiver is told by | Should take | Built? |
+|---|---|---|---|---|---|
+| Visitor → desk | A lead and the check's answers | Check finished | The office email; Pipeline | Same working day | Built |
+| Visitor → lead | A booked Discovery Call | Calendly confirms | Calendly; Discovery Calls | — | Built |
+| Lead → client | The engagement, Your plan, the first fee | New engagement | The invitation email (and WhatsApp, R44) | At once | Partly built (Your plan, WhatsApp to build) |
+| Desk → team member | A project and a role | Assigned | *You are on {business} as {role}* | At once | Built |
+| Client → team | Records, footage, approvals | Upload, link, WhatsApp, approve | Files to sort; the item's status; Today (R52) | Matched within a working day | Partly built |
+| Specialist → lead | A draft | Attached to a Deliverable | The Deliverable's files; Today (R52) | Reviewed within two working days | Partly built |
+| Team → client | Notes, Deliverables, content for approval | Shared | *Engagement update: {title}* | Notes the same day | Built |
+| Platform → lead | Late fees, overdue records | 7 days late; after reminders | An email to the lead; Today (R52) | — | To build |
+| Leaver → lead | Open items of a person who leaves | Access removed | The lead's Today (R51) | At once | To build |
+
 ## 5. Status models
 
 | Object | States | Moves on its own | Moved by a person |
 |---|---|---|---|
 | **Pipeline** (a business check) | Lead → Qualified lead → Call booked → Opportunity → Won; Lost, Nurture, Referred | The first three, forward only, never over a stage the team set; Won on a confirmed Business Review payment | Opportunity, Refer, Lost; "Move to" any stage except Won |
 | **Order** (Buy now) | Awaiting payment → Paid → Engagement opened; Abandoned | All of them (R13) | — |
-| **Engagement** | Getting set up → (Business Review, Six-Week Fix) Business Review, The Fix, Your Plan → Closed; other types Open → Closed (a dated type also shows its stage from the start date); plus **awaiting first payment** (in advance) | Awaiting first payment clears on the first fee paid; a dated type's stage follows its start date | The stage; Close (R26); Open the room now |
+| **Engagement** | Getting set up → (Business Review, Six-Week Fix) Business Review, The Fix, Your Plan → Closed; other types Open → Closed (a dated type also shows its stage from the start date); plus **awaiting first payment** (in advance) and **paused** (R51) | Awaiting first payment clears on the first fee paid; paused at 7 days late in arrears and cleared on payment; a dated type's stage follows its start date | The stage; Close (R26); Open the room now; pause or lift a pause |
 | **Fee** | Set → Due → Paid, or Late | Due and Late by date and terms; Paid on Paystack's confirmation | Paid by hand (money that came another way); undo |
 | **Payment** (one Paystack transaction) | Started → Paid, Failed, Needs a look, Refunded | Paid and Failed from Paystack | Needs a look resolved; Refunded recorded (R37) |
 | **Data Request item / action** | To do → Sent, we are checking → Received, or We need a bit more; Not available; Done; No longer needed | Sent when the client uploads or marks it | Received, We need a bit more, Done, No longer needed |
-| **Deliverable** | Draft → Awaiting approval → Approved → Shared; Sign-off given | — | Each step; editing a shared one returns it to Draft |
+| **Deliverable** | Draft → Awaiting approval → Approved → Shared → Sign-off given, or Changes asked for (R51) → Draft | — | Each step; editing a shared one returns it to Draft |
 | **Content piece** | Planned → In edit → For your approval → Approved or Changes requested → Published | — | The team, except the owner's Approved or Changes requested |
 | **Session** | Planned → Held, or Cancelled | Booked time copied from Calendly | Held, Cancelled; notes shared |
 | **Full Report** | Awaiting form → Delivered | Delivered when the intake is sent | Form link sent again |
@@ -203,7 +231,11 @@ info@ipfactory.co.
 | Client asks for another service | Office | *{business} asked for the {product}* | Built |
 | Password reset | The person | *Reset your password on The Shift* | Built |
 | Staff invited, role given, access removed, two-step reset, security alerts | Super Admins | As named | Built |
-| Fee due in 5 days, due today, 3 and 7 days late | Owner; lead at 7 days | To write | To build (R12) |
+| Engagement opened: the welcome with Your plan | Owner | *Your The Shift room for {business}*, with the plan | Partly built (the plan, R47) |
+| Fee due in 5 days, due today, 3 and 7 days late | Owner; lead at 7 days | To write; each with a WhatsApp button | To build (R12) |
+| Work paused; work resumed | Owner; lead | *Work on {engagement} is paused*; *… has resumed* | To build (R51) |
+| Payment received, with the receipt and invoice as PDFs | Owner | *Payment received: {fee}* (PDFs attached) | Email built; PDFs to build (R53) |
+| Check finished but no call or purchase: day 2, day 7; Nurture: day 30 | Owner | To write | To build (R48) |
 | Data Request item due in 2 days, 2 days late | Owner or assigned staff; lead after | To write | To build (R16) |
 | Buy-now order paid | Owner; office | Receipt and invitation; *New order: {product}, {business}* | To build (R13) |
 | Engagement closed; Day-30 Review | Owner | *Your {engagement} is complete*; *Day-30 Review: is it still working?* | To build (R26, R27) |
@@ -223,6 +255,10 @@ info@ipfactory.co.
 | A fee goes unpaid | Reminders; the Payments tab shows it late | Reminds at 5 days before, on the day, at 3 and 7 days after | Told at 7 days; in arrears, work pauses (D6) | To build (R12) |
 | A client goes quiet on records | Reminders | Reminds before and after each date | Told what is still outstanding | To build (R16) |
 | A client should get in before paying | — | — | **Open the room now** (recorded) | Built |
+| Footage is too large to upload | "Paste a link to the folder, or send it on WhatsApp to {name}" | Stores the link, never the video | The Content Producer opens it | To build (R43, R44) |
+| The client does not know whom to message | Each team member with **Message on WhatsApp** | — | — | To build (R44, R45) |
+| A team member leaves mid-engagement | The team list changes; nothing else | Moves their open items to the lead | The lead reassigns | To build (R51) |
+| An upload fails on a weak network | "The upload did not finish. Try again." (today); resumes on its own (R56) | Photos compressed first (R56) | — | Partly built |
 | A Specialist's access ends | — | Their role ends at the end of the day, Lagos time | — | Built |
 
 ## 8. Reference: pages, admin console, room, sign-in
@@ -319,6 +355,10 @@ the team) and the views as tabs.
 
 While an engagement in advance waits for its first payment, the room shows only "Your room opens once the first payment
 is made", the fee and **Pay securely with Paystack**.
+
+**To come:** the first-visit welcome and **Your plan** on Overview (R46, R47); each team member with **Message on
+WhatsApp** (R44); voice notes, links and **Send on WhatsApp to {name}** on Data Request items (R43); and, after a
+usability test, fewer places: Home, To do, Sessions, Results, Payments, so no task appears twice (R49).
 
 ## 9. Legal links
 

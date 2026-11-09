@@ -8,7 +8,6 @@ import { authorityAllows, type AnyAuthorityPermission, type PlatformPermission }
 import { ACCOUNT_AUTH_ERRORS } from "../../shared/auth";
 import { hasVerifiedAdminAccess, isOwnerAdmin } from "../adminSecurity";
 import { getDb } from "../db";
-import { BRAND } from "../../shared/brand";
 import { UNEXPECTED_ERROR_MESSAGE } from "../databaseHealth";
 
 const t = initTRPC.context<TrpcContext>().create({
@@ -92,7 +91,7 @@ export const adminProcedure = t.procedure.use(
     }
 
     if (!(await hasVerifiedAdminAccess(ctx.req, ctx.user.id))) {
-      throw new TRPCError({ code: "FORBIDDEN", message: `Kindly verify your ${BRAND.programmeShortName} administrator password to continue.` });
+      throw new TRPCError({ code: "FORBIDDEN", message: "Kindly verify your administrator password to continue." });
     }
 
     return next({
@@ -113,7 +112,7 @@ export const ownerAdminProcedure = adminProcedure.use(
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     if (!ctx.user || !(await loadAuthority(db, ctx.user)).isSuperAdmin) {
-      throw new TRPCError({ code: "FORBIDDEN", message: `This action is reserved for the ${BRAND.programmeShortName} super administrator.` });
+      throw new TRPCError({ code: "FORBIDDEN", message: "This action is reserved for the Super Admin." });
     }
     return next({ ctx: { ...ctx, user: ctx.user } });
   }),
@@ -133,7 +132,7 @@ export function adminPermissionProcedure(permission: AnyAuthorityPermission) {
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const authority = await loadAuthority(db, ctx.user);
       if (!authorityAllows(authority, permission)) {
-        throw new TRPCError({ code: "FORBIDDEN", message: `Your ${BRAND.programmeShortName} administrator role does not include this responsibility.` });
+        throw new TRPCError({ code: "FORBIDDEN", message: "Your administrator role does not include this responsibility." });
       }
       return next({ ctx: { ...ctx, user: ctx.user, authority } });
     }),

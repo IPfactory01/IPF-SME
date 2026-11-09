@@ -19,7 +19,7 @@ import {
   verifyAndRecordAdminPassword,
 } from "../adminSecurity";
 import { getDb } from "../db";
-import { deliverEmail, JUMP_MONITORING_BCC } from "../email";
+import { deliverEmail } from "../email";
 import { loadAuthority } from "../platformAccess";
 import { ownerAdminProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getTrustedApplicationOrigin } from "../security";
@@ -69,7 +69,7 @@ export const adminAccessRouter = router({
     .input(z.object({ password: passwordSchema, confirmPassword: passwordSchema }))
     .mutation(async ({ ctx, input }) => {
       if (!ctx.user || !isOwnerAdmin(ctx.user) || ctx.user.role !== "admin") {
-        throw new TRPCError({ code: "FORBIDDEN", message: `Only the recognised ${BRAND.programmeShortName} super administrator can create this password.` });
+        throw new TRPCError({ code: "FORBIDDEN", message: "Only the recognised Super Admin can create this password." });
       }
       if (input.password !== input.confirmPassword) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "The password confirmation does not match." });
@@ -84,14 +84,14 @@ export const adminAccessRouter = router({
         action: "owner_password_enrolled",
         targetEmail: normalizeAdminEmail(ctx.user.email),
       });
-      return { success: true, message: `Your ${BRAND.programmeShortName} administrator password is now active.` };
+      return { success: true, message: "Your administrator password is now active." };
     }),
 
   verifyPassword: protectedProcedure
     .input(z.object({ password: z.string().min(1).max(160) }))
     .mutation(async ({ ctx, input }) => {
       if (!ctx.user || ctx.user.role !== "admin") {
-        throw new TRPCError({ code: "FORBIDDEN", message: `This account is not an authorised ${BRAND.programmeShortName} administrator.` });
+        throw new TRPCError({ code: "FORBIDDEN", message: "This account is not an authorised administrator." });
       }
       const result = await verifyAndRecordAdminPassword(ctx.user.id, input.password);
       if (!result.ok) throw new TRPCError({ code: "UNAUTHORIZED", message: result.reason });
@@ -101,7 +101,7 @@ export const adminAccessRouter = router({
 
   requestPasswordReset: protectedProcedure.mutation(async ({ ctx }) => {
     if (!ctx.user || ctx.user.role !== "admin") {
-      throw new TRPCError({ code: "FORBIDDEN", message: `This account is not an authorised ${BRAND.programmeShortName} administrator.` });
+      throw new TRPCError({ code: "FORBIDDEN", message: "This account is not an authorised administrator." });
     }
     const db = await getDb();
     if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
@@ -125,8 +125,9 @@ export const adminAccessRouter = router({
     const resetUrl = `${baseUrl}/admin/reset?token=${encodeURIComponent(token)}`;
     const delivery = await deliverEmail({
       to: email,
-      subject: `Reset your ${BRAND.programmeShortName} administrator password`,
-      body: `Hello,\n\nWe received a request to reset the ${BRAND.programmeShortName} administrator password for ${email}. Kindly use the secure link below within 20 minutes:\n\n${resetUrl}\n\nFor your protection, this link can be used once. If you did not request this reset, please ignore this email; your existing password will remain unchanged.\n\n${BRAND.senderDisplayName}`,
+      subject: `Reset your administrator password on ${BRAND.productName}`,
+      body: `Hello,\n\nWe received a request to reset the administrator password for ${email} on ${BRAND.productName}. Kindly use the secure link below within 20 minutes:\n\n${resetUrl}\n\nFor your protection, this link can be used once. If you did not request this reset, please ignore this email; your existing password will remain unchanged.\n\n${BRAND.organisationName}`,
+      sender: "business_support",
     });
     if (delivery.status !== "Sent") {
       await db.update(adminPasswordResetTokens).set({ revokedAt: new Date(), deliveryStatus: delivery.status, deliveryMessageId: null }).where(eq(adminPasswordResetTokens.id, resetId));
@@ -176,7 +177,7 @@ export const adminAccessRouter = router({
         targetEmail: normalizeAdminEmail(administrator.email),
         details: JSON.stringify({ resetTokenId: resetToken.id }),
       });
-      return { success: true, message: `Your ${BRAND.programmeShortName} administrator password has been reset. Kindly sign in again with your authorised Gmail account.` };
+      return { success: true, message: "Your administrator password has been reset. Kindly sign in again." };
     }),
 
   logoutPassword: protectedProcedure.mutation(async ({ ctx }) => {

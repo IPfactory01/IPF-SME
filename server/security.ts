@@ -105,5 +105,5 @@ export function requireTrustedBrowserOrigin(req: Request, res: Response, next: N
     return;
   }
 
-  res.status(403).json({ message: `This request was blocked by ${BRAND.programmeShortName} security controls.` });
+  res.status(403).json({ message: `This request was blocked by ${BRAND.productName} security controls.` });
 }

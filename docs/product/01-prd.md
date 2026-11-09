@@ -241,8 +241,9 @@ The [coverage matrix](09-coverage-matrix.md) checks every object, every stage of
 and the App flow. It is run again at every review. It found 13 gaps, numbered C1 to C17; C1 was a documentation gap, fixed.
 Since 9 November 2026 the build checks it too: `test/docs/productDocs.test.ts` fails when a server action is missing from
 the matrix, a permission, project role or email from the App flow, or an audit action from the Backend schema. The first
-run found two more gaps: five permissions that no action checks (C18) and the older administrator password reset that
-still says JUMP (C19); C12, the unused JUMP email templates, was fixed by removing them. C18 and C19 wait on a decision.
+run found two more gaps: five permissions that no action checks (C18, waiting on a decision) and the older administrator
+password reset that still said JUMP (C19, fixed: every email now goes out as IP Factory); C12, the unused JUMP email
+templates, was fixed by removing them.
 
 | # | Requirement | P | Acceptance | Status |
 |---|---|---|---|---|

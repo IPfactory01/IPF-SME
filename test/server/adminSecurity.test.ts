@@ -8,7 +8,7 @@ import {
   verifyAdminPasswordHash,
 } from "@server/adminSecurity";
 
-describe("JUMP administrator security", () => {
+describe("administrator password security", () => {
   it("recognises the configured owner address without case or whitespace sensitivity", () => {
     expect(normalizeAdminEmail("  Owner@Example.TEST ")).toBe("owner@example.test");
     expect(isOwnerAdmin({ email: "Owner@Example.test" })).toBe(true);

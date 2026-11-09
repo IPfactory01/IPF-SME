@@ -4,13 +4,12 @@ import { normalizeEmailHeaderValue } from "@server/email";
 // Live Resend call: runs only when explicitly opted in (VALIDATE_RESEND_CREDENTIALS=1) and configuration exists.
 const hasResendConfiguration = Boolean(
   process.env.VALIDATE_RESEND_CREDENTIALS === "1" &&
-    process.env.RESEND_API_KEY && process.env.EMAIL_FROM && process.env.EMAIL_REPLY_TO,
+    process.env.RESEND_API_KEY,
 );
 
-describe("JUMP sender configuration", () => {
-  it.skipIf(!hasResendConfiguration)("uses the confirmed JUMP mailbox and reply route with an authenticated Resend account", async () => {
-    expect(normalizeEmailHeaderValue(process.env.EMAIL_FROM!)).toBe("Emmanuel Tarfa <jump@emmanueltarfa.com>");
-    expect(normalizeEmailHeaderValue(process.env.EMAIL_REPLY_TO!)).toBe("jump@emmanueltarfa.com");
+describe("sender configuration", () => {
+  it.skipIf(!hasResendConfiguration)("sends from the verified IP Factory domain with an authenticated Resend account", async () => {
+    if (process.env.EMAIL_FROM) expect(normalizeEmailHeaderValue(process.env.EMAIL_FROM)).toMatch(/@contact\.ipfactory\.co>?$/);
 
     const response = await fetch("https://api.resend.com/domains", {
       headers: { authorization: `Bearer ${process.env.RESEND_API_KEY}` },
@@ -18,7 +17,7 @@ describe("JUMP sender configuration", () => {
     });
     expect(response.ok).toBe(true);
     const payload = await response.json() as { data?: Array<{ name?: string; status?: string }> };
-    const programmeDomain = payload.data?.find((domain) => domain.name === "emmanueltarfa.com");
-    expect(programmeDomain?.status).toBe("verified");
+    const domain = payload.data?.find((item) => item.name === "contact.ipfactory.co");
+    expect(domain?.status).toBe("verified");
   }, 15_000);
 });

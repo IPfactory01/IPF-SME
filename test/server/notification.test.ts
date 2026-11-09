@@ -14,7 +14,7 @@ describe("desk notifications", () => {
 
     await expect(notifyOwner({ title: "  New registration  ", content: "Details" })).resolves.toBe(true);
 
-    expect(emailMock.deliverEmail).toHaveBeenCalledWith({ to: BRAND.administrationMailbox, subject: "New registration", body: "Details" });
+    expect(emailMock.deliverEmail).toHaveBeenCalledWith({ to: BRAND.businessSupportMailbox, subject: "New registration", body: "Details", sender: "business_support" });
   });
 
   it("reports an undelivered notification without throwing", async () => {

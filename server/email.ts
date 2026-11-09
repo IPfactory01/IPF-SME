@@ -1,16 +1,11 @@
 import { ENV } from "./_core/env";
 import { EMAIL_LOGO_CID, EMAIL_LOGO_PNG_BASE64 } from "./emailLogo";
-import { buildBusinessSupportEmailHtml, buildPlainTextEmailHtml } from "./emailTemplates";
+import { buildBusinessSupportEmailHtml } from "./emailTemplates";
 import { BRAND } from "../shared/brand";
 import { logBusinessSupportEmail } from "./emailDeliveryLog";
 
-export const JUMP_PROGRAMME_MAILBOX = BRAND.programmeMailbox;
-export const JUMP_PROGRAMME_SENDER = `${BRAND.senderDisplayName} <${JUMP_PROGRAMME_MAILBOX}>`;
-export const JUMP_ADMINISTRATION_MAILBOX = BRAND.administrationMailbox;
-/** Where IP Factory Business Support is told about business checks. Separate from the JUMP programme mailbox. */
+/** Where IP Factory Business Support is told about business checks, and where replies to every email go. */
 export const BUSINESS_SUPPORT_MAILBOX = BRAND.businessSupportMailbox;
-/** A single audited copy of each operational JUMP email is retained in the programme administration mailbox. */
-export const JUMP_MONITORING_BCC: string[] = [JUMP_ADMINISTRATION_MAILBOX];
 
 export type EmailAttachment = {
   filename: string;
@@ -39,22 +34,6 @@ export function normalizeEmailHeaderValue(value: string): string {
     .replace(/\\u003e/gi, ">");
 }
 
-/**
- * Participant communication must always originate from the JUMP programme mailbox.
- * A stale admin or personal configuration is deliberately ignored rather than used.
- */
-export function getJumpProgrammeSender(configuredFrom = ENV.emailFrom): string {
-  const normalised = normalizeEmailHeaderValue(configuredFrom || "");
-  const lower = normalised.toLowerCase();
-  return lower.includes(`<${JUMP_PROGRAMME_MAILBOX}>`) || lower === JUMP_PROGRAMME_MAILBOX
-    ? normalised
-    : JUMP_PROGRAMME_SENDER;
-}
-
-export function getJumpProgrammeReplyTo(_configuredReplyTo = ENV.emailReplyTo): string {
-  return JUMP_PROGRAMME_MAILBOX;
-}
-
 /** Verified production identity for IP Factory Business Support email. */
 export const BUSINESS_SUPPORT_SENDER = `${BRAND.organisationName} <notifications@contact.ipfactory.co>`;
 
@@ -69,8 +48,11 @@ export function getBusinessSupportSender(configuredFrom = ENV.emailFrom, product
   return normalised;
 }
 
-/** Which identity an email is sent under. JUMP programme email keeps its own mailbox. */
-export type EmailSender = "jump" | "business_support";
+/**
+ * Which identity an email is sent under. There is one: IP Factory (the JUMP programme mailbox and layout were removed on
+ * 9 November 2026), so every email has the IP Factory sender, layout and reply-to, and its delivery is recorded.
+ */
+export type EmailSender = "business_support";
 
 /** The Resend request body. Pure, so the sender and reply-to rules can be tested without sending anything. */
 export function resendRequestBody(input: {
@@ -84,16 +66,15 @@ export function resendRequestBody(input: {
   attachments?: EmailAttachment[];
   sender?: EmailSender;
 }) {
-  const businessSupport = input.sender === "business_support";
-  const html = input.html || (businessSupport ? buildBusinessSupportEmailHtml(input.body) : buildPlainTextEmailHtml(input.body));
+  const html = input.html || buildBusinessSupportEmailHtml(input.body);
   return {
-    from: businessSupport ? getBusinessSupportSender() : getJumpProgrammeSender(),
+    from: getBusinessSupportSender(),
     to: [input.to],
     bcc: input.bcc ? (Array.isArray(input.bcc) ? input.bcc : [input.bcc]) : undefined,
     subject: input.subject,
     text: input.body,
     html,
-    reply_to: businessSupport ? BUSINESS_SUPPORT_MAILBOX : getJumpProgrammeReplyTo(),
+    reply_to: BUSINESS_SUPPORT_MAILBOX,
     attachments: [
       ...(input.attachments || []).map((attachment) => ({
         filename: attachment.filename,
@@ -187,7 +168,7 @@ export async function deliverEmail(input: {
   icsContent?: string;
   icsFilename?: string;
   attachments?: EmailAttachment[];
-  /** Defaults to the JUMP programme; business check email passes "business_support". */
+  /** Optional: every email is IP Factory's (EmailSender). */
   sender?: EmailSender;
   /**
    * Names the record and the message, e.g. "payment_requests:12:confirmed", so a retry or a repeated request cannot
@@ -211,7 +192,7 @@ export async function deliverEmail(input: {
   } else {
     result = await postToResend({ payload: resendRequestBody(input), apiKey, idempotencyKey: input.idempotencyKey });
   }
-  if (input.sender === "business_support") await logBusinessSupportEmail({
+  await logBusinessSupportEmail({
     to: input.to,
     subject: input.subject,
     attemptedAt,

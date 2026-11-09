@@ -1,23 +1,6 @@
 import { BRAND } from "../shared/brand";
 import { ENV } from "./_core/env";
 import { EMAIL_LOGO_CID, EMAIL_LOGO_SIZE } from "./emailLogo";
-export type BrandedEmailDetails = {
-  label: string;
-  value: string;
-};
-
-export type BrandedEmailInput = {
-  label?: string;
-  title: string;
-  preheader?: string;
-  greeting?: string;
-  paragraphs: string[];
-  details?: BrandedEmailDetails[];
-  callout?: string;
-  cta?: { label: string; url: string };
-  footerNote?: string;
-};
-
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -27,10 +10,6 @@ function escapeHtml(value: string) {
     .replace(/'/g, "&#039;");
 }
 
-function toParagraphHtml(value: string) {
-  return escapeHtml(value).replace(/\n/g, "<br />");
-}
-
 function safeHref(url: string) {
   try {
     const parsed = new URL(url);
@@ -38,41 +17,6 @@ function safeHref(url: string) {
   } catch {
     return "";
   }
-}
-
-/**
- * Produces a conservative table-based email that renders reliably in Gmail and narrow mobile clients.
- * The responsive container and spacing are intentionally inline because major email clients strip CSS.
- */
-export function buildBrandedEmailHtml(input: BrandedEmailInput) {
-  const preheader = escapeHtml(input.preheader || input.title);
-  const label = input.label ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;letter-spacing:1.4px;text-transform:uppercase;color:#B45309;font-weight:700;margin:0 0 12px;">${escapeHtml(input.label)}</div>` : "";
-  const greeting = input.greeting ? `<p style="margin:0 0 18px;font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:28px;color:#18212D;">${toParagraphHtml(input.greeting)}</p>` : "";
-  const paragraphs = input.paragraphs.map((paragraph) => `<p style="margin:0 0 18px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:25px;color:#344154;word-break:normal;overflow-wrap:break-word;">${toParagraphHtml(paragraph)}</p>`).join("");
-  const details = input.details?.length
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 22px;background:#F8FAFC;border:1px solid #D8E2EC;border-radius:8px;">${input.details.map((detail) => `<tr><td style="padding:11px 14px 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:17px;letter-spacing:.7px;text-transform:uppercase;color:#5F7083;font-weight:700;">${escapeHtml(detail.label)}</td></tr><tr><td style="padding:3px 14px 11px;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:23px;color:#18212D;word-break:normal;overflow-wrap:break-word;">${toParagraphHtml(detail.value)}</td></tr>`).join("")}</table>`
-    : "";
-  const callout = input.callout ? `<div style="margin:0 0 22px;padding:15px 16px;background:#FFF7E7;border-left:4px solid #F59E0B;border-radius:0 8px 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:23px;color:#5B4214;word-break:normal;overflow-wrap:break-word;">${toParagraphHtml(input.callout)}</div>` : "";
-  const href = input.cta ? safeHref(input.cta.url) : "";
-  const cta = input.cta && href
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 24px;"><tr><td bgcolor="#F59E0B" style="border-radius:7px;"><a href="${href}" target="_blank" style="display:inline-block;padding:14px 20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:20px;font-weight:700;color:#172033;text-decoration:none;border-radius:7px;">${escapeHtml(input.cta.label)}</a></td></tr></table>`
-    : "";
-  const footerNote = input.footerNote ? `<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#68778A;word-break:normal;overflow-wrap:break-word;">${toParagraphHtml(input.footerNote)}</p>` : "";
-
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="x-apple-disable-message-reformatting"><title>${escapeHtml(input.title)}</title></head><body style="margin:0;padding:0;background:#F3F0EA;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;line-height:1px;font-size:1px;">${preheader}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background:#F3F0EA;"><tr><td align="center" style="padding:24px 12px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;border-collapse:collapse;background:#FFFFFF;border-radius:12px;overflow:hidden;"><tr><td style="padding:24px 28px;background:${BRAND.colorBrand};"><div style="font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:30px;font-weight:700;letter-spacing:.2px;color:#FFFFFF;">${BRAND.programmeName}</div><div style="margin-top:4px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;letter-spacing:1.15px;text-transform:uppercase;color:#DCE9F4;">Strategy &amp; Innovation Genius Track</div></td></tr><tr><td style="padding:30px 28px 24px;">${label}<h1 style="margin:0 0 18px;font-family:Georgia,'Times New Roman',serif;font-size:29px;line-height:36px;font-weight:700;color:#18212D;word-break:normal;">${escapeHtml(input.title)}</h1>${greeting}${paragraphs}${details}${callout}${cta}${footerNote}</td></tr><tr><td style="padding:18px 28px 22px;background:#F8FAFC;border-top:1px solid #E1E8EF;"><p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#68778A;">${BRAND.facilitatorName} &nbsp;|&nbsp; ${BRAND.programmeName} Strategy &amp; Innovation Genius Track</p></td></tr></table></td></tr></table></body></html>`;
-}
-
-/** Gives historic or admin-composed plain-text messages a readable HTML shell without changing their text fallback. */
-export function buildPlainTextEmailHtml(body: string) {
-  const blocks = body.trim().split(/\n\s*\n/).filter(Boolean);
-  const first = blocks[0] || BRAND.programmeName;
-  const greeting = /^dear\s+/i.test(first) ? first : undefined;
-  return buildBrandedEmailHtml({
-    label: `${BRAND.programmeName} communication`,
-    title: greeting ? `A message from ${BRAND.facilitatorName}` : `${BRAND.programmeName} update`,
-    greeting,
-    paragraphs: greeting ? blocks.slice(1) : blocks,
-  });
 }
 
 const URL_IN_TEXT = /(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)])/;
@@ -103,7 +47,7 @@ function linkify(text: string) {
  *
  * It follows the site: the IP Factory logo beside "The Shift" as in the site header, the plum, crimson and cyan line
  * from the logo, crimson section labels, the cyan button with navy text, and only BRAND.palette colours. The logo is
- * embedded in the email (cid:ipf-logo); resendRequestBody attaches it. JUMP email keeps buildPlainTextEmailHtml.
+ * embedded in the email (cid:ipf-logo); resendRequestBody attaches it. It is the layout of every email the platform sends.
  */
 /** Every IP Factory email says how to reach a person: replies go to the business support mailbox (Reply-To). */
 export const REPLY_INVITATION = `Questions? Reply to this email or write to ${BRAND.businessSupportMailbox}.`;

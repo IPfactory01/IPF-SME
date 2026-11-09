@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { ENV } from "@server/_core/env";
 import { EMAIL_LOGO_CID, EMAIL_LOGO_PNG_BASE64 } from "@server/emailLogo";
-import { BUSINESS_SUPPORT_SENDER, getBusinessSupportSender, JUMP_PROGRAMME_MAILBOX, JUMP_PROGRAMME_SENDER, resendRequestBody } from "@server/email";
+import { BUSINESS_SUPPORT_SENDER, getBusinessSupportSender, resendRequestBody } from "@server/email";
 
 describe("Business Support (business check) email sender", () => {
   it("uses the verified Resend identity as the production fallback", () => {
@@ -50,18 +50,20 @@ describe("the Resend request", () => {
     const business = resendRequestBody({ to: "ada@example.com", subject: "Hi", body: "Hello", sender: "business_support" });
     expect(business.attachments).toEqual([{ filename: "ip-factory-logo.png", content: EMAIL_LOGO_PNG_BASE64, content_type: "image/png", content_id: EMAIL_LOGO_CID }]);
     expect(business.html).toContain(`src="cid:${EMAIL_LOGO_CID}"`);
-    expect(resendRequestBody({ to: "participant@example.com", subject: "JUMP", body: "Hello" }).attachments).toEqual([]);
+    expect(resendRequestBody({ to: "ada@example.com", subject: "Hi", body: "Hello", html: "<p>Own, no logo</p>" }).attachments).toEqual([]);
   });
 
   it("keeps an HTML version the caller wrote", () => {
     expect(resendRequestBody({ to: "ada@example.com", subject: "Hi", body: "Hello", html: "<p>Own</p>", sender: "business_support" }).html).toBe("<p>Own</p>");
   });
 
-  it("keeps JUMP programme email on the JUMP mailbox whatever EMAIL_FROM says", () => {
-    ENV.emailFrom = "IP Factory <onboarding@resend.dev>";
-    const body = resendRequestBody({ to: "participant@example.com", subject: "JUMP", body: "Hello" });
-    expect(body.from).toBe(JUMP_PROGRAMME_SENDER);
-    expect(body.reply_to).toBe(JUMP_PROGRAMME_MAILBOX);
-    expect(body.html).toContain("JUMP 2026");
+  it("sends every email as IP Factory, even one that names no sender and with a leftover JUMP EMAIL_FROM (C19)", () => {
+    ENV.emailFrom = "Emmanuel Tarfa | JUMP 2026 <jump@emmanueltarfa.com>";
+    ENV.isProduction = true;
+    const body = resendRequestBody({ to: "ada@example.com", subject: "Reset your administrator password on The Shift", body: "Hello,\n\nUse the link." });
+    expect(body.from).toBe(BUSINESS_SUPPORT_SENDER);
+    expect(body.reply_to).toBe("info@ipfactory.co");
+    expect(body.html).toContain("The Shift");
+    expect(body.html).not.toMatch(/JUMP|Genius Track|emmanueltarfa/);
   });
 });

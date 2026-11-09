@@ -85,7 +85,7 @@ export const ENV = {
    * a role stored by `pnpm owner:bootstrap` counts. Every comparison must treat "" as "no owner", never as a match.
    */
   ownerAdminEmail: (process.env.OWNER_ADMIN_EMAIL?.trim() ?? "").toLowerCase(),
-  emailReplyTo: process.env.EMAIL_REPLY_TO ?? BRAND.administrationMailbox,
+  emailReplyTo: process.env.EMAIL_REPLY_TO ?? BRAND.businessSupportMailbox,
   /**
    * Keeps the JUMP programme's public procedures open (registration, portal sign-in links, pricing requests, Paystack
    * callbacks, emailing a diagnostic to any address). Off unless LEGACY_JUMP_ENABLED is 1, true or yes: each of them

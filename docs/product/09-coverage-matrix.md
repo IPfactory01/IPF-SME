@@ -135,7 +135,7 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 | Channels | WhatsApp: R44. Session reminders by any channel: **C3** |
 | Money | Owed, paid, late: built or R12. Refunded: R37 |
 | Day 0, weekly, day 30, after the end | Day 0: R46. Weekly: check-ins built, Session reminders **C3**. Day 30: R27 |
-| Code left over | The unused JUMP email templates (the 24-hour Session reminder among them) were removed on 9 November 2026: **C12** fixed. The older administrator password reset still says *Reset your JUMP administrator password*: **C19** |
+| Code left over | The unused JUMP email templates (the 24-hour Session reminder among them) were removed on 9 November 2026: **C12** fixed. The older administrator password reset said *Reset your JUMP administrator password* and went out from the JUMP mailbox: **C19**, fixed the same day (every email now goes out as IP Factory). A JUMP-era Google Calendar helper (`server/calendar.ts`) has no caller and stays until the calendar work |
 | Permissions | Five permissions are declared but no action checks them (`manage_businesses`, `manage_scheduling`, `manage_communications`, `manage_admins`, `manage_platform_settings`): **C18** |
 
 ## 3. Gaps found
@@ -159,7 +159,7 @@ improves the product. **Effort:** S is days, M about a week.
 | C15 | A business cannot change its owner | A sale or a handover locks the business to the first owner | P3 | M | R67 |
 | C17 | Nobody is told before a Specialist's access ends | Work stops mid-engagement without warning | P3 | S | R68 |
 | C18 | Five permissions are declared and granted but no action checks them | A permission that checks nothing reads as a control that is not there; `manage_admins` and `manage_platform_settings` are Super Admin only, so nothing is exposed today | P3 | S | To decide: wire each to its screen when built, or remove it |
-| C19 | The older administrator password reset email and its messages still say JUMP (`BRAND.programmeShortName`) | The wrong name in front of staff | P3 | S | Fix with the brand names (D1 to D4 of the migration checklist) |
+| C19 | The older administrator password reset email and its messages said JUMP (`BRAND.programmeShortName`), and the email went out from the JUMP mailbox and layout | The wrong name and sender in front of staff | P3 | S | Fixed on 9 November 2026: one sender (IP Factory) for every email; `test/shared/brand.test.ts` fails if a page, email or message reads the JUMP names again |
 
 (C11, C13, C14 and C16 were checked and found covered; the numbers are kept so the register stays stable.)
 
@@ -181,7 +181,7 @@ trusted browser origin.
 | `system.health` | Answers that the server is up | Public | — |
 | `system.notifyOwner` | Sends the platform owner a notice | The internal area | — |
 | `auth.me`, `auth.logout` | The older platform session: who is signed in; signs out of it and of the account session | Public | Account |
-| `adminAccess.status`, `adminAccess.enrollOwnerPassword`, `adminAccess.verifyPassword`, `adminAccess.requestPasswordReset`, `adminAccess.logoutPassword` | The older administrator password: its status, set by the owner, checked, a reset email (C19), sign out | A platform session; setting it, the owner's email only | Account |
+| `adminAccess.status`, `adminAccess.enrollOwnerPassword`, `adminAccess.verifyPassword`, `adminAccess.requestPasswordReset`, `adminAccess.logoutPassword` | The older administrator password: its status, set by the owner, checked, a reset email, sign out | A platform session; setting it, the owner's email only | Account |
 | `adminAccess.confirmPasswordReset` | Sets the new administrator password from the emailed link | Public, by a single-use link | Account |
 
 ### The public funnel

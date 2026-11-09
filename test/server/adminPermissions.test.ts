@@ -5,7 +5,7 @@ import {
   serializeAdminPermissions,
 } from "@shared/adminPermissions";
 
-describe("JUMP administrator permission policy", () => {
+describe("administrator permission policy", () => {
   it("exposes the complete participant-review capabilities as selectable responsibilities", () => {
     const ids = ADMIN_PERMISSION_DEFINITIONS.map((permission) => permission.id);
     expect(ids).toEqual(expect.arrayContaining([

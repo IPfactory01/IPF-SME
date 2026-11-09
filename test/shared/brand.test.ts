@@ -1,5 +1,5 @@
 import { bookingTarget } from "@shared/booking";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { BRAND } from "@shared/brand";
 
@@ -63,5 +63,19 @@ describe("Business Support inbox", () => {
   it("sends business check notifications to info@ipfactory.co, separate from the JUMP programme mailbox", () => {
     expect(BRAND.businessSupportMailbox).toBe("info@ipfactory.co");
     expect(BRAND.businessSupportMailbox).not.toBe(BRAND.administrationMailbox);
+  });
+});
+
+describe("the JUMP programme names", () => {
+  const sources = (dir: string): string[] => readdirSync(new URL(`../../${dir}`, import.meta.url), { withFileTypes: true })
+    .flatMap((entry) => (entry.isDirectory() ? sources(`${dir}/${entry.name}`) : /\.tsx?$/.test(entry.name) ? [`${dir}/${entry.name}`] : []));
+  // A JUMP-era Google Calendar helper with no caller tags its events with the programme name; it is not copy anyone sees.
+  const allowed = new Set(["server/calendar.ts"]);
+
+  it("are read by no page, email or message (C19, 9 November 2026)", () => {
+    const readers = [...sources("server"), ...sources("client/src")]
+      .filter((file) => !allowed.has(file))
+      .filter((file) => /BRAND\.(programme\w*|facilitator\w*|senderDisplayName|administrationMailbox)\b/.test(readFileSync(new URL(`../../${file}`, import.meta.url), "utf8")));
+    expect(readers).toEqual([]);
   });
 });

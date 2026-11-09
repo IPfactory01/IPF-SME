@@ -238,7 +238,7 @@ for (const target of targets) {
       }
 
       it("still needs the administrator-password session", async () => {
-        await expect((await legacyAdmin(false)).onboarding.candidates()).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringMatching(/verify your .* administrator password/i) });
+        await expect((await legacyAdmin(false)).onboarding.candidates()).rejects.toMatchObject({ code: "FORBIDDEN", message: expect.stringMatching(/verify your administrator password/i) });
         await expect((await legacyAdmin(true)).onboarding.candidates()).resolves.toBeDefined();
         expect(await (await legacyAdmin(true)).adminAccess.status()).toMatchObject({ passwordVerified: true, signedInVia: "legacy", isAdmin: true });
         expect(await (await legacyAdmin(false)).adminAccess.status()).toMatchObject({ passwordVerified: false });

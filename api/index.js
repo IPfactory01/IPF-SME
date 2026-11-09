@@ -2218,7 +2218,7 @@ var ENV = {
    * a role stored by `pnpm owner:bootstrap` counts. Every comparison must treat "" as "no owner", never as a match.
    */
   ownerAdminEmail: (process.env.OWNER_ADMIN_EMAIL?.trim() ?? "").toLowerCase(),
-  emailReplyTo: process.env.EMAIL_REPLY_TO ?? BRAND.administrationMailbox,
+  emailReplyTo: process.env.EMAIL_REPLY_TO ?? BRAND.businessSupportMailbox,
   /**
    * Keeps the JUMP programme's public procedures open (registration, portal sign-in links, pricing requests, Paystack
    * callbacks, emailing a diagnostic to any address). Off unless LEGACY_JUMP_ENABLED is 1, true or yes: each of them
@@ -2797,7 +2797,7 @@ async function verifyAndRecordAdminPassword(userId, password) {
   if (!db) throw new Error("Database not available");
   const credential = await db.select().from(adminCredentials).where(eq2(adminCredentials.userId, userId)).limit(1);
   const current = credential[0];
-  if (!current) return { ok: false, reason: `No ${BRAND.programmeShortName} administrator password is enrolled for this account.` };
+  if (!current) return { ok: false, reason: "No administrator password is set up for this account." };
   if (current.lockedUntil && current.lockedUntil.getTime() > Date.now()) {
     return { ok: false, reason: "Too many attempts. Kindly try again in 15 minutes." };
   }
@@ -2811,7 +2811,7 @@ async function verifyAndRecordAdminPassword(userId, password) {
     failedAttempts: lock ? 0 : nextAttempts,
     lockedUntil: lock
   }).where(eq2(adminCredentials.id, current.id));
-  return { ok: false, reason: lock ? "Too many attempts. Kindly try again in 15 minutes." : `The ${BRAND.programmeShortName} administrator password is not correct.` };
+  return { ok: false, reason: lock ? "Too many attempts. Kindly try again in 15 minutes." : "The administrator password is not correct." };
 }
 
 // server/fileStorage.ts
@@ -3041,7 +3041,7 @@ function requireTrustedBrowserOrigin(req, res, next) {
     next();
     return;
   }
-  res.status(403).json({ message: `This request was blocked by ${BRAND.programmeShortName} security controls.` });
+  res.status(403).json({ message: `This request was blocked by ${BRAND.productName} security controls.` });
 }
 
 // server/_core/storageProxy.ts
@@ -3153,9 +3153,6 @@ var EMAIL_LOGO_PNG_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAMAAAACzCAYAAADfahNoAABejEl
 function escapeHtml(value) {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
 }
-function toParagraphHtml(value) {
-  return escapeHtml(value).replace(/\n/g, "<br />");
-}
 function safeHref(url) {
   try {
     const parsed = new URL(url);
@@ -3163,29 +3160,6 @@ function safeHref(url) {
   } catch {
     return "";
   }
-}
-function buildBrandedEmailHtml(input) {
-  const preheader = escapeHtml(input.preheader || input.title);
-  const label = input.label ? `<div style="font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;letter-spacing:1.4px;text-transform:uppercase;color:#B45309;font-weight:700;margin:0 0 12px;">${escapeHtml(input.label)}</div>` : "";
-  const greeting = input.greeting ? `<p style="margin:0 0 18px;font-family:Georgia,'Times New Roman',serif;font-size:18px;line-height:28px;color:#18212D;">${toParagraphHtml(input.greeting)}</p>` : "";
-  const paragraphs = input.paragraphs.map((paragraph2) => `<p style="margin:0 0 18px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:25px;color:#344154;word-break:normal;overflow-wrap:break-word;">${toParagraphHtml(paragraph2)}</p>`).join("");
-  const details = input.details?.length ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;margin:4px 0 22px;background:#F8FAFC;border:1px solid #D8E2EC;border-radius:8px;">${input.details.map((detail) => `<tr><td style="padding:11px 14px 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:17px;letter-spacing:.7px;text-transform:uppercase;color:#5F7083;font-weight:700;">${escapeHtml(detail.label)}</td></tr><tr><td style="padding:3px 14px 11px;font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:23px;color:#18212D;word-break:normal;overflow-wrap:break-word;">${toParagraphHtml(detail.value)}</td></tr>`).join("")}</table>` : "";
-  const callout2 = input.callout ? `<div style="margin:0 0 22px;padding:15px 16px;background:#FFF7E7;border-left:4px solid #F59E0B;border-radius:0 8px 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:23px;color:#5B4214;word-break:normal;overflow-wrap:break-word;">${toParagraphHtml(input.callout)}</div>` : "";
-  const href = input.cta ? safeHref(input.cta.url) : "";
-  const cta = input.cta && href ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:4px 0 24px;"><tr><td bgcolor="#F59E0B" style="border-radius:7px;"><a href="${href}" target="_blank" style="display:inline-block;padding:14px 20px;font-family:Arial,Helvetica,sans-serif;font-size:16px;line-height:20px;font-weight:700;color:#172033;text-decoration:none;border-radius:7px;">${escapeHtml(input.cta.label)}</a></td></tr></table>` : "";
-  const footerNote = input.footerNote ? `<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#68778A;word-break:normal;overflow-wrap:break-word;">${toParagraphHtml(input.footerNote)}</p>` : "";
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="x-apple-disable-message-reformatting"><title>${escapeHtml(input.title)}</title></head><body style="margin:0;padding:0;background:#F3F0EA;"><div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;line-height:1px;font-size:1px;">${preheader}</div><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;background:#F3F0EA;"><tr><td align="center" style="padding:24px 12px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="width:100%;max-width:600px;border-collapse:collapse;background:#FFFFFF;border-radius:12px;overflow:hidden;"><tr><td style="padding:24px 28px;background:${BRAND.colorBrand};"><div style="font-family:Georgia,'Times New Roman',serif;font-size:26px;line-height:30px;font-weight:700;letter-spacing:.2px;color:#FFFFFF;">${BRAND.programmeName}</div><div style="margin-top:4px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;letter-spacing:1.15px;text-transform:uppercase;color:#DCE9F4;">Strategy &amp; Innovation Genius Track</div></td></tr><tr><td style="padding:30px 28px 24px;">${label}<h1 style="margin:0 0 18px;font-family:Georgia,'Times New Roman',serif;font-size:29px;line-height:36px;font-weight:700;color:#18212D;word-break:normal;">${escapeHtml(input.title)}</h1>${greeting}${paragraphs}${details}${callout2}${cta}${footerNote}</td></tr><tr><td style="padding:18px 28px 22px;background:#F8FAFC;border-top:1px solid #E1E8EF;"><p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:18px;color:#68778A;">${BRAND.facilitatorName} &nbsp;|&nbsp; ${BRAND.programmeName} Strategy &amp; Innovation Genius Track</p></td></tr></table></td></tr></table></body></html>`;
-}
-function buildPlainTextEmailHtml(body) {
-  const blocks2 = body.trim().split(/\n\s*\n/).filter(Boolean);
-  const first = blocks2[0] || BRAND.programmeName;
-  const greeting = /^dear\s+/i.test(first) ? first : void 0;
-  return buildBrandedEmailHtml({
-    label: `${BRAND.programmeName} communication`,
-    title: greeting ? `A message from ${BRAND.facilitatorName}` : `${BRAND.programmeName} update`,
-    greeting,
-    paragraphs: greeting ? blocks2.slice(1) : blocks2
-  });
 }
 var URL_IN_TEXT = /(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)])/;
 var SECTION_HEADING = /^(?:[A-Z][A-Z0-9 &'’,-]{2,40}|[^:]{1,60}:)$/;
@@ -3287,20 +3261,9 @@ async function logBusinessSupportEmail(input) {
 }
 
 // server/email.ts
-var JUMP_PROGRAMME_MAILBOX = BRAND.programmeMailbox;
-var JUMP_PROGRAMME_SENDER = `${BRAND.senderDisplayName} <${JUMP_PROGRAMME_MAILBOX}>`;
-var JUMP_ADMINISTRATION_MAILBOX = BRAND.administrationMailbox;
 var BUSINESS_SUPPORT_MAILBOX = BRAND.businessSupportMailbox;
 function normalizeEmailHeaderValue(value) {
   return value.replace(/\\u003c/gi, "<").replace(/\\u003e/gi, ">");
-}
-function getJumpProgrammeSender(configuredFrom = ENV.emailFrom) {
-  const normalised = normalizeEmailHeaderValue(configuredFrom || "");
-  const lower3 = normalised.toLowerCase();
-  return lower3.includes(`<${JUMP_PROGRAMME_MAILBOX}>`) || lower3 === JUMP_PROGRAMME_MAILBOX ? normalised : JUMP_PROGRAMME_SENDER;
-}
-function getJumpProgrammeReplyTo(_configuredReplyTo = ENV.emailReplyTo) {
-  return JUMP_PROGRAMME_MAILBOX;
 }
 var BUSINESS_SUPPORT_SENDER = `${BRAND.organisationName} <notifications@contact.ipfactory.co>`;
 function getBusinessSupportSender(configuredFrom = ENV.emailFrom, production = ENV.isProduction) {
@@ -3310,16 +3273,15 @@ function getBusinessSupportSender(configuredFrom = ENV.emailFrom, production = E
   return normalised;
 }
 function resendRequestBody(input) {
-  const businessSupport = input.sender === "business_support";
-  const html = input.html || (businessSupport ? buildBusinessSupportEmailHtml(input.body) : buildPlainTextEmailHtml(input.body));
+  const html = input.html || buildBusinessSupportEmailHtml(input.body);
   return {
-    from: businessSupport ? getBusinessSupportSender() : getJumpProgrammeSender(),
+    from: getBusinessSupportSender(),
     to: [input.to],
     bcc: input.bcc ? Array.isArray(input.bcc) ? input.bcc : [input.bcc] : void 0,
     subject: input.subject,
     text: input.body,
     html,
-    reply_to: businessSupport ? BUSINESS_SUPPORT_MAILBOX : getJumpProgrammeReplyTo(),
+    reply_to: BUSINESS_SUPPORT_MAILBOX,
     attachments: [
       ...(input.attachments || []).map((attachment) => ({
         filename: attachment.filename,
@@ -3392,7 +3354,7 @@ async function deliverEmail(input) {
   } else {
     result = await postToResend({ payload: resendRequestBody(input), apiKey, idempotencyKey: input.idempotencyKey });
   }
-  if (input.sender === "business_support") await logBusinessSupportEmail({
+  await logBusinessSupportEmail({
     to: input.to,
     subject: input.subject,
     attemptedAt,
@@ -4290,9 +4252,10 @@ var validatePayload = (input) => {
 async function notifyOwner(payload) {
   const { title, content } = validatePayload(payload);
   const delivery = await deliverEmail({
-    to: BRAND.administrationMailbox,
+    to: BRAND.businessSupportMailbox,
     subject: title,
-    body: content
+    body: content,
+    sender: "business_support"
   });
   if (delivery.status === "Failed") {
     console.warn(`[Notification] Failed to notify the desk: ${delivery.reason}`);
@@ -4393,7 +4356,7 @@ var adminProcedure = t.procedure.use(
       throw new TRPCError4({ code: "FORBIDDEN", message: NOT_ADMIN_ERR_MSG });
     }
     if (!await hasVerifiedAdminAccess(ctx.req, ctx.user.id)) {
-      throw new TRPCError4({ code: "FORBIDDEN", message: `Kindly verify your ${BRAND.programmeShortName} administrator password to continue.` });
+      throw new TRPCError4({ code: "FORBIDDEN", message: "Kindly verify your administrator password to continue." });
     }
     return next({
       ctx: {
@@ -4408,7 +4371,7 @@ var ownerAdminProcedure = adminProcedure.use(
     const db = await getDb();
     if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
     if (!ctx.user || !(await loadAuthority(db, ctx.user)).isSuperAdmin) {
-      throw new TRPCError4({ code: "FORBIDDEN", message: `This action is reserved for the ${BRAND.programmeShortName} super administrator.` });
+      throw new TRPCError4({ code: "FORBIDDEN", message: "This action is reserved for the Super Admin." });
     }
     return next({ ctx: { ...ctx, user: ctx.user } });
   })
@@ -4421,7 +4384,7 @@ function adminPermissionProcedure(permission) {
       if (!db) throw new TRPCError4({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
       const authority = await loadAuthority(db, ctx.user);
       if (!authorityAllows(authority, permission)) {
-        throw new TRPCError4({ code: "FORBIDDEN", message: `Your ${BRAND.programmeShortName} administrator role does not include this responsibility.` });
+        throw new TRPCError4({ code: "FORBIDDEN", message: "Your administrator role does not include this responsibility." });
       }
       return next({ ctx: { ...ctx, user: ctx.user, authority } });
     })
@@ -4487,7 +4450,7 @@ var adminAccessRouter = router({
   }),
   enrollOwnerPassword: protectedProcedure.input(z4.object({ password: passwordSchema, confirmPassword: passwordSchema })).mutation(async ({ ctx, input }) => {
     if (!ctx.user || !isOwnerAdmin(ctx.user) || ctx.user.role !== "admin") {
-      throw new TRPCError5({ code: "FORBIDDEN", message: `Only the recognised ${BRAND.programmeShortName} super administrator can create this password.` });
+      throw new TRPCError5({ code: "FORBIDDEN", message: "Only the recognised Super Admin can create this password." });
     }
     if (input.password !== input.confirmPassword) {
       throw new TRPCError5({ code: "BAD_REQUEST", message: "The password confirmation does not match." });
@@ -4502,11 +4465,11 @@ var adminAccessRouter = router({
       action: "owner_password_enrolled",
       targetEmail: normalizeAdminEmail(ctx.user.email)
     });
-    return { success: true, message: `Your ${BRAND.programmeShortName} administrator password is now active.` };
+    return { success: true, message: "Your administrator password is now active." };
   }),
   verifyPassword: protectedProcedure.input(z4.object({ password: z4.string().min(1).max(160) })).mutation(async ({ ctx, input }) => {
     if (!ctx.user || ctx.user.role !== "admin") {
-      throw new TRPCError5({ code: "FORBIDDEN", message: `This account is not an authorised ${BRAND.programmeShortName} administrator.` });
+      throw new TRPCError5({ code: "FORBIDDEN", message: "This account is not an authorised administrator." });
     }
     const result = await verifyAndRecordAdminPassword(ctx.user.id, input.password);
     if (!result.ok) throw new TRPCError5({ code: "UNAUTHORIZED", message: result.reason });
@@ -4515,7 +4478,7 @@ var adminAccessRouter = router({
   }),
   requestPasswordReset: protectedProcedure.mutation(async ({ ctx }) => {
     if (!ctx.user || ctx.user.role !== "admin") {
-      throw new TRPCError5({ code: "FORBIDDEN", message: `This account is not an authorised ${BRAND.programmeShortName} administrator.` });
+      throw new TRPCError5({ code: "FORBIDDEN", message: "This account is not an authorised administrator." });
     }
     const db = await getDb();
     if (!db) throw new TRPCError5({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
@@ -4539,16 +4502,17 @@ var adminAccessRouter = router({
     const resetUrl = `${baseUrl}/admin/reset?token=${encodeURIComponent(token3)}`;
     const delivery = await deliverEmail({
       to: email,
-      subject: `Reset your ${BRAND.programmeShortName} administrator password`,
+      subject: `Reset your administrator password on ${BRAND.productName}`,
       body: `Hello,
 
-We received a request to reset the ${BRAND.programmeShortName} administrator password for ${email}. Kindly use the secure link below within 20 minutes:
+We received a request to reset the administrator password for ${email} on ${BRAND.productName}. Kindly use the secure link below within 20 minutes:
 
 ${resetUrl}
 
 For your protection, this link can be used once. If you did not request this reset, please ignore this email; your existing password will remain unchanged.
 
-${BRAND.senderDisplayName}`
+${BRAND.organisationName}`,
+      sender: "business_support"
     });
     if (delivery.status !== "Sent") {
       await db.update(adminPasswordResetTokens).set({ revokedAt: /* @__PURE__ */ new Date(), deliveryStatus: delivery.status, deliveryMessageId: null }).where(eq7(adminPasswordResetTokens.id, resetId));
@@ -4595,7 +4559,7 @@ ${BRAND.senderDisplayName}`
       targetEmail: normalizeAdminEmail(administrator.email),
       details: JSON.stringify({ resetTokenId: resetToken.id })
     });
-    return { success: true, message: `Your ${BRAND.programmeShortName} administrator password has been reset. Kindly sign in again with your authorised Gmail account.` };
+    return { success: true, message: "Your administrator password has been reset. Kindly sign in again." };
   }),
   logoutPassword: protectedProcedure.mutation(async ({ ctx }) => {
     if (ctx.user) await revokeAdminSessionsForUser(ctx.user.id);

@@ -238,7 +238,7 @@ info@ipfactory.co.
 | Staff account locked after wrong passwords | Super Admins | *[The Shift security] Account locked: {email}* | Built |
 | Wrong two-step codes in a row | Super Admins | *[The Shift security] Wrong two-step codes: {email}* | Built |
 | Signed in with a recovery code, or from a new device | Super Admins | *[The Shift security] Recovery code used: {email}*; *… New device: {email}* | Built |
-| Administrator password reset (the older admin password) | The administrator | *Reset your JUMP administrator password* | Built; the wording still says JUMP (to fix) |
+| Administrator password reset (the older admin password) | The administrator | *Reset your administrator password on The Shift* | Built |
 | Engagement opened: the welcome with Your plan | Owner | *Your The Shift room for {business}*, with the plan | Partly built (the plan, R47) |
 | Fee due in 5 days, due today, 3 and 7 days late | Owner; lead at 7 days | To write; each with a WhatsApp button | To build (R12) |
 | Work paused; work resumed | Owner; lead | *Work on {engagement} is paused*; *… has resumed* | To build (R51) |

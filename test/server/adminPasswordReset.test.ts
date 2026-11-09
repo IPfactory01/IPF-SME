@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const routerSource = readFileSync(resolve(process.cwd(), "server/routers/adminAccess.ts"), "utf8");
 
-describe("JUMP administrator password reset safeguards", () => {
+describe("administrator password reset safeguards", () => {
   it("requires an authenticated authorised administrator to request an email-delivered recovery link", () => {
     const requestSection = routerSource.slice(routerSource.indexOf("requestPasswordReset: protectedProcedure"), routerSource.indexOf("confirmPasswordReset: publicProcedure"));
     expect(routerSource).toContain("requestPasswordReset: protectedProcedure");
@@ -12,8 +12,15 @@ describe("JUMP administrator password reset safeguards", () => {
     expect(routerSource).toContain("randomBytes(32)");
     expect(routerSource).toContain("PASSWORD_RESET_TOKEN_MAX_AGE_MS");
     expect(routerSource).toContain("adminPasswordResetTokens");
-    expect(routerSource).toContain("subject: `Reset your ${BRAND.programmeShortName} administrator password`");
+    expect(routerSource).toContain("subject: `Reset your administrator password on ${BRAND.productName}`");
     expect(requestSection).not.toContain("bcc:");
+  });
+
+  it("sends the reset email as IP Factory and never names JUMP (C19)", () => {
+    const requestSection = routerSource.slice(routerSource.indexOf("requestPasswordReset: protectedProcedure"), routerSource.indexOf("confirmPasswordReset: publicProcedure"));
+    expect(requestSection).toContain('sender: "business_support"');
+    // Every message and the email itself (the procedures before logoutPassword); history comments may still say JUMP.
+    expect(routerSource.slice(0, routerSource.indexOf("logoutPassword:"))).not.toMatch(/programme|JUMP|senderDisplayName|Gmail/);
   });
 
   it("allows a new password only with an unexpired, unconsumed, and unrevoked emailed token", () => {

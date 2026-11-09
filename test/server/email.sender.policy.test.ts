@@ -1,17 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { JUMP_PROGRAMME_MAILBOX, JUMP_PROGRAMME_SENDER, getJumpProgrammeReplyTo, getJumpProgrammeSender } from "@server/email";
+import { BUSINESS_SUPPORT_MAILBOX, BUSINESS_SUPPORT_SENDER, resendRequestBody } from "@server/email";
 
-describe("JUMP participant-email sender policy", () => {
-  it("rejects a stale admin sender configuration in favour of the JUMP programme mailbox", () => {
-    expect(getJumpProgrammeSender("Emmanuel Tarfa | JUMP 2026 <admin@emmanueltarfa.com>")).toBe(JUMP_PROGRAMME_SENDER);
+/** One sender for every email (C19, 9 November 2026): the JUMP programme mailbox and its layout were removed. */
+describe("email sender policy", () => {
+  it("sends an email that names no sender from IP Factory, with replies to the office", () => {
+    const body = resendRequestBody({ to: "ada@example.com", subject: "A notice", body: "Hello" });
+    expect(body.from).toBe(BUSINESS_SUPPORT_SENDER);
+    expect(body.reply_to).toBe(BUSINESS_SUPPORT_MAILBOX);
   });
 
-  it("allows the configured JUMP mailbox without changing the display name", () => {
-    expect(getJumpProgrammeSender("Emmanuel Tarfa <jump@emmanueltarfa.com>")).toBe("Emmanuel Tarfa <jump@emmanueltarfa.com>");
-  });
-
-  it("always routes participant replies to the JUMP programme mailbox", () => {
-    expect(getJumpProgrammeReplyTo("admin@emmanueltarfa.com")).toBe(JUMP_PROGRAMME_MAILBOX);
-    expect(getJumpProgrammeReplyTo("jump@emmanueltarfa.com")).toBe(JUMP_PROGRAMME_MAILBOX);
+  it("offers no other identity to choose", async () => {
+    const email = await import("@server/email");
+    expect(Object.keys(email).filter((name) => /jump|programme/i.test(name))).toEqual([]);
   });
 });

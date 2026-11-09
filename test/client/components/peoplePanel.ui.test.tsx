@@ -173,8 +173,14 @@ describe("the People panel", () => {
   });
 
   it("shows nothing to someone the server refuses", () => {
-    api.error = { message: "Your IPF administrator role does not include this responsibility." };
+    api.error = { message: "Your IPF administrator role does not include this responsibility.", data: { code: "FORBIDDEN", httpStatus: 403 } };
     const { container } = render(<Both />);
     expect(container.textContent).toBe("");
+  });
+
+  it("says when the list could not load, with Try again, instead of hiding the panel (R69)", () => {
+    api.error = { message: "Failed to fetch" };
+    render(<Both />);
+    expect(screen.getAllByRole("alert")[0]!.textContent).toContain("We could not load this. Check your connection and try again.");
   });
 });

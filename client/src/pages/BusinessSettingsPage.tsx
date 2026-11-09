@@ -1,3 +1,5 @@
+import { Failed, Loading } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import AccountLayout from "@/components/AccountLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,7 +14,7 @@ type Form = { name: string; description: string; yearFounded: string; sector: st
 
 function BusinessSettings({ businessId }: { businessId: number }) {
   const utils = trpc.useUtils();
-  const profile = trpc.account.business.useQuery({ businessId }, { retry: false, refetchOnWindowFocus: false });
+  const profile = trpc.account.business.useQuery({ businessId }, { refetchOnWindowFocus: false });
   const [form, setForm] = useState<Form | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,7 +32,8 @@ function BusinessSettings({ businessId }: { businessId: number }) {
     onError: failure => setError(failure.message),
   });
 
-  if (profile.isLoading || (profile.data && !form)) return <p className="text-sm text-ink-muted">Loading…</p>;
+  if (profile.isLoading || (profile.data && !form)) return <Loading label="Opening your business profile" rows={4} />;
+  if (profile.error && !isRefusal(profile.error)) return <Failed error={profile.error} onRetry={() => void profile.refetch()} retrying={profile.isFetching} />;
   if (!profile.data || !form) return <p role="alert" className="text-sm text-danger-strong">{profile.error?.message ?? "This business is not available."}</p>;
 
   const data = profile.data;

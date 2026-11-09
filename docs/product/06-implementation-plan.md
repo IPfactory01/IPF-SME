@@ -51,15 +51,15 @@ connection; and a visitor on a phone sees the home page's content within 2.5 sec
 Built in four batches. A and B are for the clients already in the room, so they go first; C waits on one decision for
 one line; D can run alongside.
 
-### Batch A: the room on a weak connection and a phone (no migration, about 6 days)
+### Batch A: the room on a weak connection and a phone (no migration, about 6 days): built 9 November 2026
 
-| # | Task | Builds | Acceptance and test | Preview |
+| # | Task | Builds | Acceptance and test | Status |
 |---|---|---|---|---|
-| A1 | **The four states as shared parts** (`client/src/components/states.tsx`): Loading (the outline in `paper-sunken`), Empty (what will appear and who adds it), Failed (the message, **Try again**, the last copy kept with its time), Partly done. Reads retry twice before failing; no read turns retries off except the sign-in checks that expect a refusal | R69 | Component tests for each state; a source test fails if a read sets `retry: false` outside the listed sign-in checks | — |
-| A2 | **The room and the dashboard** use them: a failed load of the room says so and keeps what was there; "Your room opens here when…" shows only when the server says there is no engagement | R69 | UI tests: a failed read never shows the empty message; Try again reloads; the last copy stays | Phone and laptop |
-| A3 | **Account, sign-in, joining and pay pages** use them (`/settings/*`, `/onboarding`, `/join`, `/reset`, `/pay/*`) | R69 | UI test per page for loading, failed and empty | Phone |
-| A4 | **The admin console** uses them in every tab and in the engagement record | R69 | UI tests per tab | Laptop |
-| A5 | **The room on a phone:** the header shrinks to one line (the project and its day) once the owner scrolls or leaves the Overview; the tab bar scrolls the selected tab into view and fades at the edge where more tabs sit | R71 | UI tests: the compact header off the Overview; the selected tab asked into view on every change; checked at 390 px in Chromium (the review's script) | Phone |
+| A1 | **The four states as shared parts** (`client/src/components/states.tsx`): Loading (the outline in `paper-sunken`), Empty (what will appear and who adds it), Failed (the message, **Try again**, the last copy kept with its time), Partly done. Reads retry twice before failing; a refusal is never retried; no read turns retries off | R69 | Component tests for each state; a source test fails if a read sets `retry: false` | Built |
+| A2 | **The room and the dashboard** use them: a failed load of the room says so and keeps what was there; "Your room opens here when…" shows only when the server says there is no engagement | R69 | UI tests: a failed read never shows the empty message; Try again reloads; the last copy stays | Built |
+| A3 | **Account, sign-in, joining and pay pages** use them (`/settings/*`, `/onboarding`, `/join`, `/reset`, `/pay/*`) | R69 | UI test per page for loading, failed and empty | Built |
+| A4 | **The admin console** uses them in every tab and in the engagement record | R69 | UI tests per tab | Built |
+| A5 | **The room on a phone:** the header shrinks to one line (the project and its day) once the owner scrolls or leaves the Overview; the tab bar scrolls the selected tab into view and fades at the edge where more tabs sit | R71 | UI tests: the compact header off the Overview; the selected tab asked into view on every change; checked at 390 px in Chromium (the review's script) | Built |
 
 ### Batch B: the Digital marketing room (migration 0021, about 8 days)
 

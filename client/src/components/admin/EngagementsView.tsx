@@ -1,3 +1,5 @@
+import { Failed, Loading, StaleLine } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import type { inferRouterOutputs } from "@trpc/server";
@@ -17,8 +19,8 @@ export type StorageStatus = inferRouterOutputs<AppRouter>["engagement"]["staff"]
  * see the ones they are on. The server decides the list; this only shows it.
  */
 export default function EngagementsView() {
-  const list = trpc.engagement.staff.list.useQuery(undefined, { retry: false });
-  const awaiting = trpc.engagement.staff.awaitingStart.useQuery(undefined, { retry: false });
+  const list = trpc.engagement.staff.list.useQuery(undefined);
+  const awaiting = trpc.engagement.staff.awaitingStart.useQuery(undefined);
   const utils = trpc.useUtils();
   const start = trpc.engagement.staff.start.useMutation({
     onSuccess: result => {
@@ -37,12 +39,15 @@ export default function EngagementsView() {
   // else sees the projects they are on.
   const seesAll = Boolean(list.data && "seesAll" in list.data && list.data.seesAll);
   const canOpen = Boolean(list.data && "canStart" in list.data && list.data.canStart);
-  if (list.error) return <p role="alert" className="p-6 text-sm text-danger">{list.error.message}</p>;
+  if (list.error && list.data === undefined) return <div className="p-6"><Failed error={list.error} onRetry={() => void list.refetch()} retrying={list.isFetching} /></div>;
   if (list.data && !list.data.setUp) {
     return <p role="note" className="m-6 border border-line bg-white p-4 text-sm text-ink-muted">The engagement room is not set up in the database yet. It starts working once migration 0008 is applied.</p>;
   }
   return (
     <div className="space-y-4 p-6">
+      <StaleLine read={list} />
+      {/* The safety net must never fail silently: a paid client with no engagement would be missed (R69). */}
+      {awaiting.error && !isRefusal(awaiting.error) && awaiting.data === undefined && <Failed error={awaiting.error} onRetry={() => void awaiting.refetch()} retrying={awaiting.isFetching} />}
       <p className="text-sm text-ink-muted">{seesAll
         ? `Every engagement, of every type. A Business Review starts when it is paid${canOpen ? "; open any other, such as Digital marketing, with New engagement" : ""}. Open one to name the team, book the Sessions, send the Data Requests and share the Deliverables.`
         : "The projects you are on, of every type. Open one to see its Work Plan, Sessions, Data Requests and Deliverables."}</p>
@@ -63,7 +68,7 @@ export default function EngagementsView() {
       {canOpen && <ServiceRequests onOpen={setPrefill} />}
       {canOpen && <NewEngagement key={prefill?.requestId ?? "new"} onCreated={setOpenId} prefill={prefill} onDone={() => setPrefill(null)} />}
       <MyProjects items={list.data?.items ?? []} onOpen={setOpenId} />
-      {list.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
+      {list.isLoading ? <Loading label="Loading the engagements" /> : (
         <div className="overflow-x-auto border border-line bg-white">
           <table className="w-full">
             <thead><tr className="border-b border-line"><th className={TH}>Business</th><th className={TH}>Stage</th><th className={TH}>Team</th><th className={TH}>Data Requests</th><th className={TH}>Next Session</th></tr></thead>
@@ -227,7 +232,7 @@ function NewEngagement({ onCreated, prefill = null, onDone }: { onCreated: (id: 
           <div><label className={label} htmlFor="new-type">Type</label><select id="new-type" className={field} value={form.type} onChange={set("type")}>{ENGAGEMENT_TYPES.map(type => <option key={type} value={type}>{ENGAGEMENT_TYPE_LABELS[type]}</option>)}</select></div>
           {needsService && <div><label className={label} htmlFor="new-service">Service</label><select id="new-service" className={field} value={form.service} onChange={set("service")}><option value="">Choose the service</option>{services.map(product => <option key={product.id} value={product.id}>{product.name}</option>)}</select></div>}
           {existing ? (
-            <div className="sm:col-span-2"><label className={label} htmlFor="new-existing">Business</label><select id="new-existing" className={field} value={form.businessId} onChange={set("businessId")}><option value="">Choose the client's business</option>{(clients.data ?? []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>
+            <div className="sm:col-span-2"><label className={label} htmlFor="new-existing">Business</label><select id="new-existing" className={field} value={form.businessId} onChange={set("businessId")}><option value="">Choose the client's business</option>{(clients.data ?? []).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>{clients.error && clients.data === undefined && <div className="mt-2"><Failed error={clients.error} onRetry={() => void clients.refetch()} retrying={clients.isFetching} /></div>}</div>
           ) : (
             <>
               <div><label className={label} htmlFor="new-business">Business name</label><input id="new-business" className={field} value={form.businessName} onChange={set("businessName")} /></div>
@@ -253,6 +258,7 @@ function ServiceRequests({ onOpen }: { onOpen: (prefill: EngagementPrefill) => v
   const utils = trpc.useUtils();
   const requests = trpc.engagement.staff.serviceRequests.useQuery();
   const handle = trpc.engagement.staff.handleRequest.useMutation({ onSuccess: () => { void utils.engagement.staff.serviceRequests.invalidate(); toast.success("Request closed."); }, onError: error => toast.error(error.message) });
+  if (requests.error && !isRefusal(requests.error) && requests.data === undefined) return <Failed error={requests.error} onRetry={() => void requests.refetch()} retrying={requests.isFetching} />;
   if (!requests.data?.length) return null;
   return (
     <section aria-labelledby="service-requests" className="space-y-2 border border-brand-line bg-brand-tint p-4">

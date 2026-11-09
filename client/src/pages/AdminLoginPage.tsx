@@ -22,7 +22,7 @@ export default function AdminLoginPage() {
   const [, setLocation] = useLocation();
   const { user, loading } = useAuth();
   const utils = trpc.useUtils();
-  const access = trpc.adminAccess.status.useQuery(undefined, { enabled: Boolean(user), retry: false });
+  const access = trpc.adminAccess.status.useQuery(undefined, { enabled: Boolean(user) });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);

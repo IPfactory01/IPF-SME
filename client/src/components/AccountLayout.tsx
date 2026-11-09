@@ -1,5 +1,6 @@
 import { LegalFooterLinks } from "@/components/LegalLinks";
 import { Button } from "@/components/ui/button";
+import { Failed } from "@/components/states";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
 import { useAccount } from "@/hooks/useAccount";
 import { trpc } from "@/lib/trpc";
@@ -16,12 +17,12 @@ import { Link, useLocation } from "wouter";
  */
 export default function AccountLayout({ children, heading, width = "reading" }: { children: (account: NonNullable<ReturnType<typeof useAccount>["account"]>) => React.ReactNode; heading?: string; width?: "reading" | "wide" }) {
   const [location, setLocation] = useLocation();
-  const { account, loading } = useAccount();
+  const { account, loading, failed, retrying, refetch } = useAccount();
   const utils = trpc.useUtils();
 
   useEffect(() => {
-    if (!loading && !account) setLocation("/login");
-  }, [loading, account, setLocation]);
+    if (!loading && !failed && !account) setLocation("/login");
+  }, [loading, failed, account, setLocation]);
 
   const signOut = trpc.account.signOut.useMutation({
     onSuccess: () => {
@@ -30,8 +31,11 @@ export default function AccountLayout({ children, heading, width = "reading" }: 
     },
   });
 
+  if (failed) {
+    return <main className="flex min-h-screen items-center justify-center bg-paper p-6"><div className="w-full max-w-md"><Failed error={null} onRetry={() => void refetch()} retrying={retrying} /></div></main>;
+  }
   if (loading || !account) {
-    return <main className="flex min-h-screen items-center justify-center bg-paper p-6 text-sm text-ink-muted">Loading…</main>;
+    return <main className="flex min-h-screen items-center justify-center bg-paper p-6 text-sm text-ink-muted" role="status" aria-label="Opening your account">Opening your account…</main>;
   }
 
   // Phones get the short label so the three links sit on one line ("Business", not "Business settings").

@@ -131,7 +131,7 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 | First visit | Covered by R46 (the welcome) |
 | What goes wrong | Pause, changes asked for, refunds, a leaver's items: R51. A wrong file cannot be removed: **C5** |
 | End of the relationship | Close and Day-30 Review: R26, R27. A business changing hands: **C15** |
-| Empty, loading, error, partly-done screens | Audited in the design brief review (9 November 2026): 31 of 33 data reads never retry and only 5 say anything when they fail, so a dropped connection looks empty (B2). The Design brief (section 5) sets the four states; R69 builds them |
+| Empty, loading, error, partly-done screens | Audited in the design brief review (9 November 2026): 31 of 33 data reads never retry and only 5 say anything when they fail, so a dropped connection looks empty (B2). The Design brief (section 5) sets the four states; R69 built them on 9 November 2026 |
 | Channels | WhatsApp: R44. Session reminders by any channel: **C3** |
 | Money | Owed, paid, late: built or R12. Refunded: R37 |
 | Day 0, weekly, day 30, after the end | Day 0: R46. Weekly: check-ins built, Session reminders **C3**. Day 30: R27 |

@@ -1,3 +1,5 @@
+import { Failed, Loading } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import { LegalFooterLinks } from "@/components/LegalLinks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -218,7 +220,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 export default function FullReportPage() {
   const params = useParams<{ token: string }>();
   const token = params.token ?? "";
-  const form = trpc.fullReport.form.useQuery({ token }, { retry: false, refetchOnWindowFocus: false });
+  const form = trpc.fullReport.form.useQuery({ token }, { refetchOnWindowFocus: false });
   const [draft, setDraft] = useState<Draft>(() => loadDraft(token));
   const [problem, setProblem] = useState<string | null>(null);
   const [sent, setSent] = useState<{ fileName: string; pdf: string } | null>(null);
@@ -234,7 +236,11 @@ export default function FullReportPage() {
   });
   const download = trpc.fullReport.download.useMutation({ onSuccess: (result) => savePdf(result.fileName, result.pdf), onError: (error) => setProblem(error.message) });
 
-  if (form.isLoading) return <Shell><p className="text-sm text-ink-muted">Opening your Report Intake…</p></Shell>;
+  if (form.isLoading) return <Shell><Loading label="Opening your Report Intake" rows={3} /></Shell>;
+  // A request that failed is not a bad link (R69).
+  if (form.error && !isRefusal(form.error)) {
+    return <Shell><h1 className="font-serif text-3xl font-normal">We could not open your Report Intake</h1><div className="mt-4"><Failed error={form.error} onRetry={() => void form.refetch()} retrying={form.isFetching} /></div></Shell>;
+  }
   if (form.error || !form.data) {
     return (
       <Shell>

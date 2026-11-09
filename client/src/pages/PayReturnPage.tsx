@@ -1,3 +1,4 @@
+import { isRefusal } from "@/lib/readPolicy";
 import { PaymentShell, TestModeBanner } from "@/components/PaymentShell";
 import { Button } from "@/components/ui/button";
 import { rememberedPayPage } from "@/lib/payOnline";
@@ -55,9 +56,11 @@ export default function PayReturnPage() {
   const reference = (params.get("reference") || params.get("trxref") || "").trim();
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  // The check itself failed (no connection, a server fault): that says nothing about the payment (R69).
+  const [unreachable, setUnreachable] = useState(false);
   const status = trpc.onlinePayment.status.useMutation({
-    onSuccess: (result) => { setProblem(null); setOutcome(result); },
-    onError: (error) => setProblem(error.message),
+    onSuccess: (result) => { setProblem(null); setUnreachable(false); setOutcome(result); },
+    onError: (error) => { if (isRefusal(error)) setProblem(error.message); else setUnreachable(true); },
   });
 
   useEffect(() => {
@@ -66,6 +69,17 @@ export default function PayReturnPage() {
 
   if (!reference) return <NotFound message="Use the Pay online button in your payment email to try again, or reply to that email for help." />;
   if (problem && !outcome) return <NotFound message={problem} />;
+  if (unreachable && !outcome) {
+    return (
+      <PaymentShell>
+        <div role="alert" className="space-y-4">
+          <h1 className="font-serif text-3xl font-normal">We could not check your payment</h1>
+          <p className="text-ink-soft">Check your connection, then check again. If you have paid, your payment is safe with Paystack: please do not pay again.</p>
+          <button type="button" onClick={() => status.mutate({ reference })} disabled={status.isPending} className="inline-flex min-h-11 items-center rounded-lg bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-deep-hover disabled:opacity-60">{status.isPending ? "Checking…" : "Check again"}</button>
+        </div>
+      </PaymentShell>
+    );
+  }
   if (!outcome) return <PaymentShell><p className="text-sm text-ink-muted">Checking your payment with Paystack…</p></PaymentShell>;
 
   const banner = outcome.mode === "test" ? <TestModeBanner /> : null;

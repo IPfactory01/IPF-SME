@@ -1,3 +1,5 @@
+import { Failed, Loading } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -139,7 +141,7 @@ type DebriefKey = (typeof DEBRIEF_FIELDS)[number]["key"];
  */
 function DebriefSummary({ businessCheckId, heldAt }: { businessCheckId: number; heldAt: Date | string | null }) {
   const utils = trpc.useUtils();
-  const debrief = trpc.businessSupport.debrief.useQuery({ businessCheckId }, { retry: false });
+  const debrief = trpc.businessSupport.debrief.useQuery({ businessCheckId });
   const [form, setForm] = useState<Record<DebriefKey, string>>({ heard: "", problemInOwnerWords: "", successLooksLike: "", tried: "", nextSteps: "" });
   useEffect(() => {
     const row = debrief.data?.debrief;
@@ -148,7 +150,8 @@ function DebriefSummary({ businessCheckId, heldAt }: { businessCheckId: number; 
   const refresh = () => void utils.businessSupport.debrief.invalidate({ businessCheckId });
   const save = trpc.businessSupport.saveDebrief.useMutation({ onSuccess: () => { toast.success("Discovery Call saved."); refresh(); }, onError: error => toast.error(error.message) });
   const share = trpc.businessSupport.shareDebrief.useMutation({ onSuccess: (_, input) => { toast.success(input.shared ? "The owner can see the Discovery Call in their room." : "The Discovery Call is internal again."); refresh(); }, onError: error => toast.error(error.message) });
-  if (!debrief.data) return null;
+  if (debrief.error && !isRefusal(debrief.error) && debrief.data === undefined) return <DetailSection title="Discovery Call summary"><Failed error={debrief.error} onRetry={() => void debrief.refetch()} retrying={debrief.isFetching} /></DetailSection>;
+  if (!debrief.data) return debrief.isLoading ? <DetailSection title="Discovery Call summary"><Loading label="Loading the Discovery Call summary" rows={2} /></DetailSection> : null;
   if (!debrief.data.setUp) return <DetailSection title="Discovery Call summary"><p className="text-sm text-ink-muted">The Discovery Call record is not set up in the database yet (migration 0009).</p></DetailSection>;
   const row = debrief.data.debrief;
   const busy = save.isPending || share.isPending;

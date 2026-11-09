@@ -1,3 +1,5 @@
+import { Failed, Loading } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import { LegalFooterLinks } from "@/components/LegalLinks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +16,7 @@ import { Link, useParams } from "wouter";
  */
 export default function ResetPasswordPage() {
   const token = useParams<{ token: string }>().token ?? "";
-  const preview = trpc.account.resetPreview.useQuery({ token }, { retry: false, refetchOnWindowFocus: false });
+  const preview = trpc.account.resetPreview.useQuery({ token }, { refetchOnWindowFocus: false });
   const [form, setForm] = useState({ password: "", confirmPassword: "" });
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
@@ -36,7 +38,9 @@ export default function ResetPasswordPage() {
   );
   const signInLink = <Link href="/login" className="text-sm font-semibold text-brand underline underline-offset-2">Go to sign in</Link>;
 
-  if (preview.isLoading) return shell(<p className="text-center text-sm text-ink-muted">Checking your link…</p>);
+  if (preview.isLoading) return shell(<Loading label="Checking your link" rows={2} />);
+  // A request that failed is not an unavailable link (R69): only the server's answer decides that.
+  if (preview.error && !isRefusal(preview.error)) return shell(<Failed error={preview.error} onRetry={() => void preview.refetch()} retrying={preview.isFetching} />);
   if (done) return shell(card("Password changed", "Sign in with your new password. Any other place you were signed in has been signed out.", signInLink));
   if (!preview.data?.available) return shell(card("Reset link unavailable", PASSWORD_RESET_ERRORS.unavailable, signInLink));
   const email = preview.data.email;

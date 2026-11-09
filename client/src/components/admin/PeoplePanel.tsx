@@ -1,3 +1,5 @@
+import { Failed, Loading, StaleLine } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import React, { useState } from "react";
@@ -19,7 +21,7 @@ const STATUS: Record<string, string> = { active: "Active", suspended: "Suspended
  */
 export default function PeoplePanel({ scope }: { scope: "team" | "clients" }) {
   const utils = trpc.useUtils();
-  const people = trpc.people.list.useQuery(undefined, { retry: false });
+  const people = trpc.people.list.useQuery(undefined);
   const [issued, setIssued] = useState<{ email: string; url: string; sent: boolean } | null>(null);
   const [suspending, setSuspending] = useState<{ id: number; name: string } | null>(null);
   const [reason, setReason] = useState("");
@@ -67,9 +69,15 @@ export default function PeoplePanel({ scope }: { scope: "team" | "clients" }) {
     setStatus.mutate({ userId: suspending.id, status: "suspended", reason: reason.trim() });
   };
 
-  if (people.error || !people.data) return null;
+  // Refused (no manage_users): nothing to show. Failed or loading: say so, in the panel's place (R69).
+  if (people.error && isRefusal(people.error)) return null;
+  if (people.data === undefined) {
+    if (people.error) return <div className="border-b border-line p-6"><Failed error={people.error} onRetry={() => void people.refetch()} retrying={people.isFetching} /></div>;
+    return people.isLoading ? <div className="border-b border-line p-6"><Loading label={scope === "team" ? "Loading the team" : "Loading the client accounts"} /></div> : null;
+  }
   return (
     <div className="space-y-5 border-b border-line p-6">
+      <StaleLine read={people} />
       <div>
         <h2 className="font-serif text-xl font-normal">{scope === "team" ? "IP Factory team" : "Client accounts"}</h2>
         <p className="text-sm text-ink-muted">{scope === "team" ? "Everyone at IP Factory, with their level. The level sets what they can open; their function on each project is set in Engagements." : "Business owners and their people who sign in. Clients never hold a level."} A reset link is emailed to the person and shown once here; it works once, for 20 minutes, and signs them out everywhere. Suspending an account signs the person out at once and refuses their sign-in until it is reinstated. Remove access takes away every role and engagement as well, for someone leaving or a contractor whose work has ended. Everyone with a role signs in with a code from their phone; reset it if they lose the phone.</p>

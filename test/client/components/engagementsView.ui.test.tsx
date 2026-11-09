@@ -14,6 +14,8 @@ const api = vi.hoisted(() => ({
   requests: [] as unknown[],
   fees: { feeLines: [], total: 0, suggested: [{ label: "Business Review, payable before work begins", amount: 600000, dueOn: null }], opensOnPayment: false, online: true, can: { edit: true, sendLink: true } } as unknown,
   calls: {} as Record<string, unknown[]>,
+  failed: {} as Record<string, boolean>,
+  refetched: [] as string[],
 }));
 const replies: Record<string, unknown> = { createDirect: { engagementId: 9, invitationUrl: "https://ipf-sme.example.test/join/OWNER", deliveryStatus: "Simulated", hasAccount: false }, sendSignInLink: { kind: "reset", email: "ada@example.test", url: "https://ipf-sme.example.test/reset/abc", deliveryStatus: "Simulated" }, start: { engagementId: 4, created: true }, sendFeeLink: { url: "https://ipf-sme.example.test/pay/fee/81/abcdefghijklmnopqrstuvwxyz012345", deliveryStatus: "Simulated" }, fileLink: { url: "https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=down&download=sales.pdf" } };
 const mutation = (name: string) => (options?: { onSuccess?: (value: never, input: never) => void }) => ({
@@ -29,14 +31,14 @@ vi.mock("@/lib/trpc", () => ({
     businessSupport: { emailDeliveryStatus: { useQuery: () => ({ data: [], isLoading: false, error: undefined }) } },
     engagement: {
       staff: {
-        list: { useQuery: () => ({ data: api.list, isLoading: false, error: null }) },
-        awaitingStart: { useQuery: () => ({ data: api.awaiting }) },
+        list: { useQuery: () => ({ data: api.failed.list ? undefined : api.list, isLoading: false, error: api.failed.list ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("list"); } }) },
+        awaitingStart: { useQuery: () => ({ data: api.failed.awaiting ? undefined : api.awaiting, error: api.failed.awaiting ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("awaiting"); } }) },
         storageStatus: { useQuery: () => ({ data: api.storageError ? undefined : api.storage, error: api.storageError, refetch: () => undefined }) },
         detail: { useQuery: () => ({ data: api.detail, isLoading: false, error: null }) },
         assignableStaff: { useQuery: () => ({ data: [{ userId: 9, name: "Ola Analyst", email: "ola@example.test", roles: ["analyst"] }] }) },
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
-        fees: { useQuery: () => ({ data: api.fees, error: null }) },
+        fees: { useQuery: () => ({ data: api.failed.fees ? undefined : api.fees, error: api.failed.fees ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("fees"); } }) },
         ...Object.fromEntries(["start", "fileLink", "matchFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "loadDataRequest", "setFeePaid", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
@@ -74,10 +76,36 @@ beforeEach(() => {
   api.storage = { configured: true, missing: [], bucket: "engagement-files", bucketFound: true, bucketPublic: false, problem: null };
   api.storageError = null;
   api.calls = {};
+  api.failed = {};
+  api.refetched = [];
 });
 afterEach(cleanup);
 
 describe("the team's engagements", () => {
+  it("says when the list could not load, with Try again, instead of an empty list (R69)", () => {
+    api.failed.list = true;
+    render(<EngagementsView />);
+    expect(screen.getByRole("alert").textContent).toContain("We could not load this. Check your connection and try again.");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(api.refetched).toEqual(["list"]);
+  });
+
+  it("never hides a failed check for paid clients with no engagement (R69)", () => {
+    api.failed.awaiting = true;
+    render(<EngagementsView />);
+    expect(screen.getByRole("alert").textContent).toContain("We could not load this.");
+    expect(screen.getByText("Ada Foods")).toBeTruthy();
+  });
+
+  it("says when an engagement's fees could not load, in the Fees section (R69)", async () => {
+    api.detail = detail({ manage: true, assign: true, review: true }, [], []);
+    api.failed.fees = true;
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods"));
+    const fees = await screen.findByRole("heading", { name: "Fees" });
+    expect(fees.closest("section")!.textContent).toContain("We could not load this.");
+  });
+
   it("shows the Work Plan by week and in order, and saves the week, the order and the factor with a task", async () => {
     api.detail = detail({ manage: true, assign: true, review: true }, [deliverable({})], [
       task({ id: 52, title: "Bank statements for the last 6 months", weekNumber: 2, sortOrder: 1 }),

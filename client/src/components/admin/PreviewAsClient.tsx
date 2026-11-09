@@ -1,3 +1,4 @@
+import { Failed, Loading } from "@/components/states";
 import EngagementRoom from "@/components/EngagementRoom";
 import { RoomPreviewContext } from "@/components/room/RoomPreview";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,7 @@ export default function PreviewAsClient({ engagementId }: { engagementId: number
 }
 
 function PreviewOverlay({ engagementId, onClose }: { engagementId: number; onClose: () => void }) {
-  const room = trpc.engagement.staff.previewRoom.useQuery({ engagementId }, { retry: false, refetchOnWindowFocus: false });
+  const room = trpc.engagement.staff.previewRoom.useQuery({ engagementId }, { refetchOnWindowFocus: false });
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -37,8 +38,8 @@ function PreviewOverlay({ engagementId, onClose }: { engagementId: number; onClo
         <Button type="button" size="sm" variant="outline" className="shrink-0 rounded-lg text-xs" onClick={onClose}><X className="mr-1 h-3.5 w-3.5" aria-hidden />Close preview</Button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {room.error ? <p role="alert" className="p-6 text-sm text-danger">{room.error.message}</p>
-          : !room.data ? <p className="p-6 text-sm text-ink-muted">Loading…</p>
+        {room.error && room.data === undefined ? <div className="p-6"><Failed error={room.error} onRetry={() => void room.refetch()} retrying={room.isFetching} /></div>
+          : !room.data ? <div className="p-6"><Loading label="Opening the client's room" rows={4} /></div>
           : <RoomPreviewContext.Provider value><EngagementRoom room={room.data} /></RoomPreviewContext.Provider>}
       </div>
     </div>

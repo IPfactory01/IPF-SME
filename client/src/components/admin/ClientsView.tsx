@@ -1,3 +1,4 @@
+import { Failed, Loading, StaleLine } from "@/components/states";
 import { trpc } from "@/lib/trpc";
 import { BUSINESS_ROLE_LABELS } from "@shared/businessCapabilities";
 import React from "react";
@@ -5,13 +6,14 @@ import { formatDate } from "./format";
 
 /** Onboarded clients only: businesses and the people who belong to them. A business check is never listed here. */
 export default function ClientsView() {
-  const clients = trpc.businessSupport.clients.useQuery(undefined, { retry: false });
-  if (clients.error) return <p role="alert" className="p-6 text-sm text-danger-strong">{clients.error.message}</p>;
+  const clients = trpc.businessSupport.clients.useQuery(undefined);
+  if (clients.error && clients.data === undefined) return <div className="p-6"><Failed error={clients.error} onRetry={() => void clients.refetch()} retrying={clients.isFetching} /></div>;
   const businessCount = new Set(clients.data?.map(row => row.businessId)).size;
   return (
     <div className="space-y-4 p-6">
+      <StaleLine read={clients} />
       <p className="text-sm text-ink-muted">Businesses that have been onboarded, with the people who belong to them. {clients.data ? `${businessCount} business${businessCount === 1 ? "" : "es"}, ${clients.data.length} membership${clients.data.length === 1 ? "" : "s"}.` : ""}</p>
-      {clients.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
+      {clients.isLoading ? <Loading label="Loading the clients" /> : (
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead><tr className="border-b border-line text-sm text-ink-muted"><th className="py-2 pr-3">Business</th><th className="pr-3">Person</th><th className="pr-3">Email</th><th className="pr-3">Role</th><th className="pr-3">Onboarded</th></tr></thead>

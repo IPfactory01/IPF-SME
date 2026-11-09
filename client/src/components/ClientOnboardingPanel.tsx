@@ -1,3 +1,5 @@
+import { Failed, Loading } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { CURRENT_STATE } from "@shared/businessSupport";
@@ -16,9 +18,9 @@ const formatDate = (value: Date | string | null) => (value ? new Date(value).toL
  */
 export default function ClientOnboardingPanel() {
   const utils = trpc.useUtils();
-  const candidates = trpc.onboarding.candidates.useQuery(undefined, { retry: false });
-  const invitations = trpc.onboarding.invitations.useQuery(undefined, { retry: false });
-  const metrics = trpc.onboarding.metrics.useQuery(undefined, { retry: false });
+  const candidates = trpc.onboarding.candidates.useQuery(undefined);
+  const invitations = trpc.onboarding.invitations.useQuery(undefined);
+  const metrics = trpc.onboarding.metrics.useQuery(undefined);
   const [issued, setIssued] = useState<{ url: string; email: string; delivery: string } | null>(null);
   /** A candidate who has not paid, waiting for the reason to invite them anyway. */
   const [early, setEarly] = useState<{ id: number; fullName: string; stage: string } | null>(null);
@@ -56,8 +58,11 @@ export default function ClientOnboardingPanel() {
   const revoke = trpc.onboarding.revoke.useMutation({ onSuccess: () => { toast.success("Invitation revoked."); refresh(); }, onError: error => toast.error(error.message) });
 
   const stats = metrics.data;
+  // One line for the three reads: say when any failed and fetch all three again (R69).
+  const failed = [candidates, invitations, metrics].find(read => read.error && !isRefusal(read.error) && read.data === undefined);
   return (
     <div className="space-y-6 p-6">
+      {failed && <Failed error={failed.error} onRetry={() => { void candidates.refetch(); void invitations.refetch(); void metrics.refetch(); }} retrying={candidates.isFetching || invitations.isFetching || metrics.isFetching} />}
       <p role="note" className="border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">
         The invitation goes out by itself when the {CURRENT_STATE.name} payment is confirmed. Invite by hand only to resend or for an agreed exception.
       </p>
@@ -100,7 +105,7 @@ export default function ClientOnboardingPanel() {
 
       <section>
         <h3 className="mb-2 font-serif text-lg">Business Health Checks</h3>
-        {candidates.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
+        {candidates.isLoading ? <Loading label="Loading the Business Health Checks to invite" /> : (
           <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b border-line text-sm text-ink-muted"><th className="py-2 pr-3">Name</th><th className="pr-3">Business</th><th className="pr-3">Email</th><th className="pr-3">Discovery Call</th><th className="pr-3">Stage</th><th className="pr-3">Onboarding link</th><th /></tr></thead><tbody>
             {candidates.data?.map(item => (
               <tr key={item.id} className="border-b border-line-soft">

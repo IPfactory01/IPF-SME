@@ -1,3 +1,4 @@
+import { Failed, Loading, StaleLine } from "@/components/states";
 import { trpc } from "@/lib/trpc";
 import { formatNaira } from "@shared/businessSupport";
 import React, { useState } from "react";
@@ -11,15 +12,16 @@ const TD = "px-3 py-2 align-top text-sm";
  * they belong: a payment request in the check's record (Pipeline), a fee line in the engagement's fees (Engagements).
  */
 export default function FinanceView() {
-  const finance = trpc.engagement.finance.list.useQuery(undefined, { retry: false });
+  const finance = trpc.engagement.finance.list.useQuery(undefined);
   const [show, setShow] = useState<"owed" | "all">("owed");
-  if (finance.error) return <p role="alert" className="p-6 text-sm text-danger">{finance.error.message}</p>;
-  if (!finance.data) return <p className="p-6 text-sm text-ink-muted">Loading…</p>;
+  if (finance.error && finance.data === undefined) return <div className="p-6"><Failed error={finance.error} onRetry={() => void finance.refetch()} retrying={finance.isFetching} /></div>;
+  if (!finance.data) return <div className="p-6"><Loading label="Loading Finance" /></div>;
   const { totals, requests, fees } = finance.data;
   const feeRows = show === "owed" ? fees.filter(row => !row.paid) : fees;
   const requestRows = show === "owed" ? requests.filter(row => !row.paid) : requests;
   return (
     <div className="space-y-5 p-6">
+      <StaleLine read={finance} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" role="group" aria-label="Totals">
         {[
           { label: "Paid", value: totals.paid, tone: "text-health-clear" },

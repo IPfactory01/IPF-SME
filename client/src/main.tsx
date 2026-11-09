@@ -1,3 +1,4 @@
+import { readRetryDelay, retryRead } from "@/lib/readPolicy";
 import { trpc } from "@/lib/trpc";
 import { COOKIE_NAME, UNAUTHED_ERR_MSG } from '@shared/const';
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -8,7 +9,8 @@ import App from "./App";
 import { ADMIN_LOGIN_PATH } from "./const";
 import "./index.css";
 
-const queryClient = new QueryClient();
+// Every read retries twice on a failed request, never on a refusal (lib/readPolicy.ts, design brief §5).
+const queryClient = new QueryClient({ defaultOptions: { queries: { retry: retryRead, retryDelay: readRetryDelay } } });
 
 const redirectToLoginIfUnauthorized = (error: unknown) => {
   if (!(error instanceof TRPCClientError)) return;

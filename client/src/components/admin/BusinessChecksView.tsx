@@ -1,3 +1,4 @@
+import { Failed, Loading, StaleLine } from "@/components/states";
 import { Input } from "@/components/ui/input";
 import type { ConsoleTarget } from "@/lib/adminSections";
 import { trpc } from "@/lib/trpc";
@@ -15,7 +16,7 @@ import { formatDate, readinessShort } from "./format";
  * attention. The full record opens in a drawer. These are prospects: nothing here creates a user or a business.
  */
 export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (section: ConsoleTarget) => void }) {
-  const checks = trpc.businessSupport.checks.useQuery(undefined, { retry: false });
+  const checks = trpc.businessSupport.checks.useQuery(undefined);
   const [search, setSearch] = useState("");
   const [stage, setStage] = useState<PipelineStage | "all">("all");
   const [openId, setOpenId] = useState<number | null>(null);
@@ -37,9 +38,10 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
     return counts;
   }, [rows]);
 
-  if (checks.error) return <p role="alert" className="p-6 text-sm text-danger-strong">{checks.error.message}</p>;
+  if (checks.error && checks.data === undefined) return <div className="p-6"><Failed error={checks.error} onRetry={() => void checks.refetch()} retrying={checks.isFetching} /></div>;
   return (
     <div className="space-y-5 p-4 sm:p-6">
+      <StaleLine read={checks} />
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-5" aria-label="Summary">
         <AdminMetricCard label="Business Health Checks" value={rows.length} />
         <AdminMetricCard label="Completed" value={rows.filter(row => row.completedAt).length} />
@@ -72,7 +74,7 @@ export default function BusinessChecksView({ onOpenSection }: { onOpenSection: (
         <span className="text-xs text-ink-muted sm:ml-auto">{visible.length} of {rows.length}</span>
       </div>
 
-      {checks.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
+      {checks.isLoading ? <Loading label="Loading the Business Health Checks" /> : (
         <div className="max-h-[68vh] overflow-y-auto border border-line bg-white">
           <table className="w-full table-fixed border-collapse">
             <thead className="sticky top-0 z-10 border-b border-line bg-paper">

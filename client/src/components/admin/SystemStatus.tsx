@@ -1,3 +1,4 @@
+import { Failed, Loading } from "@/components/states";
 import { trpc } from "@/lib/trpc";
 import React from "react";
 import { StorageLine } from "./EngagementsView";
@@ -7,8 +8,8 @@ import { StorageLine } from "./EngagementsView";
  * Support email. Both were on the tabs that use them; they are about the platform, not a client.
  */
 export default function SystemStatus() {
-  const storage = trpc.engagement.staff.storageStatus.useQuery(undefined, { retry: false });
-  const emailStatus = trpc.businessSupport.emailDeliveryStatus.useQuery(undefined, { retry: false });
+  const storage = trpc.engagement.staff.storageStatus.useQuery(undefined);
+  const emailStatus = trpc.businessSupport.emailDeliveryStatus.useQuery(undefined);
   return (
     <div className="space-y-4 border-b border-line p-6">
       <div>
@@ -22,7 +23,7 @@ export default function SystemStatus() {
           <h2 id="business-support-email-status" className="font-serif text-lg font-normal">Business Support email status</h2>
           <p className="mt-1 text-xs text-ink-muted">Recent attempts and Resend delivery events. Message contents are not stored here.</p>
         </div>
-        {emailStatus.isLoading ? <p className="p-4 text-sm text-ink-muted">Loading email status…</p> : emailStatus.error ? <p role="alert" className="p-4 text-sm text-danger-strong">Email status is unavailable.</p> : emailStatus.data?.length ? (
+        {emailStatus.isLoading ? <div className="p-4"><Loading label="Loading email status" rows={2} /></div> : emailStatus.error && emailStatus.data === undefined ? <div className="p-4"><Failed error={emailStatus.error} onRetry={() => void emailStatus.refetch()} retrying={emailStatus.isFetching} refusal="Email status is for those who run the Pipeline." /></div> : emailStatus.data?.length ? (
           <div className="max-h-80 overflow-auto">
             <table className="w-full text-left text-xs">
               <thead className="sticky top-0 bg-paper text-ink-muted"><tr><th className="p-2">Recipient</th><th className="p-2">Email</th><th className="p-2">Status</th><th className="p-2">Related record</th><th className="p-2">Provider ID</th><th className="p-2">Last update</th></tr></thead>

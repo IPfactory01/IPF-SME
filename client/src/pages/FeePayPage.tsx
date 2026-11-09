@@ -1,3 +1,5 @@
+import { Failed, Loading } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import { PrivacyLink, TermsLink } from "@/components/LegalLinks";
 import { PaymentShell, TestModeBanner } from "@/components/PaymentShell";
 import { Button } from "@/components/ui/button";
@@ -18,7 +20,7 @@ export default function FeePayPage() {
   const feeLineId = Number(params.feeLineId);
   const token = params.token ?? "";
   const valid = Number.isInteger(feeLineId) && feeLineId > 0 && token.length >= 16;
-  const page = trpc.onlinePayment.feePage.useQuery({ feeLineId, token }, { enabled: valid, retry: false, refetchOnWindowFocus: false });
+  const page = trpc.onlinePayment.feePage.useQuery({ feeLineId, token }, { enabled: valid, refetchOnWindowFocus: false });
   const [problem, setProblem] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [paidMeanwhile, setPaidMeanwhile] = useState(false);
@@ -44,7 +46,11 @@ export default function FeePayPage() {
     </PaymentShell>
   );
   if (!valid) return invalid();
-  if (page.isLoading) return <PaymentShell><p className="text-sm text-ink-muted">Opening your payment…</p></PaymentShell>;
+  if (page.isLoading) return <PaymentShell><Loading label="Opening your payment" rows={2} /></PaymentShell>;
+  // A request that failed is not a bad link (R69): say so and offer Try again; only the server's refusal means the link is wrong.
+  if (page.error && !isRefusal(page.error)) {
+    return <PaymentShell><h1 className="font-serif text-3xl font-normal">We could not open your payment</h1><div className="mt-4"><Failed error={page.error} onRetry={() => void page.refetch()} retrying={page.isFetching} /></div></PaymentShell>;
+  }
   if (page.error || !page.data) return invalid(page.error?.message);
 
   const { businessName, engagement, label, amountNaira, reference, mode, state } = page.data;

@@ -7,7 +7,8 @@ import { memoryLocation } from "wouter/memory-location";
 
 const api = vi.hoisted(() => ({
   page: undefined as unknown,
-  pageError: undefined as { message: string } | undefined,
+  pageError: undefined as { message: string; data?: { code: string; httpStatus: number } } | undefined,
+  refetched: 0,
   pageInputs: [] as unknown[],
   startCalls: [] as unknown[],
   startResult: { alreadyPaid: false, url: "https://checkout.paystack.com/fixture" } as unknown,
@@ -24,7 +25,7 @@ vi.mock("@/lib/payOnline", () => ({
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     onlinePayment: {
-      page: { useQuery: (input: unknown) => { api.pageInputs.push(input); return { data: api.page, isLoading: false, error: api.pageError }; } },
+      page: { useQuery: (input: unknown) => { api.pageInputs.push(input); return { data: api.page, isLoading: false, error: api.pageError, refetch: () => { api.refetched += 1; } }; } },
       start: {
         useMutation: (options: { onSuccess?: (value: unknown) => void; onError?: (error: { message: string }) => void }) => ({
           isPending: false,
@@ -49,6 +50,7 @@ const renderPage = (item = "full_report") => {
 const payButton = () => screen.queryByRole("button", { name: /securely with Paystack/ });
 
 beforeEach(() => {
+  api.refetched = 0;
   api.page = { item: "full_report", name: "Full Report", amountNaira: 100_000, mode: "test", state: "open" };
   api.pageError = undefined;
   api.pageInputs = [];
@@ -149,12 +151,23 @@ describe("the pay page", () => {
 
   it("says the link is not valid for an unknown payment or an item that is not for sale", () => {
     api.page = undefined;
-    api.pageError = { message: "We could not find this payment. Use the link in your payment email." };
+    // The server refused (not found): the link is wrong.
+    api.pageError = { message: "We could not find this payment. Use the link in your payment email.", data: { code: "NOT_FOUND", httpStatus: 404 } };
     renderPage();
     expect(screen.getByRole("heading", { name: "This link is not valid" })).toBeTruthy();
     expect(screen.getByText("We could not find this payment. Use the link in your payment email.")).toBeTruthy();
     cleanup();
     renderPage("the_fix");
     expect(screen.getByRole("heading", { name: "This link is not valid" })).toBeTruthy();
+  });
+
+  it("does not call the link invalid when the connection fails: it offers Try again (R69)", () => {
+    api.page = undefined;
+    api.pageError = { message: "Failed to fetch" };
+    renderPage();
+    expect(screen.getByRole("heading", { name: "We could not open your payment" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "This link is not valid" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(api.refetched).toBe(1);
   });
 });

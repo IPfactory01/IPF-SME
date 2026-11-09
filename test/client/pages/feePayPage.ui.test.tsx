@@ -7,7 +7,8 @@ import { memoryLocation } from "wouter/memory-location";
 
 const api = vi.hoisted(() => ({
   page: undefined as unknown,
-  pageError: undefined as { message: string } | undefined,
+  pageError: undefined as { message: string; data?: { code: string; httpStatus: number } } | undefined,
+  refetched: 0,
   pageInputs: [] as unknown[],
   startCalls: [] as unknown[],
   startResult: { alreadyPaid: false, url: "https://checkout.paystack.com/fixture" } as unknown,
@@ -23,7 +24,7 @@ vi.mock("@/lib/payOnline", () => ({
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     onlinePayment: {
-      feePage: { useQuery: (input: unknown, options: { enabled: boolean }) => { if (options.enabled) api.pageInputs.push(input); return { data: options.enabled ? api.page : undefined, isLoading: false, error: api.pageError }; } },
+      feePage: { useQuery: (input: unknown, options: { enabled: boolean }) => { if (options.enabled) api.pageInputs.push(input); return { data: options.enabled ? api.page : undefined, isLoading: false, error: api.pageError, refetch: () => { api.refetched += 1; } }; } },
       feeStart: {
         useMutation: (options: { onSuccess?: (value: unknown) => void }) => ({
           isPending: false,
@@ -43,6 +44,7 @@ const renderPage = (path = `/pay/fee/12/${TOKEN}`) => {
 };
 
 beforeEach(() => {
+  api.refetched = 0;
   api.page = { businessName: "Crown Studio", engagement: "Digital marketing", label: "Month 2 service fee, payable before day 31", amountNaira: 470_000, dueOn: "2026-12-09", reference: "TS-F-000012", mode: "live", state: "open" };
   api.pageError = undefined;
   api.pageInputs = [];
@@ -72,6 +74,19 @@ describe("paying an engagement fee", () => {
     renderPage();
     expect(screen.getByRole("heading", { name: "Already paid" })).toBeTruthy();
     expect(screen.queryByRole("button")).toBeNull();
+  });
+
+  it("offers Try again when the connection fails, and calls the link invalid only when the server refuses it (R69)", () => {
+    api.page = undefined;
+    api.pageError = { message: "Failed to fetch" };
+    renderPage();
+    expect(screen.getByRole("heading", { name: "We could not open your payment" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(api.refetched).toBe(1);
+    cleanup();
+    api.pageError = { message: "This payment link is not valid.", data: { code: "NOT_FOUND", httpStatus: 404 } };
+    renderPage();
+    expect(screen.getByRole("heading", { name: "This link is not valid" })).toBeTruthy();
   });
 
   it("refuses a link that is not one of ours without asking the server", () => {

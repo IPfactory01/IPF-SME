@@ -1,9 +1,11 @@
 import { useAccount } from "@/hooks/useAccount";
 import AccountLayout from "@/components/AccountLayout";
 import EngagementRoom from "@/components/EngagementRoom";
+import { Failed, Loading, Stale } from "@/components/states";
 import TeamSeats from "@/components/TeamSeats";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { isRefusal } from "@/lib/readPolicy";
 import { trpc } from "@/lib/trpc";
 import { useRoomProject } from "@/lib/roomProject";
 import { CURRENT_STATE } from "@shared/businessSupport";
@@ -22,7 +24,7 @@ function Dashboard({ account }: { account: AccountSessionView }) {
   const internal = account.platformRoles.length > 0;
   const { project } = useRoomProject();
   // The previous project stays on screen while the next one loads, so switching never flashes the welcome page.
-  const room = trpc.engagement.client.room.useQuery(project ? { engagementId: project } : undefined, { retry: false, enabled: Boolean(business), placeholderData: previous => previous });
+  const room = trpc.engagement.client.room.useQuery(project ? { engagementId: project } : undefined, { enabled: Boolean(business), placeholderData: previous => previous });
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -30,16 +32,20 @@ function Dashboard({ account }: { account: AccountSessionView }) {
         <div>
           <p className="text-sm font-medium text-ink-muted">{business ? "Your room" : "Your account"}</p>
           <h1 id="welcome" className="mt-2 font-serif text-3xl font-normal tracking-tight sm:text-4xl">{business ? business.businessName : account.user.fullName}</h1>
-          {business && (
-            <p className="mt-3 max-w-xl text-ink-600">
-              {room.isLoading ? "Opening your room…" : `Your room opens here when your ${CURRENT_STATE.name} starts. Until then, your team at IP Factory reaches you on WhatsApp and by email.`}
-            </p>
-          )}
+          {/* Four states (R69): the room loading; the room failed to load (never shown as "not started"); the server
+              saying there is no room yet (null); the room itself, which the page above shows instead of this. */}
+          {business && room.data === undefined && room.error ? (
+            <div className="mt-4 max-w-xl"><Failed error={room.error} onRetry={() => void room.refetch()} retrying={room.isFetching} /></div>
+          ) : business && room.isLoading ? (
+            <Loading label="Opening your room" rows={2} className="mt-4 max-w-xl" />
+          ) : business && room.data === null ? (
+            <p className="mt-3 max-w-xl text-ink-600">{`Your room opens here when your ${CURRENT_STATE.name} starts. Until then, your team at IP Factory reaches you on WhatsApp and by email.`}</p>
+          ) : null}
           {!business && !internal && <p className="mt-3 max-w-xl text-ink-600">You are not a member of a business yet.</p>}
         </div>
       </section>
 
-      {business && !business.profileComplete && !room.isLoading && (
+      {business && !business.profileComplete && room.data === null && (
         <Card className="rounded-none border-line-soft bg-white shadow-none">
           <CardHeader className="space-y-1 pb-3">
             <CardDescription className="text-sm font-medium">Before we start</CardDescription>
@@ -82,7 +88,7 @@ export default function AccountDashboard() {
   const business = account?.activeBusiness;
   const { project } = useRoomProject();
   // The previous project stays on screen while the next one loads, so switching never flashes the welcome page.
-  const room = trpc.engagement.client.room.useQuery(project ? { engagementId: project } : undefined, { retry: false, enabled: Boolean(business), placeholderData: previous => previous });
+  const room = trpc.engagement.client.room.useQuery(project ? { engagementId: project } : undefined, { enabled: Boolean(business), placeholderData: previous => previous });
   if (account && business && room.data) {
     const roomAccount = {
       name: account.user.fullName,
@@ -90,7 +96,9 @@ export default function AccountDashboard() {
       role: business.role === "owner" ? "Owner" : "Team member",
       internal: account.platformRoles.length > 0,
     };
-    return <EngagementRoom room={room.data} account={roomAccount} aside={room.data.viewer.kind === "owner" ? <TeamSeats /> : undefined} />;
+    // A refresh that failed keeps the room on screen and says how old it is (R69).
+    const notice = room.error && !isRefusal(room.error) ? <Stale updatedAt={room.dataUpdatedAt} onRetry={() => void room.refetch()} retrying={room.isFetching} /> : undefined;
+    return <EngagementRoom room={room.data} account={roomAccount} notice={notice} aside={room.data.viewer.kind === "owner" ? <TeamSeats /> : undefined} />;
   }
   return <AccountLayout width="wide">{acc => <Dashboard account={acc} />}</AccountLayout>;
 }

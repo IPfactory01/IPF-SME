@@ -8,6 +8,12 @@ export const TAB_SPRING = { type: "spring", bounce: 0, duration: 0.35 } as const
 /** Where a fling would come to rest, as a scroll view decelerates (UIScrollView's normal rate). */
 export const project = (velocity: number, rate = 0.998) => ((velocity / 1000) * rate) / (1 - rate);
 
+/** The fade at an edge of the tab bar where more tabs sit; none when every tab shows. */
+const fadeOf = (more: { left: boolean; right: boolean }) => {
+  if (!more.left && !more.right) return undefined;
+  return `linear-gradient(to right, ${more.left ? "transparent, black 32px" : "black"}, ${more.right ? "black calc(100% - 32px), transparent" : "black"})`;
+};
+
 const tabFromHash = (tabs: RoomTab[]) => {
   if (typeof window === "undefined") return -1;
   return tabs.findIndex(tab => `#${tab.id}` === window.location.hash);
@@ -19,7 +25,11 @@ const tabFromHash = (tabs: RoomTab[]) => {
  * resistance instead of stopping dead. Taps never wait for an animation, and a moving panel can be caught mid-way.
  * Hidden panels are inert, so the keyboard and screen readers only reach the tab on screen.
  */
-export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; initial: string; label: string }) {
+/**
+ * `onChange` hears which tab is on screen (the room shrinks its header off the Overview on a phone); `top` overrides
+ * where the tab bar sticks (under the room's one-line bar when that shows).
+ */
+export default function RoomTabs({ tabs, initial, label, onChange, top: topOverride }: { tabs: RoomTab[]; initial: string; label: string; onChange?: (id: string) => void; top?: number }) {
   const [index, setIndex] = useState(() => {
     const fromHash = tabFromHash(tabs);
     return fromHash >= 0 ? fromHash : Math.max(0, tabs.findIndex(tab => tab.id === initial));
@@ -36,6 +46,16 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
   const [top, setTop] = useState(0);
   const dragged = useRef(false);
   const controls = useDragControls();
+  const tablist = useRef<HTMLDivElement>(null);
+  // Which edges of the tab bar hide more tabs, so the bar can fade there (R71).
+  const [more, setMore] = useState<{ left: boolean; right: boolean }>({ left: false, right: false });
+  const measureMore = useCallback(() => {
+    const list = tablist.current;
+    if (!list) return;
+    const left = list.scrollLeft > 1;
+    const right = list.scrollLeft + list.clientWidth < list.scrollWidth - 1;
+    setMore(current => (current.left === left && current.right === right ? current : { left, right }));
+  }, []);
 
   const settle = useCallback((to: number, velocity = 0) => {
     if (!width) return;
@@ -67,6 +87,20 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
     if (observer && viewport.current) observer.observe(viewport.current);
     return () => { window.removeEventListener("resize", measure); observer?.disconnect(); };
   }, [x]);
+
+  // The tab on screen: tell the room, and bring its button into view inside the bar (never scrolling the page) (R71).
+  useEffect(() => {
+    onChange?.(tabs[index]?.id ?? initial);
+    const list = tablist.current;
+    const button = buttons.current[index];
+    if (list && button) list.scrollTo?.({ left: Math.max(0, button.offsetLeft - (list.clientWidth - button.offsetWidth) / 2), behavior: reduce ? "auto" : "smooth" });
+    measureMore();
+  }, [index]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    window.addEventListener("resize", measureMore);
+    return () => window.removeEventListener("resize", measureMore);
+  }, [measureMore]);
 
   // The viewport takes the height of the panel on screen, so a short tab does not leave a long empty page.
   useEffect(() => {
@@ -112,8 +146,17 @@ export default function RoomTabs({ tabs, initial, label }: { tabs: RoomTab[]; in
 
   return (
     <div>
-      <div className="sticky z-30 border-b border-line-soft bg-white px-2 sm:px-5" style={{ top }} data-room-tabs>
-        <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="flex gap-1 overflow-x-auto [scrollbar-width:none]">
+      <div className="sticky z-30 border-b border-line-soft bg-white px-2 sm:px-5" style={{ top: topOverride ?? top }} data-room-tabs>
+        <div
+          ref={tablist}
+          role="tablist"
+          aria-label={label}
+          onKeyDown={onKeyDown}
+          onScroll={measureMore}
+          data-more={more.left && more.right ? "both" : more.right ? "right" : more.left ? "left" : undefined}
+          className="flex gap-1 overflow-x-auto [scrollbar-width:none]"
+          style={{ maskImage: fadeOf(more), WebkitMaskImage: fadeOf(more) }}
+        >
           {tabs.map((tab, k) => (
             <button
               key={tab.id}

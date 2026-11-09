@@ -8,6 +8,8 @@ import { memoryLocation } from "wouter/memory-location";
 
 const api = vi.hoisted(() => ({
   preview: undefined as unknown,
+  previewError: undefined as unknown,
+  refetched: 0,
   me: null as unknown,
   seats: undefined as unknown,
   team: [] as unknown[],
@@ -27,7 +29,7 @@ vi.mock("@/lib/trpc", () => ({
     account: { me: { useQuery: () => ({ data: api.me, isLoading: false, refetch: () => undefined }) }, signOut: { useMutation: mutation("signOut") } },
     platformRoles: { setLevel: { useMutation: mutation("setLevel") } },
     invitations: {
-      preview: { useQuery: () => ({ data: api.preview, isLoading: false }) },
+      preview: { useQuery: () => ({ data: api.previewError ? undefined : api.preview, error: api.previewError, isLoading: false, refetch: () => { api.refetched += 1; } }) },
       accept: { useMutation: mutation("accept", () => api.acceptReply) },
       seats: {
         list: { useQuery: () => ({ data: api.seats }) },
@@ -58,12 +60,23 @@ const renderJoin = () => {
 
 beforeEach(() => {
   api.preview = undefined;
+  api.previewError = undefined;
+  api.refetched = 0;
   api.me = null;
   api.calls = {};
 });
 afterEach(cleanup);
 
 describe("joining by invitation", () => {
+  it("offers Try again when the invitation cannot be checked, instead of calling it unavailable (R69)", () => {
+    api.previewError = new Error("Failed to fetch");
+    renderJoin();
+    expect(screen.getByRole("alert").textContent).toContain("We could not load this. Check your connection and try again.");
+    expect(screen.queryByText("Invitation unavailable")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(api.refetched).toBe(1);
+  });
+
   it("creates an analyst's account with the invited email locked, and opens their landing page", async () => {
     api.preview = { available: true, kind: "staff", email: "ola@example.com", fullName: "Ola Analyst", businessName: null, access: null };
     api.acceptReply = { landingPath: "/admin", user: { email: "ola@example.com" } };

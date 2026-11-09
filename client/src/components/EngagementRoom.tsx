@@ -6,7 +6,7 @@ import { ASSESSMENT_DAYS, ASSESSMENT_WEEKS, ENGAGEMENT_TASK_PRIORITY_LABELS, FIX
 import { METHOD, METHOD_MEANING } from "@shared/method";
 import type { inferRouterOutputs } from "@trpc/server";
 import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlash, Download, FileText, Flag, Paperclip, UploadCloud } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
 import { DATED_TYPES, datedProgress, monthOfDay, SERVICE_STEPS } from "@shared/engagementTypes";
@@ -50,7 +50,8 @@ const isOpen = (task: Task) => OPEN_TASK_STATUSES.includes(task.status);
  * with the team, what is waiting on you and the Deliverables. Everything shown here was filtered on the server for
  * this person; this screen decides nothing about access.
  */
-export default function EngagementRoom({ room, aside, account, now = Date.now() }: { room: Room; aside?: React.ReactNode; account?: RoomAccount; now?: number }) {
+/** `notice` sits above the room, e.g. that a refresh failed and the room shows the last copy (R69). */
+export default function EngagementRoom({ room, aside, account, notice, now = Date.now() }: { room: Room; aside?: React.ReactNode; account?: RoomAccount; notice?: React.ReactNode; now?: number }) {
   const [open, setOpen] = useState<number | null>(null);
   const isOwner = room.viewer.kind === "owner";
   const here = nowOf(room, now);
@@ -65,6 +66,17 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
   const current = steps.find(step => step.state === "now")?.n ?? null;
   const shown = (n: number) => (open === null ? n === current : open === n);
   const wide = useWide();
+  // Which view is on screen, and whether the full header has scrolled out of sight (phones only; R71).
+  const [view, setView] = useState("overview");
+  const headerRef = useRef<HTMLElement>(null);
+  const [headerGone, setHeaderGone] = useState(false);
+  useEffect(() => {
+    const element = headerRef.current;
+    if (wide || !element || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(([entry]) => setHeaderGone(!entry.isIntersecting && entry.boundingClientRect.top < 0));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [wide, view]);
   const timeline = (
         <section aria-labelledby="timeline-title">
           <p className={KICKER}>{METHOD.engagement} timeline</p>
@@ -219,8 +231,22 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
     ...(room.fees.length ? [{ id: "payments", label: "Payments", group: "What you receive", count: dueCount(room) ? { value: dueCount(room), label: `${dueCount(room)} to pay` } : undefined, content: <PaymentsView room={room} /> }] : []),
   ];
 
+  // On a phone (R71): off the Overview the header is one line, so each view starts near the top; on the Overview the
+  // full header scrolls away as the page does, and a one-line bar takes its place at the top once it has gone. The bar
+  // is fixed and the tab bar moves under it, so nothing in the page shifts as it appears.
+  const compactLine = (
+    <>
+      <span className="min-w-0 truncate">{here.title}</span>
+      {here.progress && <span className="shrink-0 text-xs font-normal text-ink-muted tabular-nums">{here.progress.label}</span>}
+    </>
+  );
+  const compactHeader = (
+    <section aria-labelledby="room-title" data-room-header="compact" className="border-b border-line-soft bg-white px-4 py-2.5">
+      <h1 id="room-title" className="flex items-center justify-between gap-3 font-sans text-sm font-semibold text-ink">{compactLine}</h1>
+    </section>
+  );
   const header = (
-    <section aria-labelledby="room-title" className="border-b border-line-soft bg-white px-4 pt-5 pb-4 sm:px-7">
+    <section ref={headerRef} aria-labelledby="room-title" data-room-header="full" className="border-b border-line-soft bg-white px-4 pt-5 pb-4 sm:px-7">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs text-ink-muted"><span>{room.businessName}</span><span aria-hidden className="px-1.5">/</span><span>{room.stageLabel}</span></p>
@@ -246,14 +272,17 @@ export default function EngagementRoom({ room, aside, account, now = Date.now() 
     </section>
   );
 
+  const floating = !wide && view === "overview" && headerGone;
   return (
     <div className="flex min-h-screen bg-paper text-ink">
       {wide && <RoomSidebar room={room} tabs={room.awaitingPayment ? [] : tabs} account={account} />}
       <div className="min-w-0 flex-1">
         <div aria-hidden className="h-[3px] bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight" />
         {!wide && <RoomTopBar account={account} />}
-        {header}
-        {room.awaitingPayment ? <PaymentGate room={room} /> : <RoomTabs label="Your engagement" initial="overview" tabs={tabs} />}
+        {notice && <div className="px-4 pt-4 sm:px-7">{notice}</div>}
+        {!wide && view !== "overview" && !room.awaitingPayment ? compactHeader : header}
+        {floating && <div aria-hidden data-room-header="floating" className="fixed inset-x-0 top-0 z-40 flex h-10 items-center justify-between gap-3 border-b border-line-soft bg-white px-4 text-sm font-semibold text-ink">{compactLine}</div>}
+        {room.awaitingPayment ? <PaymentGate room={room} /> : <RoomTabs label="Your engagement" initial="overview" tabs={tabs} onChange={setView} top={floating ? 40 : undefined} />}
       </div>
     </div>
   );

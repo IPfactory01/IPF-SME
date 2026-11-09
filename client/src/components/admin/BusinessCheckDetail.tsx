@@ -1,3 +1,5 @@
+import { Failed, Loading } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -128,9 +130,10 @@ function MoveStage({ businessCheckId, current }: { businessCheckId: number; curr
 }
 
 export default function BusinessCheckDetail({ businessCheckId, onOpenSection, onClose }: { businessCheckId: number; onOpenSection: (section: ConsoleTarget) => void; onClose: () => void }) {
-  const detail = trpc.businessSupport.checkDetail.useQuery({ businessCheckId }, { retry: false, refetchOnWindowFocus: false });
+  const detail = trpc.businessSupport.checkDetail.useQuery({ businessCheckId }, { refetchOnWindowFocus: false });
   const prices = useServicePrices();
-  if (detail.isLoading) return <p className="text-sm text-ink-muted">Loading the record…</p>;
+  if (detail.isLoading) return <Loading label="Loading the record" rows={4} />;
+  if (detail.error && !isRefusal(detail.error) && detail.data === undefined) return <Failed error={detail.error} onRetry={() => void detail.refetch()} retrying={detail.isFetching} />;
   if (detail.error || !detail.data) return <p role="alert" className="text-sm text-danger-strong">{detail.error?.message ?? "This record is not available."}</p>;
 
   const check = detail.data;

@@ -1,3 +1,5 @@
+import { Failed } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { CLIENT_ACCESS_LABELS, CLIENT_ACCESS_LEVELS, type ClientAccessLevel } from "@shared/engagement";
@@ -10,7 +12,7 @@ import { toast } from "sonner";
  */
 export default function TeamSeats() {
   const utils = trpc.useUtils();
-  const seats = trpc.invitations.seats.list.useQuery(undefined, { retry: false });
+  const seats = trpc.invitations.seats.list.useQuery(undefined);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [access, setAccess] = useState<ClientAccessLevel>("contributor");
@@ -30,6 +32,8 @@ export default function TeamSeats() {
   const revoke = trpc.invitations.seats.revoke.useMutation(refresh);
   const remove = trpc.invitations.seats.remove.useMutation(refresh);
   const change = trpc.invitations.seats.setAccess.useMutation(refresh);
+  // Refused (not the owner): no card. Failed: say so in the card's place (R69).
+  if (seats.error && !isRefusal(seats.error) && seats.data === undefined) return <section aria-label="Add a colleague" className="rounded-xl border border-line-soft bg-white p-5"><Failed error={seats.error} onRetry={() => void seats.refetch()} retrying={seats.isFetching} /></section>;
   if (!seats.data) return null;
   const { included, used, members, invitations } = seats.data;
   const free = used < included;

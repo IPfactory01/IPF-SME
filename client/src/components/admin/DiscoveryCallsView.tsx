@@ -1,3 +1,4 @@
+import { Failed, Loading, StaleLine } from "@/components/states";
 import { Input } from "@/components/ui/input";
 import type { ConsoleTarget } from "@/lib/adminSections";
 import { trpc } from "@/lib/trpc";
@@ -14,7 +15,7 @@ const STATUS_FILTERS = ["call_requested", "call_scheduled", "fit", "referred", "
  * in the record drawer, so the table stays readable.
  */
 export default function DiscoveryCallsView({ onOpenSection }: { onOpenSection: (section: ConsoleTarget) => void }) {
-  const calls = trpc.businessSupport.discoveryCalls.useQuery(undefined, { retry: false });
+  const calls = trpc.businessSupport.discoveryCalls.useQuery(undefined);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [openId, setOpenId] = useState<number | null>(null);
@@ -30,9 +31,10 @@ export default function DiscoveryCallsView({ onOpenSection }: { onOpenSection: (
   }, [rows, search, status]);
   const opened = rows.find(row => row.id === openId) ?? null;
 
-  if (calls.error) return <p role="alert" className="p-6 text-sm text-danger-strong">{calls.error.message}</p>;
+  if (calls.error && calls.data === undefined) return <div className="p-6"><Failed error={calls.error} onRetry={() => void calls.refetch()} retrying={calls.isFetching} /></div>;
   return (
     <div className="space-y-5 p-4 sm:p-6">
+      <StaleLine read={calls} />
       <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Summary">
         <AdminMetricCard label="Discovery Call requests" value={rows.length} />
         <AdminMetricCard label="No time yet" value={rows.filter(row => row.status === "call_requested").length} />
@@ -49,7 +51,7 @@ export default function DiscoveryCallsView({ onOpenSection }: { onOpenSection: (
         <span className="text-xs text-ink-muted sm:ml-auto">{visible.length} of {rows.length}</span>
       </div>
 
-      {calls.isLoading ? <p className="text-sm text-ink-muted">Loading…</p> : (
+      {calls.isLoading ? <Loading label="Loading the Discovery Calls" /> : (
         <div className="max-h-[68vh] overflow-y-auto border border-line bg-white">
           <table className="w-full table-fixed border-collapse">
             <thead className="sticky top-0 z-10 border-b border-line bg-paper">

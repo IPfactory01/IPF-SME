@@ -6,7 +6,7 @@ import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 
 const api = vi.hoisted(() => ({
-  results: [] as Array<{ status: string; item: string; mode: string } | { error: string }>,
+  results: [] as Array<{ status: string; item: string; mode: string } | { error: string; refused?: boolean }>,
   calls: [] as unknown[],
   remembered: null as string | null,
 }));
@@ -21,7 +21,7 @@ vi.mock("@/lib/trpc", () => ({
           mutate: (input: unknown) => {
             api.calls.push(input);
             const next = api.results.shift();
-            if (next && "error" in next) options.onError?.({ message: next.error });
+            if (next && "error" in next) options.onError?.({ message: next.error, ...(next.refused === false ? {} : { data: { code: "NOT_FOUND", httpStatus: 404 } }) });
             else if (next) options.onSuccess?.(next);
           },
         }),
@@ -109,5 +109,16 @@ describe("the return page after Paystack", () => {
     renderPage("reference=nonsense");
     expect(screen.getByRole("heading", { name: "We could not find your payment" })).toBeTruthy();
     expect(screen.getByText("We could not find this payment. Use the link in your payment email.")).toBeTruthy();
+  });
+
+  it("never says a payment is missing when only the check failed: it says not to pay again and checks again (R69)", () => {
+    api.results = [{ error: "Failed to fetch", refused: false }, { status: "paid", item: "full_report", mode: "live" }];
+    renderPage();
+    expect(screen.getByRole("heading", { name: "We could not check your payment" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "We could not find your payment" })).toBeNull();
+    expect(screen.getByText(/please do not pay again/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Check again" }));
+    expect(api.calls).toHaveLength(2);
+    expect(screen.queryByRole("heading", { name: "We could not check your payment" })).toBeNull();
   });
 });

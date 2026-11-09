@@ -1,3 +1,5 @@
+import { Failed, Loading } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import { PrivacyLink, TermsLink } from "@/components/LegalLinks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,7 +22,7 @@ export default function JoinPage() {
   const token = useParams<{ token: string }>().token ?? "";
   const { account } = useAccount();
   const utils = trpc.useUtils();
-  const preview = trpc.invitations.preview.useQuery({ token }, { retry: false, refetchOnWindowFocus: false });
+  const preview = trpc.invitations.preview.useQuery({ token }, { refetchOnWindowFocus: false });
   const invited = preview.data?.available ? preview.data : null;
   const signedInAsSomeoneElse = Boolean(account && invited && account.user.email.toLowerCase() !== invited.email.toLowerCase());
   const [form, setForm] = useState<{ fullName: string; password: string; confirmPassword: string } | null>(null);
@@ -57,7 +59,9 @@ export default function JoinPage() {
     </Card>
   );
 
-  if (preview.isLoading || (invited && form === null)) return shell(<p className="text-center text-sm text-ink-muted">Checking your invitation…</p>);
+  if (preview.isLoading || (invited && form === null)) return shell(<Loading label="Checking your invitation" rows={2} />);
+  // A request that failed is not an unavailable link (R69): only the server's answer decides that.
+  if (preview.error && !isRefusal(preview.error)) return shell(<Failed error={preview.error} onRetry={() => void preview.refetch()} retrying={preview.isFetching} />);
   if (!invited) return shell(card("Invitation unavailable", ONBOARDING_ERRORS.unavailable, <Link href="/login" className="text-sm text-brand underline">Already have an account? Sign in</Link>));
   if (account && signedInAsSomeoneElse) {
     return shell(card(

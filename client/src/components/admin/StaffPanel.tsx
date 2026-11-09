@@ -1,3 +1,5 @@
+import { Failed } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
 import { FIRM_LEVELS, LEVEL_ACCESS, type FirmLevel } from "@shared/platformPermissions";
@@ -14,7 +16,7 @@ const STATUS: Record<string, string> = { pending: "Link sent, waiting", accepted
  */
 export default function StaffPanel() {
   const utils = trpc.useUtils();
-  const invitations = trpc.invitations.staff.list.useQuery(undefined, { retry: false });
+  const invitations = trpc.invitations.staff.list.useQuery(undefined);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [level, setLevel] = useState<FirmLevel>("Business Analyst");
@@ -58,6 +60,7 @@ export default function StaffPanel() {
           <div className="flex items-center gap-2"><input readOnly aria-label="Invitation link" className="w-full border border-line bg-white px-2 py-1 text-xs" value={issued.url} /><CopyButton value={issued.url} label="Copy the invitation link" /></div>
         </div>
       )}
+      {invitations.error && !isRefusal(invitations.error) && invitations.data === undefined && <Failed error={invitations.error} onRetry={() => void invitations.refetch()} retrying={invitations.isFetching} />}
       {invitations.data && invitations.data.length > 0 && (
         <ul aria-label="Staff invitations" className="space-y-1 text-sm">
           {invitations.data.map(item => (

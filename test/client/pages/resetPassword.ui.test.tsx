@@ -10,11 +10,13 @@ const api = vi.hoisted(() => ({
   preview: undefined as unknown,
   calls: [] as unknown[],
   failure: undefined as Error | undefined,
+  previewError: undefined as Error | undefined,
+  refetched: 0,
 }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     account: {
-      resetPreview: { useQuery: () => ({ data: api.preview, isLoading: false }) },
+      resetPreview: { useQuery: () => ({ data: api.previewError ? undefined : api.preview, error: api.previewError, isLoading: false, refetch: () => { api.refetched += 1; } }) },
       resetPassword: {
         useMutation: (options: { onSuccess?: (value: unknown) => void; onError?: (error: Error) => void }) => ({
           isPending: false,
@@ -38,6 +40,16 @@ const renderPage = () => {
 const type = (label: string, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
 
 describe("the password reset page", () => {
+  it("offers Try again when the link cannot be checked, instead of calling it unavailable (R69)", () => {
+    api.previewError = new Error("Failed to fetch");
+    renderPage();
+    expect(screen.getByRole("alert").textContent).toContain("We could not load this. Check your connection and try again.");
+    expect(screen.queryByText("Reset link unavailable")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(api.refetched).toBe(1);
+    api.previewError = undefined;
+  });
+
   beforeEach(() => {
     api.preview = { available: true, email: "ada@example.test" };
     api.calls = [];

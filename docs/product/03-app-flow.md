@@ -267,7 +267,8 @@ info@ipfactory.co.
 | The client does not know whom to message | Each team member with **Message on WhatsApp** | — | — | To build (R44, R45) |
 | A team member leaves mid-engagement | The team list changes; nothing else | Moves their open items to the lead | The lead reassigns | To build (R51) |
 | An upload fails on a weak network | "The upload did not finish. Try again." (today); resumes on its own (R56) | Photos compressed first (R56) | — | Partly built |
-| The connection drops while a screen loads | Today: the screen's empty message (the room says it opens when the stage starts). With R69: "We could not load this. Check your connection and try again.", with **Try again** and the last copy kept on screen | Retries twice by itself before saying so | — | To build (R69) |
+| The connection drops while a screen loads | "We could not load this. Check your connection and try again.", with **Try again**; when the screen already had something, it stays with "We could not refresh this. Showing what we had at 10:42 am." A signed-in person is never sent to sign in, and a pay or invitation link is never called invalid, because a request failed | Retries twice by itself before saying so | — | Built (R69) |
+| The payment check fails on the return page | "We could not check your payment. … If you have paid, your payment is safe with Paystack: please do not pay again.", with **Check again** | — | — | Built (R69) |
 | A first-time payer is unsure who receives the money | Today: the amount, Paystack and the receipt by email. With R72: the legal name on the statement, the reference and a WhatsApp button to the lead or the office, before **Pay** | — | Answers on WhatsApp | To build (R72; the name waits on D1) |
 | A Specialist's access ends | — | Their role ends at the end of the day, Lagos time | — | Built |
 
@@ -368,10 +369,12 @@ is made", the fee and **Pay securely with Paystack**.
 
 **To come:** the first-visit welcome and **Your plan** on Overview (R46, R47); each team member with **Message on
 WhatsApp** (R44); voice notes, links and **Send on WhatsApp to {name}** on Data Request items (R43); and, after a
-usability test, fewer places: Home, To do, Sessions, Results, Payments, so no task appears twice (R49). Before that, on a
-phone: the header shrinks to one line once the owner scrolls or leaves the Overview, and the tab bar keeps the selected
-tab in view (R71). Every view shows its loading, empty, failed and partly-done states as the Design brief sets them
-(section 5), and a failed load is never shown as empty (R69).
+usability test, fewer places: Home, To do, Sessions, Results, Payments, so no task appears twice (R49).
+
+**Built 9 November 2026:** on a phone the header is one line off the Overview, a one-line bar replaces it at the top once it
+scrolls away on the Overview, and the tab bar keeps the selected tab in view and fades where more tabs sit (R71). Every
+view shows its loading, empty, failed and partly-done states as the Design brief sets them (section 5), and a failed load
+is never shown as empty (R69).
 
 ### 8.5 Permissions and project roles
 

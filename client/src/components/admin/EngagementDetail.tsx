@@ -1,3 +1,5 @@
+import { Failed, Loading } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import { STAGED_TYPES } from "@shared/engagementTypes";
 import { DATA_REQUEST_TEMPLATES, parsePastedDataRequest, templateById } from "@shared/dataRequestTemplates";
 import { feeTotal, type FeeLineDraft } from "@shared/agreement";
@@ -81,9 +83,9 @@ function useRefresh(engagementId: number) {
 
 /** One engagement, for the team. The server checks every change: these controls only hide what the role cannot do. */
 export default function EngagementDetail({ engagementId }: { engagementId: number }) {
-  const detail = trpc.engagement.staff.detail.useQuery({ engagementId }, { retry: false });
-  if (detail.error) return <p role="alert" className="text-sm text-danger">{detail.error.message}</p>;
-  if (!detail.data) return <p className="text-sm text-ink-muted">Loading…</p>;
+  const detail = trpc.engagement.staff.detail.useQuery({ engagementId });
+  if (detail.error && detail.data === undefined) return <Failed error={detail.error} onRetry={() => void detail.refetch()} retrying={detail.isFetching} />;
+  if (!detail.data) return <Loading label="Loading the engagement" rows={4} />;
   const data = detail.data;
   return (
     <>
@@ -207,13 +209,14 @@ function StageAndTeam({ data, engagementId }: { data: Detail; engagementId: numb
   const setStage = trpc.engagement.staff.setStage.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Stage saved."); } });
   const assign = trpc.engagement.staff.assign.useMutation({ ...refresh, onSuccess: result => { refresh.onSuccess(); toast.success(`${result.added ? "Added to the team" : "Role changed"}${result.notified ? ", and emailed" : ""}.`); } });
   const remove = trpc.engagement.staff.removeMember.useMutation(refresh);
-  const staff = trpc.engagement.staff.assignableStaff.useQuery(undefined, { enabled: data.can.assign, retry: false });
+  const staff = trpc.engagement.staff.assignableStaff.useQuery(undefined, { enabled: data.can.assign });
   const [person, setPerson] = useState("");
   const [role, setRole] = useState<EngagementTeamRole>("analyst");
   // Someone already on the team changes role on their own row, so adding never replaces anyone.
   const available = (staff.data ?? []).filter(item => !data.team.some(member => member.userId === item.userId));
   return (
     <DetailSection title="Stage and team">
+      {staff.error && !isRefusal(staff.error) && staff.data === undefined && <Failed error={staff.error} onRetry={() => void staff.refetch()} retrying={staff.isFetching} />}
       <div className="space-y-1">
         <label className={LABEL} htmlFor="engagement-stage">Stage</label>
         <select id="engagement-stage" className={FIELD} disabled={!data.can.manage || setStage.isPending} value={STAGED_TYPES.includes(data.engagement.type) || data.engagement.stage === "closed" ? data.engagement.stage : "setting_up"} onChange={event => setStage.mutate({ engagementId, stage: event.target.value as EngagementStage })}>
@@ -717,7 +720,7 @@ function CheckinCard({ checkin, weekNumber, engagementId, canManage, unit, onDon
  */
 function FeesAdmin({ engagementId }: { engagementId: number }) {
   const utils = trpc.useUtils();
-  const query = trpc.engagement.staff.fees.useQuery({ engagementId }, { retry: false });
+  const query = trpc.engagement.staff.fees.useQuery({ engagementId });
   const [draft, setDraft] = useState<FeeLineDraft[] | null>(null);
   const done = (message: string) => ({ onSuccess: () => { void utils.engagement.staff.fees.invalidate({ engagementId }); toast.success(message); }, onError: (error: { message: string }) => toast.error(error.message) });
   const save = trpc.engagement.staff.saveFees.useMutation(done("Fees saved."));
@@ -725,9 +728,9 @@ function FeesAdmin({ engagementId }: { engagementId: number }) {
   const [sentLink, setSentLink] = useState<{ feeLineId: number; url: string } | null>(null);
   const sendLink = trpc.engagement.staff.sendFeeLink.useMutation({ onSuccess: (result, input) => { setSentLink({ feeLineId: input.feeLineId, url: result.url }); toast.success(result.deliveryStatus === "Failed" ? "The email did not go. Copy the link below and send it yourself." : "Payment link emailed to the client."); }, onError: error => toast.error(error.message) });
   const openNow = trpc.engagement.staff.openRoomNow.useMutation(done("The client's room is open."));
-  if (query.error) return <DetailSection title="Fees"><p role="alert" className="text-sm text-danger">{query.error.message}</p></DetailSection>;
+  if (query.error && query.data === undefined) return <DetailSection title="Fees"><Failed error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} /></DetailSection>;
   const data = query.data;
-  if (!data) return <DetailSection title="Fees"><p className="text-sm text-ink-muted">Loading…</p></DetailSection>;
+  if (!data) return <DetailSection title="Fees"><Loading label="Loading the fees" rows={2} /></DetailSection>;
   const saved = data.feeLines.map(line => ({ label: line.label, amount: line.amount, dueOn: line.dueOn }));
   // Unsaved: the suggestion from the service, until the team saves a schedule.
   const current = draft ?? (data.suggested ?? saved);

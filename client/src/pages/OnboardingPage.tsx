@@ -1,3 +1,5 @@
+import { Failed, Loading } from "@/components/states";
+import { isRefusal } from "@/lib/readPolicy";
 import { PrivacyLink, TermsLink } from "@/components/LegalLinks";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,7 +21,7 @@ export default function OnboardingPage() {
   const token = params.token ?? "";
   const { account } = useAccount();
   const utils = trpc.useUtils();
-  const preview = trpc.onboarding.preview.useQuery({ token }, { retry: false, refetchOnWindowFocus: false });
+  const preview = trpc.onboarding.preview.useQuery({ token }, { refetchOnWindowFocus: false });
   // Someone else signed in on this browser (often the team, testing) must not be sent to their own area or create
   // the client's account under their session: they are asked to sign out first.
   const invitedEmail = preview.data?.available ? preview.data.email : null;
@@ -53,7 +55,9 @@ export default function OnboardingPage() {
     </main>
   );
 
-  if (preview.isLoading || (preview.data?.available && form === null)) return shell(<p className="text-center text-sm text-ink-muted">Checking your invitation…</p>);
+  if (preview.isLoading || (preview.data?.available && form === null)) return shell(<Loading label="Checking your invitation" rows={2} />);
+  // A request that failed is not an unavailable link (R69): only the server's answer decides that.
+  if (preview.error && !isRefusal(preview.error)) return shell(<Failed error={preview.error} onRetry={() => void preview.refetch()} retrying={preview.isFetching} />);
 
   if (!preview.data?.available) {
     return shell(

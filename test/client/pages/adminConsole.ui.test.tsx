@@ -8,7 +8,7 @@ import { READINESS_LABELS } from "@shared/businessCheck/engine";
 
 const hoisted = vi.hoisted(() => {
   const api = {
-    checks: [] as unknown[],
+    checks: [] as unknown[] | undefined,
     calls: [] as unknown[],
     clients: [] as unknown[],
     candidates: [] as unknown[],
@@ -16,7 +16,7 @@ const hoisted = vi.hoisted(() => {
     details: {} as Record<number, unknown>,
     debrief: { setUp: true, debrief: null as unknown },
     metrics: { businessChecks: 3, users: 2, portalUsers: 1, businesses: 1, memberships: 1, pendingInvitations: 0, platformRoleAssignments: 0 },
-    error: undefined as { message: string } | undefined,
+    error: undefined as { message: string; data?: { code: string; httpStatus: number } } | undefined,
     mutations: { schedule: [] as unknown[], outcome: [] as unknown[], saveDebrief: [] as unknown[], shareDebrief: [] as unknown[], stage: [] as unknown[], invite: [] as unknown[], revoke: [] as unknown[], requestPayment: [] as unknown[], confirmPayment: [] as unknown[], downloadReport: [] as unknown[], resendReportLink: [] as unknown[], resendConfirmation: [] as unknown[] },
     inviteResult: { invitationUrl: "https://app.example.test/onboarding/TOKEN123", deliveryStatus: "Simulated", expiresAt: new Date(), invitationId: 1 } as Record<string, unknown>,
   };
@@ -265,9 +265,18 @@ describe("Business Health Checks table", () => {
   });
 
   it("shows the server's refusal", () => {
-    api.error = { message: "Your role does not include this responsibility." };
+    api.error = { message: "Your role does not include this responsibility.", data: { code: "FORBIDDEN", httpStatus: 403 } };
+    api.checks = undefined;
     renderConsole();
     expect(screen.getByRole("alert").textContent).toContain("does not include");
+  });
+
+  it("says when the list could not load, with Try again, instead of an empty table (R69)", () => {
+    api.error = { message: "Failed to fetch" };
+    api.checks = undefined;
+    renderConsole();
+    expect(screen.getAllByRole("alert")[0]!.textContent).toContain("We could not load this. Check your connection and try again.");
+    expect(screen.getAllByRole("button", { name: "Try again" }).length).toBeGreaterThan(0);
   });
 });
 

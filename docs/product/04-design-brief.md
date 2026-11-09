@@ -126,7 +126,11 @@ palette (`rose`, `red`, `amber`).
 ## 5. Screen states (R69)
 
 Every screen that loads data shows one of these states, and a failure is never shown as empty (B2: on a dropped
-connection the room used to say "Your room opens here when your Current State Assessment starts").
+connection the room used to say "Your room opens here when your Current State Assessment starts"). The parts are in
+`client/src/components/states.tsx` (`Loading`, `Empty`, `Failed`, `Stale`, `ReadState`); the retry rule is in
+`client/src/lib/readPolicy.ts` and applies to every read (`main.tsx`). A refusal from the server (not signed in, not
+allowed, not found) is an answer, never retried and never shown as a connection problem; on a token page it still means
+the link is wrong, and only then does the page say so. A signed-in person whose request failed stays where they are.
 
 | State | What the person sees | Rules |
 |---|---|---|
@@ -315,8 +319,10 @@ The room follows document 07 in its third version (the "ClickUp" layout):
 - **The payment gate:** while an engagement in advance waits for its first payment, the room shows only "Your room opens
   once the first payment is made", the fee and the Pay button.
 - Account and business details live in the settings pages (`AccountLayout`); the room shows nothing administrative.
-- **To come (R71):** on a phone the header shrinks to one line once the owner scrolls or leaves the Overview, and the tab bar
-  keeps the selected tab in view with a fade at the edge where more tabs sit (B7). After the usability test, R49 reduces
+- **On a phone (R71):** off the Overview the header is one line, the project and its day, so each view starts near the top;
+  on the Overview the full header scrolls away with the page and a one-line bar (fixed, 40 px) appears at the top once it
+  has gone, with the tab bar sticking under it, so nothing in the page shifts. The tab bar keeps the selected tab in view
+  (scrolling the bar, never the page) and fades at each edge where more tabs sit. After the usability test, R49 reduces
   the views to five.
 
 ### 12.6 The admin console (`/admin`)
@@ -361,6 +367,8 @@ Measured on the production build served locally with compression, in Chromium wi
 |---|---|
 | `test/shared/brand.test.ts` | Every `BRAND.palette` colour matches its `--color-*` token; the product name, endorsement, page title and booking link; the product name is never preceded by "your", "a", "an" or "the"; no page, email or message reads the JUMP names |
 | `test/client/contrast.test.ts` | Watch and Clear text meet 4.5:1 on white, the page and their tint; no component sets text in the Watch dot colour |
+| `test/client/components/states.ui.test.tsx`, `test/client/lib/readPolicy.test.ts` | The four states; a failed read is never shown as empty; a refusal is never retried; no read turns retries off |
+| `test/client/components/admin/readStates.ui.test.tsx` | Every admin view and the seat card say they could not load, with Try again, when the connection is down |
 | `test/server/fullReport/pdf.test.ts` | A4; the brand fonts are embedded and cover ₦; the logo is the print file; health labels print at 4.5:1 or better |
 | `test/server/emailTemplates.test.ts` | Email uses only palette colours; logo beside "The Shift"; crimson headings; cyan button with navy text; the three-colour rule; no JUMP wording |
 | `test/server/email.sender.policy.test.ts` | Every email goes out as IP Factory, with replies to the office |

@@ -30,7 +30,7 @@ const STAFF: AccountSessionView = {
 };
 
 const api = vi.hoisted(() => {
-  const state = { room: null as unknown, switchCalls: [] as unknown[], updateBusinessCalls: [] as unknown[], updateProfileCalls: [] as unknown[], changePasswordCalls: [] as unknown[], businessProfile: undefined as unknown, me: null as unknown, loading: false, preview: undefined as unknown, previewLoading: false, acceptCalls: [] as unknown[], signInCalls: [] as unknown[], resetCalls: [] as unknown[], signOutCalls: 0, setData: [] as unknown[] };
+  const state = { room: null as unknown, switchCalls: [] as unknown[], updateBusinessCalls: [] as unknown[], updateProfileCalls: [] as unknown[], changePasswordCalls: [] as unknown[], businessProfile: undefined as unknown, me: null as unknown, loading: false, preview: undefined as unknown, previewLoading: false, acceptCalls: [] as unknown[], signInCalls: [] as unknown[], resetCalls: [] as unknown[], signOutCalls: 0, setData: [] as unknown[], meError: undefined as unknown, roomError: undefined as unknown, roomLoading: false, retried: 0, previewError: undefined as unknown };
   const replies: { switchTo?: unknown; businessError?: string; passwordError?: string; accept?: unknown; signIn?: unknown; acceptError?: string; signInError?: string } = {};
   return { state, replies };
 });
@@ -40,7 +40,7 @@ const SESSION_FOR_MOCK = { user: { id: 1, fullName: "Richie Okafor", email: "ric
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     onboarding: {
-      preview: { useQuery: () => ({ data: api.state.preview, isLoading: api.state.previewLoading }) },
+      preview: { useQuery: () => ({ data: api.state.previewError ? undefined : api.state.preview, error: api.state.previewError, isLoading: api.state.previewLoading, refetch: () => { api.state.retried += 1; } }) },
       accept: {
         useMutation: (options: { onSuccess?: (v: unknown) => void; onError?: (e: Error) => void }) => ({
           isPending: false,
@@ -54,9 +54,9 @@ vi.mock("@/lib/trpc", () => ({
     },
     useUtils: () => ({ account: { me: { setData: (_: unknown, value: unknown) => api.state.setData.push(value), invalidate: () => undefined }, business: { invalidate: () => undefined } } }),
     // The room has its own tests; here it is null (no engagement yet) unless a test sets one.
-    engagement: { client: { room: { useQuery: () => ({ data: api.state.room ?? null, isLoading: false }) }, requestService: { useMutation: () => ({ isPending: false, mutate: () => undefined }) } } },
+    engagement: { client: { room: { useQuery: () => ({ data: (api.state.roomError && !api.state.room) || api.state.roomLoading ? undefined : api.state.room ?? null, error: api.state.roomError, isLoading: api.state.roomLoading ?? false, dataUpdatedAt: Date.parse("2026-11-09T09:42:00Z"), refetch: () => { api.state.retried += 1; } }) }, requestService: { useMutation: () => ({ isPending: false, mutate: () => undefined }) } } },
     account: {
-      me: { useQuery: () => ({ data: api.state.me, isLoading: api.state.loading, refetch: () => undefined }) },
+      me: { useQuery: () => ({ data: api.state.meError ? undefined : api.state.me, error: api.state.meError, isLoading: api.state.loading, refetch: () => { api.state.retried += 1; } }) },
       requestReset: {
         useMutation: (options: { onSuccess?: () => void }) => ({ isPending: false, mutate: (input: unknown) => { api.state.resetCalls.push(input); options.onSuccess?.(); } }),
       },
@@ -138,6 +138,11 @@ const fill = (label: string, value: string) => fireEvent.change(screen.getByLabe
 
 beforeEach(() => {
   api.state.room = null;
+  api.state.meError = undefined;
+  api.state.roomError = undefined;
+  api.state.roomLoading = false;
+  api.state.retried = 0;
+  api.state.previewError = undefined;
   api.state.resetCalls = [];
   api.state.me = null;
   api.state.loading = false;
@@ -166,6 +171,15 @@ const INVITED = { available: true, email: "richie@example.com", fullName: "Richi
 const renderOnboarding = () => renderAt("/onboarding/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFG", <Route path="/onboarding/:token" component={OnboardingPage} />);
 
 describe("onboarding screen (invitation only)", () => {
+  it("offers Try again when the invitation cannot be checked, instead of calling it unavailable (R69)", () => {
+    api.state.previewError = new Error("Failed to fetch");
+    renderOnboarding();
+    expect(screen.getByRole("alert").textContent).toContain("We could not load this. Check your connection and try again.");
+    expect(screen.queryByText(/Invitation unavailable/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(api.state.retried).toBe(1);
+  });
+
   it("shows the five account fields, pre-filled from the invitation, with the email locked", () => {
     api.state.preview = INVITED;
     renderOnboarding();
@@ -241,7 +255,7 @@ describe("onboarding screen (invitation only)", () => {
   it("waits for the server's answer before showing anything", () => {
     api.state.previewLoading = true;
     renderOnboarding();
-    expect(screen.getByText("Checking your invitation…")).toBeTruthy();
+    expect(screen.getByRole("status", { name: "Checking your invitation" })).toBeTruthy();
     expect(screen.queryByLabelText("Password")).toBeNull();
   });
 
@@ -378,6 +392,8 @@ describe("sign-in screen", () => {
   });
 });
 
+const roomFixture = () => ({ engagementId: 4, fees: [], awaitingPayment: false, content: [], contentTargets: [], type: "business_review", typeLabel: "Business Review", service: null, title: "Business Review", serviceStep: null, projects: [{ id: 4, title: "Business Review", stageLabel: "Business Review", closed: false, current: true }], requests: [], agreement: null, startedOn: null, uploadsEnabled: false, businessName: "Richie Tech", viewer: { kind: "member", access: "full" }, stage: "assessment", stageLabel: "Business Review", journey: journeyOf("assessment"), problemStatement: null, measure: null, team: [], people: [], sentFiles: [], nextSession: null, sessions: [], tasks: [], deliverables: [] });
+
 describe("account dashboard", () => {
   it("names their business without a greeting, says the room opens with the assessment, and offers to finish the profile", () => {
     api.state.me = SESSION;
@@ -392,6 +408,24 @@ describe("account dashboard", () => {
     expect(screen.queryByText("richie@example.com")).toBeNull();
   });
 
+  it("says when the room could not load, never that it has not started, and offers Try again (R69)", () => {
+    api.state.me = SESSION;
+    api.state.roomError = new Error("Failed to fetch");
+    renderAt("/dashboard", <AccountDashboard />);
+    expect(screen.getByRole("alert").textContent).toContain("We could not load this. Check your connection and try again.");
+    expect(screen.queryByText(/Your room opens here/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(api.state.retried).toBe(1);
+  });
+
+  it("shows the outline of the room while it loads, not the message for a room that has not started (R69)", () => {
+    api.state.me = SESSION;
+    api.state.roomLoading = true;
+    renderAt("/dashboard", <AccountDashboard />);
+    expect(screen.getByRole("status", { name: "Opening your room" })).toBeTruthy();
+    expect(screen.queryByText(/Your room opens here/)).toBeNull();
+  });
+
   it("wears the site's brand: the mark and the product name lead back to the room", () => {
     api.state.me = SESSION;
     renderAt("/dashboard", <AccountDashboard />);
@@ -404,7 +438,7 @@ describe("account dashboard", () => {
 
   it("is the room itself once the engagement exists: no profile card, no account card", () => {
     api.state.me = SESSION;
-    api.state.room = { engagementId: 4, fees: [], awaitingPayment: false, content: [], contentTargets: [], type: "business_review", typeLabel: "Business Review", service: null, title: "Business Review", serviceStep: null, projects: [{ id: 4, title: "Business Review", stageLabel: "Business Review", closed: false, current: true }], requests: [], agreement: null, startedOn: null, uploadsEnabled: false, businessName: "Richie Tech", viewer: { kind: "member", access: "full" }, stage: "assessment", stageLabel: "Business Review", journey: journeyOf("assessment"), problemStatement: null, measure: null, team: [], people: [], sentFiles: [], nextSession: null, sessions: [], tasks: [], deliverables: [] };
+    api.state.room = roomFixture();
     renderAt("/dashboard", <AccountDashboard />);
     expect(screen.getAllByText("Richie Tech").length).toBeGreaterThan(0);
     expect(screen.queryByText(/Welcome back/)).toBeNull();
@@ -412,6 +446,15 @@ describe("account dashboard", () => {
     expect(screen.getByRole("list", { name: "Engagement timeline" })).toBeTruthy();
     expect(screen.queryByRole("link", { name: "Complete profile" })).toBeNull();
     expect(screen.queryByText(/Your room opens here/)).toBeNull();
+  });
+
+  it("keeps the room on screen when a refresh fails, and says how old it is (R69)", () => {
+    api.state.me = SESSION;
+    api.state.room = roomFixture();
+    api.state.roomError = new Error("Failed to fetch");
+    renderAt("/dashboard", <AccountDashboard />);
+    expect(screen.getByRole("list", { name: "Engagement timeline" })).toBeTruthy();
+    expect(screen.getByText("We could not refresh this. Showing what we had at 10:42 am.")).toBeTruthy();
   });
 
   it("shows no workspace switcher for a person with one business", () => {
@@ -465,7 +508,18 @@ describe("account dashboard", () => {
     api.state.loading = true;
     const location = renderAt("/dashboard", <AccountDashboard />);
     expect(location.history).toEqual(["/dashboard"]);
-    expect(screen.getByText("Loading…")).toBeTruthy();
+    expect(screen.getByRole("status", { name: "Opening your account" })).toBeTruthy();
+  });
+
+  it("keeps a signed-in person here when the request fails, and offers Try again instead of sign-in (R69)", async () => {
+    api.state.me = undefined;
+    api.state.meError = new Error("Failed to fetch");
+    const location = renderAt("/dashboard", <AccountDashboard />);
+    expect(screen.getByRole("alert").textContent).toContain("We could not load this. Check your connection and try again.");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(api.state.retried).toBe(1);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(location.history).toEqual(["/dashboard"]);
   });
 
   it("signs out through the server and returns to sign-in", async () => {

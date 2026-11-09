@@ -471,6 +471,76 @@ const onWideScreen = () => vi.stubGlobal("matchMedia", (query: string) => ({
   addEventListener: () => undefined, removeEventListener: () => undefined, addListener: () => undefined, removeListener: () => undefined, dispatchEvent: () => false,
 }));
 
+describe("the room on a phone (R71)", () => {
+  beforeEach(() => {
+    MotionGlobalConfig.skipAnimations = true;
+    window.history.replaceState(null, "", "/dashboard");
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+  const tablist = () => screen.getByRole("tablist", { name: "Your engagement" });
+  const started = () => <EngagementRoom room={room({ assessmentStartedAt: new Date("2026-10-19T08:00:00Z"), deliverables: [] })} now={new Date("2026-10-22T10:00:00Z").getTime()} />;
+
+  it("shrinks the header to one line, the project and its day, off the Overview, and brings it back on the Overview", () => {
+    render(started());
+    expect(document.querySelector("[data-room-header='full']")).toBeTruthy();
+    const title = screen.getByRole("heading", { level: 1 }).textContent!;
+    const day = screen.getByRole("progressbar").getAttribute("aria-label")!;
+    fireEvent.click(within(tablist()).getByRole("tab", { name: /^Work Plan/ }));
+    const compact = document.querySelector("[data-room-header='compact']")!;
+    expect(compact).toBeTruthy();
+    expect(within(compact as HTMLElement).getByRole("heading", { level: 1 }).textContent).toBe(`${title}${day}`);
+    expect(`${title}${day}`).toBe("Business Review · Week 1 of 2Day 4 of 14");
+    expect(document.querySelector("[data-room-header='full']")).toBeNull();
+    expect(screen.queryByRole("img", { name: /^Team: / })).toBeNull();
+    fireEvent.click(within(tablist()).getByRole("tab", { name: "Overview" }));
+    expect(document.querySelector("[data-room-header='full']")).toBeTruthy();
+  });
+
+  it("brings the selected tab into view inside the tab bar, never scrolling the page", () => {
+    const scrolled: unknown[] = [];
+    const original = HTMLElement.prototype.scrollTo;
+    HTMLElement.prototype.scrollTo = function (this: HTMLElement, options: unknown) { if (this.getAttribute("role") === "tablist") scrolled.push(options); } as typeof HTMLElement.prototype.scrollTo;
+    try {
+      render(<EngagementRoom room={room()} />);
+      scrolled.length = 0;
+      fireEvent.click(within(tablist()).getByRole("tab", { name: "Deliverables" }));
+      expect(scrolled).toHaveLength(1);
+      expect(scrolled[0]).toMatchObject({ left: expect.any(Number) });
+    } finally {
+      HTMLElement.prototype.scrollTo = original;
+    }
+  });
+
+  it("fades the tab bar at each edge where more tabs sit", () => {
+    render(<EngagementRoom room={room()} />);
+    const bar = tablist();
+    Object.defineProperty(bar, "clientWidth", { value: 390, configurable: true });
+    Object.defineProperty(bar, "scrollWidth", { value: 900, configurable: true });
+    fireEvent.scroll(bar);
+    expect(bar.getAttribute("data-more")).toBe("right");
+    bar.scrollLeft = 200;
+    fireEvent.scroll(bar);
+    expect(bar.getAttribute("data-more")).toBe("both");
+    bar.scrollLeft = 510;
+    fireEvent.scroll(bar);
+    expect(bar.getAttribute("data-more")).toBe("left");
+  });
+
+  it("shows a one-line bar at the top once the Overview's header has scrolled away, with the tab bar under it", () => {
+    let report: ((entries: { isIntersecting: boolean; boundingClientRect: { top: number } }[]) => void) | null = null;
+    vi.stubGlobal("IntersectionObserver", class { constructor(callback: typeof report) { report = callback; } observe() { return undefined; } disconnect() { return undefined; } });
+    render(started());
+    expect(document.querySelector("[data-room-header='floating']")).toBeNull();
+    const title = screen.getByRole("heading", { level: 1 }).textContent!;
+    const day = screen.getByRole("progressbar").getAttribute("aria-label")!;
+    act(() => report!([{ isIntersecting: false, boundingClientRect: { top: -240 } }]));
+    expect(document.querySelector("[data-room-header='floating']")!.textContent).toBe(`${title}${day}`);
+    expect((document.querySelector("[data-room-tabs]") as HTMLElement).style.top).toBe("40px");
+    act(() => report!([{ isIntersecting: true, boundingClientRect: { top: 0 } }]));
+    expect(document.querySelector("[data-room-header='floating']")).toBeNull();
+  });
+});
+
 describe("the room on a laptop or desktop", () => {
   beforeEach(() => {
     MotionGlobalConfig.skipAnimations = true;

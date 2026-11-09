@@ -8,7 +8,8 @@ import { sampleIntake } from "../../fixtures/reportIntake";
 
 const api = vi.hoisted(() => ({
   form: undefined as unknown,
-  formError: undefined as { message: string } | undefined,
+  formError: undefined as { message: string; data?: { code: string; httpStatus: number } } | undefined,
+  refetched: 0,
   submitCalls: [] as unknown[],
   downloadCalls: [] as unknown[],
   saved: [] as unknown[],
@@ -18,7 +19,7 @@ vi.mock("@/lib/savePdf", () => ({ savePdf: (...args: unknown[]) => api.saved.pus
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     fullReport: {
-      form: { useQuery: () => ({ data: api.form, isLoading: false, error: api.formError }) },
+      form: { useQuery: () => ({ data: api.form, isLoading: false, error: api.formError, refetch: () => { api.refetched += 1; } }) },
       submit: {
         useMutation: (options: { onSuccess?: (value: unknown) => void }) => ({
           isPending: false,
@@ -88,6 +89,7 @@ function fill() {
 beforeEach(() => {
   api.form = { status: "awaiting_intake", fullName: "Adunni Example", businessName: "Adunni Fabrics", email: "adunni@example.com", deliveredAt: null };
   api.formError = undefined;
+  api.refetched = 0;
   api.submitCalls = [];
   api.downloadCalls = [];
   api.saved = [];
@@ -99,9 +101,18 @@ afterEach(cleanup);
 describe("the report form", () => {
   it("says so when the link is not valid", () => {
     api.form = undefined;
-    api.formError = { message: "This report link is not valid. Use the link in your payment confirmation email, or reply to it for help." };
+    api.formError = { message: "This report link is not valid. Use the link in your payment confirmation email, or reply to it for help.", data: { code: "NOT_FOUND", httpStatus: 404 } };
     renderPage();
     expect(screen.getByRole("heading", { name: "This link is not valid" })).toBeTruthy();
+  });
+
+  it("offers Try again when the connection fails, instead of calling the link invalid (R69)", () => {
+    api.form = undefined;
+    api.formError = { message: "Failed to fetch" };
+    renderPage();
+    expect(screen.getByRole("heading", { name: "We could not open your Report Intake" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(api.refetched).toBe(1);
   });
 
   it("tells the owner what happens, and numbers all 17 questions", () => {

@@ -1,170 +1,134 @@
 # 6. Implementation plan
 
-**What gets built, and in what order.** Last reviewed 9 October 2026. This replaces the "Phase 2 plan" in
-`docs/ipf-factory/MIGRATION_CHECKLIST.md` §9, which was written for Manus and v0.6.
+**What gets built, in what order, and how we know each piece is done.** Rewritten on 9 November 2026 to follow the
+release order in the [PRD](01-prd.md) (section 10a). It replaces the October plan (phases 0 to 5), which is complete or
+carried into the releases (section 6).
 
-**The sequencing rule:** build each part just ahead of the first paying client who needs it. The pilot calendar
-(concept note §9) sets the pace: the first clients pay in week 2 (from 16 October), the Current State Assessment starts in week 3
-(from 23 October) and the first fixes start in week 5 (from 6 November).
+**The rule (PRD, rule 8):** nothing is built before it is in the PRD and the [App flow](03-app-flow.md). This plan turns
+each release into tasks; the code follows the tasks. A new need goes into the PRD and the App flow first, then here.
+
+**How to read a task:** the requirement it builds, what changes, the test that proves it, and whether it needs a
+migration, a preview for ET or something from ET. Effort is build days for one builder, with tests and documents, not
+counting time spent waiting on a decision or a migration.
 
 ---
 
-## 1. Where we are
+## 1. Where we are (9 November 2026)
 
-| Done (live on `main`) | Tests |
+| Live on `main` | Requirements |
 |---|---|
-| Public site in the owner's words, journey and prices | `test/shared/businessSupport.test.ts`, `test/shared/brand.test.ts` |
-| Free business check: details first, decision tree, outline, four gaps, AI summary with rules fallback, saved progress | `test/shared/businessCheck/*`, golden snapshots |
-| Discovery call booking (Calendly) and outcome (Fit, Refer, Decline, Nurture) | `test/server/businessCheck*`, `test/db/*` |
-| Staff sign-in, roles and permissions, invitations, audit trail | `test/server/accountAuth.test.ts`, `test/shared/platformPermissions.test.ts`, `test/db/*` |
-| Payments on Paystack only: the payment link, self-confirmation, the confirm-by-hand fallback (full report, Current State Assessment) | `test/server/payments.test.ts`, `test/db/payments.db.test.ts` |
-| Paying online with Paystack: pay page, hosted checkout, signed webhook and return page, confirming through the same path (12 October, on the working branch) | `test/server/paystack.test.ts`, `test/server/onlinePayment.test.ts`, `test/server/routers/onlinePayment.router.test.ts`, `test/db/onlinePayment.db.test.ts`, `test/client/pages/pay*.ui.test.tsx` |
-| Full report: 17-question form, deterministic PDF emailed at once, admin status and download | `test/shared/fullReport/*`, `test/server/fullReport/*` |
-| Client account by invitation after Current State Assessment is paid; Won stage | `test/server/clientOnboarding.test.ts`, `test/db/payments.db.test.ts` (whole journey) |
+| The public site, the free Business Health Check, the Discovery Call on Calendly, the Full Report | R1 to R6 |
+| Opening an engagement of any type with its fee schedule; paying online with Paystack: the Full Report, the Business Review and every engagement fee, each with its own pay link; the first payment opens the room | R7, R8, R10, R11, R24 (in advance) |
+| The client's room (its third version): Overview, Content, Work Plan, Data Request, Sessions, Business, Founder, Deliverables, Payments; many projects per client; the owner's staff seat; Preview as client; asking for the next fix | R14, R15, R17 to R23, R25, R28 (asking) |
+| The admin console in five tabs; Finance; Team by level with two-step sign-in; branded email from IP Factory | R29 to R32 |
+| The design review fixes: the room fits a phone, readable health labels, 44 px taps (B1, B4, B10 to B12) | Design brief |
 
-**The engagement room v1 (9 October, live once migration 0008 is applied):** the engagement starts with the template
-when the Current State Assessment is paid; the team's Engagements section (team, stage, the one problem, calls and notes,
-requests and actions, deliverables with approval); the client's room on `/dashboard` (where we are, what we need from
-you, what we have found). Tests: `test/db/engagements.db.test.ts`, `test/server/engagements.test.ts`,
-`test/client/components/engagement*.ui.test.tsx`.
+Migrations are applied through **0020**. The document tests (`test/docs/productDocs.test.ts`) fail the build if a page,
+a table, a server action, a permission, a project role, an email or an audit action is added without being documented.
 
-**Since 12 October (live on `main`):**
+## 2. Before and alongside the build (no code)
 
-| Done | Tests |
+| # | Item | Owner | Needed for | Status |
+|---|---|---|---|---|
+| K1 | Paystack live keys and the live webhook in Vercel | ET, Lewis | Real money on every pay page | To confirm |
+| K2 | The sending domain (`contact.ipfactory.co`) verified in Resend | DG, Lewis | Email that reaches outside inboxes; every reminder (Release 2) | To confirm |
+| K3, K4 | Supabase on a paid plan with daily backups; the old Supabase project secured | ET | Every client record | To do |
+| K7 | A second owner on Google Search Console | ET | Search (R2, R73) | To do |
+| I1 | Marcelle's Digital Marketer and Content Producer: names, and each one's WhatsApp number with their agreement to show it to clients (K11) | ET | R44, R45 (Release 0, batch B) | Waiting |
+| I2 | The legal name a client sees on their bank statement (decision D1, with counsel, K5) | ET | R72 (Release 0, batch C) | Open |
+| I3 | IP Factory's office WhatsApp number, for pay pages and links with no lead yet | ET | R72; R44 for the office | Waiting |
+| I4 | Marcelle's fee dates moved to 30, 60 and 90 days from kickoff, and saved in Fees | ET or the lead | Marcelle's Payments tab | Waiting |
+
+## 3. Release 0: the first client's experience
+
+**Requirements:** R43, R44, R45, R46, R47, R61 (the product design review); R69, R70, R71, R72, R73 (the design brief
+review). **Moves:** time to first value, trust, records in on time, visitors who stay.
+
+**Done when:** a new Digital marketing client opens the room on a phone, sees who their experts are with a WhatsApp button
+for each, sends the week's footage in under two minutes, and never meets a blank or misleading screen on a weak
+connection; and a visitor on a phone sees the home page's content within 2.5 seconds.
+
+Built in four batches. A and B are for the clients already in the room, so they go first; C waits on one decision for
+one line; D can run alongside.
+
+### Batch A: the room on a weak connection and a phone (no migration, about 6 days)
+
+| # | Task | Builds | Acceptance and test | Preview |
+|---|---|---|---|---|
+| A1 | **The four states as shared parts** (`client/src/components/states.tsx`): Loading (the outline in `paper-sunken`), Empty (what will appear and who adds it), Failed (the message, **Try again**, the last copy kept with its time), Partly done. Reads retry twice before failing; no read turns retries off except the sign-in checks that expect a refusal | R69 | Component tests for each state; a source test fails if a read sets `retry: false` outside the listed sign-in checks | — |
+| A2 | **The room and the dashboard** use them: a failed load of the room says so and keeps what was there; "Your room opens here when…" shows only when the server says there is no engagement | R69 | UI tests: a failed read never shows the empty message; Try again reloads; the last copy stays | Phone and laptop |
+| A3 | **Account, sign-in, joining and pay pages** use them (`/settings/*`, `/onboarding`, `/join`, `/reset`, `/pay/*`) | R69 | UI test per page for loading, failed and empty | Phone |
+| A4 | **The admin console** uses them in every tab and in the engagement record | R69 | UI tests per tab | Laptop |
+| A5 | **The room on a phone:** the header shrinks to one line (the project and its day) once the owner scrolls or leaves the Overview; the tab bar scrolls the selected tab into view and fades at the edge where more tabs sit | R71 | UI tests: the compact header off the Overview; the selected tab asked into view on every change; checked at 390 px in Chromium (the review's script) | Phone |
+
+### Batch B: the Digital marketing room (migration 0021, about 8 days)
+
+| # | Task | Builds | Acceptance and test | Preview or input |
+|---|---|---|---|---|
+| B1 | **Migration 0021**, on the branch with a guarded `drizzle/supabase/apply-0021-*.sql`: `users.whatsapp` and `users.whatsappConsentAt` (a staff member's number and when they agreed to show it); the project roles `digital_marketer` and `content_producer` on `engagement_team_role`; `engagement_tasks.responseLink` (a link that answers an item). ET runs it in the Supabase SQL Editor and replies "0021 done"; then `main` | R43, R44, R45 | PGlite tests for each column and role; `pnpm db:verify` after it is applied | ET runs it |
+| B2 | **A WhatsApp number on each staff profile:** set in People (`manage_users`) or by the person in Account settings, with the agreement tick ("My number may be shown to clients I work with"); entered with +234 by default; shown to a client only when agreed, and only to clients on that person's engagements | R44 | DB tests: no number without the agreement; a client sees numbers only for their own engagement's team; audit on change | I1 |
+| B3 | **WhatsApp in the room:** each team member with **WhatsApp {first name}** (a chat with a line naming the business and the project); an item assigned to one person offers **Send on WhatsApp to {name}**, naming the item, then **Mark as sent another way** | R44 | UI tests: the button only with a number; the message names the item | Phone |
+| B4 | **Send on WhatsApp beside every link the team sends:** the invitation, the sign-in link and each fee's pay link, to the client's WhatsApp number, with the message filled in | R44 | UI tests on Fees, the client record and Team | Laptop |
+| B5 | **Digital Marketer and Content Producer** as project roles: labels, the order on the team, shown to the client with their WhatsApp; approval follows the person's level, as for every other role (App flow 4.6) | R45 | Room and admin UI tests; the document test checks both roles are in the App flow | — |
+| B6 | **Footage and voice notes:** audio files upload like any file (m4a, mp3, ogg and opus, aac, wav; 25 MB); any item can be answered with a link to a shared folder (Google Drive, Dropbox, WeTransfer, iCloud), which the team opens from the item; video is never stored | R43 | Upload type tests; DB test for the link answer and who can see it; a timed run on a phone with ET or Marcelle: footage sent in under two minutes | Phone, with ET |
+| B7 | **The first visit:** on Overview until the kickoff is held, a welcome naming the experts with their WhatsApp buttons, the first three things to do this week (book the kickoff, the first records, any fee) and what happens next | R46 | UI tests: shown before the kickoff, gone after; each of the three links to its place | Phone |
+| B8 | **Your plan:** a read-only card on Overview and in the owner's welcome email: what we will do (the service's or type's description), the team, the start date and each fee with its date (the payment terms join it with R36). A change to the fees after the owner has the room is recorded and emails the owner the new schedule | R47 | UI test for the card; email test; the document test checks the new email is in the App flow | Phone |
+| B9 | **Removing a file:** the client removes a file they sent until the team has matched it; the team removes any file with a reason; the stored object is deleted and the removal recorded (`engagement_file_removed`) | R61 | DB tests: a client cannot remove a matched file or another client's; the object is deleted; the audit action is declared and documented (document test) | Phone |
+
+### Batch C: paying with confidence (about 2 days)
+
+| # | Task | Builds | Acceptance and test | Input |
+|---|---|---|---|---|
+| C1 | **Every pay page** (`/pay/:token/:item`, `/pay/fee/...`), the pay-page part of R38, shows before **Pay**: who is paid (the legal name on the statement), what for, the amount in full, the reference, that the receipt comes by email, and a WhatsApp button to the lead or the office. The Pay button uses the gradient and the page moves to 8 px corners (Design brief, section 4) | R72 | UI tests on both pay pages | I2 (the name), I3 (the office number) |
+
+### Batch D: speed and search (about 6 days, alongside)
+
+| # | Task | Builds | Acceptance and test |
+|---|---|---|---|
+| D1 | **Each public page loads its own code;** the room and the admin console stay separate. A budget check at the end of `pnpm build` fails it when a public page's JavaScript passes 170 KB compressed | R70 | The budget check in the build |
+| D2 | **Pre-render the real page:** `scripts/prerender.ts` renders each public page as it looks (today it writes text for search engines only), and the browser takes it over without redrawing; nothing in the first screen fades in | R70 | A test that each pre-rendered page holds its visible heading and first section; Lighthouse's mobile profile: Home, the check and a guide show their main content within 2.5 s (Home 4.3 s today) |
+| D3 | **One heading per page:** How we work and the check get their own main heading; the promise stays the home page's heading and a line elsewhere | R73 | A test over every public page: no two share an `h1` |
+| D4 | **A share card for each guide and service** (1,200 × 630, its title on the brand card), made by a script and kept in `client/public/share/`; each page points to its own | R73 | A test: every guide and service has its card and uses it |
+
+**Release 0 in total:** about 22 build days. The order: A, then B once 0021 is applied and I1 is in, then C, with D
+alongside. Each batch is previewed at phone and laptop width before ET says "push it".
+
+## 4. Later releases (outline)
+
+Each release is planned in full, like section 3, before it starts.
+
+| # | Release | Requirements | Needs first | Size |
+|---|---|---|---|---|
+| 1 | Payment terms and one payment model | R36, R37, R24, R42; the pause screen of R51; the groundwork for R53 | Decisions D4 (arrears limit) and D6 (when work pauses); a migration for each engagement's terms and refunds | M |
+| 2 | Fee, Data Request and Session reminders | R12, R16, R48, R57, R59, R64 | A scheduled job on Vercel; the sending domain verified (K2); quiet hours | M |
+| 3 | Buy now and the trust layer | R13, R38, R35 | Paystack live (K1) | M |
+| 4 | Close, the Day-30 Review and the next fix | R26, R27, R28 | A migration for the close record | M |
+| 5 | The room and the team's day, after the usability test | R49, R50, R52, R54, the rest of R51 | The usability test with a live client (A4) | L |
+| 6 | Tracking, the measures page, receipts | R39, R34, R53 | Decision D5 (the analytics tool); a consent notice (K9) | M |
+| 7 | Sign-in links and the rest | R41, R55, R56, R58, R60, R62, R63, R65 to R68 | — | L |
+| Alongside | Search | R40, R2 | A Google Business Profile; Search Console (K7) | S |
+
+S is under a week, M one to two weeks, L more.
+
+## 5. How each piece is delivered
+
+1. **In the documents first:** the requirement is in the PRD and the App flow before the code (rule 8).
+2. **Tests first for access:** a client cannot reach another client's records; a person outside an engagement cannot
+   reach it; then the behaviour.
+3. **Migrations on the branch,** with a guarded apply script in `drizzle/supabase/`. ET runs it in the Supabase SQL Editor
+   and replies "00NN done"; only then does the code reach `main` (`docs/database-migrations.md`).
+4. **`pnpm verify` passes;** anything people see is previewed at phone and laptop width, with the accessibility check on
+   the changed screens; `main` only on ET's word.
+5. **The documents change in the same commit** as the code; the document tests enforce it.
+
+## 6. Carried from the October plan
+
+The October phases built the room, the Sessions, the Data Request and the check-ins. What was left is carried here:
+
+| October item | Now |
 |---|---|
-| Full Report v4, the strategic plan: cover, contents, Background with the 12-month target and how the gap closes, nine numbered sections with Recommendations, the work plan in three phases (`REPORT_VERSION` 4) | `test/shared/fullReport/build.test.ts`, `test/server/fullReport/pdf.test.ts` |
-| Trust on the home page: track record, Enzo Krypton & Co., client logos (named once, no repeat cards), sectors | `test/client/pages/home.ui.test.tsx`, `test/client/pages/about.ui.test.tsx` |
-| A website of several pages (22 October): Home, Services as a store, a story page per service, How we work, About, Questions, Contact, one menu everywhere | `test/client/pages/home.ui.test.tsx`, `test/client/pages/services.ui.test.tsx`, `test/client/pages/howWeWork.ui.test.tsx`, `test/client/pages/about.ui.test.tsx`, `test/client/pages/questions.ui.test.tsx`, `test/client/pages/contact.ui.test.tsx` |
-| Business Check: Back follows the question order, fluid screens, the phone's back gesture, reduced motion | `test/server/businessCheck.ui.test.tsx`, `test/client/components/home/reducedMotion.ui.test.tsx` |
-| Client room: Founder · Business · Plan tabs from the owner's Full Report or Business Check; the desktop layout (side column with Waiting on you and Deliverables); numbered questions shown as a list | `test/shared/fullReport/insight.test.ts`, `test/client/components/engagementRoom.ui.test.tsx`, `test/db/engagements.db.test.ts`, `test/shared/engagement.test.ts` |
-| "Forgot your password?" on both sign-in pages; the owner's first password by email | `test/db/forgotPassword.db.test.ts`, `test/client/pages/adminLogin.ui.test.tsx`, `test/client/pages/accountPages.ui.test.tsx` |
-| "Send sign-in link" on the client's record in Engagements: a reset link or a fresh invitation, whichever fits | `test/db/onboarding.db.test.ts`, `test/client/components/engagementsView.ui.test.tsx` |
-| "Preview as client" on the engagement's record: the owner's room, read-only, for staff in scope, logged | `test/db/engagements.db.test.ts`, `test/client/components/engagementRoom.ui.test.tsx` |
-| Booking the two Current State Assessment Sessions from the room on Calendly, recorded on the engagement automatically (live once `CALENDLY_SESSION_URL` and `CALENDLY_API_TOKEN` are set) | `test/server/calendly.test.ts`, `test/db/sessionBooking.db.test.ts`, `test/client/components/engagementRoom.ui.test.tsx` |
-| The admin console reviewed against Apple's fluid-interface principles: theme colours only, drawers that slide in and out along the same edge, press feedback on buttons and rows, reduced-motion fades | `test/client/components/admin/adminCraft.test.ts`, `test/client/pages/adminConsole.ui.test.tsx` |
-
-**Next, proposed 14 October:** the room as a dashboard (prototype approved for review: charts, takeaways, a what-if on
-the 12-month target).
-
-Also on `main` since 9 October: the original twelve sectors; "Not assessed" areas on the result; the report form asking
-how each product is charged; the invitation page asking someone else signed in to sign out first; the 48-hour payment
-window; the problem questions at the end of the check.
-
-## 2. Phase 0: operational, no code (this week)
-
-| # | Task | Owner | Blocks |
-|---|---|---|---|
-| 0.1 | Verify Resend DNS for `contact.ipfactory.co`; set `EMAIL_FROM` to `IP Factory <notifications@contact.ipfactory.co>` and `EMAIL_REPLY_TO` to `info@ipfactory.co` in Vercel | DG, then Lewis | Every IP Factory Business Support email |
-| 0.2 | ~~Set the bank account settings in Vercel~~ **Dropped 12 October**: Paystack is the only way to pay, so there are no bank details | — | — |
-| 0.3 | Push the branch to `main` | ET ("push to main") | The four branch changes |
-| 0.4 | Name the finance person and grant roles to the analysts on the platform | Lewis | Phase 1 assignments |
-| 0.5 | Open IP Factory's Paystack business account. Put the **test** secret key in Vercel (`PAYSTACK_SECRET_KEY`, `sk_test_…`), redeploy, and in Paystack → Settings → API Keys & Webhooks set the test webhook URL to `https://www.ipfactory.co/api/paystack/webhook`. Pay both items with Paystack's test card (every page and email says "TEST MODE: NO REAL MONEY MOVES"). Then the **live** key and the live webhook URL (the same address) | ET, Lewis | Online payment (section 4) |
-| 0.6 | ✅ **Done 10 October.** **Apply migration 0008** (`drizzle/supabase/apply-0008-engagement-room.sql` in the Supabase SQL Editor, or `pnpm db:migrate`) before the first Current State Assessment payment is confirmed | Lewis | The engagement room |
-| 0.8 | ✅ **Done before 12 October** (found recorded when its script refused to run twice). **Apply migration 0009** (`drizzle/supabase/apply-0009-debrief-work-plan.sql` in the Supabase SQL Editor, or `pnpm db:migrate`): the Discovery Call record and the Work Plan fields. Until it is applied the Engagements section and the client room say the room is not up to date, and the Discovery Call summary says it is not set up | Lewis | The Discovery Call in the admin and the room; the Work Plan by week |
-| 0.9 | ✅ **Done 12 October**, confirmed by `pnpm db:verify` (11 migrations recorded). **Apply migration 0010** (`drizzle/supabase/apply-0010-rate-limits-reset-tokens-indexes.sql`, after 0009): rate-limit counters shared by every function instance, password reset links, and the indexes the console's queries need. Until it is applied the rate limits are per instance and reset links say they are not set up | Lewis | Durable rate limits; password reset; faster admin lists |
-| 0.7 | Create the private storage bucket `engagement-files` in Supabase → Storage; set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in Vercel, then redeploy; the Engagements tab then says "File uploads: on" or names what is still missing; upload one test file from a client account | Lewis | File uploads in the room |
-
-## 3. Quick fixes found while writing these documents (this week, small)
-
-Each is one focused change with a test. None needs a migration except Q6.
-
-| # | Fix | Why | Source |
-|---|---|---|---|
-| Q1 | Map `--font-sans` and `--font-serif` to Plus Jakarta Sans and Playfair Display; check with screenshots | The site shows the system font and Georgia, not the brand fonts | Design brief §3 |
-| Q2 | ~~Point Home's "Client sign in" at `/login`~~ **Done 9 October**; JUMP participants still reach their sign-in from `/portal` and from a link on `/login` | A returning client landed in the JUMP participant sign-in | App flow §10 |
-| Q3 | **Replaced by 1.0 below.** The JUMP and Gmail wording sits in the legacy Google staff flow, which cannot create a new staff account on Vercel; staff invitations on the email-and-password sign-in replace it | Rewording a flow that is being replaced adds nothing | App flow §10 |
-| Q4 | ~~Ask to confirm "Invite to onboard" before the assessment is paid~~ **Done 9 October**: Won invites at once; any earlier stage asks first | A lead could be invited before paying | App flow §10 |
-| Q5 | Expire full report links after delivery (or cap downloads) and rate-limit the report procedures | A forwarded link works forever | Backend schema §6 |
-| Q6 | Store the business check token as a hash | Every other token is hashed | Backend schema §6 (**migration**) |
-| Q7 | Map the shadcn colour roles to the theme, or remove their use | Components that rely on them render without colour | Design brief §4 |
-| Q8 | ~~Show staff who hold only platform roles on the Admin Team screen~~ (done 9 October); decide one permission for the report | Admin Team undercounts; finance can resend but not download | Backend schema §6 |
-
-## 4. Paystack (built 12 October; live once the keys are in Vercel)
-
-Paystack plugs into the existing confirmation (`confirmPayment` in `server/payments.ts`) rather than replacing it:
-the team and Paystack confirm through the same path, and manual confirmation stays for direct transfers.
-
-| # | Build | Acceptance | Status |
-|---|---|---|---|
-| P1 | **Checkout:** a "Pay online" button in the payment email opens the pay page (`/pay/:token/:item`), which opens Paystack's hosted checkout for the exact amount, with a reference per attempt | The owner can pay the full report or Current State Assessment by card or bank on Paystack | **Built.** Not yet linked from the result page: the payment email carries it |
-| P2 | **Webhook:** Paystack's signed notification (`/api/paystack/webhook`) confirms the payment request automatically, after checking the signature, then asking Paystack again and checking the reference, the status, the currency and the amount; the return page (`/pay/return`) does the same if it arrives first | The same emails and effects as "Confirm payment": the report link, or Won plus the engagement and the client invitation. A forged or mismatched notification changes nothing; a repeat confirms nothing twice | **Built** |
-| P3 | **Admin:** a payment confirmed online carries the note "Paid online with Paystack, reference …" and the stage history names Paystack; the office is emailed when a payment confirms itself or needs a look; manual "Proof received" and "Confirm payment" stay for direct transfers | The team can tell at a glance how each payment arrived | **Built** |
-| P4 | **Copy:** payment emails carry the amount, the reference and "Pay online"; no bank details and no proof of payment (Paystack only, 12 October); "Get my Full Report" on the result page opens Paystack directly | No email or page asks for proof or offers bank details | **Built** |
-
-Tests use a fake Paystack behind a stubbed `fetch`: no real keys and no network in tests. Webhook signatures are checked
-with `PAYSTACK_SECRET_KEY`. To go live: task 0.5.
-
-## 5. Phase 1: foundation for the engagement room (needed by 23 October)
-
-Goal: when a client pays for the Current State Assessment, an engagement exists, a team is assigned, and both the client and the team can
-see where it stands.
-
-| # | Build | Acceptance | Notes |
-|---|---|---|---|
-| 1.0 | ✅ **Built 9 October.** **Staff invitations** on the email-and-password sign-in: the Super Admin invites by email with a platform role; the person sets a password from a single-use link | A new analyst can be added and assigned without Google sign-in | Found 9 October: roles can only be granted to existing accounts |
-| 1.1 | ✅ **Built 10 October**, live once `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and the private bucket exist (`docs/vercel-env-inventory.md`). **File storage** on a private Supabase Storage bucket, with short-lived signed links issued by the server after an access check | A file uploaded for client A cannot be read by client B or an unassigned analyst; links expire | Replaces the Manus storage proxy (old R3). New env names only in `.env.example` |
-| 1.2 | ✅ **Built 9 October.** **Engagement table**: created when the Current State Assessment payment is confirmed; linked to the business when the client creates their account | Confirming payment creates exactly one engagement; accepting the invitation links it | **Migration**: dedicated branch per `AGENTS.md` |
-| 1.3 | ✅ **Built 9 October.** **Engagement assignments** (engagement × person × role: lead, analyst, partner, expert) and the scope check | Analysts see only assigned engagements; `view_all_businesses` sees all | Permissions `manage_engagements`, `assign_engagements`, `review_engagements` already exist in `shared/platformPermissions.ts` |
-| 1.4 | ✅ **Built 9 October** (the Engagements section). **Internal engagement page**: stage, team, and the getting-set-up checklist (welcome note sent, data request sent, WhatsApp group created, analyst assigned, both Current State Assessment calls booked) | The desk lead can run onboarding from one screen in three working days | Concept note §7 onboarding |
-| 1.5 | ✅ **Built 9 October.** **Client room v1: "Where are we?"** on `/dashboard`: the journey with the current step, the next session date, the named team | A client sees only their own engagement | Replaces the profile-only dashboard |
-
-## 6. Phase 2: sessions, notes and deliverables (needed by 23 October, the first Current State Assessment call)
-
-| # | Build | Acceptance |
-|---|---|---|
-| 2.1 | ✅ **Built 9 October** (booked on Calendly, recorded in the room). **Sessions**: date, type (Current State Assessment call 1 and 2, check-in, review), attendees, link | Both Current State Assessment calls can be booked from the engagement page |
-| 2.2 | ✅ **Built 9 October.** **Notes and actions** per session: client version and internal version; actions with owner and due date | Notes are shared with the client the same day; internal notes are never visible to the client |
-| 2.3 | ✅ **Built 9 October** (text; files wait for 1.1). **Deliverables**: upload, version, share; prescriptions and plans need desk lead approval before sharing | An unapproved prescription cannot be shared; every share is audited |
-| 2.4 | ✅ **Built 9 October.** **Email notices** to the client when something is shared with them | Branded email, link to the room, no content in the email body beyond the title |
-
-Built with O1, O2 and O3 as recommended (decision log §3), and the owner's seat invitation (one included seat, Full or Contributor). 2.4 email notices are built too.
-
-## 7. Phase 3: data requests (needed by 23 October, getting set up)
-
-| # | Build | Acceptance |
-|---|---|---|
-| 3.1 | ✅ **Built 9 October**; list, agendas and findings outline drawn from IP Factory's assessment proposals on 10 October. **Data request list** from a template (the concept note's onboarding list), per engagement, with due dates | The desk lead sends a list in one step |
-| 3.2 | ✅ **Built 10 October.** The client uploads against a request (or says they sent it another way); the team accepts or asks for more. **Client upload** against each request; status requested → received → accepted (or "needs more") | The analyst sees what is missing at a glance; the client sees what is still owed |
-
-## 8. Phase 4: the fix, check-ins and the record (needed by 6 November)
-
-| # | Build | Acceptance |
-|---|---|---|
-| 4.1 | **Problem statement** from Current State Assessment: chosen problem area, sub-problem, the owner's words | Exactly one problem per fix (D3) |
-| 4.2 | ✅ **Built 10 October.** **Measure**: name, definition, baseline, target, recorded in fix week 1 | The client can see the measure and where it stands |
-| 4.3 | ✅ **Built 10 October** (week N needs week N-1 first). **Weekly check-in**: the five-question template, measure reading, questions asked, hours by role, AI used | A check-in cannot be closed without last week's actions reviewed |
-| 4.4 | Needs `engagement_closes` (**migration 0011**, on its own branch when the first fixes approach week 6, December). **Close and day 30**: final value, moved, extension weeks, plan delivered, next problem area, ongoing support defined, day-30 check | The PRD §7 pass marks are countable from the record |
-| 4.5 | **Monday scorecard** for the desk: funnel, active fixes, measures, record completeness, hours | Replaces the spreadsheet export |
-
-## 8a. Privileged access, phase 1 (built 5 November; live before contractors get accounts)
-
-For the Crown Studio pilot (Sales First, from 9 November), contractors join the room. Before they get accounts:
-two-step sign-in for everyone with an internal role, a specialist's role that ends on a date, granting only below your
-own role, **Remove access** and **Reset two-step** in People, and email alerts to the Super Admins (migration 0012;
-[2. Technical requirements](02-technical-requirements.md) §7; `docs/security/nist-csf.md`). Deployment order: apply
-0012 (`drizzle/supabase/apply-0012-two-step-and-access-expiry.sql` in the Supabase SQL Editor, or `pnpm db:migrate`)
-**before** the code reaches production, because sign-in reads the new session columns. Every staff member then sets
-up two-step at their next sign-in.
-
-Phase 2 (by the Month 1 Review, 7 December): an Access page with a quarterly review (who has what, confirm or remove),
-the audit log as a screen, and a written recovery runbook (lost phone, leaked password, suspected break-in).
-
-## 9. Phase 5: later (v0.2)
-
-- Referral codes on the new flow: 10% off the next invoice per paying referral, up to 30%, never on a first payment.
-- Transcript import and AI-drafted session notes for review (system actor, audited).
-- A message thread in the room, only if O2 says so.
-- A settings screen for prices and key copy, so Lovelyn can change them without a developer (concept note §14).
-- Two colours on the outline for problems that cross areas (concept note §15).
-- Retire the JUMP-era screens and tables once nothing reads them (see [5. Backend schema](05-backend-schema.md) §4).
-- The January portal: the record with the methods attached (concept note D4).
-
-## 10. How each phase is delivered
-
-1. A short design note in the PR description that names the tables, procedures and permissions it adds.
-2. Tests first for the access rules: a client cannot reach another client; an analyst cannot reach an unassigned
-   engagement.
-3. Migrations on a dedicated branch, applied to Supabase by the guarded script method used for 0006 and 0007
-   (`docs/database-migrations.md`).
-4. `pnpm verify` passes; a preview link or screenshots for review; "push to main" only on the owner's word.
-5. These documents are updated in the same PR when the product changes.
+| 4.4 Close and the Day-30 Review | Release 4 (R26, R27) |
+| 4.5 The Monday scorecard | R34, Release 6 |
+| Privileged access, phase 2: the access review, the audit log as a screen, a recovery runbook | R66 (Release 7); the runbook with the access review |
+| Q5 Full Report links that expire after delivery; Q6 the check's token stored as a hash (migration); Q7 the shadcn colour roles mapped to the theme | Small fixes, taken with the next release that touches each |
+| Phase 5: referral codes, transcript import, a settings screen for prices and copy, retiring the JUMP tables | PRD: R33 (settings), section 10 (not in this release); the JUMP tables once nothing reads them (Backend schema, section 3) |

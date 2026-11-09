@@ -259,6 +259,24 @@ templates, was fixed by removing them.
 | R67 | **A new owner (C15).** The owner can hand the business to another person, who accepts; the old owner keeps the access the new owner gives them | C | A business that changes hands keeps its history | To build |
 | R68 | **Access ending (C17).** The lead and the Specialist are told seven days before a Specialist's access ends, with a way to extend it (Super Admin) | C | No one loses access mid-work without warning | To build |
 
+### From the design brief review (9 November 2026)
+
+The [Design brief](04-design-brief.md) was checked against the built screens on a phone and a laptop, with an automated
+accessibility check (axe, WCAG 2.1 AA) and a load test on Lighthouse's mobile profile. It found twelve gaps, B1 to B12.
+Five were bugs against rules already written and were fixed the same day: the room could be dragged sideways on a phone
+(B1), Watch labels and faded steps were below 4.5:1 (B4), taps under 44 px (B10), italic running text on the check (B11)
+and the staff sign-in heading (B12). Two were the brief itself, rewritten (B5, B6), with three decisions from ET: 8 px
+corners everywhere clients see, the gradient only for the one main action on a public page, and the promise "Find it.
+Fix it. See the shift." The other five are requirements.
+
+| # | Requirement | P | Acceptance | Status |
+|---|---|---|---|---|
+| R69 | **Every screen says what is happening (B2).** Every screen that loads data shows its loading, empty, failed and partly-done states as the Design brief sets them (section 5): the outline of the content while it loads; what will appear and who adds it when it is empty; "We could not load this. Check your connection and try again." with **Try again** when it fails, keeping the last copy on screen; a failed read retries twice before saying so and is never shown as empty | M | On a dropped connection no screen shows an empty-state message; every read in the room, the account and pay pages and the admin console has its four states, each covered by a test | To build |
+| R70 | **A fast first view on a phone (B3).** Public pages are pre-rendered as the real page, so their content shows before the site's code runs; each public page loads only its own code (at most 170 KB compressed); nothing in the first screen waits on an animation | S | On Lighthouse's mobile profile the largest content shows within 2.5 s on Home, the check and a guide (4.3 s, 2.5 s and 2.6 s on 9 November 2026), checked at every release | To build |
+| R71 | **The room on a phone (B7).** On a phone the room's header shrinks to one line (the project and its day) once the owner scrolls or leaves the Overview; the tab bar keeps the selected tab in view and fades at the edge where more tabs sit. R49 then reduces the views to five after the usability test | M | On a 390 px screen the first item of every view shows without scrolling past the header, and the selected tab is always visible | To build |
+| R72 | **Paying with confidence (B8).** Every pay page (the Full Report, the Business Review, each fee) shows before the Pay button who is paid (the legal name on the statement, decision D1), what for, the amount in full, the reference, that the receipt comes by email, and a WhatsApp button to the lead or the office (R44); the Pay button uses the gradient | S | A first-time payer can see who receives the money and whom to ask without leaving the page | To build (the name waits on D1) |
+| R73 | **One page, one search (B9).** Each public page has its own main heading for the search it answers (Home, How we work and the check no longer share "Find it. Fix it. See the shift."; it stays the home page's heading and a line elsewhere), and each guide and service has its own share card with its title for WhatsApp and LinkedIn | S | No two indexable pages share a main heading or a share card, checked by a test over the pre-rendered pages | To build |
+
 ### Stage 7–8: Deliver and Measure
 
 | # | Requirement | P | Acceptance | Status |
@@ -324,7 +342,8 @@ engagement without hurting the results above it.
 2. **Authorisation on the server**, by named permissions (`shared/platformPermissions.ts`), never by role names in screens.
 3. **Personal data** handled under the Nigeria Data Protection Act 2023: collected for a stated purpose, private by
    default, never in the repository.
-4. **Phone first:** every owner-facing screen works at phone width on a slow connection.
+4. **Phone first:** every owner-facing screen works at phone width on a slow connection, within the speed budget and
+   the accessibility rules of the [Design brief](04-design-brief.md) (sections 13 and 14).
 5. **Copy:** British English, Nigerian plain English, second person, short sentences, naira in full (₦100,000),
    "expert" over "person", the problem stated before the fix.
 6. **Every change ships with tests and updated product documents**, and `pnpm verify` passes before any push (`AGENTS.md`).
@@ -367,7 +386,7 @@ Ordered by what each moves first: cash, then growth, then hours, then retention.
 
 | # | Release | Requirements | Moves |
 |---|---|---|---|
-| 0 | The first client's experience (the P1 gaps of the design review) | R43, R44, R45, R46, R47, R61 | Time to first value; trust; records in on time |
+| 0 | The first client's experience (the P1 gaps of the design review; the design brief review) | R43, R44, R45, R46, R47, R61, R69, R70, R71, R72, R73 | Time to first value; trust; records in on time; visitors who stay |
 | 1 | Payment terms and one payment model | R36, R37, R24, R42; the pause screen of R51; the groundwork for R53 | Cash collected on time |
 | 2 | Fee, Data Request and Session reminders | R12, R16, R48, R57, R59, R64; every reminder carries a WhatsApp button (R44) | Delivery hours; cash; conversion |
 | 3 | Buy now and the trust layer | R13, R38, R35 | Conversion; cost of winning a client |

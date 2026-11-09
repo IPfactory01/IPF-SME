@@ -765,6 +765,9 @@ var BRAND = {
     "health-clear-tint": "#E7F3EC",
     "health-watch": "#B26A00",
     "health-watch-tint": "#FBF0DD",
+    // Text in the health colours: the dot colours are below 4.5:1 for small text (design review B4, 9 November 2026).
+    "health-watch-strong": "#8F5500",
+    "health-clear-strong": "#236A40",
     "health-stuck": "#B42318",
     "health-stuck-tint": "#FCE9E7"
   }
@@ -8556,10 +8559,10 @@ var SANS_600 = "Sans-600";
 var SANS_700 = "Sans-700";
 var DISPLAY = "Display";
 var HEALTH = {
-  clear: { label: "Clear", fg: C2["health-clear"], bg: C2["health-clear-tint"] },
-  watch: { label: "Watch", fg: C2["health-watch"], bg: C2["health-watch-tint"] },
-  stuck: { label: "Stuck", fg: C2["health-stuck"], bg: C2["health-stuck-tint"] },
-  not_assessed: { label: "Not assessed", fg: C2["ink-muted"], bg: C2["brand-tint-softer"] }
+  clear: { label: "Clear", fg: C2["health-clear"], text: C2["health-clear-strong"], bg: C2["health-clear-tint"] },
+  watch: { label: "Watch", fg: C2["health-watch"], text: C2["health-watch-strong"], bg: C2["health-watch-tint"] },
+  stuck: { label: "Stuck", fg: C2["health-stuck"], text: C2["health-stuck"], bg: C2["health-stuck-tint"] },
+  not_assessed: { label: "Not assessed", fg: C2["ink-muted"], text: C2["ink-muted"], bg: C2["brand-tint-softer"] }
 };
 var displayFont = (text4) => text4.includes("\u20A6") ? SANS_700 : DISPLAY;
 function ensure(doc, height) {
@@ -8574,7 +8577,7 @@ function chip(doc, health, x, y) {
   doc.font(SANS_700).fontSize(7.5);
   const width = doc.widthOfString(style.label.toUpperCase(), { characterSpacing: 0.8 }) + 12;
   doc.rect(x, y, width, 14).fill(style.bg);
-  doc.fillColor(style.fg).text(style.label.toUpperCase(), x + 6, y + 3.6, { characterSpacing: 0.8, lineBreak: false });
+  doc.fillColor(style.text).text(style.label.toUpperCase(), x + 6, y + 3.6, { characterSpacing: 0.8, lineBreak: false });
   return width;
 }
 function paragraph(doc, text4, options = {}) {
@@ -8786,7 +8789,7 @@ function scorecard(doc, rows, compact = false) {
     doc.rect(M.left, y, 3, height).fill(style.fg);
     doc.fillColor(C2.ink).font(SANS_600).fontSize(size).text(row.area, M.left + 10, y + (compact ? 4.5 : 6), { width: areaWidth - 12 });
     doc.rect(M.left + areaWidth, y, cellWidth, height).fill(style.bg);
-    doc.fillColor(style.fg).font(SANS_700).fontSize(7.5).text(style.label.toUpperCase(), M.left + areaWidth, y + height / 2 - 4, { width: cellWidth, align: "center", characterSpacing: 0.8, lineBreak: false });
+    doc.fillColor(style.text).font(SANS_700).fontSize(7.5).text(style.label.toUpperCase(), M.left + areaWidth, y + height / 2 - 4, { width: cellWidth, align: "center", characterSpacing: 0.8, lineBreak: false });
     doc.fillColor(C2["ink-soft"]).font(SANS2).fontSize(size).text(row.finding, findingX, y + (compact ? 4.5 : 6), { width: findingWidth - 6, lineGap: 1.5 });
     doc.x = M.left;
     doc.y = y + height + 2;
@@ -8863,7 +8866,7 @@ function benchmarks2(doc, items, title) {
     const marker = scale(item2.value);
     const style = HEALTH[item2.health];
     doc.rect(marker - 1.5, y - 1, 3, 18).fill(style.fg);
-    doc.fillColor(style.fg).font(SANS_700).fontSize(9).text(item2.display, barX + barWidth + 12, y + 3, { width: valueWidth, lineBreak: false });
+    doc.fillColor(style.text).font(SANS_700).fontSize(9).text(item2.display, barX + barWidth + 12, y + 3, { width: valueWidth, lineBreak: false });
     doc.fillColor(C2["ink-muted"]).font(SANS2).fontSize(7.5).text(item2.target, barX, y + 19, { width: barWidth, lineBreak: false });
     doc.x = M.left;
     doc.y = y + rowHeight;

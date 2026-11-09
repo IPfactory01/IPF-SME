@@ -3,7 +3,7 @@
 **How The Shift works for each person who uses it, step by step.** Rebuilt on 8 November 2026 from the
 [PRD](01-prd.md) review, as service blueprints: for every step, what the client does, what the platform does on its own,
 what a person on the team does, the email that goes out, and the status that changes. Each step says whether it is
-**Built** or **To build** (with the PRD requirement, R1 to R68). The [coverage matrix](09-coverage-matrix.md) checks this document against the code. Diagrams use Mermaid, which GitHub renders.
+**Built** or **To build** (with the PRD requirement, R1 to R73). The [coverage matrix](09-coverage-matrix.md) checks this document against the code. Diagrams use Mermaid, which GitHub renders.
 
 How to read it. Sections 1 to 4 are the design: who arrives where, the two rules that shape everything after (the
 front doors and the payment terms), and the journeys. Sections 5 to 7 are the reference for building and testing: every
@@ -267,6 +267,8 @@ info@ipfactory.co.
 | The client does not know whom to message | Each team member with **Message on WhatsApp** | — | — | To build (R44, R45) |
 | A team member leaves mid-engagement | The team list changes; nothing else | Moves their open items to the lead | The lead reassigns | To build (R51) |
 | An upload fails on a weak network | "The upload did not finish. Try again." (today); resumes on its own (R56) | Photos compressed first (R56) | — | Partly built |
+| The connection drops while a screen loads | Today: the screen's empty message (the room says it opens when the stage starts). With R69: "We could not load this. Check your connection and try again.", with **Try again** and the last copy kept on screen | Retries twice by itself before saying so | — | To build (R69) |
+| A first-time payer is unsure who receives the money | Today: the amount, Paystack and the receipt by email. With R72: the legal name on the statement, the reference and a WhatsApp button to the lead or the office, before **Pay** | — | Answers on WhatsApp | To build (R72; the name waits on D1) |
 | A Specialist's access ends | — | Their role ends at the end of the day, Lagos time | — | Built |
 
 ## 8. Reference: pages, admin console, room, sign-in
@@ -366,7 +368,10 @@ is made", the fee and **Pay securely with Paystack**.
 
 **To come:** the first-visit welcome and **Your plan** on Overview (R46, R47); each team member with **Message on
 WhatsApp** (R44); voice notes, links and **Send on WhatsApp to {name}** on Data Request items (R43); and, after a
-usability test, fewer places: Home, To do, Sessions, Results, Payments, so no task appears twice (R49).
+usability test, fewer places: Home, To do, Sessions, Results, Payments, so no task appears twice (R49). Before that, on a
+phone: the header shrinks to one line once the owner scrolls or leaves the Overview, and the tab bar keeps the selected
+tab in view (R71). Every view shows its loading, empty, failed and partly-done states as the Design brief sets them
+(section 5), and a failed load is never shown as empty (R69).
 
 ### 8.5 Permissions and project roles
 

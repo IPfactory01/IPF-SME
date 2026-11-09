@@ -19,12 +19,15 @@ const SANS_600 = "Sans-600";
 const SANS_700 = "Sans-700";
 const DISPLAY = "Display";
 
-const HEALTH: Record<ReportHealth, { label: string; fg: string; bg: string }> = {
-  clear: { label: "Clear", fg: C["health-clear"], bg: C["health-clear-tint"] },
-  watch: { label: "Watch", fg: C["health-watch"], bg: C["health-watch-tint"] },
-  stuck: { label: "Stuck", fg: C["health-stuck"], bg: C["health-stuck-tint"] },
-  not_assessed: { label: "Not assessed", fg: C["ink-muted"], bg: C["brand-tint-softer"] },
+/** fg marks bars and markers; text is for labels and figures, at 4.5:1 or better on white and on the tint (B4). */
+const HEALTH: Record<ReportHealth, { label: string; fg: string; text: string; bg: string }> = {
+  clear: { label: "Clear", fg: C["health-clear"], text: C["health-clear-strong"], bg: C["health-clear-tint"] },
+  watch: { label: "Watch", fg: C["health-watch"], text: C["health-watch-strong"], bg: C["health-watch-tint"] },
+  stuck: { label: "Stuck", fg: C["health-stuck"], text: C["health-stuck"], bg: C["health-stuck-tint"] },
+  not_assessed: { label: "Not assessed", fg: C["ink-muted"], text: C["ink-muted"], bg: C["brand-tint-softer"] },
 };
+/** For the contrast check in the tests. */
+export const REPORT_HEALTH_COLOURS = HEALTH;
 
 type Doc = PDFKit.PDFDocument;
 
@@ -45,7 +48,7 @@ function chip(doc: Doc, health: ReportHealth, x: number, y: number) {
   doc.font(SANS_700).fontSize(7.5);
   const width = doc.widthOfString(style.label.toUpperCase(), { characterSpacing: 0.8 }) + 12;
   doc.rect(x, y, width, 14).fill(style.bg);
-  doc.fillColor(style.fg).text(style.label.toUpperCase(), x + 6, y + 3.6, { characterSpacing: 0.8, lineBreak: false });
+  doc.fillColor(style.text).text(style.label.toUpperCase(), x + 6, y + 3.6, { characterSpacing: 0.8, lineBreak: false });
   return width;
 }
 
@@ -271,7 +274,7 @@ function scorecard(doc: Doc, rows: ScoreRow[], compact = false) {
     doc.rect(M.left, y, 3, height).fill(style.fg);
     doc.fillColor(C.ink).font(SANS_600).fontSize(size).text(row.area, M.left + 10, y + (compact ? 4.5 : 6), { width: areaWidth - 12 });
     doc.rect(M.left + areaWidth, y, cellWidth, height).fill(style.bg);
-    doc.fillColor(style.fg).font(SANS_700).fontSize(7.5).text(style.label.toUpperCase(), M.left + areaWidth, y + height / 2 - 4, { width: cellWidth, align: "center", characterSpacing: 0.8, lineBreak: false });
+    doc.fillColor(style.text).font(SANS_700).fontSize(7.5).text(style.label.toUpperCase(), M.left + areaWidth, y + height / 2 - 4, { width: cellWidth, align: "center", characterSpacing: 0.8, lineBreak: false });
     doc.fillColor(C["ink-soft"]).font(SANS).fontSize(size).text(row.finding, findingX, y + (compact ? 4.5 : 6), { width: findingWidth - 6, lineGap: 1.5 });
     doc.x = M.left;
     doc.y = y + height + 2;
@@ -355,7 +358,7 @@ function benchmarks(doc: Doc, items: Benchmark[], title?: string) {
     const marker = scale(item.value);
     const style = HEALTH[item.health];
     doc.rect(marker - 1.5, y - 1, 3, 18).fill(style.fg);
-    doc.fillColor(style.fg).font(SANS_700).fontSize(9).text(item.display, barX + barWidth + 12, y + 3, { width: valueWidth, lineBreak: false });
+    doc.fillColor(style.text).font(SANS_700).fontSize(9).text(item.display, barX + barWidth + 12, y + 3, { width: valueWidth, lineBreak: false });
     doc.fillColor(C["ink-muted"]).font(SANS).fontSize(7.5).text(item.target, barX, y + 19, { width: barWidth, lineBreak: false });
     doc.x = M.left;
     doc.y = y + rowHeight;

@@ -10,6 +10,10 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 |---|---|
 | Completeness is checked, not remembered: a coverage matrix built from the code (every procedure, audit action and table) is run at every review; its 13 gaps (numbered C1 to C17) become R58 to R68, and C1 (the Specialist's added-to-an-engagement step) is fixed in the App flow and on the board | ET, 9 November 2026 |
 | Drift fails the build: the document tests fail when a server action is missing from the coverage matrix, a permission, project role or email from the App flow, or an audit action from the Backend schema (and the code may record only the audit actions it declares) | ET, 9 November 2026 |
+| Corners: 8 px (`rounded-lg`) on cards, panels, buttons, inputs and chips everywhere a client or visitor sees; the admin console moves to it screen by screen; no new square screen | ET, 9 November 2026 |
+| Buttons: the logo gradient only for the one main action on a public page (the free check, Pay); navy for every other primary button and everything after sign-in | ET, 9 November 2026 |
+| The promise is "Find it. Fix it. See the shift.", the line the site already uses; the brief changes, not the site | ET, 9 November 2026 |
+| The design brief review: B1, B4, B10, B11 and B12 fixed as bugs the same day; the Design brief rewritten (B5, B6); B2, B3, B7, B8 and B9 become R69 to R73, in Release 0 | ET, 9 November 2026 |
 | The product design review of the flows: 16 gaps (G1 to G16) written into the PRD as R43 to R57, with a new Release 0 for the first client's experience | ET, 9 November 2026 |
 | Raw footage moves by WhatsApp or a Drive link and is never stored on the platform; voice notes can be uploaded | ET, 9 November 2026 |
 | Clients send WhatsApp messages to the person doing the work (the Digital Marketer or the Content Producer), not a central line; two new project roles for Digital marketing | ET, 9 November 2026 |

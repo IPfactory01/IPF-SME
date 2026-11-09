@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { describe, expect, it } from "vitest";
 import { evaluate } from "@shared/businessCheck/engine";
 import { buildFullReport } from "@shared/fullReport/build";
-import { renderFullReportPdf } from "@server/fullReport/pdf";
+import { renderFullReportPdf, REPORT_HEALTH_COLOURS } from "@server/fullReport/pdf";
 import { PLAYFAIR_DISPLAY_700, PLUS_JAKARTA_SANS_400, PLUS_JAKARTA_SANS_600, PLUS_JAKARTA_SANS_700 } from "@server/fullReport/fonts";
 import { PRINT_LOGO_PNG_BASE64, PRINT_LOGO_SIZE } from "@server/fullReport/logo";
 import { businessCheckProfiles } from "../../fixtures/businessCheckProfiles";
@@ -67,5 +67,20 @@ describe("the embedded brand assets", () => {
     const png = Buffer.from(PRINT_LOGO_PNG_BASE64, "base64");
     expect(png.equals(file)).toBe(true);
     expect({ width: png.readUInt32BE(16), height: png.readUInt32BE(20) }).toEqual(PRINT_LOGO_SIZE);
+  });
+});
+
+describe("the health labels in the report", () => {
+  const luminance = (hex: string) => {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const contrast = (a: string, b: string) => { const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (high + 0.05) / (low + 0.05); };
+
+  it("prints every label and figure at 4.5:1 or better, on white and on its tint (design review B4)", () => {
+    for (const [health, style] of Object.entries(REPORT_HEALTH_COLOURS)) {
+      expect(contrast(style.text, "#FFFFFF"), `${health} on white`).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(style.text, style.bg), `${health} on its tint`).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });

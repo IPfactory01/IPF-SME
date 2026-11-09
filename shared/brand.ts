@@ -146,6 +146,9 @@ export const BRAND = {
     "health-clear-tint": "#E7F3EC",
     "health-watch": "#B26A00",
     "health-watch-tint": "#FBF0DD",
+    // Text in the health colours: the dot colours are below 4.5:1 for small text (design review B4, 9 November 2026).
+    "health-watch-strong": "#8F5500",
+    "health-clear-strong": "#236A40",
     "health-stuck": "#B42318",
     "health-stuck-tint": "#FCE9E7",
   },

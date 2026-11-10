@@ -296,7 +296,7 @@ info@ipfactory.co.
 | `/experience` | `ExperiencePage.tsx` | Home, About | The record: figures, client logos, the firm behind The Shift |
 | `/guides` | `GuidesPage.tsx` | Home, the footer | Answers to what Nigerian owners search for |
 | `/guides/:slug` | `GuidesPage.tsx` | Search, Guides | One guide, its fix and the services with prices; FAQ structured data |
-| `/about` | `AboutPage.tsx` | The menu | IP Factory and Enzo Krypton & Co. |
+| `/about` | `AboutPage.tsx` | The menu | IP Factory and Enzo Krypton & Co., written for the searches an About page answers (who, where, who is behind it, for whom): the figures, what we do with a link to each service, how we work, who it is for, and its questions (FAQ structured data) |
 | `/questions` | `QuestionsPage.tsx` | The menu | Every question, before buying and per service |
 | `/contact` | `ContactPage.tsx` | The menu | "Talk to an expert": the call, the mailbox, the office |
 | `/check` | `CheckPage.tsx`, then `BusinessCheck.tsx` | Every page | The free Business Health Check (4.1). The first screen opens alone; the questions load in the background and take over (R70) |

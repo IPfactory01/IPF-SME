@@ -12,6 +12,7 @@ import { GUIDES, guidePath } from "./guides";
 
 export { HOME_META, PAGE_META, pageTitle, productMeta, SERVICE_SEARCH_TITLES, SITE_ORIGIN } from "./pageMeta";
 import { HOME_META, PAGE_META, pageTitle, productMeta, SITE_ORIGIN, type Meta } from "./pageMeta";
+import { ABOUT_FAQ, ABOUT_HEADING, ABOUT_SUB } from "./about";
 
 const ORGANISATION_ID = `${SITE_ORIGIN}/#organisation`;
 
@@ -117,7 +118,7 @@ export function publicPages(): PublicPage[] {
     }),
     page("/how-we-work", PAGE_META.howWeWork, "How we work with your business.", [PAGE_META.howWeWork.description], [], PAGE_META.howWeWork.title, { line: "The free check, four ways to work with us, and what every piece of work comes with." }),
     page("/experience", PAGE_META.experience, "We have done this before, many times.", [PAGE_META.experience.description], [], PAGE_META.experience.title, { line: `${BRAND.trackRecord.clients} clients advised since ${BRAND.trackRecord.since}, and the research behind the method.` }),
-    page("/about", PAGE_META.about, "Consulting experience, at the size of your business.", [PAGE_META.about.description]),
+    page("/about", PAGE_META.about, ABOUT_HEADING, [ABOUT_SUB, ...ABOUT_FAQ.map((item) => `${item.q} ${item.a}`)], [faqJsonLd(ABOUT_FAQ)], "About", { eyebrow: BRAND.organisationName, line: firstSentence(ABOUT_SUB) }),
     page("/guides", PAGE_META.guides, "Answers to what owners ask.", [PAGE_META.guides.description, ...GUIDES.map((guide) => `${guide.h1} ${guide.description}`)], [], PAGE_META.guides.title, { eyebrow: "Guides", line: "Plain answers to what owners in Nigeria search for." }),
     ...GUIDES.map((guide) => page(guidePath(guide), { title: guide.title, description: guide.description }, guide.h1, [guide.lede, ...guide.sections.flatMap((section) => [section.heading, ...(section.paragraphs ?? []), ...(section.points ?? [])])], [faqJsonLd(guide.faq)], guide.h1, { eyebrow: "A guide for owners in Nigeria", line: firstSentence(guide.lede) })),
     page("/questions", PAGE_META.questions, "Questions owners ask.", QUESTION_GROUPS.flatMap((group) => group.items.map((item) => `${item.q} ${item.a}`)), [faqJsonLd(QUESTION_GROUPS.flatMap((group) => group.items))], PAGE_META.questions.title, { line: "Paying, delivery dates, refunds, your information, and each service." }),

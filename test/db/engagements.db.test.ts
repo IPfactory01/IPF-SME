@@ -160,6 +160,47 @@ for (const target of targets) {
       mocked.deliverEmail.mockResolvedValue({ status: "Simulated", reason: "test_sender" });
     });
 
+    describe("Session emails (R75, ET 10 November 2026)", () => {
+      it("emails everyone on the engagement who still has access, with a calendar invitation, when a Session is booked, moved or cancelled; never for the agenda alone", async () => {
+        const desk = await superAdmin.call();
+        const contactEmail = uniqueEmail("crown-studios");
+        const { engagementId } = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Crown Studios", contactName: "Marcelle Crown", contactEmail, startedOn: "2026-11-11" });
+        const marketer = await person(["analyst"], "Miracle Marketer");
+        await desk.engagement.staff.assign({ engagementId, userId: marketer.id, role: "digital_marketer" });
+        // A specialist whose access ended yesterday is still on the team, but hears nothing.
+        const former = await person(["subject_matter_expert"], "Former Specialist");
+        await db.update(schema.userPlatformRoles).set({ expiresAt: new Date(Date.now() - 86_400_000) }).where(eq(schema.userPlatformRoles.userId, former.id));
+        await db.insert(schema.engagementTeam).values({ engagementId, userId: former.id, role: "expert" });
+        type Sent = EmailCall & { icsContent?: string };
+        const sent = () => mocked.deliverEmail.mock.calls.map(call => call[0] as Sent);
+        mocked.deliverEmail.mockClear();
+
+        const when = new Date(Date.now() + 3 * 86_400_000);
+        const session = { engagementId, kind: "check_in" as const, title: "Weekly Check-in", scheduledFor: when, durationMinutes: 45, meetingLink: "https://zoom.example.test/j/9", agenda: null, status: "planned" as const };
+        const { sessionId } = await desk.engagement.staff.saveSession(session);
+        const booked = sent();
+        expect(booked.map(email => email.to)).toEqual(expect.arrayContaining([contactEmail, marketer.email]));
+        expect(booked.map(email => email.to)).not.toContain(former.email);
+        expect(booked.every(email => email.subject.startsWith("Session booked: Weekly Check-in, "))).toBe(true);
+        expect(booked.find(email => email.to === contactEmail)!.body).toContain("Weekly Check-in with your team at IP Factory is booked");
+        expect(booked.find(email => email.to === marketer.email)!.body).toContain("Weekly Check-in with Crown Studios is booked");
+        expect(booked.every(email => email.icsContent?.includes(`UID:session-${sessionId}@ipfactory.co`) && email.icsContent.includes("METHOD:REQUEST"))).toBe(true);
+
+        // The agenda alone sends nothing; a new time goes to everyone again; a cancellation takes it out of their calendars.
+        mocked.deliverEmail.mockClear();
+        await desk.engagement.staff.saveSession({ ...session, sessionId, agenda: "Last week's numbers" });
+        expect(sent()).toEqual([]);
+        const later = new Date(when.getTime() + 86_400_000);
+        await desk.engagement.staff.saveSession({ ...session, sessionId, scheduledFor: later });
+        expect(sent()).toHaveLength(booked.length);
+        expect(sent().every(email => email.subject.startsWith("Session moved: Weekly Check-in, now "))).toBe(true);
+        mocked.deliverEmail.mockClear();
+        await desk.engagement.staff.saveSession({ ...session, sessionId, scheduledFor: later, status: "cancelled" });
+        expect(sent()).toHaveLength(booked.length);
+        expect(sent().every(email => email.subject.startsWith("Session cancelled: Weekly Check-in, ") && email.icsContent?.includes("METHOD:CANCEL"))).toBe(true);
+      });
+    });
+
     describe("a database behind this build (live, 10 November 2026)", () => {
       // The live database lacked 0022: the list read its write-off column and said "migration 0008 is not applied".
       it.skipIf(target.name !== "PGlite")("names the migration the database lacks, and lists again once it is applied", async () => {

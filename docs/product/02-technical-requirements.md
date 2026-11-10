@@ -59,7 +59,7 @@ docs/product/     These six documents
   (`docs/database-migrations.md`). Every migration from 0012 has its own guarded script,
   `drizzle/supabase/apply-00NN-*.sql`, which `test/db/applyScripts.db.test.ts` checks against the migration (every
   statement, the hash and the guard); ET runs it and replies "00NN done". A backfill goes in the migration's own SQL, so
-  the script and `pnpm db:migrate` give the same database. Applied through 0022 (10 November 2026); 0023 (paid in arrears) is written and is applied just before its code. `pnpm db:verify` checks a
+  the script and `pnpm db:migrate` give the same database. Applied through 0023 (10 November 2026). `pnpm db:verify` checks a
   database against the schema, read-only (`docs/database-migrations.md`).
 - `/api/health` counts the migrations the database has recorded against those the build needs (the journal, bundled at
   build). A database behind the build answers 503 with `MIGRATION_MISSING` and the first migration it lacks, and Admin

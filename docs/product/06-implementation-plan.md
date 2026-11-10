@@ -27,7 +27,7 @@ counting time spent waiting on a decision or a migration.
 | The design review fixes: the room fits a phone, readable health labels, 44 px taps (B1, B4, B10 to B12) | Design brief |
 | Release 1 (10 November): payment terms by what is bought and the pause seven days after a missed date (E); one payment model, with part payments, refunds, write-offs, receipt and invoice numbers, Finance from one source and the Business Review on fees (F); the work resumed email and alerts (G) | R24, R36, R37, R42, R51 (the pause), the groundwork for R53 |
 
-Migrations are applied through **0022**; 0023 (paid in arrears, R74) is written and is applied just before its code. Release 0 still waits on the timed phone run with ET or Marcelle (B6) and the
+Migrations are applied through **0023** (paid in arrears, R74, live 10 November). Session emails with a calendar invitation (R75) were built the same day. Release 0 still waits on the timed phone run with ET or Marcelle (B6) and the
 team's WhatsApp numbers (I1); batch C was built on 10 November. Release 1 is built (batches E, F and G, 10 November
 2026). Release 2, the reminders, needs a scheduled job on Vercel first; the sending domain is verified (K2, 10 November). The document tests (`test/docs/productDocs.test.ts`) fail the build
 if a page, a table, a server action, a permission, a project role, an email or an audit action is added without being

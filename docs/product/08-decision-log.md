@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Everyone on an engagement hears of each Session by email with a calendar invitation: the team, and the client unless they booked it on Calendly, which has already emailed them; a cancellation takes it out of their calendars (R75) | ET, 10 November 2026 |
 | Digital Marketing may be paid in arrears, a Partner's or the Super Admin's choice for a client: each month's fee falls due 30, 60 and 90 days after the kickoff, which officially starts the engagement; the room opens at once; a new kickoff date moves every fee not yet paid. Every other engagement still pays its first fee at the start (D4, R74) | ET, 10 November 2026 |
 | The live site checks its database against its code: `/api/health` answers 503 and names a migration the build needs that the database lacks, Admin shows it at the top of every tab, and a push to main counts as live only once health counts every migration (after 0022 was found missing on the live database, with the Engagements tab wrongly naming 0008) | ET, 10 November 2026 ("push it") |
 | Alerts (G3): an email that did not arrive stays at the top of Pipeline until someone marks it **Dealt with** (the plan said "until someone opens it"; dealing with it is what clears it, and who did is recorded); the resumed email goes to the engagement's Engagement Manager or Lead Consultant, and to the office when nobody leads it yet | ET, 10 November 2026, approved with G's preview ("push it") |

@@ -67,6 +67,7 @@ import { PRODUCTS, secondHalf } from "../shared/products";
 import { inviteBusinessOwner } from "./accountInvitations";
 import { slugify } from "./accountAuth";
 import { recordAudit } from "./audit";
+import { sendSessionEmails, sessionChange } from "./sessionInvitations";
 import { DUE_DAYS } from "../shared/dataRequestTemplates";
 import { initialFeeRows } from "./agreements";
 import { clientFees, dateBalancesOnDelivery } from "./feePayments";
@@ -687,11 +688,18 @@ export async function saveSession(db: Database, actor: StaffActor, input: Sessio
   await requireStaffEngagement(db, actor, input.engagementId);
   const values = { kind: input.kind, title: input.title, scheduledFor: input.scheduledFor, durationMinutes: input.durationMinutes, meetingLink: input.meetingLink, agenda: input.agenda, status: input.status, ...(input.weekNumber === undefined ? {} : { weekNumber: input.weekNumber }) };
   if (input.sessionId) {
+    const before = (await db.select().from(engagementSessions).where(and(eq(engagementSessions.id, input.sessionId), eq(engagementSessions.engagementId, input.engagementId))).limit(1))[0];
+    if (!before) throw notFound();
     const updated = await db.update(engagementSessions).set(values).where(and(eq(engagementSessions.id, input.sessionId), eq(engagementSessions.engagementId, input.engagementId))).returning({ id: engagementSessions.id });
     if (!updated.length) throw notFound();
+    // A new time, length, link or title, or a cancellation, goes to everyone on the engagement (R75).
+    const change = sessionChange(before, values);
+    if (change) await sendSessionEmails(db, { sessionId: input.sessionId, change, includeClient: true });
     return { sessionId: input.sessionId } as const;
   }
   const [created] = await db.insert(engagementSessions).values({ engagementId: input.engagementId, ...values, createdByUserId: actor.id }).returning({ id: engagementSessions.id });
+  const change = sessionChange(null, values);
+  if (change) await sendSessionEmails(db, { sessionId: created.id, change, includeClient: true });
   return { sessionId: created.id } as const;
 }
 
@@ -906,12 +914,14 @@ export async function syncSessionBookings(db: Pick<Database, "select" | "update"
     const booking = bookings[index];
     if (!booking) break;
     const minutes = booking.end ? Math.round((booking.end.getTime() - booking.start.getTime()) / 60_000) : null;
-    await db.update(engagementSessions).set({
+    const booked = await db.update(engagementSessions).set({
       scheduledFor: booking.start,
       ...(minutes && minutes > 0 ? { durationMinutes: minutes } : {}),
       ...(booking.joinUrl && !session.meetingLink ? { meetingLink: booking.joinUrl } : {}),
-    }).where(and(eq(engagementSessions.id, session.id), isNull(engagementSessions.scheduledFor)));
+    }).where(and(eq(engagementSessions.id, session.id), isNull(engagementSessions.scheduledFor))).returning({ id: engagementSessions.id });
     await recordAudit(db, { action: "engagement_session_booked", actorUserId: null, details: { engagementId: engagement.id, sessionId: session.id, via: "calendly", scheduledFor: booking.start.toISOString() } });
+    // The team hears of it with a calendar invitation; the client booked it on Calendly, which has emailed them (R75).
+    if (booked.length && booking.start.getTime() > now) await sendSessionEmails(db, { sessionId: session.id, change: "booked", includeClient: false, now });
     recorded += 1;
   }
   return recorded;

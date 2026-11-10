@@ -18,6 +18,15 @@ vi.mock("@server/calendly", async importOriginal => ({
   },
 }));
 
+const mail = vi.hoisted(() => ({ sent: [] as { to: string; subject: string; body: string; icsContent?: string }[] }));
+vi.mock("@server/email", async importOriginal => ({
+  ...(await importOriginal<typeof import("@server/email")>()),
+  deliverEmail: async (input: { to: string; subject: string; body: string; icsContent?: string }) => {
+    mail.sent.push(input);
+    return { status: "Simulated", reason: "test_sender" };
+  },
+}));
+
 import { resetSessionSyncForTests, syncSessionBookings } from "@server/engagements";
 
 const targets = [
@@ -56,6 +65,21 @@ for (const target of targets) {
       calendly.configured = true;
       calendly.bookings = [];
       calendly.asked = [];
+      mail.sent = [];
+    });
+
+    it("emails the team a Session the owner booked on Calendly, with a calendar invitation, but not the owner, whom Calendly has emailed (R75)", async () => {
+      const { engagement: row, email } = await engagement();
+      const [member] = await db.insert(schema.users).values({ openId: unique("u"), email: `${unique("lewis")}@example.test`, name: "Lewis Lead", role: "user", status: "active" }).returning();
+      await db.insert(schema.userPlatformRoles).values({ userId: member.id, role: "analyst" });
+      await db.insert(schema.engagementTeam).values({ engagementId: row.id, userId: member.id, role: "lead" });
+      const start = new Date(Date.now() + 2 * 86_400_000);
+      calendly.bookings = [{ start, end: new Date(start.getTime() + 90 * 60_000), joinUrl: "https://zoom.example.test/j/7" }];
+      expect(await syncSessionBookings(db, row, email)).toBe(1);
+      expect(mail.sent.map(sent => sent.to)).toEqual([member.email]);
+      expect(mail.sent[0]!.subject).toMatch(/^Session booked: Business Review Session 1, /);
+      expect(mail.sent[0]!.body).toContain("Join: https://zoom.example.test/j/7");
+      expect(mail.sent[0]!.icsContent).toContain("METHOD:REQUEST");
     });
 
     it("fills Session 1 then Session 2 from the owner's bookings, in order, with the length and the meeting link", async () => {

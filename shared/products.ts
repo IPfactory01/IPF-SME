@@ -563,7 +563,8 @@ export const NEED_LEAD: Record<Need, string> = {
   funding: "funding_readiness_assessment",
   strategy: "strategy_90_day_plan",
   people: "hiring_toolkit",
-  sales: "six_week_fix",
+  // "Sales are flat and I need more customers every month": Digital Marketing (ET, 10 November 2026).
+  sales: "digital_marketing",
   whole_business: "business_review",
 };
 

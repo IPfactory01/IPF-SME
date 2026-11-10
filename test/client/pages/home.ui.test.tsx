@@ -79,6 +79,8 @@ describe("home page: a standard home page that leads to the site's other pages",
       expect(link.textContent).toContain(product.name);
     }
     expect(problems.getByRole("link", { name: "Take the free Business Health Check" }).getAttribute("href")).toBe("/check");
+    // An owner who needs more customers is sent to Digital Marketing (ET, 10 November 2026).
+    expect(problems.getByRole("link", { name: /Sales are flat and I need more customers every month/ }).getAttribute("href")).toBe("/services/digital-marketing");
   });
 
   it("features three services to start with, with their prices, and links to all of them", () => {

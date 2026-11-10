@@ -70,6 +70,7 @@ export const AUDIT_ACTIONS = [
   "engagement_fees_dated_on_delivery",
   "engagement_room_opened",
   "engagement_fee_timing_set",
+  "team_view_previewed",
   // The payments ledger (batch F): money recorded by hand by Finance or the Super Admin, cancelled when recorded by
   // mistake, and a Paystack payment that needed a look accepted.
   "fee_payment_recorded",

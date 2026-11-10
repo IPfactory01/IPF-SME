@@ -23,6 +23,8 @@ import { deliverEmail } from "../email";
 import { loadAuthority } from "../platformAccess";
 import { ownerAdminProcedure, protectedProcedure, publicProcedure, router } from "../_core/trpc";
 import { getTrustedApplicationOrigin } from "../security";
+import { recordAudit } from "../audit";
+import { TEAM_PREVIEW_COOKIE, TEAM_PREVIEW_MINUTES, teamPreviewCookieOptions, teamPreviewToken } from "../teamPreview";
 import { emailEquals } from "../dbHelpers";
 import { ADMIN_PERMISSION_IDS, isAdminPermission, parseAdminPermissions, serializeAdminPermissions } from "../../shared/adminPermissions";
 import { BRAND } from "../../shared/brand";
@@ -62,7 +64,34 @@ export const adminAccessRouter = router({
       // legacy administrator profile grant.
       permissions: authority.legacyCapabilities,
       platformPermissions: authority.permissions,
+      /** Preview as a team member (R76): whose view this is, who is looking, and until when. */
+      preview: ctx.preview ? { name: ctx.preview.asName, email: ctx.preview.asEmail, by: ctx.preview.byName, until: new Date(ctx.preview.expiresAt) } : null,
     };
+  }),
+
+  /**
+   * Preview as a team member (R76): the Super Admin opens Admin as this person sees it for 30 minutes, read only.
+   * Never from inside a preview (the person in it is not the Super Admin), never a client, never another Super Admin.
+   */
+  previewAs: ownerAdminProcedure.input(z.object({ userId: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+    const db = await getDb();
+    if (!db || !ctx.user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database not available" });
+    if (input.userId === ctx.user.id) throw new TRPCError({ code: "BAD_REQUEST", message: "This is already your own view." });
+    const shown = (await db.select().from(users).where(eq(users.id, input.userId)).limit(1))[0];
+    if (!shown || shown.status !== "active") throw new TRPCError({ code: "NOT_FOUND", message: "This person is not available to preview." });
+    const authority = await loadAuthority(db, shown);
+    if (authority.roles.length === 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Only someone at IP Factory can be previewed here. A client's room has Preview as client." });
+    if (authority.isSuperAdmin) throw new TRPCError({ code: "BAD_REQUEST", message: "Another Super Admin sees what you see." });
+    const expiresAt = Date.now() + TEAM_PREVIEW_MINUTES * 60_000;
+    ctx.res.cookie(TEAM_PREVIEW_COOKIE, teamPreviewToken(ctx.user.id, shown.id, expiresAt), { ...teamPreviewCookieOptions(ctx.req), maxAge: TEAM_PREVIEW_MINUTES * 60_000 });
+    await recordAudit(db, { action: "team_view_previewed", actorUserId: ctx.user.id, targetEmail: shown.email ?? null, details: { userId: shown.id, until: new Date(expiresAt).toISOString() } });
+    return { success: true, name: shown.name ?? shown.email ?? "", until: new Date(expiresAt) } as const;
+  }),
+
+  /** Close the preview: the one change a preview may make, and harmless to anyone without one. */
+  endPreview: publicProcedure.mutation(({ ctx }) => {
+    ctx.res.clearCookie(TEAM_PREVIEW_COOKIE, teamPreviewCookieOptions(ctx.req));
+    return { success: true } as const;
   }),
 
   enrollOwnerPassword: protectedProcedure

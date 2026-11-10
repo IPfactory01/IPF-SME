@@ -140,6 +140,12 @@ How it is built:
   needs no database access to get in (`pnpm owner:bootstrap` remains for a database with no email).
 - **Staff** have platform roles and permissions (`shared/platformPermissions.ts`); a client's session never becomes a
   staff identity.
+- **Preview as a team member** (R76, `server/teamPreview.ts`): the Super Admin starts it from Team; the server sets
+  `ipf_team_preview`, httpOnly, SameSite=Strict, 30 minutes, signed with HMAC-SHA256 under `JWT_SECRET` over who
+  started it, whom it shows and when it ends. `createContext` honours it only when the signed-in person is that same
+  Super Admin, then evaluates the request as the team member. A guard on every tRPC procedure refuses each mutation
+  while it lasts, except **Close preview** and signing out; Preview as client is refused inside it. Starting one is
+  recorded (`team_view_previewed`).
 - **Two-step sign-in** (migration 0012, `server/twoStep.ts`): everyone with an internal role signs in with the password,
   then a six-digit code from an authenticator app (RFC 6238; a code from the step before or after is accepted, never
   one already used). The correct password returns a challenge, not a cookie: a ten-minute `user_sessions` row that

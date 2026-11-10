@@ -39,6 +39,7 @@ import { resetBusinessCheckRateLimitsForTests } from "@server/routers/businessCh
 import { hashAdminPassword, OWNER_ADMIN_EMAIL } from "@server/adminSecurity";
 import { addWorkingDays } from "@server/engagements";
 import { checkDatabase } from "@server/databaseHealth";
+import { TEAM_PREVIEW_COOKIE, TEAM_PREVIEW_REFUSAL, teamPreviewToken } from "@server/teamPreview";
 import { ENV } from "@server/_core/env";
 import { ACCOUNT_SESSION_COOKIE, type PlatformRole } from "@shared/auth";
 import { cleanAnswers } from "@shared/businessCheck/engine";
@@ -158,6 +159,56 @@ for (const target of targets) {
       resetBusinessCheckRateLimitsForTests();
       mocked.deliverEmail.mockReset();
       mocked.deliverEmail.mockResolvedValue({ status: "Simulated", reason: "test_sender" });
+    });
+
+    describe("Preview as a team member (R76, ET 10 November 2026)", () => {
+      it("shows the Super Admin Admin as an analyst sees it, refuses every change meanwhile, records it, and ends on Close preview", async () => {
+        const owner = (await db.select().from(schema.users).where(sql`lower(${schema.users.email}) = ${OWNER_ADMIN_EMAIL.toLowerCase()}`))[0];
+        const looking = await signIn(owner, true);
+        const desk = await superAdmin.call();
+        const theirs = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Theirs Studio", contactName: "Tolu Theirs", contactEmail: uniqueEmail("theirs-studio"), startedOn: "2026-11-16" });
+        const other = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Other Studio", contactName: "Obi Other", contactEmail: uniqueEmail("other-studio"), startedOn: "2026-11-16" });
+        const analyst = await person(["analyst"], "Ana Analyst");
+        await desk.engagement.staff.assign({ engagementId: theirs.engagementId, userId: analyst.id, role: "analyst" });
+
+        expect(await (await looking.call()).adminAccess.previewAs({ userId: analyst.id })).toMatchObject({ success: true, name: "Ana Analyst" });
+        expect(looking.jar.has(TEAM_PREVIEW_COOKIE)).toBe(true);
+        // Admin answers as the analyst: their access, their projects only.
+        expect(await (await looking.call()).adminAccess.status()).toMatchObject({ email: analyst.email, isSuperAdmin: false, preview: { name: "Ana Analyst" } });
+        const projects = (await (await looking.call()).engagement.staff.list()).items.map(item => item.id);
+        expect(projects).toContain(theirs.engagementId);
+        expect(projects).not.toContain(other.engagementId);
+        // Nothing can be changed in their name, nor a preview started inside one, nor a client's room opened as them.
+        await expect((await looking.call()).engagement.staff.saveSession({ engagementId: theirs.engagementId, kind: "check_in", title: "Weekly Check-in", scheduledFor: null, durationMinutes: 45, meetingLink: null, agenda: null, status: "planned" })).rejects.toMatchObject({ code: "FORBIDDEN", message: TEAM_PREVIEW_REFUSAL });
+        await expect((await looking.call()).adminAccess.previewAs({ userId: analyst.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await expect((await looking.call()).engagement.staff.previewRoom({ engagementId: theirs.engagementId })).rejects.toMatchObject({ code: "FORBIDDEN", message: "Close the team preview first: Preview as client is your own action." });
+
+        // Close preview: back as the Super Admin, and the preview is on the record.
+        expect(await (await looking.call()).adminAccess.endPreview()).toEqual({ success: true });
+        expect(looking.jar.has(TEAM_PREVIEW_COOKIE)).toBe(false);
+        expect(await (await looking.call()).adminAccess.status()).toMatchObject({ isSuperAdmin: true, preview: null });
+        const recorded = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "team_view_previewed"));
+        expect(recorded.map((row: { actorUserId: number; details: string }) => ({ actor: row.actorUserId, ...JSON.parse(row.details) }))).toContainEqual(expect.objectContaining({ actor: owner.id, userId: analyst.id }));
+      });
+
+      it("is the Super Admin's alone: never for anyone else, never of a client, themselves or another Super Admin, and a copied cookie does nothing", async () => {
+        const owner = (await db.select().from(schema.users).where(sql`lower(${schema.users.email}) = ${OWNER_ADMIN_EMAIL.toLowerCase()}`))[0];
+        const analyst = await person(["analyst"], "Ama Analyst");
+        const deskLeadUser = await person(["desk_lead"], "Dami Desk");
+        const deskLead = await signIn(deskLeadUser, true);
+        await expect((await deskLead.call()).adminAccess.previewAs({ userId: analyst.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        const client = await person([], "Chi Client");
+        await expect((await superAdmin.call()).adminAccess.previewAs({ userId: client.id })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await expect((await superAdmin.call()).adminAccess.previewAs({ userId: owner.id })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        const another = await person(["super_admin"], "Second Owner");
+        await expect((await superAdmin.call()).adminAccess.previewAs({ userId: another.id })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        // A preview cookie the Super Admin was given, copied into someone else's browser, changes nothing for them.
+        deskLead.jar.set(TEAM_PREVIEW_COOKIE, teamPreviewToken(owner.id, analyst.id, Date.now() + 600_000));
+        expect(await (await deskLead.call()).adminAccess.status()).toMatchObject({ email: deskLeadUser.email, preview: null });
+        // No preview was started, so nothing is on the record for these.
+        const recorded = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "team_view_previewed"));
+        expect(recorded.map((row: { details: string }) => JSON.parse(row.details).userId)).not.toContain(client.id);
+      });
     });
 
     describe("Session emails (R75, ET 10 November 2026)", () => {

@@ -16,6 +16,8 @@ const mutation = (name: string, reply?: () => unknown) => (options?: { onSuccess
   mutate: (input: unknown) => { (api.calls[name] ??= []).push(input); options?.onSuccess?.((reply?.() ?? { success: true }) as never, input as never); },
 });
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
+const reload = vi.hoisted(() => ({ calls: 0 }));
+vi.mock("@/lib/reload", () => ({ reloadPage: () => { reload.calls += 1; } }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({ people: { list: { invalidate: () => undefined } } }),
@@ -28,6 +30,7 @@ vi.mock("@/lib/trpc", () => ({
       setJobTitle: { useMutation: mutation("setJobTitle") },
       setWhatsapp: { useMutation: mutation("setWhatsapp") },
     },
+    adminAccess: { previewAs: { useMutation: mutation("previewAs") } },
     platformRoles: {
       grant: { useMutation: mutation("grant") },
       revoke: { useMutation: mutation("revoke") },
@@ -46,6 +49,33 @@ const rowOf = (name: string) => within(screen.getByText(name).closest("tr")!);
 
 /** Team and Clients each render their own list; most checks here read both, as the two tabs together. */
 const Both = () => <><PeoplePanel scope="team" /><PeoplePanel scope="clients" /></>;
+
+describe("Preview as a team member (R76)", () => {
+  afterEach(cleanup);
+
+  it("offers the Super Admin a preview of each active team member, never of a client, a suspended person or a Super Admin", () => {
+    api.calls = {};
+    api.error = null;
+    api.people = [ada, lewis, { ...kemi, accessEndsAt: null }, owner];
+    render(<PeoplePanel scope="team" previewer />);
+    expect(rowOf("Kemi Contractor").getByRole("button", { name: "Preview Admin as Kemi Contractor sees it" }).textContent).toBe("Preview as Kemi");
+    expect(rowOf("Lewis Desk").queryByRole("button", { name: /^Preview Admin as/ })).toBeNull();
+    expect(rowOf("Owner Person").queryByRole("button", { name: /^Preview Admin as/ })).toBeNull();
+    fireEvent.click(rowOf("Kemi Contractor").getByRole("button", { name: "Preview Admin as Kemi Contractor sees it" }));
+    expect(api.calls.previewAs).toEqual([{ userId: 3 }]);
+    expect(reload.calls).toBe(1);
+  });
+
+  it("offers nothing to anyone else, and nothing for someone whose access has ended", () => {
+    api.people = [{ ...kemi, accessEndsAt: new Date("2026-01-01T00:00:00Z") }];
+    const { unmount } = render(<PeoplePanel scope="team" previewer />);
+    expect(screen.queryByRole("button", { name: /^Preview Admin as/ })).toBeNull();
+    unmount();
+    api.people = [{ ...kemi, accessEndsAt: null }];
+    render(<PeoplePanel scope="team" />);
+    expect(screen.queryByRole("button", { name: /^Preview Admin as/ })).toBeNull();
+  });
+});
 
 describe("the People panel", () => {
   beforeEach(() => {

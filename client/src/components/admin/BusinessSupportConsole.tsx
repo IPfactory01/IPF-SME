@@ -12,7 +12,7 @@ import PeoplePanel from "./PeoplePanel";
 import StaffPanel from "./StaffPanel";
 import SystemStatus from "./SystemStatus";
 
-type Access = AdminAccessView & { email?: string | null; name?: string | null; level?: string | null };
+type Access = AdminAccessView & { email?: string | null; name?: string | null; level?: string | null; preview?: { name: string } | null };
 
 /**
  * The IPF Business Support admin console, in five sections with one job each, in the order work flows: Pipeline
@@ -83,7 +83,7 @@ export default function BusinessSupportConsole({ access }: { access: Access }) {
             {active?.id === "engagements" && <EngagementsView />}
             {active?.id === "clients" && <><ClientsView /><PeoplePanel scope="clients" /></>}
             {active?.id === "finance" && <FinanceView />}
-            {active?.id === "team" && <><PeoplePanel scope="team" /><StaffPanel /><SystemStatus /></>}
+            {active?.id === "team" && <><PeoplePanel scope="team" previewer={Boolean(access.isSuperAdmin && !access.preview)} /><StaffPanel /><SystemStatus /></>}
           </div>
         </>
       )}

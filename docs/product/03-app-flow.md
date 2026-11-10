@@ -441,7 +441,7 @@ checks every action again. Under the person's name is their level.
 | **Engagements** | `view_all_businesses`, or `view_assigned_businesses` for one's own | Delivery | My projects; Clients asking for another service; New engagement; Paid but no engagement yet; every engagement in scope; the engagement record (below) |
 | **Clients** | `view_all_businesses` | Accounts | Businesses and their members; client accounts (reset link, suspend, reinstate, reset two-step, remove access) |
 | **Finance** | `view_financials` | Money | Paid (real money in, less refunds; test payments apart), owed, late, all from the ledger; payments that need a look at the top; two views: **Fees and requests** (every fee and payment request, each fee's payments, section 3.1) and **Money in** (every payment, each opening to its fee, to reconcile Paystack; section 4.7). Finance and the Super Admin record, cancel and accept payments and record and cancel refunds (`manage_payments`); a Partner or the Super Admin writes off and reverses (`write_off_fees`) |
-| **Team** | `manage_roles` | Our people | Everyone by level; invite by level; access ends; System status |
+| **Team** | `manage_roles` | Our people | Everyone by level; invite by level; access ends; System status; **Preview as {name}** for the Super Admin only (R76): Admin as that person sees it, read only, with a banner and **Close preview**, for 30 minutes at most, recorded |
 
 **The engagement record** (the drawer in Engagements), top to bottom:
 

@@ -9,6 +9,7 @@ import { ACCOUNT_AUTH_ERRORS } from "../../shared/auth";
 import { hasVerifiedAdminAccess, isOwnerAdmin } from "../adminSecurity";
 import { getDb } from "../db";
 import { UNEXPECTED_ERROR_MESSAGE } from "../databaseHealth";
+import { TEAM_PREVIEW_ALLOWED, TEAM_PREVIEW_REFUSAL } from "../teamPreview";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -30,7 +31,18 @@ export function safeErrorShape<S extends { message: string; data: { code: string
 }
 
 export const router = t.router;
-export const publicProcedure = t.procedure;
+
+/**
+ * Preview as a team member (R76): while the Super Admin sees Admin as someone else, nothing is done in that person's
+ * name. Every mutation is refused, whatever the procedure, except closing the preview and signing out.
+ */
+const readOnlyInPreview = t.middleware(({ ctx, type, path, next }) => {
+  if (ctx.preview && type === "mutation" && !TEAM_PREVIEW_ALLOWED.has(path)) throw new TRPCError({ code: "FORBIDDEN", message: TEAM_PREVIEW_REFUSAL });
+  return next();
+});
+const procedure = t.procedure.use(readOnlyInPreview);
+
+export const publicProcedure = procedure;
 
 const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;
@@ -47,14 +59,14 @@ const requireUser = t.middleware(async opts => {
   });
 });
 
-export const protectedProcedure = t.procedure.use(requireUser);
+export const protectedProcedure = procedure.use(requireUser);
 
 /**
  * Requires a universal-account session (cookie checked against user_sessions). Independent of the legacy
  * `protectedProcedure` (platform OAuth) and `participantProcedure`. Uses its own message so the client's
  * legacy redirect to the OAuth login is never triggered.
  */
-export const accountProcedure = t.procedure.use(
+export const accountProcedure = procedure.use(
   t.middleware(async ({ ctx, next }) => {
     const account = await resolveAccountSession(ctx.req);
     if (!account) throw new TRPCError({ code: "UNAUTHORIZED", message: ACCOUNT_AUTH_ERRORS.signInRequired });
@@ -70,7 +82,7 @@ export const accountProcedure = t.procedure.use(
  *    exactly as before.
  * What a person may DO inside is decided per action by the central authority resolver (adminPermissionProcedure).
  */
-export const adminProcedure = t.procedure.use(
+export const adminProcedure = procedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
 

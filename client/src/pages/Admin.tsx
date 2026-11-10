@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { trpc } from "@/lib/trpc";
 import DashboardLayout from "@/components/DashboardLayout";
 import BusinessSupportConsole from "@/components/admin/BusinessSupportConsole";
+import { TeamPreviewBanner } from "@/components/admin/TeamPreview";
 import { Shield, ShieldAlert } from "lucide-react";
 import { useLocation } from "wouter";
 
@@ -28,6 +29,7 @@ export default function Admin() {
     <DashboardLayout>
       <div className="-m-4 min-h-screen bg-paper p-6 text-ink lg:p-10">
         <div className="mx-auto max-w-7xl">
+          {access.data.preview && <TeamPreviewBanner preview={access.data.preview} />}
           <BusinessSupportConsole access={access.data} />
         </div>
       </div>

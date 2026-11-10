@@ -194,6 +194,7 @@ trusted browser origin.
 | `auth.me`, `auth.logout` | The older platform session: who is signed in; signs out of it and of the account session | Public | Account |
 | `adminAccess.status`, `adminAccess.enrollOwnerPassword`, `adminAccess.verifyPassword`, `adminAccess.requestPasswordReset`, `adminAccess.logoutPassword` | The older administrator password: its status, set by the owner, checked, a reset email, sign out | A platform session; setting it, the owner's email only | Account |
 | `adminAccess.confirmPasswordReset` | Sets the new administrator password from the emailed link | Public, by a single-use link | Account |
+| `adminAccess.previewAs`, `adminAccess.endPreview` | Preview as a team member (R76): opens Admin as that person sees it for 30 minutes, every change refused meanwhile, recorded; close it | Start: the Super Admin only, never from inside a preview, never as another Super Admin; close: whoever holds the preview | Account |
 
 ### The public funnel
 

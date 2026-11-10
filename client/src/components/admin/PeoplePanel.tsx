@@ -1,4 +1,5 @@
 import { Failed, Loading, StaleLine } from "@/components/states";
+import { PreviewAsButton } from "./TeamPreview";
 import { isRefusal } from "@/lib/readPolicy";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
@@ -19,7 +20,8 @@ const STATUS: Record<string, string> = { active: "Active", suspended: "Suspended
  * One table per audience: `team` (IP Factory people, in Admin › Team) or `clients` (client accounts, in Admin › Clients).
  * Each person is listed once, with their account actions beside them.
  */
-export default function PeoplePanel({ scope }: { scope: "team" | "clients" }) {
+/** `previewer`: the Super Admin, outside a preview, may open Admin as a team member sees it (R76). */
+export default function PeoplePanel({ scope, previewer = false }: { scope: "team" | "clients"; previewer?: boolean }) {
   const utils = trpc.useUtils();
   const people = trpc.people.list.useQuery(undefined);
   const [issued, setIssued] = useState<{ email: string; url: string; sent: boolean } | null>(null);
@@ -139,6 +141,7 @@ export default function PeoplePanel({ scope }: { scope: "team" | "clients" }) {
                   <td className={TD}>{formatDate(person.lastSignedIn)}</td>
                   <td className={`${TD} text-right`}>
                     <div className="flex flex-wrap justify-end gap-2">
+                      {previewer && staff && person.status === "active" && person.roles.length > 0 && !person.superAdmin && !(person.accessEndsAt && new Date(person.accessEndsAt).getTime() < Date.now()) && <PreviewAsButton userId={person.id} name={person.name || person.email || "this person"} />}
                       {person.status === "active" && <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={issue.isPending} onClick={() => issue.mutate({ userId: person.id })}>Reset link</Button>}
                       {person.status === "active" && <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={setStatus.isPending} onClick={() => { setSuspending({ id: person.id, name: person.name || person.email || "this person" }); setReason(""); }}>Suspend</Button>}
                       {person.twoStep && <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={resetTwoStep.isPending} onClick={() => resetTwoStep.mutate({ userId: person.id })}>Reset two-step</Button>}

@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { users, type User } from "../../drizzle/schema";
 import { resolveAccountSession } from "../accountAuth";
 import { getDb } from "../db";
+import { teamPreviewOf, type TeamPreview } from "../teamPreview";
 import { sdk } from "./sdk";
 
 export type TrpcContext = {
@@ -14,6 +15,11 @@ export type TrpcContext = {
    * still builds on); "account" is the universal email-and-password session. Absent when nobody is signed in.
    */
   authChannel?: "legacy" | "account";
+  /**
+   * Preview as a team member (R76): set when the signed-in Super Admin is previewing someone. `user` is then that team
+   * member, so every check answers as it would for them, and every change is refused (server/_core/trpc.ts).
+   */
+  preview?: TeamPreview;
 };
 
 /**
@@ -51,5 +57,21 @@ export async function createContext(
     }
   }
 
-  return { req: opts.req, res: opts.res, user, authChannel };
+  // Preview as a team member (R76): only for the Super Admin who started it, and never a reason to refuse them.
+  let preview: TeamPreview | undefined;
+  if (user && opts.req.headers?.cookie?.includes("ipf_team_preview=")) {
+    try {
+      const db = await getDb();
+      const shown = db ? await teamPreviewOf(db, opts.req, user) : null;
+      if (shown) {
+        preview = { byUserId: user.id, byName: user.name ?? user.email ?? "", asUserId: shown.user.id, asName: shown.user.name ?? shown.user.email ?? "", asEmail: shown.user.email ?? null, expiresAt: shown.expiresAt };
+        user = shown.user;
+        authChannel = "account";
+      }
+    } catch {
+      preview = undefined;
+    }
+  }
+
+  return { req: opts.req, res: opts.res, user, authChannel, preview };
 }

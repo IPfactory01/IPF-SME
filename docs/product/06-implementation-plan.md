@@ -25,10 +25,11 @@ counting time spent waiting on a decision or a migration.
 | Release 0 (9 November): every screen says what is happening on a weak connection; the room on a phone; footage and voice notes by link; WhatsApp to the right person; the Digital Marketer and Content Producer roles; Getting started and What we will do; taking a file back | R43 to R47, R61, R69, R71 |
 | Release 0 (9 November): speed and search: each public page rendered at build time and loading its own code (Home 0.9 s on a throttled phone, was 4.3 s); one main heading and one share card per page | R70, R73 |
 | The design review fixes: the room fits a phone, readable health labels, 44 px taps (B1, B4, B10 to B12) | Design brief |
+| Release 1 (10 November): payment terms by what is bought and the pause seven days after a missed date (E); one payment model, with part payments, refunds, write-offs, receipt and invoice numbers, Finance from one source and the Business Review on fees (F); the work resumed email and alerts (G) | R24, R36, R37, R42, R51 (the pause), the groundwork for R53 |
 
-Migrations are applied through **0021**. Release 0 still waits on the timed phone run with ET or Marcelle (B6) and the
-team's WhatsApp numbers (I1); batch C was built on 10 November. In Release 1, batch E is built and live (payment terms
-by what is bought, the pause, Digital Marketing on the menu); batch F is designed and approved, and its migration 0022 is written on the branch. The document tests (`test/docs/productDocs.test.ts`) fail the build
+Migrations are applied through **0022**. Release 0 still waits on the timed phone run with ET or Marcelle (B6) and the
+team's WhatsApp numbers (I1); batch C was built on 10 November. Release 1 is built (batches E, F and G, 10 November
+2026). Release 2, the reminders, needs a scheduled job on Vercel and the sending domain verified (K2) first. The document tests (`test/docs/productDocs.test.ts`) fail the build
 if a page, a table, a server action, a permission, a project role, an email or an audit action is added without being
 documented.
 

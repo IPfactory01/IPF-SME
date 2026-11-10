@@ -40,7 +40,7 @@ export function stepsFor(product: Product, price: PriceModel): { title: string; 
   if (product.id === "digital_marketing") return [
     { title: "Talk to us first", body: `A free 20-minute call about your customers and what you sell. If it fits, we send ${firstPaymentLink(product)} after it.` },
     { title: "Week 1: the plan", body: "A kick-off call, the month's content plan, and your first clips. You film on your phone; we edit within 48 hours." },
-    { title: "Every month", body: "15 reels, 5 posts and 20 stories, each approved by you before it goes out, and a review of the numbers at the month's end." },
+    { title: "Every month", body: "15 reels, 5 posts and 20 stories, each approved by you before it goes out, and at the month's end every step counted, from views to sales." },
   ];
   if (product.way === "monthly_service") return [
     { title: "Talk to us first", body: "A free 20-minute call to agree what you need each month." },

@@ -62,7 +62,7 @@ export const DIGITAL_MARKETING: DatedEngagementType = {
   stages: [
     { title: "Onboarding", summary: "Brand assets, account access and the content plan for month 1.", from: 0, to: 6 },
     { title: "Month 1", summary: "Reels, posts and stories go out each week; you approve before anything is published.", from: 7, to: 29 },
-    { title: "Month 1 review", summary: "What went out, what it reached, and what changes for month 2.", from: 30, to: 30 },
+    { title: "Month 1 review", summary: "What went out, who it reached, the enquiries and sales it brought, and what changes for month 2.", from: 30, to: 30 },
     { title: "Month 2", summary: "The second month's content, shaped by the month 1 numbers.", from: 31, to: 59 },
     { title: "Month 3", summary: "The third month's content, and the plan for after the quarter.", from: 60, to: 89 },
     { title: "Quarter review", summary: "The 90 days in numbers, and what support looks like from here.", from: 90, to: 90 },
@@ -81,7 +81,7 @@ export const DIGITAL_MARKETING: DatedEngagementType = {
   ],
   teamActions: [
     { week: 1, order: 7, title: "Content plan for month 1", detail: "The reels, posts and stories for the month, by week, with the offers they carry." },
-    { week: 1, order: 8, title: "Baseline numbers", detail: "Followers, reach, calls and bookings on each platform today, to measure against." },
+    { week: 1, order: 8, title: "Baseline numbers", detail: "Reach, engagement, enquiries and sales from each platform today, to measure against." },
   ],
   sessions: [
     { kind: "other", title: "Kick-off", week: 1, order: 0, durationMinutes: 45, agenda: "The 90 days, the content plan, who does what, and the access we need." },

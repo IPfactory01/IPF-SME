@@ -391,20 +391,22 @@ export const PRODUCT_STORIES: Record<string, ProductStory> = {
   // (ET, 10 November 2026): Instagram, TikTok, Facebook and the Google Business Profile, named where each matters.
   digital_marketing: {
     art: "content",
-    promise: "Reels, posts and stories every week, approved by you before they go out.",
-    headline: ["Be where your customers look.", "Every week, without doing it yourself."],
-    sub: "Every month, 15 reels, 5 posts and 20 stories across Instagram, TikTok, Facebook and your Google Business Profile. You film short clips on your phone; we plan, edit and publish.",
-    stage: { kind: "timeline", title: "Your 90 days", items: [{ when: "Week 1", title: "Onboarding", detail: "Brand assets, account access and the content plan for month 1" }, { when: "Every week", title: "Reels, posts and stories go out", detail: "Made from your clips, each approved by you first" }, { when: "End of each month", title: "The month in numbers", detail: "What went out, what it reached, and what changes next" }, { when: "Day 90", title: "Quarter review", detail: "The 90 days in numbers, and what support looks like from here" }] },
-    statement: ["Most owners post when they remember.", "Yours goes out every week."],
+    promise: "Content every week that gets you seen and brings in enquiries and sales.",
+    headline: ["From seen to sold.", "Every week, without doing it yourself."],
+    sub: "Content on Instagram, TikTok, Facebook and Google that gets you seen, gets people talking, and turns enquiries into sales. You film short clips; we do the rest.",
+    // The path ET named (10 November 2026): visibility, engagement, leads, then conversion into sales.
+    stage: { kind: "moves", title: "Month 1, from seen to sold", rows: [{ tag: "Seen", text: "Accounts reached across your platforms", value: "9,800" }, { tag: "Engaged", text: "Likes, comments, shares and saves", value: "1,150" }, { tag: "Enquired", text: "Messages, calls and booking requests", value: "64" }, { tag: "Bought", text: "Bookings and orders from those enquiries", value: "21" }] },
+    statement: ["Posts are not the point.", "Enquiries and sales are."],
     features: [
-      { eyebrow: "From your phone", title: "You film. We do the rest.", body: "Six or more short vertical clips a week, sent by link or on WhatsApp. Within 48 hours we edit them into reels and short videos for Instagram, TikTok and Facebook, and write the posts and stories around what you sell.", visual: { kind: "moves", title: "A week of content", rows: [{ tag: "Monday", text: "You send the week's clips", value: "8 clips" }, { tag: "Tuesday", text: "Edited reels wait in your room for your yes", value: "Within 48 hours" }, { tag: "All week", text: "Reels, posts and stories go out", value: "As planned" }] } },
+      { eyebrow: "From your phone", title: "You film. We do the rest.", body: "Six or more short vertical clips a week, sent by link or on WhatsApp. Within 48 hours we edit them into reels and short videos for Instagram, TikTok and Facebook, and write the posts and stories around what you sell, each with a way to book or buy.", visual: { kind: "moves", title: "A week of content", rows: [{ tag: "Monday", text: "You send the week's clips", value: "8 clips" }, { tag: "Tuesday", text: "Edited reels wait in your room for your yes", value: "Within 48 hours" }, { tag: "All week", text: "Reels, posts and stories go out", value: "As planned" }] } },
       { eyebrow: "Your yes first", title: "Nothing goes out without your approval.", body: "Each piece waits in your room. Watch it on your phone, approve it, or ask for changes. Two rounds of changes are included.", visual: { kind: "moves", title: "In your room this week", rows: [{ tag: "Approved", text: "Reel: the Saturday brunch offer", value: "Out on Friday" }, { tag: "Your yes", text: "Reel: behind the counter", value: "Sent today" }, { tag: "Changes", text: "Post: the new opening hours", value: "Round 1 of 2" }] } },
-      { eyebrow: "The numbers", title: "Measured against where you started.", body: "Before the first post we record where you start on each platform: followers, reach, and the calls and bookings they bring. Each month you see what went out, what it reached and what it brought in, and what changes next month.", visual: { kind: "table", title: "Month 1 review", columns: ["", "Before", "Month 1"], rows: [["Followers, all platforms", "1,240", "1,390"], ["Accounts reached", "3,100", "9,800"], ["Calls and bookings", "9", "21"]] } },
+      { eyebrow: "Every step, measured", title: "How many saw you, engaged, enquired and bought.", body: "Before the first post we record where you start on each platform. At the end of each month you see every step, from views to sales, and what changes next month to turn more of them into customers.", visual: { kind: "timeline", title: "Your 90 days", items: [{ when: "Week 1", title: "Onboarding", detail: "Brand assets, account access, and where you start on each platform" }, { when: "Every week", title: "Reels, posts and stories go out", detail: "Made from your clips, each approved by you first" }, { when: "End of each month", title: "From seen to sold, in numbers", detail: "Seen, engaged, enquired, bought, and what changes next" }, { when: "Day 90", title: "Quarter review", detail: "The 90 days in numbers, and what support looks like from here" }] } },
     ],
-    forYou: ["Your customers find you on social media or on Google", "You know you should post more, and never have the time", "You want to see what your posts bring in, month by month"],
-    notForYou: [{ text: "People already see you but do not buy. Start with the Six-Week Fix on sales.", productId: "six_week_fix" }],
+    forYou: ["Your customers find you on social media or on Google", "You want more people to see you, enquire and buy", "You want to know what your content brings in, from views to sales"],
+    notForYou: [{ text: "Plenty of people enquire, but your team loses them in the follow-up. Start with the Six-Week Fix on sales.", productId: "six_week_fix" }],
     faq: [
       { q: "How do I pay?", a: `${priceTerms(productById("digital_marketing")!.price)} You pay the first when we start, then before day 31 and day 61, by transfer or card.` },
+      { q: "Will this bring me sales?", a: "That is what it is built for: every piece carries one of your offers and a way to book or buy. Each month we count every step, from views to enquiries to sales, and change what is not working." },
       { q: "Which platforms do you cover?", a: "Instagram, TikTok and Facebook, and your Google Business Profile: the listing customers see when they find you on Google Search and Maps." },
       { q: "Who films the videos?", a: "You do, on your phone: six or more short vertical clips a week, sent by link or on WhatsApp. We edit them within 48 hours." },
       { q: "Will you post anything without asking me?", a: "No. You approve every reel, post and story in your room before it goes out, and two rounds of changes are included." },
@@ -412,7 +414,7 @@ export const PRODUCT_STORIES: Record<string, ProductStory> = {
       { q: "Who will I work with?", a: "A Digital Marketer, who plans the content, publishes it and reads the numbers, and a Content Producer, who edits your clips. You reach both on WhatsApp." },
       { q: "What happens after three months?", a: "At the quarter review we go through the 90 days in numbers and agree what support looks like from here. You can stop then." },
     ],
-    closer: "Be seen every week.",
+    closer: "Turn attention into sales.",
   },
 };
 

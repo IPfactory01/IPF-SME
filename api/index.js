@@ -408,9 +408,9 @@ var PRODUCTS = [
     name: "Digital Marketing",
     way: "monthly_service",
     needs: ["sales"],
-    short: "Reels, posts and stories on Instagram, TikTok, Facebook and Google, made from your footage and approved by you.",
+    short: "Content on Instagram, TikTok, Facebook and Google that gets you seen and brings in enquiries and sales.",
     forWhom: "Owners whose customers find them on social media or on Google, who know they should post more and never have the time.",
-    youGet: ["15 reels, 5 posts and 20 stories a month across your platforms, planned with you", "Your clips edited within 48 hours", "Nothing published without your approval", "A review of the numbers each month, and of the quarter"],
+    youGet: ["15 reels, 5 posts and 20 stories a month across your platforms, planned with you", "Your clips edited within 48 hours", "Nothing published without your approval", "Each month, every step from views to enquiries and sales, and what changes next"],
     price: { kind: "monthly", perMonth: 47e4, months: 3 },
     delivery: "Every week, for three months.",
     buy: "after_call",
@@ -482,7 +482,7 @@ var DIGITAL_MARKETING = {
   stages: [
     { title: "Onboarding", summary: "Brand assets, account access and the content plan for month 1.", from: 0, to: 6 },
     { title: "Month 1", summary: "Reels, posts and stories go out each week; you approve before anything is published.", from: 7, to: 29 },
-    { title: "Month 1 review", summary: "What went out, what it reached, and what changes for month 2.", from: 30, to: 30 },
+    { title: "Month 1 review", summary: "What went out, who it reached, the enquiries and sales it brought, and what changes for month 2.", from: 30, to: 30 },
     { title: "Month 2", summary: "The second month's content, shaped by the month 1 numbers.", from: 31, to: 59 },
     { title: "Month 3", summary: "The third month's content, and the plan for after the quarter.", from: 60, to: 89 },
     { title: "Quarter review", summary: "The 90 days in numbers, and what support looks like from here.", from: 90, to: 90 }
@@ -501,7 +501,7 @@ var DIGITAL_MARKETING = {
   ],
   teamActions: [
     { week: 1, order: 7, title: "Content plan for month 1", detail: "The reels, posts and stories for the month, by week, with the offers they carry." },
-    { week: 1, order: 8, title: "Baseline numbers", detail: "Followers, reach, calls and bookings on each platform today, to measure against." }
+    { week: 1, order: 8, title: "Baseline numbers", detail: "Reach, engagement, enquiries and sales from each platform today, to measure against." }
   ],
   sessions: [
     { kind: "other", title: "Kick-off", week: 1, order: 0, durationMinutes: 45, agenda: "The 90 days, the content plan, who does what, and the access we need." },

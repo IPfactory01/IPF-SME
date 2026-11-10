@@ -134,10 +134,13 @@ describe("a service page (/services/:slug), told as a story", () => {
 
   it("tells Digital Marketing as its programme runs: month by month, the client's own clips, nothing out without their yes (R35)", () => {
     at("/services/digital-marketing");
-    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Be where your customers look.Every week, without doing it yourself.");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("From seen to sold.Every week, without doing it yourself.");
     // The whole digital space (ET, 10 November 2026), each platform named.
-    expect(screen.getByText("Every month, 15 reels, 5 posts and 20 stories across Instagram, TikTok, Facebook and your Google Business Profile. You film short clips on your phone; we plan, edit and publish.")).toBeTruthy();
+    expect(screen.getByText("Content on Instagram, TikTok, Facebook and Google that gets you seen, gets people talking, and turns enquiries into sales. You film short clips; we do the rest.")).toBeTruthy();
     expect(screen.getByText("Which platforms do you cover?")).toBeTruthy();
+    // Sold on what it brings (ET, 10 November 2026): seen, engaged, enquired, bought.
+    for (const step of ["Seen", "Engaged", "Enquired", "Bought"]) expect(screen.getByText(step)).toBeTruthy();
+    expect(screen.getByText("Will this bring me sales?")).toBeTruthy();
     expect(screen.getByText("Monthly Service · Sales and marketing")).toBeTruthy();
     expect(screen.getByText("Twenty minutes, by phone or video. We send the link for the first month after the call.")).toBeTruthy();
     expect(screen.getByText("₦470,000 a month for three months, each paid before the month starts.")).toBeTruthy();

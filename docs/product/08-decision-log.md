@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Digital Marketing is sold on what it brings, not on posts: visibility, engagement, enquiries (leads) and sales (conversion), the path its page tells ("From seen to sold") and each month's review counts | ET, 10 November 2026 |
 | On the home page, "Sales are flat and I need more customers every month" leads to Digital Marketing (it led to the Six-Week Fix) | ET, 10 November 2026 |
 | Digital Marketing covers the whole digital space, not one platform: Instagram, TikTok, Facebook and the Google Business Profile, each named on its page; new clients are asked for access to all four | ET, 10 November 2026 |
 | Digital Marketing goes on the menu now (R35, brought forward from Release 3) as a Monthly Service under Sales and marketing, paid month by month: ₦470,000 a month for three months, each before the month starts; its page tells the first client's programme; the product and its engagement type are both named Digital Marketing | ET, 10 November 2026 (asked for the page; the placement is shown in its preview) |

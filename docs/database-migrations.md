@@ -152,7 +152,7 @@ Additive. **Apply it before deploying.** Paste
 `drizzle/supabase/apply-0021-staff-whatsapp-marketing-roles-response-link.sql` into the Supabase SQL Editor and press
 Run; it stops, changing nothing, unless exactly `0000` to `0020` are recorded.
 
-**`0022` and deployment order** (written 10 November 2026; not yet applied). The payments ledger (batch F, Backend
+**`0022` and deployment order** (written and applied 10 November 2026). The payments ledger (batch F, Backend
 schema section 2): `payments`, `payment_refunds`, `document_counters`, four types, and five columns on
 `engagement_fee_lines` (`invoiceNumber` and the write-off). Its own SQL then carries today's payments into the ledger:
 one paid payment for each fee marked paid and each confirmed payment request, with receipt numbers in the order they
@@ -161,4 +161,6 @@ changes. **Apply it just before deploying the ledger code, not earlier**: until 
 engagement's fees deletes and re-adds every fee, which the ledger refuses for a fee that has a payment, so Save the fees
 would fail for any engagement with a paid fee. Paste `drizzle/supabase/apply-0022-payments-ledger.sql` into the Supabase
 SQL Editor and press Run; it stops, changing nothing, unless exactly `0000` to `0021` are recorded and no `payments`
-table exists. The push follows at once.
+table exists. The push follows at once. On 10 November it was reported applied at 16:00 and the ledger code went live,
+but the database the site uses was still at `0021` until the same evening, when the script was run there; health then
+counted 23 of 23. Between the two, every screen that reads the ledger failed.

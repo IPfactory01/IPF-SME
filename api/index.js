@@ -608,7 +608,7 @@ var feeTotal = (lines) => lines.reduce((sum, line) => sum + line.amount, 0);
 
 // drizzle/schema.ts
 import { sql } from "drizzle-orm";
-import { boolean, date, index, integer, numeric, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { boolean, check, date, index, integer, numeric, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 
 // shared/businessCheck/pipeline.ts
 var PIPELINE_STAGES = ["lead", "qualified_lead", "call_booked", "opportunity", "won", "lost", "nurture", "referred"];
@@ -681,6 +681,12 @@ var ONLINE_TEST_NOTICE = "TEST MODE: NO REAL MONEY MOVES";
 var PAYMENT_ITEM_TITLES = { full_report: METHOD.fullReport, current_state: METHOD.currentState };
 var payPath = (token3, item2) => `/pay/${encodeURIComponent(token3)}/${item2}`;
 var PAY_RETURN_PATH = "/pay/return";
+
+// shared/ledger.ts
+var LEDGER_PAYMENT_METHODS = ["paystack", "bank_transfer", "cash", "other"];
+var LEDGER_PAYMENT_STATUSES = ["started", "paid", "failed", "needs_a_look", "refunded", "cancelled"];
+var LEDGER_PAYMENT_MODES = ["test", "live"];
+var DOCUMENT_NUMBER_KINDS = ["receipt", "invoice"];
 
 // shared/brand.ts
 var programmeShortName = "JUMP";
@@ -2152,12 +2158,83 @@ var engagementFeeLines = pgTable("engagement_fee_lines", {
   amount: integer("amount").notNull(),
   dueOn: date("dueOn"),
   paidAt: timestamp("paidAt", { withTimezone: true }),
-  /** The Paystack attempt that paid it (0020), so a repeat confirmation is recognised and a second payment flagged. */
+  /**
+   * The Paystack attempt that paid it (0020), so a repeat confirmation is recognised and a second payment flagged.
+   * Retired with the ledger (batch F): the payments hold every reference; kept so older rows read.
+   */
   paidReference: varchar("paidReference", { length: 64 }),
   sortOrder: integer("sortOrder").default(0).notNull(),
+  /** Its invoice (0022), shown as TS-IN-000001 (`invoiceNumberLabel`): given the first time it is billed, kept for good. */
+  invoiceNumber: integer("invoiceNumber").unique(),
+  /** A write-off (0022, F2): what was left, when, by which Partner or Super Admin and why; cleared if it is reversed. */
+  writtenOffAmount: integer("writtenOffAmount"),
+  writtenOffAt: timestamp("writtenOffAt", { withTimezone: true }),
+  writtenOffByUserId: integer("writtenOffByUserId").references(() => users.id),
+  writeOffNote: varchar("writeOffNote", { length: 500 }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
 }, (table2) => [index("engagement_fee_lines_engagement_idx").on(table2.engagementId)]);
+var paymentsMethodEnum = pgEnum("payments_method", LEDGER_PAYMENT_METHODS);
+var paymentsStatusEnum = pgEnum("payments_status", LEDGER_PAYMENT_STATUSES);
+var paymentsModeEnum = pgEnum("payments_mode", LEDGER_PAYMENT_MODES);
+var payments = pgTable("payments", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  feeLineId: integer("feeLineId").references(() => engagementFeeLines.id),
+  paymentRequestId: integer("paymentRequestId").references(() => paymentRequests.id),
+  method: paymentsMethodEnum("method").notNull(),
+  status: paymentsStatusEnum("status").default("started").notNull(),
+  /** Whole naira: what was asked, for an attempt; what was received, once paid. */
+  amount: integer("amount").notNull(),
+  /** The Paystack attempt (TS-F-000123-1a2b3c4d); empty for money recorded by hand. */
+  paystackReference: varchar("paystackReference", { length: 64 }).unique(),
+  mode: paymentsModeEnum("mode"),
+  /** The day the money arrived, in Lagos. */
+  receivedOn: date("receivedOn"),
+  /** When it was confirmed by Paystack or recorded by hand. */
+  paidAt: timestamp("paidAt", { withTimezone: true }),
+  /** Its receipt, shown as TS-RC-000001 (`receiptNumberLabel`): given once it is paid, and kept if it is cancelled. */
+  receiptNumber: integer("receiptNumber").unique(),
+  /** For money recorded by hand, the bank's reference or how it came; for one that needs a look, why. */
+  note: varchar("note", { length: 500 }),
+  /** Who recorded it by hand; empty for Paystack, a system actor. */
+  recordedByUserId: integer("recordedByUserId").references(() => users.id),
+  cancelledAt: timestamp("cancelledAt", { withTimezone: true }),
+  cancelledByUserId: integer("cancelledByUserId").references(() => users.id),
+  cancelReason: varchar("cancelReason", { length: 500 }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [
+  index("payments_fee_line_idx").on(table2.feeLineId),
+  index("payments_payment_request_idx").on(table2.paymentRequestId),
+  index("payments_status_idx").on(table2.status),
+  check("payments_one_owner", sql`("feeLineId" is null) <> ("paymentRequestId" is null)`),
+  check("payments_amount_positive", sql`"amount" > 0`)
+]);
+var paymentRefunds = pgTable("payment_refunds", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  paymentId: integer("paymentId").notNull().references(() => payments.id),
+  amount: integer("amount").notNull(),
+  refundedOn: date("refundedOn").notNull(),
+  reason: varchar("reason", { length: 500 }).notNull(),
+  /** Paystack's refund reference, or the bank's. */
+  reference: varchar("reference", { length: 100 }),
+  recordedByUserId: integer("recordedByUserId").notNull().references(() => users.id),
+  cancelledAt: timestamp("cancelledAt", { withTimezone: true }),
+  cancelledByUserId: integer("cancelledByUserId").references(() => users.id),
+  cancelReason: varchar("cancelReason", { length: 500 }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [
+  index("payment_refunds_payment_idx").on(table2.paymentId),
+  check("payment_refunds_amount_positive", sql`"amount" > 0`)
+]);
+var documentCountersKindEnum = pgEnum("document_counters_kind", DOCUMENT_NUMBER_KINDS);
+var documentCounters = pgTable("document_counters", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  kind: documentCountersKindEnum("kind").notNull().unique(),
+  lastNumber: integer("lastNumber").default(0).notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+});
 var SERVICE_REQUEST_STATUSES = ["open", "done", "declined"];
 var serviceRequestsStatusEnum = pgEnum("service_requests_status", SERVICE_REQUEST_STATUSES);
 var serviceRequests = pgTable("service_requests", {
@@ -6625,13 +6702,13 @@ import { and as and6, eq as eq10 } from "drizzle-orm";
 import { TRPCError as TRPCError8 } from "@trpc/server";
 import { eq as eq9 } from "drizzle-orm";
 var PAY_LINK_NOTE = "Started paying online from the link in their Business Health Check summary email.";
-async function askForFullReport(db, check, input) {
-  const first = !check.reportRequestedAt;
+async function askForFullReport(db, check2, input) {
+  const first = !check2.reportRequestedAt;
   if (!first && input.source === "result_page") return;
-  if (first) await db.update(businessChecks).set({ reportRequestedAt: databaseNow() }).where(eq9(businessChecks.id, check.id));
+  if (first) await db.update(businessChecks).set({ reportRequestedAt: databaseNow() }).where(eq9(businessChecks.id, check2.id));
   let payment;
   try {
-    const sent = await requestPayment(db, { businessCheckId: check.id, item: "full_report", actorUserId: null });
+    const sent = await requestPayment(db, { businessCheckId: check2.id, item: "full_report", actorUserId: null });
     payment = sent.deliveryStatus === "Failed" ? `Payment details: ${sent.reference}, but the email to the owner failed (${sent.deliveryProblem ?? "no reason given"}). Send them again from admin once that is fixed.` : `Payment details sent: ${sent.reference}`;
   } catch (error) {
     const paid = error instanceof TRPCError8 && error.code === "CONFLICT";
@@ -6642,19 +6719,19 @@ async function askForFullReport(db, check, input) {
   const note = input.note || (input.source === "pay_link" ? PAY_LINK_NOTE : "None");
   await deliverEmail({
     sender: "business_support",
-    idempotencyKey: `business_checks:${check.id}:report:office`,
+    idempotencyKey: `business_checks:${check2.id}:report:office`,
     to: BUSINESS_SUPPORT_MAILBOX,
-    subject: `Business Health Check: ${check.businessName || check.fullName} asked for the Full Report`,
+    subject: `Business Health Check: ${check2.businessName || check2.fullName} asked for the Full Report`,
     body: [
-      `${check.fullName} asked for the Full Report.`,
+      `${check2.fullName} asked for the Full Report.`,
       "",
-      `Email: ${check.email}`,
-      `WhatsApp: ${check.whatsapp || "Not given"}`,
-      `Business: ${check.businessName || "Not given"}`,
+      `Email: ${check2.email}`,
+      `WhatsApp: ${check2.whatsapp || "Not given"}`,
+      `Business: ${check2.businessName || "Not given"}`,
       `Note: ${note}`,
       payment,
       "",
-      `Business Health Check #${check.id}${check.completedAt ? `, completed ${lagosTime(check.completedAt)} (Lagos time)` : ""}.`
+      `Business Health Check #${check2.id}${check2.completedAt ? `, completed ${lagosTime(check2.completedAt)} (Lagos time)` : ""}.`
     ].join("\n")
   });
 }
@@ -6668,12 +6745,12 @@ function requireOnlinePayment() {
   return mode;
 }
 async function lookup(db, token3, item2) {
-  const check = (await db.select().from(businessChecks).where(eq10(businessChecks.publicToken, token3)).limit(1))[0];
-  if (!check) throw notFound();
-  const request = (await db.select().from(paymentRequests).where(and6(eq10(paymentRequests.businessCheckId, check.id), eq10(paymentRequests.item, item2))).limit(1))[0];
-  return { check, request };
+  const check2 = (await db.select().from(businessChecks).where(eq10(businessChecks.publicToken, token3)).limit(1))[0];
+  if (!check2) throw notFound();
+  const request = (await db.select().from(paymentRequests).where(and6(eq10(paymentRequests.businessCheckId, check2.id), eq10(paymentRequests.item, item2))).limit(1))[0];
+  return { check: check2, request };
 }
-var ownerMayStart = (check, item2) => item2 === "full_report" && Boolean(check.completedAt);
+var ownerMayStart = (check2, item2) => item2 === "full_report" && Boolean(check2.completedAt);
 var requestByReference = async (db, reference2) => (await db.select().from(paymentRequests).where(eq10(paymentRequests.reference, reference2)).limit(1))[0];
 var PAGE_STATE = { requested: "open", expired: "expired", proof_received: "open", confirmed: "paid" };
 function wholePrice(request) {
@@ -6681,9 +6758,9 @@ function wholePrice(request) {
   return rest > 0 ? request.amountNaira + rest : null;
 }
 async function onlinePaymentPage(db, input) {
-  const { check, request } = await lookup(db, input.token, input.item);
+  const { check: check2, request } = await lookup(db, input.token, input.item);
   if (!request) {
-    if (!ownerMayStart(check, input.item)) throw notFound();
+    if (!ownerMayStart(check2, input.item)) throw notFound();
     return { item: input.item, name: PAYMENT_ITEM_TITLES[input.item], amountNaira: getBusinessSupportPrice(input.item), totalNaira: null, reference: null, mode: paystackMode(), state: "open" };
   }
   const display = effectivePaymentStatus(request);
@@ -6696,30 +6773,30 @@ async function onlinePaymentPage(db, input) {
     reference: request.reference,
     mode: paystackMode(),
     // An owner's own Full Report link never dead-ends: pressing pay starts a new 48 hours.
-    state: display === "expired" && ownerMayStart(check, request.item) ? "open" : PAGE_STATE[display]
+    state: display === "expired" && ownerMayStart(check2, request.item) ? "open" : PAGE_STATE[display]
   };
 }
 async function startOnlinePayment(db, input) {
   requireOnlinePayment();
   const found = await lookup(db, input.token, input.item);
-  const { check } = found;
+  const { check: check2 } = found;
   let request = found.request;
   if (!request) {
-    if (!ownerMayStart(check, input.item)) throw notFound();
-    await askForFullReport(db, check, { source: "pay_link" });
+    if (!ownerMayStart(check2, input.item)) throw notFound();
+    await askForFullReport(db, check2, { source: "pay_link" });
     request = (await lookup(db, input.token, input.item)).request;
     if (!request) throw new TRPCError9({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute, or reply to your summary email." });
   }
   if (request.status === "confirmed") return { alreadyPaid: true };
   if (effectivePaymentStatus(request) === "expired") {
-    if (!ownerMayStart(check, request.item)) {
+    if (!ownerMayStart(check2, request.item)) {
       throw new TRPCError9({ code: "PRECONDITION_FAILED", message: "This payment link has passed its 48 hours. Reply to your payment email and we will send you a new one." });
     }
-    await requestPayment(db, { businessCheckId: check.id, item: request.item, actorUserId: null });
+    await requestPayment(db, { businessCheckId: check2.id, item: request.item, actorUserId: null });
     request = (await lookup(db, input.token, input.item)).request ?? request;
   }
   assertAmountAllowed(request.amountNaira);
-  const email = check.email;
+  const email = check2.email;
   const reference2 = onlineReference(request.reference);
   try {
     const { authorizationUrl } = await initializeTransaction({
@@ -6760,11 +6837,11 @@ var PROBLEM_TEXT = {
 async function needsALook(db, request, transaction, problem, source) {
   const reason = PROBLEM_TEXT[problem](transaction, request);
   console.error(`[Paystack] ${source}: ${transaction.reference} was not confirmed for ${request.reference}: ${problem}.`);
-  const check = await checkOf(db, request.businessCheckId);
+  const check2 = await checkOf(db, request.businessCheckId);
   await recordAudit(db, {
     action: "payment_online_refused",
     actorUserId: null,
-    targetEmail: check?.email ?? null,
+    targetEmail: check2?.email ?? null,
     details: { businessCheckId: request.businessCheckId, item: request.item, reference: request.reference, via: "paystack", paystackReference: transaction.reference, mode: paystackMode(), problem, amountKobo: transaction.amount, currency: transaction.currency }
   });
   await deliverEmail({
@@ -6778,7 +6855,7 @@ async function needsALook(db, request, transaction, problem, source) {
       `Reason: ${reason}`,
       `Reference: ${request.reference}`,
       `Paystack reference: ${transaction.reference}`,
-      `Owner: ${check ? `${check.fullName} (${check.email})` : "Not found"}`,
+      `Owner: ${check2 ? `${check2.fullName} (${check2.email})` : "Not found"}`,
       `Item: ${PAYMENT_ITEM_TITLES[request.item]}`,
       "",
       `Business Health Check #${request.businessCheckId}.`
@@ -6786,7 +6863,7 @@ async function needsALook(db, request, transaction, problem, source) {
   }).catch((error) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
 }
 async function tellOfficePaid(db, request, online, result) {
-  const check = await checkOf(db, request.businessCheckId);
+  const check2 = await checkOf(db, request.businessCheckId);
   const test = online.mode === "test";
   const next = request.item === "full_report" ? ["The payment confirmation with the Report Intake link has been emailed to the owner."] : [
     "The business is now Won.",
@@ -6797,13 +6874,13 @@ async function tellOfficePaid(db, request, online, result) {
     to: BUSINESS_SUPPORT_MAILBOX,
     sender: "business_support",
     idempotencyKey: `payment_requests:${request.id}:paid_online:office`,
-    subject: `${test ? "TEST: " : ""}Paid online: ${check?.businessName || check?.fullName || request.reference}, ${PAYMENT_ITEM_TITLES[request.item]}`,
+    subject: `${test ? "TEST: " : ""}Paid online: ${check2?.businessName || check2?.fullName || request.reference}, ${PAYMENT_ITEM_TITLES[request.item]}`,
     body: [
       ...test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : [],
-      `${check?.fullName ?? "The owner"} paid ${formatNaira(request.amountNaira)} for the ${PAYMENT_ITEM_TITLES[request.item]} with Paystack. It is confirmed: nothing to do in the admin console.`,
+      `${check2?.fullName ?? "The owner"} paid ${formatNaira(request.amountNaira)} for the ${PAYMENT_ITEM_TITLES[request.item]} with Paystack. It is confirmed: nothing to do in the admin console.`,
       "",
-      `Email: ${check?.email ?? "Not found"}`,
-      `Business: ${check?.businessName || "Not given"}`,
+      `Email: ${check2?.email ?? "Not found"}`,
+      `Business: ${check2?.businessName || "Not given"}`,
       `Reference: ${request.reference}`,
       `Paystack reference: ${online.reference}`,
       `Confirmed: ${lagosTime(/* @__PURE__ */ new Date())} (Lagos time)`,
@@ -7280,28 +7357,28 @@ function isMissingDebriefTable(error) {
   return code === "42P01";
 }
 async function requireCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email }).from(businessChecks).where(eq14(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError12({ code: "NOT_FOUND", message: "This Business Health Check does not exist." });
-  return check;
+  const check2 = (await db.select({ id: businessChecks.id, email: businessChecks.email }).from(businessChecks).where(eq14(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check2) throw new TRPCError12({ code: "NOT_FOUND", message: "This Business Health Check does not exist." });
+  return check2;
 }
 async function getDebrief(db, businessCheckId) {
   return (await db.select().from(debriefs).where(eq14(debriefs.businessCheckId, businessCheckId)).limit(1))[0] ?? null;
 }
 async function saveDebrief(db, input, actorUserId) {
-  const check = await requireCheck(db, input.businessCheckId);
+  const check2 = await requireCheck(db, input.businessCheckId);
   const values2 = { heldAt: input.heldAt, heard: input.heard, problemInOwnerWords: input.problemInOwnerWords, successLooksLike: input.successLooksLike, tried: input.tried, nextSteps: input.nextSteps, capturedByUserId: actorUserId };
   return db.transaction(async (tx) => {
-    const [row] = await tx.insert(debriefs).values({ businessCheckId: check.id, ...values2 }).onConflictDoUpdate({ target: debriefs.businessCheckId, set: values2 }).returning({ id: debriefs.id, sharedAt: debriefs.sharedAt });
-    await recordAudit(tx, { action: "debrief_saved", actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, debriefId: row.id } });
+    const [row] = await tx.insert(debriefs).values({ businessCheckId: check2.id, ...values2 }).onConflictDoUpdate({ target: debriefs.businessCheckId, set: values2 }).returning({ id: debriefs.id, sharedAt: debriefs.sharedAt });
+    await recordAudit(tx, { action: "debrief_saved", actorUserId, targetEmail: check2.email, details: { businessCheckId: check2.id, debriefId: row.id } });
     return { debriefId: row.id, shared: row.sharedAt !== null };
   });
 }
 async function shareDebrief(db, input, actorUserId) {
-  const check = await requireCheck(db, input.businessCheckId);
+  const check2 = await requireCheck(db, input.businessCheckId);
   return db.transaction(async (tx) => {
-    const updated = await tx.update(debriefs).set({ sharedAt: input.shared ? /* @__PURE__ */ new Date() : null }).where(eq14(debriefs.businessCheckId, check.id)).returning({ id: debriefs.id });
+    const updated = await tx.update(debriefs).set({ sharedAt: input.shared ? /* @__PURE__ */ new Date() : null }).where(eq14(debriefs.businessCheckId, check2.id)).returning({ id: debriefs.id });
     if (!updated.length) throw new TRPCError12({ code: "NOT_FOUND", message: "Write the Discovery Call up before sharing it." });
-    await recordAudit(tx, { action: "debrief_shared", actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, debriefId: updated[0].id, shared: input.shared } });
+    await recordAudit(tx, { action: "debrief_shared", actorUserId, targetEmail: check2.email, details: { businessCheckId: check2.id, debriefId: updated[0].id, shared: input.shared } });
     return { success: true };
   });
 }
@@ -8742,13 +8819,13 @@ function riskRegister(answers, result, intake, metrics2) {
   ] : [{ kind: "paragraph", text: "Your answers did not point to a pressing risk. Keep a short list of the five things that could hurt the business most, and review it once a year." }];
 }
 function appendix(answers, intake) {
-  const check = [];
+  const check2 = [];
   for (const section of Object.values(SECTIONS)) {
     for (const question of section.questions) {
       const value = answers[question.id];
       if (value === void 0 || value === "" || Array.isArray(value) && !value.length) continue;
       const text4 = question.kind === "text" ? String(value) : optionLabel(question.id, value) ?? String(value);
-      check.push({ question: question.prompt, answer: text4 });
+      check2.push({ question: question.prompt, answer: text4 });
     }
   }
   const intakeAnswers = {
@@ -8771,7 +8848,7 @@ function appendix(answers, intake) {
     goal: intake.revenueTarget ? `${sentence(intake.goal)} Monthly sales wanted in 12 months: ${formatNaira(intake.revenueTarget)}.` : intake.goal
   };
   return [
-    { title: "Your Business Health Check", rows: check },
+    { title: "Your Business Health Check", rows: check2 },
     { title: "Your Report Intake", rows: INTAKE_QUESTIONS.map((question) => ({ question: intakeWording(question, earnsByDeal(intake.products)).prompt, answer: intakeAnswers[question.id] })) }
   ];
 }
@@ -9547,14 +9624,14 @@ async function recordFor(db, token3) {
   return record;
 }
 async function checkFor(db, businessCheckId) {
-  const check = (await db.select().from(businessChecks).where(eq15(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError13({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
-  return check;
+  const check2 = (await db.select().from(businessChecks).where(eq15(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check2) throw new TRPCError13({ code: "NOT_FOUND", message: REPORT_ERRORS.unavailable });
+  return check2;
 }
 async function reportForm(db, token3) {
   const record = await recordFor(db, token3);
-  const check = await checkFor(db, record.businessCheckId);
-  return { status: record.status, fullName: check.fullName, businessName: check.businessName ?? "", email: check.email, deliveredAt: record.deliveredAt };
+  const check2 = await checkFor(db, record.businessCheckId);
+  return { status: record.status, fullName: check2.fullName, businessName: check2.businessName ?? "", email: check2.email, deliveredAt: record.deliveredAt };
 }
 function parse(text4) {
   if (!text4) return null;
@@ -9567,20 +9644,20 @@ function parse(text4) {
 async function assemble(db, record) {
   const intake = readIntake(parse(record.intakeJson));
   if (!intake || !record.intakeSubmittedAt) throw new TRPCError13({ code: "BAD_REQUEST", message: REPORT_ERRORS.notReady });
-  const check = await checkFor(db, record.businessCheckId);
+  const check2 = await checkFor(db, record.businessCheckId);
   const payment = (await db.select({ reference: paymentRequests.reference }).from(paymentRequests).where(eq15(paymentRequests.id, record.paymentRequestId)).limit(1))[0];
-  const answers = parse(check.answersJson) ?? {};
-  const result = parse(check.resultJson) ?? evaluate(answers);
+  const answers = parse(check2.answersJson) ?? {};
+  const result = parse(check2.resultJson) ?? evaluate(answers);
   const report = buildFullReport({
-    reference: payment?.reference ?? `TS-R-${String(check.id).padStart(6, "0")}`,
+    reference: payment?.reference ?? `TS-R-${String(check2.id).padStart(6, "0")}`,
     date: record.intakeSubmittedAt,
-    contact: { fullName: check.fullName, businessName: check.businessName },
+    contact: { fullName: check2.fullName, businessName: check2.businessName },
     answers,
     result,
     intake,
     currentStatePrice: displayedPrices().currentState
   });
-  return { report, generatedAt: record.intakeSubmittedAt, email: check.email, fullName: check.fullName };
+  return { report, generatedAt: record.intakeSubmittedAt, email: check2.email, fullName: check2.fullName };
 }
 var fileName = (report) => `${report.businessName.replace(/[^A-Za-z0-9]+/g, "-").replace(/^-|-$/g, "") || "Business"}-full-report.pdf`;
 function reportEmail(report, downloadUrl) {
@@ -9682,15 +9759,15 @@ async function resendReportLink(db, input) {
   if (record?.status === "delivered") throw new TRPCError13({ code: "CONFLICT", message: "The Full Report has already been sent." });
   const paymentRequestId = record?.paymentRequestId ?? (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and9(eq15(paymentRequests.businessCheckId, input.businessCheckId), eq15(paymentRequests.item, "full_report"), eq15(paymentRequests.status, "confirmed"))).limit(1))[0]?.id;
   if (!paymentRequestId) throw new TRPCError13({ code: "NOT_FOUND", message: "Confirm the Full Report payment first: that sends the Report Intake link." });
-  const check = await checkFor(db, input.businessCheckId);
-  const link = await issueReportLink(db, { businessCheckId: check.id, paymentRequestId });
-  const firstName2 = check.fullName.trim().split(/\s+/)[0] || "there";
+  const check2 = await checkFor(db, input.businessCheckId);
+  const link = await issueReportLink(db, { businessCheckId: check2.id, paymentRequestId });
+  const firstName2 = check2.fullName.trim().split(/\s+/)[0] || "there";
   const delivery = await deliverEmail({
     sender: "business_support",
-    businessCheckId: check.id,
+    businessCheckId: check2.id,
     // A new link each time, so each resend is its own message.
-    idempotencyKey: `full_reports:${check.id}:link:${Date.now()}`,
-    to: check.email,
+    idempotencyKey: `full_reports:${check2.id}:link:${Date.now()}`,
+    to: check2.email,
     subject: "Your Report Intake",
     body: [
       `Dear ${firstName2},`,
@@ -9703,7 +9780,7 @@ async function resendReportLink(db, input) {
       BRAND.organisationName
     ].join("\n")
   }).catch(() => ({ status: "Failed" }));
-  await recordAudit(db, { action: "full_report_link_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, delivery: delivery.status } });
+  await recordAudit(db, { action: "full_report_link_sent", actorUserId: input.actorUserId, targetEmail: check2.email, details: { businessCheckId: check2.id, delivery: delivery.status } });
   return { success: true, deliveryStatus: delivery.status };
 }
 
@@ -10095,8 +10172,8 @@ async function listStaffEngagements(db, actor) {
 }
 async function getStaffEngagement(db, actor, engagementId) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
-  const check = engagement.businessCheckId !== null ? (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq16(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { id: null, fullName: engagement.contactName ?? "", email: engagement.contactEmail, whatsapp: null, businessName: null } : void 0;
-  if (check) await syncSessionBookings(db, engagement, check.email);
+  const check2 = engagement.businessCheckId !== null ? (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq16(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { id: null, fullName: engagement.contactName ?? "", email: engagement.contactEmail, whatsapp: null, businessName: null } : void 0;
+  if (check2) await syncSessionBookings(db, engagement, check2.email);
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq16(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
   const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins, matches, waiting] = await Promise.all([
     db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq16(engagementTeam.userId, users.id)).where(eq16(engagementTeam.engagementId, engagementId)).orderBy(asc4(engagementTeam.id)),
@@ -10118,8 +10195,8 @@ async function getStaffEngagement(db, actor, engagementId) {
   return {
     uploadsEnabled: isFileStorageConfigured(),
     engagement: { ...engagement, stageLabel: engagementStageLabel(engagement, Date.now()), typeLabel: engagementTitle(engagement.type, engagement.service) },
-    owner: check ? { name: check.fullName, email: check.email, whatsapp: check.whatsapp } : null,
-    businessName: business?.name ?? check?.businessName ?? check?.fullName ?? "",
+    owner: check2 ? { name: check2.fullName, email: check2.email, whatsapp: check2.whatsapp } : null,
+    businessName: business?.name ?? check2?.businessName ?? check2?.fullName ?? "",
     hasAccount: business !== null,
     team: team.map((member) => ({ ...member, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[member.role] })),
     clientPeople,
@@ -10466,10 +10543,10 @@ function parseJson(text4) {
 async function insightFor(db, businessCheckId, reportDelivered) {
   const report = reportDelivered ? await reportForCheck(db, businessCheckId) : null;
   if (report) return roomInsight({ report, result: null });
-  const check = (await db.select({ answersJson: businessChecks.answersJson, resultJson: businessChecks.resultJson }).from(businessChecks).where(eq16(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) return null;
-  const answers = parseJson(check.answersJson);
-  const stored = parseJson(check.resultJson);
+  const check2 = (await db.select({ answersJson: businessChecks.answersJson, resultJson: businessChecks.resultJson }).from(businessChecks).where(eq16(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check2) return null;
+  const answers = parseJson(check2.answersJson);
+  const stored = parseJson(check2.resultJson);
   const result = stored && Array.isArray(stored.outline) && stored.founder ? stored : answers ? evaluate(answers) : null;
   return roomInsight({ report: null, result });
 }
@@ -10493,8 +10570,8 @@ async function previewClientRoom(db, actor, input) {
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   const owner = engagement.businessId === null ? void 0 : (await db.select({ userId: businessMemberships.userId }).from(businessMemberships).where(and10(eq16(businessMemberships.businessId, engagement.businessId), eq16(businessMemberships.role, "owner"), eq16(businessMemberships.status, "active"))).limit(1))[0];
   const business = engagement.businessId === null ? void 0 : (await db.select({ name: businesses.name }).from(businesses).where(eq16(businesses.id, engagement.businessId)).limit(1))[0];
-  const check = engagement.businessCheckId === null ? void 0 : (await db.select({ businessName: businessChecks.businessName, fullName: businessChecks.fullName }).from(businessChecks).where(eq16(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
-  const businessName = business?.name ?? check?.businessName ?? check?.fullName ?? engagement.contactName ?? "";
+  const check2 = engagement.businessCheckId === null ? void 0 : (await db.select({ businessName: businessChecks.businessName, fullName: businessChecks.fullName }).from(businessChecks).where(eq16(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  const businessName = business?.name ?? check2?.businessName ?? check2?.fullName ?? engagement.contactName ?? "";
   await recordAudit(db, { action: "engagement_room_previewed", actorUserId: actor.id, details: { engagementId: engagement.id } });
   return buildClientRoom(db, engagement, { kind: "owner" }, owner?.userId ?? 0, businessName);
 }
@@ -10517,7 +10594,7 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
   const fullView = viewer.kind === "owner" || viewer.access === "full";
   const projects = engagement.businessId === null ? [engagement] : await db.select().from(engagements).where(eq16(engagements.businessId, engagement.businessId)).orderBy(desc5(engagements.id));
   const checkId = engagement.businessCheckId ?? projects.find((row) => row.businessCheckId !== null)?.businessCheckId ?? null;
-  const check = checkId === null ? void 0 : (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor }).from(businessChecks).where(eq16(businessChecks.id, checkId)).limit(1))[0];
+  const check2 = checkId === null ? void 0 : (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor }).from(businessChecks).where(eq16(businessChecks.id, checkId)).limit(1))[0];
   const report = checkId === null ? null : (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq16(fullReports.businessCheckId, checkId)).limit(1))[0] ?? null;
   const debrief = fullView && checkId !== null ? await sharedDebriefFor(db, checkId) : null;
   const insight = fullView && checkId !== null ? await insightFor(db, checkId, Boolean(report?.deliveredAt)) : null;
@@ -10567,7 +10644,7 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
     fixStartedAt: engagement.fixStartedAt,
     closedAt: engagement.closedAt,
     createdAt: engagement.createdAt,
-    check: check ? { primaryArea: check.primaryArea, readiness: check.readiness, completedAt: check.completedAt, reportRequestedAt: check.reportRequestedAt, callRequestedAt: check.callRequestedAt, callScheduledFor: check.callScheduledFor } : null,
+    check: check2 ? { primaryArea: check2.primaryArea, readiness: check2.readiness, completedAt: check2.completedAt, reportRequestedAt: check2.reportRequestedAt, callRequestedAt: check2.callRequestedAt, callScheduledFor: check2.callScheduledFor } : null,
     report: report ? { requestedAt: report.createdAt, deliveredAt: report.deliveredAt } : null,
     debrief,
     insight,
@@ -11408,23 +11485,23 @@ async function createOnboardingInvitation(input) {
   const createdBy = input.actorUserId ?? input.createdByUserId ?? null;
   if (createdBy === null) throw new TRPCError16({ code: "PRECONDITION_FAILED", message: "Nobody on the team is named to send this invitation. Send it from Client Onboarding." });
   const db = await requireDatabase();
-  const check = (await db.select().from(businessChecks).where(eq18(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError16({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
-  const email = normaliseAccountEmail(check.email);
+  const check2 = (await db.select().from(businessChecks).where(eq18(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  if (!check2) throw new TRPCError16({ code: "NOT_FOUND", message: ONBOARDING_ERRORS.noCheck });
+  const email = normaliseAccountEmail(check2.email);
   if (!emailSchema.safeParse(email).success) throw new TRPCError16({ code: "BAD_REQUEST", message: ONBOARDING_ERRORS.invalidCheckEmail });
   if (await identityConflict(db, email)) throw new TRPCError16({ code: "CONFLICT", message: ONBOARDING_ERRORS.existingAccountAdmin });
-  const paid = await assessmentPaid(db, check.id);
+  const paid = await assessmentPaid(db, check2.id);
   const override = input.overrideReason?.trim() ?? "";
   if (!paid && !override) throw new TRPCError16({ code: "PRECONDITION_FAILED", message: ONBOARDING_ERRORS.unpaid });
   const token3 = randomBytes9(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ONBOARDING_INVITATION_TTL_MS);
   const invitation = await db.transaction(async (tx) => {
-    await tx.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and12(eq18(clientOnboardingInvitations.businessCheckId, check.id), eq18(clientOnboardingInvitations.status, "pending")));
+    await tx.update(clientOnboardingInvitations).set({ status: "revoked", revokedAt: databaseNow() }).where(and12(eq18(clientOnboardingInvitations.businessCheckId, check2.id), eq18(clientOnboardingInvitations.status, "pending")));
     const [row] = await tx.insert(clientOnboardingInvitations).values({
-      businessCheckId: check.id,
+      businessCheckId: check2.id,
       email,
-      fullNameSnapshot: check.fullName,
-      businessNameSnapshot: check.businessName ?? "",
+      fullNameSnapshot: check2.fullName,
+      businessNameSnapshot: check2.businessName ?? "",
       tokenHash: sha256(token3),
       expiresAt,
       createdByUserId: createdBy
@@ -11432,8 +11509,8 @@ async function createOnboardingInvitation(input) {
     return row;
   });
   const invitationUrl = `${getTrustedApplicationOrigin()}/onboarding/${encodeURIComponent(token3)}`;
-  const message = buildOnboardingEmail({ fullName: check.fullName, businessName: check.businessName ?? "", url: invitationUrl });
-  const delivery = await deliverEmail({ to: email, subject: message.subject, body: message.body, sender: "business_support", invitationId: invitation.id, businessCheckId: check.id, idempotencyKey: `client_onboarding_invitations:${invitation.id}` });
+  const message = buildOnboardingEmail({ fullName: check2.fullName, businessName: check2.businessName ?? "", url: invitationUrl });
+  const delivery = await deliverEmail({ to: email, subject: message.subject, body: message.body, sender: "business_support", invitationId: invitation.id, businessCheckId: check2.id, idempotencyKey: `client_onboarding_invitations:${invitation.id}` });
   await db.update(clientOnboardingInvitations).set({
     deliveryStatus: delivery.status,
     deliveryMessageId: delivery.status === "Sent" ? delivery.providerMessageId || null : null
@@ -11442,7 +11519,7 @@ async function createOnboardingInvitation(input) {
     actorUserId: input.actorUserId,
     action: "client_onboarding_invitation_created",
     targetEmail: email,
-    details: JSON.stringify({ invitationId: invitation.id, businessCheckId: check.id, deliveryStatus: delivery.status, paid, ...paid ? {} : { override }, ...input.via ? { via: input.via, recordedAgainstUserId: createdBy } : {} })
+    details: JSON.stringify({ invitationId: invitation.id, businessCheckId: check2.id, deliveryStatus: delivery.status, paid, ...paid ? {} : { override }, ...input.via ? { via: input.via, recordedAgainstUserId: createdBy } : {} })
   });
   return { invitationId: invitation.id, invitationUrl, expiresAt, deliveryStatus: delivery.status };
 }
@@ -11563,7 +11640,7 @@ async function listOnboardingCandidates() {
     }).from(businessChecks).orderBy(desc6(businessChecks.createdAt)).limit(200),
     latestInvitationStatuses(db)
   ]);
-  return checks.map((check) => ({ ...check, invitationStatus: latest.get(check.id) ?? null }));
+  return checks.map((check2) => ({ ...check2, invitationStatus: latest.get(check2.id) ?? null }));
 }
 async function listOnboardingInvitations() {
   const db = await requireDatabase();
@@ -11702,33 +11779,33 @@ async function paymentStatusesByCheck(db, businessCheckIds) {
   return byCheck;
 }
 async function loadCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, publicToken: businessChecks.publicToken, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq19(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError17({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
-  return check;
+  const check2 = (await db.select({ id: businessChecks.id, publicToken: businessChecks.publicToken, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq19(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check2) throw new TRPCError17({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  return check2;
 }
 var BEFORE_OPPORTUNITY = ["lead", "qualified_lead", "call_booked"];
 async function requestPayment(db, input) {
-  const check = await loadCheck(db, input.businessCheckId);
-  const existing = (await db.select().from(paymentRequests).where(and13(eq19(paymentRequests.businessCheckId, check.id), eq19(paymentRequests.item, input.item))).limit(1))[0];
+  const check2 = await loadCheck(db, input.businessCheckId);
+  const existing = (await db.select().from(paymentRequests).where(and13(eq19(paymentRequests.businessCheckId, check2.id), eq19(paymentRequests.item, input.item))).limit(1))[0];
   if (existing?.status === "confirmed") throw new TRPCError17({ code: "CONFLICT", message: "This has already been paid." });
-  const reference2 = paymentReference(input.item, check.id);
+  const reference2 = paymentReference(input.item, check2.id);
   const priced = resolveBusinessSupportPrice(input.item);
   const { lowPriceTesting } = priced;
   const amountNaira = input.item === "current_state" ? firstHalf(priced.amountNaira) : priced.amountNaira;
-  const stageTo = input.item === "current_state" && BEFORE_OPPORTUNITY.includes(check.pipelineStage) ? "opportunity" : check.pipelineStage;
+  const stageTo = input.item === "current_state" && BEFORE_OPPORTUNITY.includes(check2.pipelineStage) ? "opportunity" : check2.pipelineStage;
   const request = await db.transaction(async (tx) => {
-    const [row] = await tx.insert(paymentRequests).values({ businessCheckId: check.id, item: input.item, amountNaira, reference: reference2, requestedByUserId: input.actorUserId }).onConflictDoUpdate({ target: [paymentRequests.businessCheckId, paymentRequests.item], set: { amountNaira, requestedByUserId: input.actorUserId, requestedAt: /* @__PURE__ */ new Date() } }).returning();
-    if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq19(businessChecks.id, check.id));
+    const [row] = await tx.insert(paymentRequests).values({ businessCheckId: check2.id, item: input.item, amountNaira, reference: reference2, requestedByUserId: input.actorUserId }).onConflictDoUpdate({ target: [paymentRequests.businessCheckId, paymentRequests.item], set: { amountNaira, requestedByUserId: input.actorUserId, requestedAt: /* @__PURE__ */ new Date() } }).returning();
+    if (stageTo !== check2.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq19(businessChecks.id, check2.id));
     await recordAudit(tx, {
       action: "payment_details_sent",
       actorUserId: input.actorUserId,
-      targetEmail: check.email,
-      details: { businessCheckId: check.id, item: input.item, reference: reference2, amountNaira, again: Boolean(existing), ...lowPriceTesting ? { lowPriceTesting: true } : {}, ...stageTo !== check.pipelineStage ? { from: check.pipelineStage, to: stageTo } : {} }
+      targetEmail: check2.email,
+      details: { businessCheckId: check2.id, item: input.item, reference: reference2, amountNaira, again: Boolean(existing), ...lowPriceTesting ? { lowPriceTesting: true } : {}, ...stageTo !== check2.pipelineStage ? { from: check2.pipelineStage, to: stageTo } : {} }
     });
     return row;
   });
-  const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference: reference2, deadline: paymentDeadline(request.requestedAt), amountNaira: request.amountNaira, totalNaira: priced.amountNaira, online: onlinePaymentOffer(check.publicToken, input.item) });
-  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check.id, idempotencyKey: `payment_requests:${request.id}:details:${request.requestedAt.getTime()}` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
+  const message = paymentDetailsEmail({ fullName: check2.fullName, item: input.item, reference: reference2, deadline: paymentDeadline(request.requestedAt), amountNaira: request.amountNaira, totalNaira: priced.amountNaira, online: onlinePaymentOffer(check2.publicToken, input.item) });
+  const delivery = await deliverEmail({ to: check2.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check2.id, idempotencyKey: `payment_requests:${request.id}:details:${request.requestedAt.getTime()}` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
   await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq19(paymentRequests.id, request.id));
   const deliveryProblem = delivery.status === "Failed" ? delivery.reason : null;
   return { paymentRequestId: request.id, reference: reference2, status: request.status, deliveryStatus: delivery.status, deliveryProblem, pipelineStage: stageTo };
@@ -11748,8 +11825,8 @@ var viaDetails = (online) => online ? { via: online.provider, paystackReference:
 async function confirmPayment(db, input) {
   const request = await loadRequest(db, input.paymentRequestId);
   if (request.status === "confirmed") return NOT_CONFIRMED;
-  const check = await loadCheck(db, request.businessCheckId);
-  const stageTo = request.item === "current_state" ? "won" : check.pipelineStage;
+  const check2 = await loadCheck(db, request.businessCheckId);
+  const stageTo = request.item === "current_state" ? "won" : check2.pipelineStage;
   const note = input.online ? onlinePaymentNote(input.online) : input.note || null;
   const via = viaDetails(input.online);
   let outcome;
@@ -11757,14 +11834,14 @@ async function confirmPayment(db, input) {
     outcome = await db.transaction(async (tx) => {
       const [claimed] = await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note }).where(and13(eq19(paymentRequests.id, request.id), ne3(paymentRequests.status, "confirmed"))).returning({ id: paymentRequests.id });
       if (!claimed) return null;
-      if (stageTo !== check.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq19(businessChecks.id, check.id));
+      if (stageTo !== check2.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq19(businessChecks.id, check2.id));
       await recordAudit(tx, {
         action: "payment_confirmed",
         actorUserId: input.actorUserId,
-        targetEmail: check.email,
-        details: { businessCheckId: check.id, item: request.item, reference: request.reference, amountNaira: request.amountNaira, ...note ? { note } : {}, ...via, ...stageTo !== check.pipelineStage ? { from: check.pipelineStage, to: stageTo } : {} }
+        targetEmail: check2.email,
+        details: { businessCheckId: check2.id, item: request.item, reference: request.reference, amountNaira: request.amountNaira, ...note ? { note } : {}, ...via, ...stageTo !== check2.pipelineStage ? { from: check2.pipelineStage, to: stageTo } : {} }
       });
-      const reportLink = request.item === "full_report" ? await issueReportLink(tx, { businessCheckId: check.id, paymentRequestId: request.id }) : null;
+      const reportLink = request.item === "full_report" ? await issueReportLink(tx, { businessCheckId: check2.id, paymentRequestId: request.id }) : null;
       return { reportLink };
     });
   } catch (error) {
@@ -11772,14 +11849,14 @@ async function confirmPayment(db, input) {
     throw error;
   }
   if (!outcome) return NOT_CONFIRMED;
-  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink, amountNaira: request.amountNaira, testMode: input.online?.mode === "test" });
-  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check.id, idempotencyKey: `payment_requests:${request.id}:confirmed` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
-  await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference, delivery: delivery.status, again: false, ...via } });
+  const message = paymentConfirmedEmail({ fullName: check2.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink, amountNaira: request.amountNaira, testMode: input.online?.mode === "test" });
+  const delivery = await deliverEmail({ to: check2.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check2.id, idempotencyKey: `payment_requests:${request.id}:confirmed` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
+  await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check2.email, details: { businessCheckId: check2.id, item: request.item, reference: request.reference, delivery: delivery.status, again: false, ...via } });
   let invitation = null;
   let engagement = null;
   if (request.item === "current_state") {
-    engagement = await startEngagementSafely(db, { businessCheckId: check.id, paymentRequestId: request.id, actorUserId: input.actorUserId });
-    invitation = await inviteToClientAccount(db, check.id, input.online ? { actorUserId: null, createdByUserId: request.requestedByUserId, via: input.online.provider } : { actorUserId: input.actorUserId });
+    engagement = await startEngagementSafely(db, { businessCheckId: check2.id, paymentRequestId: request.id, actorUserId: input.actorUserId });
+    invitation = await inviteToClientAccount(db, check2.id, input.online ? { actorUserId: null, createdByUserId: request.requestedByUserId, via: input.online.provider } : { actorUserId: input.actorUserId });
   }
   return { success: true, changed: true, invitation, engagement };
 }
@@ -11787,11 +11864,11 @@ async function resendPaymentConfirmation(db, input) {
   const request = await loadRequest(db, input.paymentRequestId);
   if (request.status !== "confirmed") throw new TRPCError17({ code: "CONFLICT", message: "This payment is not confirmed yet." });
   if (request.item !== "current_state") throw new TRPCError17({ code: "CONFLICT", message: "For the Full Report, send the Report Intake link again instead." });
-  const check = await loadCheck(db, request.businessCheckId);
+  const check2 = await loadCheck(db, request.businessCheckId);
   const testMode = request.confirmedByUserId === null && Boolean(request.note?.startsWith(`${TEST_NOTE}${ONLINE_NOTE}`));
-  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: null, amountNaira: request.amountNaira, testMode });
-  const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check.id, idempotencyKey: `payment_requests:${request.id}:confirmed:${Date.now()}` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
-  await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference, delivery: delivery.status, again: true } });
+  const message = paymentConfirmedEmail({ fullName: check2.fullName, item: request.item, reference: request.reference, reportLink: null, amountNaira: request.amountNaira, testMode });
+  const delivery = await deliverEmail({ to: check2.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check2.id, idempotencyKey: `payment_requests:${request.id}:confirmed:${Date.now()}` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
+  await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check2.email, details: { businessCheckId: check2.id, item: request.item, reference: request.reference, delivery: delivery.status, again: true } });
   return { success: true, deliveryStatus: delivery.status };
 }
 async function inviteToClientAccount(db, businessCheckId, actor) {
@@ -11828,17 +11905,17 @@ async function database(what) {
   return db;
 }
 async function findCheck(db, token3) {
-  const [check] = await db.select().from(businessChecks).where(eq20(businessChecks.publicToken, token3)).limit(1);
-  if (!check) throw new TRPCError18({ code: "NOT_FOUND", message: "We could not find that Business Health Check. Kindly start again." });
-  return check;
+  const [check2] = await db.select().from(businessChecks).where(eq20(businessChecks.publicToken, token3)).limit(1);
+  if (!check2) throw new TRPCError18({ code: "NOT_FOUND", message: "We could not find that Business Health Check. Kindly start again." });
+  return check2;
 }
 function answerColumns(answers) {
   const { businessName, description } = businessDetails(answers);
   return { answersJson: JSON.stringify(answers), stage: stageOf(answers) ?? "unknown", businessName: businessName || null, description: description || null };
 }
-function contactOf(check, answers) {
+function contactOf(check2, answers) {
   const { businessName, description } = businessDetails(answers);
-  return { fullName: check.fullName, email: check.email, whatsapp: check.whatsapp || void 0, heardFrom: check.heardFrom || void 0, businessName: businessName || void 0, description: description || void 0 };
+  return { fullName: check2.fullName, email: check2.email, whatsapp: check2.whatsapp || void 0, heardFrom: check2.heardFrom || void 0, businessName: businessName || void 0, description: description || void 0 };
 }
 var businessCheckRouter = router({
   /** The prices the site shows: the same server-side figures the payment requests are created with. Read only; nothing here sets a price. */
@@ -11867,29 +11944,29 @@ var businessCheckRouter = router({
   saveProgress: publicProcedure.input(z9.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }) => {
     if (!await consumeLimit(LIMITS.checkSave, input.token)) throw tooMany2("Too many updates. Your answers are still kept on this device.");
     const db = await database("save your progress");
-    const check = await findCheck(db, input.token);
-    if (check.completedAt) return { saved: false };
-    await db.update(businessChecks).set(answerColumns(cleanAnswers(input.answers))).where(eq20(businessChecks.id, check.id));
+    const check2 = await findCheck(db, input.token);
+    if (check2.completedAt) return { saved: false };
+    await db.update(businessChecks).set(answerColumns(cleanAnswers(input.answers))).where(eq20(businessChecks.id, check2.id));
     return { saved: true };
   }),
   /** Finishes the check: works out the result on the server, writes the summary and emails both sides once. */
   submit: publicProcedure.input(z9.object({ token: tokenInput, answers: answersInput })).mutation(async ({ input }) => {
     if (!await consumeLimit(LIMITS.checkSubmit, input.token)) throw tooMany2("Your Business Health Check has been sent. Kindly wait a while before sending it again.");
     const db = await database("record your Business Health Check");
-    const check = await findCheck(db, input.token);
-    if (check.completedAt && check.resultJson && check.summaryJson && check.summarySource) {
-      return { token: check.publicToken, result: JSON.parse(check.resultJson), summary: JSON.parse(check.summaryJson), summarySource: check.summarySource, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: check.notificationStatus };
+    const check2 = await findCheck(db, input.token);
+    if (check2.completedAt && check2.resultJson && check2.summaryJson && check2.summarySource) {
+      return { token: check2.publicToken, result: JSON.parse(check2.resultJson), summary: JSON.parse(check2.summaryJson), summarySource: check2.summarySource, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: check2.notificationStatus };
     }
     const answers = cleanAnswers(input.answers);
     if (!isComplete(answers)) {
       throw new TRPCError18({ code: "BAD_REQUEST", message: "Some questions are still unanswered. Kindly go back and complete them." });
     }
     const result = evaluate(answers);
-    const contact = contactOf(check, answers);
+    const contact = contactOf(check2, answers);
     const { summary, source } = await summariseCheck({ answers, result, contact });
     const [claimed] = await db.update(businessChecks).set({
       ...answerColumns(answers),
-      pipelineStage: advancePipeline(check.pipelineStage, "qualified_lead"),
+      pipelineStage: advancePipeline(check2.pipelineStage, "qualified_lead"),
       route: result.route,
       readiness: result.founder.level,
       primaryArea: result.primaryArea?.area ?? null,
@@ -11897,20 +11974,20 @@ var businessCheckRouter = router({
       summaryJson: JSON.stringify(summary),
       summarySource: source,
       completedAt: databaseNow()
-    }).where(and14(eq20(businessChecks.id, check.id), isNull10(businessChecks.completedAt))).returning({ id: businessChecks.id });
+    }).where(and14(eq20(businessChecks.id, check2.id), isNull10(businessChecks.completedAt))).returning({ id: businessChecks.id });
     if (!claimed) {
       const recorded = await findCheck(db, input.token);
       return { token: recorded.publicToken, result: JSON.parse(recorded.resultJson ?? "null") ?? result, summary: JSON.parse(recorded.summaryJson ?? "null") ?? summary, summarySource: recorded.summarySource ?? source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: recorded.notificationStatus };
     }
     const office = officeEmail({ contact, answers, summary, source, result });
-    const owner = ownerEmail({ contact, summary, result, answers, fullReportPay: onlinePaymentOffer(check.publicToken, "full_report"), fullReportPrice: displayedPrices().fullReport });
+    const owner = ownerEmail({ contact, summary, result, answers, fullReportPay: onlinePaymentOffer(check2.publicToken, "full_report"), fullReportPrice: displayedPrices().fullReport });
     const failed = { status: "Failed" };
     const [officeDelivery, ownerDelivery] = await Promise.all([
-      deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, subject: office.subject, body: office.body, sender: "business_support", businessCheckId: check.id, idempotencyKey: `business_checks:${check.id}:summary:office` }).catch(() => failed),
-      deliverEmail({ to: check.email, subject: owner.subject, body: owner.body, sender: "business_support", businessCheckId: check.id, idempotencyKey: `business_checks:${check.id}:summary:owner` }).catch(() => failed)
+      deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, subject: office.subject, body: office.body, sender: "business_support", businessCheckId: check2.id, idempotencyKey: `business_checks:${check2.id}:summary:office` }).catch(() => failed),
+      deliverEmail({ to: check2.email, subject: owner.subject, body: owner.body, sender: "business_support", businessCheckId: check2.id, idempotencyKey: `business_checks:${check2.id}:summary:owner` }).catch(() => failed)
     ]);
-    await db.update(businessChecks).set({ notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent" }).where(eq20(businessChecks.id, check.id));
-    return { token: check.publicToken, result, summary, summarySource: source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: ownerDelivery.status === "Sent" ? "Sent" : ownerDelivery.status === "Failed" ? "Failed" : "Simulated" };
+    await db.update(businessChecks).set({ notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent" }).where(eq20(businessChecks.id, check2.id));
+    return { token: check2.publicToken, result, summary, summarySource: source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: ownerDelivery.status === "Sent" ? "Sent" : ownerDelivery.status === "Failed" ? "Failed" : "Simulated" };
   }),
   /** The owner asks for the free call or the full report from the result screen. */
   requestNext: publicProcedure.input(z9.object({
@@ -11922,36 +11999,36 @@ var businessCheckRouter = router({
   })).mutation(async ({ input }) => {
     if (!await consumeLimit(LIMITS.checkNext, input.token)) throw tooMany2("Your request has been recorded. Kindly wait before sending another.");
     const db = await database("record your request");
-    const check = await findCheck(db, input.token);
-    if (!check.completedAt) throw new TRPCError18({ code: "BAD_REQUEST", message: "Kindly finish the Business Health Check first." });
+    const check2 = await findCheck(db, input.token);
+    if (!check2.completedAt) throw new TRPCError18({ code: "BAD_REQUEST", message: "Kindly finish the Business Health Check first." });
     if (input.choice === "report") {
-      await askForFullReport(db, check, { source: "result_page", note: input.note });
+      await askForFullReport(db, check2, { source: "result_page", note: input.note });
       return { success: true, choice: input.choice };
     }
-    const bookedFor = input.choice === "call" && input.calendlyEventUri ? await bookedCallTime(input.calendlyEventUri, check.email) ?? await findBookedCall(check.email) : null;
+    const bookedFor = input.choice === "call" && input.calendlyEventUri ? await bookedCallTime(input.calendlyEventUri, check2.email) ?? await findBookedCall(check2.email) : null;
     if (bookedFor) {
-      await db.update(businessChecks).set({ callScheduledFor: bookedFor }).where(eq20(businessChecks.id, check.id));
-      await recordAudit(db, { action: "business_check_call_booked", targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: bookedFor.toISOString(), source: "calendly" } });
+      await db.update(businessChecks).set({ callScheduledFor: bookedFor }).where(eq20(businessChecks.id, check2.id));
+      await recordAudit(db, { action: "business_check_call_booked", targetEmail: check2.email, details: { businessCheckId: check2.id, scheduledFor: bookedFor.toISOString(), source: "calendly" } });
     }
-    const already = check.callRequestedAt;
+    const already = check2.callRequestedAt;
     if (!already) {
-      await db.update(businessChecks).set({ callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq20(businessChecks.id, check.id));
+      await db.update(businessChecks).set({ callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check2.pipelineStage, "call_booked") }).where(eq20(businessChecks.id, check2.id));
       const what = "a free Discovery Call";
       await deliverEmail({
         sender: "business_support",
-        idempotencyKey: `business_checks:${check.id}:${input.choice}:office`,
+        idempotencyKey: `business_checks:${check2.id}:${input.choice}:office`,
         to: BUSINESS_SUPPORT_MAILBOX,
-        subject: `Business Health Check: ${check.businessName || check.fullName} asked for ${what}`,
+        subject: `Business Health Check: ${check2.businessName || check2.fullName} asked for ${what}`,
         body: [
-          `${check.fullName} asked for ${what}.`,
+          `${check2.fullName} asked for ${what}.`,
           "",
-          `Email: ${check.email}`,
-          `WhatsApp: ${check.whatsapp || "Not given"}`,
-          `Business: ${check.businessName || "Not given"}`,
+          `Email: ${check2.email}`,
+          `WhatsApp: ${check2.whatsapp || "Not given"}`,
+          `Business: ${check2.businessName || "Not given"}`,
           `Note: ${input.note || "None"}`,
           ...bookedFor ? [`Booked on Calendly for: ${lagosTime(bookedFor)} (Lagos time)`] : [],
           "",
-          `Business Health Check #${check.id}, completed ${lagosTime(check.completedAt)} (Lagos time).`
+          `Business Health Check #${check2.id}, completed ${lagosTime(check2.completedAt)} (Lagos time).`
         ].join("\n")
       });
     }
@@ -12153,16 +12230,16 @@ async function listBusinessChecks(db) {
     db.select(CHECK_COLUMNS).from(businessChecks).orderBy(desc8(businessChecks.createdAt)).limit(500),
     latestInvitationStatuses(db)
   ]);
-  const payments2 = await paymentStatusesByCheck(db);
-  return (await syncCalendlyBookings(db, rows)).map((row) => ({ ...row, invitationStatus: invitations.get(row.id) ?? null, payments: payments2.get(row.id) ?? {} }));
+  const payments3 = await paymentStatusesByCheck(db);
+  return (await syncCalendlyBookings(db, rows)).map((row) => ({ ...row, invitationStatus: invitations.get(row.id) ?? null, payments: payments3.get(row.id) ?? {} }));
 }
 async function listDiscoveryCalls(db) {
   const [rows, invitations] = await Promise.all([
     db.select(CHECK_COLUMNS).from(businessChecks).where(isNotNull2(businessChecks.callRequestedAt)).orderBy(desc8(businessChecks.callRequestedAt)).limit(500),
     latestInvitationStatuses(db)
   ]);
-  const payments2 = await paymentStatusesByCheck(db);
-  return (await syncCalendlyBookings(db, rows)).map((row) => ({ ...row, invitationStatus: invitations.get(row.id) ?? null, payments: payments2.get(row.id) ?? {} }));
+  const payments3 = await paymentStatusesByCheck(db);
+  return (await syncCalendlyBookings(db, rows)).map((row) => ({ ...row, invitationStatus: invitations.get(row.id) ?? null, payments: payments3.get(row.id) ?? {} }));
 }
 var parseJson2 = (text4) => {
   if (!text4) return null;
@@ -12202,12 +12279,12 @@ async function getBusinessCheckDetail(db, businessCheckId) {
   const { resultJson, summaryJson, ...fields } = row;
   const result = parseJson2(resultJson);
   const summary = parseJson2(summaryJson);
-  const [invitations, stageHistory, payments2, report] = await Promise.all([latestInvitationStatuses(db), stageHistoryFor(db, row.id), paymentsOf(db, row.id), reportOf(db, row.id)]);
+  const [invitations, stageHistory, payments3, report] = await Promise.all([latestInvitationStatuses(db), stageHistoryFor(db, row.id), paymentsOf(db, row.id), reportOf(db, row.id)]);
   return {
     ...fields,
     invitationStatus: invitations.get(row.id) ?? null,
     stageHistory,
-    payments: payments2,
+    payments: payments3,
     report,
     summary: summary ? { found: summary.found, think: summary.think, next: summary.next, offerings: summary.offerings ?? [] } : null,
     outline: result?.outline ?? null,
@@ -12224,47 +12301,47 @@ async function stageHistoryFor(db, businessCheckId) {
 }
 var SETTABLE_STAGES = PIPELINE_STAGES.filter((stage) => stage !== "lead" && stage !== "won");
 async function setPipelineStage(db, input) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq22(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError23({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
-  if (check.pipelineStage === input.stage) return { success: true, pipelineStage: check.pipelineStage, changed: false };
-  if (check.pipelineStage === "won") throw new TRPCError23({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
+  const check2 = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq22(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  if (!check2) throw new TRPCError23({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  if (check2.pipelineStage === input.stage) return { success: true, pipelineStage: check2.pipelineStage, changed: false };
+  if (check2.pipelineStage === "won") throw new TRPCError23({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ pipelineStage: input.stage }).where(eq22(businessChecks.id, check.id));
+    await tx.update(businessChecks).set({ pipelineStage: input.stage }).where(eq22(businessChecks.id, check2.id));
     await recordAudit(tx, {
       action: "business_check_stage_changed",
       actorUserId: input.actorUserId,
-      targetEmail: check.email,
-      details: { businessCheckId: check.id, from: check.pipelineStage, to: input.stage, ...input.note ? { note: input.note } : {} }
+      targetEmail: check2.email,
+      details: { businessCheckId: check2.id, from: check2.pipelineStage, to: input.stage, ...input.note ? { note: input.note } : {} }
     });
   });
   return { success: true, pipelineStage: input.stage, changed: true };
 }
 async function requestedCheck(db, businessCheckId) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq22(businessChecks.id, businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError23({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
-  if (!check.callRequestedAt) throw new TRPCError23({ code: "BAD_REQUEST", message: "This Business Health Check has not asked for a Discovery Call." });
-  if (check.pipelineStage === "won") throw new TRPCError23({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call outcome can no longer be changed here." });
-  return check;
+  const check2 = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq22(businessChecks.id, businessCheckId)).limit(1))[0];
+  if (!check2) throw new TRPCError23({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  if (!check2.callRequestedAt) throw new TRPCError23({ code: "BAD_REQUEST", message: "This Business Health Check has not asked for a Discovery Call." });
+  if (check2.pipelineStage === "won") throw new TRPCError23({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call outcome can no longer be changed here." });
+  return check2;
 }
 async function scheduleDiscoveryCall(db, input) {
-  const check = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt }).from(businessChecks).where(eq22(businessChecks.id, input.businessCheckId)).limit(1))[0];
-  if (!check) throw new TRPCError23({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
-  if (!check.completedAt) throw new TRPCError23({ code: "BAD_REQUEST", message: "This Business Health Check is not finished yet, so there is no Discovery Call to schedule." });
-  if (check.pipelineStage === "won") throw new TRPCError23({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call can no longer be changed here." });
+  const check2 = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt }).from(businessChecks).where(eq22(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  if (!check2) throw new TRPCError23({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
+  if (!check2.completedAt) throw new TRPCError23({ code: "BAD_REQUEST", message: "This Business Health Check is not finished yet, so there is no Discovery Call to schedule." });
+  if (check2.pipelineStage === "won") throw new TRPCError23({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call can no longer be changed here." });
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, callRequestedAt: check.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check.pipelineStage, "call_booked") }).where(eq22(businessChecks.id, check.id));
-    await recordAudit(tx, { action: "business_check_call_scheduled", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, scheduledFor: input.scheduledFor.toISOString(), ...check.callRequestedAt ? {} : { requested: "by_hand" } } });
+    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, callRequestedAt: check2.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check2.pipelineStage, "call_booked") }).where(eq22(businessChecks.id, check2.id));
+    await recordAudit(tx, { action: "business_check_call_scheduled", actorUserId: input.actorUserId, targetEmail: check2.email, details: { businessCheckId: check2.id, scheduledFor: input.scheduledFor.toISOString(), ...check2.callRequestedAt ? {} : { requested: "by_hand" } } });
   });
   return { success: true };
 }
 var CALL_OUTCOMES = ["fit", "refer", "decline"];
 var OUTCOME_STAGE = { fit: "opportunity", refer: "referred", decline: "lost" };
 async function recordDiscoveryCallOutcome(db, input) {
-  const check = await requestedCheck(db, input.businessCheckId);
+  const check2 = await requestedCheck(db, input.businessCheckId);
   const stage = OUTCOME_STAGE[input.outcome];
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ pipelineStage: stage }).where(eq22(businessChecks.id, check.id));
-    await recordAudit(tx, { action: "business_check_call_outcome", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, outcome: input.outcome, from: check.pipelineStage, to: stage } });
+    await tx.update(businessChecks).set({ pipelineStage: stage }).where(eq22(businessChecks.id, check2.id));
+    await recordAudit(tx, { action: "business_check_call_outcome", actorUserId: input.actorUserId, targetEmail: check2.email, details: { businessCheckId: check2.id, outcome: input.outcome, from: check2.pipelineStage, to: stage } });
   });
   return { success: true, pipelineStage: stage };
 }
@@ -12291,7 +12368,7 @@ async function businessSupportDb() {
 import { desc as desc9 } from "drizzle-orm";
 var prospects = adminPermissionProcedure("manage_client_onboarding");
 var clients = adminPermissionProcedure("view_all_businesses");
-var payments = adminPermissionProcedure("manage_payments");
+var payments2 = adminPermissionProcedure("manage_payments");
 var businessSupportRouter = router({
   /** Metadata-only recent Business Support mail state for authorised internal support. */
   emailDeliveryStatus: prospects.query(async () => {
@@ -12326,18 +12403,18 @@ var businessSupportRouter = router({
   setStage: prospects.input(z13.object({ businessCheckId: z13.number().int().positive(), stage: z13.enum(SETTABLE_STAGES), note: z13.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => setPipelineStage(await businessSupportDb(), { ...input, note: input.note || void 0, actorUserId: ctx.user.id })),
   clients: clients.query(async () => listClients(await businessSupportDb())),
   /** Emails the owner the Paystack payment link for the Full Report or the Business Review (again, if already sent). */
-  requestPayment: payments.input(z13.object({ businessCheckId: z13.number().int().positive(), item: z13.enum(PAYMENT_ITEMS) })).mutation(async ({ ctx, input }) => requestPayment(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
+  requestPayment: payments2.input(z13.object({ businessCheckId: z13.number().int().positive(), item: z13.enum(PAYMENT_ITEMS) })).mutation(async ({ ctx, input }) => requestPayment(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
   /** The sent full report, rebuilt from the owner's stored answers, as a PDF. */
   downloadReport: prospects.input(z13.object({ businessCheckId: z13.number().int().positive() })).mutation(async ({ input }) => adminDownloadReport(await businessSupportDb(), input.businessCheckId)),
   /** Sends the owner a new link to the Report Intake. */
-  resendReportLink: payments.input(z13.object({ businessCheckId: z13.number().int().positive() })).mutation(async ({ ctx, input }) => resendReportLink(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
+  resendReportLink: payments2.input(z13.object({ businessCheckId: z13.number().int().positive() })).mutation(async ({ ctx, input }) => resendReportLink(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
   /** Sends the "payment received" email again for a confirmed Business Review payment. */
-  resendPaymentConfirmation: payments.input(z13.object({ paymentRequestId: z13.number().int().positive() })).mutation(async ({ ctx, input }) => resendPaymentConfirmation(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
+  resendPaymentConfirmation: payments2.input(z13.object({ paymentRequestId: z13.number().int().positive() })).mutation(async ({ ctx, input }) => resendPaymentConfirmation(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
   /**
    * A fallback only: payments confirm themselves when Paystack confirms them. For a payment Paystack shows as paid that
    * has not confirmed itself here. For the Business Review this wins the business and sends the invitation.
    */
-  confirmPayment: payments.input(z13.object({ paymentRequestId: z13.number().int().positive(), note: z13.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => confirmPayment(await businessSupportDb(), { ...input, note: input.note || void 0, actorUserId: ctx.user.id }))
+  confirmPayment: payments2.input(z13.object({ paymentRequestId: z13.number().int().positive(), note: z13.string().trim().max(500).optional() })).mutation(async ({ ctx, input }) => confirmPayment(await businessSupportDb(), { ...input, note: input.note || void 0, actorUserId: ctx.user.id }))
 });
 
 // server/routers/fullReport.ts

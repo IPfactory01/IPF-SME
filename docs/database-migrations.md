@@ -134,3 +134,25 @@ what the client does, the terms; draft, sent or accepted, with the version and t
 Paste `drizzle/supabase/apply-0019-engagement-agreements.sql` into the Supabase SQL Editor and press Run; it stops,
 changing nothing, unless exactly `0000` to `0018` are recorded.
 
+
+**`0020` and deployment order.** Paying engagement fees online: `engagement_fee_lines.paidReference` (the Paystack
+payment that paid a fee) and `engagements.opensOnPayment` (false for every existing engagement). Additive. **Apply it
+before deploying.** Paste `drizzle/supabase/apply-0020-engagement-fee-payments.sql` into the Supabase SQL Editor and
+press Run; it stops, changing nothing, unless exactly `0000` to `0019` are recorded.
+
+**`0021` and deployment order.** Staff WhatsApp numbers (`users.whatsapp`, `users.whatsappConsentAt`), the Digital
+Marketer and Content Producer roles, and a shared-folder link that answers an item (`engagement_tasks.responseLink`).
+Additive. **Apply it before deploying.** Paste
+`drizzle/supabase/apply-0021-staff-whatsapp-marketing-roles-response-link.sql` into the Supabase SQL Editor and press
+Run; it stops, changing nothing, unless exactly `0000` to `0020` are recorded.
+
+**`0022` and deployment order** (written 10 November 2026; not yet applied). The payments ledger (batch F, Backend
+schema section 2): `payments`, `payment_refunds`, `document_counters`, four types, and five columns on
+`engagement_fee_lines` (`invoiceNumber` and the write-off). Its own SQL then carries today's payments into the ledger:
+one paid payment for each fee marked paid and each confirmed payment request, with receipt numbers in the order they
+were paid and invoice numbers for the paid fees; each statement skips what is already there. Nothing that exists
+changes. **Apply it just before deploying the ledger code, not earlier**: until that code is live, saving an
+engagement's fees deletes and re-adds every fee, which the ledger refuses for a fee that has a payment, so Save the fees
+would fail for any engagement with a paid fee. Paste `drizzle/supabase/apply-0022-payments-ledger.sql` into the Supabase
+SQL Editor and press Run; it stops, changing nothing, unless exactly `0000` to `0021` are recorded and no `payments`
+table exists. The push follows at once.

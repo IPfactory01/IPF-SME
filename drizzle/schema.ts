@@ -1,9 +1,10 @@
 import { AGREEMENT_STATUSES } from "../shared/agreement";
 import { sql } from "drizzle-orm";
-import { type AnyPgColumn, boolean, date, index, integer, numeric, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, boolean, check, date, index, integer, numeric, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { PIPELINE_STAGES } from "../shared/businessCheck/pipeline";
 import { PAYMENT_ITEMS, PAYMENT_STATUSES } from "../shared/payments";
 import { CONTENT_KINDS, CONTENT_STATUSES, ENGAGEMENT_TYPES } from "../shared/engagementTypes";
+import { DOCUMENT_NUMBER_KINDS, LEDGER_PAYMENT_METHODS, LEDGER_PAYMENT_MODES, LEDGER_PAYMENT_STATUSES } from "../shared/ledger";
 import {
   CLIENT_ACCESS_LEVELS,
   ENGAGEMENT_AUDIENCES,
@@ -1130,7 +1131,10 @@ export const engagementAgreements = pgTable("engagement_agreements", {
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
 });
 
-/** The fees of an engagement (0019), in whole naira, each with when it is due and when it was paid. */
+/**
+ * The fees of an engagement (0019), in whole naira, each with when it is due and when it was paid. With the ledger
+ * (0022) a fee's payments are rows in `payments`; `paidAt` then means paid in full, and only the ledger writes it.
+ */
 export const engagementFeeLines = pgTable("engagement_fee_lines", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
@@ -1138,12 +1142,109 @@ export const engagementFeeLines = pgTable("engagement_fee_lines", {
   amount: integer("amount").notNull(),
   dueOn: date("dueOn"),
   paidAt: timestamp("paidAt", { withTimezone: true }),
-  /** The Paystack attempt that paid it (0020), so a repeat confirmation is recognised and a second payment flagged. */
+  /**
+   * The Paystack attempt that paid it (0020), so a repeat confirmation is recognised and a second payment flagged.
+   * Retired with the ledger (batch F): the payments hold every reference; kept so older rows read.
+   */
   paidReference: varchar("paidReference", { length: 64 }),
   sortOrder: integer("sortOrder").default(0).notNull(),
+  /** Its invoice (0022), shown as TS-IN-000001 (`invoiceNumberLabel`): given the first time it is billed, kept for good. */
+  invoiceNumber: integer("invoiceNumber").unique(),
+  /** A write-off (0022, F2): what was left, when, by which Partner or Super Admin and why; cleared if it is reversed. */
+  writtenOffAmount: integer("writtenOffAmount"),
+  writtenOffAt: timestamp("writtenOffAt", { withTimezone: true }),
+  writtenOffByUserId: integer("writtenOffByUserId").references(() => users.id),
+  writeOffNote: varchar("writeOffNote", { length: 500 }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
 }, table => [index("engagement_fee_lines_engagement_idx").on(table.engagementId)]);
+
+// ---- The payments ledger (migration 0022; R37, batch F): App flow 3.1, Backend schema section 2. Vocabulary:
+// shared/ledger.ts. Additive: no existing column changes. It is applied just before the ledger code ships, because the
+// code from before it deletes and re-adds an engagement's fees on every save, which a payment's link to its fee refuses.
+
+export const paymentsMethodEnum = pgEnum("payments_method", LEDGER_PAYMENT_METHODS);
+export const paymentsStatusEnum = pgEnum("payments_status", LEDGER_PAYMENT_STATUSES);
+export const paymentsModeEnum = pgEnum("payments_mode", LEDGER_PAYMENT_MODES);
+
+/**
+ * One row per attempt to pay and per payment recorded by hand, against one fee or (until F3 and R13) one payment
+ * request, never both. A status moves in one conditional statement, so Paystack's webhook and the return page together
+ * record one payment and one receipt. Never deleted: money recorded by hand by mistake is cancelled; money Paystack
+ * took is refunded.
+ */
+export const payments = pgTable("payments", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  feeLineId: integer("feeLineId").references(() => engagementFeeLines.id),
+  paymentRequestId: integer("paymentRequestId").references(() => paymentRequests.id),
+  method: paymentsMethodEnum("method").notNull(),
+  status: paymentsStatusEnum("status").default("started").notNull(),
+  /** Whole naira: what was asked, for an attempt; what was received, once paid. */
+  amount: integer("amount").notNull(),
+  /** The Paystack attempt (TS-F-000123-1a2b3c4d); empty for money recorded by hand. */
+  paystackReference: varchar("paystackReference", { length: 64 }).unique(),
+  mode: paymentsModeEnum("mode"),
+  /** The day the money arrived, in Lagos. */
+  receivedOn: date("receivedOn"),
+  /** When it was confirmed by Paystack or recorded by hand. */
+  paidAt: timestamp("paidAt", { withTimezone: true }),
+  /** Its receipt, shown as TS-RC-000001 (`receiptNumberLabel`): given once it is paid, and kept if it is cancelled. */
+  receiptNumber: integer("receiptNumber").unique(),
+  /** For money recorded by hand, the bank's reference or how it came; for one that needs a look, why. */
+  note: varchar("note", { length: 500 }),
+  /** Who recorded it by hand; empty for Paystack, a system actor. */
+  recordedByUserId: integer("recordedByUserId").references(() => users.id),
+  cancelledAt: timestamp("cancelledAt", { withTimezone: true }),
+  cancelledByUserId: integer("cancelledByUserId").references(() => users.id),
+  cancelReason: varchar("cancelReason", { length: 500 }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [
+  index("payments_fee_line_idx").on(table.feeLineId),
+  index("payments_payment_request_idx").on(table.paymentRequestId),
+  index("payments_status_idx").on(table.status),
+  check("payments_one_owner", sql`("feeLineId" is null) <> ("paymentRequestId" is null)`),
+  check("payments_amount_positive", sql`"amount" > 0`),
+]);
+
+export type LedgerPayment = typeof payments.$inferSelect;
+
+/**
+ * Money returned against one payment (F2), recorded once it has gone back through Paystack or the bank. A payment's
+ * refunds, less cancelled ones, never add up to more than it. Never deleted: one recorded by mistake is cancelled.
+ */
+export const paymentRefunds = pgTable("payment_refunds", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  paymentId: integer("paymentId").notNull().references(() => payments.id),
+  amount: integer("amount").notNull(),
+  refundedOn: date("refundedOn").notNull(),
+  reason: varchar("reason", { length: 500 }).notNull(),
+  /** Paystack's refund reference, or the bank's. */
+  reference: varchar("reference", { length: 100 }),
+  recordedByUserId: integer("recordedByUserId").notNull().references(() => users.id),
+  cancelledAt: timestamp("cancelledAt", { withTimezone: true }),
+  cancelledByUserId: integer("cancelledByUserId").references(() => users.id),
+  cancelReason: varchar("cancelReason", { length: 500 }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [
+  index("payment_refunds_payment_idx").on(table.paymentId),
+  check("payment_refunds_amount_positive", sql`"amount" > 0`),
+]);
+
+export const documentCountersKindEnum = pgEnum("document_counters_kind", DOCUMENT_NUMBER_KINDS);
+
+/**
+ * The last receipt number and the last invoice number given (0022). A number is taken in the same transaction as the
+ * payment or fee it numbers, by inserting or raising its kind's row, whose lock is held until that transaction ends; so
+ * numbers are unique, in order and without gaps.
+ */
+export const documentCounters = pgTable("document_counters", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  kind: documentCountersKindEnum("kind").notNull().unique(),
+  lastNumber: integer("lastNumber").default(0).notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+});
 
 export const SERVICE_REQUEST_STATUSES = ["open", "done", "declined"] as const;
 export const serviceRequestsStatusEnum = pgEnum("service_requests_status", SERVICE_REQUEST_STATUSES);

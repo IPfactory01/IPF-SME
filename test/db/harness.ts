@@ -87,10 +87,19 @@ export function pgErrorCode(error: unknown): string | undefined {
 let counter = 0;
 
 /**
+ * Values a table's minimal row needs to pass its check constraints, unless a caller overrides them: a payment belongs to
+ * a fee or a payment request, never both (`payments_one_owner`, 0022), so its fixture leaves the request empty.
+ */
+const FIXTURE_DEFAULTS: Record<string, Record<string, unknown>> = {
+  payments: { paymentRequestId: null },
+};
+
+/**
  * Inserts a minimal valid row, first inserting a parent row for every foreign key (recursively), and returns it.
  * Lets generic per-table tests cover tables that reference others.
  */
-export async function insertFixture(db: AnyPgDb, table: PgTable, overrides: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+export async function insertFixture(db: AnyPgDb, table: PgTable, given: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+  const overrides = { ...FIXTURE_DEFAULTS[getTableConfig(table).name], ...given };
   const values = fixtureRow(table, overrides);
   for (const foreignKey of getTableConfig(table).foreignKeys) {
     const reference = foreignKey.reference();
@@ -116,6 +125,7 @@ export function fixtureRow(table: PgTable, overrides: Record<string, unknown> = 
       case "PgText": row[column.name] = `text-${unique}`; break;
       case "PgVarchar": row[column.name] = `v-${unique}`.slice(0, (column as unknown as { length?: number }).length ?? 255); break;
       case "PgTimestamp": row[column.name] = new Date(); break;
+      case "PgDateString": row[column.name] = "2026-01-01"; break;
       case "PgEnumColumn": row[column.name] = column.enumValues![0]; break;
       default: throw new Error(`fixtureRow: unsupported column type ${column.columnType} on ${column.name}`);
     }

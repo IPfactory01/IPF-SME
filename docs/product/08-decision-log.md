@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Batch F's design is approved (App flow 3.1). Only Finance and the Super Admin record money by hand (`manage_payments`, as decided on 6 November for payments), so the engagement team's Paid tick goes with batch F | ET, 10 November 2026 |
 | Writing off a fee is for a Partner or the Super Admin only (a new permission, `write_off_fees`, with batch F) | ET, 10 November 2026 |
 | A fee can be paid in parts by hand as well as online; Paystack then charges only what is left | ET, 10 November 2026 |
 | A payment recorded by hand by mistake is cancelled, never deleted: it stays on the record, marked cancelled, with its receipt number | ET, 10 November 2026 |

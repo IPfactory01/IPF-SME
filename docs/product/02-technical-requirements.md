@@ -53,14 +53,15 @@ docs/product/     These six documents
   five connections per function instance (`DATABASE_POOL_MAX` overrides it), each query abandoned after 8 seconds so a
   stuck statement cannot hold the instance; migrations use `MIGRATION_DATABASE_URL` (session pooler, port 5432).
   `DATABASE_SSL_CA` pins the certificate.
-- Schema in `drizzle/schema.ts` (60 tables and 77 enums on 10 November 2026); explained in [5. Backend schema](05-backend-schema.md).
+- Schema in `drizzle/schema.ts` (63 tables and 81 enums on 10 November 2026, with 0022); explained in [5. Backend schema](05-backend-schema.md).
 - Changes: edit the schema → `pnpm db:generate` → review the SQL → apply. Migrations 0006 and 0007 were applied with a
   guarded SQL script that records the Drizzle hash, so `drizzle.__drizzle_migrations` stays in step
   (`docs/database-migrations.md`). Every migration from 0012 has its own guarded script,
   `drizzle/supabase/apply-00NN-*.sql`, which `test/db/applyScripts.db.test.ts` checks against the migration (every
   statement, the hash and the guard); ET runs it and replies "00NN done". A backfill goes in the migration's own SQL, so
   the script and `pnpm db:migrate` give the same database. Applied through 0021. `pnpm db:verify` checks a database
-  against the schema, read-only.
+  against the schema, read-only. 0022 (the payments ledger) is written and is applied just before the ledger
+  code ships (`docs/database-migrations.md`).
 - Never edit the database by hand. Migrations, major authentication changes and destructive changes go on a dedicated
   branch.
 
@@ -95,12 +96,12 @@ example, exists only in Resend (shown once at creation) and in Vercel.
 | **Paystack** | Paying online for the Full Report, the Business Review and each engagement fee (R11, `server/feePayments.ts`, references `TS-F-`; concept note §11) | Hosted checkout by redirect, so no Paystack script runs on the site and the security policy does not change (`server/paystack.ts`, `server/onlinePayment.ts`). `POST /transaction/initialize` with the amount in kobo from the payment request, `currency: "NGN"`, a reference per attempt (`TS-R-000123-` plus eight hex characters, because Paystack refuses a reference twice), `callback_url` `{APP_ORIGIN}/pay/return` and metadata (payment request, check, item). `GET /transaction/verify/:reference` before anything is confirmed. Bearer secret key; 10-second limit per call. The signed webhook `POST /api/paystack/webhook` (HMAC-SHA512 of the raw body with the secret key, compared in constant time) and the return page both confirm through `confirmPayment`, once. Paystack is the only way to pay (12 October): no bank details and no proof of payment; "Confirm by hand" stays as a fallback for a payment Paystack shows as paid that has not confirmed itself | Built. Takes payments once `PAYSTACK_SECRET_KEY` is in Vercel and the webhook address is set in Paystack. JUMP-era `initializePaystack` and `verifyPaystack` (`server/routers/registration.ts`) are separate and stay closed |
 | **Google (OAuth, Calendar, Gmail)** | JUMP-era sign-in, sessions and mailbox sync | `server/_core/oauth.ts`, `server/calendar.ts`, `server/workspaceMailbox.ts` | Legacy |
 
-### The payments ledger (batch F; designed 10 November 2026 for ET's approval, to build)
+### The payments ledger (batch F; approved 10 November 2026, to build)
 
 What it does is in the App flow (section 3.1) and the tables are in the Backend schema (section 2, migration 0022).
 How it is built:
 
-- **One module owns money,** `server/payments.ts`. Every write to `payments`, `payment_refunds`, `document_counters` and
+- **One module owns money,** `server/ledger.ts` (`server/payments.ts` stays the payment requests). Every write to `payments`, `payment_refunds`, `document_counters` and
   a fee's paid and write-off columns goes through it, in one transaction that first locks the fee's row
   (`SELECT … FOR UPDATE`), so two payments cannot both take what is left. The lock lives inside the transaction, so it
   works through the transaction pooler.
@@ -109,8 +110,11 @@ How it is built:
 - **Once only.** A Paystack reference is unique. The webhook and the return page call the same settle, which moves an
   attempt from `started` to `paid` only where it is still `started`; the receipt email's idempotency key names the
   payment, so it is sent once. A confirmation for a reference with no row (an attempt opened before 0022) creates it.
-- **Numbers without gaps.** A receipt or invoice number is taken by updating `document_counters` in the same transaction
-  as what it numbers, so a save that fails gives its number back.
+- **Numbers without gaps.** A receipt or invoice number is taken by inserting or raising its row in `document_counters`
+  (`insert … on conflict (kind) do update … returning`) in the same transaction as what it numbers, so a save that
+  fails gives its number back.
+- **Release order.** 0022 is applied just before the ledger code ships, and the push follows at once; a fee marked paid
+  by the old code in the minutes between is carried over by the ledger code the first time it touches that fee.
 - **Nothing is deleted.** Cancelling a payment or a refund, and reversing a write-off, are updates that keep who, when
   and why, each with its audit row.
 - **Tests** (PGlite, `test/db/`): every rule in App flow 3.1, including two part payments that settle a fee, the webhook

@@ -63,4 +63,79 @@ describe("the Supabase apply scripts", () => {
     expect(columns.rows.map(row => `${row.table_name}.${row.column_name}`)).toEqual(["engagement_tasks.responseLink", "users.whatsapp", "users.whatsappConsentAt"]);
     await pg.close();
   }, 60_000);
+
+  /**
+   * 0022 (the payments ledger, batch F) carries today's payments into the ledger in its own SQL, so the apply script and
+   * `pnpm db:migrate` give the same database. Fictional records, written as the code before the ledger writes them.
+   */
+  describe("0022: the payments ledger", () => {
+    const seed = `
+      insert into users ("openId", "name") values ('local:ana', 'Ana Example'), ('local:bo', 'Bo Example');
+      insert into business_checks ("publicToken", "fullName", "email", "stage", "answersJson") values
+        ('check-0022-a', 'Ada Example', 'ada@example.com', 'won', '{}'),
+        ('check-0022-b', 'Ben Example', 'ben@example.com', 'lead', '{}');
+      insert into payment_requests ("businessCheckId", "item", "amountNaira", "reference", "status", "confirmedAt", "confirmedByUserId", "note") values
+        (1, 'full_report', 100000, 'TS-R-000001', 'confirmed', '2026-11-01T10:00:00Z', null, 'TEST: Paid online with Paystack, reference TS-R-000001-1a2b3c4d'),
+        (1, 'current_state', 300000, 'TS-CS-000002', 'confirmed', '2026-11-03T23:30:00Z', 2, 'Bank transfer 123'),
+        (2, 'full_report', 100000, 'TS-R-000003', 'requested', null, null, null);
+      insert into engagements ("contactName") values ('Ada Example');
+      insert into engagement_fee_lines ("engagementId", "label", "amount", "dueOn", "paidAt", "paidReference") values
+        (1, 'Business Review: half to start', 300000, '2026-11-02', '2026-11-02T09:00:00Z', 'TS-F-000001-aabbccdd'),
+        (1, 'Business Review: half on delivery', 300000, null, '2026-11-05T22:30:00Z', null),
+        (1, 'Month 2', 470000, '2026-12-02', null, null);
+      insert into admin_access_audit_events ("actorUserId", "action", "details") values
+        (null, 'engagement_fee_paid_online', '{"engagementId":1,"feeLineId":1,"amount":300000,"via":"paystack","paystackReference":"TS-F-000001-aabbccdd","mode":"test"}'),
+        (1, 'engagement_fee_paid', '{"engagementId":1,"feeLineId":2,"paid":true,"amount":300000}'),
+        (2, 'engagement_fee_paid', '{"engagementId":1,"feeLineId":12,"paid":true,"amount":300000}');
+    `;
+    const ledger = async (pg: PGlite) => (await pg.query<Record<string, unknown>>('select "feeLineId", "paymentRequestId", method::text, status::text, amount, "paystackReference", mode::text, "receivedOn"::text as "receivedOn", "receiptNumber", note, "recordedByUserId" from payments order by "receiptNumber"')).rows;
+
+    it("carries each paid fee and confirmed payment request over once, numbered in the order they were paid", async () => {
+      const pg = await databaseAt(22);
+      await pg.exec(seed);
+      await pg.exec(readFileSync(join(SCRIPTS, scriptFor(22)!), "utf8"));
+      expect(await ledger(pg)).toEqual([
+        // The Full Report on Paystack's test keys: its reference and mode come from its note.
+        { feeLineId: null, paymentRequestId: 1, method: "paystack", status: "paid", amount: 100000, paystackReference: "TS-R-000001-1a2b3c4d", mode: "test", receivedOn: "2026-11-01", receiptNumber: 1, note: null, recordedByUserId: null },
+        // A fee paid on Paystack: its reference from the fee, its mode from the audit row.
+        { feeLineId: 1, paymentRequestId: null, method: "paystack", status: "paid", amount: 300000, paystackReference: "TS-F-000001-aabbccdd", mode: "test", receivedOn: "2026-11-02", receiptNumber: 2, note: null, recordedByUserId: null },
+        // Confirmed by hand at 23:30 UTC: the 4th in Lagos; the team's note and who confirmed it are kept.
+        { feeLineId: null, paymentRequestId: 2, method: "other", status: "paid", amount: 300000, paystackReference: null, mode: null, receivedOn: "2026-11-04", receiptNumber: 3, note: "Bank transfer 123", recordedByUserId: 2 },
+        // A fee ticked Paid: who ticked it comes from the audit row for that fee, never a fee with a longer id.
+        { feeLineId: 2, paymentRequestId: null, method: "other", status: "paid", amount: 300000, paystackReference: null, mode: null, receivedOn: "2026-11-05", receiptNumber: 4, note: "Marked paid before the ledger", recordedByUserId: 1 },
+      ]);
+      const invoices = await pg.query<{ id: number; invoiceNumber: number | null }>('select id, "invoiceNumber" from engagement_fee_lines order by id');
+      expect(invoices.rows).toEqual([{ id: 1, invoiceNumber: 1 }, { id: 2, invoiceNumber: 2 }, { id: 3, invoiceNumber: null }]);
+      const counters = await pg.query<{ kind: string; lastNumber: number }>('select kind::text as kind, "lastNumber" from document_counters order by 1');
+      expect(counters.rows).toEqual([{ kind: "invoice", lastNumber: 2 }, { kind: "receipt", lastNumber: 4 }]);
+      await pg.close();
+    }, 60_000);
+
+    it("adds nothing when the carry-over runs again", async () => {
+      const pg = await databaseAt(22);
+      await pg.exec(seed);
+      await pg.exec(readFileSync(join(SCRIPTS, scriptFor(22)!), "utf8"));
+      const before = await ledger(pg);
+      const statements = statementsOf(readFileSync(join(MIGRATIONS, `${journal.entries[22]!.tag}.sql`), "utf8"));
+      for (const statement of statements.filter(text => /^-- |^UPDATE |^INSERT INTO "document_counters"/.test(text))) await pg.exec(statement);
+      expect(await ledger(pg)).toEqual(before);
+      const counters = await pg.query<{ lastNumber: number }>('select "lastNumber" from document_counters order by kind::text');
+      expect(counters.rows.map(row => row.lastNumber)).toEqual([2, 4]);
+      await pg.close();
+    }, 60_000);
+
+    it("refuses a payment with two owners or none, a zero amount, and removing a fee that has a payment", async () => {
+      const pg = await databaseAt(22);
+      await pg.exec(seed);
+      await pg.exec(readFileSync(join(SCRIPTS, scriptFor(22)!), "utf8"));
+      const code = (statement: string) => pg.exec(statement).then(() => null, (error: { code?: string }) => error.code);
+      expect(await code(`insert into payments ("feeLineId", "paymentRequestId", method, amount) values (3, 1, 'other', 1000)`)).toBe("23514");
+      expect(await code(`insert into payments (method, amount) values ('other', 1000)`)).toBe("23514");
+      expect(await code(`insert into payments ("feeLineId", method, amount) values (3, 'other', 0)`)).toBe("23514");
+      expect(await code(`insert into payments ("feeLineId", method, amount, "receiptNumber") values (3, 'other', 1000, 4)`)).toBe("23505");
+      // Why 0022 waits for the ledger code: today's Save the fees deletes and re-adds every fee.
+      expect(await code(`delete from engagement_fee_lines where "engagementId" = 1`)).toBe("23503");
+      await pg.close();
+    }, 60_000);
+  });
 });

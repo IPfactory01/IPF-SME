@@ -77,7 +77,7 @@ after a missed date (D6, R51): the room says so from the first late day, and the
 Today's clients: **Marcelle (Digital marketing)** pays at 30, 60 and 90 days from her kickoff, as agreed with her; her
 lead sets those dates by hand in the engagement's Fees (I4).
 
-### 3.1 Recording money: the ledger (R37, batch F; designed 10 November 2026 for ET's approval, to build)
+### 3.1 Recording money: the ledger (R37, batch F; approved by ET on 10 November 2026, to build)
 
 Every naira that comes in is one **payment** against one fee: a Paystack transaction, or money that came another way
 and was recorded by hand. Until the Business Review and the Full Report become fees (F3, R13), a payment can instead be
@@ -98,8 +98,9 @@ reversed; each keeps who did it, when and why.
 | Reverse a write-off | A Partner or the Super Admin | A reason | What was written off is owed again | — |
 
 Today the engagement team ticks **Paid** in Fees, which can open a room or lift a pause without the money. From batch F
-only Finance and the Super Admin record money, in line with the 6 November rule that recording payments stays with
-`manage_payments`; the team sees each payment, and tells Finance when a client says they have paid another way.
+only Finance and the Super Admin record money (ET, 10 November 2026), in line with the 6 November rule that recording
+payments stays with `manage_payments`; the team sees each payment, and tells Finance when a client says they have paid
+another way.
 
 **The rules.**
 

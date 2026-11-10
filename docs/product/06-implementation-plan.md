@@ -28,7 +28,7 @@ counting time spent waiting on a decision or a migration.
 
 Migrations are applied through **0021**. Release 0 still waits on the timed phone run with ET or Marcelle (B6) and the
 team's WhatsApp numbers (I1); batch C was built on 10 November. In Release 1, batch E is built and live (payment terms
-by what is bought, the pause, Digital Marketing on the menu); batch F is designed and waits on ET's approval. The document tests (`test/docs/productDocs.test.ts`) fail the build
+by what is bought, the pause, Digital Marketing on the menu); batch F is designed and approved, and its migration 0022 is written on the branch. The document tests (`test/docs/productDocs.test.ts`) fail the build
 if a page, a table, a server action, a permission, a project role, an email or an audit action is added without being
 documented.
 
@@ -121,8 +121,9 @@ client told at three (D6). Batch E needs no migration: the terms come from what 
 **Needs first:** K5 (counsel adds to the Terms who collects payments, Enzo Krypton & Co., and the pause period).
 
 One migration, **0022**, for batch F (`payments`, `payment_refunds`, `document_counters` and five columns on the fees,
-with the backfill in its own SQL; Backend schema, section 2), written on the branch with its guarded apply script; ET
-runs it and replies "0022 done".
+with the backfill in its own SQL; Backend schema, section 2), written on the branch with its guarded apply script on
+10 November 2026. ET runs it just before the ledger code ships, not earlier (until then Save the fees deletes and re-adds
+every fee, which the ledger refuses for a paid fee), and replies "0022 done"; the push follows at once.
 
 ### Batch E: payment terms by what is bought (no migration, about 3 days): built 10 November 2026
 
@@ -136,8 +137,8 @@ runs it and replies "0022 done".
 
 ### Batch F: one payment model (about 4 days)
 
-Designed on 10 November 2026 for ET's approval, before any code: what each action does and who may do it is in the App
-flow (section 3.1), the tables in the Backend schema (section 2). Built in the order F1, F2, F4, then F3, so the ledger,
+Designed and approved by ET on 10 November 2026, before any code: what each action does and who may do it is in the App
+flow (section 3.1), the tables in the Backend schema (section 2). Migration 0022 was written the same day. Built in the order F1, F2, F4, then F3, so the ledger,
 refunds and Finance land before the Business Review moves onto fees.
 
 | # | Task | Builds | Acceptance and test | Preview or input |
@@ -155,8 +156,8 @@ refunds and Finance land before the Business Review moves onto fees.
 | G2 | *Work on {engagement} has resumed*, to the owner and the lead, when a payment lifts a pause | R51 | Email test; the document test checks the email is in the App flow | — |
 | G3 | **Alerts.** A Paystack notification the server could not process (answered 500, so Paystack sends it again) emails the office at once, once per reference; a client email that failed shows at the top of the console's first tab until someone opens it. A daily summary joins the scheduled jobs in Release 2 | R42 | PGlite or unit: the failing webhook emails the office once; console UI test for the failed-email line | — |
 
-**Release 1 in total:** about 10 build days. The order: E (built 10 November, with no migration), then F once ET has
-approved its design and applied 0022 (F1, F2, F4, then F3), then G. Each batch is previewed at phone and laptop width
+**Release 1 in total:** about 10 build days. The order: E (built 10 November, with no migration), then F (approved and
+0022 written on 10 November; F1, F2, F4, then F3, with 0022 applied just before it ships), then G. Each batch is previewed at phone and laptop width
 before ET says "push it".
 
 ## 5. Later releases (outline)

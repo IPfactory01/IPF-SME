@@ -2,7 +2,8 @@
 
 **What gets built, in what order, and how we know each piece is done.** Rewritten on 9 November 2026 to follow the
 release order in the [PRD](01-prd.md) (section 10a). It replaces the October plan (phases 0 to 5), which is complete or
-carried into the releases (section 6).
+carried into the releases (section 7). Updated on 10 November 2026: Release 0 is built but for batch C, and Release 1 is
+planned in full (section 4).
 
 **The rule (PRD, rule 8):** nothing is built before it is in the PRD and the [App flow](03-app-flow.md). This plan turns
 each release into tasks; the code follows the tasks. A new need goes into the PRD and the App flow first, then here.
@@ -13,7 +14,7 @@ counting time spent waiting on a decision or a migration.
 
 ---
 
-## 1. Where we are (9 November 2026)
+## 1. Where we are (10 November 2026)
 
 | Live on `main` | Requirements |
 |---|---|
@@ -21,10 +22,14 @@ counting time spent waiting on a decision or a migration.
 | Opening an engagement of any type with its fee schedule; paying online with Paystack: the Full Report, the Business Review and every engagement fee, each with its own pay link; the first payment opens the room | R7, R8, R10, R11, R24 (in advance) |
 | The client's room (its third version): Overview, Content, Work Plan, Data Request, Sessions, Business, Founder, Deliverables, Payments; many projects per client; the owner's staff seat; Preview as client; asking for the next fix | R14, R15, R17 to R23, R25, R28 (asking) |
 | The admin console in five tabs; Finance; Team by level with two-step sign-in; branded email from IP Factory | R29 to R32 |
+| Release 0 (9 November): every screen says what is happening on a weak connection; the room on a phone; footage and voice notes by link; WhatsApp to the right person; the Digital Marketer and Content Producer roles; Getting started and What we will do; taking a file back | R43 to R47, R61, R69, R71 |
+| Release 0 (9 November): speed and search: each public page rendered at build time and loading its own code (Home 0.9 s on a throttled phone, was 4.3 s); one main heading and one share card per page | R70, R73 |
 | The design review fixes: the room fits a phone, readable health labels, 44 px taps (B1, B4, B10 to B12) | Design brief |
 
-Migrations are applied through **0020**. The document tests (`test/docs/productDocs.test.ts`) fail the build if a page,
-a table, a server action, a permission, a project role, an email or an audit action is added without being documented.
+Migrations are applied through **0021**. Release 0 still waits on batch C (I2 and I3), the timed phone run with ET or
+Marcelle (B6) and the team's WhatsApp numbers (I1). The document tests (`test/docs/productDocs.test.ts`) fail the build
+if a page, a table, a server action, a permission, a project role, an email or an audit action is added without being
+documented.
 
 ## 2. Before and alongside the build (no code)
 
@@ -37,7 +42,7 @@ a table, a server action, a permission, a project role, an email or an audit act
 | I1 | Marcelle's Digital Marketer and Content Producer: names, and each one's WhatsApp number with their agreement to show it to clients (K11) | ET | R44, R45 (Release 0, batch B) | Waiting |
 | I2 | The legal name a client sees on their bank statement (decision D1, with counsel, K5) | ET | R72 (Release 0, batch C) | Open |
 | I3 | IP Factory's office WhatsApp number, for pay pages and links with no lead yet | ET | R72; R44 for the office | Waiting |
-| I4 | Marcelle's fee dates moved to 30, 60 and 90 days from kickoff, and saved in Fees | ET or the lead | Marcelle's Payments tab | Waiting |
+| I4 | Marcelle's fee dates moved to 30, 60 and 90 days from kickoff, and saved in Fees | ET or the lead | Marcelle's Payments tab | Waiting; or set by her terms with Release 1 (E6) |
 
 ## 3. Release 0: the first client's experience
 
@@ -61,7 +66,7 @@ one line; D can run alongside.
 | A4 | **The admin console** uses them in every tab and in the engagement record | R69 | UI tests per tab | Built |
 | A5 | **The room on a phone:** the header shrinks to one line (the project and its day) once the owner scrolls or leaves the Overview; the tab bar scrolls the selected tab into view and fades at the edge where more tabs sit | R71 | UI tests: the compact header off the Overview; the selected tab asked into view on every change; checked at 390 px in Chromium (the review's script) | Built |
 
-### Batch B: the Digital marketing room (migration 0021, about 8 days)
+### Batch B: the Digital marketing room (migration 0021, about 8 days): built 9 November 2026, but the timed phone run (B6)
 
 | # | Task | Builds | Acceptance and test | Preview or input |
 |---|---|---|---|---|
@@ -75,7 +80,7 @@ one line; D can run alongside.
 | B8 | **What we will do** (not "Your plan", which the method uses for the plan handed over at the end): a read-only card on Overview and in the owner's welcome email: what we will do (the service's or type's description), the team, the start date and each fee with its date (the payment terms join it with R36). A change to the fees after the owner has the room is recorded and emails the owner the new schedule | R47 | UI test for the card; email test; the document test checks the new email is in the App flow | Built (*Your fees have changed: {engagement}*) |
 | B9 | **Removing a file:** the client removes a file they sent until the team has matched it; the team removes any file with a reason; the stored object is deleted and the removal recorded (`engagement_file_removed`) | R61 | DB tests: a client cannot remove a matched file or another client's; the object is deleted; the audit action is declared and documented (document test) | Built |
 
-### Batch C: paying with confidence (about 2 days)
+### Batch C: paying with confidence (about 2 days): waits on I2 and I3
 
 | # | Task | Builds | Acceptance and test | Input |
 |---|---|---|---|---|
@@ -93,13 +98,66 @@ one line; D can run alongside.
 **Release 0 in total:** about 22 build days. The order: A, then B once 0021 is applied and I1 is in, then C, with D
 alongside. Each batch is previewed at phone and laptop width before ET says "push it".
 
-## 4. Later releases (outline)
+## 4. Release 1: payment terms and one payment model
 
-Each release is planned in full, like section 3, before it starts.
+**Requirements:** R36, R24 (in arrears), R37, R42, R51 (the pause screen and the resumed email), the groundwork for
+R53. The App flow already sets out the behaviour: payment terms (section 3), the Fee and Payment states (section 5),
+journey step 7b (work paused) and the emails (section 6). **Moves:** cash collected on its date; Finance's numbers trusted
+without a spreadsheet; no client surprised by a pause.
+
+**Done when:** Marcelle's engagement is in arrears, approved by a partner, with her fees due 30, 60 and 90 days after
+her kickoff and her room open; a new in-advance client sees only the first fee until it is paid; Finance counts an
+in-arrears fee as owed only from its date and reads one ledger, in which every naira paid traces to one fee and one
+Paystack reference, or to a payment recorded by hand with who recorded it; a fee seven days late on an in-arrears
+engagement pauses the work, with a banner in the room saying what to pay; a refund is recorded against the payment it
+returns; and a Paystack notification the server could not process reaches the office the same day.
+
+**Needs first:** D4 (the most IP Factory carries in arrears: a number of engagements or an amount owed); D6 (work pauses
+seven days after a missed date, the client told at three); K5 (counsel confirms the Terms state the pause period, since
+they allow suspension but give no period). The day-3 notice and the *paused* email fire on a date, not on an action,
+so they come with the scheduled reminders in Release 2.
+
+One migration, **0022**, written first on the branch with its guarded apply script; ET runs it and replies "0022 done";
+then E, F and G, each previewed before `main`.
+
+### Batch E: payment terms (migration 0022, about 4 days)
+
+| # | Task | Builds | Acceptance and test | Preview or input |
+|---|---|---|---|---|
+| E1 | **Migration 0022:** `engagements.paymentTerms` (`in_advance`, the default, or `in_arrears`), `paymentTermsApprovedByUserId` and `paymentTermsApprovedAt`; the `payments` ledger (F1) with its receipt numbers, and an invoice number on each fee (R53); additive only, guarded to run only on a database at 0021 | R36, R37, R53 | PGlite tests for each column and constraint; the apply-script test, as for 0021; `pnpm db:verify` after it is applied | ET runs it |
+| E2 | **Fee dates follow the terms and the kickoff date.** In advance: a fixed price on the kickoff date; monthly fees on day 0, 30 and 60; the Six-Week Fix at its start, mid-point and result. In arrears: monthly fees on day 30, 60 and 90; any other fee on the date the lead sets. Filled in when the engagement opens, and worked out again when the terms or the kickoff date change while nothing is paid | R36, R24 | Unit tests for every type and service under both terms; PGlite: opening an engagement dates its fees; a paid fee is never moved | — |
+| E3 | **In arrears needs a partner.** The lead chooses it on **New engagement** or the engagement's Fees; it waits for a partner's approval (new permission `approve_payment_terms`: Partner, and the Super Admin), recorded with who and when (audit `engagement_terms_approved`); whoever chose it cannot approve it; an approval that would take IP Factory past the arrears limit (D4) is refused, with the total named; until approved the engagement stays in advance | R36 | PGlite: a lead is refused, a partner approves, the limit refuses, the audit row; the document test checks the permission and the audit action are documented | D4 |
+| E4 | **The room follows the terms.** In advance, only the first fee until it is paid (built); in arrears, the room is open from the kickoff and the Payments tab shows each fee with its date. What we will do and the welcome email name the terms | R36, R47 | Room UI tests for both terms; the welcome email test | Preview |
+| E5 | **Finance by terms.** An in-arrears fee is *Scheduled* before its date, owed from it and late after it; the totals show paid, owed, late and scheduled | R36 | Finance PGlite test for both terms | Preview |
+| E6 | **Marcelle's engagement** set to in arrears and approved in the console, her three dates worked out from her kickoff date; never by hand in the database | R36, I4 | Checked with ET on the live site | ET or Lewis |
+
+### Batch F: one payment model (about 4 days)
+
+| # | Task | Builds | Acceptance and test | Preview or input |
+|---|---|---|---|---|
+| F1 | **The ledger (`payments`).** One row for each attempt to pay a fee: on Paystack (started, then paid or failed, with its reference and mode) or by hand (a bank transfer or cash: amount, date, a note and who recorded it, which replaces the bare *Paid* tick). A fee is paid when its paid payments add up to its amount, so a fee can be paid in parts by hand. Each paid payment gets the next receipt number (`TS-RC-000001`) and each fee an invoice number, ready for the PDFs of R53 | R37, R53 | PGlite: opening Paystack records the attempt; the webhook and the return page together record one payment and one receipt; two part payments settle a fee; a second Paystack payment for a paid fee *needs a look*; receipt numbers are unique and in order | — |
+| F2 | **Refunds.** After the team refunds in Paystack, the refund is recorded against the payment it returns (amount, date, reason, who); the fee is owed again unless the lead writes it off, which is also recorded | R37, R51 | PGlite: a refund reopens the fee; a write-off closes it; the audit rows; Finance shows both | — |
+| F3 | **The Business Review moves onto the ledger.** Sending its payment details opens its engagement awaiting the first payment, with its fee, so it is paid through the fee pay page like any fee; paying it still moves the check to *Won*, opens the room and invites the owner. The Full Report records each payment in the same ledger until orders arrive (Release 3); payment requests from before stay as history | R37 | PGlite: the check-to-Business-Review route end to end; *Won* on payment; the owner's invitation; an older request still reads correctly | Preview of the changed admin step |
+| F4 | **Finance reads one source:** money in from the ledger, money owed from the fees; every naira paid opens to its fee and its reference | R37 | Finance test: the totals equal the ledger | Preview |
+
+### Batch G: when a fee is late, and alerts (about 2 days)
+
+| # | Task | Builds | Acceptance and test | Preview or input |
+|---|---|---|---|---|
+| G1 | **Work paused (in arrears).** Seven days after an unpaid fee's date (D6) the engagement shows *Paused* to the team, on the list and the record, and the room shows a banner saying what to pay to continue, with **Pay**; the room stays readable and uploads stay open. Paying lifts it at once. Moving the fee's date gives more time, lifts it and tells the owner (built: *Your fees have changed*) | R51 | Unit: the pause date from the terms and the dates; room UI: the banner and **Pay**; PGlite: a payment or a new date lifts it | D6; preview |
+| G2 | *Work on {engagement} has resumed*, to the owner and the lead, when a payment lifts a pause | R51 | Email test; the document test checks the email is in the App flow | — |
+| G3 | **Alerts.** A Paystack notification the server could not process (answered 500, so Paystack sends it again) emails the office at once, once per reference; a client email that failed shows at the top of the console's first tab until someone opens it. A daily summary joins the scheduled jobs in Release 2 | R42 | PGlite or unit: the failing webhook emails the office once; console UI test for the failed-email line | — |
+
+**Release 1 in total:** about 10 build days. The order: E1, then E2 to E6 once 0022 is applied and D4 is in, then F,
+then G once D6 is confirmed. Each batch is previewed at phone and laptop width before ET says "push it".
+
+## 5. Later releases (outline)
+
+Each release is planned in full, like sections 3 and 4, before it starts.
 
 | # | Release | Requirements | Needs first | Size |
 |---|---|---|---|---|
-| 1 | Payment terms and one payment model | R36, R37, R24, R42; the pause screen of R51; the groundwork for R53 | Decisions D4 (arrears limit) and D6 (when work pauses); a migration for each engagement's terms and refunds | M |
+| 1 | Payment terms and one payment model | R36, R37, R24, R42; the pause screen of R51; the groundwork for R53 | Planned in full in section 4 | M |
 | 2 | Fee, Data Request and Session reminders | R12, R16, R48, R57, R59, R64 | A scheduled job on Vercel; the sending domain verified (K2); quiet hours | M |
 | 3 | Buy now and the trust layer | R13, R38, R35 | Paystack live (K1) | M |
 | 4 | Close, the Day-30 Review and the next fix | R26, R27, R28 | A migration for the close record | M |
@@ -110,7 +168,7 @@ Each release is planned in full, like section 3, before it starts.
 
 S is under a week, M one to two weeks, L more.
 
-## 5. How each piece is delivered
+## 6. How each piece is delivered
 
 1. **In the documents first:** the requirement is in the PRD and the App flow before the code (rule 8).
 2. **Tests first for access:** a client cannot reach another client's records; a person outside an engagement cannot
@@ -121,7 +179,7 @@ S is under a week, M one to two weeks, L more.
    the changed screens; `main` only on ET's word.
 5. **The documents change in the same commit** as the code; the document tests enforce it.
 
-## 6. Carried from the October plan
+## 7. Carried from the October plan
 
 The October phases built the room, the Sessions, the Data Request and the check-ins. What was left is carried here:
 

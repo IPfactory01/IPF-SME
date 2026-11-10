@@ -742,8 +742,11 @@ var BRAND = {
    * on their statement (R72).
    */
   paymentsCollectedBy: "Enzo Krypton & Co.",
-  /** The name to look for on Paystack's page and the bank statement: Enzo Krypton's Paystack business name. */
-  paymentsStatementName: "Enzo Krypton",
+  /**
+   * The name to look for on Paystack's page and the bank statement: "Enzo", the name on Enzo Krypton's Paystack account
+   * (ET, 10 November 2026); it also matches a statement that prints the full name.
+   */
+  paymentsStatementName: "Enzo",
   /**
    * IP Factory's office WhatsApp (ET, 10 November 2026), in international form: the pay pages' WhatsApp button, and any
    * link where no team member is named yet (R72, R44). Shown to every visitor of a pay page.

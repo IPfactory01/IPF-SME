@@ -403,9 +403,9 @@ Ordered by what each moves first: cash, then growth, then hours, then retention.
 | D1 | Which legal entity contracts with clients, and who owns the P&L | Name the entity once, in the Terms and on invoices. Payments are collected by Enzo Krypton & Co. through its Paystack account (ET, 10 November 2026), as the pay pages say; the Terms do not yet name who collects, so counsel adds that line with K5 | ET |
 | D2 | Full Session transcripts in the room | Reviewed notes by default; the transcript on request (as built) | ET |
 | D3 | Ongoing support after a fix: content and price | Offer a Monthly Service at close | ET |
-| D4 | How much payment in arrears IP Factory will carry | In arrears only for clients a partner approves; at most [number] engagements or [₦ amount] owed in arrears at any time | ET |
+| D4 | How much payment in arrears IP Factory will carry | Decided (ET, 10 November 2026): no limit, because no engagement chooses its own terms. Terms follow what is bought: a product is paid in advance; a service is paid in milestones on one standard schedule (to agree); Digital marketing is paid monthly | ET |
 | D5 | The analytics tool | Google Analytics 4 linked to Search Console for the journey from search to page; payment and engagement measures from our own database | ET |
-| D6 | When work pauses for a late fee | Seven days after the due date, with the client told at three days. The Terms allow suspension for unresolved payment issues but set no period; counsel should confirm the period is stated to clients (K5) | ET |
+| D6 | When work pauses for a late fee | Decided (ET, 10 November 2026): seven days after the due date, with the client told at three days. The Terms allow suspension for unresolved payment issues but set no period; counsel adds the period with K5 | ET |
 
 ## 12. Glossary
 

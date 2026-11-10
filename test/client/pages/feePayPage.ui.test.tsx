@@ -74,7 +74,9 @@ describe("paying an engagement fee", () => {
     renderPage();
     const before = within(screen.getByRole("region", { name: "Before you pay" }));
     expect(before.getByText(/Enzo Krypton & Co\., the firm behind IP Factory, through Paystack/)).toBeTruthy();
-    expect(before.getByText("Enzo Krypton").tagName).toBe("SPAN");
+    // The name on the Paystack account, which a statement printing the full name also matches.
+    expect(before.getByText(/Look for/).textContent).toContain("Look for Enzo on Paystack's page and on your bank statement.");
+    expect(before.getByText("Enzo").tagName).toBe("SPAN");
     expect(before.getByText("By email, as soon as Paystack confirms your payment.")).toBeTruthy();
     // What it is for is the heading above the box; neither it nor the receipt is said a second time.
     expect(screen.getAllByText("Month 2 service fee, payable before day 31")).toHaveLength(1);

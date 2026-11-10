@@ -8,6 +8,9 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Payment terms follow what is bought, so there is no arrears limit (D4): products are paid in advance; services are paid in milestones on one standard schedule across services, still to agree; Digital marketing is paid monthly | ET, 10 November 2026 |
+| Work pauses seven days after a missed due date, with the client told at three days (D6) | ET, 10 November 2026 |
+| The name on Enzo Krypton's Paystack account is "Enzo": the pay pages tell a payer to look for it | ET, 10 November 2026 |
 | Client payments are collected by Enzo Krypton & Co., the firm behind IP Factory, through its own Paystack account, and every pay page says so before Pay; IP Factory's office WhatsApp (+234 810 160 3638) is the pay pages' fallback when no team member is named (R72) | ET, 10 November 2026 |
 | Completeness is checked, not remembered: a coverage matrix built from the code (every procedure, audit action and table) is run at every review; its 13 gaps (numbered C1 to C17) become R58 to R68, and C1 (the Specialist's added-to-an-engagement step) is fixed in the App flow and on the board | ET, 9 November 2026 |
 | Drift fails the build: the document tests fail when a server action is missing from the coverage matrix, a permission, project role or email from the App flow, or an audit action from the Backend schema (and the code may record only the audit actions it declares) | ET, 9 November 2026 |

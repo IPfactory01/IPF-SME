@@ -112,9 +112,13 @@ Paystack reference, or to a payment recorded by hand with who recorded it; a fee
 engagement pauses the work, with a banner in the room saying what to pay; a refund is recorded against the payment it
 returns; and a Paystack notification the server could not process reaches the office the same day.
 
-**Needs first:** D4 (the most IP Factory carries in arrears: a number of engagements or an amount owed); D6 (work pauses
-seven days after a missed date, the client told at three); K5 (counsel confirms the Terms state the pause period, since
-they allow suspension but give no period). The day-3 notice and the *paused* email fire on a date, not on an action,
+**Decided on 10 November (ET), which changes batch E:** there is no arrears limit, because no engagement chooses its
+own terms (D4): a product is paid in advance, a service in milestones on one standard schedule across services, and
+Digital marketing monthly. E2 and E3 are re-planned once the milestone schedule is agreed: the partner's approval and the
+limit go, and the fees follow the schedule. Work pauses seven days after a missed date, the client told at three (D6).
+
+**Needs first:** the standard milestone schedule for services; K5 (counsel adds the pause period to the Terms, since they
+allow suspension but give no period, and names Enzo Krypton & Co. as the collector). The day-3 notice and the *paused* email fire on a date, not on an action,
 so they come with the scheduled reminders in Release 2.
 
 One migration, **0022**, written first on the branch with its guarded apply script; ET runs it and replies "0022 done";

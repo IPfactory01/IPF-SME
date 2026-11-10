@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Request, Response } from "express";
 import { applySecurityHeaders } from "@server/security";
 import { manusPluginsFor } from "../../vite.config";
@@ -46,8 +46,25 @@ describe("transport security on the static routes", () => {
 describe("the inline script that CSP blocked", () => {
   it("is the Manus runtime, and builds made on Vercel leave it out (no unsafe-inline needed)", () => {
     expect(manusPluginsFor({ VERCEL: "1" })).toEqual([]);
-    expect(manusPluginsFor({})).toHaveLength(2);
-    expect(manusPluginsFor({ VERCEL: "" })).toHaveLength(2);
+    expect(manusPluginsFor({})).toHaveLength(3);
+    expect(manusPluginsFor({ VERCEL: "" })).toHaveLength(3);
+  });
+
+  it("leaves Manus's source-file markers (data-loc) out of the site Vercel builds, so visitors never see the code's layout", async () => {
+    const names = (plugins: unknown) => (plugins as { name?: string }[]).flat().map(plugin => plugin?.name);
+    expect(names(manusPluginsFor({}))).toContain("vite-plugin-jsx-loc");
+    const previous = process.env.VERCEL;
+    process.env.VERCEL = "1";
+    try {
+      vi.resetModules();
+      const site = (await import("../../vite.config")).default as { plugins: unknown };
+      expect(names(site.plugins)).not.toContain("vite-plugin-jsx-loc");
+      expect(names(site.plugins)).not.toContain("vite-plugin-manus-runtime");
+    } finally {
+      if (previous === undefined) delete process.env.VERCEL;
+      else process.env.VERCEL = previous;
+      vi.resetModules();
+    }
   });
 
   it("is not part of the application's own HTML template", () => {

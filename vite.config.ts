@@ -172,12 +172,14 @@ function analyticsPlugin(): Plugin {
  * injects a large INLINE script (`<script id="manus-runtime">`) into index.html. That is fine on Manus but is blocked
  * by the production Content-Security-Policy on Vercel (`script-src 'self' ...`, deliberately without 'unsafe-inline'),
  * so builds made on Vercel (`VERCEL` is set, including `vercel build`) leave them out instead of weakening the policy.
+ * The jsx-loc plugin, Manus's visual editor's, writes each element's source file and line (`data-loc`) into the HTML
+ * and code; on Vercel that only adds weight and shows the code's layout to every visitor, so it is left out too.
  */
 export function manusPluginsFor(env: NodeJS.ProcessEnv): Plugin[] {
-  return env.VERCEL ? [] : [vitePluginManusRuntime(), vitePluginManusDebugCollector()];
+  return env.VERCEL ? [] : [jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), ...manusPluginsFor(process.env), analyticsPlugin()];
+const plugins = [react(), tailwindcss(), ...manusPluginsFor(process.env), analyticsPlugin()];
 
 export default defineConfig({
   plugins,

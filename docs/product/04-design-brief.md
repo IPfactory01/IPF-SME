@@ -334,7 +334,8 @@ The room follows document 07 in its third version (the "ClickUp" layout):
   the programme; approve or ask for changes); Work Plan by week; Data Request by section with the drop box; Sessions;
   Business and Founder (from the check or the Full Report); Deliverables; Payments (each fee with its date, reference and
   Pay button; a fee paid in part shows what is paid and what is left, with Pay for the rest, and each payment's receipt
-  number, amount and day, batch F1). Which views show, and who sees them, is in the App flow (8.4).
+  number, amount and day, batch F1; a fee a Partner closed reads *Nothing more to pay*, and the summary shows what is
+  *Not charged*, F2). Which views show, and who sees them, is in the App flow (8.4).
 - **The stage band:** done stages in `brand` with a tick, the current one in `brand-plum`, those to come in a neutral;
   the four figures under it link to the view behind them. People share one avatar tone; in the Data Request only high
   priority and an overdue date carry colour; item references (A1, B3) are tabular.

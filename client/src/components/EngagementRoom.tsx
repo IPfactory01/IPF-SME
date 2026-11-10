@@ -399,6 +399,8 @@ function PaymentsView({ room }: { room: Room }) {
   const total = room.fees.reduce((sum, fee) => sum + fee.amount, 0);
   const paid = room.fees.reduce((sum, fee) => sum + fee.paidAmount, 0);
   const left = room.fees.reduce((sum, fee) => sum + fee.left, 0);
+  // What a Partner closed without payment, in plain words, so the summary still adds up to the total.
+  const notCharged = Math.max(0, total - paid - left);
   return (
     <div className="grid items-start gap-5 lg:grid-cols-3 [&>*]:min-w-0">
       <section aria-label="Fees" className={`${CARD} lg:col-span-2`}>
@@ -436,6 +438,7 @@ function PaymentsView({ room }: { room: Room }) {
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between"><dt className="text-ink-muted">Total</dt><dd className="font-semibold tabular-nums">{formatNaira(total)}</dd></div>
           <div className="flex justify-between"><dt className="text-ink-muted">Paid</dt><dd className="tabular-nums text-health-clear-strong">{formatNaira(paid)}</dd></div>
+          {notCharged > 0 && <div className="flex justify-between"><dt className="text-ink-muted">Not charged</dt><dd className="tabular-nums">{formatNaira(notCharged)}</dd></div>}
           <div className="flex justify-between"><dt className="text-ink-muted">To pay</dt><dd className="tabular-nums">{formatNaira(left)}</dd></div>
         </dl>
         <p className="mt-3 text-xs text-ink-muted">Paystack takes card, bank transfer or USSD. A receipt, with its number, comes by email for every payment.</p>

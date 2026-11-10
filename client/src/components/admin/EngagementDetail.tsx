@@ -802,7 +802,7 @@ function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { na
                 <input aria-label={`Amount ${index + 1}`} type="number" min={1} className={FIELD} disabled={!data.can.edit} value={line.amount || ""} onChange={event => setLine(index, { amount: Math.round(Number(event.target.value) || 0) })} />
                 <input aria-label={`Due ${index + 1}`} type="date" className={FIELD} disabled={!data.can.edit} value={line.dueOn ?? ""} onChange={event => setLine(index, { dueOn: event.target.value || null })} />
                 <span className="flex flex-wrap items-center gap-x-2 text-xs text-ink-muted">
-                  {status && <span className={stored?.left === 0 ? "text-health-clear-strong" : undefined}>{status}</span>}
+                  {status && <span className={stored?.left === 0 && !stored.writtenOff ? "text-health-clear-strong" : undefined}>{status}</span>}
                   {stored && stored.left > 0 && !unsaved && data.online && data.can.sendLink && <button type="button" className="font-semibold text-brand underline" disabled={sendLink.isPending} onClick={() => sendLink.mutate({ feeLineId: stored.id })}>Send link</button>}
                   {stored && stored.left > 0 && !unsaved && data.can.recordPayments && recording !== stored.id && <button type="button" className="font-semibold text-brand underline" onClick={() => setRecording(stored.id)}>Record a payment</button>}
                   {data.can.edit && !stored?.billed && <button type="button" className="text-danger underline" aria-label={`Remove fee ${index + 1}`} onClick={() => setDraft(current.filter((_, at) => at !== index))}>Remove</button>}

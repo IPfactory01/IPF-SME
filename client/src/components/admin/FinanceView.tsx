@@ -81,7 +81,7 @@ export default function FinanceView() {
                       <td className={TD}>{row.dueOn ? formatDate(`${row.dueOn}T12:00:00Z`) : "No date set"}</td>
                       <td className={`${TD} text-right tabular-nums`}>{formatNaira(row.amount)}</td>
                       <td className={TD}>
-                        <span className={row.late ? "font-semibold text-danger" : row.paid ? "text-health-clear" : "text-ink-muted"}>{row.late && row.paidAmount > 0 ? `Late: ${status}` : status}</span>
+                        <span className={row.late ? "font-semibold text-danger" : row.paid && !row.writtenOff ? "text-health-clear" : "text-ink-muted"}>{row.late && row.paidAmount > 0 ? `Late: ${status}` : status}</span>
                         <span className="mt-1 flex flex-wrap gap-x-2 text-xs">
                           {counted.length > 0 && <button type="button" className="font-semibold text-brand underline" aria-expanded={open.has(row.id)} onClick={() => toggle(row.id)}>{open.has(row.id) ? "Hide payments" : `Payments (${counted.length})`}</button>}
                           {can.record && row.left > 0 && recording !== row.id && <button type="button" className="font-semibold text-brand underline" onClick={() => setRecording(row.id)}>Record a payment</button>}

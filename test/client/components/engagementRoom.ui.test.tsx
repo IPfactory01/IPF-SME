@@ -1113,10 +1113,12 @@ describe("payments", () => {
     expect(list.getByRole("link", { name: "Pay ₦270,000" }).getAttribute("href")).toBe("/pay/fee/11/abcdefghijklmnopqrstuvwxyz012345");
     expect(list.getByText("Nothing more to pay")).toBeTruthy();
     expect(list.queryByText(/written off/i)).toBeNull();
+    // The summary adds up: what was paid, what was closed without payment ("Not charged", never the team's word), what is left.
     const summary = within(screen.getByRole("region", { name: "Summary" }));
     expect(summary.getByText("₦940,000")).toBeTruthy();
     expect(summary.getByText("₦200,000")).toBeTruthy();
-    expect(summary.getByText("₦270,000")).toBeTruthy();
+    expect(summary.getByText("Not charged").nextElementSibling!.textContent).toBe("₦470,000");
+    expect(summary.getByText("To pay").nextElementSibling!.textContent).toBe("₦270,000");
   });
 
   it("lists a service's two halves: the first paid, the second due seven days after delivery until it has a date, and no pay step before then (R36)", () => {

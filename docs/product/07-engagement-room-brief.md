@@ -111,5 +111,5 @@ The owner meets money at three moments, and the room answers each where they alr
 
 Built with batch F1 (App flow 3.1): a fee paid in part shows *₦150,000 of ₦300,000 paid, ₦150,000 left* and **Pay**
 asks only for what is left; each payment shows its receipt number, amount and day, and any refund against it; a fee a
-Partner has closed shows *Nothing more to pay*. The team's words (write-off, needs a look, cancelled) never reach
+Partner has closed shows *Nothing more to pay*, and the summary adds what is *Not charged*. The team's words (write-off, needs a look, cancelled) never reach
 the room.

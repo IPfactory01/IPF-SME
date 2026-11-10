@@ -162,7 +162,7 @@ paid product starts with a call or the check until R13 is built.
 | Six-Week Fix (Margin, Sales, Cash and Pricing, Delegation and Structure) | Six-Week Fix | ₦1,500,000 | Six weeks | Talk to an expert |
 | Monthly Accounts and Cash Report | Monthly Service | ₦600,000 a quarter | By the 10th of each month | Talk to an expert |
 | Monthly Adviser Review | Monthly Service | ₦450,000 a quarter | One Session a month | Talk to an expert |
-| **Digital marketing** (ET, 6 November 2026; the structure of the first client's engagement) | Monthly service fee, for 90 days, with milestones and a quarter review | ₦470,000 a month, in advance (day 0, 30, 60) or in arrears (day 30, 60, 90) | 15 reels, 5 posts and 20 stories a month; nothing published without the owner's approval | Talk to an expert |
+| **Digital marketing** (ET, 6 November 2026; the structure of the first client's engagement) | Monthly service fee, for 90 days, with milestones and a quarter review | ₦470,000 a month, paid before each month starts (day 0, 30 and 60; R36) | 15 reels, 5 posts and 20 stories a month; nothing published without the owner's approval | Talk to an expert |
 
 **Delivery promise:** we confirm the delivery date once the records are complete; if we cannot deliver as agreed, we make
 it right in line with the Terms (a refund, a service credit or an agreed alternative). The site never promises an
@@ -288,7 +288,7 @@ Fix it. See the shift." The other five are requirements.
 | R21 | Specialists hand in team items and drafts; the lead shares them | M | A Specialist's file reaches no client until the lead shares it | Built |
 | R22 | Deliverables approved by a lead before the client sees them; the owner signs off | M | Server-enforced | Built |
 | R23 | The one number and the weekly check-in (five questions, the reading, hours by role, AI used) | M | Recorded one week at a time, in order | Built |
-| R24 | A new Digital marketing engagement's fees fill in at ₦470,000 for each of three months, dated by its payment terms | M | The team only checks the dates | Built for in advance; in arrears comes with R36 |
+| R24 | A new Digital marketing engagement's fees fill in at ₦470,000 for each of three months, dated day 0, 30 and 60 from the kickoff (R36) | M | The team only checks the dates | Built |
 | R25 | Preview as client: staff see the room exactly as the owner does, read only, logged | S | The preview equals the owner's view | Built |
 
 ### Stage 9: Close and next

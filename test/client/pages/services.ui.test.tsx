@@ -112,9 +112,15 @@ describe("a service page (/services/:slug), told as a story", () => {
   it("says a service agreed on a call is paid half to start and half on delivery, and a product bought online before we start (R36)", () => {
     at("/services/business-plan");
     expect(screen.getByText("₦375,000 to start and ₦375,000 on delivery, by transfer or card.")).toBeTruthy();
+    expect(screen.getByText("Twenty minutes, by phone or video. We send the link for the first half after the call.")).toBeTruthy();
+    expect(screen.getByText("A free 20-minute call. If it fits, we send the link for the first half after it.")).toBeTruthy();
     cleanup();
+    // While online ordering is closed a product starts with the call too, and is still paid in full before we start.
     at("/services/13-week-cash-flow-forecast");
     expect(screen.getByText("Paid before we start, by transfer or card.")).toBeTruthy();
+    expect(screen.getByText("Twenty minutes, by phone or video. We send your payment link after the call.")).toBeTruthy();
+    expect(screen.getByText("A free 20-minute call. If it fits, we send your payment link after it.")).toBeTruthy();
+    expect(screen.queryByText(/first half/)).toBeNull();
   });
 
   it("labels a service that answers several needs by its way to buy only, and lets keyboards reach wide sample charts", () => {

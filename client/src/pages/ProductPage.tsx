@@ -13,7 +13,7 @@ import { EYEBROW } from "@/pages/ServicesPage";
 import { stepName } from "@shared/businessCheck/routing";
 import { storyOf } from "@shared/productStories";
 import {
-  NEED_DETAILS, nextProduct, paymentTerms, priceLabel, priceTerms, productById, productBySlug, servicePath, startMode, WAY_DETAILS, type PriceModel, type Product,
+  isService, NEED_DETAILS, nextProduct, paymentTerms, priceLabel, priceTerms, productById, productBySlug, servicePath, startMode, WAY_DETAILS, type PriceModel, type Product,
 } from "@shared/products";
 import { ArrowRight, Check, Minus } from "lucide-react";
 import React from "react";
@@ -41,8 +41,9 @@ export function stepsFor(product: Product, price: PriceModel): { title: string; 
     { title: "Pay by the quarter", body: priceTerms(price) },
     { title: "Every month", body: product.delivery },
   ];
+  // While online ordering is closed a product is also sold after a call, and still paid before we start (R36).
   if (mode === "after_call") return [
-    { title: "Talk to us first", body: "A free 20-minute call. If it fits, we send the link for the first half after it." },
+    { title: "Talk to us first", body: `A free 20-minute call. If it fits, we send ${isService(product) ? "the link for the first half" : "your payment link"} after it.` },
     { title: "Send your records", body: send },
     receive,
   ];

@@ -2,7 +2,7 @@
 import { LegalLink, TERMS_PATH } from "@/components/LegalLinks";
 import { DELIVERY_REMEDY, formatNaira } from "@shared/businessSupport";
 import { BRAND } from "@shared/brand";
-import { DELIVERY_PROMISE, perMonthAmount, priceLabel, startMode, type PriceModel, type Product } from "@shared/products";
+import { DELIVERY_PROMISE, isService, perMonthAmount, priceLabel, startMode, type PriceModel, type Product } from "@shared/products";
 import { ArrowRight, CalendarCheck, LockKeyhole, ShieldCheck } from "lucide-react";
 import React from "react";
 import { Link } from "wouter";
@@ -60,6 +60,7 @@ export function QuietLink({ href, children, external }: { href: string; children
 export function startNote(product: Product): string {
   const mode = startMode(product);
   if (mode === "self") return "Pay by transfer or card. The form for your records follows.";
-  if (mode === "after_call") return "Twenty minutes, by phone or video. We send your payment link after the call.";
+  // A service is paid in halves (R36); a product sold after a call is still paid in full before we start.
+  if (mode === "after_call") return `Twenty minutes, by phone or video. We send ${isService(product) ? "the link for the first half" : "your payment link"} after the call.`;
   return "Ten minutes on your phone. No card needed.";
 }

@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "crypto";
-import { and, count, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, count, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import type { Request, Response } from "express";
 import { TRPCError } from "@trpc/server";
 import {
@@ -8,7 +8,10 @@ import {
   businessMemberships,
   businesses,
   clientOnboardingInvitations,
+  engagementFeeLines,
+  engagements,
   paymentRequests,
+  payments,
   userCredentials,
   userPlatformRoles,
   users,
@@ -88,12 +91,20 @@ export function buildOnboardingEmail(input: { fullName: string; businessName: st
   };
 }
 
-/** True when the Business Review payment is confirmed. A missing payment table (migration 0006) counts as unpaid. */
+/**
+ * True when the Business Review is paid: since F3, a payment that counts on a fee of the check's engagement; before it,
+ * its confirmed payment request. A missing payment table (migration 0006) counts as unpaid.
+ */
 async function assessmentPaid(db: Pick<Database, "select">, businessCheckId: number) {
   try {
     const paid = await db.select({ id: paymentRequests.id }).from(paymentRequests)
       .where(and(eq(paymentRequests.businessCheckId, businessCheckId), eq(paymentRequests.item, "current_state"), eq(paymentRequests.status, "confirmed"))).limit(1);
-    return paid.length > 0;
+    if (paid.length > 0) return true;
+    const onFees = await db.select({ id: payments.id }).from(payments)
+      .innerJoin(engagementFeeLines, eq(payments.feeLineId, engagementFeeLines.id))
+      .innerJoin(engagements, eq(engagementFeeLines.engagementId, engagements.id))
+      .where(and(eq(engagements.businessCheckId, businessCheckId), inArray(payments.status, ["paid", "refunded"]))).limit(1);
+    return onFees.length > 0;
   } catch (error) {
     if (isUndefinedTable(error)) return false;
     throw error;
@@ -287,6 +298,31 @@ export async function latestInvitationStatuses(db: Pick<Database, "select">) {
   const latest = new Map<number, InvitationStatus>();
   for (const invitation of invitations) if (!latest.has(invitation.businessCheckId)) latest.set(invitation.businessCheckId, effectiveInvitationStatus(invitation));
   return latest;
+}
+
+/** What happened to the client account invitation when a Business Review was paid (or its room opened before payment). */
+export type CurrentStateInvitation = "sent" | "already_invited" | "has_account" | "failed";
+
+/**
+ * The Business Review starts in the client account: invite the owner unless an invitation is already out or accepted.
+ * `overrideReason` is for a room opened before payment by a Partner or the Super Admin; it is recorded with the
+ * invitation. A failure is logged and reported, never thrown: the payment it follows is already recorded.
+ */
+export async function inviteToClientAccount(db: Pick<Database, "select">, businessCheckId: number, actor: { actorUserId: number | null; createdByUserId?: number | null; via?: "paystack"; overrideReason?: string }): Promise<CurrentStateInvitation> {
+  const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt })
+    .from(clientOnboardingInvitations).where(eq(clientOnboardingInvitations.businessCheckId, businessCheckId))
+    .orderBy(desc(clientOnboardingInvitations.id)).limit(1))[0];
+  const status = latest ? effectiveInvitationStatus(latest) : null;
+  if (status === "accepted") return "has_account";
+  if (status === "pending") return "already_invited";
+  try {
+    await createOnboardingInvitation({ businessCheckId, ...actor });
+    return "sent";
+  } catch (error) {
+    if (error instanceof TRPCError && error.code === "CONFLICT") return "has_account";
+    console.error("[Onboarding] The Business Review is paid, but the client account invitation could not be sent:", error instanceof Error ? error.message : error);
+    return "failed";
+  }
 }
 
 /** Business checks an administrator can invite, with the call request and the state of their latest invitation. Prospects only. */

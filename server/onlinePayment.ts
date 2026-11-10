@@ -13,6 +13,7 @@ import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { getDb } from "./db";
 import { BUSINESS_SUPPORT_MAILBOX, deliverEmail } from "./email";
+import { businessReviewOnFees } from "./businessReview";
 import { lagosTime } from "./lagosTime";
 import { assertAmountAllowed, displayedPrices, getBusinessSupportPrice } from "./businessSupportPrices";
 import { askForFullReport } from "./fullReportRequest";
@@ -79,7 +80,8 @@ export async function onlinePaymentPage(db: Pick<Database, "select">, input: { t
     if (!ownerMayStart(check, input.item)) throw notFound();
     return { item: input.item, name: PAYMENT_ITEM_TITLES[input.item], amountNaira: getBusinessSupportPrice(input.item), totalNaira: null, reference: null, mode: paystackMode(), state: "open" as PayPageState };
   }
-  const display = effectivePaymentStatus(request);
+  // A Business Review link from before F3 stops taking payment once its link has gone out as its fee (App flow 3.2).
+  const display = request.item === "current_state" && request.status !== "confirmed" && await businessReviewOnFees(db, check.id) ? "expired" : effectivePaymentStatus(request);
   return {
     item: request.item,
     name: PAYMENT_ITEM_TITLES[request.item],
@@ -111,6 +113,9 @@ export async function startOnlinePayment(db: Database, input: { token: string; i
     if (!request) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute, or reply to your summary email." });
   }
   if (request.status === "confirmed") return { alreadyPaid: true };
+  if (request.item === "current_state" && await businessReviewOnFees(db, check.id)) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: "This payment link has passed. Pay from the link in our latest email about your Business Review." });
+  }
   // The link holds for 48 hours; sending it again opens a new window.
   if (effectivePaymentStatus(request) === "expired") {
     if (!ownerMayStart(check, request.item)) {

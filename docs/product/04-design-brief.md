@@ -386,6 +386,12 @@ be previewed as the client sees it (**Preview as client**, read only).
   under the amount. What it is for is a link: it opens the fee in the fees view with its payments open, marked on the
   brand tint. A reference stays on one line, whole, so it can be read against Paystack. On a phone each payment is two
   columns: who paid and what for, with the day, receipt and how it came under it; and the amount.
+- **The Business Review in Pipeline** (F3, App flow 3.2; `Payments.tsx`): the record's Payments shows its first half as
+  a fee, in the same box as before: a chip (**Awaiting payment** on the brand call-out, **Late** on the danger tint,
+  **Paid** on the Clear tint, **Written off** on the neutral sunken tint), the fee's name and amount, a muted line with
+  when the link went, its invoice number and the day to pay by, and the whole price on the right. Late adds what to do
+  in the danger colour. One action only, **Send the link again**: there is nothing to confirm by hand, so a muted line
+  says money that came another way is recorded on the fee in Finance.
 
 ## 13. Accessibility
 

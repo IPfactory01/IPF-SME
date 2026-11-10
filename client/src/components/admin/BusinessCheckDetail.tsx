@@ -222,7 +222,8 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
       </DetailSection>
 
       <DetailSection title="Payments">
-        <PaymentsPanel businessCheckId={check.id} payments={check.payments} report={check.report} />
+        <PaymentsPanel businessCheckId={check.id} payments={check.payments} report={check.report} businessReview={check.businessReview}
+          businessReviewSentAt={check.stageHistory.find(event => event.action === "payment_details_sent" && event.item === "current_state")?.at ?? null} />
       </DetailSection>
 
       {check.completedAt && !check.callRequestedAt && check.pipelineStage !== "won" && (

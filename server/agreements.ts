@@ -24,6 +24,7 @@ import { AGREEMENT_LIMITS, defaultFees, feeTotal, type FeeLineDraft } from "../s
 import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { canSeeFees, requireStaffEngagement, type StaffActor } from "./engagements";
+import { beginBusinessReview } from "./businessReview";
 import { feeReference, openRoomIfFirstPayment, sendFeeLink } from "./feePayments";
 import { anyCounted, namesOf, paymentView, writeOffView } from "./finance";
 import { carryOver, paymentsOfFees, refreshFeePaid, refundsOfPayments } from "./ledger";
@@ -216,5 +217,7 @@ export async function openRoomNow(db: Database, actor: StaffActor, input: { enga
   await requireStaffEngagement(db, actor, input.engagementId);
   const opened = await openRoomIfFirstPayment(db, input.engagementId);
   if (opened) await recordAudit(db, { action: "engagement_room_opened", actorUserId: actor.id, details: { engagementId: input.engagementId, before: "first payment" } });
+  // A Business Review on fees (F3): its plan loads and the owner is invited; the check moves to Won when it is paid.
+  if (opened) await beginBusinessReview(db, input.engagementId, { opened, paid: false, actorUserId: actor.id });
   return { success: true, opened } as const;
 }

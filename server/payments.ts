@@ -1,19 +1,21 @@
-import { and, desc, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-import { businessChecks, clientOnboardingInvitations, paymentRequests, type PaymentRequest } from "../drizzle/schema";
+import { businessChecks, paymentRequests, type PaymentRequest } from "../drizzle/schema";
 import { BRAND } from "../shared/brand";
 import { CURRENT_STATE, FULL_REPORT, formatNaira } from "../shared/businessSupport";
 import { resolveBusinessSupportPrice } from "./businessSupportPrices";
-import { firstHalf, secondHalf } from "../shared/products";
+import { secondHalf } from "../shared/products";
 import { effectivePaymentStatus, ONLINE_TEST_NOTICE, PAYMENT_ITEM_DETAILS, PAYMENT_WINDOW_HOURS, paymentDeadline, paymentReference, payPath, type PaymentDisplayStatus, type PaymentItem } from "../shared/payments";
 import type { PipelineStage } from "../shared/businessCheck/pipeline";
 import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { startEngagementSafely, type EngagementStart } from "./engagements";
-import { createOnboardingInvitation, effectiveInvitationStatus } from "./clientOnboarding";
-import { deliverEmail } from "./email";
+import { inviteToClientAccount, type CurrentStateInvitation } from "./clientOnboarding";
+import { BUSINESS_SUPPORT_MAILBOX, deliverEmail } from "./email";
+import { businessReviewOnFees, businessReviewStates, sendBusinessReviewLink } from "./businessReview";
 import { issueReportLink } from "./fullReport/service";
 import { lagosTime } from "./lagosTime";
+import { dayLabel } from "../shared/engagementWork";
 import { addRequestPayment } from "./ledger";
 import { receiptNumberLabel } from "../shared/ledger";
 import { paystackMode } from "./paystack";
@@ -46,8 +48,12 @@ export function onlinePaymentOffer(publicToken: string, item: PaymentItem): Onli
  * here and nothing to send back. With online payment off (no Paystack key, which /api/health reports) it says the link
  * is coming, and the team sends it again once Paystack is on.
  */
-/** `totalNaira`: the item's whole price, when the amount asked for is its first half (the Business Review, R36). */
-export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem; reference: string; deadline: Date; amountNaira: number; totalNaira?: number; online?: OnlinePaymentOffer | null }) {
+/**
+ * `totalNaira`: the item's whole price, when the amount asked for is its first half (the Business Review, R36). Since F3
+ * the Business Review's details are its fee: `payByDay` is the fee's date (its link stays open, so there is no 48-hour
+ * line), `invoice` its invoice number, and the reference and pay link are the fee's.
+ */
+export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem; reference: string; deadline?: Date; payByDay?: string | null; invoice?: string | null; amountNaira: number; totalNaira?: number; online?: OnlinePaymentOffer | null }) {
   const report = input.item === "full_report";
   const second = input.totalNaira === undefined ? 0 : secondHalf(input.amountNaira, input.totalNaira);
   const afterwards = report
@@ -66,8 +72,10 @@ export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem
       "HOW TO PAY",
       second ? `Amount: ${formatNaira(input.amountNaira)}, the first half of ${formatNaira(input.totalNaira!)}` : `Amount: ${formatNaira(input.amountNaira)}`,
       `Reference: ${input.reference}`,
-      // The owner's own Full Report link reopens by itself; the assessment's holds for the 48 hours after the call.
-      ...(report ? [] : [`Pay by: ${lagosTime(input.deadline)} (Lagos time)`]),
+      ...(input.invoice ? [`Invoice: ${input.invoice}`] : []),
+      // The owner's own Full Report link reopens by itself; a Business Review request from before F3 holds for the 48
+      // hours after the call, and its fee since F3 is due on its date.
+      ...(report ? [] : input.payByDay ? [`Pay by: ${dayLabel(input.payByDay)}`] : input.deadline ? [`Pay by: ${lagosTime(input.deadline)} (Lagos time)`] : []),
       "",
       ...(input.online
         ? [
@@ -80,7 +88,7 @@ export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem
       "There is nothing more to do. We email you as soon as Paystack confirms your payment.",
       afterwards,
       ...(second ? [`The second half, ${formatNaira(second)}, is due seven days after we share your Findings. We email you its link then.`] : []),
-      ...(report ? [] : ["", `If you need more than ${PAYMENT_WINDOW_HOURS} hours, reply to this email and we will send you a new link.`]),
+      ...(report || input.payByDay ? [] : ["", `If you need more than ${PAYMENT_WINDOW_HOURS} hours, reply to this email and we will send you a new link.`]),
       "",
       BRAND.organisationName,
     ].join("\n"),
@@ -165,7 +173,14 @@ export async function paymentStatusesByCheck(db: Pick<Database, "select">, busin
   } catch (error) {
     if (!isMissingPaymentTable(error)) throw error;
     console.error("[Payments] The payment_requests table is missing: apply migration 0006 with pnpm db:migrate.");
+    // Every later table (the engagements, the ledger) comes after 0006, so there is nothing more to read.
+    return byCheck;
   }
+  // Since F3 the Business Review is its fee: awaiting payment until its first half is paid; nothing once written off.
+  (await businessReviewStates(db, businessCheckIds)).forEach((state, businessCheckId) => {
+    const { current_state: _before, ...rest } = byCheck.get(businessCheckId) ?? {};
+    byCheck.set(businessCheckId, state.writtenOff ? rest : { ...rest, current_state: state.paid ? "confirmed" : "requested" });
+  });
   return byCheck;
 }
 
@@ -177,25 +192,26 @@ async function loadCheck(db: Pick<Database, "select">, businessCheckId: number) 
 }
 
 /** Stages before the team's own decisions: sending Business Review payment details makes the business an Opportunity. */
-const BEFORE_OPPORTUNITY: readonly PipelineStage[] = ["lead", "qualified_lead", "call_booked"];
+export const BEFORE_OPPORTUNITY: readonly PipelineStage[] = ["lead", "qualified_lead", "call_booked"];
 
 /**
  * Emails the owner the payment details for an item, creating its payment request (or sending the details again).
  * `actorUserId` is null when it happens automatically (the owner asked for the full report on their result page).
  */
 export async function requestPayment(db: Database, input: { businessCheckId: number; item: PaymentItem; actorUserId: number | null }) {
+  // Since F3 the Business Review is sent as its fee, on the engagement it opens (server/businessReview.ts).
+  if (input.item === "current_state") return sendBusinessReviewLink(db, { businessCheckId: input.businessCheckId, actorUserId: input.actorUserId });
   const check = await loadCheck(db, input.businessCheckId);
   const existing = (await db.select().from(paymentRequests)
     .where(and(eq(paymentRequests.businessCheckId, check.id), eq(paymentRequests.item, input.item))).limit(1))[0];
   if (existing?.status === "confirmed") throw new TRPCError({ code: "CONFLICT", message: "This has already been paid." });
 
   const reference = paymentReference(input.item, check.id);
-  // The server's price, never the browser's. Sending the details again of an unpaid request prices it afresh. The
-  // Business Review is a service, paid half to start and half on its Findings (R36): its details ask for the first half.
+  // The server's price, never the browser's. Sending the details again of an unpaid request prices it afresh.
   const priced = resolveBusinessSupportPrice(input.item);
   const { lowPriceTesting } = priced;
-  const amountNaira = input.item === "current_state" ? firstHalf(priced.amountNaira) : priced.amountNaira;
-  const stageTo = input.item === "current_state" && BEFORE_OPPORTUNITY.includes(check.pipelineStage) ? "opportunity" : check.pipelineStage;
+  const amountNaira = priced.amountNaira;
+  const stageTo = check.pipelineStage;
   // Recorded before the email goes, so a payment can always be matched to its reference.
   const request = await db.transaction(async tx => {
     const [row] = await tx.insert(paymentRequests)
@@ -219,7 +235,7 @@ export async function requestPayment(db: Database, input: { businessCheckId: num
   await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq(paymentRequests.id, request.id));
   // Why an email failed, for the office notice (for example Resend refusing addresses before the domain is verified).
   const deliveryProblem = delivery.status === "Failed" ? delivery.reason : null;
-  return { paymentRequestId: request.id, reference, status: request.status, deliveryStatus: delivery.status, deliveryProblem, pipelineStage: stageTo };
+  return { paymentRequestId: request.id as number | null, reference, status: request.status, deliveryStatus: delivery.status, deliveryProblem, pipelineStage: stageTo, engagementId: null as number | null, feeLineId: null as number | null };
 }
 
 async function loadRequest(db: Pick<Database, "select">, paymentRequestId: number): Promise<PaymentRequest> {
@@ -228,8 +244,6 @@ async function loadRequest(db: Pick<Database, "select">, paymentRequestId: numbe
   return request;
 }
 
-/** What happened to the client account invitation when a Business Review payment was confirmed. */
-export type CurrentStateInvitation = "sent" | "already_invited" | "has_account" | "failed";
 
 const NOT_CONFIRMED = { success: true, changed: false, invitation: null, engagement: null } as const;
 
@@ -267,6 +281,10 @@ export async function confirmPayment(db: Database, input: { paymentRequestId: nu
   const request = await loadRequest(db, input.paymentRequestId);
   if (request.status === "confirmed") return NOT_CONFIRMED;
   const check = await loadCheck(db, request.businessCheckId);
+  // A Business Review link from before F3 whose link has since been sent as its fee: money for it is recorded on the
+  // fee. Paystack can still confirm a checkout opened on the old link before the new one went, and the office is told.
+  const movedOn = request.item === "current_state" ? await businessReviewOnFees(db, check.id) : null;
+  if (movedOn && !input.online) throw new TRPCError({ code: "CONFLICT", message: "This Business Review is now paid on its fee. Record the payment on the fee in Finance." });
   const stageTo: PipelineStage = request.item === "current_state" ? "won" : check.pipelineStage;
   const note = input.online ? onlinePaymentNote(input.online) : input.note || null;
   const via = viaDetails(input.online);
@@ -306,6 +324,16 @@ export async function confirmPayment(db: Database, input: { paymentRequestId: nu
     .catch((error: unknown) => ({ status: "Failed" as const, reason: error instanceof Error ? error.message : "Unknown error" }));
   await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference, delivery: delivery.status, again: false, ...via } });
 
+  if (movedOn) {
+    await deliverEmail({
+      to: BUSINESS_SUPPORT_MAILBOX, sender: "business_support", idempotencyKey: `payment_requests:${request.id}:moved_on:office`,
+      subject: `Business Review paid on its old link: ${request.reference}`,
+      body: [
+        `Paystack confirmed ${formatNaira(request.amountNaira)} on the Business Review link sent before its fee (reference ${request.reference}). The money is recorded against that old link.`,
+        "", "So the first half is not owed twice: a Partner writes off the first half on the engagement's fee in Finance, then uses Open the room now on the engagement.",
+      ].join("\n"),
+    }).catch((error: unknown) => console.error("[Payments] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
+  }
   let invitation: CurrentStateInvitation | null = null;
   let engagement: EngagementStart | null = null;
   if (request.item === "current_state") {
@@ -338,20 +366,4 @@ export async function resendPaymentConfirmation(db: Database, input: { paymentRe
   return { success: true, deliveryStatus: delivery.status } as const;
 }
 
-/** The Business Review starts in the client account: invite the owner unless an invitation is already out or accepted. */
-async function inviteToClientAccount(db: Pick<Database, "select">, businessCheckId: number, actor: { actorUserId: number | null; createdByUserId?: number | null; via?: "paystack" }): Promise<CurrentStateInvitation> {
-  const latest = (await db.select({ status: clientOnboardingInvitations.status, expiresAt: clientOnboardingInvitations.expiresAt })
-    .from(clientOnboardingInvitations).where(eq(clientOnboardingInvitations.businessCheckId, businessCheckId))
-    .orderBy(desc(clientOnboardingInvitations.id)).limit(1))[0];
-  const status = latest ? effectiveInvitationStatus(latest) : null;
-  if (status === "accepted") return "has_account";
-  if (status === "pending") return "already_invited";
-  try {
-    await createOnboardingInvitation({ businessCheckId, ...actor });
-    return "sent";
-  } catch (error) {
-    if (error instanceof TRPCError && error.code === "CONFLICT") return "has_account";
-    console.error("[Payments] Payment confirmed, but the client account invitation could not be sent:", error instanceof Error ? error.message : error);
-    return "failed";
-  }
-}
+

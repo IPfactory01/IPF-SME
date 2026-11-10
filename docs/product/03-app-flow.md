@@ -86,8 +86,8 @@ and write-offs with their reversal. **Built (F4):** Finance from one source: mon
 payments apart, each payment opening to its fee and its Paystack reference (section 4.7).
 
 Every naira that comes in is one **payment** against one fee: a Paystack transaction, or money that came another way
-and was recorded by hand. Until the Business Review and the Full Report become fees (F3, R13), a payment can instead be
-against their payment request. Finance reads money in from the payments and money owed from the fees (built, F4), so every
+and was recorded by hand. The Business Review is a fee since F3 (section 3.2); until the Full Report becomes an order
+(R13), its payment is against its payment request, as is the payment of a Business Review link sent before F3. Finance reads money in from the payments and money owed from the fees (built, F4), so every
 naira traces to one fee and one Paystack reference, or to the person who recorded it. Nothing about money is deleted: a
 payment recorded by mistake is cancelled, a refund is recorded against the payment it returns, and a write-off can be
 reversed; each keeps who did it, when and why.
@@ -127,6 +127,36 @@ the Super Admin record money (ET, 10 November 2026), in line with the 6 November
    it. The client's Payments tab shows each fee's state, what is left with **Pay**, and the receipt number, day and
    amount of each payment and refund; never a cancelled one, a note or who recorded it.
 
+### 3.2 The Business Review on fees (R37, batch F3)
+
+**Built (F3, 10 November 2026).** The Business Review is paid like any fee, so every naira of it traces to its fee and
+one Paystack reference.
+
+1. **Sending the link** (Pipeline, the check's record, Payments, Business Review: **Send the payment link**;
+   `manage_payments`, as before). The platform opens the client's Business Review engagement, waiting for its first
+   payment, with the owner's name and email from the check, and its two fees at the server's price: **Business Review:
+   half to start** (₦300,000), due two days later, the "pay by" day the email gives; and **Business Review: half on
+   delivery** (₦300,000), with no date until the Findings are shared (section 3). Sending it bills the first half, so it
+   gets its invoice number. The owner is emailed *Payment details for your Business Review* with the fee's pay link. A
+   check before Opportunity moves to Opportunity, as before. Sending it again emails the same fee's link: it never opens
+   a second engagement, and a paid first half cannot be sent again.
+2. **Paying it.** The owner pays on the fee's pay page, like any fee; money that came another way is recorded on the
+   fee by Finance (section 3.1). The first payment opens the room and starts the Business Review: the check moves to
+   **Won**; the Work Plan, Data Request and Sessions load, dated from that day; and the owner is invited to their client
+   account, unless an invitation is out or they have one. The owner gets the receipt (*Payment received: Business Review:
+   half to start*, with the receipt number and what happens next), then the invitation.
+3. **Before it is paid**, nothing is due from the client, so the engagement holds only its fees. The team sees it in
+   Engagements as **awaiting first payment**. A Partner or the Super Admin can **Open the room now**: the plan loads and
+   the owner is invited (the reason is recorded with the invitation); the check moves to Won when the money comes.
+4. **If the owner does not go ahead**, the first half stays owed and shows as late in Finance after its date; it never
+   pauses work, because the room is waiting for it. A Partner writes it off with a note, and the team moves the check
+   to Lost or Nurture.
+5. **Links sent before F3** stay as they were: a Business Review payment request keeps its pay page until its 48 hours
+   pass, and a paid one keeps its engagement, its receipt and its history. Sending the link again opens the engagement
+   on fees, and from then on the old link no longer takes payment, nor can it be confirmed by hand: money for it is
+   recorded on the fee. The Full Report stays a payment request, recorded in the ledger with its receipt number (F1),
+   until orders arrive (R13).
+
 ## 4. The journeys
 
 Columns: **Client** does · **Platform** does on its own · **Team** does · **Email** (to whom) · **Status** after · **Built?**
@@ -157,7 +187,7 @@ flowchart TD
 | 4b | Answers the 17-question Report Intake | Builds the Full Report by fixed rule and emails the PDF at once | — | Owner: *Your Full Report: {business}* (PDF). Office: *Full Report sent* | Report **delivered** | Built |
 | 5 | Books the Discovery Call in the embedded calendar | Records the booking only when Calendly confirms; picks up bookings made from the email | — | Office: *… asked for a free discovery call*. Calendly confirms to the owner | **Call booked** | Built |
 | 6 | Joins the 20-minute call | — | Holds it; writes up the Discovery Call summary; records Opportunity, Refer, Lost or Nurture; shares the summary with the owner as a separate step | A Nurture outcome: one follow-up at day 30 (R48, to build) | **Opportunity**, **Referred**, **Lost** or **Nurture** | Built (the day-30 follow-up to build) |
-| 7 | — | — | Opens the engagement (4.3), or for the Business Review sends the link for its first half (₦300,000 of ₦600,000); paying it opens the engagement with the second half as a fee, due seven days after the Findings are shared (R36) | Owner: *Payment details for your Business Review* | Payment **requested** (48 hours) | Built (moves onto fees with R37) |
+| 7 | Pays the first half from the email's link, on the fee's pay page | Opens the Business Review engagement when the link is sent, waiting for its first payment, with both halves as fees; the first payment opens the room, moves the check to Won, loads the plan and invites the owner (section 3.2) | Opens the engagement (4.3), or for the Business Review sends the link for its first half (₦300,000 of ₦600,000); the second half falls due seven days after the Findings are shared (R36) | Owner: *Payment details for your Business Review*; then *Payment received: Business Review: half to start* and the invitation | Engagement **awaiting first payment**, then fee **paid** and check **Won** | Built (on fees, F3) |
 
 ### 4.2 Prospect to client, by Buy now (To build, R13 and R38)
 
@@ -255,7 +285,7 @@ receiving it, and a time it should take.
 
 | Object | States | Moves on its own | Moved by a person |
 |---|---|---|---|
-| **Pipeline** (a business check) | Lead → Qualified lead → Call booked → Opportunity → Won; Lost, Nurture, Referred | The first three, forward only, never over a stage the team set; Won on a confirmed Business Review payment | Opportunity, Refer, Lost; "Move to" any stage except Won |
+| **Pipeline** (a business check) | Lead → Qualified lead → Call booked → Opportunity → Won; Lost, Nurture, Referred | The first three, forward only, never over a stage the team set; Won on the Business Review's first payment (its fee, F3; or a link from before F3, its payment request) | Opportunity, Refer, Lost; "Move to" any stage except Won |
 | **Order** (Buy now) | Awaiting payment → Paid → Engagement opened; Abandoned | All of them (R13) | — |
 | **Engagement** | Getting set up → (Business Review, Six-Week Fix) Business Review, The Fix, Your Plan → Closed; other types Open → Closed (a dated type also shows its stage from the start date); plus **awaiting first payment** and **paused** (R51) | Awaiting first payment clears on the first fee paid; late from the day after an unpaid fee's date and paused seven days after it, cleared when it is paid or given a new date (nothing stored); a dated type's stage follows its start date | The stage; Close (R26); Open the room now; pause or lift a pause |
 | **Fee** | Set (no date yet) → Due → Paid, or Late; **Part paid** while its payments add up to less than its amount; **Written off** | Due and Late by date and terms; Paid once its payments, less refunds, add up to its amount | A payment recorded by Finance or the Super Admin, in part or in full (built, F1); Written off, and reversed, by a Partner or the Super Admin (built, F2) |
@@ -277,15 +307,16 @@ info@ipfactory.co.
 |---|---|---|---|
 | Check finished | Owner; office | *Your Business Health Check: Findings* (the summary); *Business Health Check: {business} ({path}, {area})* (every answer) | Built |
 | Full Report asked for | Owner; office | *Payment details for your Full Report*; *… asked for the Full Report* | Built |
-| Business Review link sent | Owner | *Payment details for your Business Review*: the first half, and when the second is due | Built (moves to fee reminders with R37) |
+| Business Review link sent | Owner | *Payment details for your Business Review*: the first half with its fee's pay link and the day to pay by, and when the second is due | Built (on fees, F3) |
 | A service's main output shared (delivery) | Owner | *{fee}: ₦{amount} due by {date}*, the second half with its pay link (R36) | Built |
-| Business Review or Full Report paid | Owner; office | *Payment received: …*; *Paid online: …* | Built |
+| Full Report paid, or a Business Review link from before F3 | Owner; office | *Payment received: your Full Report* (or *your Business Review is booked*); *Paid online: …* | Built |
+| Business Review's first half paid | Owner; office | *Payment received: Business Review: half to start*, with the receipt number and what happens next; *Paid online: …* | Built (F3) |
 | Report Intake sent again | Owner | *Your Report Intake* | Built |
 | Full Report built | Owner; office | *Your Full Report: {business}* (PDF); *Full Report sent* | Built |
 | Discovery Call asked for | Office | *… asked for a free discovery call* | Built |
 | Engagement opened for a new client | Owner | *Your The Shift room for {business}*, with **What we will do**: the work, the start date and each fee with its date, before the link (R47) | Built |
 | Fees changed once the owner has an account | Owner | *Your fees have changed: {engagement}*: the schedule as it now stands, the total and a link to Payments. Saving the same fees again sends nothing | Built (R47) |
-| Business Review paid (account) | Owner | *Set up your client account on The Shift* | Built |
+| Business Review paid, or its room opened before payment (account) | Owner | *Set up your client account on The Shift* | Built |
 | Notes or a Deliverable shared | Those who can see it | *Engagement update: {title}* | Built |
 | Added to an engagement, or role changed | Team member | *You are on {business} as {role}*; *Your role on {business}: {role}* | Built |
 | Fee link sent by the team | Owner | *{fee}: ₦{amount} for the {engagement}* | Built |
@@ -294,6 +325,7 @@ info@ipfactory.co.
 | A payment recorded by hand cancelled after its receipt went out | Owner | *Your payment record has been corrected: {fee}*: what was recorded by mistake, and what is left to pay | Built (F1) |
 | A refund recorded | Owner | *Your refund: {fee}*: the amount, the day and the payment it returns; a bank can take some days to show it | Built (F2) |
 | Payment needs a look | Office | *Paystack payment needs a look: {reference}*: accept it in Finance, or refund it in Paystack and record the refund | Built |
+| A Business Review link sent before F3 paid on Paystack after it went out again as its fee | Office | *Business Review paid on its old link: {reference}*: the money is recorded against the old link, so a Partner writes off the first half on the fee and opens the room | Built (F3) |
 | Client asks for another service | Office | *{business} asked for the {product}* | Built |
 | Password reset | The person | *Reset your password on The Shift* | Built |
 | Staff invited | The invitee; Super Admins | *Join the IP Factory team on The Shift*; *Staff invitation: {level} for {email}* | Built |
@@ -331,6 +363,8 @@ info@ipfactory.co.
 | A fee goes unpaid | The room's banner: late, then paused seven days after its date (built, E5); reminders by email (to build) | Reminds at 5 days before, on the day, at 3 and 7 days after | Sees **Fee late**, then **Paused**; work pauses (D6) | Banner and badges built; reminders to build (R12) |
 | A client goes quiet on records | Reminders | Reminds before and after each date | Told what is still outstanding | To build (R16) |
 | A client should get in before paying | — | — | A Partner or the Super Admin: **Open the room now** (recorded) | Built |
+| A prospect does not pay the Business Review link | — | Keeps the first half owed; late in Finance after its date; it never pauses work | A Partner writes off the first half with a note; the team moves the check to Lost or Nurture | Built (F3) |
+| An owner opens a Business Review link sent before F3, after a new one went out | "This payment link has passed" | The old link takes no payment and cannot be confirmed by hand; the new fee is the one to pay | Records money that came another way on the fee | Built (F3) |
 | Footage is too large to upload | **Send a link** on the item: "A link to a shared folder on Google Drive, Dropbox, WeTransfer or iCloud. Videos always come this way, or on WhatsApp." A video file is refused with the same advice | Stores the link, never the video | The Content Producer opens it from the item (**Open the link**) | Built (R43); Send on WhatsApp to {name} with R44 |
 | A wrong or private file was sent | **Remove** beside their own file until the team has matched it or accepted its item; after that, they ask the team | Deletes the stored file and the record; an item back to "To do" if that file was its only answer | Remove any file with a reason, recorded | Built (R61) |
 | The client does not know whom to message | Each team member with **WhatsApp {first name}**, once that person agreed in their Account settings; an item offers **Send on WhatsApp to {name}** (the person who asked for it, or the main contact) | Shows a number only once agreed, and only to clients of that person's engagements | Each person adds their number and agrees in Account settings | Built (R44, R45); numbers wait on each person |

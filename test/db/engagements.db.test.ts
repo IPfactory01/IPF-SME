@@ -8,6 +8,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as schema from "../../drizzle/schema";
 import { createPgliteHarness, createRemoteHarness, type DbHarness } from "./harness";
+import { legacyBusinessReviewRequest } from "./legacyBusinessReview";
 import { businessCheckProfiles } from "../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../fixtures/reportIntake";
 import { addDays, lagosDay } from "@shared/agreement";
@@ -102,9 +103,11 @@ for (const target of targets) {
       const id = (await db.select().from(schema.businessChecks).where(eq(schema.businessChecks.publicToken, token)))[0].id as number;
       return { token, email, id };
     }
+    /** The Business Review paid (F3): its link sent, which opens the engagement, then its first half recorded as Finance would. */
     async function payAssessment(businessCheckId: number) {
-      const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId, item: "current_state" });
-      return (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId });
+      const { feeLineId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId, item: "current_state" });
+      const [fee] = await db.select().from(schema.engagementFeeLines).where(eq(schema.engagementFeeLines.id, feeLineId!));
+      return (await superAdmin.call()).engagement.finance.recordPayment({ feeLineId: feeLineId!, amount: fee.amount, receivedOn: lagosDay(), method: "bank_transfer", note: "Transfer for the Business Review" });
     }
     async function acceptInvitation(email: string, businessName: string) {
       const invitation = emails().filter(sent => sent.to === email && sent.subject === "Set up your client account on The Shift").at(-1)!;
@@ -117,6 +120,15 @@ for (const target of targets) {
     async function client(label: string) {
       const { email, id } = await finishedCheck(label);
       await payAssessment(id);
+      const owner = await acceptInvitation(email, `Business ${label}`);
+      const engagement = await engagementOf(id);
+      return { owner, email, businessCheckId: id, engagementId: engagement.id as number, businessId: engagement.businessId as number };
+    }
+    /** A client whose Business Review was paid on its payment request before F3: the data the platform still holds. */
+    async function legacyClient(label: string) {
+      const { email, id } = await finishedCheck(label);
+      const request = await legacyBusinessReviewRequest(db, { businessCheckId: id, requestedByUserId: null });
+      await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: request.id });
       const owner = await acceptInvitation(email, `Business ${label}`);
       const engagement = await engagementOf(id);
       return { owner, email, businessCheckId: id, engagementId: engagement.id as number, businessId: engagement.businessId as number };
@@ -148,13 +160,18 @@ for (const target of targets) {
     });
 
     describe("starting an engagement", () => {
-      it("starts one engagement when the Business Review is paid, with the data requests and both calls from the template", async () => {
-        const { id } = await finishedCheck("start");
-        const confirmed = await payAssessment(id);
-        expect(confirmed).toMatchObject({ engagement: "started", invitation: "sent" });
+      it("opens the engagement when the Business Review's link is sent, and loads the data requests and both calls from the template when it is paid (F3)", async () => {
+        const { id, email } = await finishedCheck("start");
+        const { feeLineId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+        const waiting = await engagementOf(id);
+        expect(waiting).toMatchObject({ stage: "setting_up", businessId: null, type: "business_review", opensOnPayment: true, paymentRequestId: null, contactEmail: email });
+        // Nothing is due from the client before they pay, so the plan waits for the payment.
+        expect(await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.engagementId, waiting.id))).toEqual([]);
+        expect(await db.select().from(schema.engagementSessions).where(eq(schema.engagementSessions.engagementId, waiting.id))).toEqual([]);
+        expect(await (await superAdmin.call()).engagement.finance.recordPayment({ feeLineId: feeLineId!, amount: 300_000, receivedOn: lagosDay(), method: "bank_transfer", note: "Transfer for the Business Review" })).toMatchObject({ opened: true });
 
         const engagement = await engagementOf(id);
-        expect(engagement).toMatchObject({ stage: "setting_up", businessId: null });
+        expect(engagement).toMatchObject({ id: waiting.id, stage: "setting_up", businessId: null, opensOnPayment: false });
         const tasks = await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.engagementId, engagement.id));
         expect(tasks.map((task: { title: string }) => task.title)).toEqual([...ASSESSMENT_TEMPLATE.dataRequests, ...ASSESSMENT_TEMPLATE.teamActions].map(item => item.title));
         // The Work Plan: week 1 due in three working days, week 2 in eight; the team's actions sit beside the client's requests.
@@ -186,17 +203,18 @@ for (const target of targets) {
       it("starts nothing for the full report, and never a second engagement", async () => {
         const { id } = await finishedCheck("once");
         const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "full_report" });
-        await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId });
+        await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: paymentRequestId! });
         expect(await engagementOf(id)).toBeUndefined();
-        const { paymentRequestId: assessment } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
-        await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: assessment });
-        expect(await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: assessment })).toMatchObject({ changed: false });
+        await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+        await payAssessment(id);
+        await expect((await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" })).rejects.toMatchObject({ code: "CONFLICT", message: "This has already been paid." });
         expect(await db.select().from(schema.engagements).where(eq(schema.engagements.businessCheckId, id))).toHaveLength(1);
       });
 
       it("lists a paid assessment that has no engagement (paid before migration 0008), and lets the desk lead start it", async () => {
         const { email, id } = await finishedCheck("catch-up");
-        await payAssessment(id);
+        const request = await legacyBusinessReviewRequest(db, { businessCheckId: id, requestedByUserId: null });
+        await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: request.id });
         await acceptInvitation(email, "Catch Up Ltd");
         // As if the payment had been confirmed while the engagement tables were missing.
         await db.delete(schema.engagements).where(eq(schema.engagements.businessCheckId, id));
@@ -236,10 +254,10 @@ for (const target of targets) {
 
       it("asks the Business Review's first half, starts it with the second, and dates the second seven days after the Findings are shared, emailing its link once", async () => {
         const { email, businessCheckId, engagementId } = await client("halves");
-        const request = (await db.select().from(schema.paymentRequests).where(and(eq(schema.paymentRequests.businessCheckId, businessCheckId), eq(schema.paymentRequests.item, "current_state"))))[0];
-        expect(request.amountNaira).toBe(300_000);
+        // Since F3 there is no payment request: both halves are fees from the day the link went, the first now paid.
+        expect(await db.select().from(schema.paymentRequests).where(and(eq(schema.paymentRequests.businessCheckId, businessCheckId), eq(schema.paymentRequests.item, "current_state")))).toEqual([]);
         const desk = await superAdmin.call();
-        expect((await desk.engagement.staff.fees({ engagementId })).feeLines).toMatchObject([{ label: "Business Review: half on delivery", amount: 300_000, dueOn: null }]);
+        expect((await desk.engagement.staff.fees({ engagementId })).feeLines).toMatchObject([{ label: "Business Review: half to start", amount: 300_000, paidAt: expect.any(Date) }, { label: "Business Review: half on delivery", amount: 300_000, dueOn: null }]);
         // The team is told before a share that bills.
         expect((await desk.engagement.staff.detail({ engagementId })).balanceOnDelivery).toBe(true);
 
@@ -247,12 +265,12 @@ for (const target of targets) {
         const { deliverableId: prescription } = await desk.engagement.staff.saveDeliverable({ engagementId, kind: "prescription", title: "What to do", summary: "Price first." });
         await desk.engagement.staff.approveDeliverable({ deliverableId: prescription });
         expect(await desk.engagement.staff.shareDeliverable({ deliverableId: prescription, audience: "owner" })).toMatchObject({ balancesDated: 0 });
-        expect((await desk.engagement.staff.fees({ engagementId })).feeLines).toMatchObject([{ dueOn: null }]);
+        expect((await desk.engagement.staff.fees({ engagementId })).feeLines).toMatchObject([{ label: "Business Review: half to start" }, { dueOn: null }]);
         mocked.deliverEmail.mockClear();
         const { deliverableId: findings } = await desk.engagement.staff.saveDeliverable({ engagementId, kind: "findings", title: "What we found", summary: "Cash leaks at the till." });
         expect(await desk.engagement.staff.shareDeliverable({ deliverableId: findings, audience: "owner" })).toMatchObject({ balancesDated: 1 });
         const dueOn = lagosDayPlus(7);
-        expect((await desk.engagement.staff.fees({ engagementId })).feeLines).toMatchObject([{ label: "Business Review: half on delivery", dueOn }]);
+        expect((await desk.engagement.staff.fees({ engagementId })).feeLines).toMatchObject([{ label: "Business Review: half to start" }, { label: "Business Review: half on delivery", dueOn }]);
         expect((await desk.engagement.staff.detail({ engagementId })).balanceOnDelivery).toBe(false);
         const notice = emails().find(sent => sent.to === email && sent.subject.includes("Business Review: half on delivery: ₦300,000 due by"))!;
         expect(notice.body).toContain("We have shared your Findings for your Business Review in your room.");
@@ -268,19 +286,17 @@ for (const target of targets) {
 
       it("adds no second half for a Business Review paid in full before the change", async () => {
         const { id } = await finishedCheck("paid-in-full");
-        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
-        await db.update(schema.paymentRequests).set({ amountNaira: 600_000 }).where(eq(schema.paymentRequests.id, paymentRequestId));
-        await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId });
+        const request = await legacyBusinessReviewRequest(db, { businessCheckId: id, requestedByUserId: null, amountNaira: 600_000 });
+        await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: request.id });
         const engagement = await engagementOf(id);
         expect(await db.select().from(schema.engagementFeeLines).where(eq(schema.engagementFeeLines.engagementId, engagement.id))).toEqual([]);
       });
 
       it("keeps the second half to what the first half was when a token test price is restored before the payment confirms", async () => {
         const { id } = await finishedCheck("token-price");
-        vi.stubEnv("CURRENT_STATE_PRICE_NGN", "100");
-        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" }).finally(() => vi.unstubAllEnvs());
-        expect((await db.select().from(schema.paymentRequests).where(eq(schema.paymentRequests.id, paymentRequestId)))[0].amountNaira).toBe(50);
-        await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId });
+        // A request sent before F3 at a token test price of ₦100: its first half was ₦50.
+        const request = await legacyBusinessReviewRequest(db, { businessCheckId: id, requestedByUserId: null, amountNaira: 50 });
+        await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: request.id });
         const engagement = await engagementOf(id);
         expect((await db.select().from(schema.engagementFeeLines).where(eq(schema.engagementFeeLines.engagementId, engagement.id))).map((line: { label: string; amount: number }) => [line.label, line.amount]))
           .toEqual([["Business Review: half on delivery", 50]]);
@@ -308,8 +324,8 @@ for (const target of targets) {
     });
 
     describe("fees (there are no proposals)", () => {
-      it("starts a paid Business Review with its second half, saves the schedule, records payments, and shows the client nothing to sign", async () => {
-        const { owner, email: ownerEmail, engagementId } = await client("fees");
+      it("starts a Business Review paid before F3 with its second half, saves the schedule, records payments, and shows the client nothing to sign", async () => {
+        const { owner, email: ownerEmail, engagementId } = await legacyClient("fees");
         const desk = await superAdmin.call();
         // A Business Review paid its first half on the check's request (R36): it starts with the second half as a fee,
         // dated when the Findings are shared, and the room lists both halves.
@@ -462,11 +478,11 @@ for (const target of targets) {
 
     describe("Finance: money across every client", () => {
       it("lists payment requests and engagement fees, counts a fee as owed once set and late once its date passes, and is for finance only", async () => {
-        const { engagementId } = await client("finance");
+        const { engagementId } = await legacyClient("finance");
         const desk = await superAdmin.call();
         await desk.engagement.staff.saveFees({ engagementId, feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-01-05" }, { label: "With the Findings", amount: 300000, dueOn: null }] });
         const finance = await desk.engagement.finance.list();
-        // The Business Review was paid through a payment request when the client was set up.
+        // The Business Review was paid through a payment request when the client was set up (before F3).
         expect(finance.requests.some(row => row.title === "Business Review" && row.paid)).toBe(true);
         const mine = finance.fees.filter(row => row.engagementId === engagementId);
         expect(mine.map(row => [row.label, row.paid, row.late, row.engagement])).toEqual([["To start", false, true, "Business Review"], ["With the Findings", false, false, "Business Review"]]);
@@ -614,8 +630,8 @@ for (const target of targets) {
         const { engagementId } = await client("paid-first");
         const associate = await signIn(await person(["desk_lead"]), true);
         const fees = (await (await associate.call()).engagement.staff.fees({ engagementId })).feeLines;
-        // Its first half was paid on the check's payment request; the second half has no date until delivery.
-        expect(await (await associate.call()).engagement.staff.saveFees({ engagementId, feeLines: [...fees.map((line: { label: string; amount: number; dueOn: string | null }) => ({ label: line.label, amount: line.amount, dueOn: line.dueOn })), { label: "Travel to Abuja", amount: 50_000, dueOn: null }] })).toMatchObject({ success: true });
+        // Its first half is paid on its fee (F3); the second half has no date until delivery.
+        expect(await (await associate.call()).engagement.staff.saveFees({ engagementId, feeLines: [...fees.map((line: { id: number; label: string; amount: number; dueOn: string | null }) => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn })), { label: "Travel to Abuja", amount: 50_000, dueOn: null }] })).toMatchObject({ success: true });
       });
     });
 
@@ -900,7 +916,8 @@ for (const target of targets) {
         expect((await (await contributor.browser.call()).engagement.client.room())!.insight).toBeNull();
 
         // A delivered Full Report replaces the check: the same report the owner was emailed, rebuilt from the stored intake.
-        const payment = (await db.select().from(schema.paymentRequests).where(eq(schema.paymentRequests.businessCheckId, businessCheckId)))[0];
+        const { paymentRequestId: reportRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId, item: "full_report" });
+        const payment = { id: reportRequestId! };
         await db.insert(schema.fullReports).values({ businessCheckId, paymentRequestId: payment.id, tokenHash: unique("hash").padEnd(64, "0").slice(0, 64), status: "delivered", intakeJson: JSON.stringify({ ...sampleIntake, revenueTarget: 4_000_000 }), intakeSubmittedAt: new Date("2026-10-14T09:00:00Z"), reportVersion: 4, deliveredAt: new Date("2026-10-14T09:00:00Z") });
         const fromReport = (await (await owner.call()).engagement.client.room())!.insight!;
         expect(fromReport.source).toBe("Full Report");
@@ -1219,8 +1236,8 @@ for (const target of targets) {
         await expect(specialist.engagement.staff.fees({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });
         // A partner keeps both.
         expect((await partner.engagement.staff.detail({ engagementId })).sessions.find(item => item.id === sessionId)!.internalNotes).toContain("under-reporting");
-        // The partner reads the fees: the Business Review's second half (R36).
-        expect((await partner.engagement.staff.fees({ engagementId })).feeLines.map(line => line.label)).toEqual(["Business Review: half on delivery"]);
+        // The partner reads the fees: the Business Review's two halves (R36), on fees since F3.
+        expect((await partner.engagement.staff.fees({ engagementId })).feeLines.map(line => line.label)).toEqual(["Business Review: half to start", "Business Review: half on delivery"]);
 
         const item = { engagementId, kind: "action" as const, title: "Draft the competitor scan", detail: null, assigneeUserId: null, dueOn: null, status: "open" as const, statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 9, factor: null };
         const { taskId } = await specialist.engagement.staff.saveTask({ ...item, side: "ipf" });

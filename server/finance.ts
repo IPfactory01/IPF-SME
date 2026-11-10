@@ -25,6 +25,7 @@ import { authorityAllows, type Authority } from "../shared/platformPermissions";
 import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { deliverEmail } from "./email";
+import { beginBusinessReview } from "./businessReview";
 import { feeContext, feeReference, openRoomIfFirstPayment, sendFeeReceipt } from "./feePayments";
 import { acceptLooked, addPaymentByHand, addRefund, balanceOf, cancelPaymentByHand, cancelRefundRecord, carryOver, lockFee, paymentById, paymentsOfFees, paymentsOfRequests, refreshFeePaid, refundById, refundsOfPayments, reverseFeeWriteOff, writeOffFee, type LedgerEntry } from "./ledger";
 import type { paymentRefunds } from "../drizzle/schema";
@@ -231,10 +232,12 @@ export async function recordPayment(db: Database, actor: FinanceActor, input: { 
     const after = await refreshFeePaid(tx, fee);
     await recordAudit(tx, { action: "fee_payment_recorded", actorUserId: actor.id, details: { engagementId: fee.engagementId, feeLineId: fee.id, paymentId: payment.id, amount: payment.amount, method: payment.method, receiptNumber: payment.receiptNumber, left: after.left } });
     const opened = await openRoomIfFirstPayment(tx, fee.engagementId);
-    return { payment, left: after.left, opened };
+    return { payment, left: after.left, opened, engagementId: fee.engagementId };
   });
   const { payment, left, opened } = result;
   await sendFeeReceipt(db, { feeLineId: input.feeLineId, paymentId: payment.id, amount: payment.amount, left, receiptNumber: payment.receiptNumber!, paid: { on: input.receivedOn }, test: false, opened });
+  // A Business Review on fees starts on its first payment (F3): Won, its plan and the owner's invitation.
+  await beginBusinessReview(db, result.engagementId, { opened, paid: true, actorUserId: actor.id });
   return { success: true, receipt: receiptNumberLabel(payment.receiptNumber!), left, opened } as const;
 }
 
@@ -319,10 +322,11 @@ export async function acceptPayment(db: Database, actor: FinanceActor, input: { 
     const after = await refreshFeePaid(tx, fee);
     await recordAudit(tx, { action: "payment_accepted", actorUserId: actor.id, details: { engagementId: fee.engagementId, feeLineId: fee.id, paymentId: accepted.id, amount: accepted.amount, receiptNumber: accepted.receiptNumber, paystackReference: accepted.paystackReference, left: after.left } });
     const opened = await openRoomIfFirstPayment(tx, fee.engagementId);
-    return { accepted, left: after.left, opened };
+    return { accepted, left: after.left, opened, engagementId: fee.engagementId };
   });
   const { accepted, left, opened } = result;
   await sendFeeReceipt(db, { feeLineId: payment.feeLineId, paymentId: accepted.id, amount: accepted.amount, left, receiptNumber: accepted.receiptNumber!, paid: { on: accepted.receivedOn ?? lagosDay() }, test: accepted.mode === "test", opened });
+  await beginBusinessReview(db, result.engagementId, { opened, paid: true, actorUserId: actor.id });
   return { success: true, receipt: receiptNumberLabel(accepted.receiptNumber!), left, opened } as const;
 }
 

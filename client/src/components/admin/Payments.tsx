@@ -14,8 +14,9 @@ import { formatDate, formatDateTime } from "./format";
  * Payment is online with Paystack only: send the payment link (the owner is emailed the amount, the reference and a
  * "Pay online" button) and the payment confirms itself when Paystack confirms it. "Confirm by hand" is a fallback for a
  * payment Paystack shows as paid that has not confirmed itself here. The server checks the permission (manage_payments)
- * and records every step; confirming the Business Review wins the business and sends the client account
- * invitation.
+ * and records every step. Since F3 the Business Review's link opens its engagement with its fees, and its first half is
+ * paid like any fee: paying it wins the business and sends the client account invitation (App flow 3.2). A Business
+ * Review request sent before F3 still shows here as it was.
  */
 
 type Payment = {
@@ -194,12 +195,65 @@ function PaymentRow({ businessCheckId, item, payment, report }: { businessCheckI
   );
 }
 
+/** The Business Review on fees (F3, App flow 3.2): its first half, on the engagement its link opened. */
+export type BusinessReviewFee = {
+  engagementId: number; feeLineId: number; label: string; amount: number; total: number; dueOn: string | null; left: number;
+  paid: boolean; writtenOff: boolean; late: boolean; paidOn: string | null; receipt: string | null; invoice: string | null; awaitingPayment: boolean;
+};
+
+const dayOf = (day: string) => formatDate(`${day}T12:00:00Z`);
+
+/**
+ * The Business Review since F3: its first half is a fee, so this shows the fee (awaiting payment, late, paid or written
+ * off), when its link went and its invoice, and sends the link again. Money that came another way is recorded on the
+ * fee in Finance; there is nothing to confirm by hand here.
+ */
+function BusinessReviewFeeRow({ businessCheckId, review, sentAt }: { businessCheckId: number; review: BusinessReviewFee; sentAt: Date | string | null }) {
+  const utils = trpc.useUtils();
+  const send = trpc.businessSupport.requestPayment.useMutation({
+    onSuccess: result => {
+      if (result.deliveryStatus === "Failed") toast.error(`The link is ready (${result.reference}), but the email failed. Try sending it again.`);
+      else toast.success(`Payment link sent again. Reference ${result.reference}.`);
+      void utils.businessSupport.checkDetail.invalidate({ businessCheckId });
+      void utils.businessSupport.checks.invalidate();
+    },
+    onError: error => toast.error(error.message),
+  });
+  const chip = review.paid ? { text: "Paid", className: CHIP.confirmed }
+    : review.writtenOff ? { text: "Written off", className: "border-line bg-paper-sunken text-ink-muted" }
+      : review.late ? { text: "Late", className: CHIP.expired } : { text: "Awaiting payment", className: CHIP.requested };
+  const sentLine = [sentAt ? `Link sent ${formatDate(sentAt)}` : null, review.invoice ? `invoice ${review.invoice}` : null, !review.paid && !review.writtenOff && review.dueOn ? `pay by ${dayOf(review.dueOn)}` : null].filter(Boolean).join(" · ");
+  return (
+    <li className="border border-line-soft p-3" aria-label={CURRENT_STATE.name}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm font-medium text-ink">{CURRENT_STATE.name}</p>
+        <p className="text-sm tabular-nums text-ink">{formatNaira(review.total)}</p>
+      </div>
+      <div className="mt-1.5 space-y-0.5 text-[13px]">
+        <p><span className={`inline-block border px-1.5 py-0.5 text-[11px] font-medium ${chip.className}`}>{chip.text}</span> <span className="ml-1 text-ink-muted">{review.label}</span> <span className="font-medium tabular-nums text-ink">{formatNaira(review.amount)}</span></p>
+        {sentLine && <p className="text-ink-muted">{sentLine}</p>}
+        {review.paid && <p className="text-ink">Paid{review.paidOn ? ` ${dayOf(review.paidOn)}` : ""}{review.receipt ? ` · ${review.receipt}` : ""}. The {CURRENT_STATE.name} has started; the second half falls due seven days after the Findings are shared.</p>}
+        {!review.paid && !review.writtenOff && review.left < review.amount && <p className="text-ink">{formatNaira(review.amount - review.left)} of it is paid; {formatNaira(review.left)} is left.</p>}
+        {review.late && <p className="text-danger">Not paid by its date. Send the link again, or move the business to Lost; a Partner can write off the first half in Finance.</p>}
+        <p className="text-ink-muted">It is in Engagements, {review.awaitingPayment ? "waiting for its first payment" : "with its room open"}.{!review.paid && !review.writtenOff ? " Money that came another way is recorded on the fee in Finance." : ""}</p>
+      </div>
+      {!review.paid && !review.writtenOff && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" className="rounded-none text-xs" disabled={send.isPending} onClick={() => send.mutate({ businessCheckId, item: "current_state" })}>Send the link again</Button>
+        </div>
+      )}
+    </li>
+  );
+}
+
 /** Both things an owner can pay for before the Business Review, in journey order. */
-export function PaymentsPanel({ businessCheckId, payments, report = null }: { businessCheckId: number; payments: Payment[] | null | undefined; report?: ReportState }) {
+export function PaymentsPanel({ businessCheckId, payments, report = null, businessReview = null, businessReviewSentAt = null }: { businessCheckId: number; payments: Payment[] | null | undefined; report?: ReportState; businessReview?: BusinessReviewFee | null; businessReviewSentAt?: Date | string | null }) {
   if (payments === null) return <p className="text-sm text-ink-muted">Payments are not set up in the database yet (migration 0006).</p>;
   return (
     <ul className="space-y-2.5">
-      {PAYMENT_ITEMS.map(item => <PaymentRow key={item} businessCheckId={businessCheckId} item={item} payment={(payments ?? []).find(payment => payment.item === item)} report={report} />)}
+      {PAYMENT_ITEMS.map(item => item === "current_state" && businessReview
+        ? <BusinessReviewFeeRow key={item} businessCheckId={businessCheckId} review={businessReview} sentAt={businessReviewSentAt} />
+        : <PaymentRow key={item} businessCheckId={businessCheckId} item={item} payment={(payments ?? []).find(payment => payment.item === item)} report={report} />)}
     </ul>
   );
 }

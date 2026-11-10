@@ -36,11 +36,12 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 | Discovery Call | Booked | Visitor, desk | Calendly; `businessSupport.scheduleCall` | 4.1 #5 | Visitor: Talk to an expert | Built |
 | | Held, outcome | Lead | `businessSupport.recordOutcome` | 4.1 #6 | Lead: Holds the Discovery Call | Built |
 | | Summary written, shared | Lead | `saveDebrief`, `shareDebrief` | 4.1 #6 | Lead: Holds the Discovery Call | Built |
-| Payment request (Full Report, Business Review) | Created | Visitor (Full Report), Finance | `onlinePayment.start`; `businessSupport.requestPayment` | 4.1 #4a, #7 | Visitor: Buys the Full Report | Built |
+| Payment request (Full Report; a Business Review link sent before F3) | Created | Visitor (Full Report), Finance | `onlinePayment.start`; `businessSupport.requestPayment` (the Business Review since F3: its fee, below) | 4.1 #4a | Visitor: Buys the Full Report | Built |
 | | Paid | Visitor, Paystack | `onlinePayment.status`, the webhook | 4.1 #4a | Platform: Confirms every payment | Built |
 | | Confirmed by hand | Finance | `businessSupport.confirmPayment`; every confirmed request is also a payment in the ledger, with its receipt number (F1) | 4.7 #3 | Finance: Confirms or refunds | Built |
 | | Expired (48 hours) | Platform | Worked out on read | 5 Payment | — | Built |
-| | Refunded | Finance | Recorded against a fee's payment (F2); a payment request's own refund comes with F3 | 4.7 #3 | Finance: Confirms or refunds | Partly built |
+| | Superseded (a Business Review link sent before F3) | Platform | Its pay page and confirming by hand stop once the link goes out again as its fee | 3.2 | — | Built (F3) |
+| | Refunded | Finance | The Business Review on fees through its fee's payment (F2, F3); the Full Report's own refund comes with orders (R13) | 4.7 #3 | Finance: Confirms or refunds | Partly built |
 | Full Report | Intake answered | Buyer | `fullReport.form`, `submit` | 4.1 #4b | Visitor: Full Report emailed | Built |
 | | Delivered, downloaded | Buyer, desk | `fullReport.download`; `businessSupport.downloadReport` | 4.1 #4b | Visitor: Full Report emailed | Built |
 | | Link sent again | Finance | `businessSupport.resendReportLink` | 6 Emails | — | Built |
@@ -106,6 +107,7 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 | Object | Stage | Who | How (in the code) | App flow | Board | Status |
 |---|---|---|---|---|---|---|
 | Fee | Created | Platform, team | Filled in when the engagement opens; `staff.saveFees` | 3, 4.3 | Lead: Opens the engagement | Built |
+| | The Business Review's two halves, with its engagement | Finance | `businessSupport.requestPayment` opens the engagement waiting for its first payment and bills the first half; its first payment wins the check, loads the plan and invites the owner (`server/businessReview.ts`) | 3.2, 4.1 #7 | Platform: Confirms every payment | Built (F3) |
 | | Link sent | Team, Finance | `staff.sendFeeLink` | 4.3 #3 | Platform: Sends reminders | Built (on a schedule: R12) |
 | | Paid online, for what is left | Client, Paystack | `onlinePayment.feePage`, `feeStart`, the webhook; each attempt a row in `payments` | 4.4 #7, 3.1 | Client: Pays each fee | Built (part payments with F1) |
 | | Paid by hand, in part or in full | Finance, Super Admin | `finance.recordPayment` (`manage_payments`); the Paid tick is retired | 4.7 #4, 3.1 | Finance: Records money paid offline | Built (F1, 10 November 2026) |
@@ -224,7 +226,7 @@ trusted browser origin.
 | `businessSupport.checks`, `businessSupport.checkDetail`, `businessSupport.setStage`, `businessSupport.downloadReport`, `businessSupport.emailDeliveryStatus` | Every check; one check with its history; its stage; a report's file; email delivery | `manage_client_onboarding` | Business Health Check, Full Report, Email delivery |
 | `businessSupport.discoveryCalls`, `businessSupport.scheduleCall`, `businessSupport.recordOutcome`, `businessSupport.debrief`, `businessSupport.saveDebrief`, `businessSupport.shareDebrief` | Discovery Calls: list, set a time, record the outcome; the call summary, saved and shared | `manage_client_onboarding` | Discovery Call |
 | `businessSupport.clients` | Businesses and their members | `view_all_businesses` | Business |
-| `businessSupport.requestPayment`, `businessSupport.confirmPayment`, `businessSupport.resendReportLink`, `businessSupport.resendPaymentConfirmation` | Send payment details; confirm money by hand; send the Report Intake link or the receipt again | `manage_payments` | Payment request, Full Report |
+| `businessSupport.requestPayment`, `businessSupport.confirmPayment`, `businessSupport.resendReportLink`, `businessSupport.resendPaymentConfirmation` | Send payment details (the Business Review's opens its engagement with its fees, F3); confirm money by hand (never for a Business Review link sent before F3 once it is on fees); send the Report Intake link or the receipt again | `manage_payments` | Payment request, Fee, Full Report |
 
 ### Engagements: the team's side
 

@@ -9,6 +9,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { and, eq, sql } from "drizzle-orm";
 import * as schema from "../../drizzle/schema";
 import { createPgliteHarness, createRemoteHarness, type DbHarness } from "./harness";
+import { legacyBusinessReviewRequest } from "./legacyBusinessReview";
 import { businessCheckProfiles, profileContact } from "../fixtures/businessCheckProfiles";
 
 /** Fixture keys: shaped like Paystack's, never real. */
@@ -139,10 +140,10 @@ for (const target of targets) {
       await (await check.visitor.call()).businessCheck.requestNext({ token: check.token, choice: "report" });
       return check;
     }
-    /** A finished check the team sent the Business Review payment details to. */
+    /** A finished check the team sent the Business Review payment details to before F3: a payment request with its pay page. */
     async function assessmentAskedFor(label: string) {
       const check = await finishedCheck(label);
-      await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: check.id, item: "current_state" });
+      await legacyBusinessReviewRequest(db, { businessCheckId: check.id, requestedByUserId: ownerId });
       return check;
     }
     /** The owner presses the pay button; returns the attempt's Paystack reference. */
@@ -304,7 +305,7 @@ for (const target of targets) {
       it("binds each pay link to its exact Business Health Check token and cannot pay another check's Business Review", async () => {
         const a = await finishedCheck("token-a");
         const b = await finishedCheck("token-b");
-        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: a.id, item: "current_state" });
+        const { id: paymentRequestId } = await legacyBusinessReviewRequest(db, { businessCheckId: a.id, requestedByUserId: ownerId });
         const initializedBefore = paystack.initialized.length;
         const tamperedToken = `${a.token.slice(0, -1)}${a.token.endsWith("a") ? "b" : "a"}`;
         await expect((await browser().call()).onlinePayment.start({ token: tamperedToken, item: "current_state" })).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -358,13 +359,17 @@ for (const target of targets) {
         expect((await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).state).toBe("paid");
       });
 
-      it("holds the Business Review link for the same 48 hours as the bank details, and opens again when the team sends them again", async () => {
+      it("holds a Business Review link sent before F3 for 48 hours, and takes no payment on it once its link goes out again as its fee", async () => {
         const { token, id } = await assessmentAskedFor("expired");
         await db.update(schema.paymentRequests).set({ requestedAt: new Date(Date.now() - 49 * 3_600_000) }).where(eq(schema.paymentRequests.id, (await paymentOf(id, "current_state")).id));
         expect((await (await browser().call()).onlinePayment.page({ token, item: "current_state" })).state).toBe("expired");
         await expect((await browser().call()).onlinePayment.start({ token, item: "current_state" })).rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: expect.stringContaining("48 hours") });
+        // Sending it again since F3 opens the engagement on fees: the old link stays closed, even inside a fresh 48 hours.
         await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
-        expect((await (await browser().call()).onlinePayment.start({ token, item: "current_state" })).alreadyPaid).toBe(false);
+        await db.update(schema.paymentRequests).set({ requestedAt: new Date() }).where(eq(schema.paymentRequests.id, (await paymentOf(id, "current_state")).id));
+        expect((await (await browser().call()).onlinePayment.page({ token, item: "current_state" })).state).toBe("expired");
+        await expect((await browser().call()).onlinePayment.start({ token, item: "current_state" })).rejects.toMatchObject({ code: "PRECONDITION_FAILED", message: "This payment link has passed. Pay from the link in our latest email about your Business Review." });
+        expect(paystack.initialized.filter(sent => String(sent.reference).startsWith("TS-CS-"))).toEqual([]);
       });
 
       it("reopens an expired Full Report link by itself when the owner pays: a new 48 hours and fresh details by email", async () => {
@@ -443,6 +448,22 @@ for (const target of targets) {
         const office = emails().find(sent => sent.to === OFFICE)!;
         expect(office.subject).toMatch(/^Paid online: /);
         expect(office.body).toContain("Client account invitation: sent");
+      });
+
+      it("still records a checkout opened on a link sent before F3 that completes after its new link went, and tells the office how to put it right", async () => {
+        const { token, id } = await assessmentAskedFor("old-checkout");
+        const reference = await start(token, "current_state");
+        // The team sends the link again: the engagement opens on fees, and the old pay page closes.
+        await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+        pay(reference);
+        mocked.deliverEmail.mockClear();
+        expect(await webhook(charged(reference))).toBe(200);
+        // Paystack took the money, so it is recorded against the old link, and nobody is asked to pay it twice unseen.
+        expect(await paymentOf(id, "current_state")).toMatchObject({ status: "confirmed" });
+        const office = emails().find(sent => sent.to === OFFICE && sent.subject.startsWith("Business Review paid on its old link: "))!;
+        expect(office.subject).toBe(`Business Review paid on its old link: ${(await paymentOf(id, "current_state")).reference}`);
+        expect(office.body).toContain("a Partner writes off the first half on the engagement's fee in Finance, then uses Open the room now on the engagement.");
+        expect(await db.select().from(schema.engagements).where(eq(schema.engagements.businessCheckId, id))).toHaveLength(1);
       });
 
       it("says TEST MODE again when the team re-sends the confirmation of a test payment", async () => {

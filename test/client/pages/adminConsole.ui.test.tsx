@@ -863,6 +863,45 @@ describe("payments in Business Health Checks", () => {
     expect(currentState.getAllByRole("button").map(button => button.textContent)).toEqual(["Send the link again", "Confirm by hand"]);
   });
 
+  it("shows the Business Review on its fee since F3: awaiting payment with its invoice and pay-by day, then late, then paid, and sends the link again", () => {
+    const review = (over: Record<string, unknown> = {}) => ({
+      engagementId: 9, feeLineId: 31, label: "Business Review: half to start", amount: 300_000, total: 600_000, dueOn: "2026-11-12", left: 300_000,
+      paid: false, writtenOff: false, late: false, paidOn: null, receipt: null, invoice: "TS-IN-000007", awaitingPayment: true, ...over,
+    });
+    const sent = { id: 6, action: "payment_details_sent", from: null, to: null, note: null, scheduledFor: null, item: "current_state", reference: "TS-F-000031", delivery: null, via: null, by: "Emmanuel Tarfa", at: new Date("2026-11-10T10:00:00Z") };
+    api.details[1] = detailFor({ businessReview: review(), stageHistory: [sent] });
+    renderConsole();
+    openRow("Ada Okafor");
+    let currentState = within(payments().getByRole("listitem", { name: "Business Review" }));
+    expect(currentState.getByText("Awaiting payment")).toBeTruthy();
+    expect(currentState.getByText("₦600,000")).toBeTruthy();
+    expect(currentState.getByText("Link sent 10 Nov 2026 · invoice TS-IN-000007 · pay by 12 Nov 2026")).toBeTruthy();
+    expect(currentState.getByText("It is in Engagements, waiting for its first payment. Money that came another way is recorded on the fee in Finance.")).toBeTruthy();
+    // There is nothing to confirm by hand: Finance records money on the fee.
+    expect(currentState.getAllByRole("button").map(button => button.textContent)).toEqual(["Send the link again"]);
+    fireEvent.click(currentState.getByRole("button", { name: "Send the link again" }));
+    expect(api.mutations.requestPayment).toEqual([{ businessCheckId: 1, item: "current_state" }]);
+    cleanup();
+
+    api.details[1] = detailFor({ businessReview: review({ late: true }), stageHistory: [sent] });
+    renderConsole();
+    openRow("Ada Okafor");
+    currentState = within(payments().getByRole("listitem", { name: "Business Review" }));
+    expect(currentState.getByText("Late")).toBeTruthy();
+    expect(currentState.getByText("Not paid by its date. Send the link again, or move the business to Lost; a Partner can write off the first half in Finance.")).toBeTruthy();
+    cleanup();
+
+    api.details[1] = detailFor({ businessReview: review({ paid: true, left: 0, paidOn: "2026-11-11", receipt: "TS-RC-000021", awaitingPayment: false }), stageHistory: [sent] });
+    renderConsole();
+    openRow("Ada Okafor");
+    currentState = within(payments().getByRole("listitem", { name: "Business Review" }));
+    expect(currentState.getByText("Paid")).toBeTruthy();
+    expect(currentState.getByText("Paid 11 Nov 2026 · TS-RC-000021. The Business Review has started; the second half falls due seven days after the Findings are shared.")).toBeTruthy();
+    expect(currentState.getByText("It is in Engagements, with its room open.")).toBeTruthy();
+    expect(currentState.queryByText(/Money that came another way/)).toBeNull();
+    expect(currentState.queryAllByRole("button")).toEqual([]);
+  });
+
   it("says when the payment table is not in the database yet", () => {
     api.details[1] = detailFor({ payments: null });
     renderConsole();

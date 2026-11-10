@@ -15,7 +15,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { businessMemberships, businesses, engagementFeeLines, engagements, paymentRequests, users } from "../drizzle/schema";
+import { businessChecks, businessMemberships, businesses, engagementFeeLines, engagements, paymentRequests, users } from "../drizzle/schema";
 import { addDays, BALANCE_DUE_DAYS, lagosDay } from "../shared/agreement";
 import { BRAND } from "../shared/brand";
 import { CURRENT_STATE, formatNaira } from "../shared/businessSupport";
@@ -26,6 +26,7 @@ import { PAY_RETURN_PATH, type OnlinePaymentMode, type OnlinePaymentStatus } fro
 import { ENV } from "./_core/env";
 import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
+import { beginBusinessReview } from "./businessReview";
 import { BUSINESS_SUPPORT_MAILBOX, deliverEmail } from "./email";
 import { lagosTime } from "./lagosTime";
 import { balanceOf, billFee, carryOver, claimAttempt, lockAttempt, lockFee, markFailed, markNeedsALook, paymentByReference, paymentsOfFees, paymentsOfRequests, refreshFeePaid, startAttempt, type FeeLine } from "./ledger";
@@ -67,8 +68,14 @@ export async function feeContext(db: Pick<Database, "select">, feeLineId: number
   const business = engagement.businessId === null ? undefined : (await db.select({ name: businesses.name }).from(businesses).where(eq(businesses.id, engagement.businessId)).limit(1))[0];
   const owner = engagement.businessId === null ? undefined : (await db.select({ email: users.email, name: users.name }).from(businessMemberships).innerJoin(users, eq(businessMemberships.userId, users.id))
     .where(and(eq(businessMemberships.businessId, engagement.businessId), eq(businessMemberships.role, "owner"), eq(businessMemberships.status, "active"))).limit(1))[0];
-  const payer = owner?.email ? { email: owner.email, name: owner.name ?? engagement.contactName ?? "" } : engagement.contactEmail ? { email: engagement.contactEmail, name: engagement.contactName ?? "" } : null;
-  return { fee, engagement, businessName: business?.name ?? engagement.contactName ?? "", payer, title: engagementTitle(engagement.type, engagement.service) };
+  // An engagement from a Business Health Check, before its owner has an account, is named and paid from the check.
+  const check = !business && engagement.businessCheckId !== null
+    ? (await db.select({ businessName: businessChecks.businessName, fullName: businessChecks.fullName, email: businessChecks.email }).from(businessChecks).where(eq(businessChecks.id, engagement.businessCheckId)).limit(1))[0]
+    : undefined;
+  const payer = owner?.email ? { email: owner.email, name: owner.name ?? engagement.contactName ?? "" }
+    : engagement.contactEmail ? { email: engagement.contactEmail, name: engagement.contactName ?? "" }
+      : check?.email ? { email: check.email, name: check.fullName } : null;
+  return { fee, engagement, businessName: business?.name ?? (check?.businessName || null) ?? engagement.contactName ?? check?.fullName ?? "", payer, title: engagementTitle(engagement.type, engagement.service) };
 }
 
 async function requireFee(db: Pick<Database, "select">, feeLineId: number, token: string) {
@@ -144,19 +151,30 @@ async function tellOffice(subject: string, lines: string[], key: string) {
 /** "Payment received: {fee}": the receipt, for every payment, online or by hand. */
 export function feeReceiptEmail(input: {
   name: string; title: string; label: string; amount: number; left: number; receipt: string; reference: string;
-  paid: { at: Date } | { on: string }; test: boolean; opened: boolean;
+  paid: { at: Date } | { on: string }; test: boolean; opened: boolean; startsBusinessReview?: boolean;
 }) {
   const url = `${getTrustedApplicationOrigin()}/dashboard`;
+  // The payment that starts a Business Review on fees (F3): what happens next, as its confirmation always said.
+  const next = input.startsBusinessReview
+    ? [
+      `Your ${CURRENT_STATE.name} is booked. ${CURRENT_STATE.start}`, "",
+      "WHAT HAPPENS NEXT",
+      `• If you do not have a client account on ${BRAND.productName} yet, we email you a link to set one up. Your ${CURRENT_STATE.name} lives there: ${url}`,
+      `• We agree the time of your first ${CURRENT_STATE.name} Session with you.`,
+      `• ${CURRENT_STATE.what}`,
+    ]
+    : [input.opened ? `Your room is open: ${url}` : `Everything about the engagement is in your room: ${url}`];
   return {
     subject: `${input.test ? "TEST: " : ""}Payment received: ${input.label}`,
     body: [
       ...(input.test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : []),
       `Hello ${input.name.split(" ")[0] ?? ""},`, "",
-      `We have received ${formatNaira(input.amount)} for the ${input.title}: ${input.label}. Thank you.`,
+      // "the Business Review: half to start", not "the Business Review: Business Review: half to start".
+      `We have received ${formatNaira(input.amount)} for the ${input.label.startsWith(`${input.title}:`) ? input.label : `${input.title}: ${input.label}`}. Thank you.`,
       ...(input.left > 0 ? [`${formatNaira(input.left)} is left to pay on it.`] : []), "",
       `Receipt: ${input.receipt}`, `Reference: ${input.reference}`,
       "at" in input.paid ? `Paid: ${lagosTime(input.paid.at)} (Lagos time)` : `Received: ${dayLabel(input.paid.on)}`, "",
-      input.opened ? `Your room is open: ${url}` : `Everything about the engagement is in your room: ${url}`, "",
+      ...next, "",
       BRAND.organisationName,
     ].join("\n"),
   };
@@ -166,7 +184,9 @@ export function feeReceiptEmail(input: {
 export async function sendFeeReceipt(db: Pick<Database, "select">, input: { feeLineId: number; paymentId: number; amount: number; left: number; receiptNumber: number; paid: { at: Date } | { on: string }; test: boolean; opened: boolean }) {
   const found = await feeContext(db, input.feeLineId);
   if (!found?.payer) return;
-  const message = feeReceiptEmail({ name: found.payer.name, title: found.title, label: found.fee.label, amount: input.amount, left: input.left, receipt: receiptNumberLabel(input.receiptNumber), reference: feeReference(input.feeLineId), paid: input.paid, test: input.test, opened: input.opened });
+  const { engagement } = found;
+  const startsBusinessReview = input.opened && engagement.businessCheckId !== null && engagement.paymentRequestId === null && engagement.type === "business_review";
+  const message = feeReceiptEmail({ name: found.payer.name, title: found.title, label: found.fee.label, amount: input.amount, left: input.left, receipt: receiptNumberLabel(input.receiptNumber), reference: feeReference(input.feeLineId), paid: input.paid, test: input.test, opened: input.opened, startsBusinessReview });
   await deliverEmail({ to: found.payer.email, sender: "business_support", idempotencyKey: `payments:${input.paymentId}:receipt`, subject: message.subject, body: message.body })
     .catch((error: unknown) => console.error("[Fees] The receipt could not be sent:", error instanceof Error ? error.message : "unknown error"));
 }
@@ -243,6 +263,8 @@ export async function settleFee(db: Database, feeLineId: number, reference: stri
     left > 0 ? `${formatNaira(left)} is left to pay on this fee.` : "",
     "", `Receipt: ${receiptNumberLabel(payment.receiptNumber!)}`, `Reference: ${feeReference(fee.id)}`, `Paystack reference: ${reference}`, opened ? "This was the first payment: the client's room is now open." : "",
   ], `payments:${payment.id}:office`);
+  // A Business Review on fees starts on its first payment (F3): Won, its plan and the owner's invitation.
+  await beginBusinessReview(db, fee.engagementId, { opened, paid: true, actorUserId: null, via: "paystack" });
   return "confirmed";
 }
 

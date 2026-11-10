@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import * as schema from "../../drizzle/schema";
+import { lagosDay } from "@shared/agreement";
 import { createPgliteHarness, createRemoteHarness, type DbHarness } from "./harness";
 import { businessCheckProfiles } from "../fixtures/businessCheckProfiles";
 
@@ -96,8 +97,9 @@ for (const target of targets) {
       const { token } = await (await visitor.call()).businessCheck.start({ fullName: `Ada ${label}`, email, whatsapp: "+2348000000001" });
       await (await visitor.call()).businessCheck.submit({ token, answers: { ...completeAnswers, p_name: `Shop ${label}` } });
       const id = (await db.select().from(schema.businessChecks).where(eq(schema.businessChecks.publicToken, token)))[0].id as number;
-      const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
-      await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId });
+      // The Business Review paid (F3): its link opens the engagement; its first half is recorded as Finance would.
+      const { feeLineId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+      await (await superAdmin.call()).engagement.finance.recordPayment({ feeLineId: feeLineId!, amount: 300_000, receivedOn: lagosDay(), method: "bank_transfer", note: "Transfer for the Business Review" });
       const invitation = emails().filter(sent => sent.to === email && sent.subject.startsWith("Set up your client account")).at(-1)!;
       const owner = browser();
       await (await owner.call()).onboarding.accept({ token: decodeURIComponent(invitation.body.match(/Create your account: (\S+)/)![1].split("/onboarding/")[1]), email, fullName: `Owner ${label}`, password: PASSWORD, confirmPassword: PASSWORD, businessName: `Business ${label}` });

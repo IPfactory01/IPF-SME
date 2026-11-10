@@ -101,7 +101,8 @@ example, exists only in Resend (shown once at creation) and in Vercel.
 What it does is in the App flow (section 3.1) and the tables are in the Backend schema (section 2, migration 0022).
 How it is built:
 
-- **One module owns money,** `server/ledger.ts` (`server/payments.ts` stays the payment requests). Every write to `payments`, `payment_refunds`, `document_counters` and
+- **One module owns money,** `server/ledger.ts` (`server/payments.ts` stays the payment requests; `server/businessReview.ts`
+  opens the Business Review on fees and starts it on its first payment, F3). Every write to `payments`, `payment_refunds`, `document_counters` and
   a fee's paid and write-off columns goes through it, in one transaction that first locks the fee's row
   (`SELECT … FOR UPDATE`), so two payments cannot both take what is left. The lock lives inside the transaction, so it
   works through the transaction pooler.

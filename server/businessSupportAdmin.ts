@@ -1,5 +1,6 @@
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
+import { businessReviewStates } from "./businessReview";
 import { adminAccessAuditEvents, businessChecks, businessMemberships, businesses, users } from "../drizzle/schema";
 import { advancePipeline, PIPELINE_STAGES, type PipelineStage } from "../shared/businessCheck/pipeline";
 import type { CheckResult } from "../shared/businessCheck/engine";
@@ -149,13 +150,15 @@ export async function getBusinessCheckDetail(db: Pick<Database, "select">, busin
   const { resultJson, summaryJson, ...fields } = row;
   const result = parseJson<Pick<CheckResult, "outline" | "primaryArea" | "founder">>(resultJson);
   const summary = parseJson<CheckSummary>(summaryJson);
-  const [invitations, stageHistory, payments, report] = await Promise.all([latestInvitationStatuses(db), stageHistoryFor(db, row.id), paymentsOf(db, row.id), reportOf(db, row.id)]);
+  const [invitations, stageHistory, payments, report, businessReview] = await Promise.all([latestInvitationStatuses(db), stageHistoryFor(db, row.id), paymentsOf(db, row.id), reportOf(db, row.id), businessReviewStates(db, [row.id])]);
   return {
     ...fields,
     invitationStatus: invitations.get(row.id) ?? null,
     stageHistory,
     payments,
     report,
+    /** Since F3: the Business Review's first half, on the engagement its link opened (server/businessReview.ts). */
+    businessReview: businessReview.get(row.id) ?? null,
     summary: summary ? { found: summary.found, think: summary.think, next: summary.next, offerings: summary.offerings ?? [] } : null,
     outline: result?.outline ?? null,
     primaryAreaNumber: result?.primaryArea?.area ?? row.primaryArea ?? null,

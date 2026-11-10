@@ -8,6 +8,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import { and, eq, sql } from "drizzle-orm";
 import * as schema from "../../drizzle/schema";
 import { createPgliteHarness, createRemoteHarness, type DbHarness } from "./harness";
+import { legacyBusinessReviewRequest } from "./legacyBusinessReview";
 import { businessCheckProfiles, profileContact } from "../fixtures/businessCheckProfiles";
 
 const holder = vi.hoisted(() => {
@@ -37,6 +38,7 @@ import { hashAdminPassword, OWNER_ADMIN_EMAIL } from "@server/adminSecurity";
 import { ACCOUNT_SESSION_COOKIE, type PlatformRole } from "@shared/auth";
 import { cleanAnswers } from "@shared/businessCheck/engine";
 import { sampleIntake } from "../fixtures/reportIntake";
+import { addDays, lagosDay } from "@shared/agreement";
 import type { TrpcContext } from "@server/_core/context";
 
 const REMOTE_TEST_TIMEOUT_MS = 90_000;
@@ -242,119 +244,148 @@ for (const target of targets) {
     });
 
     describe("Business Review", () => {
-      it("is requested by the team after the call, moving the business to Opportunity, and re-sending keeps one request", async () => {
+      const parse = (rows: Array<{ details: string }>) => rows.map(row => JSON.parse(row.details));
+      /** Finance records the first half by hand, as for money that came another way (App flow 3.1). */
+      const payFirstHalf = async (feeLineId: number, payer: Browser = superAdmin) =>
+        (await payer.call()).engagement.finance.recordPayment({ feeLineId, amount: 300_000, receivedOn: lagosDay(), method: "bank_transfer", note: "Transfer 5521" });
+
+      it("is sent by the team after the call as its fee: the engagement opens waiting for its first payment, the business moves to Opportunity, and sending again keeps one fee (F3)", async () => {
         const { token, email, visitor, id } = await finishedCheck("current-state");
         await (await visitor.call()).businessCheck.requestNext({ token, choice: "call" });
         mocked.deliverEmail.mockClear();
 
         const sent = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
-        expect(sent).toMatchObject({ reference: `TS-CS-${String(id).padStart(6, "0")}`, pipelineStage: "opportunity" });
+        expect(sent).toMatchObject({ paymentRequestId: null, reference: `TS-F-${String(sent.feeLineId).padStart(6, "0")}`, pipelineStage: "opportunity", engagementId: expect.any(Number) });
         expect((await rowFor(token)).pipelineStage).toBe("opportunity");
-        const details = emails().find(sent => sent.to === email)!;
+        // There is no payment request since F3: its two halves are fees on the engagement, the first billed and due in two days.
+        expect(await paymentsOf(id)).toEqual([]);
+        const fees = await db.select().from(schema.engagementFeeLines).where(eq(schema.engagementFeeLines.engagementId, sent.engagementId!)).orderBy(schema.engagementFeeLines.sortOrder);
+        expect(fees.map((fee: { label: string; amount: number; dueOn: string | null }) => [fee.label, fee.amount, fee.dueOn])).toEqual([["Business Review: half to start", 300_000, addDays(lagosDay(), 2)], ["Business Review: half on delivery", 300_000, null]]);
+        expect(fees[0].invoiceNumber).not.toBeNull();
+        const engagement = (await db.select().from(schema.engagements).where(eq(schema.engagements.businessCheckId, id)))[0];
+        expect(engagement).toMatchObject({ id: sent.engagementId, opensOnPayment: true, paymentRequestId: null, contactEmail: email });
+
+        const details = emails().find(message => message.to === email)!;
         expect(details.subject).toBe("Payment details for your Business Review");
-        // A service agreed on a call is paid in halves (R36): the details ask for the first.
+        // A service agreed on a call is paid in halves (R36): the details ask for the first, on its fee.
         expect(details.body).toContain("Amount: ₦300,000, the first half of ₦600,000");
+        expect(details.body).toContain(`Reference: ${sent.reference}`);
+        expect(details.body).toMatch(/Invoice: TS-IN-\d{6}/);
+        expect(details.body).toMatch(/Pay by: \w{3} \d{1,2} \w{3} \d{4}\n/);
+        expect(details.body).not.toContain("48 hours");
         expect(details.body).toContain("The second half, ₦300,000, is due seven days after we share your Findings.");
 
         await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
-        const rows = await paymentsOf(id);
-        expect(rows).toHaveLength(1);
-        expect(rows[0].requestedByUserId).not.toBeNull();
-        const audits = await auditsFor("payment_details_sent", id);
-        expect(audits.map((event: { details: string }) => JSON.parse(event.details))).toEqual(expect.arrayContaining([
-          expect.objectContaining({ item: "current_state", again: false, from: "call_booked", to: "opportunity" }),
+        expect(await db.select().from(schema.engagements).where(eq(schema.engagements.businessCheckId, id))).toHaveLength(1);
+        expect(await db.select().from(schema.engagementFeeLines).where(eq(schema.engagementFeeLines.engagementId, sent.engagementId!))).toHaveLength(2);
+        expect(parse(await auditsFor("payment_details_sent", id))).toEqual(expect.arrayContaining([
+          expect.objectContaining({ item: "current_state", again: false, from: "call_booked", to: "opportunity", feeLineId: sent.feeLineId }),
           expect.objectContaining({ item: "current_state", again: true }),
         ]));
+        // The record shows the fee, awaiting payment; the list's chip says the same.
+        expect((await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id })).businessReview).toMatchObject({ feeLineId: sent.feeLineId, paid: false, late: false, awaitingPayment: true, amount: 300_000, total: 600_000 });
+        expect((await (await superAdmin.call()).businessSupport.checks()).find((row: { id: number }) => row.id === id)!.payments).toEqual({ current_state: "requested" });
       });
 
-      it("once paid, wins the business and sends the client account invitation, which is where the Business Review starts", async () => {
+      it("once its first half is paid, wins the business and sends the client account invitation, which is where the Business Review starts (F3)", async () => {
         const { token, email, id } = await finishedCheck("current-state-paid");
-        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+        const { feeLineId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
         mocked.deliverEmail.mockClear();
 
-        const confirmed = await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId });
-        expect(confirmed).toMatchObject({ changed: true, invitation: "sent" });
+        expect(await payFirstHalf(feeLineId!)).toMatchObject({ success: true, left: 0, opened: true });
         expect((await rowFor(token)).pipelineStage).toBe("won");
         const invitations = await db.select().from(schema.clientOnboardingInvitations).where(eq(schema.clientOnboardingInvitations.businessCheckId, id));
         expect(invitations).toHaveLength(1);
         expect(invitations[0].status).toBe("pending");
-        const subjects = emails().filter(sent => sent.to === email).map(sent => sent.subject);
-        expect(subjects).toEqual(["Payment received: your Business Review is booked", "Set up your client account on The Shift"]);
-        const confirmation = emails().find(sent => sent.subject === "Payment received: your Business Review is booked")!;
-        expect(confirmation.body).toContain("We take three working days to get set up; the review starts at your first Session.");
-        const audit = (await auditsFor("payment_confirmed", id)).map((event: { details: string }) => JSON.parse(event.details));
-        expect(audit).toEqual([expect.objectContaining({ item: "current_state", amountNaira: 300_000, from: "opportunity", to: "won" })]);
-      });
-
-      it("holds the link for 48 hours; after that the team sees it and can send a fresh link, and a late payment can still be confirmed by hand", async () => {
-        const { token, email, id } = await finishedCheck("window");
-        mocked.deliverEmail.mockClear();
-        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
-        const details = emails().find(sent => sent.to === email)!;
-        expect(details.body).toMatch(/Pay by: .+ \(Lagos time\)/);
-        expect(details.body).toContain("If you need more than 48 hours, reply to this email and we will send you a new link.");
-        const detailOf = async () => (await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id })).payments![0];
-        const listedOf = async () => (await (await superAdmin.call()).businessSupport.checks()).find((row: { id: number }) => row.id === id)!.payments;
-        expect(await detailOf()).toMatchObject({ status: "requested", displayStatus: "requested" });
-
-        const age = async (hours: number) => db.update(schema.paymentRequests).set({ requestedAt: new Date(Date.now() - hours * 3_600_000) }).where(eq(schema.paymentRequests.id, paymentRequestId));
-        await age(49);
-        expect(await detailOf()).toMatchObject({ status: "requested", displayStatus: "expired" });
-        expect(await listedOf()).toEqual({ current_state: "expired" });
-        // The stage is the team's call: it does not move to Lost on its own.
-        expect((await rowFor(token)).pipelineStage).toBe("opportunity");
-
-        // Sending the details again starts a new window.
-        await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
-        expect(await detailOf()).toMatchObject({ displayStatus: "requested" });
-
-        // Money that arrives after the window can still be confirmed.
-        await age(72);
-        expect(await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId })).toMatchObject({ changed: true, invitation: "sent" });
-        expect(await detailOf()).toMatchObject({ status: "confirmed", displayStatus: "confirmed" });
-        expect((await rowFor(token)).pipelineStage).toBe("won");
-      });
-
-      it("records what happened to the confirmation email, and sends it again on request", async () => {
-        const { email, id } = await finishedCheck("confirmation-again");
-        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
-        await expect((await superAdmin.call()).businessSupport.resendPaymentConfirmation({ paymentRequestId })).rejects.toMatchObject({ code: "CONFLICT" });
-        mocked.deliverEmail.mockResolvedValueOnce({ status: "Failed", reason: "mailbox unavailable" });
-        await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId });
-        const history = () => (async () => (await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id })).stageHistory.filter(event => event.action === "payment_confirmation_sent"))();
-        expect(await history()).toEqual([expect.objectContaining({ item: "current_state", delivery: "Failed" })]);
-
-        mocked.deliverEmail.mockClear();
-        expect(await (await superAdmin.call()).businessSupport.resendPaymentConfirmation({ paymentRequestId })).toEqual({ success: true, deliveryStatus: "Simulated" });
-        const again = emails().find(sent => sent.to === email)!;
-        expect(again.subject).toBe("Payment received: your Business Review is booked");
-        expect(await history()).toEqual([expect.objectContaining({ delivery: "Simulated" }), expect.objectContaining({ delivery: "Failed" })]);
-        const audit = (await auditsFor("payment_confirmation_sent", id)).map((event: { details: string }) => JSON.parse(event.details).again);
-        expect(audit).toEqual([false, true]);
-      });
-
-      it("sends one invitation and one confirmation when two people confirm together", async () => {
-        const { email, id } = await finishedCheck("invite-twice");
-        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
-        mocked.deliverEmail.mockClear();
-        const [first, second] = await Promise.all([superAdmin.call(), superAdmin.call()]);
-        const results = await together([
-          () => first.businessSupport.confirmPayment({ paymentRequestId }),
-          () => second.businessSupport.confirmPayment({ paymentRequestId }),
-        ]);
-        expect(results.filter(result => result.changed)).toEqual([expect.objectContaining({ invitation: "sent" })]);
-        const invitations = await db.select().from(schema.clientOnboardingInvitations).where(eq(schema.clientOnboardingInvitations.businessCheckId, id));
-        expect(invitations.map((invitation: { status: string }) => invitation.status)).toEqual(["pending"]);
-        expect(emails().filter(sent => sent.to === email).map(sent => sent.subject)).toEqual(["Payment received: your Business Review is booked", "Set up your client account on The Shift"]);
+        expect(emails().filter(message => message.to === email).map(message => message.subject)).toEqual(["Payment received: Business Review: half to start", "Set up your client account on The Shift"]);
+        const receipt = emails().find(message => message.subject === "Payment received: Business Review: half to start")!;
+        expect(receipt.body).toContain("We have received ₦300,000 for the Business Review: half to start. Thank you.");
+        expect(receipt.body).toContain("Your Business Review is booked. We take three working days to get set up; the review starts at your first Session.");
+        expect(receipt.body).toContain("WHAT HAPPENS NEXT");
+        expect(parse(await auditsFor("payment_confirmed", id))).toEqual([expect.objectContaining({ item: "current_state", amountNaira: 300_000, from: "opportunity", to: "won", feeLineId })]);
+        expect((await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id })).businessReview).toMatchObject({ paid: true, receipt: expect.stringMatching(/^TS-RC-\d{6}$/), awaitingPayment: false });
+        expect((await (await superAdmin.call()).businessSupport.checks()).find((row: { id: number }) => row.id === id)!.payments).toEqual({ current_state: "confirmed" });
+        // A paid first half is never sent again.
+        await expect((await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" })).rejects.toMatchObject({ code: "CONFLICT", message: "This has already been paid." });
       });
 
       it("does not send a second invitation when one is already out", async () => {
         const { id } = await finishedCheck("already-invited");
         await (await superAdmin.call()).onboarding.invite({ businessCheckId: id, overrideReason: "Invited early by agreement" });
-        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
-        expect(await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId })).toMatchObject({ invitation: "already_invited" });
+        const { feeLineId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+        await payFirstHalf(feeLineId!);
         const invitations = await db.select().from(schema.clientOnboardingInvitations).where(eq(schema.clientOnboardingInvitations.businessCheckId, id));
         expect(invitations).toHaveLength(1);
+      });
+
+      describe("a link sent before F3", () => {
+        it("holds for 48 hours; after that the team sees it lapse, and a late payment can still be confirmed by hand", async () => {
+          const { token, id } = await finishedCheck("window");
+          const request = await legacyBusinessReviewRequest(db, { businessCheckId: id, requestedByUserId: null });
+          const detailOf = async () => (await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id })).payments![0];
+          const listedOf = async () => (await (await superAdmin.call()).businessSupport.checks()).find((row: { id: number }) => row.id === id)!.payments;
+          expect(await detailOf()).toMatchObject({ status: "requested", displayStatus: "requested" });
+
+          const age = async (hours: number) => db.update(schema.paymentRequests).set({ requestedAt: new Date(Date.now() - hours * 3_600_000) }).where(eq(schema.paymentRequests.id, request.id));
+          await age(49);
+          expect(await detailOf()).toMatchObject({ status: "requested", displayStatus: "expired" });
+          expect(await listedOf()).toEqual({ current_state: "expired" });
+          // The stage is the team's call: it does not move to Lost on its own.
+          expect((await rowFor(token)).pipelineStage).toBe("opportunity");
+
+          // Money that arrives after the window can still be confirmed, while the link has not gone out again as a fee.
+          expect(await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: request.id })).toMatchObject({ changed: true, invitation: "sent" });
+          expect(await detailOf()).toMatchObject({ status: "confirmed", displayStatus: "confirmed" });
+          expect((await rowFor(token)).pipelineStage).toBe("won");
+          // A Business Review paid on its old link is paid: its link is never sent again as a fee.
+          await expect((await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" })).rejects.toMatchObject({ code: "CONFLICT", message: "This has already been paid." });
+        });
+
+        it("stops taking money once its link goes out again as a fee: it cannot be confirmed by hand, and the fee is the one to pay", async () => {
+          const { id } = await finishedCheck("moved-on");
+          const request = await legacyBusinessReviewRequest(db, { businessCheckId: id, requestedByUserId: null });
+          const { feeLineId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+          await expect((await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: request.id })).rejects.toMatchObject({ code: "CONFLICT", message: "This Business Review is now paid on its fee. Record the payment on the fee in Finance." });
+          expect((await paymentsOf(id))[0]).toMatchObject({ status: "requested" });
+          // The record and the list follow the fee.
+          expect((await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id })).businessReview).toMatchObject({ feeLineId, paid: false });
+          expect((await (await superAdmin.call()).businessSupport.checks()).find((row: { id: number }) => row.id === id)!.payments).toEqual({ current_state: "requested" });
+          await payFirstHalf(feeLineId!);
+          expect((await (await superAdmin.call()).businessSupport.checks()).find((row: { id: number }) => row.id === id)!.payments).toEqual({ current_state: "confirmed" });
+        });
+
+        it("records what happened to the confirmation email, and sends it again on request", async () => {
+          const { email, id } = await finishedCheck("confirmation-again");
+          const { id: paymentRequestId } = await legacyBusinessReviewRequest(db, { businessCheckId: id, requestedByUserId: null });
+          await expect((await superAdmin.call()).businessSupport.resendPaymentConfirmation({ paymentRequestId })).rejects.toMatchObject({ code: "CONFLICT" });
+          mocked.deliverEmail.mockResolvedValueOnce({ status: "Failed", reason: "mailbox unavailable" });
+          await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId });
+          const history = () => (async () => (await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id })).stageHistory.filter(event => event.action === "payment_confirmation_sent"))();
+          expect(await history()).toEqual([expect.objectContaining({ item: "current_state", delivery: "Failed" })]);
+
+          mocked.deliverEmail.mockClear();
+          expect(await (await superAdmin.call()).businessSupport.resendPaymentConfirmation({ paymentRequestId })).toEqual({ success: true, deliveryStatus: "Simulated" });
+          const again = emails().find(message => message.to === email)!;
+          expect(again.subject).toBe("Payment received: your Business Review is booked");
+          expect(await history()).toEqual([expect.objectContaining({ delivery: "Simulated" }), expect.objectContaining({ delivery: "Failed" })]);
+          const audit = (await auditsFor("payment_confirmation_sent", id)).map((event: { details: string }) => JSON.parse(event.details).again);
+          expect(audit).toEqual([false, true]);
+        });
+
+        it("sends one invitation and one confirmation when two people confirm together", async () => {
+          const { email, id } = await finishedCheck("invite-twice");
+          const { id: paymentRequestId } = await legacyBusinessReviewRequest(db, { businessCheckId: id, requestedByUserId: null });
+          mocked.deliverEmail.mockClear();
+          const [first, second] = await Promise.all([superAdmin.call(), superAdmin.call()]);
+          const results = await together([
+            () => first.businessSupport.confirmPayment({ paymentRequestId }),
+            () => second.businessSupport.confirmPayment({ paymentRequestId }),
+          ]);
+          expect(results.filter(result => result.changed)).toEqual([expect.objectContaining({ invitation: "sent" })]);
+          const invitations = await db.select().from(schema.clientOnboardingInvitations).where(eq(schema.clientOnboardingInvitations.businessCheckId, id));
+          expect(invitations.map((invitation: { status: string }) => invitation.status)).toEqual(["pending"]);
+          expect(emails().filter(message => message.to === email).map(message => message.subject)).toEqual(["Payment received: your Business Review is booked", "Set up your client account on The Shift"]);
+        });
       });
     });
 
@@ -366,24 +397,25 @@ for (const target of targets) {
         expect((await rowFor(token)).pipelineStage).toBe("call_booked");
         await (await visitor.call()).businessCheck.requestNext({ token, choice: "report" });
         const report = (await paymentsOf(id)).find((row: { item: string }) => row.item === "full_report");
-        expect(emails().some(sent => sent.to === email && sent.subject === "Payment details for your Full Report")).toBe(true);
+        expect(emails().some(message => message.to === email && message.subject === "Payment details for your Full Report")).toBe(true);
 
         // 2. They pay for the report (the Paystack path is covered in onlinePayment.db.test.ts; the team's fallback stands in
         //    here); they answer the form and get the report.
         await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: report.id });
-        const formLink = emails().find(sent => sent.to === email && sent.subject === "Payment received: your Full Report")!.body.match(/Complete your Report Intake: (\S+)/)![1];
+        const formLink = emails().find(message => message.to === email && message.subject === "Payment received: your Full Report")!.body.match(/Complete your Report Intake: (\S+)/)![1];
         await (await browser().call()).fullReport.submit({ token: decodeURIComponent(formLink.split("/report/")[1]), intake: sampleIntake });
-        expect(emails().some(sent => sent.to === email && sent.subject.startsWith("Your Full Report") && sent.attachments?.length === 1)).toBe(true);
+        expect(emails().some(message => message.to === email && message.subject.startsWith("Your Full Report") && message.attachments?.length === 1)).toBe(true);
 
-        // 3. After the call, the team sends the Business Review details; the owner pays; the team confirms.
-        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+        // 3. After the call, the team sends the Business Review link, which opens its engagement; the owner pays its first
+        //    half (Paystack's path is in ledger.db.test.ts; Finance recording it stands in here).
+        const { feeLineId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
         expect((await rowFor(token)).pipelineStage).toBe("opportunity");
         mocked.deliverEmail.mockClear();
-        expect(await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId })).toMatchObject({ invitation: "sent" });
+        await (await superAdmin.call()).engagement.finance.recordPayment({ feeLineId: feeLineId!, amount: 300_000, receivedOn: lagosDay(), method: "bank_transfer", note: "Transfer 7719" });
         expect((await rowFor(token)).pipelineStage).toBe("won");
 
         // 4. The owner follows the link in the invitation email and creates their client account.
-        const invitation = emails().find(sent => sent.to === email && sent.subject === "Set up your client account on The Shift")!;
+        const invitation = emails().find(message => message.to === email && message.subject === "Set up your client account on The Shift")!;
         const link = invitation.body.match(/Create your account: (\S+)/)![1];
         const inviteToken = decodeURIComponent(link.split("/onboarding/")[1]);
         const owner = browser();
@@ -396,7 +428,8 @@ for (const target of targets) {
         // 5. The admin console tells the whole story.
         const detail = await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id });
         expect(detail.invitationStatus).toBe("accepted");
-        expect(detail.payments!.map(payment => [payment.item, payment.status])).toEqual([["full_report", "confirmed"], ["current_state", "confirmed"]]);
+        expect(detail.payments!.map(payment => [payment.item, payment.status])).toEqual([["full_report", "confirmed"]]);
+        expect(detail.businessReview).toMatchObject({ paid: true, awaitingPayment: false });
         const actions = detail.stageHistory.map(event => event.action);
         expect(actions.filter(action => action === "payment_confirmed")).toHaveLength(2);
         expect(actions.filter(action => action === "payment_details_sent")).toHaveLength(2);
@@ -404,6 +437,9 @@ for (const target of targets) {
         expect(actions).not.toContain("payment_proof_received");
         expect(actions).toContain("full_report_delivered");
         expect(detail.report).toMatchObject({ status: "delivered" });
+        // The room is theirs, with both halves of the Business Review.
+        const room = (await (await owner.call()).engagement.client.room())!;
+        expect(room.fees.map(fee => [fee.label, fee.paid])).toEqual([["Business Review: half to start", true], ["Business Review: half on delivery", false]]);
       });
     });
 
@@ -543,7 +579,8 @@ for (const target of targets) {
       it("lets finance and the Super Admin handle payments, and refuses everyone else", async () => {
         const { id } = await finishedCheck("permissions");
         const finance = await signInStaff(await person({}, ["finance"]));
-        const { paymentRequestId } = await (await finance.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+        expect((await (await finance.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" })).feeLineId).toBeGreaterThan(0);
+        const { paymentRequestId } = await (await finance.call()).businessSupport.requestPayment({ businessCheckId: id, item: "full_report" });
         expect(paymentRequestId).toBeGreaterThan(0);
         await expect((await finance.call()).businessSupport.setStage({ businessCheckId: id, stage: "lost" })).rejects.toMatchObject({ code: "FORBIDDEN" });
 
@@ -556,9 +593,10 @@ for (const target of targets) {
         const analyst = await signInStaff(await person({}, ["analyst"]));
         for (const b of [clientSession, browser(), bareAdmin, analyst]) {
           await expect((await b.call()).businessSupport.requestPayment({ businessCheckId: id, item: "full_report" })).rejects.toMatchObject({ code: "FORBIDDEN" });
-          await expect((await b.call()).businessSupport.confirmPayment({ paymentRequestId })).rejects.toMatchObject({ code: "FORBIDDEN" });
+          await expect((await b.call()).businessSupport.confirmPayment({ paymentRequestId: paymentRequestId! })).rejects.toMatchObject({ code: "FORBIDDEN" });
+          await expect((await b.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" })).rejects.toMatchObject({ code: "FORBIDDEN" });
         }
-        expect((await paymentsOf(id))[0]).toMatchObject({ status: "requested" });
+        expect((await paymentsOf(id))[0]).toMatchObject({ item: "full_report", status: "requested" });
       });
 
       it("refuses an unknown check or payment", async () => {

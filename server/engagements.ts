@@ -142,6 +142,27 @@ async function businessReviewBalance(db: Pick<Database, "select">, paymentReques
   return secondHalf(request.amountNaira, displayedPrices().currentState);
 }
 
+/**
+ * The Business Review's starting plan: its Data Request and the team's actions from the template, week 1 due in three
+ * working days and week 2 in eight, and its Sessions. Loaded when it is paid, so nothing is due before the client can
+ * see it: at once for a link paid before F3 (`startEngagement`), and on the first payment of its fee since F3
+ * (server/businessReview.ts).
+ */
+export async function loadAssessmentPlan(tx: Pick<Database, "insert">, engagementId: number, input: { now: Date; actorUserId: number | null }) {
+  const dueFor = (week: number) => addWorkingDays(input.now, week === 1 ? 3 : 8);
+  await tx.insert(engagementTasks).values([
+    ...ASSESSMENT_TEMPLATE.dataRequests.map(item => ({
+      engagementId, kind: "data_request" as const, side: "client" as const, title: item.title, detail: item.detail, dueOn: dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: input.actorUserId,
+    })),
+    ...ASSESSMENT_TEMPLATE.teamActions.map(item => ({
+      engagementId, kind: "action" as const, side: "ipf" as const, title: item.title, detail: item.detail, dueOn: dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: input.actorUserId,
+    })),
+  ]);
+  await tx.insert(engagementSessions).values(ASSESSMENT_TEMPLATE.sessions.map(item => ({
+    engagementId, kind: item.kind, title: item.title, durationMinutes: item.durationMinutes, agenda: item.agenda, weekNumber: item.week, sortOrder: item.order, createdByUserId: input.actorUserId,
+  })));
+}
+
 export async function startEngagement(db: Database, input: { businessCheckId: number; paymentRequestId: number | null; actorUserId: number | null; now?: Date }) {
   const now = input.now ?? new Date();
   return db.transaction(async tx => {
@@ -154,19 +175,7 @@ export async function startEngagement(db: Database, input: { businessCheckId: nu
       .onConflictDoNothing({ target: engagements.businessCheckId })
       .returning({ id: engagements.id });
     if (!created) return { engagementId: null, created: false } as const;
-    // The Work Plan: week 1 is due in three working days, week 2 in eight; the team's own actions sit beside the client's.
-    const dueFor = (week: number) => addWorkingDays(now, week === 1 ? 3 : 8);
-    await tx.insert(engagementTasks).values([
-      ...ASSESSMENT_TEMPLATE.dataRequests.map(item => ({
-        engagementId: created.id, kind: "data_request" as const, side: "client" as const, title: item.title, detail: item.detail, dueOn: dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: input.actorUserId,
-      })),
-      ...ASSESSMENT_TEMPLATE.teamActions.map(item => ({
-        engagementId: created.id, kind: "action" as const, side: "ipf" as const, title: item.title, detail: item.detail, dueOn: dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: input.actorUserId,
-      })),
-    ]);
-    await tx.insert(engagementSessions).values(ASSESSMENT_TEMPLATE.sessions.map(item => ({
-      engagementId: created.id, kind: item.kind, title: item.title, durationMinutes: item.durationMinutes, agenda: item.agenda, weekNumber: item.week, sortOrder: item.order, createdByUserId: input.actorUserId,
-    })));
+    await loadAssessmentPlan(tx, created.id, { now, actorUserId: input.actorUserId });
     if (balance > 0) await tx.insert(engagementFeeLines).values(initialFeeRows(created.id, [{ label: `${CURRENT_STATE.name}: half on delivery`, amount: balance, dueOn: null }]));
     await recordAudit(tx, { action: "engagement_started", actorUserId: input.actorUserId, details: { engagementId: created.id, businessCheckId: input.businessCheckId, ...(balance > 0 ? { secondHalf: balance } : {}) } });
     return { engagementId: created.id, created: true } as const;

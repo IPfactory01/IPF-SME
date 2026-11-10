@@ -4,6 +4,7 @@ import React from "react";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { journeyOf } from "@shared/engagement";
+import { addDays, lagosDay } from "@shared/agreement";
 import { AREA_NAMES } from "@shared/businessCheck/questions";
 import { evaluate, READINESS_LABELS } from "@shared/businessCheck/engine";
 import { buildFullReport } from "@shared/fullReport/build";
@@ -285,6 +286,24 @@ describe("the first visit (R46) and What we will do (R47)", () => {
     expect(week.getByText("Your records on the Data Request are in")).toBeTruthy();
     expect(week.getAllByText("(done)")).toHaveLength(2);
     expect(week.queryAllByRole("link")).toEqual([]);
+  });
+
+  it("lists a fee only when it is due this week or late, never one a month away (Marcelle's room, 10 November 2026)", () => {
+    // Her Month 1 fee was moved to 30 days after kickoff, and Getting started still said to pay it, "payable on starting".
+    const today = lagosDay();
+    const monthly = (id: number, label: string, dueOn: string) => feeRow({ id, label, amount: 470000, dueOn, paid: false, reference: `TS-F-00000${id}`, payPath: `/pay/fee/${id}` });
+    const fees = [monthly(1, "Month 1 service fee", addDays(today, 30)), monthly(2, "Month 2 service fee", addDays(today, 60))];
+    const { unmount } = render(<EngagementRoom room={room({ sessions: [], nextSession: null, booking: null, fees })} />);
+    const week = within(screen.getByRole("list", { name: "First things to do" }));
+    expect(week.queryByRole("link", { name: /^Pay / })).toBeNull();
+    expect(week.getByText("Your team sends you a time for your first Session")).toBeTruthy();
+    unmount();
+    // Due within seven days, it is a first thing to do; so is one already late.
+    for (const dueOn of [addDays(today, 7), addDays(today, -2)]) {
+      const { unmount: close } = render(<EngagementRoom room={room({ sessions: [], nextSession: null, booking: null, fees: [monthly(1, "Month 1 service fee", dueOn)] })} />);
+      expect(within(screen.getByRole("list", { name: "First things to do" })).getByRole("link", { name: "Pay Month 1 service fee: ₦470,000" }).getAttribute("href")).toBe("/pay/fee/1");
+      close();
+    }
   });
 
   it("says the team sends a time when nothing can be booked yet, and shows nothing once the engagement is closed", () => {

@@ -10,6 +10,7 @@ import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlas
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
+import { addDays, lagosDay } from "@shared/agreement";
 import { DATED_TYPES, datedProgress, monthOfDay, SERVICE_STEPS, TYPE_PRODUCT } from "@shared/engagementTypes";
 import { MENU_PRODUCTS } from "@shared/products";
 import { CURRENT_STATE, formatNaira } from "@shared/businessSupport";
@@ -211,8 +212,10 @@ function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps)
   // things to do (the first Session, the first records, any fee) and what happens next. Each line opens where it is done.
   // Not "Your first week": the first Session can fall in week two.
   const firstRecords = room.tasks.filter(task => task.side === "client" && task.kind === "data_request" && (task.status === "open" || task.status === "needs_more"));
-  // A fee that is due: a second half has no date until delivery, so it is not a first-week step (R36).
-  const firstFee = room.fees.find(fee => !fee.paid && fee.dueOn !== null);
+  // A fee due this week, or late (R46): one due later waits on Payments with its date, and a second half has no date
+  // until delivery (R36). A fee a month away is not a first thing to do.
+  const weekAhead = addDays(lagosDay(), 7);
+  const firstFee = room.fees.find(fee => !fee.paid && fee.dueOn !== null && fee.dueOn <= weekAhead);
   const firstWeekSteps: { text: string; done: boolean; href?: string; external?: boolean }[] = [
     room.booking ? { text: `Book your first ${METHOD.session}`, done: false, href: room.booking.url, external: true }
       : room.nextSession ? { text: `Your first ${METHOD.session} is booked: ${lagos(room.nextSession.scheduledFor)}`, done: true }

@@ -375,9 +375,9 @@ engagement without hurting the results above it.
 | K10 | Raw footage is large; storing it would cost more than it is worth | Risk | Engineering | Video moves by link or WhatsApp, never stored (R43) |
 | K11 | WhatsApp numbers of team members shown to clients | Risk | ET | Each person agrees to their number being shown; a work number where they have one |
 | K1 | Paystack live keys and the live webhook in Vercel | Dependency | ET, Lewis | To confirm |
-| K2 | The sending domain verified in Resend, so emails reach outside inboxes | Dependency | DG, Lewis | To confirm |
+| K2 | The sending domain verified in Resend, so emails reach outside inboxes | Dependency | DG, Lewis | Done: the platform's emails reach clients, and Resend sends only from a verified domain (ET, 10 November 2026) |
 | K3 | Supabase on a paid plan with daily backups | Dependency | ET | To do |
-| K4 | The old Supabase project secured | Risk | ET | To do |
+| K4 | The old Supabase project secured | Risk | ET | Done (ET, 10 November 2026); the site uses only the live project |
 | K5 | Counsel's view of the Terms and the signing entity (D1) | Dependency | ET | Open |
 | K6 | The desk depends on a few people; levels and assignments must be kept current | Risk | Partners | Ongoing |
 | K7 | A second owner on Google Search Console | Risk | ET | To do |

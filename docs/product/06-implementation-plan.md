@@ -29,7 +29,7 @@ counting time spent waiting on a decision or a migration.
 
 Migrations are applied through **0022**. Release 0 still waits on the timed phone run with ET or Marcelle (B6) and the
 team's WhatsApp numbers (I1); batch C was built on 10 November. Release 1 is built (batches E, F and G, 10 November
-2026). Release 2, the reminders, needs a scheduled job on Vercel and the sending domain verified (K2) first. The document tests (`test/docs/productDocs.test.ts`) fail the build
+2026). Release 2, the reminders, needs a scheduled job on Vercel first; the sending domain is verified (K2, 10 November). The document tests (`test/docs/productDocs.test.ts`) fail the build
 if a page, a table, a server action, a permission, a project role, an email or an audit action is added without being
 documented.
 
@@ -38,8 +38,8 @@ documented.
 | # | Item | Owner | Needed for | Status |
 |---|---|---|---|---|
 | K1 | Paystack live keys and the live webhook in Vercel | ET, Lewis | Real money on every pay page | To confirm |
-| K2 | The sending domain (`contact.ipfactory.co`) verified in Resend | DG, Lewis | Email that reaches outside inboxes; every reminder (Release 2) | To confirm |
-| K3, K4 | Supabase on a paid plan with daily backups; the old Supabase project secured | ET | Every client record | To do |
+| K2 | The sending domain (`contact.ipfactory.co`) verified in Resend | DG, Lewis | Email that reaches outside inboxes; every reminder (Release 2) | Done (ET, 10 November): emails reach clients through Resend |
+| K3, K4 | Supabase on a paid plan with daily backups; the old Supabase project secured | ET | Every client record | K4 done (ET, 10 November); K3 to do |
 | K7 | A second owner on Google Search Console | ET | Search (R2, R73) | To do |
 | I1 | Marcelle's Digital Marketer and Content Producer: names, and each one's WhatsApp number with their agreement to show it to clients (K11) | ET | R44, R45 (Release 0, batch B) | Waiting |
 | I2 | The legal name a client sees on their bank statement (decision D1, with counsel, K5) | ET | R72 (Release 0, batch C) | Enzo Krypton & Co., through its Paystack (ET, 10 November); the exact statement wording to confirm in Paystack |
@@ -168,7 +168,7 @@ Each release is planned in full, like sections 3 and 4, before it starts.
 | # | Release | Requirements | Needs first | Size |
 |---|---|---|---|---|
 | 1 | Payment terms and one payment model | R36, R37, R24, R42; the pause screen of R51; the groundwork for R53 | Planned in full in section 4 | M |
-| 2 | Fee, Data Request and Session reminders | R12, R16, R48, R57, R59, R64 | A scheduled job on Vercel; the sending domain verified (K2); quiet hours | M |
+| 2 | Fee, Data Request and Session reminders | R12, R16, R48, R57, R59, R64 | A scheduled job on Vercel; quiet hours (the sending domain is verified, K2) | M |
 | 3 | Buy now and the trust layer | R13, R38 (R35 built early, 10 November 2026) | Paystack live (K1) | M |
 | 4 | Close, the Day-30 Review and the next fix | R26, R27, R28 | A migration for the close record | M |
 | 5 | The room and the team's day, after the usability test | R49, R50, R52, R54, the rest of R51 | The usability test with a live client (A4) | L |

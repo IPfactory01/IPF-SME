@@ -170,7 +170,7 @@ allows IP Factory to suspend for unresolved payment issues).
 | Six-Week Fix (Margin, Sales, Cash and Pricing, Delegation and Structure) | Six-Week Fix | ₦1,500,000 | Six weeks | Talk to an expert |
 | Monthly Accounts and Cash Report | Monthly Service | ₦600,000 a quarter | By the 10th of each month | Talk to an expert |
 | Monthly Adviser Review | Monthly Service | ₦450,000 a quarter | One Session a month | Talk to an expert |
-| Digital Marketing (ET, 6 November 2026; the programme of the first client's engagement) | Monthly Service | ₦470,000 a month | 15 reels, 5 posts and 20 stories a month for three months; nothing published without the owner's approval | Talk to an expert |
+| Digital Marketing (ET, 6 November 2026; the programme of the first client's engagement) | Monthly Service | ₦470,000 a month | 15 reels, 5 posts and 20 stories a month for three months, across Instagram, TikTok, Facebook and the Google Business Profile; nothing published without the owner's approval | Talk to an expert |
 
 **Delivery promise:** we confirm the delivery date once the records are complete; if we cannot deliver as agreed, we make
 it right in line with the Terms (a refund, a service credit or an agreed alternative). The site never promises an

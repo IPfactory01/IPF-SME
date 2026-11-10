@@ -71,7 +71,7 @@ export const DIGITAL_MARKETING: DatedEngagementType = {
   dataRequests: [
     { week: 1, order: 1, section: "A Brand", ref: "A1", priority: "high", title: "Logo, colours and fonts", detail: "Whatever you use today: the logo files, and the colours and fonts if you have them.", informs: "So every reel and post looks like your business", format: "Any" },
     { week: 1, order: 2, section: "A Brand", ref: "A2", priority: "medium", title: "Past content that worked", detail: "Five to ten posts or videos you liked, yours or anyone's.", informs: "The style to build on", format: "Links or screenshots" },
-    { week: 1, order: 3, section: "B Accounts", ref: "B1", priority: "high", title: "Access to your Instagram and Facebook", detail: "Add us as a partner in Meta Business Suite; we send the steps. Never your password.", informs: "Posting, scheduling and the monthly numbers", format: "Partner access" },
+    { week: 1, order: 3, section: "B Accounts", ref: "B1", priority: "high", title: "Access to your accounts", detail: "Instagram and Facebook through Meta Business Suite, TikTok, and your Google Business Profile. We send the steps for each. Never your password.", informs: "Posting, scheduling and the monthly numbers", format: "Partner or manager access" },
     { week: 1, order: 4, section: "C Offers", ref: "C1", priority: "high", title: "Your services and prices", detail: "What you sell, what each costs, and any offer you are running.", informs: "What the content sells", format: "A list or price board photo" },
     { week: 1, order: 5, section: "C Offers", ref: "C2", priority: "medium", title: "Your booking link and opening hours", detail: "Where a customer books, and when you are open.", informs: "The call to action in every post", format: "A link" },
   ],
@@ -81,7 +81,7 @@ export const DIGITAL_MARKETING: DatedEngagementType = {
   ],
   teamActions: [
     { week: 1, order: 7, title: "Content plan for month 1", detail: "The reels, posts and stories for the month, by week, with the offers they carry." },
-    { week: 1, order: 8, title: "Baseline numbers", detail: "Followers, reach and bookings from Instagram today, to measure against." },
+    { week: 1, order: 8, title: "Baseline numbers", detail: "Followers, reach, calls and bookings on each platform today, to measure against." },
   ],
   sessions: [
     { kind: "other", title: "Kick-off", week: 1, order: 0, durationMinutes: 45, agenda: "The 90 days, the content plan, who does what, and the access we need." },

@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Digital Marketing covers the whole digital space, not one platform: Instagram, TikTok, Facebook and the Google Business Profile, each named on its page; new clients are asked for access to all four | ET, 10 November 2026 |
 | Digital Marketing goes on the menu now (R35, brought forward from Release 3) as a Monthly Service under Sales and marketing, paid month by month: ₦470,000 a month for three months, each before the month starts; its page tells the first client's programme; the product and its engagement type are both named Digital Marketing | ET, 10 November 2026 (asked for the page; the placement is shown in its preview) |
 | The standard schedule for services agreed on a call is half to start and half on delivery, the Six-Week Fix included (it was 50/25/25); the second half falls due seven days after the main output is shared; the Business Review's first half is ₦300,000 of ₦600,000 | ET, 10 November 2026 |
 | Payment terms follow what is bought, so there is no arrears limit (D4): products are paid in advance; services are paid in milestones on one standard schedule across services, still to agree; Digital marketing is paid monthly | ET, 10 November 2026 |

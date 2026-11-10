@@ -17,7 +17,8 @@ const hoisted = vi.hoisted(() => {
     debrief: { setUp: true, debrief: null as unknown },
     metrics: { businessChecks: 3, users: 2, portalUsers: 1, businesses: 1, memberships: 1, pendingInvitations: 0, platformRoleAssignments: 0 },
     error: undefined as { message: string; data?: { code: string; httpStatus: number } } | undefined,
-    mutations: { schedule: [] as unknown[], outcome: [] as unknown[], saveDebrief: [] as unknown[], shareDebrief: [] as unknown[], stage: [] as unknown[], invite: [] as unknown[], revoke: [] as unknown[], requestPayment: [] as unknown[], confirmPayment: [] as unknown[], downloadReport: [] as unknown[], resendReportLink: [] as unknown[], resendConfirmation: [] as unknown[] },
+    failedEmails: { total: 0, emails: [] as unknown[] },
+    mutations: { schedule: [] as unknown[], outcome: [] as unknown[], saveDebrief: [] as unknown[], shareDebrief: [] as unknown[], stage: [] as unknown[], invite: [] as unknown[], revoke: [] as unknown[], requestPayment: [] as unknown[], confirmPayment: [] as unknown[], downloadReport: [] as unknown[], resendReportLink: [] as unknown[], resendConfirmation: [] as unknown[], emailsDealtWith: [] as unknown[] },
     inviteResult: { invitationUrl: "https://app.example.test/onboarding/TOKEN123", deliveryStatus: "Simulated", expiresAt: new Date(), invitationId: 1 } as Record<string, unknown>,
   };
   const query = (key: "checks" | "calls" | "clients" | "candidates" | "invitations" | "metrics") => () => ({ data: api[key], isLoading: false, error: api.error });
@@ -37,7 +38,7 @@ vi.mock("@/lib/savePdf", () => ({ savePdf: () => undefined }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
     useUtils: () => ({
-      businessSupport: { discoveryCalls: hoisted.invalidate, checks: hoisted.invalidate, checkDetail: hoisted.invalidate, debrief: hoisted.invalidate },
+      businessSupport: { discoveryCalls: hoisted.invalidate, checks: hoisted.invalidate, checkDetail: hoisted.invalidate, debrief: hoisted.invalidate, failedEmails: hoisted.invalidate },
       onboarding: { candidates: hoisted.invalidate, invitations: hoisted.invalidate, metrics: hoisted.invalidate },
       people: { list: hoisted.invalidate },
     }),
@@ -45,6 +46,8 @@ vi.mock("@/lib/trpc", () => ({
     businessSupport: {
       checks: { useQuery: hoisted.query("checks") },
       emailDeliveryStatus: { useQuery: () => ({ data: [], isLoading: false, error: undefined }) },
+      failedEmails: { useQuery: () => ({ data: hoisted.api.failedEmails, isLoading: false, error: undefined, refetch: () => undefined }) },
+      emailsDealtWith: { useMutation: hoisted.mutation("emailsDealtWith", () => ({ success: true, marked: 1 })) },
       checkDetail: { useQuery: (input: { businessCheckId: number }) => ({ data: hoisted.api.details[input.businessCheckId], isLoading: false, error: hoisted.api.error }) },
       discoveryCalls: { useQuery: hoisted.query("calls") },
       clients: { useQuery: hoisted.query("clients") },
@@ -121,7 +124,8 @@ beforeEach(() => {
   api.invitations = [];
   api.details = { 1: detailFor(), 2: detailFor({ id: 2, fullName: "Bola Quiet", businessName: "Bola Bakes", email: "bola@example.test", whatsapp: null, pipelineStage: "qualified_lead", callRequestedAt: null }) };
   api.error = undefined;
-  api.mutations = { schedule: [], outcome: [], saveDebrief: [], shareDebrief: [], stage: [], invite: [], revoke: [], requestPayment: [], confirmPayment: [], downloadReport: [], resendReportLink: [], resendConfirmation: [] };
+  api.mutations = { schedule: [], outcome: [], saveDebrief: [], shareDebrief: [], stage: [], invite: [], revoke: [], requestPayment: [], confirmPayment: [], downloadReport: [], resendReportLink: [], resendConfirmation: [], emailsDealtWith: [] };
+  api.failedEmails = { total: 0, emails: [] };
   api.debrief = { setUp: true, debrief: null };
   api.inviteResult = { invitationUrl: "https://app.example.test/onboarding/TOKEN123", deliveryStatus: "Simulated", expiresAt: new Date(), invitationId: 1 };
 });
@@ -766,6 +770,31 @@ describe("full report requests in Business Health Checks", () => {
     renderConsole();
     openRow("Ada Okafor");
     expect(drawer().getByText("Not requested")).toBeTruthy();
+  });
+});
+
+describe("emails that did not arrive (G3, R42)", () => {
+  const failed = (over: Record<string, unknown> = {}) => ({ id: 41, recipient: "ada@example.test", subject: "Payment details for your Business Review", state: "bounced", at: new Date("2026-11-10T09:30:00Z"), client: "Ada Foods", ...over });
+
+  it("shows nothing while every email arrived", () => {
+    renderConsole();
+    expect(screen.queryByRole("region", { name: "Emails that did not arrive" })).toBeNull();
+  });
+
+  it("lists each email that did not arrive at the top of Pipeline, says why, and clears one or all once dealt with", () => {
+    api.failedEmails = { total: 3, emails: [failed(), failed({ id: 42, recipient: "bola@example.test", subject: "Set up your client account on The Shift", state: "failed", client: null })] };
+    renderConsole();
+    const box = within(screen.getByRole("region", { name: "Emails that did not arrive" }));
+    expect(box.getByRole("heading", { name: "Emails that did not arrive (3)" })).toBeTruthy();
+    expect(box.getByText("Payment details for your Business Review")).toBeTruthy();
+    expect(box.getByText(/^To ada@example\.test · Ada Foods · /)).toBeTruthy();
+    expect(box.getByText("Bounced: the address does not exist, or its mail server refused it.")).toBeTruthy();
+    expect(box.getByText("Not sent: Resend did not accept it, or could not be reached.")).toBeTruthy();
+    expect(box.getByText("And 1 older, shown as these are dealt with.")).toBeTruthy();
+    fireEvent.click(box.getByRole("button", { name: "Dealt with: Payment details for your Business Review to ada@example.test" }));
+    expect(api.mutations.emailsDealtWith).toEqual([{ deliveryIds: [41] }]);
+    fireEvent.click(box.getByRole("button", { name: "Mark all 2 dealt with" }));
+    expect(api.mutations.emailsDealtWith).toEqual([{ deliveryIds: [41] }, { deliveryIds: [41, 42] }]);
   });
 });
 

@@ -80,6 +80,10 @@ export const AUDIT_ACTIONS = [
   "payment_refund_cancelled",
   "fee_written_off",
   "fee_write_off_reversed",
+  // Alerts (batch G3, R42): a Paystack notification the server could not process, told to the office once per
+  // reference; an email that did not arrive, marked dealt with in Pipeline.
+  "paystack_webhook_failed",
+  "email_failure_dealt_with",
   // Retired with the ledger (batch F): the Paid tick. No longer written, kept so older log rows still read.
   "engagement_fee_paid",
   // Retired with proposals (ET, 6 November 2026): no longer written, kept so older log rows still read.

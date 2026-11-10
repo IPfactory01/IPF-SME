@@ -5,6 +5,7 @@ import BusinessChecksView from "./BusinessChecksView";
 import ClientsView from "./ClientsView";
 import DiscoveryCallsView from "./DiscoveryCallsView";
 import EngagementsView from "./EngagementsView";
+import FailedEmails from "./FailedEmails";
 import FinanceView from "./FinanceView";
 import PeoplePanel from "./PeoplePanel";
 import StaffPanel from "./StaffPanel";
@@ -64,6 +65,7 @@ export default function BusinessSupportConsole({ access }: { access: Access }) {
           <div className="border border-line bg-paper shadow-sm">
             {active?.id === "pipeline" && (
               <>
+                <FailedEmails />
                 <div role="group" aria-label="Pipeline stage" className="flex flex-wrap gap-1 border-b border-line bg-white px-4 py-2">
                   {PIPELINE_STAGES.map(item => (
                     <button key={item.id} type="button" aria-pressed={stage === item.id} onClick={() => setStage(item.id)}

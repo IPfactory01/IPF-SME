@@ -127,9 +127,11 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 
 | Object | Stage | Who | How (in the code) | App flow | Board | Status |
 |---|---|---|---|---|---|---|
-| Audit log | Written | Platform | `recordAudit`, 88 actions in use (6 more retired), each listed in the [Backend schema](05-backend-schema.md) | — | — | Built |
+| Audit log | Written | Platform | `recordAudit`, 90 actions in use (6 more retired), each listed in the [Backend schema](05-backend-schema.md) | — | — | Built |
 | | Read | Desk (a check's history only) | `stageHistoryFor` in `server/businessSupportAdmin.ts` | 8.3 Pipeline | — | **C10** (no view of who did what elsewhere) |
 | Email delivery | Recorded, seen | Platform; desk | `businessSupport.emailDeliveryStatus` | 6 | Super Admin: Watches System status | Built |
+| | Did not arrive (failed, bounced or suppressed), then dealt with | Platform; desk | `businessSupport.failedEmails`, `businessSupport.emailsDealtWith`: listed at the top of Pipeline for 30 days until marked dealt with (G3, R42) | 7 | Super Admin: Watches System status | Built (G3) |
+| Paystack notification | Not processed (500), the office told once per reference | Platform | The webhook (`server/onlinePayment.ts`) | 7 | Platform: Confirms every payment | Built (G3) |
 
 ## 2. What the checklist found beyond the matrix
 
@@ -224,6 +226,7 @@ trusted browser origin.
 | Actions | What they do | Who may call | Object |
 |---|---|---|---|
 | `businessSupport.checks`, `businessSupport.checkDetail`, `businessSupport.setStage`, `businessSupport.downloadReport`, `businessSupport.emailDeliveryStatus` | Every check; one check with its history; its stage; a report's file; email delivery | `manage_client_onboarding` | Business Health Check, Full Report, Email delivery |
+| `businessSupport.failedEmails`, `businessSupport.emailsDealtWith` | Emails to clients and prospects that did not arrive in the last 30 days, at the top of Pipeline; mark one or several dealt with (G3) | `manage_client_onboarding` | Email delivery |
 | `businessSupport.discoveryCalls`, `businessSupport.scheduleCall`, `businessSupport.recordOutcome`, `businessSupport.debrief`, `businessSupport.saveDebrief`, `businessSupport.shareDebrief` | Discovery Calls: list, set a time, record the outcome; the call summary, saved and shared | `manage_client_onboarding` | Discovery Call |
 | `businessSupport.clients` | Businesses and their members | `view_all_businesses` | Business |
 | `businessSupport.requestPayment`, `businessSupport.confirmPayment`, `businessSupport.resendReportLink`, `businessSupport.resendPaymentConfirmation` | Send payment details (the Business Review's opens its engagement with its fees, F3); confirm money by hand (never for a Business Review link sent before F3 once it is on fees); send the Report Intake link or the receipt again | `manage_payments` | Payment request, Fee, Full Report |

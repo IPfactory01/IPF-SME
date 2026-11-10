@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import { TRPCError } from "@trpc/server";
-import { and, eq } from "drizzle-orm";
-import { businessChecks, paymentRequests, type BusinessCheck, type PaymentRequest } from "../drizzle/schema";
+import { and, eq, sql } from "drizzle-orm";
+import { adminAccessAuditEvents, businessChecks, paymentRequests, type BusinessCheck, type PaymentRequest } from "../drizzle/schema";
 import { BRAND } from "../shared/brand";
 import { formatNaira } from "../shared/businessSupport";
 import { secondHalf } from "../shared/products";
@@ -380,6 +380,41 @@ export async function handlePaystackWebhook(req: Request, res: Response) {
     res.status(200).json({ received: true });
   } catch (error) {
     console.error("[Paystack] webhook not processed; Paystack will send it again:", error instanceof Error ? error.message : "unknown error");
+    await alertUnprocessedWebhook(event.reference);
     res.status(500).json({ message: "Not processed. Please send it again." });
   }
+}
+
+/**
+ * Tells the office at once that a Paystack notification could not be processed (G3, R42), once per reference: the
+ * audit row records that the office was told, so Paystack's retries over the next three days add nothing. When the
+ * database is the problem, Resend's idempotency key keeps it to one email a day. The error itself stays in the server
+ * log: it can name the database's host, so it never goes in an email.
+ */
+async function alertUnprocessedWebhook(reference: string) {
+  try {
+    const db = await getDb();
+    if (db) {
+      const told = (await db.select({ id: adminAccessAuditEvents.id }).from(adminAccessAuditEvents)
+        .where(and(eq(adminAccessAuditEvents.action, "paystack_webhook_failed"), sql`${adminAccessAuditEvents.details}::jsonb ->> 'reference' = ${reference}`)).limit(1))[0];
+      if (told) return;
+      await recordAudit(db, { action: "paystack_webhook_failed", actorUserId: null, details: { reference, via: "paystack" } });
+    }
+  } catch {
+    // The database may be what failed: tell the office all the same.
+  }
+  await deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, sender: "business_support", idempotencyKey: `paystack:${reference}:webhook_failed`, ...unprocessedWebhookEmail(reference) })
+    .catch((error: unknown) => console.error("[Paystack] The office could not be told about the notification:", error instanceof Error ? error.message : "unknown error"));
+}
+
+/** "Paystack notification not processed: {reference}", to the office: what happened and what to do, never the error. */
+export function unprocessedWebhookEmail(reference: string, at = new Date()) {
+  return {
+    subject: `Paystack notification not processed: ${reference}`,
+    body: [
+      `Paystack told us about a payment (reference ${reference}), but the server could not process it, so it may not show as paid yet. Paystack sends it again for up to three days, and the payer's return page can confirm it too.`,
+      "", "If it does not show as paid within the hour, check the payment in Paystack. If Paystack shows it paid, record it by hand: on its fee in Finance, or for a Full Report, Confirm by hand in the client's record.",
+      "", `Reference: ${reference}`, `When: ${lagosTime(at)} (Lagos time)`,
+    ].join("\n"),
+  };
 }

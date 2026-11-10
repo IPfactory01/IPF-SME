@@ -14,9 +14,9 @@
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
-import { and, asc, eq, isNull } from "drizzle-orm";
-import { businessChecks, businessMemberships, businesses, engagementFeeLines, engagements, paymentRequests, users } from "../drizzle/schema";
-import { addDays, BALANCE_DUE_DAYS, lagosDay } from "../shared/agreement";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { businessChecks, businessMemberships, businesses, engagementFeeLines, engagements, engagementTeam, paymentRequests, users } from "../drizzle/schema";
+import { addDays, BALANCE_DUE_DAYS, feeHold, lagosDay } from "../shared/agreement";
 import { BRAND } from "../shared/brand";
 import { CURRENT_STATE, formatNaira } from "../shared/businessSupport";
 import { dayLabel } from "../shared/engagementWork";
@@ -148,6 +148,78 @@ async function tellOffice(subject: string, lines: string[], key: string) {
     .catch((error: unknown) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
 }
 
+/**
+ * Whether work on the engagement is paused today (D6), and why: the room's rule (`feeHold`) on its fees as they stand,
+ * each paid once its payments, less refunds, cover it, and never late once written off. None while the room waits for
+ * its first payment, which shows the fee instead.
+ */
+export async function holdOf(db: Pick<Database, "select">, engagementId: number, today = lagosDay()) {
+  const engagement = (await db.select({ opensOnPayment: engagements.opensOnPayment }).from(engagements).where(eq(engagements.id, engagementId)).limit(1))[0];
+  if (!engagement || engagement.opensOnPayment) return null;
+  const lines = await db.select().from(engagementFeeLines).where(eq(engagementFeeLines.engagementId, engagementId));
+  const ledger = await paymentsOfFees(db, lines.map(line => line.id));
+  return feeHold(lines.map(line => {
+    const { left } = feeBalance(line, ledger.filter(entry => entry.feeLineId === line.id));
+    return { id: line.id, label: line.label, dueOn: line.dueOn, left, paid: left === 0 };
+  }), today);
+}
+
+/**
+ * "Work on your {engagement} has resumed" (G2): to the owner, and "Work has resumed: {business}, {engagement}" to the
+ * lead, when a payment lifted a pause. Another fee still late is named, with the day work pauses again.
+ */
+export function workResumedEmails(input: {
+  name: string; businessName: string; title: string; label: string; amount: number; receipt: string;
+  stillLate: { label: string; left: number; pausesOn: string } | null; test: boolean;
+}) {
+  const url = `${getTrustedApplicationOrigin()}/dashboard`;
+  const test = input.test ? "TEST: " : "";
+  const notice = input.test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : [];
+  return {
+    owner: {
+      subject: `${test}Work on your ${input.title} has resumed`,
+      body: [
+        ...notice,
+        `Hello ${input.name.split(" ")[0] ?? ""},`, "",
+        `Thank you for your payment. Work on your ${input.title} has resumed.`,
+        ...(input.stillLate ? ["", `One fee is still late: ${input.stillLate.label}, with ${formatNaira(input.stillLate.left)} left to pay. Pay it before ${dayLabel(input.stillLate.pausesOn)} to keep the work going.`] : []),
+        "", `Open your room: ${url}`, "",
+        BRAND.organisationName,
+      ].join("\n"),
+    },
+    team: {
+      subject: `${test}Work has resumed: ${input.businessName}, ${input.title}`,
+      body: [
+        ...notice,
+        `${input.businessName} paid ${formatNaira(input.amount)} (${input.label}). Work on their ${input.title} is no longer paused: pick it up again.`,
+        ...(input.stillLate ? ["", `One fee is still late: ${input.stillLate.label} (${formatNaira(input.stillLate.left)} left). Work pauses again on ${dayLabel(input.stillLate.pausesOn)} if it is not paid.`] : []),
+        "", `Receipt: ${input.receipt}`,
+      ].join("\n"),
+    },
+  };
+}
+
+/**
+ * Sends the resumed emails once for the payment that lifted a pause: to the owner, and to the engagement's lead (its
+ * Engagement Manager or Lead Consultant), or to the office when nobody leads it yet. A failed send is logged.
+ */
+export async function sendWorkResumed(db: Pick<Database, "select">, input: { engagementId: number; feeLineId: number; paymentId: number; amount: number; receiptNumber: number; test: boolean }) {
+  const found = await feeContext(db, input.feeLineId);
+  if (!found) return;
+  const after = await holdOf(db, input.engagementId);
+  const messages = workResumedEmails({
+    name: found.payer?.name ?? "", businessName: found.businessName, title: found.title, label: found.fee.label, amount: input.amount, receipt: receiptNumberLabel(input.receiptNumber),
+    stillLate: after ? { label: after.fee.label, left: after.fee.left, pausesOn: after.pausesOn } : null, test: input.test,
+  });
+  const failed = (error: unknown) => console.error("[Fees] The resumed email could not be sent:", error instanceof Error ? error.message : "unknown error");
+  if (found.payer) await deliverEmail({ to: found.payer.email, sender: "business_support", idempotencyKey: `payments:${input.paymentId}:resumed`, ...messages.owner }).catch(failed);
+  const leads = (await db.select({ email: users.email }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id))
+    .where(and(eq(engagementTeam.engagementId, input.engagementId), inArray(engagementTeam.role, ["manager", "lead"])))).flatMap(lead => (lead.email ? [lead.email] : []));
+  for (const to of leads.length ? Array.from(new Set(leads)) : [BUSINESS_SUPPORT_MAILBOX]) {
+    await deliverEmail({ to, sender: "business_support", idempotencyKey: `payments:${input.paymentId}:resumed:${to}`, ...messages.team }).catch(failed);
+  }
+}
+
 /** "Payment received: {fee}": the receipt, for every payment, online or by hand. */
 export function feeReceiptEmail(input: {
   name: string; title: string; label: string; amount: number; left: number; receipt: string; reference: string;
@@ -219,6 +291,7 @@ export async function settleFee(db: Database, feeLineId: number, reference: stri
     if (!fee) return { kind: "unknown" as const };
     await carryOver(tx, fee);
     const { left } = await balanceOf(tx, fee);
+    const pausedBefore = (await holdOf(tx, fee.engagementId))?.state === "paused";
     // An attempt from before the ledger has no row: it was opened for the whole of what was then owed.
     const attempt = await lockAttempt(tx, fee, { reference, amount: known?.amount ?? (left || fee.amount), mode });
     if (countsTowardsFee(attempt.status) || attempt.status === "cancelled") return { kind: "already_paid" as const };
@@ -240,7 +313,9 @@ export async function settleFee(db: Database, feeLineId: number, reference: stri
     const after = await refreshFeePaid(tx, fee);
     await recordAudit(tx, { action: "engagement_fee_paid_online", actorUserId: null, targetEmail: payer?.email ?? null, details: { engagementId: fee.engagementId, feeLineId: fee.id, paymentId: paid.id, amount: paid.amount, receiptNumber: paid.receiptNumber, via: "paystack", paystackReference: reference, mode } });
     const opened = await openRoomIfFirstPayment(tx, fee.engagementId);
-    return { kind: "confirmed" as const, fee, payment: paid, left: after.left, opened };
+    // A payment that lifts a pause says so (G2).
+    const resumed = pausedBefore && (await holdOf(tx, fee.engagementId))?.state !== "paused";
+    return { kind: "confirmed" as const, fee, payment: paid, left: after.left, opened, resumed };
   });
   if (outcome.kind === "unknown") return "unknown";
   if (outcome.kind === "already_paid") return "already_paid";
@@ -254,7 +329,7 @@ export async function settleFee(db: Database, feeLineId: number, reference: stri
     }
     return "refused";
   }
-  const { fee, payment, left, opened } = outcome;
+  const { fee, payment, left, opened, resumed } = outcome;
   const test = mode === "test";
   await sendFeeReceipt(db, { feeLineId: fee.id, paymentId: payment.id, amount: payment.amount, left, receiptNumber: payment.receiptNumber!, paid: { at: payment.paidAt! }, test, opened });
   await tellOffice(`${test ? "TEST: " : ""}Paid online: ${businessName}, ${fee.label}`, [
@@ -263,6 +338,7 @@ export async function settleFee(db: Database, feeLineId: number, reference: stri
     left > 0 ? `${formatNaira(left)} is left to pay on this fee.` : "",
     "", `Receipt: ${receiptNumberLabel(payment.receiptNumber!)}`, `Reference: ${feeReference(fee.id)}`, `Paystack reference: ${reference}`, opened ? "This was the first payment: the client's room is now open." : "",
   ], `payments:${payment.id}:office`);
+  if (resumed) await sendWorkResumed(db, { engagementId: fee.engagementId, feeLineId: fee.id, paymentId: payment.id, amount: payment.amount, receiptNumber: payment.receiptNumber!, test });
   // A Business Review on fees starts on its first payment (F3): Won, its plan and the owner's invitation.
   await beginBusinessReview(db, fee.engagementId, { opened, paid: true, actorUserId: null, via: "paystack" });
   return "confirmed";

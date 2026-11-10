@@ -599,6 +599,41 @@ for (const target of targets) {
         expect((await paymentsOf(id))[0]).toMatchObject({ item: "full_report", status: "requested" });
       });
 
+      it("lists the emails to clients that did not arrive in the last 30 days until someone marks them dealt with, for those who run the Pipeline (G3)", async () => {
+        const deliveries = schema.businessSupportEmailDeliveries;
+        const insert = async (over: Record<string, unknown>) => (await db.insert(deliveries).values({ recipientEmail: uniqueEmail("mail"), purpose: "Payment details for your Business Review", latestState: "bounced", attemptedAt: new Date(), ...over }).returning())[0] as { id: number; recipientEmail: string };
+        const { id: checkId } = await finishedCheck("bounced-client");
+        const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000);
+        const bounced = await insert({ businessCheckId: checkId, attemptedAt: minutesAgo(1) });
+        const failed = await insert({ latestState: "failed", purpose: "Set up your client account on The Shift", attemptedAt: minutesAgo(2) });
+        const suppressed = await insert({ latestState: "suppressed", attemptedAt: minutesAgo(3) });
+        // Arrived, still trying, the office's own notice, and one from before the 30 days: none of them is listed.
+        const delivered = await insert({ latestState: "delivered" });
+        await insert({ latestState: "delivery_delayed" });
+        await insert({ recipientEmail: "info@ipfactory.co", latestState: "failed", purpose: "Paid online: Studio, Month 1" });
+        await insert({ attemptedAt: new Date(Date.now() - 31 * 86_400_000) });
+
+        let listed = await (await superAdmin.call()).businessSupport.failedEmails();
+        expect(listed.total).toBe(3);
+        expect(listed.emails.map(email => [email.id, email.state])).toEqual([[bounced.id, "bounced"], [failed.id, "failed"], [suppressed.id, "suppressed"]]);
+        expect(listed.emails[0]).toMatchObject({ recipient: bounced.recipientEmail, subject: "Payment details for your Business Review", client: expect.stringContaining("bounced-client") });
+        expect(listed.emails[1]!.client).toBeNull();
+
+        expect(await (await superAdmin.call()).businessSupport.emailsDealtWith({ deliveryIds: [bounced.id] })).toEqual({ success: true, marked: 1 });
+        listed = await (await superAdmin.call()).businessSupport.failedEmails();
+        expect(listed.emails.map(email => email.id)).toEqual([failed.id, suppressed.id]);
+        // Once is enough, and an email that arrived is not a failure to deal with.
+        expect(await (await superAdmin.call()).businessSupport.emailsDealtWith({ deliveryIds: [bounced.id, delivered.id] })).toEqual({ success: true, marked: 0 });
+        const [audit] = await db.select().from(schema.adminAccessAuditEvents).where(and(eq(schema.adminAccessAuditEvents.action, "email_failure_dealt_with"), sql`${schema.adminAccessAuditEvents.details}::jsonb ->> 'deliveryId' = ${String(bounced.id)}`));
+        expect(audit).toMatchObject({ targetEmail: bounced.recipientEmail });
+        expect(JSON.parse(audit.details)).toMatchObject({ deliveryId: bounced.id, state: "bounced" });
+
+        // The Pipeline's people see it; Finance does not.
+        const finance = await signInStaff(await person({}, ["finance"]));
+        await expect((await finance.call()).businessSupport.failedEmails()).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await expect((await finance.call()).businessSupport.emailsDealtWith({ deliveryIds: [failed.id] })).rejects.toMatchObject({ code: "FORBIDDEN" });
+      });
+
       it("refuses an unknown check or payment", async () => {
         await expect((await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: 2_000_000_000, item: "full_report" })).rejects.toMatchObject({ code: "NOT_FOUND" });
         await expect((await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: 2_000_000_000 })).rejects.toMatchObject({ code: "NOT_FOUND" });

@@ -6408,12 +6408,12 @@ function officeEmail(input) {
 }
 
 // server/payments.ts
-import { and as and15, eq as eq22, inArray as inArray9, ne as ne3 } from "drizzle-orm";
+import { and as and15, eq as eq22, inArray as inArray10, ne as ne3 } from "drizzle-orm";
 import { TRPCError as TRPCError19 } from "@trpc/server";
 
 // server/engagements.ts
 import { TRPCError as TRPCError18 } from "@trpc/server";
-import { and as and14, asc as asc7, desc as desc8, eq as eq21, inArray as inArray8, isNull as isNull11, sql as sql7 } from "drizzle-orm";
+import { and as and14, asc as asc7, desc as desc8, eq as eq21, inArray as inArray9, isNull as isNull11, sql as sql8 } from "drizzle-orm";
 
 // server/accountInvitations.ts
 import { randomBytes as randomBytes6, randomUUID } from "crypto";
@@ -6674,7 +6674,7 @@ var BUSINESS_REVIEW = ASSESSMENT_TEMPLATE.dataRequests.map((item2, index2) => ({
 
 // server/agreements.ts
 import { TRPCError as TRPCError15 } from "@trpc/server";
-import { and as and12, asc as asc6, eq as eq18, inArray as inArray7 } from "drizzle-orm";
+import { and as and12, asc as asc6, eq as eq18, inArray as inArray8 } from "drizzle-orm";
 
 // shared/engagementWork.ts
 var WORK_TITLE = "What we will do";
@@ -6705,7 +6705,7 @@ function workLines(input) {
 
 // server/businessReview.ts
 import { TRPCError as TRPCError13 } from "@trpc/server";
-import { and as and11, asc as asc4, desc as desc6, eq as eq16, inArray as inArray5, isNotNull as isNotNull2, isNull as isNull10, sql as sql6 } from "drizzle-orm";
+import { and as and11, asc as asc4, desc as desc6, eq as eq16, inArray as inArray6, isNotNull as isNotNull2, isNull as isNull10, sql as sql7 } from "drizzle-orm";
 
 // server/clientOnboarding.ts
 import { randomBytes as randomBytes8, randomUUID as randomUUID3 } from "crypto";
@@ -7180,7 +7180,7 @@ async function onboardingMetrics() {
 // server/feePayments.ts
 import { createHmac as createHmac3, timingSafeEqual as timingSafeEqual4 } from "node:crypto";
 import { TRPCError as TRPCError12 } from "@trpc/server";
-import { and as and10, asc as asc3, eq as eq15, isNull as isNull9 } from "drizzle-orm";
+import { and as and10, asc as asc3, eq as eq15, inArray as inArray5, isNull as isNull9 } from "drizzle-orm";
 
 // server/lagosTime.ts
 var lagosTime = (date2) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit", hour12: true }).format(date2);
@@ -7364,7 +7364,7 @@ async function reverseFeeWriteOff(tx, fee) {
 
 // server/onlinePayment.ts
 import { TRPCError as TRPCError11 } from "@trpc/server";
-import { and as and9, eq as eq13 } from "drizzle-orm";
+import { and as and9, eq as eq13, sql as sql6 } from "drizzle-orm";
 
 // server/fullReportRequest.ts
 import { TRPCError as TRPCError10 } from "@trpc/server";
@@ -7651,8 +7651,34 @@ async function handlePaystackWebhook(req, res) {
     res.status(200).json({ received: true });
   } catch (error) {
     console.error("[Paystack] webhook not processed; Paystack will send it again:", error instanceof Error ? error.message : "unknown error");
+    await alertUnprocessedWebhook(event.reference);
     res.status(500).json({ message: "Not processed. Please send it again." });
   }
+}
+async function alertUnprocessedWebhook(reference2) {
+  try {
+    const db = await getDb();
+    if (db) {
+      const told = (await db.select({ id: adminAccessAuditEvents.id }).from(adminAccessAuditEvents).where(and9(eq13(adminAccessAuditEvents.action, "paystack_webhook_failed"), sql6`${adminAccessAuditEvents.details}::jsonb ->> 'reference' = ${reference2}`)).limit(1))[0];
+      if (told) return;
+      await recordAudit(db, { action: "paystack_webhook_failed", actorUserId: null, details: { reference: reference2, via: "paystack" } });
+    }
+  } catch {
+  }
+  await deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, sender: "business_support", idempotencyKey: `paystack:${reference2}:webhook_failed`, ...unprocessedWebhookEmail(reference2) }).catch((error) => console.error("[Paystack] The office could not be told about the notification:", error instanceof Error ? error.message : "unknown error"));
+}
+function unprocessedWebhookEmail(reference2, at = /* @__PURE__ */ new Date()) {
+  return {
+    subject: `Paystack notification not processed: ${reference2}`,
+    body: [
+      `Paystack told us about a payment (reference ${reference2}), but the server could not process it, so it may not show as paid yet. Paystack sends it again for up to three days, and the payer's return page can confirm it too.`,
+      "",
+      "If it does not show as paid within the hour, check the payment in Paystack. If Paystack shows it paid, record it by hand: on its fee in Finance, or for a Full Report, Confirm by hand in the client's record.",
+      "",
+      `Reference: ${reference2}`,
+      `When: ${lagosTime(at)} (Lagos time)`
+    ].join("\n")
+  };
 }
 
 // server/teamContact.ts
@@ -7763,6 +7789,68 @@ var STILL_OPEN2 = /* @__PURE__ */ new Set(["ongoing", "pending", "processing", "
 async function tellOffice(subject, lines, key) {
   await deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, sender: "business_support", idempotencyKey: key, subject, body: lines.join("\n") }).catch((error) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
 }
+async function holdOf(db, engagementId, today = lagosDay()) {
+  const engagement = (await db.select({ opensOnPayment: engagements.opensOnPayment }).from(engagements).where(eq15(engagements.id, engagementId)).limit(1))[0];
+  if (!engagement || engagement.opensOnPayment) return null;
+  const lines = await db.select().from(engagementFeeLines).where(eq15(engagementFeeLines.engagementId, engagementId));
+  const ledger = await paymentsOfFees(db, lines.map((line) => line.id));
+  return feeHold(lines.map((line) => {
+    const { left } = feeBalance(line, ledger.filter((entry) => entry.feeLineId === line.id));
+    return { id: line.id, label: line.label, dueOn: line.dueOn, left, paid: left === 0 };
+  }), today);
+}
+function workResumedEmails(input) {
+  const url = `${getTrustedApplicationOrigin()}/dashboard`;
+  const test = input.test ? "TEST: " : "";
+  const notice = input.test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : [];
+  return {
+    owner: {
+      subject: `${test}Work on your ${input.title} has resumed`,
+      body: [
+        ...notice,
+        `Hello ${input.name.split(" ")[0] ?? ""},`,
+        "",
+        `Thank you for your payment. Work on your ${input.title} has resumed.`,
+        ...input.stillLate ? ["", `One fee is still late: ${input.stillLate.label}, with ${formatNaira(input.stillLate.left)} left to pay. Pay it before ${dayLabel(input.stillLate.pausesOn)} to keep the work going.`] : [],
+        "",
+        `Open your room: ${url}`,
+        "",
+        BRAND.organisationName
+      ].join("\n")
+    },
+    team: {
+      subject: `${test}Work has resumed: ${input.businessName}, ${input.title}`,
+      body: [
+        ...notice,
+        `${input.businessName} paid ${formatNaira(input.amount)} (${input.label}). Work on their ${input.title} is no longer paused: pick it up again.`,
+        ...input.stillLate ? ["", `One fee is still late: ${input.stillLate.label} (${formatNaira(input.stillLate.left)} left). Work pauses again on ${dayLabel(input.stillLate.pausesOn)} if it is not paid.`] : [],
+        "",
+        `Receipt: ${input.receipt}`
+      ].join("\n")
+    }
+  };
+}
+async function sendWorkResumed(db, input) {
+  const found = await feeContext(db, input.feeLineId);
+  if (!found) return;
+  const after = await holdOf(db, input.engagementId);
+  const messages = workResumedEmails({
+    name: found.payer?.name ?? "",
+    businessName: found.businessName,
+    title: found.title,
+    label: found.fee.label,
+    amount: input.amount,
+    receipt: receiptNumberLabel(input.receiptNumber),
+    stillLate: after ? { label: after.fee.label, left: after.fee.left, pausesOn: after.pausesOn } : null,
+    test: input.test
+  });
+  const failed = (error) => console.error("[Fees] The resumed email could not be sent:", error instanceof Error ? error.message : "unknown error");
+  if (found.payer) await deliverEmail({ to: found.payer.email, sender: "business_support", idempotencyKey: `payments:${input.paymentId}:resumed`, ...messages.owner }).catch(failed);
+  const leads = (await db.select({ email: users.email }).from(engagementTeam).innerJoin(users, eq15(engagementTeam.userId, users.id)).where(and10(eq15(engagementTeam.engagementId, input.engagementId), inArray5(engagementTeam.role, ["manager", "lead"])))).flatMap((lead) => lead.email ? [lead.email] : []);
+  for (const to of leads.length ? Array.from(new Set(leads)) : [BUSINESS_SUPPORT_MAILBOX]) {
+    await deliverEmail({ to, sender: "business_support", idempotencyKey: `payments:${input.paymentId}:resumed:${to}`, ...messages.team }).catch(failed);
+  }
+}
 function feeReceiptEmail(input) {
   const url = `${getTrustedApplicationOrigin()}/dashboard`;
   const next = input.startsBusinessReview ? [
@@ -7822,6 +7910,7 @@ async function settleFee(db, feeLineId, reference2, source) {
     if (!fee2) return { kind: "unknown" };
     await carryOver(tx, fee2);
     const { left: left2 } = await balanceOf(tx, fee2);
+    const pausedBefore = (await holdOf(tx, fee2.engagementId))?.state === "paused";
     const attempt = await lockAttempt(tx, fee2, { reference: reference2, amount: known?.amount ?? (left2 || fee2.amount), mode });
     if (countsTowardsFee(attempt.status) || attempt.status === "cancelled") return { kind: "already_paid" };
     if (attempt.status === "needs_a_look") return { kind: "refused", fee: fee2, problem: null };
@@ -7837,7 +7926,8 @@ async function settleFee(db, feeLineId, reference2, source) {
     const after = await refreshFeePaid(tx, fee2);
     await recordAudit(tx, { action: "engagement_fee_paid_online", actorUserId: null, targetEmail: payer?.email ?? null, details: { engagementId: fee2.engagementId, feeLineId: fee2.id, paymentId: paid.id, amount: paid.amount, receiptNumber: paid.receiptNumber, via: "paystack", paystackReference: reference2, mode } });
     const opened2 = await openRoomIfFirstPayment(tx, fee2.engagementId);
-    return { kind: "confirmed", fee: fee2, payment: paid, left: after.left, opened: opened2 };
+    const resumed2 = pausedBefore && (await holdOf(tx, fee2.engagementId))?.state !== "paused";
+    return { kind: "confirmed", fee: fee2, payment: paid, left: after.left, opened: opened2, resumed: resumed2 };
   });
   if (outcome.kind === "unknown") return "unknown";
   if (outcome.kind === "already_paid") return "already_paid";
@@ -7856,7 +7946,7 @@ async function settleFee(db, feeLineId, reference2, source) {
     }
     return "refused";
   }
-  const { fee, payment, left, opened } = outcome;
+  const { fee, payment, left, opened, resumed } = outcome;
   const test = mode === "test";
   await sendFeeReceipt(db, { feeLineId: fee.id, paymentId: payment.id, amount: payment.amount, left, receiptNumber: payment.receiptNumber, paid: { at: payment.paidAt }, test, opened });
   await tellOffice(`${test ? "TEST: " : ""}Paid online: ${businessName}, ${fee.label}`, [
@@ -7869,6 +7959,7 @@ async function settleFee(db, feeLineId, reference2, source) {
     `Paystack reference: ${reference2}`,
     opened ? "This was the first payment: the client's room is now open." : ""
   ], `payments:${payment.id}:office`);
+  if (resumed) await sendWorkResumed(db, { engagementId: fee.engagementId, feeLineId: fee.id, paymentId: payment.id, amount: payment.amount, receiptNumber: payment.receiptNumber, test });
   await beginBusinessReview(db, fee.engagementId, { opened, paid: true, actorUserId: null, via: "paystack" });
   return "confirmed";
 }
@@ -8104,8 +8195,8 @@ async function linkSender(db, businessCheckId) {
   const sent = (await db.select({ actorUserId: adminAccessAuditEvents.actorUserId }).from(adminAccessAuditEvents).where(and11(
     eq16(adminAccessAuditEvents.action, "payment_details_sent"),
     isNotNull2(adminAccessAuditEvents.actorUserId),
-    sql6`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`,
-    sql6`${adminAccessAuditEvents.details}::jsonb ->> 'item' = 'current_state'`
+    sql7`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`,
+    sql7`${adminAccessAuditEvents.details}::jsonb ->> 'item' = 'current_state'`
   )).orderBy(desc6(adminAccessAuditEvents.id)).limit(1))[0];
   return sent?.actorUserId ?? null;
 }
@@ -8169,9 +8260,9 @@ async function beginBusinessReview(db, engagementId, input) {
 async function businessReviewStates(db, businessCheckIds) {
   const states = /* @__PURE__ */ new Map();
   if (businessCheckIds && !businessCheckIds.length) return states;
-  const rows = await db.select({ id: engagements.id, businessCheckId: engagements.businessCheckId, opensOnPayment: engagements.opensOnPayment }).from(engagements).where(businessCheckIds ? and11(onFees, inArray5(engagements.businessCheckId, businessCheckIds)) : onFees);
+  const rows = await db.select({ id: engagements.id, businessCheckId: engagements.businessCheckId, opensOnPayment: engagements.opensOnPayment }).from(engagements).where(businessCheckIds ? and11(onFees, inArray6(engagements.businessCheckId, businessCheckIds)) : onFees);
   if (!rows.length) return states;
-  const lines = await db.select().from(engagementFeeLines).where(inArray5(engagementFeeLines.engagementId, rows.map((row) => row.id))).orderBy(asc4(engagementFeeLines.sortOrder), asc4(engagementFeeLines.id));
+  const lines = await db.select().from(engagementFeeLines).where(inArray6(engagementFeeLines.engagementId, rows.map((row) => row.id))).orderBy(asc4(engagementFeeLines.sortOrder), asc4(engagementFeeLines.id));
   const ledger = await paymentsOfFees(db, lines.map((line) => line.id));
   const today = lagosDay();
   for (const row of rows) {
@@ -8203,7 +8294,7 @@ async function businessReviewStates(db, businessCheckIds) {
 
 // server/finance.ts
 import { TRPCError as TRPCError14 } from "@trpc/server";
-import { asc as asc5, desc as desc7, eq as eq17, inArray as inArray6 } from "drizzle-orm";
+import { asc as asc5, desc as desc7, eq as eq17, inArray as inArray7 } from "drizzle-orm";
 var lagosToday = (now) => lagosDay(now);
 var refused = (code, message) => new TRPCError14({ code, message });
 var requirePayments = (actor) => {
@@ -8379,7 +8470,7 @@ async function listFinance(db, actor, now = Date.now()) {
 async function namesOf(db, ids) {
   const wanted = Array.from(new Set(ids.filter((id3) => id3 !== null)));
   if (!wanted.length) return /* @__PURE__ */ new Map();
-  const rows = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(inArray6(users.id, wanted));
+  const rows = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(inArray7(users.id, wanted));
   return new Map(rows.map((row) => [row.id, row.name ?? row.email ?? "Someone on the team"]));
 }
 function writeOffView(fee, people) {
@@ -8435,14 +8526,17 @@ async function recordPayment(db, actor, input, today = lagosDay()) {
     const { left: left2 } = await balanceOf(tx, fee);
     if (left2 === 0) throw refused("CONFLICT", "This fee is already paid.");
     if (input.amount > left2) throw refused("BAD_REQUEST", `Only ${formatNaira(left2)} is left to pay on this fee.`);
+    const pausedBefore = (await holdOf(tx, fee.engagementId))?.state === "paused";
     const payment2 = await addPaymentByHand(tx, fee, { amount: input.amount, receivedOn: input.receivedOn, method: input.method, note, recordedByUserId: actor.id });
     const after = await refreshFeePaid(tx, fee);
     await recordAudit(tx, { action: "fee_payment_recorded", actorUserId: actor.id, details: { engagementId: fee.engagementId, feeLineId: fee.id, paymentId: payment2.id, amount: payment2.amount, method: payment2.method, receiptNumber: payment2.receiptNumber, left: after.left } });
     const opened2 = await openRoomIfFirstPayment(tx, fee.engagementId);
-    return { payment: payment2, left: after.left, opened: opened2, engagementId: fee.engagementId };
+    const resumed = pausedBefore && (await holdOf(tx, fee.engagementId))?.state !== "paused";
+    return { payment: payment2, left: after.left, opened: opened2, engagementId: fee.engagementId, resumed };
   });
   const { payment, left, opened } = result;
   await sendFeeReceipt(db, { feeLineId: input.feeLineId, paymentId: payment.id, amount: payment.amount, left, receiptNumber: payment.receiptNumber, paid: { on: input.receivedOn }, test: false, opened });
+  if (result.resumed) await sendWorkResumed(db, { engagementId: result.engagementId, feeLineId: input.feeLineId, paymentId: payment.id, amount: payment.amount, receiptNumber: payment.receiptNumber, test: false });
   await beginBusinessReview(db, result.engagementId, { opened, paid: true, actorUserId: actor.id });
   return { success: true, receipt: receiptNumberLabel(payment.receiptNumber), left, opened };
 }
@@ -8511,15 +8605,18 @@ async function acceptPayment(db, actor, input) {
     const counts = received - entry.refunded;
     if (counts <= 0) throw refused("CONFLICT", "It has been refunded in full.");
     if (counts > left2) throw refused("CONFLICT", `It is more than is left to pay on this fee (${formatNaira(left2)}). Refund the difference in Paystack and record the refund first.`);
+    const pausedBefore = (await holdOf(tx, fee.engagementId))?.state === "paused";
     const accepted2 = await acceptLooked(tx, fee, entry, received);
     if (!accepted2) throw refused("CONFLICT", "This payment has just changed. Refresh and try again.");
     const after = await refreshFeePaid(tx, fee);
     await recordAudit(tx, { action: "payment_accepted", actorUserId: actor.id, details: { engagementId: fee.engagementId, feeLineId: fee.id, paymentId: accepted2.id, amount: accepted2.amount, receiptNumber: accepted2.receiptNumber, paystackReference: accepted2.paystackReference, left: after.left } });
     const opened2 = await openRoomIfFirstPayment(tx, fee.engagementId);
-    return { accepted: accepted2, left: after.left, opened: opened2, engagementId: fee.engagementId };
+    const resumed = pausedBefore && (await holdOf(tx, fee.engagementId))?.state !== "paused";
+    return { accepted: accepted2, left: after.left, opened: opened2, engagementId: fee.engagementId, resumed };
   });
   const { accepted, left, opened } = result;
   await sendFeeReceipt(db, { feeLineId: payment.feeLineId, paymentId: accepted.id, amount: accepted.amount, left, receiptNumber: accepted.receiptNumber, paid: { on: accepted.receivedOn ?? lagosDay() }, test: accepted.mode === "test", opened });
+  if (result.resumed) await sendWorkResumed(db, { engagementId: result.engagementId, feeLineId: payment.feeLineId, paymentId: accepted.id, amount: accepted.amount, receiptNumber: accepted.receiptNumber, test: accepted.mode === "test" });
   await beginBusinessReview(db, result.engagementId, { opened, paid: true, actorUserId: actor.id });
   return { success: true, receipt: receiptNumberLabel(accepted.receiptNumber), left, opened };
 }
@@ -8712,7 +8809,7 @@ async function saveFees(db, actor, input) {
     }
     const same = (a, b) => a.length === b.length && a.every((line, index2) => line.label.trim() === b[index2].label.trim() && line.amount === b[index2].amount && (line.dueOn || null) === (b[index2].dueOn || null));
     const removed = existing.filter((item2) => !kept.has(item2.id)).map((item2) => item2.id);
-    if (removed.length) await tx.delete(engagementFeeLines).where(inArray7(engagementFeeLines.id, removed));
+    if (removed.length) await tx.delete(engagementFeeLines).where(inArray8(engagementFeeLines.id, removed));
     for (let index2 = 0; index2 < input.feeLines.length; index2 += 1) {
       const line = input.feeLines[index2];
       const values2 = { label: line.label.trim().slice(0, AGREEMENT_LIMITS.label), amount: line.amount, dueOn: line.dueOn || null, sortOrder: index2 };
@@ -11419,7 +11516,7 @@ async function createDirectEngagement(db, actor, input) {
   const contactName = input.contactName?.trim() ?? "";
   const email = input.contactEmail?.trim().toLowerCase() ?? "";
   if (businessName.length < 2 || contactName.length < 2 || !email.includes("@")) throw new TRPCError18({ code: "BAD_REQUEST", message: "Name the business and the client, and give the client's email." });
-  const existing = (await db.select({ id: users.id, status: users.status }).from(users).where(sql7`lower(${users.email}) = ${email}`).limit(1))[0];
+  const existing = (await db.select({ id: users.id, status: users.status }).from(users).where(sql8`lower(${users.email}) = ${email}`).limit(1))[0];
   if (existing) {
     const staff2 = (await db.select({ id: userPlatformRoles.id }).from(userPlatformRoles).where(eq21(userPlatformRoles.userId, existing.id)).limit(1)).length > 0;
     if (staff2) throw new TRPCError18({ code: "BAD_REQUEST", message: "This email belongs to a staff account. Use the client's own email." });
@@ -11557,19 +11654,19 @@ async function listStaffEngagements(db, actor) {
     contactName: engagements.contactName,
     contactEmail: engagements.contactEmail,
     opensOnPayment: engagements.opensOnPayment
-  }).from(engagements).leftJoin(businessChecks, eq21(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq21(engagements.businessId, businesses.id)).where(scope ? inArray8(engagements.id, scope) : void 0).orderBy(desc8(engagements.id));
+  }).from(engagements).leftJoin(businessChecks, eq21(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq21(engagements.businessId, businesses.id)).where(scope ? inArray9(engagements.id, scope) : void 0).orderBy(desc8(engagements.id));
   if (!rows.length) return [];
   const ids = rows.map((row) => row.id);
   const [team, tasks, sessions, drops, matched, unpaidFees] = await Promise.all([
-    db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role, name: users.name, userId: engagementTeam.userId }).from(engagementTeam).innerJoin(users, eq21(engagementTeam.userId, users.id)).where(inArray8(engagementTeam.engagementId, ids)),
-    db.select({ engagementId: engagementTasks.engagementId, side: engagementTasks.side, status: engagementTasks.status, dueOn: engagementTasks.dueOn }).from(engagementTasks).where(inArray8(engagementTasks.engagementId, ids)),
-    db.select({ engagementId: engagementSessions.engagementId, title: engagementSessions.title, scheduledFor: engagementSessions.scheduledFor, status: engagementSessions.status }).from(engagementSessions).where(inArray8(engagementSessions.engagementId, ids)),
+    db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role, name: users.name, userId: engagementTeam.userId }).from(engagementTeam).innerJoin(users, eq21(engagementTeam.userId, users.id)).where(inArray9(engagementTeam.engagementId, ids)),
+    db.select({ engagementId: engagementTasks.engagementId, side: engagementTasks.side, status: engagementTasks.status, dueOn: engagementTasks.dueOn }).from(engagementTasks).where(inArray9(engagementTasks.engagementId, ids)),
+    db.select({ engagementId: engagementSessions.engagementId, title: engagementSessions.title, scheduledFor: engagementSessions.scheduledFor, status: engagementSessions.status }).from(engagementSessions).where(inArray9(engagementSessions.engagementId, ids)),
     // Files in the drop box (on no request or deliverable yet), and which of them the team has matched.
-    db.select({ id: engagementFiles.id, engagementId: engagementFiles.engagementId }).from(engagementFiles).where(and14(inArray8(engagementFiles.engagementId, ids), isNull11(engagementFiles.taskId), isNull11(engagementFiles.deliverableId))),
-    db.select({ fileId: engagementFileMatches.fileId }).from(engagementFileMatches).innerJoin(engagementFiles, eq21(engagementFileMatches.fileId, engagementFiles.id)).where(inArray8(engagementFiles.engagementId, ids)),
+    db.select({ id: engagementFiles.id, engagementId: engagementFiles.engagementId }).from(engagementFiles).where(and14(inArray9(engagementFiles.engagementId, ids), isNull11(engagementFiles.taskId), isNull11(engagementFiles.deliverableId))),
+    db.select({ fileId: engagementFileMatches.fileId }).from(engagementFileMatches).innerJoin(engagementFiles, eq21(engagementFileMatches.fileId, engagementFiles.id)).where(inArray9(engagementFiles.engagementId, ids)),
     // Fees with something left to pay (not paid in full, not written off), for Late and Paused (D6): the team sees the
     // state, not the amounts.
-    db.select({ engagementId: engagementFeeLines.engagementId, dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and14(inArray8(engagementFeeLines.engagementId, ids), isNull11(engagementFeeLines.paidAt), isNull11(engagementFeeLines.writtenOffAt)))
+    db.select({ engagementId: engagementFeeLines.engagementId, dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and14(inArray9(engagementFeeLines.engagementId, ids), isNull11(engagementFeeLines.paidAt), isNull11(engagementFeeLines.writtenOffAt)))
   ]);
   const now = Date.now();
   const today = lagosDay(now);
@@ -12028,7 +12125,7 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
     matchesOf(db, engagement.id)
   ]);
   const assigneeIds = Array.from(new Set(tasks.map((task) => task.assigneeUserId).filter((value) => value !== null)));
-  const assigneeNames = new Map((assigneeIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray8(users.id, assigneeIds)) : []).map((row) => [row.id, row.name ?? ""]));
+  const assigneeNames = new Map((assigneeIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray9(users.id, assigneeIds)) : []).map((row) => [row.id, row.name ?? ""]));
   const fullView = viewer.kind === "owner" || viewer.access === "full";
   const projects = engagement.businessId === null ? [engagement] : await db.select().from(engagements).where(eq21(engagements.businessId, engagement.businessId)).orderBy(desc8(engagements.id));
   const checkId = engagement.businessCheckId ?? projects.find((row) => row.businessCheckId !== null)?.businessCheckId ?? null;
@@ -12448,13 +12545,13 @@ async function matchFile(db, actor, input) {
   if (!file || file.taskId !== null || file.deliverableId !== null) throw notFound4();
   await requireStaffEngagement(db, actor, file.engagementId);
   const wanted = Array.from(new Set(input.taskIds));
-  const requests = wanted.length ? await db.select().from(engagementTasks).where(and14(inArray8(engagementTasks.id, wanted), eq21(engagementTasks.engagementId, file.engagementId), eq21(engagementTasks.kind, "data_request"))) : [];
+  const requests = wanted.length ? await db.select().from(engagementTasks).where(and14(inArray9(engagementTasks.id, wanted), eq21(engagementTasks.engagementId, file.engagementId), eq21(engagementTasks.kind, "data_request"))) : [];
   if (requests.length !== wanted.length) throw new TRPCError18({ code: "BAD_REQUEST", message: "Match the file to this engagement's Data Requests only." });
   return db.transaction(async (tx) => {
     await tx.delete(engagementFileMatches).where(eq21(engagementFileMatches.fileId, file.id));
     if (wanted.length) await tx.insert(engagementFileMatches).values(wanted.map((taskId) => ({ fileId: file.id, taskId, matchedByUserId: actor.id })));
     const waiting = requests.filter((task) => task.status === "open" || task.status === "needs_more" || task.status === "not_available").map((task) => task.id);
-    if (waiting.length) await tx.update(engagementTasks).set({ status: "received", statusNote: "From the files you sent" }).where(inArray8(engagementTasks.id, waiting));
+    if (waiting.length) await tx.update(engagementTasks).set({ status: "received", statusNote: "From the files you sent" }).where(inArray9(engagementTasks.id, waiting));
     await recordAudit(tx, { action: "engagement_file_matched", actorUserId: actor.id, details: { engagementId: file.engagementId, fileId: file.id, taskIds: wanted } });
     return { success: true, moved: waiting.length };
   });
@@ -12747,7 +12844,7 @@ function paymentConfirmedEmail(input) {
 async function paymentRequestsFor(db, businessCheckIds) {
   if (businessCheckIds && !businessCheckIds.length) return [];
   const query = db.select().from(paymentRequests);
-  return (businessCheckIds ? query.where(inArray9(paymentRequests.businessCheckId, businessCheckIds)) : query).orderBy(paymentRequests.id);
+  return (businessCheckIds ? query.where(inArray10(paymentRequests.businessCheckId, businessCheckIds)) : query).orderBy(paymentRequests.id);
 }
 function isMissingPaymentTable(error) {
   const code = error?.code ?? error?.cause?.code;
@@ -13180,7 +13277,7 @@ var platformRolesRouter = router({
 import { z as z13 } from "zod";
 
 // server/businessSupportAdmin.ts
-import { and as and17, desc as desc9, eq as eq25, inArray as inArray10, isNotNull as isNotNull3, isNull as isNull13, sql as sql8 } from "drizzle-orm";
+import { and as and17, desc as desc9, eq as eq25, inArray as inArray11, isNotNull as isNotNull3, isNull as isNull13, sql as sql9 } from "drizzle-orm";
 import { TRPCError as TRPCError25 } from "@trpc/server";
 async function requireDatabase2() {
   const db = await getDb();
@@ -13298,7 +13395,7 @@ async function getBusinessCheckDetail(db, businessCheckId) {
 }
 var HISTORY_ACTIONS = ["business_check_stage_changed", "business_check_call_outcome", "business_check_call_scheduled", "business_check_call_booked", "payment_details_sent", "payment_proof_received", "payment_confirmed", "payment_confirmation_sent", "full_report_link_sent", "full_report_delivered"];
 async function stageHistoryFor(db, businessCheckId) {
-  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq25(users.id, adminAccessAuditEvents.actorUserId)).where(and17(inArray10(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql8`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc9(adminAccessAuditEvents.createdAt), desc9(adminAccessAuditEvents.id)).limit(100);
+  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq25(users.id, adminAccessAuditEvents.actorUserId)).where(and17(inArray11(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql9`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc9(adminAccessAuditEvents.createdAt), desc9(adminAccessAuditEvents.id)).limit(100);
   return events.map((event) => {
     const details = parseJson2(event.details) ?? {};
     return { id: event.id, action: event.action, from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, delivery: details.delivery ?? null, via: details.via === "paystack" ? "paystack" : null, by: event.by ?? null, at: event.at };
@@ -13369,8 +13466,66 @@ async function businessSupportDb() {
   return requireDatabase2();
 }
 
+// server/emailAlerts.ts
+import { and as and18, desc as desc10, eq as eq26, gte, inArray as inArray12, sql as sql10 } from "drizzle-orm";
+var FAILED_EMAIL_STATES = ["failed", "bounced", "suppressed"];
+var FAILED_EMAIL_WINDOW_DAYS = 30;
+var FAILED_EMAILS_SHOWN = 20;
+var DAY_MS = 864e5;
+async function dealtWith(db, since) {
+  const rows = await db.select({ deliveryId: sql10`${adminAccessAuditEvents.details}::jsonb ->> 'deliveryId'` }).from(adminAccessAuditEvents).where(and18(eq26(adminAccessAuditEvents.action, "email_failure_dealt_with"), gte(adminAccessAuditEvents.createdAt, since)));
+  return new Set(rows.map((row) => Number(row.deliveryId)));
+}
+async function failedEmails(db, now = Date.now()) {
+  const since = new Date(now - FAILED_EMAIL_WINDOW_DAYS * DAY_MS);
+  const rows = await db.select({
+    id: businessSupportEmailDeliveries.id,
+    recipientEmail: businessSupportEmailDeliveries.recipientEmail,
+    purpose: businessSupportEmailDeliveries.purpose,
+    latestState: businessSupportEmailDeliveries.latestState,
+    attemptedAt: businessSupportEmailDeliveries.attemptedAt,
+    lastEventAt: businessSupportEmailDeliveries.lastEventAt,
+    businessCheckId: businessSupportEmailDeliveries.businessCheckId
+  }).from(businessSupportEmailDeliveries).where(and18(
+    inArray12(businessSupportEmailDeliveries.latestState, [...FAILED_EMAIL_STATES]),
+    gte(businessSupportEmailDeliveries.attemptedAt, since),
+    // The office's own notices are not a client's email.
+    sql10`lower(${businessSupportEmailDeliveries.recipientEmail}) <> ${BUSINESS_SUPPORT_MAILBOX.toLowerCase()}`
+  )).orderBy(desc10(businessSupportEmailDeliveries.attemptedAt), desc10(businessSupportEmailDeliveries.id)).limit(500);
+  const done = rows.length ? await dealtWith(db, since) : /* @__PURE__ */ new Set();
+  const open = rows.filter((row) => !done.has(row.id));
+  const shown = open.slice(0, FAILED_EMAILS_SHOWN);
+  const checkIds = Array.from(new Set(shown.flatMap((row) => row.businessCheckId !== null ? [row.businessCheckId] : [])));
+  const checks = checkIds.length ? await db.select({ id: businessChecks.id, businessName: businessChecks.businessName, fullName: businessChecks.fullName }).from(businessChecks).where(inArray12(businessChecks.id, checkIds)) : [];
+  return {
+    total: open.length,
+    emails: shown.map((row) => {
+      const check2 = checks.find((item2) => item2.id === row.businessCheckId);
+      return {
+        id: row.id,
+        recipient: row.recipientEmail,
+        subject: row.purpose,
+        state: row.latestState,
+        at: row.lastEventAt ?? row.attemptedAt,
+        client: check2 ? check2.businessName || check2.fullName : null
+      };
+    })
+  };
+}
+async function markEmailsDealtWith(db, actorUserId, deliveryIds, now = Date.now()) {
+  const since = new Date(now - FAILED_EMAIL_WINDOW_DAYS * DAY_MS);
+  const wanted = Array.from(new Set(deliveryIds));
+  const rows = await db.select({ id: businessSupportEmailDeliveries.id, recipientEmail: businessSupportEmailDeliveries.recipientEmail, latestState: businessSupportEmailDeliveries.latestState }).from(businessSupportEmailDeliveries).where(inArray12(businessSupportEmailDeliveries.id, wanted));
+  const done = await dealtWith(db, since);
+  const marked = rows.filter((row) => FAILED_EMAIL_STATES.includes(row.latestState) && !done.has(row.id));
+  for (const row of marked) {
+    await recordAudit(db, { action: "email_failure_dealt_with", actorUserId, targetEmail: row.recipientEmail, details: { deliveryId: row.id, state: row.latestState } });
+  }
+  return { success: true, marked: marked.length };
+}
+
 // server/routers/businessSupport.ts
-import { desc as desc10 } from "drizzle-orm";
+import { desc as desc11 } from "drizzle-orm";
 var prospects = adminPermissionProcedure("manage_client_onboarding");
 var clients = adminPermissionProcedure("view_all_businesses");
 var payments2 = adminPermissionProcedure("manage_payments");
@@ -13378,9 +13533,12 @@ var businessSupportRouter = router({
   /** Metadata-only recent Business Support mail state for authorised internal support. */
   emailDeliveryStatus: prospects.query(async () => {
     const db = await businessSupportDb();
-    return db.select({ recipientEmail: businessSupportEmailDeliveries.recipientEmail, providerMessageId: businessSupportEmailDeliveries.providerMessageId, purpose: businessSupportEmailDeliveries.purpose, latestState: businessSupportEmailDeliveries.latestState, attemptedAt: businessSupportEmailDeliveries.attemptedAt, acceptedAt: businessSupportEmailDeliveries.acceptedAt, lastEventAt: businessSupportEmailDeliveries.lastEventAt, businessCheckId: businessSupportEmailDeliveries.businessCheckId, paymentRequestId: businessSupportEmailDeliveries.paymentRequestId, invitationId: businessSupportEmailDeliveries.invitationId }).from(businessSupportEmailDeliveries).orderBy(desc10(businessSupportEmailDeliveries.attemptedAt)).limit(100);
+    return db.select({ recipientEmail: businessSupportEmailDeliveries.recipientEmail, providerMessageId: businessSupportEmailDeliveries.providerMessageId, purpose: businessSupportEmailDeliveries.purpose, latestState: businessSupportEmailDeliveries.latestState, attemptedAt: businessSupportEmailDeliveries.attemptedAt, acceptedAt: businessSupportEmailDeliveries.acceptedAt, lastEventAt: businessSupportEmailDeliveries.lastEventAt, businessCheckId: businessSupportEmailDeliveries.businessCheckId, paymentRequestId: businessSupportEmailDeliveries.paymentRequestId, invitationId: businessSupportEmailDeliveries.invitationId }).from(businessSupportEmailDeliveries).orderBy(desc11(businessSupportEmailDeliveries.attemptedAt)).limit(100);
   }),
   checks: prospects.query(async () => listBusinessChecks(await businessSupportDb())),
+  /** Emails that did not arrive (G3, R42): at the top of Pipeline until someone marks them dealt with. */
+  failedEmails: prospects.query(async () => failedEmails(await businessSupportDb())),
+  emailsDealtWith: prospects.input(z13.object({ deliveryIds: z13.array(z13.number().int().positive()).min(1).max(FAILED_EMAILS_SHOWN) })).mutation(async ({ ctx, input }) => markEmailsDealtWith(await businessSupportDb(), ctx.user.id, input.deliveryIds)),
   checkDetail: prospects.input(z13.object({ businessCheckId: z13.number().int().positive() })).query(async ({ input }) => getBusinessCheckDetail(await businessSupportDb(), input.businessCheckId)),
   discoveryCalls: prospects.query(async () => listDiscoveryCalls(await businessSupportDb())),
   scheduleCall: prospects.input(z13.object({ businessCheckId: z13.number().int().positive(), scheduledFor: z13.coerce.date() })).mutation(async ({ ctx, input }) => scheduleDiscoveryCall(await businessSupportDb(), { ...input, actorUserId: ctx.user.id })),
@@ -13837,7 +13995,7 @@ var appRouter = router({
 });
 
 // server/_core/context.ts
-import { eq as eq26 } from "drizzle-orm";
+import { eq as eq27 } from "drizzle-orm";
 async function createContext(opts) {
   let user = null;
   let authChannel;
@@ -13852,7 +14010,7 @@ async function createContext(opts) {
       const session = await resolveAccountSession(opts.req);
       if (session && session.authority.roles.length > 0) {
         const db = await getDb();
-        const row = db ? (await db.select().from(users).where(eq26(users.id, session.user.id)).limit(1))[0] : void 0;
+        const row = db ? (await db.select().from(users).where(eq27(users.id, session.user.id)).limit(1))[0] : void 0;
         if (row && row.status === "active") {
           user = row;
           authChannel = "account";
@@ -13876,7 +14034,7 @@ function healthReport(settings = ENV) {
 
 // server/resendWebhook.ts
 import { createHmac as createHmac4, timingSafeEqual as timingSafeEqual5 } from "node:crypto";
-import { and as and18, eq as eq27, sql as sql9 } from "drizzle-orm";
+import { and as and19, eq as eq28, sql as sql11 } from "drizzle-orm";
 var SUPPORTED = /* @__PURE__ */ new Set(["email.sent", "email.delivered", "email.delivery_delayed", "email.bounced", "email.complained", "email.failed", "email.suppressed"]);
 var MAX_SKEW_SECONDS = 5 * 60;
 function verifyResendWebhookSignature(input) {
@@ -13932,7 +14090,7 @@ async function handleResendWebhook(req, res) {
     await db.transaction(async (tx) => {
       const [inserted] = await tx.insert(resendEmailEvents).values({ eventId, providerMessageId, eventType: state, recipientEmail, happenedAt }).onConflictDoNothing({ target: resendEmailEvents.eventId }).returning({ id: resendEmailEvents.id });
       if (!inserted) return;
-      await tx.update(businessSupportEmailDeliveries).set({ latestState: state, lastEventAt: happenedAt }).where(and18(eq27(businessSupportEmailDeliveries.providerMessageId, providerMessageId), sql9`(${businessSupportEmailDeliveries.lastEventAt} is null or ${businessSupportEmailDeliveries.lastEventAt} < ${happenedAt})`));
+      await tx.update(businessSupportEmailDeliveries).set({ latestState: state, lastEventAt: happenedAt }).where(and19(eq28(businessSupportEmailDeliveries.providerMessageId, providerMessageId), sql11`(${businessSupportEmailDeliveries.lastEventAt} is null or ${businessSupportEmailDeliveries.lastEventAt} < ${happenedAt})`));
     });
     return res.status(200).json({ received: true });
   } catch (error) {

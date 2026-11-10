@@ -13,6 +13,7 @@ import {
   type SettableStage,
 } from "../businessSupportAdmin";
 import { confirmPayment, requestPayment, resendPaymentConfirmation } from "../payments";
+import { FAILED_EMAILS_SHOWN, failedEmails, markEmailsDealtWith } from "../emailAlerts";
 import { getDebrief, isMissingDebriefTable, saveDebrief, shareDebrief } from "../debriefs";
 import { adminDownloadReport, resendReportLink } from "../fullReport/service";
 import { PAYMENT_ITEMS } from "../../shared/payments";
@@ -39,6 +40,11 @@ export const businessSupportRouter = router({
       .from(businessSupportEmailDeliveries).orderBy(desc(businessSupportEmailDeliveries.attemptedAt)).limit(100);
   }),
   checks: prospects.query(async () => listBusinessChecks(await businessSupportDb())),
+  /** Emails that did not arrive (G3, R42): at the top of Pipeline until someone marks them dealt with. */
+  failedEmails: prospects.query(async () => failedEmails(await businessSupportDb())),
+  emailsDealtWith: prospects
+    .input(z.object({ deliveryIds: z.array(z.number().int().positive()).min(1).max(FAILED_EMAILS_SHOWN) }))
+    .mutation(async ({ ctx, input }) => markEmailsDealtWith(await businessSupportDb(), ctx.user.id, input.deliveryIds)),
   checkDetail: prospects
     .input(z.object({ businessCheckId: z.number().int().positive() }))
     .query(async ({ input }) => getBusinessCheckDetail(await businessSupportDb(), input.businessCheckId)),

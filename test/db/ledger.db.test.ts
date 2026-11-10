@@ -57,6 +57,7 @@ import { cleanAnswers } from "@shared/businessCheck/engine";
 import { addDays, lagosDay } from "@shared/agreement";
 import { takeNumber } from "@server/ledger";
 import { ASSESSMENT_TEMPLATE } from "@shared/engagement";
+import { dayLabel } from "@shared/engagementWork";
 import type { TrpcContext } from "@server/_core/context";
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -591,6 +592,96 @@ for (const target of targets) {
         expect(rows).toEqual([expect.objectContaining({ status: "paid", method: "other", amount: request.amountNaira, note: "Transfer 7730", feeLineId: null, receiptNumber: expect.any(Number), recordedByUserId: ownerId })]);
         const confirmation = emails().find(sent => sent.to === check.email && sent.subject.startsWith("Payment received"))!;
         expect(confirmation.body).toContain(`Your receipt number is TS-RC-${String(rows[0].receiptNumber).padStart(6, "0")}.`);
+      });
+    });
+
+    describe("work resumed and alerts (G2, G3)", () => {
+      /** A member of IP Factory's staff put on the engagement as its Engagement Manager. */
+      async function leadOn(engagementId: number, name: string) {
+        const [user] = await db.insert(schema.users).values({ openId: unique(name), email: uniqueEmail(name), name, role: "user", status: "active" }).returning();
+        await db.insert(schema.userPlatformRoles).values({ userId: user.id, role: "desk_lead" });
+        await (await superAdmin.call()).engagement.staff.assign({ engagementId, userId: user.id, role: "manager" });
+        return user as { id: number; email: string };
+      }
+      /** Dates a fee some days back (negative) or ahead, as if time had passed. */
+      const dateFee = (feeLineId: number, days: number) => db.update(schema.engagementFeeLines).set({ dueOn: addDays(lagosDay(), days) }).where(eq(schema.engagementFeeLines.id, feeLineId));
+
+      it("tells the owner and the lead that work has resumed when a payment lifts a pause, naming a fee still late, and tells nobody when nothing was paused", async () => {
+        const { email, owner, engagementId } = await digitalClient("resumed");
+        const [first, second, third] = await feesOf(engagementId);
+        const finance = await staffMember(["finance"], "Fola Resumed");
+        const lead = await leadOn(engagementId, "Lola Lead");
+        mocked.deliverEmail.mockClear();
+        await (await finance.call()).engagement.finance.recordPayment(byHand(first.id, 470_000));
+        expect(emails().filter(message => message.subject.includes("has resumed"))).toEqual([]);
+
+        // Month 2 ten days past its date (paused), month 3 two days past it (late, not yet paused).
+        await dateFee(second.id, -10);
+        await dateFee(third.id, -2);
+        expect((await (await owner.call()).engagement.client.room())!.hold).toMatchObject({ state: "paused" });
+        // Part of it does not lift the pause.
+        mocked.deliverEmail.mockClear();
+        await (await finance.call()).engagement.finance.recordPayment(byHand(second.id, 200_000));
+        expect(emails().filter(message => message.subject.includes("has resumed"))).toEqual([]);
+        // The rest does.
+        await (await finance.call()).engagement.finance.recordPayment(byHand(second.id, 270_000));
+        expect((await (await owner.call()).engagement.client.room())!.hold).toMatchObject({ state: "late" });
+        const resumed = emails().filter(message => message.subject.includes("has resumed"));
+        expect(resumed.map(message => [message.to, message.subject])).toEqual([
+          [email, "Work on your Digital Marketing has resumed"],
+          [lead.email, "Work has resumed: Studio resumed, Digital Marketing"],
+        ]);
+        expect(resumed[0]!.body).toContain("Thank you for your payment. Work on your Digital Marketing has resumed.");
+        expect(resumed[0]!.body).toContain(`One fee is still late: Month 3 service fee, payable before day 61, with ₦470,000 left to pay. Pay it before ${dayLabel(addDays(lagosDay(), 5))} to keep the work going.`);
+        expect(resumed[1]!.body).toContain("Studio resumed paid ₦270,000 (Month 2 service fee, payable before day 31). Work on their Digital Marketing is no longer paused: pick it up again.");
+        expect(resumed[1]!.body).toMatch(/Receipt: TS-RC-\d{6}/);
+        expect(resumed.some(message => message.to === OFFICE)).toBe(false);
+      });
+
+      it("tells the office when nobody leads the engagement yet, and sends it once for Paystack's payment, whatever arrives twice", async () => {
+        const { email, owner, engagementId } = await digitalClient("resumed-online");
+        const [first, second] = await feesOf(engagementId);
+        await (await superAdmin.call()).engagement.finance.recordPayment(byHand(first.id, 470_000));
+        await dateFee(second.id, -8);
+        const room = (await (await owner.call()).engagement.client.room())!;
+        expect(room.hold).toMatchObject({ state: "paused" });
+        await (await browser().call()).onlinePayment.feeStart(linkParts(room.fees[1]!.payPath!));
+        const reference = paystack.initialized.at(-1)!.reference as string;
+        pay(reference);
+        mocked.deliverEmail.mockClear();
+        expect(await webhook(charged(reference))).toBe(200);
+        expect(await webhook(charged(reference))).toBe(200);
+        expect(emails().filter(message => message.subject.includes("has resumed")).map(message => [message.to, message.subject])).toEqual([
+          [email, "TEST: Work on your Digital Marketing has resumed"],
+          [OFFICE, expect.stringMatching(/^TEST: Work has resumed: Studio resumed-online/)],
+        ]);
+      });
+
+      it("tells the office once when a Paystack notification cannot be processed, without the error, and the next try that works records the payment", async () => {
+        const { owner, engagementId } = await digitalClient("webhook-down");
+        const [first] = await feesOf(engagementId);
+        const room = (await (await owner.call()).engagement.client.room())!;
+        await (await browser().call()).onlinePayment.feeStart(linkParts(room.fees[0]!.payPath!));
+        const reference = paystack.initialized.at(-1)!.reference as string;
+        pay(reference);
+        const real = harness.db as unknown as Record<string, unknown>;
+        holder.current = new Proxy(real, { get: (target, property) => (property === "transaction" ? () => Promise.reject(new Error("connection to db.internal.example.test lost")) : Reflect.get(target, property)) });
+        mocked.deliverEmail.mockClear();
+        try {
+          expect(await webhook(charged(reference))).toBe(500);
+          expect(await webhook(charged(reference))).toBe(500);
+        } finally {
+          holder.current = real;
+        }
+        const alerts = emails().filter(message => message.to === OFFICE && message.subject.startsWith("Paystack notification not processed: "));
+        expect(alerts.map(message => message.subject)).toEqual([`Paystack notification not processed: ${reference}`]);
+        expect(alerts[0]!.body).toContain("check the payment in Paystack");
+        expect(alerts[0]!.body).not.toContain("db.internal.example.test");
+        const told = await db.select().from(schema.adminAccessAuditEvents).where(and(eq(schema.adminAccessAuditEvents.action, "paystack_webhook_failed"), sql`${schema.adminAccessAuditEvents.details}::jsonb ->> 'reference' = ${reference}`));
+        expect(told).toEqual([expect.objectContaining({ actorUserId: null })]);
+        // Once the server is well, Paystack's next try records the payment.
+        expect(await webhook(charged(reference))).toBe(200);
+        expect((await ledgerOf(first.id)).map((row: { status: string }) => row.status)).toEqual(["paid"]);
       });
     });
 

@@ -386,6 +386,10 @@ be previewed as the client sees it (**Preview as client**, read only).
   under the amount. What it is for is a link: it opens the fee in the fees view with its payments open, marked on the
   brand tint. A reference stays on one line, whole, so it can be read against Paystack. On a phone each payment is two
   columns: who paid and what for, with the day, receipt and how it came under it; and the amount.
+- **Emails that did not arrive** (G3; `FailedEmails.tsx`): only while there are any, a white band across the top of
+  Pipeline, above the stage tabs, with a danger rule at its left edge: the heading with the count, one muted sentence
+  on what to do, then one row per email (its subject, to whom and for which client, when, and why in the danger
+  colour) with **Dealt with** on the right, and **Mark all dealt with** below. Nothing shows when every email arrived.
 - **The Business Review in Pipeline** (F3, App flow 3.2; `Payments.tsx`): the record's Payments shows its first half as
   a fee, in the same box as before: a chip (**Awaiting payment** on the brand call-out, **Late** on the danger tint,
   **Paid** on the Clear tint, **Written off** on the neutral sunken tint), the fee's name and amount, a muted line with

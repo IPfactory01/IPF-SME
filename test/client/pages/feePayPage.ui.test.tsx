@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -62,11 +62,42 @@ describe("paying an engagement fee", () => {
     expect(screen.getByText("Payment · Crown Studio")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Digital marketing" })).toBeTruthy();
     expect(screen.getByText("₦470,000")).toBeTruthy();
-    expect(screen.getByText("Reference TS-F-000012")).toBeTruthy();
+    // The reference sits with what the payer checks before paying (R72).
+    expect(within(screen.getByRole("region", { name: "Before you pay" })).getByText("TS-F-000012")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Pay ₦470,000 securely with Paystack" }));
     expect(api.startCalls).toEqual([{ feeLineId: 12, token: TOKEN }]);
     expect(api.opened).toEqual(["https://checkout.paystack.com/fixture"]);
     expect(api.remembered).toEqual([`/pay/fee/12/${TOKEN}`]);
+  });
+
+  it("tells a first-time payer, before Pay, who receives the money, the reference and the receipt, each said once (R72)", () => {
+    renderPage();
+    const before = within(screen.getByRole("region", { name: "Before you pay" }));
+    expect(before.getByText(/Enzo Krypton & Co\., the firm behind IP Factory, through Paystack/)).toBeTruthy();
+    expect(before.getByText("Enzo Krypton").tagName).toBe("SPAN");
+    expect(before.getByText("By email, as soon as Paystack confirms your payment.")).toBeTruthy();
+    // What it is for is the heading above the box; neither it nor the receipt is said a second time.
+    expect(screen.getAllByText("Month 2 service fee, payable before day 31")).toHaveLength(1);
+    expect(screen.getByText(/You go to Paystack's secure page/).textContent).not.toMatch(/receipt/i);
+    // It comes before the button, and the button is the page's one gradient action, with 8 px corners.
+    const button = screen.getByRole("button", { name: "Pay ₦470,000 securely with Paystack" });
+    expect(screen.getByRole("region", { name: "Before you pay" }).compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(button.className).toMatch(/bg-gradient-to-r from-brand-plum to-highlight-ink/);
+    expect(button.className).toContain("rounded-lg");
+    expect(button.className).not.toContain("rounded-none");
+  });
+
+  it("offers the engagement's main contact on WhatsApp when they agreed to show their number, else the office (R72)", () => {
+    api.page = { ...(api.page as object), contact: { name: "Lewis Lead", whatsapp: "+2348030000001" } };
+    const { unmount } = renderPage();
+    const lead = screen.getByRole("link", { name: "Questions first? WhatsApp Lewis" });
+    expect(lead.getAttribute("href")).toMatch(/^https:\/\/wa\.me\/2348030000001\?text=/);
+    expect(decodeURIComponent(lead.getAttribute("href")!.split("text=")[1]!)).toBe("Hello Lewis, I have a question before I pay TS-F-000012: Month 2 service fee, payable before day 31.");
+    expect(lead.getAttribute("target")).toBe("_blank");
+    unmount();
+    api.page = { ...(api.page as object), contact: null };
+    renderPage();
+    expect(screen.getByRole("link", { name: "Questions first? WhatsApp IP Factory" }).getAttribute("href")).toMatch(/^https:\/\/wa\.me\/2348101603638\?text=/);
   });
 
   it("says when it is already paid, with no button", () => {

@@ -270,7 +270,7 @@ info@ipfactory.co.
 | An upload fails on a weak network | "The upload did not finish. Try again." (today); resumes on its own (R56) | Photos compressed first (R56) | — | Partly built |
 | The connection drops while a screen loads | "We could not load this. Check your connection and try again.", with **Try again**; when the screen already had something, it stays with "We could not refresh this. Showing what we had at 10:42 am." A signed-in person is never sent to sign in, and a pay or invitation link is never called invalid, because a request failed | Retries twice by itself before saying so | — | Built (R69) |
 | The payment check fails on the return page | "We could not check your payment. … If you have paid, your payment is safe with Paystack: please do not pay again.", with **Check again** | — | — | Built (R69) |
-| A first-time payer is unsure who receives the money | Today: the amount, Paystack and the receipt by email. With R72: the legal name on the statement, the reference and a WhatsApp button to the lead or the office, before **Pay** | — | Answers on WhatsApp | To build (R72; the name waits on D1) |
+| A first-time payer is unsure who receives the money | Before **Pay**, "Before you pay": *You pay Enzo Krypton & Co., the firm behind IP Factory, through Paystack. Look for Enzo Krypton on Paystack's page and on your bank statement*; the reference; the receipt by email (what it is for is the page's heading, above); and **Questions first? WhatsApp {first name}** (the engagement's main contact, once they agreed to show their number) or **WhatsApp IP Factory** (the office) | Names a team member only once they agreed (R44); offers the office otherwise | Answers on WhatsApp | Built (R72) |
 | A Specialist's access ends | — | Their role ends at the end of the day, Lagos time | — | Built |
 
 ## 8. Reference: pages, admin console, room, sign-in
@@ -293,8 +293,8 @@ info@ipfactory.co.
 | `/terms` | `LegalPage.tsx` | Footer, forms, pay pages | The Terms and Conditions |
 | `/privacy` | `LegalPage.tsx` | Footer, forms, pay pages | The Privacy Policy |
 | `/report/:token` | `FullReportPage.tsx` | *Payment received: your Full Report* | The Report Intake, then the download |
-| `/pay/:token/:item` | `PayPage.tsx` | The Full Report or Business Review payment email | Pay for the Full Report or the Business Review (₦600,000) on Paystack |
-| `/pay/fee/:feeLineId/:token` | `FeePayPage.tsx` | A fee's email, the room's Payments tab | Pay one engagement fee on Paystack; the token is an HMAC of the fee's id |
+| `/pay/:token/:item` | `PayPage.tsx` | The Full Report or Business Review payment email | Pay for the Full Report or the Business Review (₦600,000) on Paystack, after "Before you pay" (R72) |
+| `/pay/fee/:feeLineId/:token` | `FeePayPage.tsx` | A fee's email, the room's Payments tab | Pay one engagement fee on Paystack, after "Before you pay" (R72); the token is an HMAC of the fee's id |
 | `/pay/return` | `PayReturnPage.tsx` | Paystack | Paid, still confirming, or not completed |
 | `/onboarding/:token` | `OnboardingPage.tsx` | The Business Review account invitation | Create the client account |
 | `/join/:token` | `JoinPage.tsx` | A client, seat or staff invitation | Set a password; land in the room or the admin |

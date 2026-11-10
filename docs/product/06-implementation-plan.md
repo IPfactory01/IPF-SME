@@ -26,8 +26,8 @@ counting time spent waiting on a decision or a migration.
 | Release 0 (9 November): speed and search: each public page rendered at build time and loading its own code (Home 0.9 s on a throttled phone, was 4.3 s); one main heading and one share card per page | R70, R73 |
 | The design review fixes: the room fits a phone, readable health labels, 44 px taps (B1, B4, B10 to B12) | Design brief |
 
-Migrations are applied through **0021**. Release 0 still waits on batch C (I2 and I3), the timed phone run with ET or
-Marcelle (B6) and the team's WhatsApp numbers (I1). The document tests (`test/docs/productDocs.test.ts`) fail the build
+Migrations are applied through **0021**. Release 0 still waits on the timed phone run with ET or Marcelle (B6) and the
+team's WhatsApp numbers (I1); batch C was built on 10 November. The document tests (`test/docs/productDocs.test.ts`) fail the build
 if a page, a table, a server action, a permission, a project role, an email or an audit action is added without being
 documented.
 
@@ -40,8 +40,8 @@ documented.
 | K3, K4 | Supabase on a paid plan with daily backups; the old Supabase project secured | ET | Every client record | To do |
 | K7 | A second owner on Google Search Console | ET | Search (R2, R73) | To do |
 | I1 | Marcelle's Digital Marketer and Content Producer: names, and each one's WhatsApp number with their agreement to show it to clients (K11) | ET | R44, R45 (Release 0, batch B) | Waiting |
-| I2 | The legal name a client sees on their bank statement (decision D1, with counsel, K5) | ET | R72 (Release 0, batch C) | Open |
-| I3 | IP Factory's office WhatsApp number, for pay pages and links with no lead yet | ET | R72; R44 for the office | Waiting |
+| I2 | The legal name a client sees on their bank statement (decision D1, with counsel, K5) | ET | R72 (Release 0, batch C) | Enzo Krypton & Co., through its Paystack (ET, 10 November); the exact statement wording to confirm in Paystack |
+| I3 | IP Factory's office WhatsApp number, for pay pages and links with no lead yet | ET | R72; R44 for the office | Given (ET, 10 November) |
 | I4 | Marcelle's fee dates moved to 30, 60 and 90 days from kickoff, and saved in Fees | ET or the lead | Marcelle's Payments tab | Waiting; or set by her terms with Release 1 (E6) |
 
 ## 3. Release 0: the first client's experience
@@ -80,11 +80,11 @@ one line; D can run alongside.
 | B8 | **What we will do** (not "Your plan", which the method uses for the plan handed over at the end): a read-only card on Overview and in the owner's welcome email: what we will do (the service's or type's description), the team, the start date and each fee with its date (the payment terms join it with R36). A change to the fees after the owner has the room is recorded and emails the owner the new schedule | R47 | UI test for the card; email test; the document test checks the new email is in the App flow | Built (*Your fees have changed: {engagement}*) |
 | B9 | **Removing a file:** the client removes a file they sent until the team has matched it; the team removes any file with a reason; the stored object is deleted and the removal recorded (`engagement_file_removed`) | R61 | DB tests: a client cannot remove a matched file or another client's; the object is deleted; the audit action is declared and documented (document test) | Built |
 
-### Batch C: paying with confidence (about 2 days): waits on I2 and I3
+### Batch C: paying with confidence (about 2 days): built 10 November 2026
 
 | # | Task | Builds | Acceptance and test | Input |
 |---|---|---|---|---|
-| C1 | **Every pay page** (`/pay/:token/:item`, `/pay/fee/...`), the pay-page part of R38, shows before **Pay**: who is paid (the legal name on the statement), what for, the amount in full, the reference, that the receipt comes by email, and a WhatsApp button to the lead or the office. The Pay button uses the gradient and the page moves to 8 px corners (Design brief, section 4) | R72 | UI tests on both pay pages | I2 (the name), I3 (the office number) |
+| C1 | **Every pay page** (`/pay/:token/:item`, `/pay/fee/...`), the pay-page part of R38, shows before **Pay**: who is paid (the legal name on the statement), what for, the amount in full, the reference, that the receipt comes by email, and a WhatsApp button to the lead or the office. The Pay button uses the gradient and the page moves to 8 px corners (Design brief, section 4) | R72 | UI tests on both pay pages | I2 (the name), I3 (the office number). Built 10 November 2026: Enzo Krypton & Co. collects (ET); the office WhatsApp is +234 810 160 3638 |
 
 ### Batch D: speed and search (about 6 days, alongside): built 9 November 2026
 

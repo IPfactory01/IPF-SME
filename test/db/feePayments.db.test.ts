@@ -298,6 +298,34 @@ for (const target of targets) {
       });
     });
 
+    describe("asking someone before paying (R72)", () => {
+      it("names the engagement's main contact on the pay page only once they agree to show their number, else nobody (the page offers the office)", async () => {
+        const { engagementId } = await digitalClient("ask-first");
+        const [first] = await feesOf(engagementId);
+        const link = { feeLineId: first.id, token: (await (await superAdmin.call()).engagement.staff.sendFeeLink({ feeLineId: first.id })).url.split("/").at(-1)! };
+        // Nobody on the team yet: no one is named.
+        expect(await (await browser().call()).onlinePayment.feePage(link)).toMatchObject({ contact: null });
+
+        const leadUser = (await db.insert(schema.users).values({ openId: unique("lead"), email: uniqueEmail("lead"), name: "Lewis Lead", role: "user", status: "active" }).returning())[0];
+        await db.insert(schema.userCredentials).values({ userId: leadUser.id, passwordHash });
+        await db.insert(schema.userPlatformRoles).values({ userId: leadUser.id, role: "desk_lead" });
+        await (await superAdmin.call()).engagement.staff.assign({ engagementId, userId: leadUser.id, role: "manager" });
+        const lead = browser();
+        await (await lead.call()).account.signInInternal({ email: leadUser.email, password: PASSWORD });
+        // A number not yet agreed to is never shown.
+        await (await lead.call()).account.setWhatsapp({ whatsapp: "+234 803 000 0001", agree: false });
+        expect(await (await browser().call()).onlinePayment.feePage(link)).toMatchObject({ contact: null });
+        await (await lead.call()).account.setWhatsapp({ whatsapp: "+234 803 000 0001", agree: true });
+        expect(await (await browser().call()).onlinePayment.feePage(link)).toMatchObject({ contact: { name: "Lewis Lead", whatsapp: "+2348030000001" } });
+
+        // Another client's pay page never names this engagement's team.
+        const other = await digitalClient("ask-other");
+        const [otherFee] = await feesOf(other.engagementId);
+        const otherLink = { feeLineId: otherFee.id, token: (await (await superAdmin.call()).engagement.staff.sendFeeLink({ feeLineId: otherFee.id })).url.split("/").at(-1)! };
+        expect(await (await browser().call()).onlinePayment.feePage(otherLink)).toMatchObject({ contact: null });
+      });
+    });
+
     describe("payment links from the team", () => {
       it("emails the client the fee's pay link, for the team and Finance, never a Specialist or an analyst off the engagement", async () => {
         const { email, engagementId } = await digitalClient("send-link");

@@ -219,9 +219,12 @@ for (const target of targets) {
         expect(details.body).not.toMatch(/BANK TRANSFER|Bank:|Account number|proof of payment/);
       });
 
-      it("shows the item, the amount on the payment request, the mode and where it stands, and nothing else", async () => {
+      it("shows the item, the amount on the payment request, its reference, the mode and where it stands, and nothing else", async () => {
         const { token, id } = await reportAskedFor("page");
-        expect(await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).toEqual({ item: "full_report", name: "Full Report", amountNaira: 100_000, mode: "test", state: "open" });
+        // The reference is shown before Pay (R72), as on the payment email.
+        const reference = (await paymentOf(id, "full_report"))!.reference;
+        expect(reference).toMatch(/^TS-R-\d{6}$/);
+        expect(await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).toEqual({ item: "full_report", name: "Full Report", amountNaira: 100_000, reference, mode: "test", state: "open" });
         await db.update(schema.paymentRequests).set({ status: "proof_received" }).where(eq(schema.paymentRequests.id, (await paymentOf(id, "full_report")).id));
         // An old record that noted proof of a bank transfer can still be paid online.
         expect((await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).state).toBe("open");
@@ -261,7 +264,8 @@ for (const target of targets) {
       it("works before the owner has asked: the page offers ₦100,000, and paying files the request as the result page does, once", async () => {
         const { token, email, id } = await finishedCheck("self-serve");
         expect(await paymentOf(id, "full_report")).toBeUndefined();
-        expect(await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).toEqual({ item: "full_report", name: "Full Report", amountNaira: 100_000, mode: "test", state: "open" });
+        // Nothing asked for yet, so no reference yet: the page leaves that line out (R72).
+        expect(await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).toEqual({ item: "full_report", name: "Full Report", amountNaira: 100_000, reference: null, mode: "test", state: "open" });
         mocked.deliverEmail.mockClear();
 
         const reference = await start(token, "full_report");

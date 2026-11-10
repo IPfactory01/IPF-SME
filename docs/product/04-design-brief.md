@@ -104,9 +104,9 @@ palette (`rose`, `red`, `amber`).
 
 - **Corners (ET, 9 November 2026): 8 px** (`rounded-lg`) on cards, panels, buttons, inputs and chips everywhere a client or
   visitor sees: the public site, the check, the room, account, sign-in and pay pages. Pills, avatars, dots and progress
-  bars are round (`rounded-full`). Today the room and the home page are rounded; the check, the pay and sign-in pages and
-  the admin console are square. They move to 8 px as each screen is next changed (the pay pages with R72, every screen
-  with R69). No new square screen.
+  bars are round (`rounded-full`). The room, the home page and the pay pages (R72, 10 November 2026) are rounded; the
+  check, sign-in and the admin console are square. They move to 8 px as each screen is next changed (every screen with
+  R69). No new square screen.
 - **Buttons (ET, 9 November 2026).** The one main action on a public page (the free check; Pay) uses the gradient with white
   text, once per screen. Every other primary button, and every button after sign-in, is navy: `brand` fill, white text,
   hover `brand-deep-hover`. Secondary: an outline in `brand-line` with `brand` text. A destructive action: `danger`. Today
@@ -291,8 +291,12 @@ The pay shell (`PaymentShell`): the top rule, the logo beside "The Shift", a rea
 The amount sits on the button in full ("Pay ₦470,000 securely with Paystack"), with what happens next under it
 (Paystack's page, card, bank transfer or USSD, the receipt by email). The return page has three answers: paid, still
 confirming (so nobody pays twice), and not completed with **Try again**. While Paystack runs on test keys a Watch-coloured
-banner says no real money moves. **To come (R72):** before the button, who is paid (the legal name on the statement,
-decision D1), what for, the reference, and a WhatsApp button to the lead or the office.
+banner says no real money moves. **Before you pay** (R72, `BeforeYouPay` in `PaymentShell.tsx`), above the button: who
+is paid (Enzo Krypton & Co., through Paystack, and the name to look for on the statement, `BRAND.paymentsCollectedBy`
+and `paymentsStatementName`), the reference, the receipt by email, and **Questions first? WhatsApp {first name}**
+(the engagement's main contact, once agreed) or **WhatsApp IP Factory** (`BRAND.officeWhatsapp`). What it is for is the
+page's heading, so the box does not repeat it, and the receipt is said once. The Pay button is the
+page's one gradient action (`PAY_BUTTON`), with 8 px corners; so is **Try again** on the return page.
 
 ### 12.4 Signing in and joining
 
@@ -387,7 +391,7 @@ before and after.
 | `test/server/emailLogo.test.ts` | The embedded logo is the brand file at twice its display size |
 | `test/client/components/engagementRoom.ui.test.tsx` | The room fits a phone (hidden panels' controls stay inside the panels' clip); every tab and top-bar link is 44 px; no timeline step is faded; the team is named for screen readers |
 | `test/server/payments.test.ts` | The "TEST MODE - NO REAL MONEY MOVES" label uses the crimson token; "Pay online" is the email's button |
-| `test/client/pages/payPage.ui.test.tsx` | The pay page names the amount in full ("Pay ₦100,000 securely with Paystack") and shows the test-mode notice in test mode |
+| `test/client/pages/payPage.ui.test.tsx`, `feePayPage.ui.test.tsx` | The pay page names the amount in full ("Pay ₦100,000 securely with Paystack") and shows the test-mode notice in test mode; "Before you pay" comes before the button, names who is paid, the reference and the receipt, and offers the main contact or the office on WhatsApp; the Pay button is the gradient with 8 px corners (R72) |
 | `test/server/interactiveAffordances.test.ts` | Pointer and not-allowed cursor rules are present |
 | `test/client/components/admin/adminCraft.test.ts` | The admin console uses theme colours only; drawers slide in and out along the same edge, with a fade for reduced motion; the ink scrim; buttons and rows answer on press |
 | `test/client/sitemap.test.ts` | Plus Jakarta Sans 800 is loaded |

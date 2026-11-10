@@ -1,7 +1,7 @@
 import { Failed, Loading } from "@/components/states";
 import { isRefusal } from "@/lib/readPolicy";
 import { PrivacyLink, TermsLink } from "@/components/LegalLinks";
-import { PaymentShell, TestModeBanner } from "@/components/PaymentShell";
+import { BeforeYouPay, PAY_BUTTON, PaymentShell, TestModeBanner } from "@/components/PaymentShell";
 import { Button } from "@/components/ui/button";
 import { openCheckout, rememberPayPage } from "@/lib/payOnline";
 import { trpc } from "@/lib/trpc";
@@ -77,7 +77,7 @@ export default function PayPage() {
     );
   }
 
-  const { name, amountNaira, mode, state } = page.data;
+  const { name, amountNaira, reference, mode, state } = page.data;
   const amount = formatNaira(amountNaira);
   const banner = mode === "test" ? <TestModeBanner /> : null;
 
@@ -105,20 +105,21 @@ export default function PayPage() {
       <p className="mt-6 font-sans text-5xl font-semibold tracking-tight tabular-nums text-ink">{amount}</p>
 
       {state === "expired" && (
-        <p role="alert" className="mt-6 border border-danger-line bg-danger-tint p-4 text-sm text-danger-strong">
+        <p role="alert" className="mt-6 rounded-lg border border-danger-line bg-danger-tint p-4 text-sm text-danger-strong">
           This payment link has passed its 48 hours. Reply to your payment email and we will send you a new one.
         </p>
       )}
       {mode === "off" && state !== "expired" && (
-        <p className="mt-6 border border-line bg-paper-raised p-4 text-sm text-ink-soft">
+        <p className="mt-6 rounded-lg border border-line bg-paper-raised p-4 text-sm text-ink-soft">
           Online payment is not open yet. Please try again later, or reply to your payment email and we will send you a link when it is.
         </p>
       )}
 
       {online && (
-        <div className="mt-6 space-y-3">
+        <div className="space-y-3">
+          <BeforeYouPay what={name} reference={reference ?? null} contact={null} />
           <Button type="button" disabled={start.isPending || leaving} onClick={() => { setProblem(null); start.mutate({ token, item }); }}
-            className="h-14 w-full rounded-none bg-highlight-ink px-6 text-sm font-semibold text-paper hover:opacity-90 disabled:opacity-60">
+            className={`mt-3 ${PAY_BUTTON}`}>
             <Lock className="mr-2 h-4 w-4" aria-hidden />
             {start.isPending || leaving ? "Opening Paystack…" : `Pay ${amount} securely with Paystack`}
           </Button>

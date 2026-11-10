@@ -72,6 +72,7 @@ import { initialFeeRows } from "./agreements";
 import { clientFees } from "./feePayments";
 import { defaultFees } from "../shared/agreement";
 import { workLines } from "../shared/engagementWork";
+import { agreedWhatsapp, recipientOf } from "./teamContact";
 import { sharedDebriefFor } from "./debriefs";
 import { getDb } from "./db";
 import { deliverEmail } from "./email";
@@ -929,19 +930,6 @@ export async function previewClientRoom(db: Database, actor: StaffActor, input: 
   const businessName = business?.name ?? check?.businessName ?? check?.fullName ?? engagement.contactName ?? "";
   await recordAudit(db, { action: "engagement_room_previewed", actorUserId: actor.id, details: { engagementId: engagement.id } });
   return buildClientRoom(db, engagement, { kind: "owner" } as ClientViewer, owner?.userId ?? 0, businessName);
-}
-
-/** A staff member's WhatsApp number for clients: only once they agreed to it being shown (R44, K11). */
-const agreedWhatsapp = (member: { whatsapp: string | null; whatsappConsentAt: Date | null }) => (member.whatsapp && member.whatsappConsentAt ? member.whatsapp : null);
-
-/** Whom a client item goes to on WhatsApp: the team member who asked for it, else the main contact, with an agreed number. */
-const MAIN_CONTACT_ORDER: readonly EngagementTeamRole[] = ["digital_marketer", "manager", "lead", "partner", "content_producer", "analyst", "expert"];
-function recipientOf(team: { userId: number; name: string | null; role: EngagementTeamRole; whatsapp: string | null; whatsappConsentAt: Date | null }[], askedBy: number | null) {
-  const reachable = team.filter(member => agreedWhatsapp(member));
-  const asker = reachable.find(member => member.userId === askedBy);
-  const main = [...reachable].sort((a, b) => MAIN_CONTACT_ORDER.indexOf(a.role) - MAIN_CONTACT_ORDER.indexOf(b.role))[0];
-  const chosen = asker ?? main;
-  return chosen ? { name: chosen.name ?? "", whatsapp: agreedWhatsapp(chosen)! } : null;
 }
 
 async function buildClientRoom(db: Database, engagement: typeof engagements.$inferSelect, viewer: ClientViewer, viewerUserId: number, businessName: string) {

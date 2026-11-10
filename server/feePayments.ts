@@ -24,6 +24,7 @@ import { lagosTime } from "./lagosTime";
 import { amountMatches, requireOnlinePayment } from "./onlinePayment";
 import { initializeTransaction, onlineReference, paystackMode, verifyTransaction } from "./paystack";
 import { getTrustedApplicationOrigin } from "./security";
+import { mainContactOf } from "./teamContact";
 
 type FeeLine = typeof engagementFeeLines.$inferSelect;
 
@@ -70,10 +71,15 @@ async function requireFee(db: Pick<Database, "select">, feeLineId: number, token
   return found;
 }
 
-/** The pay page: the business, the engagement, the fee, its amount, the mode and whether it is paid. Nothing else. */
+/**
+ * The pay page: the business, the engagement, the fee, its amount, the mode and whether it is paid, and whom to ask on
+ * WhatsApp before paying (R72): the engagement's main contact, only if they agreed to show their number; else the page
+ * offers the office. Nothing else.
+ */
 export async function feePayPage(db: Pick<Database, "select">, input: { feeLineId: number; token: string }) {
-  const { fee, businessName, title } = await requireFee(db, input.feeLineId, input.token);
-  return { businessName, engagement: title, label: fee.label, amountNaira: fee.amount, dueOn: fee.dueOn, reference: feeReference(fee.id), mode: paystackMode(), state: fee.paidAt ? "paid" as const : "open" as const };
+  const { fee, engagement, businessName, title } = await requireFee(db, input.feeLineId, input.token);
+  const contact = await mainContactOf(db, engagement.id);
+  return { businessName, engagement: title, label: fee.label, amountNaira: fee.amount, dueOn: fee.dueOn, reference: feeReference(fee.id), mode: paystackMode(), state: fee.paidAt ? "paid" as const : "open" as const, contact };
 }
 
 /** Opens a Paystack transaction for the fee, for its amount in the database, and returns the checkout page. */

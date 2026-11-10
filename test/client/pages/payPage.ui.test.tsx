@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Route, Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -75,6 +75,23 @@ describe("the pay page", () => {
     expect(screen.getByText(/pay by card, bank transfer or USSD/)).toBeTruthy();
     expect(screen.queryByRole("region", { name: "Pay by bank transfer" })).toBeNull();
     expect(document.body.textContent).not.toMatch(/proof of payment|bank details/i);
+  });
+
+  it("tells a first-time payer who receives the money, the reference once there is one, the receipt, and offers the office on WhatsApp (R72)", () => {
+    api.page = { ...(api.page as object), reference: "TS-R-000004" };
+    const { unmount } = renderPage();
+    const before = within(screen.getByRole("region", { name: "Before you pay" }));
+    expect(before.getByText(/Enzo Krypton & Co\., the firm behind IP Factory, through Paystack/)).toBeTruthy();
+    expect(before.getByText("TS-R-000004")).toBeTruthy();
+    expect(screen.getAllByText("Full Report")).toHaveLength(1);
+    const office = before.getByRole("link", { name: "Questions first? WhatsApp IP Factory" });
+    expect(decodeURIComponent(office.getAttribute("href")!)).toBe("https://wa.me/2348101603638?text=Hello, I have a question before I pay TS-R-000004: Full Report.");
+    expect(payButton()!.className).toMatch(/bg-gradient-to-r from-brand-plum to-highlight-ink/);
+    unmount();
+    // Before the owner asks for it there is no reference yet: the row is left out, not shown empty.
+    api.page = { ...(api.page as object), reference: null };
+    renderPage();
+    expect(within(screen.getByRole("region", { name: "Before you pay" })).queryByText("Reference")).toBeNull();
   });
 
   it("offers the Terms & Conditions and Privacy Policy before the button that opens Paystack", () => {

@@ -116,6 +116,19 @@ export const BRAND = {
   administrationMailbox: "admin@emmanueltarfa.com",
   /** IP Factory Business Support inbox: business check notifications (finished checks, call and report requests). */
   businessSupportMailbox: "info@ipfactory.co",
+  /**
+   * Who receives client payments (ET, 10 November 2026): Enzo Krypton & Co., the firm behind IP Factory, through its own
+   * Paystack account. Every pay page names it before Pay, so a first-time payer recognises the name on Paystack's page and
+   * on their statement (R72).
+   */
+  paymentsCollectedBy: "Enzo Krypton & Co.",
+  /** The name to look for on Paystack's page and the bank statement: Enzo Krypton's Paystack business name. */
+  paymentsStatementName: "Enzo Krypton",
+  /**
+   * IP Factory's office WhatsApp (ET, 10 November 2026), in international form: the pay pages' WhatsApp button, and any
+   * link where no team member is named yet (R72, R44). Shown to every visitor of a pay page.
+   */
+  officeWhatsapp: "+2348101603638",
 
   /**
    * Brand colours for email HTML and PDFs, which cannot read CSS variables.

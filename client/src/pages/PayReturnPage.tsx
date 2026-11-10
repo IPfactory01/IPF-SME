@@ -110,7 +110,7 @@ export default function PayReturnPage() {
           <h1 className="font-serif text-3xl font-normal">Still confirming</h1>
           <p className="text-ink-soft">Paystack has not confirmed your payment to us yet. This usually takes a moment.</p>
           <Button type="button" disabled={status.isPending} onClick={() => status.mutate({ reference })}
-            className="h-12 rounded-none bg-brand px-6 text-sm font-semibold text-white hover:bg-brand-deep-hover disabled:opacity-60">
+            className="h-12 rounded-lg bg-brand px-6 text-sm font-semibold text-white hover:bg-brand-deep-hover disabled:opacity-60">
             {status.isPending ? "Checking…" : "Check again"}
           </Button>
           {problem && <p role="alert" className="text-sm text-danger-strong">{problem}</p>}
@@ -129,7 +129,7 @@ export default function PayReturnPage() {
         <h1 className="font-serif text-3xl font-normal">Payment not completed</h1>
         <p className="text-ink-soft">Your payment did not go through, so nothing has been confirmed. You can try again.</p>
         {back
-          ? <Link href={back} className="inline-flex h-12 items-center bg-highlight-ink px-6 text-sm font-semibold text-paper hover:opacity-90">Try again</Link>
+          ? <Link href={back} className="inline-flex h-12 items-center rounded-lg bg-gradient-to-r from-brand-plum to-highlight-ink px-6 text-sm font-semibold text-white hover:brightness-110">Try again</Link>
           : <p className="text-ink-soft">Use the Pay online button in your payment email to try again.</p>}
       </div>
     </PaymentShell>

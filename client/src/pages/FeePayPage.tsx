@@ -1,7 +1,7 @@
 import { Failed, Loading } from "@/components/states";
 import { isRefusal } from "@/lib/readPolicy";
 import { PrivacyLink, TermsLink } from "@/components/LegalLinks";
-import { PaymentShell, TestModeBanner } from "@/components/PaymentShell";
+import { BeforeYouPay, PAY_BUTTON, PaymentShell, TestModeBanner } from "@/components/PaymentShell";
 import { Button } from "@/components/ui/button";
 import { openCheckout, rememberPayPage } from "@/lib/payOnline";
 import { trpc } from "@/lib/trpc";
@@ -53,7 +53,7 @@ export default function FeePayPage() {
   }
   if (page.error || !page.data) return invalid(page.error?.message);
 
-  const { businessName, engagement, label, amountNaira, reference, mode, state } = page.data;
+  const { businessName, engagement, label, amountNaira, reference, mode, state, contact } = page.data;
   const amount = formatNaira(amountNaira);
   const banner = mode === "test" ? <TestModeBanner /> : null;
 
@@ -77,21 +77,21 @@ export default function FeePayPage() {
       <h1 className="mt-2 font-serif text-3xl font-normal sm:text-4xl">{engagement}</h1>
       <p className="mt-3 text-ink-soft">{label}</p>
       <p className="mt-6 font-sans text-5xl font-semibold tracking-tight tabular-nums text-ink">{amount}</p>
-      <p className="mt-2 text-xs text-ink-muted">Reference {reference}</p>
 
       {mode === "off" ? (
-        <p className="mt-6 border border-line bg-paper-raised p-4 text-sm text-ink-soft">
+        <p className="mt-6 rounded-lg border border-line bg-paper-raised p-4 text-sm text-ink-soft">
           Online payment is not open yet. Please reply to your payment email and we will send you a link when it is.
         </p>
       ) : (
-        <div className="mt-6 space-y-3">
+        <div className="space-y-3">
+          <BeforeYouPay what={label} reference={reference} contact={contact ?? null} />
           <Button type="button" disabled={start.isPending || leaving} onClick={() => { setProblem(null); start.mutate({ feeLineId, token }); }}
-            className="h-14 w-full rounded-none bg-highlight-ink px-6 text-sm font-semibold text-paper hover:opacity-90 disabled:opacity-60">
+            className={`mt-3 ${PAY_BUTTON}`}>
             <Lock className="mr-2 h-4 w-4" aria-hidden />
             {start.isPending || leaving ? "Opening Paystack…" : `Pay ${amount} securely with Paystack`}
           </Button>
           <p className="text-xs leading-relaxed text-ink-muted">By proceeding with payment, you agree to the <TermsLink newTab /> and acknowledge the <PrivacyLink newTab />.</p>
-          <p className="text-xs leading-relaxed text-ink-muted">You go to Paystack's secure page to pay by card, bank transfer or USSD, then come back here. Your payment is confirmed straight away, and we email you a receipt.</p>
+          <p className="text-xs leading-relaxed text-ink-muted">You go to Paystack's secure page to pay by card, bank transfer or USSD, then come back here. Your payment is confirmed straight away.</p>
           {problem && <p role="alert" className="text-sm text-danger-strong">{problem}</p>}
         </div>
       )}

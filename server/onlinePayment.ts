@@ -61,19 +61,23 @@ const requestByReference = async (db: Pick<Database, "select">, reference: strin
 // An old record with proof of a bank transfer (from before Paystack only) can still be paid online.
 const PAGE_STATE = { requested: "open", expired: "expired", proof_received: "open", confirmed: "paid" } as const satisfies Record<PaymentDisplayStatus, PayPageState>;
 
-/** What the pay page needs, and nothing else: the item, its amount, whether online payment is on, and where it stands. */
+/**
+ * What the pay page needs, and nothing else: the item, its amount, its reference once asked for, whether online payment
+ * is on, and where it stands. Nobody is named to ask before paying: the page offers the office (R72).
+ */
 export async function onlinePaymentPage(db: Pick<Database, "select">, input: { token: string; item: PaymentItem }) {
   const { check, request } = await lookup(db, input.token, input.item);
   if (!request) {
     // Not asked for yet: the Full Report at today's price, filed when the owner presses pay.
     if (!ownerMayStart(check, input.item)) throw notFound();
-    return { item: input.item, name: PAYMENT_ITEM_TITLES[input.item], amountNaira: getBusinessSupportPrice(input.item), mode: paystackMode(), state: "open" as PayPageState };
+    return { item: input.item, name: PAYMENT_ITEM_TITLES[input.item], amountNaira: getBusinessSupportPrice(input.item), reference: null, mode: paystackMode(), state: "open" as PayPageState };
   }
   const display = effectivePaymentStatus(request);
   return {
     item: request.item,
     name: PAYMENT_ITEM_TITLES[request.item],
     amountNaira: request.amountNaira,
+    reference: request.reference,
     mode: paystackMode(),
     // An owner's own Full Report link never dead-ends: pressing pay starts a new 48 hours.
     state: display === "expired" && ownerMayStart(check, request.item) ? "open" : PAGE_STATE[display],

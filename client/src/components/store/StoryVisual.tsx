@@ -10,11 +10,17 @@ import React from "react";
 const FONT = "Plus Jakarta Sans, Arial, sans-serif";
 const AXIS = { fontSize: 12, fill: "var(--color-ink-muted)", fontFamily: FONT } as const;
 
+/** A visual's caption: "Sample" moves to its badge, and what is left starts with a capital ("Sample notes" reads "Notes"). */
+export const captionOf = (title: string) => {
+  const rest = title.replace(/^Sample:?\s*/i, "");
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+};
+
 function Frame({ title, children, sample = true }: { title: string; children: React.ReactNode; sample?: boolean }) {
   return (
     <figure className="m-0 min-w-0">
       <figcaption className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-sm font-semibold text-ink">{title.replace(/^Sample:?\s*/i, "")}</span>
+        <span className="text-sm font-semibold text-ink">{captionOf(title)}</span>
         {sample && <span className="border border-line px-2 py-0.5 text-xs font-semibold text-ink-muted">Sample</span>}
       </figcaption>
       {children}

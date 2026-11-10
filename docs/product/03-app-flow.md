@@ -32,10 +32,10 @@ same kind of engagement, so everything after the door works the same way.
 
 | | **Buy now** | **Talk to an expert** |
 |---|---|---|
-| For | Fixed-price products a client can scope alone: the Full Report, the Funding Readiness Assessment, Strategy and 90-Day Plan, Business Model, Financial Model, Pitch Deck, Bookkeeping Catch-Up, 13-Week Cash Flow Forecast, Hiring Toolkit | The Business Review, Business Plan, Pricing and Unit Cost Review, Funding Application Pack, the Six-Week Fix, the Monthly Services, Digital marketing |
+| For | Fixed-price products a client can scope alone: the Full Report, the Funding Readiness Assessment, Strategy and 90-Day Plan, Business Model, Financial Model, Pitch Deck, Bookkeeping Catch-Up, 13-Week Cash Flow Forecast, Hiring Toolkit | The Business Review, Business Plan, Pricing and Unit Cost Review, Funding Application Pack, the Six-Week Fix, the Monthly Services, Digital Marketing |
 | The buyer does | Gives name, business, email and WhatsApp; pays on Paystack | Books a 20-minute Discovery Call, or messages on WhatsApp |
-| Then | The platform opens the engagement, invites the owner and shows what happens next | The lead opens the engagement and sets its payment terms |
-| Payment terms | Always in advance | In advance, or in arrears with a partner's approval |
+| Then | The platform opens the engagement, invites the owner and shows what happens next | The lead opens the engagement; its payment terms follow what was bought (R36) |
+| Payment terms | Paid before we start | Half to start and half on delivery for a service; month by month for Digital Marketing; a quarter at a time for a Monthly Service (R36) |
 | Status | **To build (R13).** Online ordering is off today (`ONLINE_ORDERS_OPEN`): every Buy-now product shows Talk to an expert until R13 ships. The Full Report is the exception and is bought from the check today | **Built** (Calendly, then New engagement) |
 
 **On every page with a door (R38, partly built):** the expert behind the work by name, the office address, "Talk to an
@@ -121,8 +121,8 @@ flowchart TD
 | # | Client | Platform | Team | Email | Status | Built? |
 |---|---|---|---|---|---|---|
 | 1 | Agrees the work and the terms on the call | — | The lead opens **New engagement**: client (new or existing), type and service, start date | — | — | Built |
-| 2 | — | Loads the type's Data Request, Work Plan, Sessions and fee schedule, dated from the start; invites the owner (an existing client's project joins their account) | Sets the **payment terms**; in arrears needs a partner's approval, recorded | Owner: *Your The Shift room for {business}*, with **What we will do** (the work, the start date, each fee and its date; R47); the payment terms join it with R36 | Engagement **open**; **awaiting first payment** (in advance) or room open (in arrears) | Built, except payment terms (R36) |
-| 3 | In advance: pays the first fee from the room or the email. In arrears: starts at once | Confirms the payment; opens the room; sends the receipt | Records money that came another way (ticks Paid), or **Open the room now** | Owner: receipt. Office: *Paid online: …* | Fee **paid**; room open | Built (in advance) |
+| 2 | — | Loads the type's Data Request, Work Plan, Sessions and fee schedule, dated from the start; invites the owner (an existing client's project joins their account) | Checks the fee schedule, whose terms follow what was bought (R36) | Owner: *Your The Shift room for {business}*, with **What we will do** (the work, the start date, each fee and its date; R47) | Engagement **open**; **awaiting first payment** | Built |
+| 3 | Pays the first fee from the room or the email | Confirms the payment; opens the room; sends the receipt | Records money that came another way (ticks Paid), or **Open the room now** | Owner: receipt. Office: *Paid online: …* | Fee **paid**; room open | Built |
 
 ### 4.4 The client during delivery
 
@@ -135,8 +135,8 @@ flowchart TD
 | 4 | Approves reels, posts and stories, or asks for changes (Digital marketing); on a phone, previews each piece and approves several at once | Counts the month's pieces once approved | The Content Producer edits and sends for approval; the Digital Marketer plans and publishes | — | Content **For your approval** → **Approved** or **Changes requested** → **Published** | Built; previews and approving several at once to build (R54) |
 | 5 | Reads a shared Deliverable; comments; gives Sign-off, or asks for changes (R51, to build) | — | Drafts; a lead approves prescriptions and plans; shares with the owner or the owner and their team; Specialists hand in drafts the lead shares | Owner: *Engagement update: {title}* | Deliverable **draft** → **approved** → **shared**; Sign-off given | Built |
 | 6 | Sees the one number each week | Shows where it started, this week, where it is going | Records the weekly check-in: five questions, the reading, hours by role, AI used | — | — | Built |
-| 7 | Pays each later fee from the reminder (by email, with a WhatsApp button) or the Payments tab; keeps the PDF receipt | Sends each fee's link 5 days before its date, on the day, and 3 and 7 days after if unpaid, never between 9pm and 7am; confirms payment; sends the receipt and invoice as PDFs | Told at 7 days late; for in arrears, work pauses (D6) | Owner: reminders, receipt, invoice (reminders and PDFs to build). Lead: 7 days late (to build) | Fee **due** → **paid** or **late** | Built, except reminders (R12), PDFs (R53) and quiet hours (R57) |
-| 7b | Work paused for a late fee: sees the room as before, a banner saying what to pay to continue, uploads still open | Pauses at 7 days late (in arrears); lifts the pause on payment | The lead decides whether to pause early or late | Owner: *Work on {engagement} is paused* (to write) | Engagement **paused** → **open** | To build (R51) |
+| 7 | Pays each later fee from the reminder (by email, with a WhatsApp button) or the Payments tab; keeps the PDF receipt | Sends each fee's link 5 days before its date, on the day, and 3 and 7 days after if unpaid, never between 9pm and 7am; confirms payment; sends the receipt and invoice as PDFs | Told at 7 days late; work pauses (D6) | Owner: reminders, receipt, invoice (reminders and PDFs to build). Lead: 7 days late (to build) | Fee **due** → **paid** or **late** | Built, except reminders (R12), PDFs (R53) and quiet hours (R57) |
+| 7b | Work paused for a late fee: sees the room as before, a banner saying what to pay to continue, uploads still open | Pauses at 7 days late; lifts the pause on payment | The lead decides whether to pause early or late | Owner: *Work on {engagement} is paused* (to write) | Engagement **paused** → **open** | To build (R51) |
 | 8 | Adds their own staff (one seat): full access or contributor; later, sends one staff member a link to answer one item without an account (R55) | Sends the seat invitation | — | Staff member: invitation | — | Built (the one-item link to design) |
 
 ### 4.5 Close, the Day-30 Review and the next fix (To build, R26 to R28)
@@ -203,7 +203,7 @@ receiving it, and a time it should take.
 |---|---|---|---|
 | **Pipeline** (a business check) | Lead → Qualified lead → Call booked → Opportunity → Won; Lost, Nurture, Referred | The first three, forward only, never over a stage the team set; Won on a confirmed Business Review payment | Opportunity, Refer, Lost; "Move to" any stage except Won |
 | **Order** (Buy now) | Awaiting payment → Paid → Engagement opened; Abandoned | All of them (R13) | — |
-| **Engagement** | Getting set up → (Business Review, Six-Week Fix) Business Review, The Fix, Your Plan → Closed; other types Open → Closed (a dated type also shows its stage from the start date); plus **awaiting first payment** (in advance) and **paused** (R51) | Awaiting first payment clears on the first fee paid; paused at 7 days late in arrears and cleared on payment; a dated type's stage follows its start date | The stage; Close (R26); Open the room now; pause or lift a pause |
+| **Engagement** | Getting set up → (Business Review, Six-Week Fix) Business Review, The Fix, Your Plan → Closed; other types Open → Closed (a dated type also shows its stage from the start date); plus **awaiting first payment** and **paused** (R51) | Awaiting first payment clears on the first fee paid; paused at 7 days late and cleared on payment; a dated type's stage follows its start date | The stage; Close (R26); Open the room now; pause or lift a pause |
 | **Fee** | Set → Due → Paid, or Late | Due and Late by date and terms; Paid on Paystack's confirmation | Paid by hand (money that came another way); undo |
 | **Payment** (one Paystack transaction) | Started → Paid, Failed, Needs a look, Refunded | Paid and Failed from Paystack | Needs a look resolved; Refunded recorded (R37) |
 | **Data Request item / action** | To do → Sent, we are checking → Received, or We need a bit more; Not available; Done; No longer needed | Sent when the client uploads or marks it | Received, We need a bit more, Done, No longer needed |
@@ -268,7 +268,7 @@ info@ipfactory.co.
 | An email does not arrive | — | Records the failure; shows it to the office | Copies the link shown once (invitations, fee links, resets) and sends it on WhatsApp | Built |
 | An invitation expires or is revoked | "Invitation unavailable", with sign-in | — | **Send sign-in link** from the engagement | Built |
 | A client forgets their password | "Forgot your password?" on `/login` | Emails a 20-minute single-use link; same answer whether or not the account exists | — | Built (sign-in links replace this with R41) |
-| A fee goes unpaid | Reminders; the Payments tab shows it late | Reminds at 5 days before, on the day, at 3 and 7 days after | Told at 7 days; in arrears, work pauses (D6) | To build (R12) |
+| A fee goes unpaid | Reminders; the Payments tab shows it late | Reminds at 5 days before, on the day, at 3 and 7 days after | Told at 7 days; work pauses (D6) | To build (R12) |
 | A client goes quiet on records | Reminders | Reminds before and after each date | Told what is still outstanding | To build (R16) |
 | A client should get in before paying | — | — | **Open the room now** (recorded) | Built |
 | Footage is too large to upload | **Send a link** on the item: "A link to a shared folder on Google Drive, Dropbox, WeTransfer or iCloud. Videos always come this way, or on WhatsApp." A video file is refused with the same advice | Stores the link, never the video | The Content Producer opens it from the item (**Open the link**) | Built (R43); Send on WhatsApp to {name} with R44 |

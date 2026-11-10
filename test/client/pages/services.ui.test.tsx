@@ -43,7 +43,7 @@ describe("the services page (/services), laid out as a store", () => {
     const shelf = within(screen.getByRole("region", { name: "Products" }));
     expect(shelf.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
       "Funding Readiness Assessment", "Business Model", "Pitch Deck", "Bookkeeping Catch-Up", "13-Week Cash Flow Forecast", "Hiring Toolkit", "Financial Model", "Pricing and Unit Cost Review",
-      "Strategy and 90-Day Plan", "Monthly Adviser Review", "Business Review", "Monthly Accounts and Cash Report", "Business Plan", "Funding Application Pack", "Six-Week Fix",
+      "Strategy and 90-Day Plan", "Monthly Adviser Review", "Digital Marketing", "Business Review", "Monthly Accounts and Cash Report", "Business Plan", "Funding Application Pack", "Six-Week Fix",
     ]);
     for (const product of MENU_PRODUCTS) {
       expect(shelf.getByRole("link", { name: `Learn more about ${product.name}` }).getAttribute("href")).toBe(`/services/${product.slug}`);
@@ -54,6 +54,11 @@ describe("the services page (/services), laid out as a store", () => {
     expect(shelf.getByText("₦600,000 a quarter")).toBeTruthy();
     expect(shelf.getByText("₦200,000 a month")).toBeTruthy();
     expect(shelf.getByText("₦450,000 a quarter")).toBeTruthy();
+    // Digital Marketing is paid month by month, for three months (R36); the Six-Week Fix in its two halves.
+    expect(shelf.getByText("₦470,000 a month")).toBeTruthy();
+    expect(shelf.getByText("for three months")).toBeTruthy();
+    expect(shelf.getByText("or in two payments")).toBeTruthy();
+    expect(shelf.queryByText("or in three payments")).toBeNull();
     expect(shelf.getAllByText(/^₦600,000$/).length).toBeGreaterThan(0);
     expect(screen.getByRole("link", { name: BRAND.trackRecord.groupName })).toBeTruthy();
   });
@@ -69,6 +74,10 @@ describe("the services page (/services), laid out as a store", () => {
     expect(within(screen.getByRole("region", { name: "Products" })).getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(MENU_PRODUCTS.filter((product) => product.way === "done_for_you").map((product) => product.name));
     fireEvent.click(screen.getByRole("button", { name: "All" }));
     expect(within(screen.getByRole("region", { name: "Products" })).getAllByRole("heading", { level: 3 }).length).toBe(MENU_PRODUCTS.length);
+    // Digital Marketing is a Monthly Service, paid month by month; only a quarterly price holds for twelve months.
+    fireEvent.click(screen.getByRole("button", { name: "Monthly Service" }));
+    expect(within(screen.getByRole("region", { name: "Products" })).getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual(["Monthly Accounts and Cash Report", "Monthly Adviser Review", "Digital Marketing"]);
+    expect(screen.getByText("Paid before it starts: a quarter at a time, or month by month for Digital Marketing. A quarterly price holds for twelve months. Stop at the end of any quarter.")).toBeTruthy();
   });
 
   it("never uses the words the site avoids", () => {
@@ -120,6 +129,21 @@ describe("a service page (/services/:slug), told as a story", () => {
     expect(screen.getByText("Paid before we start, by transfer or card.")).toBeTruthy();
     expect(screen.getByText("Twenty minutes, by phone or video. We send your payment link after the call.")).toBeTruthy();
     expect(screen.getByText("A free 20-minute call. If it fits, we send your payment link after it.")).toBeTruthy();
+    expect(screen.queryByText(/first half/)).toBeNull();
+  });
+
+  it("tells Digital Marketing as its programme runs: month by month, the client's own clips, nothing out without their yes (R35)", () => {
+    at("/services/digital-marketing");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Show up on Instagram every week.Without doing it yourself.");
+    expect(screen.getByText("Monthly Service · Sales and marketing")).toBeTruthy();
+    expect(screen.getByText("Twenty minutes, by phone or video. We send the link for the first month after the call.")).toBeTruthy();
+    expect(screen.getByText("₦470,000 a month for three months, each paid before the month starts.")).toBeTruthy();
+    for (const step of ["Talk to us first", "Week 1: the plan", "Every month"]) expect(screen.getByText(step)).toBeTruthy();
+    expect(screen.getByText("A free 20-minute call about your customers and what you sell. If it fits, we send the link for the first month after it.")).toBeTruthy();
+    expect(screen.getAllByText("Your 90 days").length).toBeGreaterThan(0);
+    for (const question of ["Who films the videos?", "Will you post anything without asking me?", "What happens after three months?"]) expect(screen.getByText(question)).toBeTruthy();
+    // What we need arrives on the Data Request in the room, so there is no upload form to describe.
+    expect(screen.queryByRole("heading", { name: "What we need from you" })).toBeNull();
     expect(screen.queryByText(/first half/)).toBeNull();
   });
 

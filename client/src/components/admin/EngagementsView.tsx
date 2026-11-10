@@ -51,7 +51,7 @@ export default function EngagementsView() {
       {/* The safety net must never fail silently: a paid client with no engagement would be missed (R69). */}
       {awaiting.error && !isRefusal(awaiting.error) && awaiting.data === undefined && <Failed error={awaiting.error} onRetry={() => void awaiting.refetch()} retrying={awaiting.isFetching} />}
       <p className="text-sm text-ink-muted">{seesAll
-        ? `Every engagement, of every type. A Business Review starts when it is paid${canOpen ? "; open any other, such as Digital marketing, with New engagement" : ""}. Open one to name the team, book the Sessions, send the Data Requests and share the Deliverables.`
+        ? `Every engagement, of every type. A Business Review starts when it is paid${canOpen ? "; open any other, such as Digital Marketing, with New engagement" : ""}. Open one to name the team, book the Sessions, send the Data Requests and share the Deliverables.`
         : "The projects you are on, of every type. Open one to see its Work Plan, Sessions, Data Requests and Deliverables."}</p>
       {awaiting.data && awaiting.data.length > 0 && (
         <section aria-labelledby="awaiting-start" className="space-y-2 border border-danger-line bg-danger-tint p-4">

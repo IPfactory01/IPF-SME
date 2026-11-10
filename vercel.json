@@ -122,6 +122,10 @@
       "destination": "/services/monthly-adviser-review/index.html"
     },
     {
+      "source": "/services/digital-marketing",
+      "destination": "/services/digital-marketing/index.html"
+    },
+    {
       "source": "/how-we-work",
       "destination": "/how-we-work/index.html"
     },

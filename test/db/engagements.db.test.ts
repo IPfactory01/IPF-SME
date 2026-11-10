@@ -421,7 +421,7 @@ for (const target of targets) {
         expect(team.map(member => [member.name, member.roleLabel])).toEqual(expect.arrayContaining([["Dami Marketer", "Digital Marketer"], ["Kunle Producer", "Content Producer"]]));
 
         const { engagementId } = await client("not-marketing");
-        await expect(desk.engagement.staff.assign({ engagementId, userId: marketer.id, role: "digital_marketer" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: "The Digital Marketer and Content Producer roles are for Digital marketing engagements." });
+        await expect(desk.engagement.staff.assign({ engagementId, userId: marketer.id, role: "digital_marketer" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: "The Digital Marketer and Content Producer roles are for Digital Marketing engagements." });
       });
     });
 
@@ -534,6 +534,26 @@ for (const target of targets) {
       });
     });
 
+    describe("Digital Marketing from the menu (R35)", () => {
+      it("opens a client's request for Digital Marketing as its own programme, with its three months' fees, not as a Monthly Service", async () => {
+        const { owner, businessId } = await client("wants-reels");
+        await (await owner.call()).engagement.client.requestService({ service: "digital_marketing", note: "More bookings from Instagram." });
+        const request = (await (await superAdmin.call()).engagement.staff.serviceRequests()).find(item => item.businessId === businessId)!;
+        expect(request).toMatchObject({ service: "digital_marketing", serviceName: "Digital Marketing", type: "digital_marketing" });
+
+        const opened = await (await superAdmin.call()).engagement.staff.createDirect({ type: request.type, service: request.service, startedOn: "2026-11-16", businessId });
+        const detail = await (await superAdmin.call()).engagement.staff.detail({ engagementId: opened.engagementId });
+        expect(detail.engagement).toMatchObject({ type: "digital_marketing", typeLabel: "Digital Marketing" });
+        expect((await (await superAdmin.call()).engagement.staff.fees({ engagementId: opened.engagementId })).feeLines.map(line => [line.label, line.amount, line.dueOn])).toEqual([
+          ["Month 1 service fee, payable on starting", 470_000, "2026-11-16"],
+          ["Month 2 service fee, payable before day 31", 470_000, "2026-12-16"],
+          ["Month 3 service fee, payable before day 61", 470_000, "2027-01-15"],
+        ]);
+        // A Monthly Service engagement cannot be opened for it: it has its own type.
+        await expect((await superAdmin.call()).engagement.staff.createDirect({ type: "monthly_service", service: "digital_marketing", startedOn: "2026-11-16", businessId })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      });
+    });
+
     describe("engagements opened directly, by type", () => {
       it("opens a Digital marketing engagement: the business, the type's starting content, and the owner's invitation", async () => {
         const email = uniqueEmail("crown");
@@ -548,14 +568,14 @@ for (const target of targets) {
         expect(welcome.body.indexOf("WHAT WE WILL DO")).toBeLessThan(welcome.body.indexOf("Create your account:"));
 
         const listed = (await (await superAdmin.call()).engagement.staff.list()).items.find(item => item.id === opened.engagementId)!;
-        expect(listed).toMatchObject({ businessName: "Crown Studio", ownerName: "Marie Tiogo", ownerEmail: email, type: "digital_marketing", typeLabel: "Digital marketing", hasAccount: true });
+        expect(listed).toMatchObject({ businessName: "Crown Studio", ownerName: "Marie Tiogo", ownerEmail: email, type: "digital_marketing", typeLabel: "Digital Marketing", hasAccount: true });
 
         // The client accepts and lands in the room as its owner, with the type's starting content.
         const token = decodeURIComponent(emails().filter(sent => sent.to === email).at(-1)!.body.match(/Create your account: (\S+)/)![1].split("/join/")[1]);
         const owner = browser();
         await (await owner.call()).invitations.accept({ token, email, fullName: "Marie Tiogo", password: PASSWORD, confirmPassword: PASSWORD });
         const room = (await (await owner.call()).engagement.client.room())!;
-        expect(room).toMatchObject({ type: "digital_marketing", typeLabel: "Digital marketing", startedOn: "2026-11-02", businessName: "Crown Studio", viewer: { kind: "owner" }, check: null, insight: null });
+        expect(room).toMatchObject({ type: "digital_marketing", typeLabel: "Digital Marketing", startedOn: "2026-11-02", businessName: "Crown Studio", viewer: { kind: "owner" }, check: null, insight: null });
         expect(room.tasks.filter(task => task.kind === "data_request").map(task => task.ref)).toEqual(["A1", "A2", "B1", "C1", "C2"]);
         expect(room.tasks.find(task => task.ref === "B1")).toMatchObject({ section: "B Accounts", priority: "high", dueOn: "2026-11-05" });
         expect(room.sessions.map(item => item.title)).toEqual(["Kick-off", "Weekly check-in", "Month 1 review"]);
@@ -563,7 +583,7 @@ for (const target of targets) {
 
         // The team's record has no Business Health Check behind it, and names the contact.
         const detail = await (await superAdmin.call()).engagement.staff.detail({ engagementId: opened.engagementId });
-        expect(detail.engagement).toMatchObject({ businessCheckId: null, typeLabel: "Digital marketing" });
+        expect(detail.engagement).toMatchObject({ businessCheckId: null, typeLabel: "Digital Marketing" });
         expect(detail.owner).toMatchObject({ name: "Marie Tiogo", email });
       });
 

@@ -1027,6 +1027,19 @@ describe("Fix the next problem", () => {
     expect(card.getByRole("link", { name: /See every service/ }).getAttribute("href")).toBe("/services");
   });
 
+  it("offers every service but the one the room already is, Digital Marketing included (R35)", () => {
+    const optionsIn = (type: string, service: string | null) => {
+      const { unmount } = render(<EngagementRoom room={room({ type: type as never, typeLabel: "Digital Marketing", service, startedOn: "2026-11-02" })} />);
+      const values = Array.from(within(screen.getByRole("region", { name: "Fix the next problem" })).getByLabelText<HTMLSelectElement>("The service you need").options).map(option => option.value);
+      unmount();
+      return values;
+    };
+    expect(optionsIn("digital_marketing", null)).not.toContain("digital_marketing");
+    const elsewhere = optionsIn("done_for_you", "pitch_deck");
+    expect(elsewhere).toContain("digital_marketing");
+    expect(elsewhere).not.toContain("pitch_deck");
+  });
+
   it("shows what the client has already asked for", () => {
     render(<EngagementRoom room={room({ requests: [{ id: 1, service: "pitch_deck", serviceName: "Pitch Deck", createdAt: new Date("2026-11-06T10:00:00Z") }] })} />);
     expect(within(screen.getByRole("list", { name: "Your requests" })).getByText("Pitch Deck")).toBeTruthy();

@@ -13,7 +13,7 @@ import { EYEBROW } from "@/pages/ServicesPage";
 import { stepName } from "@shared/businessCheck/routing";
 import { storyOf } from "@shared/productStories";
 import {
-  isService, NEED_DETAILS, nextProduct, paymentTerms, priceLabel, priceTerms, productById, productBySlug, servicePath, startMode, WAY_DETAILS, type PriceModel, type Product,
+  firstPaymentLink, NEED_DETAILS, nextProduct, paymentTerms, priceLabel, priceTerms, productById, productBySlug, servicePath, startMode, WAY_DETAILS, type PriceModel, type Product,
 } from "@shared/products";
 import { ArrowRight, Check, Minus } from "lucide-react";
 import React from "react";
@@ -36,6 +36,12 @@ export function stepsFor(product: Product, price: PriceModel): { title: string; 
     { title: "Week 1: the Prescription", body: "What to do, the tools, and the Measure of Success, agreed with you." },
     { title: "Weeks 2 to 6: every week", body: "A Weekly Check-in on the number until it moves. Then a Day-30 Review." },
   ];
+  // Digital Marketing: the content programme the first client runs on (shared/engagementTypes.ts DIGITAL_MARKETING).
+  if (product.id === "digital_marketing") return [
+    { title: "Talk to us first", body: `A free 20-minute call about your customers and what you sell. If it fits, we send ${firstPaymentLink(product)} after it.` },
+    { title: "Week 1: the plan", body: "A kick-off call, the month's content plan, and your first clips. You film on your phone; we edit within 48 hours." },
+    { title: "Every month", body: "15 reels, 5 posts and 20 stories, each approved by you before it goes out, and a review of the numbers at the month's end." },
+  ];
   if (product.way === "monthly_service") return [
     { title: "Talk to us first", body: "A free 20-minute call to agree what you need each month." },
     { title: "Pay by the quarter", body: priceTerms(price) },
@@ -43,7 +49,7 @@ export function stepsFor(product: Product, price: PriceModel): { title: string; 
   ];
   // While online ordering is closed a product is also sold after a call, and still paid before we start (R36).
   if (mode === "after_call") return [
-    { title: "Talk to us first", body: `A free 20-minute call. If it fits, we send ${isService(product) ? "the link for the first half" : "your payment link"} after it.` },
+    { title: "Talk to us first", body: `A free 20-minute call. If it fits, we send ${firstPaymentLink(product)} after it.` },
     { title: "Send your records", body: send },
     receive,
   ];

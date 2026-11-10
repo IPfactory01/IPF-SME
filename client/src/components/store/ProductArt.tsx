@@ -212,6 +212,24 @@ const DRAWINGS: Record<ArtKind, { label: string; draw: () => React.ReactNode }> 
       </>
     ),
   },
+  content: {
+    label: "A reel playing on a phone, with a post and a story beside it, the reel approved",
+    draw: () => (
+      <>
+        <rect x={22} y={40} width={46} height={50} fill={C.raised} stroke={C.line} strokeWidth={2} />
+        <rect x={28} y={46} width={34} height={24} fill={C.sunken} />
+        <line x1={28} y1={78} x2={58} y2={78} stroke={C.muted} strokeWidth={4} />
+        <rect x={84} y={8} width={56} height={114} fill={C.raised} stroke={C.line} strokeWidth={2} />
+        <rect x={90} y={18} width={44} height={80} fill={C.brand} />
+        <path d="M104 46 l16 12 l-16 12 z" fill={C.raised} />
+        <line x1={92} y1={108} x2={132} y2={108} stroke={C.sunken} strokeWidth={4} />
+        <line x1={92} y1={108} x2={114} y2={108} stroke={C.crimson} strokeWidth={4} />
+        <rect x={156} y={28} width={40} height={70} fill={C.plum} />
+        {[0, 1, 2].map(i => <line key={i} x1={160 + i * 11} y1={34} x2={168 + i * 11} y2={34} stroke={C.raised} strokeWidth={2} />)}
+        {tick(166, 108)}
+      </>
+    ),
+  },
 };
 
 export function ProductArt({ kind, className = "h-36 w-auto" }: { kind: ArtKind; className?: string }) {

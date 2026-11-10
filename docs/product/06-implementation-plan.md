@@ -160,7 +160,7 @@ Each release is planned in full, like sections 3 and 4, before it starts.
 |---|---|---|---|---|
 | 1 | Payment terms and one payment model | R36, R37, R24, R42; the pause screen of R51; the groundwork for R53 | Planned in full in section 4 | M |
 | 2 | Fee, Data Request and Session reminders | R12, R16, R48, R57, R59, R64 | A scheduled job on Vercel; the sending domain verified (K2); quiet hours | M |
-| 3 | Buy now and the trust layer | R13, R38, R35 | Paystack live (K1) | M |
+| 3 | Buy now and the trust layer | R13, R38 (R35 built early, 10 November 2026) | Paystack live (K1) | M |
 | 4 | Close, the Day-30 Review and the next fix | R26, R27, R28 | A migration for the close record | M |
 | 5 | The room and the team's day, after the usability test | R49, R50, R52, R54, the rest of R51 | The usability test with a live client (A4) | L |
 | 6 | Tracking, the measures page, receipts | R39, R34, R53 | Decision D5 (the analytics tool); a consent notice (K9) | M |

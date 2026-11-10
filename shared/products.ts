@@ -36,8 +36,8 @@ export const WAY_DETAILS: Record<WayToBuy, { name: string; summary: string; char
   },
   monthly_service: {
     name: "Monthly Service",
-    summary: "Work delivered every month, or a monthly review with an adviser, paid by the quarter.",
-    charge: "Paid a quarter at a time, before the quarter starts. The price holds for twelve months. Stop at the end of any quarter.",
+    summary: "Work delivered every month, such as your accounts or your reels and posts, or a monthly review with an adviser.",
+    charge: "Paid before it starts: a quarter at a time, or month by month for Digital Marketing. A quarterly price holds for twelve months. Stop at the end of any quarter.",
   },
 };
 
@@ -59,14 +59,15 @@ export const NEED_DETAILS: Record<Need, { name: string; ownerWords: string }> = 
  * How a product is charged. Amounts are whole naira. `fixed` is one payment; `per_month` is a price for each month of
  * records with a minimum; `milestones` splits the price into stages (the Six-Week Fix: half at the start, half at the
  * result, since 10 November 2026) with an optional pay-in-full discount; `quarterly` is a monthly price paid three months
- * at a time.
+ * at a time; `monthly` is a programme of `months` months, each paid before it starts (Digital Marketing, R36).
  */
 export type PriceModel =
   | { kind: "free" }
   | { kind: "fixed"; amount: number }
   | { kind: "per_month"; perMonth: number; minMonths: number; maxMonths: number }
   | { kind: "milestones"; total: number; stages: readonly { name: string; percent: number }[]; payInFullDiscountPercent: number }
-  | { kind: "quarterly"; perMonth: number };
+  | { kind: "quarterly"; perMonth: number }
+  | { kind: "monthly"; perMonth: number; months: number };
 
 /**
  * How the owner starts: `check` (the free check itself), `self` (buy online now: details, pay, intake),
@@ -445,6 +446,23 @@ export const PRODUCTS: readonly Product[] = [
     buy: "after_call",
     intake: { records: [], questions: [] },
   },
+  {
+    // On the menu from 10 November 2026 (R35; ET approved the page on 6 November). The programme is the first client's:
+    // shared/engagementTypes.ts DIGITAL_MARKETING runs it, with the same pieces each month (checked by test).
+    id: "digital_marketing",
+    slug: "digital-marketing",
+    name: "Digital Marketing",
+    way: "monthly_service",
+    needs: ["sales"],
+    short: "Reels, posts and stories on Instagram and Facebook every week, made from your own footage and approved by you.",
+    forWhom: "Owners whose customers find them on Instagram, who know they should post more and never have the time.",
+    youGet: ["15 reels, 5 posts and 20 stories a month, planned with you", "Your clips edited within 48 hours", "Nothing published without your approval", "A review of the numbers each month, and of the quarter"],
+    price: { kind: "monthly", perMonth: 470_000, months: 3 },
+    delivery: "Every week, for three months.",
+    buy: "after_call",
+    // What we need arrives on the Data Request in the room, not an order form; the page's questions say what it is.
+    intake: { records: [], questions: [] },
+  },
 ];
 
 /**
@@ -477,6 +495,7 @@ export function priceLabel(price: PriceModel): string {
     case "milestones": return formatNaira(price.total);
     // Paid a quarter at a time, so the quarter is the price; the month is shown beside it.
     case "quarterly": return `${formatNaira(quarterAmount(price))} a quarter`;
+    case "monthly": return `${formatNaira(price.perMonth)} a month`;
   }
 }
 
@@ -495,6 +514,13 @@ export const firstHalf = (total: number) => Math.ceil(total / 2);
  * payment confirmed, or a price rise in between, cannot inflate it.
  */
 export const secondHalf = (paid: number, wholePrice: number) => (paid < wholePrice ? Math.min(paid, wholePrice - paid) : 0);
+
+/**
+ * What we send after the call, named for how the product is paid (R36): a service's first half, Digital Marketing's
+ * first month, or the payment for anything else.
+ */
+export const firstPaymentLink = (product: Pick<Product, "buy" | "price">) =>
+  isService(product) ? "the link for the first half" : product.price.kind === "monthly" ? "the link for the first month" : "your payment link";
 
 /** How a product is paid, in a line: a service's two halves, or the price's own terms. */
 export function paymentTerms(product: Pick<Product, "buy" | "price">): string {
@@ -517,8 +543,13 @@ export function priceTerms(price: PriceModel): string {
       return `${parts}. Or ${formatNaira(payInFullAmount(price))} in full at the start, ${price.payInFullDiscountPercent}% less.`;
     }
     case "quarterly": return `${formatNaira(quarterAmount(price))} a quarter (${formatNaira(price.perMonth)} a month), paid before the quarter starts. Stop at the end of any quarter.`;
+    case "monthly": return `${formatNaira(price.perMonth)} a month for ${countWord(price.months)} months, each paid before the month starts.`;
   }
 }
+
+const COUNT_WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve"] as const;
+/** A small count in words, as the site writes it ("three months"); a larger one in figures. */
+export const countWord = (count: number) => COUNT_WORDS[count] ?? String(count);
 
 export const stageAmount = (price: Extract<PriceModel, { kind: "milestones" }>, percent: number) => Math.round((price.total * percent) / 100);
 export const payInFullAmount = (price: Extract<PriceModel, { kind: "milestones" }>) => Math.round((price.total * (100 - price.payInFullDiscountPercent)) / 100);
@@ -550,6 +581,7 @@ export function startingAmount(price: PriceModel): number {
     case "per_month": return perMonthAmount(price, price.minMonths);
     case "milestones": return price.total;
     case "quarterly": return quarterAmount(price);
+    case "monthly": return price.perMonth;
   }
 }
 

@@ -15,21 +15,25 @@ import { PRODUCTS, type Product, type WayToBuy } from "./products";
 /**
  * The types follow how the website sells (ET, 6 November 2026): an Assessment (the Business Review has its own type, with
  * the seven-step method), Done for You, the Six-Week Fix and a Monthly Service, each tied to the service bought; and
- * Digital marketing. A client may have several engagements over time, one per service they buy.
+ * Digital Marketing, a Monthly Service on the website with its own type (the content programme). A client may have
+ * several engagements over time, one per service they buy.
  */
 export const ENGAGEMENT_TYPES = ["business_review", "digital_marketing", "assessment", "done_for_you", "six_week_fix", "monthly_service"] as const;
 export type EngagementType = (typeof ENGAGEMENT_TYPES)[number];
 export const ENGAGEMENT_TYPE_LABELS: Record<EngagementType, string> = {
-  business_review: "Business Review", digital_marketing: "Digital marketing", assessment: "Assessment", done_for_you: "Done for You", six_week_fix: "Six-Week Fix", monthly_service: "Monthly Service",
+  business_review: "Business Review", digital_marketing: "Digital Marketing", assessment: "Assessment", done_for_you: "Done for You", six_week_fix: "Six-Week Fix", monthly_service: "Monthly Service",
 };
 
 /** The types tied to a service on the website, and the way to buy each one covers. */
 export const SERVICE_TYPES: Partial<Record<EngagementType, WayToBuy>> = { assessment: "assessment", done_for_you: "done_for_you", six_week_fix: "six_week_fix", monthly_service: "monthly_service" };
-/** The services an engagement of this type can be for. The Business Health Check is free and the Business Review has its own type. */
-export const servicesFor = (type: EngagementType): Product[] => {
-  const way = SERVICE_TYPES[type];
-  return way ? PRODUCTS.filter(product => product.way === way && product.id !== "business_health_check" && product.id !== "business_review") : [];
-};
+/** The product an engagement of this type is, where the type is one product: its fees and its place in the menu. */
+export const TYPE_PRODUCT: Partial<Record<EngagementType, string>> = { business_review: "business_review", six_week_fix: "six_week_fix", digital_marketing: "digital_marketing" };
+/** The engagement a product is delivered as: its own type where it has one (TYPE_PRODUCT), otherwise its way to buy's. */
+export const engagementTypeOf = (product: Pick<Product, "id" | "way">): EngagementType =>
+  (Object.keys(TYPE_PRODUCT) as EngagementType[]).find(type => TYPE_PRODUCT[type] === product.id) ?? product.way;
+/** The services an engagement of this type can be for: the products delivered as it. The Business Health Check is free. */
+export const servicesFor = (type: EngagementType): Product[] =>
+  SERVICE_TYPES[type] ? PRODUCTS.filter(product => product.id !== "business_health_check" && engagementTypeOf(product) === type) : [];
 /** The engagement's name for people: the service bought, or the type. */
 export const engagementTitle = (type: EngagementType, service: string | null) => PRODUCTS.find(product => product.id === service)?.name ?? ENGAGEMENT_TYPE_LABELS[type];
 /** Types whose stage the team moves through the method (setting up, assessment, the fix, the plan); every other type is open or closed. */
@@ -42,7 +46,6 @@ type StarterItem = { title: string; detail: string; week: number; order: number;
 type StarterSession = { kind: EngagementSessionKind; title: string; week: number; order: number; durationMinutes: number; agenda: string };
 
 export type DatedEngagementType = {
-  monthlyFee?: number;
   /** Length in days; the room counts "Day N of M" against it. */
   durationDays: number;
   stages: TypeStage[];
@@ -65,8 +68,6 @@ export const DIGITAL_MARKETING: DatedEngagementType = {
     { title: "Quarter review", summary: "The 90 days in numbers, and what support looks like from here.", from: 90, to: 90 },
   ],
   monthly: [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }],
-  /** The monthly service fee (ET, 6 November 2026), in whole naira: paid for each month before it starts, the first at signing. */
-  monthlyFee: 470_000,
   dataRequests: [
     { week: 1, order: 1, section: "A Brand", ref: "A1", priority: "high", title: "Logo, colours and fonts", detail: "Whatever you use today: the logo files, and the colours and fonts if you have them.", informs: "So every reel and post looks like your business", format: "Any" },
     { week: 1, order: 2, section: "A Brand", ref: "A2", priority: "medium", title: "Past content that worked", detail: "Five to ten posts or videos you liked, yours or anyone's.", informs: "The style to build on", format: "Links or screenshots" },

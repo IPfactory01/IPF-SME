@@ -2,7 +2,7 @@
 import { LegalLink, TERMS_PATH } from "@/components/LegalLinks";
 import { DELIVERY_REMEDY, formatNaira } from "@shared/businessSupport";
 import { BRAND } from "@shared/brand";
-import { DELIVERY_PROMISE, isService, perMonthAmount, priceLabel, startMode, type PriceModel, type Product } from "@shared/products";
+import { countWord, DELIVERY_PROMISE, firstPaymentLink, perMonthAmount, priceLabel, startMode, type PriceModel, type Product } from "@shared/products";
 import { ArrowRight, CalendarCheck, LockKeyhole, ShieldCheck } from "lucide-react";
 import React from "react";
 import { Link } from "wouter";
@@ -21,11 +21,15 @@ export function DeliveryPromise({ className, onDark }: { className?: string; onD
 
 export const orderPath = (product: Pick<Product, "slug">) => `/order/${product.slug}`;
 
-/** The price as a tile says it: "From ₦300,000" for the Catch-Up, "₦600,000 a quarter" for a Monthly Service, with its month beside it. */
+/**
+ * The price as a tile says it: "From ₦300,000" for the Catch-Up, "₦600,000 a quarter" for a Monthly Service with its
+ * month beside it, "₦470,000 a month" for Digital Marketing with its three months beside it.
+ */
 export function tilePrice(price: PriceModel): { main: string; note?: string } {
   if (price.kind === "per_month") return { main: `From ${formatNaira(perMonthAmount(price, price.minMonths))}`, note: `${formatNaira(price.perMonth)} a month of records` };
-  if (price.kind === "milestones") return { main: formatNaira(price.total), note: "or in three payments" };
+  if (price.kind === "milestones") return { main: formatNaira(price.total), note: `or in ${countWord(price.stages.length)} payments` };
   if (price.kind === "quarterly") return { main: priceLabel(price), note: `${formatNaira(price.perMonth)} a month` };
+  if (price.kind === "monthly") return { main: priceLabel(price), note: `for ${countWord(price.months)} months` };
   return { main: priceLabel(price) };
 }
 
@@ -60,7 +64,8 @@ export function QuietLink({ href, children, external }: { href: string; children
 export function startNote(product: Product): string {
   const mode = startMode(product);
   if (mode === "self") return "Pay by transfer or card. The form for your records follows.";
-  // A service is paid in halves (R36); a product sold after a call is still paid in full before we start.
-  if (mode === "after_call") return `Twenty minutes, by phone or video. We send ${isService(product) ? "the link for the first half" : "your payment link"} after the call.`;
+  // A service is paid in halves and Digital Marketing month by month (R36); a product sold after a call is still paid in
+  // full before we start.
+  if (mode === "after_call") return `Twenty minutes, by phone or video. We send ${firstPaymentLink(product)} after the call.`;
   return "Ten minutes on your phone. No card needed.";
 }

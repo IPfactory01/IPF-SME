@@ -443,7 +443,7 @@ describe("what the list says, for the desk and for an analyst", () => {
   it("tells the desk how each type starts: a Business Review when it is paid, any other with New engagement", () => {
     api.list = { setUp: true, items: [], canStart: true, seesAll: true } as never;
     render(<EngagementsView />);
-    expect(screen.getByText(/Every engagement, of every type\. A Business Review starts when it is paid; open any other, such as Digital marketing, with New engagement/)).toBeTruthy();
+    expect(screen.getByText(/Every engagement, of every type\. A Business Review starts when it is paid; open any other, such as Digital Marketing, with New engagement/)).toBeTruthy();
     expect(screen.getByText("No engagements yet. A Business Review starts when its payment is confirmed; open any other type with New engagement.")).toBeTruthy();
   });
 });

@@ -399,6 +399,23 @@ var PRODUCTS = [
     delivery: "One Session a month.",
     buy: "after_call",
     intake: { records: [], questions: [] }
+  },
+  {
+    // On the menu from 10 November 2026 (R35; ET approved the page on 6 November). The programme is the first client's:
+    // shared/engagementTypes.ts DIGITAL_MARKETING runs it, with the same pieces each month (checked by test).
+    id: "digital_marketing",
+    slug: "digital-marketing",
+    name: "Digital Marketing",
+    way: "monthly_service",
+    needs: ["sales"],
+    short: "Reels, posts and stories on Instagram and Facebook every week, made from your own footage and approved by you.",
+    forWhom: "Owners whose customers find them on Instagram, who know they should post more and never have the time.",
+    youGet: ["15 reels, 5 posts and 20 stories a month, planned with you", "Your clips edited within 48 hours", "Nothing published without your approval", "A review of the numbers each month, and of the quarter"],
+    price: { kind: "monthly", perMonth: 47e4, months: 3 },
+    delivery: "Every week, for three months.",
+    buy: "after_call",
+    // What we need arrives on the Data Request in the room, not an order form; the page's questions say what it is.
+    intake: { records: [], questions: [] }
   }
 ];
 var productById = (id3) => PRODUCTS.find((product2) => product2.id === id3);
@@ -417,6 +434,8 @@ function priceLabel(price) {
     // Paid a quarter at a time, so the quarter is the price; the month is shown beside it.
     case "quarterly":
       return `${formatNaira(quarterAmount(price))} a quarter`;
+    case "monthly":
+      return `${formatNaira(price.perMonth)} a month`;
   }
 }
 var isService = (product2) => product2.buy === "after_call" && (product2.price.kind === "fixed" || product2.price.kind === "milestones");
@@ -437,6 +456,8 @@ function startingAmount(price) {
       return price.total;
     case "quarterly":
       return quarterAmount(price);
+    case "monthly":
+      return price.perMonth;
   }
 }
 
@@ -444,17 +465,16 @@ function startingAmount(price) {
 var ENGAGEMENT_TYPES = ["business_review", "digital_marketing", "assessment", "done_for_you", "six_week_fix", "monthly_service"];
 var ENGAGEMENT_TYPE_LABELS = {
   business_review: "Business Review",
-  digital_marketing: "Digital marketing",
+  digital_marketing: "Digital Marketing",
   assessment: "Assessment",
   done_for_you: "Done for You",
   six_week_fix: "Six-Week Fix",
   monthly_service: "Monthly Service"
 };
 var SERVICE_TYPES = { assessment: "assessment", done_for_you: "done_for_you", six_week_fix: "six_week_fix", monthly_service: "monthly_service" };
-var servicesFor = (type) => {
-  const way = SERVICE_TYPES[type];
-  return way ? PRODUCTS.filter((product2) => product2.way === way && product2.id !== "business_health_check" && product2.id !== "business_review") : [];
-};
+var TYPE_PRODUCT = { business_review: "business_review", six_week_fix: "six_week_fix", digital_marketing: "digital_marketing" };
+var engagementTypeOf = (product2) => Object.keys(TYPE_PRODUCT).find((type) => TYPE_PRODUCT[type] === product2.id) ?? product2.way;
+var servicesFor = (type) => SERVICE_TYPES[type] ? PRODUCTS.filter((product2) => product2.id !== "business_health_check" && engagementTypeOf(product2) === type) : [];
 var engagementTitle = (type, service) => PRODUCTS.find((product2) => product2.id === service)?.name ?? ENGAGEMENT_TYPE_LABELS[type];
 var STAGED_TYPES = ["business_review", "six_week_fix"];
 var DIGITAL_MARKETING = {
@@ -468,8 +488,6 @@ var DIGITAL_MARKETING = {
     { title: "Quarter review", summary: "The 90 days in numbers, and what support looks like from here.", from: 90, to: 90 }
   ],
   monthly: [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }],
-  /** The monthly service fee (ET, 6 November 2026), in whole naira: paid for each month before it starts, the first at signing. */
-  monthlyFee: 47e4,
   dataRequests: [
     { week: 1, order: 1, section: "A Brand", ref: "A1", priority: "high", title: "Logo, colours and fonts", detail: "Whatever you use today: the logo files, and the colours and fonts if you have them.", informs: "So every reel and post looks like your business", format: "Any" },
     { week: 1, order: 2, section: "A Brand", ref: "A2", priority: "medium", title: "Past content that worked", detail: "Five to ten posts or videos you liked, yours or anyone's.", informs: "The style to build on", format: "Links or screenshots" },
@@ -559,21 +577,17 @@ function feeLinesFor(product2, startsOn = null) {
       return [{ label: `${product2.name}: ${price.minMonths} months of records`, amount: perMonthAmount(price, price.minMonths), dueOn: startsOn }];
     case "quarterly":
       return [{ label: `${product2.name}: first quarter, payable before it starts`, amount: quarterAmount(price), dueOn: startsOn }];
+    case "monthly":
+      return Array.from({ length: price.months }, (_, index2) => ({
+        label: index2 === 0 ? "Month 1 service fee, payable on starting" : `Month ${index2 + 1} service fee, payable before day ${index2 * 30 + 1}`,
+        amount: price.perMonth,
+        dueOn: startsOn ? addDays(startsOn, index2 * 30) : null
+      }));
   }
 }
 function defaultFees(type, service, startsOn = null) {
-  const product2 = PRODUCTS.find((item2) => item2.id === (service ?? (type === "business_review" ? "business_review" : type === "six_week_fix" ? "six_week_fix" : "")));
-  if (product2) return feeLinesFor(product2, startsOn);
-  if (type === "digital_marketing") {
-    const fee = DIGITAL_MARKETING.monthlyFee ?? 0;
-    const on = (days) => startsOn ? addDays(startsOn, days) : null;
-    return [
-      { label: "Month 1 service fee, payable on starting", amount: fee, dueOn: on(0) },
-      { label: "Month 2 service fee, payable before day 31", amount: fee, dueOn: on(30) },
-      { label: "Month 3 service fee, payable before day 61", amount: fee, dueOn: on(60) }
-    ];
-  }
-  return [];
+  const product2 = PRODUCTS.find((item2) => item2.id === (service ?? TYPE_PRODUCT[type]));
+  return product2 ? feeLinesFor(product2, startsOn) : [];
 }
 var BALANCE_DUE_DAYS = 7;
 function isDelivery(type, kind) {
@@ -10148,7 +10162,7 @@ async function notifyShared(db, engagementId, audience, what, title) {
 async function assignTeamMember(db, actor, input) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
-  if (!teamRolesFor(engagement.type).includes(input.role)) throw new TRPCError14({ code: "BAD_REQUEST", message: "The Digital Marketer and Content Producer roles are for Digital marketing engagements." });
+  if (!teamRolesFor(engagement.type).includes(input.role)) throw new TRPCError14({ code: "BAD_REQUEST", message: "The Digital Marketer and Content Producer roles are for Digital Marketing engagements." });
   const staff2 = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq16(userPlatformRoles.userId, users.id)).where(and10(eq16(userPlatformRoles.userId, input.userId), eq16(users.status, "active"))).limit(1))[0];
   if (!staff2) throw new TRPCError14({ code: "BAD_REQUEST", message: "Only IP Factory staff can join an engagement team." });
   const existing = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and10(eq16(engagementTeam.engagementId, input.engagementId), eq16(engagementTeam.userId, input.userId))).limit(1))[0];
@@ -11074,7 +11088,7 @@ async function listServiceRequests(db, actor) {
   const rows = await db.select({ id: serviceRequests.id, businessId: serviceRequests.businessId, businessName: businesses.name, service: serviceRequests.service, note: serviceRequests.note, createdAt: serviceRequests.createdAt, requestedBy: users.name }).from(serviceRequests).innerJoin(businesses, eq16(serviceRequests.businessId, businesses.id)).innerJoin(users, eq16(serviceRequests.requestedByUserId, users.id)).where(eq16(serviceRequests.status, "open")).orderBy(asc4(serviceRequests.id));
   return rows.map((row) => {
     const product2 = PRODUCTS.find((item2) => item2.id === row.service);
-    const type = row.service === "six_week_fix" ? "six_week_fix" : row.service === "business_review" ? "business_review" : product2?.way === "assessment" ? "assessment" : product2?.way === "monthly_service" ? "monthly_service" : "done_for_you";
+    const type = product2 ? engagementTypeOf(product2) : "done_for_you";
     return { ...row, serviceName: product2?.name ?? row.service, type };
   });
 }

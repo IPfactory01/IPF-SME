@@ -10,7 +10,7 @@ import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlas
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
-import { DATED_TYPES, datedProgress, monthOfDay, SERVICE_STEPS } from "@shared/engagementTypes";
+import { DATED_TYPES, datedProgress, monthOfDay, SERVICE_STEPS, TYPE_PRODUCT } from "@shared/engagementTypes";
 import { MENU_PRODUCTS } from "@shared/products";
 import { CURRENT_STATE, formatNaira } from "@shared/businessSupport";
 import { useRoomProject } from "@/lib/roomProject";
@@ -1467,7 +1467,9 @@ function NextProblem({ room }: { room: Room }) {
     onSuccess: result => { void utils.engagement.client.room.invalidate(); setService(""); setNote(""); toast.success(result.already ? "You have already asked for this. Your team will be in touch." : "Sent. Your team will confirm it and send the payment link."); },
     onError: error => toast.error(error.message),
   });
-  const options = MENU_PRODUCTS.filter(product => product.id !== "business_health_check" && product.id !== room.service);
+  // Every service but the one this room already is (a Digital Marketing or Business Review room has no service of its own).
+  const own = room.service ?? TYPE_PRODUCT[room.type] ?? null;
+  const options = MENU_PRODUCTS.filter(product => product.id !== "business_health_check" && product.id !== own);
   return (
     <section aria-labelledby="next-problem" className="rounded-xl border border-brand-line bg-brand-tint p-5">
       <h2 id="next-problem" className="font-sans text-base font-semibold text-ink">Fix the next problem</h2>

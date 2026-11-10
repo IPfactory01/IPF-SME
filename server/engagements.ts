@@ -62,7 +62,7 @@ import {
   isVideoFile,
 } from "../shared/engagement";
 import type { AccountSession, Database } from "./accountAuth";
-import { CONTENT_KIND_LABELS, CONTENT_STATUS_LABELS, DATED_TYPES, datedProgress, engagementTitle, ENGAGEMENT_TYPE_LABELS, SERVICE_TYPES, serviceStarter, servicesFor, serviceStep, SERVICE_STEPS, STAGED_TYPES, type ContentKind, type ContentStatus, type DatedEngagementType, type EngagementType } from "../shared/engagementTypes";
+import { CONTENT_KIND_LABELS, CONTENT_STATUS_LABELS, DATED_TYPES, datedProgress, engagementTitle, engagementTypeOf, ENGAGEMENT_TYPE_LABELS, SERVICE_TYPES, serviceStarter, servicesFor, serviceStep, SERVICE_STEPS, STAGED_TYPES, type ContentKind, type ContentStatus, type DatedEngagementType, type EngagementType } from "../shared/engagementTypes";
 import { PRODUCTS, secondHalf } from "../shared/products";
 import { inviteBusinessOwner } from "./accountInvitations";
 import { slugify } from "./accountAuth";
@@ -574,7 +574,7 @@ export async function assignTeamMember(db: Database, actor: StaffActor, input: {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   // The Digital Marketer and Content Producer belong to Digital marketing engagements only (R45).
-  if (!teamRolesFor(engagement.type).includes(input.role)) throw new TRPCError({ code: "BAD_REQUEST", message: "The Digital Marketer and Content Producer roles are for Digital marketing engagements." });
+  if (!teamRolesFor(engagement.type).includes(input.role)) throw new TRPCError({ code: "BAD_REQUEST", message: "The Digital Marketer and Content Producer roles are for Digital Marketing engagements." });
   const staff = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq(userPlatformRoles.userId, users.id))
     .where(and(eq(userPlatformRoles.userId, input.userId), eq(users.status, "active"))).limit(1))[0];
   if (!staff) throw new TRPCError({ code: "BAD_REQUEST", message: "Only IP Factory staff can join an engagement team." });
@@ -1662,7 +1662,8 @@ export async function listServiceRequests(db: Database, actor: StaffActor) {
     .where(eq(serviceRequests.status, "open")).orderBy(asc(serviceRequests.id));
   return rows.map(row => {
     const product = PRODUCTS.find(item => item.id === row.service);
-    const type: EngagementType = row.service === "six_week_fix" ? "six_week_fix" : row.service === "business_review" ? "business_review" : product?.way === "assessment" ? "assessment" : product?.way === "monthly_service" ? "monthly_service" : "done_for_you";
+    // The engagement the service is delivered as: Digital Marketing opens its content programme, not a Monthly Service.
+    const type: EngagementType = product ? engagementTypeOf(product) : "done_for_you";
     return { ...row, serviceName: product?.name ?? row.service, type };
   });
 }

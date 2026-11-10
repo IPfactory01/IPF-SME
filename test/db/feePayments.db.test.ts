@@ -235,7 +235,7 @@ for (const target of targets) {
         // The pay page answers only with the right token, and the amount comes from the fee line.
         await expect((await browser().call()).onlinePayment.feePage({ feeLineId: link.feeLineId, token: "x".repeat(32) })).rejects.toMatchObject({ code: "NOT_FOUND" });
         await expect((await browser().call()).onlinePayment.feePage({ feeLineId: link.feeLineId + 1, token: link.token })).rejects.toMatchObject({ code: "NOT_FOUND" });
-        expect(await (await browser().call()).onlinePayment.feePage(link)).toMatchObject({ businessName: "Studio first-pay", engagement: "Digital marketing", amountNaira: 470000, state: "open", mode: "test", reference: first.reference });
+        expect(await (await browser().call()).onlinePayment.feePage(link)).toMatchObject({ businessName: "Studio first-pay", engagement: "Digital Marketing", amountNaira: 470000, state: "open", mode: "test", reference: first.reference });
         const started = await (await browser().call()).onlinePayment.feeStart(link);
         expect(started).toMatchObject({ alreadyPaid: false, url: expect.stringContaining("https://checkout.paystack.com/") });
         const attempt = paystack.initialized.at(-1)!;
@@ -334,7 +334,7 @@ for (const target of targets) {
         const sent = await (await superAdmin.call()).engagement.staff.sendFeeLink({ feeLineId: second.id });
         expect(sent.url).toMatch(new RegExp(`/pay/fee/${second.id}/[A-Za-z0-9_-]{32}$`));
         const message = emails().find(item => item.to === email)!;
-        expect(message.subject).toBe("TEST: Month 2 service fee, payable before day 31: ₦470,000 for the Digital marketing");
+        expect(message.subject).toBe("TEST: Month 2 service fee, payable before day 31: ₦470,000 for the Digital Marketing");
         expect(message.body).toContain(`Pay online: ${sent.url}`);
         expect(message.body).toContain("Your room opens as soon as it is paid.");
 

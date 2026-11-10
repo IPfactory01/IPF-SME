@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { PRICES } from "@shared/businessSupport";
+import { DIGITAL_MARKETING } from "@shared/engagementTypes";
 import {
-  firstHalf, isService, secondHalf, MENU_PRODUCTS, NEED_DETAILS, NEEDS, nextProduct, payInFullAmount, paymentTerms, priceLabel, priceTerms, productById, productBySlug, PRODUCTS,
+  countWord, firstHalf, firstPaymentLink, isService, secondHalf, startingAmount, MENU_PRODUCTS, NEED_DETAILS, NEEDS, nextProduct, payInFullAmount, paymentTerms, priceLabel, priceTerms, productById, productBySlug, PRODUCTS,
   menuEntry, productsForNeed, quarterAmount, stageAmount, startingPriceOf, startMode, WAY_DETAILS, WAYS_TO_BUY, type PriceModel,
 } from "@shared/products";
 
@@ -28,10 +29,12 @@ const PLAN_PRICES: Record<string, string> = {
   financial_model: "₦350,000",
   business_plan: "₦750,000",
   pitch_deck: "₦300,000",
+  // On the menu from 10 November 2026 (R35): the first client's programme, paid month by month (R36).
+  digital_marketing: "₦470,000 a month",
 };
 
 describe("the launch menu (Operational Business Plan, 22 October 2026)", () => {
-  it("has the thirteen products of page 11 and the four added on 28 October, each at its price", () => {
+  it("has the thirteen products of page 11, the four added on 28 October and Digital Marketing, each at its price", () => {
     expect(PRODUCTS.map((product) => product.id).sort()).toEqual(Object.keys(PLAN_PRICES).sort());
     for (const product of PRODUCTS) expect(priceLabel(product.price), product.id).toBe(PLAN_PRICES[product.id]);
   });
@@ -94,6 +97,21 @@ describe("the launch menu (Operational Business Plan, 22 October 2026)", () => {
     expect(secondHalf(300_000, 700_000)).toBe(300_000);
     expect(WAY_DETAILS.done_for_you.charge).toMatch(/Bought online, it is paid before we start; agreed on a call, half to start and half on delivery/);
     expect(WAY_DETAILS.six_week_fix.charge).toMatch(/^Half at the start and half at the result/);
+  });
+
+  it("sells Digital Marketing as a Monthly Service for sales, month by month for three months, with the programme the room runs (R35)", () => {
+    const marketing = productById("digital_marketing")!;
+    expect([marketing.way, marketing.needs, marketing.buy, marketing.slug]).toEqual(["monthly_service", ["sales"], "after_call", "digital-marketing"]);
+    expect(marketing.price).toEqual({ kind: "monthly", perMonth: 470_000, months: 3 });
+    expect(priceTerms(marketing.price)).toBe("₦470,000 a month for three months, each paid before the month starts.");
+    // Not a service paid in halves: its own terms, and the link for its first month after the call.
+    expect(isService(marketing)).toBe(false);
+    expect(paymentTerms(marketing)).toBe(priceTerms(marketing.price));
+    expect(startingAmount(marketing.price)).toBe(470_000);
+    expect([firstPaymentLink(marketing), firstPaymentLink(productById("business_plan")!), firstPaymentLink(productById("pitch_deck")!)]).toEqual(["the link for the first month", "the link for the first half", "your payment link"]);
+    // The page promises the pieces the programme delivers each month.
+    for (const item of DIGITAL_MARKETING.monthly) expect(marketing.youGet[0]).toContain(`${item.count} ${item.label.toLowerCase()}`);
+    expect([countWord(3), countWord(12), countWord(13)]).toEqual(["three", "twelve", "13"]);
   });
 
   it("charges Monthly Services by the quarter, and the Catch-Up for at least three months", () => {

@@ -32,6 +32,8 @@ describe("the fees a new engagement starts with", () => {
 
   it("dates Digital marketing's three months from the kickoff: on starting, day 31 and day 61", () => {
     expect(defaultFees("digital_marketing", null, "2026-11-02").map((fee) => fee.dueOn)).toEqual(["2026-11-02", "2026-12-02", "2027-01-01"]);
+    // The fees come from the product on the website (R35), whether or not the engagement names it.
+    expect(defaultFees("digital_marketing", "digital_marketing", "2026-11-02")).toEqual(defaultFees("digital_marketing", null, "2026-11-02"));
   });
 
   it("knows which shared Deliverable is a service's delivery, which dates its second half seven days later", () => {

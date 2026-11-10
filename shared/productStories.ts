@@ -7,6 +7,8 @@
  * (price, delivery, intake, next product) stay in shared/products.ts; this file only tells the story.
  */
 
+import { priceTerms, productById } from "./products";
+
 /** A picture of the work, drawn from data. One renderer per kind (client/src/components/store/StoryVisual.tsx). */
 export type StoryVisual =
   | { kind: "line"; title: string; unit: string; labels: readonly string[]; values: readonly number[]; callout: string }
@@ -18,7 +20,7 @@ export type StoryVisual =
   | { kind: "measure"; title: string; unit: string; baseline: number; target: number; readings: readonly number[] };
 
 /** The small drawing on the product's tile and order summary (client/src/components/store/ProductArt.tsx). */
-export type ArtKind = "check" | "report" | "forecast" | "ledger" | "pricing" | "plan" | "funding" | "hiring" | "readiness" | "review" | "fix" | "monthly" | "adviser" | "canvas" | "projections" | "bizplan" | "deck";
+export type ArtKind = "check" | "report" | "forecast" | "ledger" | "pricing" | "plan" | "funding" | "hiring" | "readiness" | "review" | "fix" | "monthly" | "adviser" | "canvas" | "projections" | "bizplan" | "deck" | "content";
 
 export type ProductStory = {
   art: ArtKind;
@@ -382,6 +384,33 @@ export const PRODUCT_STORIES: Record<string, ProductStory> = {
       { q: "Who is the adviser?", a: "An IP Factory consultant, with a partner joining for larger decisions." },
     ],
     closer: "Decide with someone in your corner.",
+  },
+
+  // The programme as the first client runs it (shared/engagementTypes.ts DIGITAL_MARKETING): what the owner sends,
+  // what we make, the approval before anything goes out, and the review each month.
+  digital_marketing: {
+    art: "content",
+    promise: "Reels, posts and stories every week, approved by you before they go out.",
+    headline: ["Show up on Instagram every week.", "Without doing it yourself."],
+    sub: "Every month, 15 reels, 5 posts and 20 stories for Instagram and Facebook. You film short clips on your phone; we plan, edit and publish.",
+    stage: { kind: "timeline", title: "Your 90 days", items: [{ when: "Week 1", title: "Onboarding", detail: "Brand assets, account access and the content plan for month 1" }, { when: "Every week", title: "Reels, posts and stories go out", detail: "Made from your clips, each approved by you first" }, { when: "End of each month", title: "The month in numbers", detail: "What went out, what it reached, and what changes next" }, { when: "Day 90", title: "Quarter review", detail: "The 90 days in numbers, and what support looks like from here" }] },
+    statement: ["Most owners post when they remember.", "Yours goes out every week."],
+    features: [
+      { eyebrow: "From your phone", title: "You film. We do the rest.", body: "Six or more short vertical clips a week, sent by link or on WhatsApp. We edit them into reels within 48 hours, and write the posts and stories around what you sell.", visual: { kind: "moves", title: "Sample week", rows: [{ tag: "Monday", text: "You send the week's clips", value: "8 clips" }, { tag: "Tuesday", text: "Edited reels wait in your room for your yes", value: "Within 48 hours" }, { tag: "All week", text: "Reels, posts and stories go out", value: "As planned" }] } },
+      { eyebrow: "Your yes first", title: "Nothing goes out without your approval.", body: "Each piece waits in your room. Watch it on your phone, approve it, or ask for changes. Two rounds of changes are included.", visual: { kind: "checklist", title: "Sample approvals", items: [{ label: "Reel: the Saturday brunch offer", state: "ready", note: "Approved" }, { label: "Reel: behind the counter", state: "nearly", note: "Waiting for you" }, { label: "Post: the new opening hours", state: "missing", note: "Clips needed" }] } },
+      { eyebrow: "The numbers", title: "Measured against where you started.", body: "Before the first post we record your followers, reach and bookings. Each month you see what went out, what it reached and what it brought in, and what changes next month.", visual: { kind: "table", title: "Sample month 1 review", columns: ["", "Before", "Month 1"], rows: [["Followers", "1,240", "1,390"], ["Accounts reached", "3,100", "9,800"], ["Bookings from Instagram", "9", "21"]], highlight: [2] } },
+    ],
+    forYou: ["Your customers find you on Instagram or Facebook", "You know you should post more, and never have the time", "You want to see what your posts bring in, month by month"],
+    notForYou: [{ text: "People already see you but do not buy. Start with the Six-Week Fix on sales.", productId: "six_week_fix" }],
+    faq: [
+      { q: "How do I pay?", a: `${priceTerms(productById("digital_marketing")!.price)} You pay the first when we start, then before day 31 and day 61, by transfer or card.` },
+      { q: "Who films the videos?", a: "You do, on your phone: six or more short vertical clips a week, sent by link or on WhatsApp. We edit them within 48 hours." },
+      { q: "Will you post anything without asking me?", a: "No. You approve every reel, post and story in your room before it goes out, and two rounds of changes are included." },
+      { q: "What do you need from me to start?", a: "Your logo, colours and fonts, five to ten posts or videos you like, your services and prices, your booking link and opening hours, and partner access to your Instagram and Facebook in Meta Business Suite. Never your password." },
+      { q: "Who will I work with?", a: "A Digital Marketer, who plans the content, publishes it and reads the numbers, and a Content Producer, who edits your clips. You reach both on WhatsApp." },
+      { q: "What happens after three months?", a: "At the quarter review we go through the 90 days in numbers and agree what support looks like from here. You can stop then." },
+    ],
+    closer: "Be seen every week.",
   },
 };
 

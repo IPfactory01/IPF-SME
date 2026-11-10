@@ -45,6 +45,7 @@ export const SERVICE_SEARCH_TITLES: Partial<Record<Product["id"], string>> = {
   six_week_fix: "Six-Week Fix: one business problem fixed in six weeks",
   monthly_accounts: "Monthly Accounts and Cash Report for small businesses",
   monthly_adviser_review: "Monthly Adviser Review: a business adviser every month",
+  digital_marketing: "Digital Marketing: Instagram and Facebook content every week",
 };
 
 export const PAGE_META = {

@@ -2,7 +2,7 @@ import { Failed, Loading, StaleLine } from "@/components/states";
 import { trpc } from "@/lib/trpc";
 import { formatNaira } from "@shared/businessSupport";
 import React, { useState } from "react";
-import { FeePaymentList, RecordPaymentForm } from "./FeePayments";
+import { FeePaymentList, RecordPaymentForm, WriteOffControls } from "./FeePayments";
 import { formatDate } from "./format";
 
 const TH = "px-3 py-2 text-left text-xs font-semibold text-ink-muted";
@@ -11,8 +11,9 @@ const TD = "px-3 py-2 align-top text-sm";
 /**
  * Finance: money across every client. What has been paid, what is owed and what is late, from the payments ledger.
  * Payments that need a look come first. Finance and the Super Admin record money that came another way on the fee
- * (Record a payment), cancel one recorded by mistake and accept a payment that needs a look (App flow 3.1); a payment
- * request is still confirmed in the client's record under Pipeline.
+ * (Record a payment), cancel one recorded by mistake, accept a payment that needs a look, and record a refund against a
+ * payment; a Partner or the Super Admin writes off what is left of a fee (App flow 3.1). A payment request is still
+ * confirmed in the client's record under Pipeline.
  */
 export default function FinanceView() {
   const utils = trpc.useUtils();
@@ -20,13 +21,15 @@ export default function FinanceView() {
   const [show, setShow] = useState<"owed" | "all">("owed");
   const [recording, setRecording] = useState<number | null>(null);
   const [open, setOpen] = useState<Set<number>>(new Set());
+  const [writingOff, setWritingOff] = useState<Set<number>>(new Set());
   if (finance.error && finance.data === undefined) return <div className="p-6"><Failed error={finance.error} onRetry={() => void finance.refetch()} retrying={finance.isFetching} /></div>;
   if (!finance.data) return <div className="p-6"><Loading label="Loading Finance" /></div>;
   const { totals, requests, fees, needsALook, can } = finance.data;
   const refresh = () => { void utils.engagement.finance.list.invalidate(); void utils.engagement.staff.fees.invalidate(); };
   const feeRows = show === "owed" ? fees.filter(row => !row.paid) : fees;
   const requestRows = show === "owed" ? requests.filter(row => !row.paid) : requests;
-  const toggle = (id: number) => setOpen(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  const flip = (set: Set<number>, id: number) => { const next = new Set(set); if (next.has(id)) next.delete(id); else next.add(id); return next; };
+  const toggle = (id: number) => setOpen(previous => flip(previous, id));
   return (
     <div className="space-y-5 p-6">
       <StaleLine read={finance} />
@@ -69,7 +72,8 @@ export default function FinanceView() {
             <tbody>
               {feeRows.map(row => {
                 const counted = row.payments.filter(payment => payment.status !== "needs_a_look");
-                const status = row.paid ? `Paid ${formatDate(row.paidAt)}` : row.paidAmount > 0 ? `${formatNaira(row.paidAmount)} paid, ${formatNaira(row.left)} left` : row.late ? "Late" : "Owed";
+                const status = row.writtenOff && row.left === 0 ? `Written off ${formatNaira(row.writtenOff.amount)}` : row.paid ? `Paid ${formatDate(row.paidAt)}` : row.paidAmount > 0 ? `${formatNaira(row.paidAmount)} paid, ${formatNaira(row.left)} left` : row.late ? "Late" : "Owed";
+                const showsWriteOff = writingOff.has(row.id) || (row.writtenOff !== null && open.has(row.id));
                 return (
                   <React.Fragment key={row.id}>
                     <tr className="border-b border-line-soft">
@@ -81,16 +85,18 @@ export default function FinanceView() {
                         <span className="mt-1 flex flex-wrap gap-x-2 text-xs">
                           {counted.length > 0 && <button type="button" className="font-semibold text-brand underline" aria-expanded={open.has(row.id)} onClick={() => toggle(row.id)}>{open.has(row.id) ? "Hide payments" : `Payments (${counted.length})`}</button>}
                           {can.record && row.left > 0 && recording !== row.id && <button type="button" className="font-semibold text-brand underline" onClick={() => setRecording(row.id)}>Record a payment</button>}
+                          {can.writeOff && (row.left > 0 || row.writtenOff) && !showsWriteOff && <button type="button" className="font-semibold text-danger underline" onClick={() => setWritingOff(previous => flip(previous, row.id))}>{row.writtenOff ? "The write-off" : "Write off"}</button>}
                         </span>
                       </td>
                     </tr>
-                    {(open.has(row.id) || recording === row.id) && (
+                    {(open.has(row.id) || recording === row.id || showsWriteOff) && (
                       <tr className="border-b border-line-soft bg-paper-sunken/40">
                         <td colSpan={6} className={TD}>
                           {/* On a phone the table scrolls sideways: the payments and the form keep to the width in view. */}
                           <div className="sticky left-3 max-w-[calc(100vw-5rem)] space-y-2 sm:static sm:max-w-none">
                             {open.has(row.id) && <FeePaymentList payments={counted} canRecord={can.record} onChanged={refresh} />}
                             {recording === row.id && <RecordPaymentForm feeLineId={row.id} label={row.label} left={row.left} onDone={recorded => { setRecording(null); if (recorded) refresh(); }} />}
+                            {showsWriteOff && <WriteOffControls fee={row} canWriteOff={can.writeOff} startOpen={writingOff.has(row.id)} onChanged={() => { setWritingOff(previous => { const next = new Set(previous); next.delete(row.id); return next; }); refresh(); }} />}
                           </div>
                         </td>
                       </tr>

@@ -40,7 +40,7 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 | | Paid | Visitor, Paystack | `onlinePayment.status`, the webhook | 4.1 #4a | Platform: Confirms every payment | Built |
 | | Confirmed by hand | Finance | `businessSupport.confirmPayment`; every confirmed request is also a payment in the ledger, with its receipt number (F1) | 4.7 #3 | Finance: Confirms or refunds | Built |
 | | Expired (48 hours) | Platform | Worked out on read | 5 Payment | — | Built |
-| | Refunded | — | Not recorded yet | 4.7 #3 | Finance: Confirms or refunds | To build (F2) |
+| | Refunded | Finance | Recorded against a fee's payment (F2); a payment request's own refund comes with F3 | 4.7 #3 | Finance: Confirms or refunds | Partly built |
 | Full Report | Intake answered | Buyer | `fullReport.form`, `submit` | 4.1 #4b | Visitor: Full Report emailed | Built |
 | | Delivered, downloaded | Buyer, desk | `fullReport.download`; `businessSupport.downloadReport` | 4.1 #4b | Visitor: Full Report emailed | Built |
 | | Link sent again | Finance | `businessSupport.resendReportLink` | 6 Emails | — | Built |
@@ -114,8 +114,8 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 | | Billed: invoice number | Platform | The first link emailed, or a payment started or recorded; a billed fee cannot be removed | 3.1 | Finance: Receipts and invoices | Built (F1) |
 | | Reminded, late | Platform | — | 4.4 #7 | Platform: Sends reminders | To build (R12) |
 | | Receipt and invoice as documents | Platform | Numbers built (F1): every receipt email names its number; the PDFs to build | 4.4 #7 | Finance: Receipts and invoices | To build (R53) |
-| | Refunded | — | Not recorded yet | 4.7 #3 | Finance: Confirms or refunds | To build (F2) |
-| | Written off | — | Not recorded yet | 4.7 #6 | Partner: Writes off | To build (F2) |
+| | Refunded, in part or in full | Finance, Super Admin | `finance.recordRefund` after refunding in Paystack or the bank; `finance.cancelRefund` for one recorded by mistake | 4.7 #3, 3.1 | Finance: Confirms or refunds | Built (F2) |
+| | Written off, or reversed | Partner, Super Admin | `finance.writeOff`, `finance.reverseWriteOff` (`write_off_fees`) | 4.7 #6, 3.1 | Partner: Writes off | Built (F2) |
 | Finance view | Seen | `view_financials` | `engagement.finance.list` | 4.7 #1 | Finance: Opens Finance | Built |
 | Service request ("Fix the next problem") | Asked for | Client | `client.requestService` (office emailed) | 4.5 #3 | Client: Buys the next fix | Built |
 | | Handled or declined | Desk | `staff.handleRequest` | 4.5 #3 | — | Built; **C4** (the client is not told) |
@@ -124,7 +124,7 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 
 | Object | Stage | Who | How (in the code) | App flow | Board | Status |
 |---|---|---|---|---|---|---|
-| Audit log | Written | Platform | `recordAudit`, 84 actions in use (6 more retired), each listed in the [Backend schema](05-backend-schema.md) | — | — | Built |
+| Audit log | Written | Platform | `recordAudit`, 88 actions in use (6 more retired), each listed in the [Backend schema](05-backend-schema.md) | — | — | Built |
 | | Read | Desk (a check's history only) | `stageHistoryFor` in `server/businessSupportAdmin.ts` | 8.3 Pipeline | — | **C10** (no view of who did what elsewhere) |
 | Email delivery | Recorded, seen | Platform; desk | `businessSupport.emailDeliveryStatus` | 6 | Super Admin: Watches System status | Built |
 
@@ -137,7 +137,7 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 | End of the relationship | Close and Day-30 Review: R26, R27. A business changing hands: **C15** |
 | Empty, loading, error, partly-done screens | Audited in the design brief review (9 November 2026): 31 of 33 data reads never retry and only 5 say anything when they fail, so a dropped connection looks empty (B2). The Design brief (section 5) sets the four states; R69 built them on 9 November 2026 |
 | Channels | WhatsApp: R44. Session reminders by any channel: **C3** |
-| Money | Owed, paid in part or in full, late: built (the ledger, F1) or R12. Refunded, written off: F2 |
+| Money | Owed, paid in part or in full, late, refunded, written off: built (the ledger, F1 and F2) or R12 |
 | Day 0, weekly, day 30, after the end | Day 0: R46. Weekly: check-ins built, Session reminders **C3**. Day 30: R27 |
 | Code left over | The unused JUMP email templates (the 24-hour Session reminder among them) were removed on 9 November 2026: **C12** fixed. The older administrator password reset said *Reset your JUMP administrator password* and went out from the JUMP mailbox: **C19**, fixed the same day (every email now goes out as IP Factory). A JUMP-era Google Calendar helper (`server/calendar.ts`) has no caller and stays until the calendar work |
 | Permissions | Five permissions are declared but no action checks them (`manage_businesses`, `manage_scheduling`, `manage_communications`, `manage_admins`, `manage_platform_settings`): **C18** |
@@ -158,7 +158,7 @@ improves the product. **Effort:** S is days, M about a week.
 | C7 | An engagement opened by mistake cannot be archived or deleted | Clutter in the team's lists and the client's projects | P3 | S | R63 |
 | C8 | Nobody is alerted when a finished check or a booked call is not followed up | The "same working day" handoff has no signal | P2 | S | R64 |
 | C9 | A lead marked Referred (to Enzo Krypton & Co.) reaches nobody | A referral that goes nowhere | P3 | S | R65 |
-| C10 | The audit log is written for 84 actions but readable only as a check's history | The Super Admin cannot see who recorded a payment by hand, cancelled one, opened a room early or removed access | P3 | M | R66 |
+| C10 | The audit log is written for 88 actions but readable only as a check's history | The Super Admin cannot see who recorded a payment by hand, cancelled one, opened a room early or removed access | P3 | M | R66 |
 | C12 | Unused JUMP-era email templates remained in the code | Dead code with the wrong wording | P3 | S | Fixed: removed on 9 November 2026 |
 | C15 | A business cannot change its owner | A sale or a handover locks the business to the first owner | P3 | M | R67 |
 | C17 | Nobody is told before a Specialist's access ends | Work stops mid-engagement without warning | P3 | S | R68 |
@@ -247,6 +247,8 @@ person is not on is not found unless they see every engagement.
 | `engagement.staff.serviceRequests`, `engagement.staff.handleRequest` | Clients asking for another service; handle or decline | `view_all_businesses` and `manage_engagements` | Service request |
 | `engagement.finance.list` | Finance: paid, owed and late across every client, from the ledger; payments that need a look | `view_financials` | Finance view |
 | `engagement.finance.recordPayment`, `engagement.finance.cancelPayment`, `engagement.finance.acceptPayment` | Record money that came another way, in part or in full; cancel one recorded by mistake (kept, marked cancelled); accept a Paystack payment that needs a look once it fits | `manage_payments` (Finance and the Super Admin, ET 10 November 2026), on any fee | Fee |
+| `engagement.finance.recordRefund`, `engagement.finance.cancelRefund` | Record a refund against a fee's payment, never more than is left of it; cancel one recorded by mistake (kept, marked cancelled) | `manage_payments`, on any fee | Fee |
+| `engagement.finance.writeOff`, `engagement.finance.reverseWriteOff` | Write off what is left of a fee, with a note; reverse a write-off, with a reason | `write_off_fees` (a Partner or the Super Admin) | Fee |
 
 ### Engagements: the client's side
 

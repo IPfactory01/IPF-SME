@@ -6,8 +6,10 @@
  *
  * Recording money (batch F, ET 10 November 2026) is for Finance and the Super Admin only (manage_payments): money that
  * came another way, in part or in full, with the day it arrived, how it came and a note such as the bank's reference;
- * cancelling one recorded by mistake, which stays on the record; and accepting a Paystack payment that needs a look once
- * it fits the fee. Each sends the owner what it changes, and each is in the audit log.
+ * cancelling one recorded by mistake, which stays on the record; accepting a Paystack payment that needs a look once
+ * it fits the fee; and (F2) recording a refund against the payment it returns, or cancelling one recorded by mistake.
+ * Writing off what is left of a fee, and reversing a write-off, is for a Partner or the Super Admin (write_off_fees).
+ * Each is in the audit log, and the owner is told what concerns them.
  */
 import { TRPCError } from "@trpc/server";
 import { asc, desc, eq, inArray } from "drizzle-orm";
@@ -24,7 +26,8 @@ import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { deliverEmail } from "./email";
 import { feeContext, feeReference, openRoomIfFirstPayment, sendFeeReceipt } from "./feePayments";
-import { acceptLooked, addPaymentByHand, balanceOf, cancelPaymentByHand, carryOver, lockFee, paymentById, paymentsOfFees, refreshFeePaid, type LedgerEntry } from "./ledger";
+import { acceptLooked, addPaymentByHand, addRefund, balanceOf, cancelPaymentByHand, cancelRefundRecord, carryOver, lockFee, paymentById, paymentsOfFees, refreshFeePaid, refundById, refundsOfPayments, reverseFeeWriteOff, writeOffFee, type LedgerEntry } from "./ledger";
+import type { paymentRefunds } from "../drizzle/schema";
 import { requireOnlinePayment } from "./onlinePayment";
 import { verifyTransaction } from "./paystack";
 import { getTrustedApplicationOrigin } from "./security";
@@ -40,6 +43,10 @@ const refused = (code: "FORBIDDEN" | "BAD_REQUEST" | "CONFLICT" | "NOT_FOUND" | 
 const requirePayments = (actor: FinanceActor) => {
   if (!authorityAllows(actor.authority, "manage_payments")) throw refused("FORBIDDEN", "Recording money is for Finance and the Super Admin.");
 };
+const requireWriteOff = (actor: FinanceActor) => {
+  if (!authorityAllows(actor.authority, "write_off_fees")) throw refused("FORBIDDEN", "Only a Partner or the Super Admin can write off a fee.");
+};
+type Refund = typeof paymentRefunds.$inferSelect;
 
 export async function listFinance(db: Pick<Database, "select">, actor: { authority: Authority }, now = Date.now()) {
   if (!authorityAllows(actor.authority, "view_financials")) throw new TRPCError({ code: "FORBIDDEN", message: "Your role does not include finance." });
@@ -50,13 +57,14 @@ export async function listFinance(db: Pick<Database, "select">, actor: { authori
   }).from(paymentRequests).innerJoin(businessChecks, eq(paymentRequests.businessCheckId, businessChecks.id)).orderBy(desc(paymentRequests.id));
   const feeRows = await db.select({
     id: engagementFeeLines.id, engagementId: engagementFeeLines.engagementId, label: engagementFeeLines.label, amount: engagementFeeLines.amount, dueOn: engagementFeeLines.dueOn, paidAt: engagementFeeLines.paidAt,
-    writtenOffAmount: engagementFeeLines.writtenOffAmount,
+    writtenOffAmount: engagementFeeLines.writtenOffAmount, writtenOffAt: engagementFeeLines.writtenOffAt, writtenOffByUserId: engagementFeeLines.writtenOffByUserId, writeOffNote: engagementFeeLines.writeOffNote,
     type: engagements.type, service: engagements.service, businessName: businesses.name, contactName: engagements.contactName, checkBusinessName: businessChecks.businessName,
   }).from(engagementFeeLines).innerJoin(engagements, eq(engagementFeeLines.engagementId, engagements.id))
     .leftJoin(businesses, eq(engagements.businessId, businesses.id)).leftJoin(businessChecks, eq(engagements.businessCheckId, businessChecks.id))
     .orderBy(asc(engagementFeeLines.dueOn), asc(engagementFeeLines.id));
   const ledger = await paymentsOfFees(db, feeRows.map(row => row.id));
-  const people = await namesOf(db, ledger.flatMap(entry => [entry.recordedByUserId, entry.cancelledByUserId]));
+  const refunds = await refundsOfPayments(db, ledger.map(entry => entry.id));
+  const people = await namesOf(db, [...ledger.flatMap(entry => [entry.recordedByUserId, entry.cancelledByUserId]), ...refunds.flatMap(refund => [refund.recordedByUserId, refund.cancelledByUserId]), ...feeRows.map(row => row.writtenOffByUserId)]);
   const requests = requestRows.map(row => ({ ...row, title: PAYMENT_ITEM_TITLES[row.item], client: row.businessName || row.fullName, paid: row.status === "confirmed" }));
   const fees = feeRows.map(row => {
     const own = ledger.filter(entry => entry.feeLineId === row.id);
@@ -64,11 +72,12 @@ export async function listFinance(db: Pick<Database, "select">, actor: { authori
     return {
       id: row.id, engagementId: row.engagementId, label: row.label, amount: row.amount, dueOn: row.dueOn, paid: left === 0, paidAt: row.paidAt,
       paidAmount: paid, left, reference: feeReference(row.id),
+      writtenOff: writeOffView(row, people),
       client: row.businessName ?? row.checkBusinessName ?? row.contactName ?? "", engagement: engagementTitle(row.type, row.service),
       // A fee is owed once it is set (there are no proposals to sign), and late once its due date passes with something left.
       late: left > 0 && row.dueOn !== null && row.dueOn < today,
       // Attempts that never moved money are left out; a cancelled payment stays, marked cancelled.
-      payments: own.filter(entry => entry.status !== "started" && entry.status !== "failed").map(entry => paymentView(entry, people)),
+      payments: own.filter(entry => entry.status !== "started" && entry.status !== "failed").map(entry => paymentView(entry, people, refunds)),
     };
   });
   const needsALook = fees.flatMap(fee => fee.payments.filter(payment => payment.status === "needs_a_look").map(payment => ({ ...payment, feeLineId: fee.id, label: fee.label, client: fee.client, engagement: fee.engagement, left: fee.left })));
@@ -82,7 +91,7 @@ export async function listFinance(db: Pick<Database, "select">, actor: { authori
       owed: sum(requests.filter(row => !row.paid).map(row => row.amount)) + sum(fees.map(row => row.left)),
       late: sum(fees.filter(row => row.late).map(row => row.left)),
     },
-    can: { record: authorityAllows(actor.authority, "manage_payments") },
+    can: { record: authorityAllows(actor.authority, "manage_payments"), writeOff: authorityAllows(actor.authority, "write_off_fees") },
   };
 }
 
@@ -94,8 +103,21 @@ export async function namesOf(db: Pick<Database, "select">, ids: readonly (numbe
   return new Map(rows.map(row => [row.id, row.name ?? row.email ?? "Someone on the team"]));
 }
 
+/** A fee's write-off as Finance and the team see it, or null. */
+export function writeOffView(fee: { writtenOffAmount: number | null; writtenOffAt: Date | null; writtenOffByUserId: number | null; writeOffNote: string | null }, people: Map<number, string>) {
+  if (fee.writtenOffAt === null || fee.writtenOffAmount === null) return null;
+  return { amount: fee.writtenOffAmount, at: fee.writtenOffAt, by: fee.writtenOffByUserId !== null ? people.get(fee.writtenOffByUserId) ?? null : null, note: fee.writeOffNote };
+}
+
+/** A refund as Finance and the team see it; a cancelled one stays on the record. */
+const refundView = (refund: Refund, people: Map<number, string>) => ({
+  id: refund.id, amount: refund.amount, refundedOn: refund.refundedOn, reason: refund.reason, reference: refund.reference,
+  recordedBy: people.get(refund.recordedByUserId) ?? null, cancelledAt: refund.cancelledAt, cancelReason: refund.cancelReason,
+  cancelledBy: refund.cancelledByUserId !== null ? people.get(refund.cancelledByUserId) ?? null : null,
+});
+
 /** A payment as Finance and the team see it: never shown to a client in this form. */
-export function paymentView(entry: LedgerEntry, people: Map<number, string>) {
+export function paymentView(entry: LedgerEntry, people: Map<number, string>, refunds: readonly Refund[] = []) {
   return {
     id: entry.id, status: entry.status, method: entry.method, methodLabel: PAYMENT_METHOD_LABELS[entry.method], amount: entry.amount, refunded: entry.refunded,
     receipt: entry.receiptNumber !== null ? receiptNumberLabel(entry.receiptNumber) : null, receivedOn: entry.receivedOn, paidAt: entry.paidAt,
@@ -104,6 +126,9 @@ export function paymentView(entry: LedgerEntry, people: Map<number, string>) {
     cancelledAt: entry.cancelledAt, cancelReason: entry.cancelReason, cancelledBy: entry.cancelledByUserId !== null ? people.get(entry.cancelledByUserId) ?? null : null,
     /** Money recorded by hand that still counts and has no refund against it. */
     canCancel: entry.method !== "paystack" && entry.status === "paid" && entry.refunded === 0,
+    /** What can still be refunded of money that was received: a paid payment, or one that needs a look. */
+    refundable: entry.status === "paid" || entry.status === "needs_a_look" ? entry.amount - entry.refunded : 0,
+    refunds: refunds.filter(refund => refund.paymentId === entry.id).map(refund => refundView(refund, people)),
   };
 }
 
@@ -222,6 +247,119 @@ export async function acceptPayment(db: Database, actor: FinanceActor, input: { 
   const { accepted, left, opened } = result;
   await sendFeeReceipt(db, { feeLineId: payment.feeLineId, paymentId: accepted.id, amount: accepted.amount, left, receiptNumber: accepted.receiptNumber!, paid: { on: accepted.receivedOn ?? lagosDay() }, test: accepted.mode === "test", opened });
   return { success: true, receipt: receiptNumberLabel(accepted.receiptNumber!), left, opened } as const;
+}
+
+/** "Your refund: {fee}", to the payer, once a refund is recorded against their payment. */
+export function refundEmail(input: { name: string; title: string; label: string; amount: number; refundedOn: string; receipt: string | null; reference: string | null; test: boolean }) {
+  return {
+    subject: `${input.test ? "TEST: " : ""}Your refund: ${input.label}`,
+    body: [
+      ...(input.test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : []),
+      `Hello ${input.name.split(" ")[0] ?? ""},`, "",
+      `We have refunded ${formatNaira(input.amount)} of your payment for the ${input.title} (${input.label}) on ${dayLabel(input.refundedOn)}.${input.receipt ? ` It was paid with receipt ${input.receipt}.` : ""}`,
+      "A bank can take a few days to show it.", "",
+      ...(input.reference ? [`Refund reference: ${input.reference}`, ""] : []),
+      "Any questions, reply to this email.", "",
+      BRAND.organisationName,
+    ].join("\n"),
+  };
+}
+
+/**
+ * Money returned against a fee's payment, recorded once it has gone back through Paystack or the bank (F2). Never more
+ * than is left of the payment; refunded in full, the payment is marked refunded. The amount is owed on the fee again
+ * unless a Partner writes it off, and the owner is told.
+ */
+export async function recordRefund(db: Database, actor: FinanceActor, input: { paymentId: number; amount: number; refundedOn: string; reason: string; reference: string | null }, today = lagosDay()) {
+  requirePayments(actor);
+  if (input.refundedOn > today) throw refused("BAD_REQUEST", "The day of the refund cannot be in the future.");
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw refused("BAD_REQUEST", "Say why the money was refunded.");
+  const reference = input.reference?.trim() || null;
+  const payment = await paymentById(db, input.paymentId);
+  if (!payment) throw refused("NOT_FOUND", "We could not find this payment.");
+  if (payment.feeLineId === null) throw refused("CONFLICT", "This payment is not against a fee.");
+  const result = await db.transaction(async tx => {
+    const fee = await lockFee(tx, payment.feeLineId!);
+    if (!fee) throw refused("NOT_FOUND", "We could not find this fee.");
+    const entry = (await paymentsOfFees(tx, [fee.id])).find(item => item.id === payment.id);
+    if (!entry || (entry.status !== "paid" && entry.status !== "needs_a_look")) throw refused("CONFLICT", "Only money that was received, and not refunded in full, can be refunded.");
+    const refundable = entry.amount - entry.refunded;
+    if (input.amount > refundable) throw refused("BAD_REQUEST", `Only ${formatNaira(refundable)} of this payment is left to refund.`);
+    const refund = await addRefund(tx, entry, { amount: input.amount, refundedOn: input.refundedOn, reason, reference, recordedByUserId: actor.id });
+    const after = await refreshFeePaid(tx, fee);
+    await recordAudit(tx, { action: "payment_refund_recorded", actorUserId: actor.id, details: { engagementId: fee.engagementId, feeLineId: fee.id, paymentId: entry.id, refundId: refund.id, amount: refund.amount, reason, ...(reference ? { reference } : {}), left: after.left } });
+    return { refund, entry, left: after.left };
+  });
+  const found = await feeContext(db, payment.feeLineId);
+  if (found?.payer) {
+    const message = refundEmail({ name: found.payer.name, title: found.title, label: found.fee.label, amount: result.refund.amount, refundedOn: result.refund.refundedOn, receipt: result.entry.receiptNumber !== null ? receiptNumberLabel(result.entry.receiptNumber) : null, reference, test: result.entry.mode === "test" });
+    await deliverEmail({ to: found.payer.email, sender: "business_support", idempotencyKey: `payment_refunds:${result.refund.id}:client`, subject: message.subject, body: message.body })
+      .catch((error: unknown) => console.error("[Fees] The refund email could not be sent:", error instanceof Error ? error.message : "unknown error"));
+  }
+  return { success: true, left: result.left } as const;
+}
+
+/** A refund recorded by mistake: cancelled with a reason, never deleted; it no longer counts, and the payment counts again. */
+export async function cancelRefund(db: Database, actor: FinanceActor, input: { refundId: number; reason: string }) {
+  requirePayments(actor);
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw refused("BAD_REQUEST", "Say why the refund is cancelled.");
+  const refund = await refundById(db, input.refundId);
+  const payment = refund ? await paymentById(db, refund.paymentId) : null;
+  if (!refund || !payment || payment.feeLineId === null) throw refused("NOT_FOUND", "We could not find this refund.");
+  const left = await db.transaction(async tx => {
+    const fee = await lockFee(tx, payment.feeLineId!);
+    if (!fee) throw refused("NOT_FOUND", "We could not find this fee.");
+    const cancelled = await cancelRefundRecord(tx, refund.id, { cancelledByUserId: actor.id, reason });
+    if (!cancelled) throw refused("CONFLICT", "This refund is already cancelled.");
+    const after = await refreshFeePaid(tx, fee);
+    await recordAudit(tx, { action: "payment_refund_cancelled", actorUserId: actor.id, details: { engagementId: fee.engagementId, feeLineId: fee.id, paymentId: payment.id, refundId: refund.id, amount: refund.amount, reason, left: after.left } });
+    return after.left;
+  });
+  return { success: true, left } as const;
+}
+
+/**
+ * What is left of a fee, written off by a Partner or the Super Admin with a note (F2, ET 10 November 2026): nothing more
+ * is owed, it is never late and it never pauses the work; the client sees "Nothing more to pay". It covers what is left
+ * at that moment, so a later refund is owed again. It opens no room: Open the room now does. No email: the Partner tells
+ * the client.
+ */
+export async function writeOff(db: Database, actor: FinanceActor, input: { feeLineId: number; note: string }) {
+  requireWriteOff(actor);
+  const note = input.note.trim();
+  if (note.length < 3) throw refused("BAD_REQUEST", "Say why the fee is written off.");
+  const amount = await db.transaction(async tx => {
+    const fee = await lockFee(tx, input.feeLineId);
+    if (!fee) throw refused("NOT_FOUND", "We could not find this fee.");
+    if (fee.writtenOffAt) throw refused("CONFLICT", "This fee is already written off.");
+    await carryOver(tx, fee);
+    const { left } = await balanceOf(tx, fee);
+    if (left === 0) throw refused("CONFLICT", "Nothing is left to pay on this fee.");
+    await writeOffFee(tx, fee, { amount: left, note, writtenOffByUserId: actor.id });
+    await recordAudit(tx, { action: "fee_written_off", actorUserId: actor.id, details: { engagementId: fee.engagementId, feeLineId: fee.id, amount: left, note } });
+    return left;
+  });
+  return { success: true, writtenOff: amount } as const;
+}
+
+/** A write-off reversed by a Partner or the Super Admin, with a reason: what was written off is owed again. */
+export async function reverseWriteOff(db: Database, actor: FinanceActor, input: { feeLineId: number; reason: string }) {
+  requireWriteOff(actor);
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw refused("BAD_REQUEST", "Say why the write-off is reversed.");
+  const left = await db.transaction(async tx => {
+    const fee = await lockFee(tx, input.feeLineId);
+    if (!fee) throw refused("NOT_FOUND", "We could not find this fee.");
+    if (!fee.writtenOffAt) throw refused("CONFLICT", "This fee is not written off.");
+    const was = { amount: fee.writtenOffAmount, note: fee.writeOffNote, by: fee.writtenOffByUserId };
+    await reverseFeeWriteOff(tx, fee);
+    const after = await refreshFeePaid(tx, fee);
+    await recordAudit(tx, { action: "fee_write_off_reversed", actorUserId: actor.id, details: { engagementId: fee.engagementId, feeLineId: fee.id, amount: was.amount, note: was.note, writtenOffByUserId: was.by, reason, left: after.left } });
+    return after.left;
+  });
+  return { success: true, left } as const;
 }
 
 /** Whether a fee's payments include any that count, for the engagement's own checks. */

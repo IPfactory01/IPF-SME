@@ -31,7 +31,7 @@ vi.mock("@/lib/trpc", () => ({
     businessSupport: { emailDeliveryStatus: { useQuery: () => ({ data: [], isLoading: false, error: undefined }) } },
     engagement: {
       // Recording money (batch F): Finance and the Super Admin, from the engagement's Fees or the Finance tab.
-      finance: Object.fromEntries(["recordPayment", "cancelPayment", "acceptPayment"].map(name => [name, { useMutation: mutation(name) }])),
+      finance: Object.fromEntries(["recordPayment", "cancelPayment", "acceptPayment", "recordRefund", "cancelRefund", "writeOff", "reverseWriteOff"].map(name => [name, { useMutation: mutation(name) }])),
       staff: {
         list: { useQuery: () => ({ data: api.failed.list ? undefined : api.list, isLoading: false, error: api.failed.list ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("list"); } }) },
         awaitingStart: { useQuery: () => ({ data: api.failed.awaiting ? undefined : api.awaiting, error: api.failed.awaiting ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("awaiting"); } }) },

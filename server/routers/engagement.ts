@@ -21,7 +21,7 @@ import {
 } from "../../shared/engagement";
 import { authorityAllows } from "../../shared/platformPermissions";
 import { AGREEMENT_LIMITS } from "../../shared/agreement";
-import { acceptPayment, cancelPayment, listFinance, recordPayment } from "../finance";
+import { acceptPayment, cancelPayment, cancelRefund, listFinance, recordPayment, recordRefund, reverseWriteOff, writeOff } from "../finance";
 import { openRoomNow, saveFees, staffFees, staffSendFeeLink } from "../agreements";
 import {
   acceptDeliverable,
@@ -287,8 +287,9 @@ const clientRouter = router({
 
 /**
  * Finance: money across every client (payment requests and engagement fees). Authentication: the internal area. Seeing
- * it: view_financials. Recording money by hand, cancelling it and accepting a payment that needs a look:
- * manage_payments (Finance and the Super Admin, ET 10 November 2026), on any fee: Finance works across every client.
+ * it: view_financials. Recording money by hand, cancelling it, accepting a payment that needs a look, and recording or
+ * cancelling a refund: manage_payments (Finance and the Super Admin, ET 10 November 2026), on any fee: Finance works
+ * across every client. Writing off a fee, and reversing a write-off: write_off_fees (Partners and the Super Admin).
  */
 const finance = adminProcedure.use(async ({ ctx, next }) => next({ ctx: { ...ctx, actor: { id: ctx.user!.id, authority: await loadAuthority(await engagementDb(), ctx.user!) } } }));
 const financeRouter = router({
@@ -303,6 +304,19 @@ const financeRouter = router({
   cancelPayment: finance.input(z.object({ paymentId: id, reason: text(500).min(3, "Say why the payment is cancelled.") }))
     .mutation(async ({ ctx, input }) => guarded(async () => cancelPayment(await engagementDb(), ctx.actor, input))),
   acceptPayment: finance.input(z.object({ paymentId: id })).mutation(async ({ ctx, input }) => guarded(async () => acceptPayment(await engagementDb(), ctx.actor, input))),
+  recordRefund: finance.input(z.object({
+    paymentId: id,
+    amount: z.number().int("Whole naira only.").positive("Enter the amount refunded.").max(AGREEMENT_LIMITS.amount),
+    refundedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the day of the refund."),
+    reason: text(500).min(3, "Say why the money was refunded."),
+    reference: text(100).nullable(),
+  })).mutation(async ({ ctx, input }) => guarded(async () => recordRefund(await engagementDb(), ctx.actor, input))),
+  cancelRefund: finance.input(z.object({ refundId: id, reason: text(500).min(3, "Say why the refund is cancelled.") }))
+    .mutation(async ({ ctx, input }) => guarded(async () => cancelRefund(await engagementDb(), ctx.actor, input))),
+  writeOff: finance.input(z.object({ feeLineId: id, note: text(500).min(3, "Say why the fee is written off.") }))
+    .mutation(async ({ ctx, input }) => guarded(async () => writeOff(await engagementDb(), ctx.actor, input))),
+  reverseWriteOff: finance.input(z.object({ feeLineId: id, reason: text(500).min(3, "Say why the write-off is reversed.") }))
+    .mutation(async ({ ctx, input }) => guarded(async () => reverseWriteOff(await engagementDb(), ctx.actor, input))),
 });
 
 export const engagementRouter = router({ staff: staffRouter, client: clientRouter, finance: financeRouter });

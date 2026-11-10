@@ -56,7 +56,7 @@ import { DetailField, DetailSection } from "./AdminPrimitives";
 import DeliveryShareNote from "./DeliveryShareNote";
 import { combineDateAndTime, formatDate, formatDateTime, toDateInput, toTimeInput, whatsappLink } from "./format";
 import { FeeHoldNote } from "./FeeHoldBadge";
-import { FeePaymentList, RecordPaymentForm } from "./FeePayments";
+import { FeePaymentList, RecordPaymentForm, WriteOffControls } from "./FeePayments";
 
 type Detail = inferRouterOutputs<AppRouter>["engagement"]["staff"]["detail"];
 type Session = Detail["sessions"][number];
@@ -792,6 +792,7 @@ function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { na
         {current.map((line, index) => {
           const stored = storedOf(line);
           const status = !stored ? null
+            : stored.left === 0 && stored.writtenOff ? `Written off ${formatNaira(stored.writtenOff.amount)}`
             : stored.left === 0 ? (stored.paidOnline ? "Paid online" : "Paid")
               : stored.paidAmount > 0 ? `${formatNaira(stored.paidAmount)} paid, ${formatNaira(stored.left)} left` : "Owed";
           return (
@@ -808,6 +809,7 @@ function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { na
                 </span>
               </div>
               {stored && <FeePaymentList payments={stored.payments} canRecord={data.can.recordPayments} onChanged={refresh} />}
+              {stored && !unsaved && <WriteOffControls fee={stored} canWriteOff={data.can.writeOff} onChanged={refresh} />}
               {stored && recording === stored.id && <RecordPaymentForm feeLineId={stored.id} label={stored.label} left={stored.left} onDone={recorded => { setRecording(null); if (recorded) refresh(); }} />}
             </li>
           );

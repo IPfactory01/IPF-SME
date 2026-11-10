@@ -46,6 +46,15 @@ describe("platform roles are separate from business roles", () => {
   });
 });
 
+describe("writing off a fee (ET, 10 November 2026, batch F2)", () => {
+  it("is a Partner's decision or the Super Admin's, never Finance's or the desk's", () => {
+    const holders = PLATFORM_ROLES.filter((role) => PLATFORM_ROLE_PERMISSIONS[role].includes("write_off_fees"));
+    expect(holders).toEqual(["super_admin", "partner"]);
+    expect(PLATFORM_ROLE_PERMISSIONS.finance).not.toContain("write_off_fees");
+    expect(PLATFORM_ROLE_PERMISSIONS.partner).not.toContain("manage_payments");
+  });
+});
+
 describe("work before the first payment (ET, 10 November 2026)", () => {
   it("is a Partner's decision or the Super Admin's: no other level or role grants it", () => {
     const holders = PLATFORM_ROLES.filter((role) => PLATFORM_ROLE_PERMISSIONS[role].includes("approve_work_before_payment"));

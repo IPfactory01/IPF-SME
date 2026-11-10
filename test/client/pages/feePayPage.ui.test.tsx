@@ -145,3 +145,14 @@ describe("a fee paid in part (the ledger, batch F)", () => {
     expect(screen.getByRole("button", { name: /Pay ₦270,000 securely with Paystack/ })).toBeTruthy();
   });
 });
+
+describe("a fee closed without payment (F2)", () => {
+  it("says there is nothing more to pay, never the team's word for it", () => {
+    api.page = { ...(api.page as Record<string, unknown>), state: "paid", writtenOff: true };
+    renderPage();
+    expect(screen.getByRole("heading", { name: "Nothing more to pay" })).toBeTruthy();
+    expect(screen.getByText("There is nothing more to pay on Month 2 service fee, payable before day 31 for the Digital marketing.")).toBeTruthy();
+    expect(screen.queryByText(/written off/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Pay/ })).toBeNull();
+  });
+});

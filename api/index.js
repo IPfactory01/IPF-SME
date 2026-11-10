@@ -1099,6 +1099,9 @@ var PLATFORM_PERMISSIONS = [
   // Work before the first payment (ET, 10 November 2026): opening a client's room before it is paid, or moving the
   // first fee past the start date. Partners and the Super Admin only; terms otherwise follow what is bought (R36, D4).
   "approve_work_before_payment",
+  // Writing off what is left of a fee, and reversing a write-off (ET, 10 November 2026, batch F2): Partners and the
+  // Super Admin only. Recording money is Finance's (manage_payments); closing a fee without it is a Partner's decision.
+  "write_off_fees",
   "view_financials",
   "manage_scheduling",
   "manage_communications",
@@ -1113,7 +1116,7 @@ var PLATFORM_ROLE_PERMISSIONS = {
   // The desk and partners see Finance (ET, 6 November 2026): read only; recording payments stays with manage_payments.
   desk_lead: ["view_all_businesses", "manage_engagements", "assign_engagements", "review_engagements", "manage_scheduling", "manage_communications", "view_financials"],
   analyst: ["view_assigned_businesses", "manage_engagements"],
-  partner: ["view_assigned_businesses", "review_engagements", "view_financials", "approve_work_before_payment"],
+  partner: ["view_assigned_businesses", "review_engagements", "view_financials", "approve_work_before_payment", "write_off_fees"],
   // Specialists hand in work on their own engagements (ET, 6 November 2026): team-side Work Plan items and draft files on
   // a Deliverable, seen by IP Factory only until the lead shares them. They do not see internal notes or fees.
   subject_matter_expert: ["view_assigned_businesses", "contribute_engagements"],
@@ -6847,6 +6850,41 @@ async function addRequestPayment(tx, input) {
   });
   return receiptNumber;
 }
+async function refundsOfPayments(db, paymentIds) {
+  if (!paymentIds.length) return [];
+  return db.select().from(paymentRefunds).where(inArray3(paymentRefunds.paymentId, [...paymentIds])).orderBy(asc(paymentRefunds.id));
+}
+async function refundById(db, refundId) {
+  return (await db.select().from(paymentRefunds).where(eq9(paymentRefunds.id, refundId)).limit(1))[0] ?? null;
+}
+async function settleRefunded(tx, paymentId) {
+  const [payment] = await tx.select().from(payments).where(eq9(payments.id, paymentId));
+  if (!payment) return;
+  const [entry] = await withRefunds(tx, [payment]);
+  const full = entry.refunded >= entry.amount;
+  if (full && (entry.status === "paid" || entry.status === "needs_a_look")) await tx.update(payments).set({ status: "refunded" }).where(eq9(payments.id, paymentId));
+  if (!full && entry.status === "refunded") await tx.update(payments).set({ status: entry.receiptNumber !== null ? "paid" : "needs_a_look" }).where(eq9(payments.id, paymentId));
+}
+async function addRefund(tx, payment, input) {
+  const [refund] = await tx.insert(paymentRefunds).values({ paymentId: payment.id, amount: input.amount, refundedOn: input.refundedOn, reason: input.reason, reference: input.reference, recordedByUserId: input.recordedByUserId }).returning();
+  await settleRefunded(tx, payment.id);
+  return refund;
+}
+async function cancelRefundRecord(tx, refundId, input) {
+  const [cancelled] = await tx.update(paymentRefunds).set({ cancelledAt: /* @__PURE__ */ new Date(), cancelledByUserId: input.cancelledByUserId, cancelReason: input.reason }).where(and6(eq9(paymentRefunds.id, refundId), isNull6(paymentRefunds.cancelledAt))).returning();
+  if (cancelled) await settleRefunded(tx, cancelled.paymentId);
+  return cancelled ?? null;
+}
+async function writeOffFee(tx, fee, input) {
+  const values2 = { writtenOffAmount: input.amount, writtenOffAt: /* @__PURE__ */ new Date(), writtenOffByUserId: input.writtenOffByUserId, writeOffNote: input.note };
+  await tx.update(engagementFeeLines).set(values2).where(eq9(engagementFeeLines.id, fee.id));
+  Object.assign(fee, values2);
+}
+async function reverseFeeWriteOff(tx, fee) {
+  const values2 = { writtenOffAmount: null, writtenOffAt: null, writtenOffByUserId: null, writeOffNote: null };
+  await tx.update(engagementFeeLines).set(values2).where(eq9(engagementFeeLines.id, fee.id));
+  Object.assign(fee, values2);
+}
 
 // server/onlinePayment.ts
 import { TRPCError as TRPCError9 } from "@trpc/server";
@@ -7193,11 +7231,13 @@ async function requireFee(db, feeLineId, token3) {
 async function feePayPage(db, input) {
   const { fee, engagement, businessName, title } = await requireFee(db, input.feeLineId, input.token);
   const contact = await mainContactOf(db, engagement.id);
-  const { paid, left } = feeBalance(fee, await paymentsOfFees(db, [fee.id]));
+  const { paid, left, writtenOff } = feeBalance(fee, await paymentsOfFees(db, [fee.id]));
   return {
     businessName,
     engagement: title,
     label: fee.label,
+    /** Closed without payment by a Partner: the page says there is nothing more to pay, never the team's word for it. */
+    writtenOff: left === 0 && writtenOff > 0,
     /** What the Pay button asks for: what is left on the fee. */
     amountNaira: left || fee.amount,
     totalNaira: fee.amount,
@@ -7294,7 +7334,7 @@ async function settleFee(db, feeLineId, reference2, source) {
     const attempt = await lockAttempt(tx, fee2, { reference: reference2, amount: known?.amount ?? (left2 || fee2.amount), mode });
     if (countsTowardsFee(attempt.status) || attempt.status === "cancelled") return { kind: "already_paid" };
     if (attempt.status === "needs_a_look") return { kind: "refused", fee: fee2, problem: null };
-    const problem = !ours ? "The Paystack reference does not belong to this fee." : transaction.currency !== "NGN" ? `The payment was not in naira (${transaction.currency || "no currency given"}).` : !amountMatches(transaction, attempt.amount * 100) ? `The amount does not match: ${Number.isFinite(transaction.amount) ? formatNaira(transaction.amount / 100) : "no amount"} paid, ${formatNaira(attempt.amount)} expected.` : left2 === 0 ? "This fee was already paid, so this may be a second payment for it." : attempt.amount > left2 ? `Only ${formatNaira(left2)} was left to pay on this fee, so this payment is more than it.` : null;
+    const problem = !ours ? "The Paystack reference does not belong to this fee." : transaction.currency !== "NGN" ? `The payment was not in naira (${transaction.currency || "no currency given"}).` : !amountMatches(transaction, attempt.amount * 100) ? `The amount does not match: ${Number.isFinite(transaction.amount) ? formatNaira(transaction.amount / 100) : "no amount"} paid, ${formatNaira(attempt.amount)} expected.` : left2 === 0 ? fee2.writtenOffAt ? "This fee was written off, so nothing was left to pay on it." : "This fee was already paid, so this may be a second payment for it." : attempt.amount > left2 ? `Only ${formatNaira(left2)} was left to pay on this fee, so this payment is more than it.` : null;
     if (problem) {
       const receivedNaira = Number.isFinite(transaction.amount) && transaction.amount > 0 ? Math.floor(transaction.amount / 100) : 0;
       await markNeedsALook(tx, attempt, { receivedNaira: transaction.currency === "NGN" ? receivedNaira : 0, problem });
@@ -7490,6 +7530,9 @@ var refused = (code, message) => new TRPCError11({ code, message });
 var requirePayments = (actor) => {
   if (!authorityAllows(actor.authority, "manage_payments")) throw refused("FORBIDDEN", "Recording money is for Finance and the Super Admin.");
 };
+var requireWriteOff = (actor) => {
+  if (!authorityAllows(actor.authority, "write_off_fees")) throw refused("FORBIDDEN", "Only a Partner or the Super Admin can write off a fee.");
+};
 async function listFinance(db, actor, now = Date.now()) {
   if (!authorityAllows(actor.authority, "view_financials")) throw new TRPCError11({ code: "FORBIDDEN", message: "Your role does not include finance." });
   const today = lagosToday(now);
@@ -7512,6 +7555,9 @@ async function listFinance(db, actor, now = Date.now()) {
     dueOn: engagementFeeLines.dueOn,
     paidAt: engagementFeeLines.paidAt,
     writtenOffAmount: engagementFeeLines.writtenOffAmount,
+    writtenOffAt: engagementFeeLines.writtenOffAt,
+    writtenOffByUserId: engagementFeeLines.writtenOffByUserId,
+    writeOffNote: engagementFeeLines.writeOffNote,
     type: engagements.type,
     service: engagements.service,
     businessName: businesses.name,
@@ -7519,7 +7565,8 @@ async function listFinance(db, actor, now = Date.now()) {
     checkBusinessName: businessChecks.businessName
   }).from(engagementFeeLines).innerJoin(engagements, eq14(engagementFeeLines.engagementId, engagements.id)).leftJoin(businesses, eq14(engagements.businessId, businesses.id)).leftJoin(businessChecks, eq14(engagements.businessCheckId, businessChecks.id)).orderBy(asc4(engagementFeeLines.dueOn), asc4(engagementFeeLines.id));
   const ledger = await paymentsOfFees(db, feeRows.map((row) => row.id));
-  const people = await namesOf(db, ledger.flatMap((entry) => [entry.recordedByUserId, entry.cancelledByUserId]));
+  const refunds = await refundsOfPayments(db, ledger.map((entry) => entry.id));
+  const people = await namesOf(db, [...ledger.flatMap((entry) => [entry.recordedByUserId, entry.cancelledByUserId]), ...refunds.flatMap((refund) => [refund.recordedByUserId, refund.cancelledByUserId]), ...feeRows.map((row) => row.writtenOffByUserId)]);
   const requests = requestRows.map((row) => ({ ...row, title: PAYMENT_ITEM_TITLES[row.item], client: row.businessName || row.fullName, paid: row.status === "confirmed" }));
   const fees = feeRows.map((row) => {
     const own = ledger.filter((entry) => entry.feeLineId === row.id);
@@ -7535,12 +7582,13 @@ async function listFinance(db, actor, now = Date.now()) {
       paidAmount: paid,
       left,
       reference: feeReference(row.id),
+      writtenOff: writeOffView(row, people),
       client: row.businessName ?? row.checkBusinessName ?? row.contactName ?? "",
       engagement: engagementTitle(row.type, row.service),
       // A fee is owed once it is set (there are no proposals to sign), and late once its due date passes with something left.
       late: left > 0 && row.dueOn !== null && row.dueOn < today,
       // Attempts that never moved money are left out; a cancelled payment stays, marked cancelled.
-      payments: own.filter((entry) => entry.status !== "started" && entry.status !== "failed").map((entry) => paymentView(entry, people))
+      payments: own.filter((entry) => entry.status !== "started" && entry.status !== "failed").map((entry) => paymentView(entry, people, refunds))
     };
   });
   const needsALook2 = fees.flatMap((fee) => fee.payments.filter((payment) => payment.status === "needs_a_look").map((payment) => ({ ...payment, feeLineId: fee.id, label: fee.label, client: fee.client, engagement: fee.engagement, left: fee.left })));
@@ -7554,7 +7602,7 @@ async function listFinance(db, actor, now = Date.now()) {
       owed: sum(requests.filter((row) => !row.paid).map((row) => row.amount)) + sum(fees.map((row) => row.left)),
       late: sum(fees.filter((row) => row.late).map((row) => row.left))
     },
-    can: { record: authorityAllows(actor.authority, "manage_payments") }
+    can: { record: authorityAllows(actor.authority, "manage_payments"), writeOff: authorityAllows(actor.authority, "write_off_fees") }
   };
 }
 async function namesOf(db, ids) {
@@ -7563,7 +7611,22 @@ async function namesOf(db, ids) {
   const rows = await db.select({ id: users.id, name: users.name, email: users.email }).from(users).where(inArray4(users.id, wanted));
   return new Map(rows.map((row) => [row.id, row.name ?? row.email ?? "Someone on the team"]));
 }
-function paymentView(entry, people) {
+function writeOffView(fee, people) {
+  if (fee.writtenOffAt === null || fee.writtenOffAmount === null) return null;
+  return { amount: fee.writtenOffAmount, at: fee.writtenOffAt, by: fee.writtenOffByUserId !== null ? people.get(fee.writtenOffByUserId) ?? null : null, note: fee.writeOffNote };
+}
+var refundView = (refund, people) => ({
+  id: refund.id,
+  amount: refund.amount,
+  refundedOn: refund.refundedOn,
+  reason: refund.reason,
+  reference: refund.reference,
+  recordedBy: people.get(refund.recordedByUserId) ?? null,
+  cancelledAt: refund.cancelledAt,
+  cancelReason: refund.cancelReason,
+  cancelledBy: refund.cancelledByUserId !== null ? people.get(refund.cancelledByUserId) ?? null : null
+});
+function paymentView(entry, people, refunds = []) {
   return {
     id: entry.id,
     status: entry.status,
@@ -7582,7 +7645,10 @@ function paymentView(entry, people) {
     cancelReason: entry.cancelReason,
     cancelledBy: entry.cancelledByUserId !== null ? people.get(entry.cancelledByUserId) ?? null : null,
     /** Money recorded by hand that still counts and has no refund against it. */
-    canCancel: entry.method !== "paystack" && entry.status === "paid" && entry.refunded === 0
+    canCancel: entry.method !== "paystack" && entry.status === "paid" && entry.refunded === 0,
+    /** What can still be refunded of money that was received: a paid payment, or one that needs a look. */
+    refundable: entry.status === "paid" || entry.status === "needs_a_look" ? entry.amount - entry.refunded : 0,
+    refunds: refunds.filter((refund) => refund.paymentId === entry.id).map((refund) => refundView(refund, people))
   };
 }
 async function recordPayment(db, actor, input, today = lagosDay()) {
@@ -7684,6 +7750,102 @@ async function acceptPayment(db, actor, input) {
   await sendFeeReceipt(db, { feeLineId: payment.feeLineId, paymentId: accepted.id, amount: accepted.amount, left, receiptNumber: accepted.receiptNumber, paid: { on: accepted.receivedOn ?? lagosDay() }, test: accepted.mode === "test", opened });
   return { success: true, receipt: receiptNumberLabel(accepted.receiptNumber), left, opened };
 }
+function refundEmail(input) {
+  return {
+    subject: `${input.test ? "TEST: " : ""}Your refund: ${input.label}`,
+    body: [
+      ...input.test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : [],
+      `Hello ${input.name.split(" ")[0] ?? ""},`,
+      "",
+      `We have refunded ${formatNaira(input.amount)} of your payment for the ${input.title} (${input.label}) on ${dayLabel(input.refundedOn)}.${input.receipt ? ` It was paid with receipt ${input.receipt}.` : ""}`,
+      "A bank can take a few days to show it.",
+      "",
+      ...input.reference ? [`Refund reference: ${input.reference}`, ""] : [],
+      "Any questions, reply to this email.",
+      "",
+      BRAND.organisationName
+    ].join("\n")
+  };
+}
+async function recordRefund(db, actor, input, today = lagosDay()) {
+  requirePayments(actor);
+  if (input.refundedOn > today) throw refused("BAD_REQUEST", "The day of the refund cannot be in the future.");
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw refused("BAD_REQUEST", "Say why the money was refunded.");
+  const reference2 = input.reference?.trim() || null;
+  const payment = await paymentById(db, input.paymentId);
+  if (!payment) throw refused("NOT_FOUND", "We could not find this payment.");
+  if (payment.feeLineId === null) throw refused("CONFLICT", "This payment is not against a fee.");
+  const result = await db.transaction(async (tx) => {
+    const fee = await lockFee(tx, payment.feeLineId);
+    if (!fee) throw refused("NOT_FOUND", "We could not find this fee.");
+    const entry = (await paymentsOfFees(tx, [fee.id])).find((item2) => item2.id === payment.id);
+    if (!entry || entry.status !== "paid" && entry.status !== "needs_a_look") throw refused("CONFLICT", "Only money that was received, and not refunded in full, can be refunded.");
+    const refundable = entry.amount - entry.refunded;
+    if (input.amount > refundable) throw refused("BAD_REQUEST", `Only ${formatNaira(refundable)} of this payment is left to refund.`);
+    const refund = await addRefund(tx, entry, { amount: input.amount, refundedOn: input.refundedOn, reason, reference: reference2, recordedByUserId: actor.id });
+    const after = await refreshFeePaid(tx, fee);
+    await recordAudit(tx, { action: "payment_refund_recorded", actorUserId: actor.id, details: { engagementId: fee.engagementId, feeLineId: fee.id, paymentId: entry.id, refundId: refund.id, amount: refund.amount, reason, ...reference2 ? { reference: reference2 } : {}, left: after.left } });
+    return { refund, entry, left: after.left };
+  });
+  const found = await feeContext(db, payment.feeLineId);
+  if (found?.payer) {
+    const message = refundEmail({ name: found.payer.name, title: found.title, label: found.fee.label, amount: result.refund.amount, refundedOn: result.refund.refundedOn, receipt: result.entry.receiptNumber !== null ? receiptNumberLabel(result.entry.receiptNumber) : null, reference: reference2, test: result.entry.mode === "test" });
+    await deliverEmail({ to: found.payer.email, sender: "business_support", idempotencyKey: `payment_refunds:${result.refund.id}:client`, subject: message.subject, body: message.body }).catch((error) => console.error("[Fees] The refund email could not be sent:", error instanceof Error ? error.message : "unknown error"));
+  }
+  return { success: true, left: result.left };
+}
+async function cancelRefund(db, actor, input) {
+  requirePayments(actor);
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw refused("BAD_REQUEST", "Say why the refund is cancelled.");
+  const refund = await refundById(db, input.refundId);
+  const payment = refund ? await paymentById(db, refund.paymentId) : null;
+  if (!refund || !payment || payment.feeLineId === null) throw refused("NOT_FOUND", "We could not find this refund.");
+  const left = await db.transaction(async (tx) => {
+    const fee = await lockFee(tx, payment.feeLineId);
+    if (!fee) throw refused("NOT_FOUND", "We could not find this fee.");
+    const cancelled = await cancelRefundRecord(tx, refund.id, { cancelledByUserId: actor.id, reason });
+    if (!cancelled) throw refused("CONFLICT", "This refund is already cancelled.");
+    const after = await refreshFeePaid(tx, fee);
+    await recordAudit(tx, { action: "payment_refund_cancelled", actorUserId: actor.id, details: { engagementId: fee.engagementId, feeLineId: fee.id, paymentId: payment.id, refundId: refund.id, amount: refund.amount, reason, left: after.left } });
+    return after.left;
+  });
+  return { success: true, left };
+}
+async function writeOff(db, actor, input) {
+  requireWriteOff(actor);
+  const note = input.note.trim();
+  if (note.length < 3) throw refused("BAD_REQUEST", "Say why the fee is written off.");
+  const amount = await db.transaction(async (tx) => {
+    const fee = await lockFee(tx, input.feeLineId);
+    if (!fee) throw refused("NOT_FOUND", "We could not find this fee.");
+    if (fee.writtenOffAt) throw refused("CONFLICT", "This fee is already written off.");
+    await carryOver(tx, fee);
+    const { left } = await balanceOf(tx, fee);
+    if (left === 0) throw refused("CONFLICT", "Nothing is left to pay on this fee.");
+    await writeOffFee(tx, fee, { amount: left, note, writtenOffByUserId: actor.id });
+    await recordAudit(tx, { action: "fee_written_off", actorUserId: actor.id, details: { engagementId: fee.engagementId, feeLineId: fee.id, amount: left, note } });
+    return left;
+  });
+  return { success: true, writtenOff: amount };
+}
+async function reverseWriteOff(db, actor, input) {
+  requireWriteOff(actor);
+  const reason = input.reason.trim();
+  if (reason.length < 3) throw refused("BAD_REQUEST", "Say why the write-off is reversed.");
+  const left = await db.transaction(async (tx) => {
+    const fee = await lockFee(tx, input.feeLineId);
+    if (!fee) throw refused("NOT_FOUND", "We could not find this fee.");
+    if (!fee.writtenOffAt) throw refused("CONFLICT", "This fee is not written off.");
+    const was = { amount: fee.writtenOffAmount, note: fee.writeOffNote, by: fee.writtenOffByUserId };
+    await reverseFeeWriteOff(tx, fee);
+    const after = await refreshFeePaid(tx, fee);
+    await recordAudit(tx, { action: "fee_write_off_reversed", actorUserId: actor.id, details: { engagementId: fee.engagementId, feeLineId: fee.id, amount: was.amount, note: was.note, writtenOffByUserId: was.by, reason, left: after.left } });
+    return after.left;
+  });
+  return { success: true, left };
+}
 var anyCounted = (entries) => entries.some((entry) => countsTowardsFee(entry.status));
 
 // server/agreements.ts
@@ -7704,13 +7866,14 @@ async function staffFees(db, actor, engagementId) {
   if (!canSeeFees(actor)) throw new TRPCError12({ code: "FORBIDDEN", message: "Fees are for the team leading the engagement and Finance." });
   const feeLines = await feeLinesOf(db, engagementId);
   const ledger = await paymentsOfFees(db, feeLines.map((line) => line.id));
-  const people = await namesOf(db, ledger.flatMap((entry) => [entry.recordedByUserId, entry.cancelledByUserId]));
+  const refunds = await refundsOfPayments(db, ledger.map((entry) => entry.id));
+  const people = await namesOf(db, [...ledger.flatMap((entry) => [entry.recordedByUserId, entry.cancelledByUserId]), ...refunds.flatMap((refund) => [refund.recordedByUserId, refund.cancelledByUserId]), ...feeLines.map((line) => line.writtenOffByUserId)]);
   const seesNotes = authorityAllows(actor.authority, "view_financials");
   return {
     feeLines: feeLines.map((line) => {
       const own = ledger.filter((entry) => entry.feeLineId === line.id);
       const { paid, left } = feeBalance(line, own);
-      const shown = own.filter((entry) => entry.status !== "started" && entry.status !== "failed").map((entry) => paymentView(entry, people));
+      const shown = own.filter((entry) => entry.status !== "started" && entry.status !== "failed").map((entry) => paymentView(entry, people, refunds));
       return {
         id: line.id,
         label: line.label,
@@ -7724,7 +7887,8 @@ async function staffFees(db, actor, engagementId) {
         /** Billed: it has an invoice number or a payment, so it can be changed but not removed. */
         billed: line.invoiceNumber !== null || own.length > 0 || line.writtenOffAt !== null,
         invoice: line.invoiceNumber !== null ? invoiceNumberLabel(line.invoiceNumber) : null,
-        payments: seesNotes ? shown : shown.map((payment) => ({ ...payment, note: null }))
+        payments: seesNotes ? shown : shown.map((payment) => ({ ...payment, note: null, refunds: payment.refunds.map((refund) => ({ ...refund, reason: "", reference: null })) })),
+        writtenOff: writeOffView(line, people)
       };
     }),
     total: feeTotal(feeLines),
@@ -7732,7 +7896,7 @@ async function staffFees(db, actor, engagementId) {
     /** Waiting for its first payment: the client sees only the fee to pay until one is paid. */
     opensOnPayment: engagement.opensOnPayment,
     online: paystackMode() !== "off",
-    can: { edit: authorityAllows(actor.authority, "manage_engagements"), sendLink: canSendLinks(actor), approveUnpaidWork: mayApproveUnpaidWork(actor), recordPayments: authorityAllows(actor.authority, "manage_payments") }
+    can: { edit: authorityAllows(actor.authority, "manage_engagements"), sendLink: canSendLinks(actor), approveUnpaidWork: mayApproveUnpaidWork(actor), recordPayments: authorityAllows(actor.authority, "manage_payments"), writeOff: authorityAllows(actor.authority, "write_off_fees") }
   };
 }
 function initialFeeRows(engagementId, lines) {
@@ -13187,7 +13351,17 @@ var financeRouter = router({
     note: text3(500).min(1, "Add the bank's reference, or say how the money came.")
   })).mutation(async ({ ctx, input }) => guarded(async () => recordPayment(await engagementDb(), ctx.actor, input))),
   cancelPayment: finance.input(z15.object({ paymentId: id, reason: text3(500).min(3, "Say why the payment is cancelled.") })).mutation(async ({ ctx, input }) => guarded(async () => cancelPayment(await engagementDb(), ctx.actor, input))),
-  acceptPayment: finance.input(z15.object({ paymentId: id })).mutation(async ({ ctx, input }) => guarded(async () => acceptPayment(await engagementDb(), ctx.actor, input)))
+  acceptPayment: finance.input(z15.object({ paymentId: id })).mutation(async ({ ctx, input }) => guarded(async () => acceptPayment(await engagementDb(), ctx.actor, input))),
+  recordRefund: finance.input(z15.object({
+    paymentId: id,
+    amount: z15.number().int("Whole naira only.").positive("Enter the amount refunded.").max(AGREEMENT_LIMITS.amount),
+    refundedOn: z15.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the day of the refund."),
+    reason: text3(500).min(3, "Say why the money was refunded."),
+    reference: text3(100).nullable()
+  })).mutation(async ({ ctx, input }) => guarded(async () => recordRefund(await engagementDb(), ctx.actor, input))),
+  cancelRefund: finance.input(z15.object({ refundId: id, reason: text3(500).min(3, "Say why the refund is cancelled.") })).mutation(async ({ ctx, input }) => guarded(async () => cancelRefund(await engagementDb(), ctx.actor, input))),
+  writeOff: finance.input(z15.object({ feeLineId: id, note: text3(500).min(3, "Say why the fee is written off.") })).mutation(async ({ ctx, input }) => guarded(async () => writeOff(await engagementDb(), ctx.actor, input))),
+  reverseWriteOff: finance.input(z15.object({ feeLineId: id, reason: text3(500).min(3, "Say why the write-off is reversed.") })).mutation(async ({ ctx, input }) => guarded(async () => reverseWriteOff(await engagementDb(), ctx.actor, input)))
 });
 var engagementRouter = router({ staff: staffRouter, client: clientRouter, finance: financeRouter });
 

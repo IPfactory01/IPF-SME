@@ -53,7 +53,7 @@ export default function FeePayPage() {
   }
   if (page.error || !page.data) return invalid(page.error?.message);
 
-  const { businessName, engagement, label, amountNaira, totalNaira, paidNaira, reference, mode, state, contact } = page.data;
+  const { businessName, engagement, label, amountNaira, totalNaira, paidNaira, reference, mode, state, contact, writtenOff } = page.data;
   const amount = formatNaira(amountNaira);
   const banner = mode === "test" ? <TestModeBanner /> : null;
 
@@ -63,8 +63,8 @@ export default function FeePayPage() {
         {banner}
         <div className="space-y-4">
           <CheckCircle2 className="h-10 w-10 text-brand" aria-hidden />
-          <h1 className="font-serif text-3xl font-normal">Already paid</h1>
-          <p className="text-ink-soft">{label} for the {engagement} is paid. Thank you.</p>
+          <h1 className="font-serif text-3xl font-normal">{writtenOff && !paidMeanwhile ? "Nothing more to pay" : "Already paid"}</h1>
+          <p className="text-ink-soft">{writtenOff && !paidMeanwhile ? `There is nothing more to pay on ${label} for the ${engagement}.` : `${label} for the ${engagement} is paid. Thank you.`}</p>
         </div>
       </PaymentShell>
     );

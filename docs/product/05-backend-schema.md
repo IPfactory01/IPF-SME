@@ -128,7 +128,7 @@ and the room says it is not set up. Vocabulary and the who-sees-what rules: `sha
 ### The payments ledger (migration 0022, batch F: approved 10 November 2026; F1 built, applied with the ledger code)
 
 What it does and who does it is in the App flow (section 3.1); the code that writes it is `server/ledger.ts`, the
-only writer of the payments, the counters and a fee's paid state. Refunds and write-offs come with F2. Additive: three new tables and five columns on
+only writer of the payments, the refunds, the counters and a fee's paid state and write-off (F1 and F2 built). Additive: three new tables and five columns on
 `engagement_fee_lines`; nothing is dropped. It is applied just before the ledger code ships, not earlier: until then
 Save the fees deletes and re-adds every fee, which the ledger's link from a payment to its fee refuses
 (`docs/database-migrations.md`).
@@ -158,10 +158,10 @@ its note and who confirmed it. Receipt numbers go to these in the order they wer
 in the order they were set, and each counter is left at the last number given. Each statement skips what is already
 there, so it can run again. Its guarded apply script is `drizzle/supabase/apply-0022-payments-ledger.sql`.
 
-**Audit actions:** `fee_payment_recorded`, `fee_payment_cancelled` and `payment_accepted` (built, F1; in the audit
-table below); to add with F2: `payment_refund_recorded`, `payment_refund_cancelled`, `fee_written_off` and
-`fee_write_off_reversed`, each with the fee or payment, the amount and the reason. `engagement_fee_paid` (the Paid tick)
-is retired and kept so older rows read.
+**Audit actions** (in the audit table below): `fee_payment_recorded`, `fee_payment_cancelled` and `payment_accepted`
+(F1); `payment_refund_recorded`, `payment_refund_cancelled`, `fee_written_off` and `fee_write_off_reversed` (F2), each
+with the fee or payment, the amount and the reason. `engagement_fee_paid` (the Paid tick) is retired and kept so older
+rows read.
 
 **Who sees it:** as for `engagement_fee_lines`, plus Finance (`view_financials`). Recording, cancelling, accepting and
 refunds need `manage_payments`; write-offs a new permission, `write_off_fees`, for the Partner role (and the Super
@@ -192,7 +192,7 @@ or one listed there is missing here.
 | Deliverables and content | `engagement_deliverable_approved`, `engagement_deliverable_shared`, `engagement_deliverable_accepted`, `engagement_content_saved`, `engagement_content_deleted`, `engagement_content_approved`, `engagement_content_changes_requested` | A Deliverable approved, shared or signed off; a content piece saved or deleted by the team, approved or sent back by the owner |
 | The fix | `engagement_measure_saved`, `engagement_checkin_recorded` | The Measure of Success set; a Weekly Check-in recorded |
 | More work | `service_requested`, `service_request_handled` | A client asking for another service; the desk handling or declining it |
-| Fees | `engagement_fees_saved`, `engagement_fee_paid_online`, `engagement_fee_online_refused`, `engagement_fee_link_sent`, `engagement_fees_dated_on_delivery`, `fee_payment_recorded`, `fee_payment_cancelled`, `payment_accepted` | The fee schedule saved (total, lines, any removed); paid on Paystack (the payment and its receipt number); an online payment that needs a look; a pay link sent; a service's second half dated seven days after its main output was shared (R36); money recorded by hand (amount, how, receipt number, what is left); a payment cancelled (the reason); a payment that needed a look accepted |
+| Fees | `engagement_fees_saved`, `engagement_fee_paid_online`, `engagement_fee_online_refused`, `engagement_fee_link_sent`, `engagement_fees_dated_on_delivery`, `fee_payment_recorded`, `fee_payment_cancelled`, `payment_accepted`, `payment_refund_recorded`, `payment_refund_cancelled`, `fee_written_off`, `fee_write_off_reversed` | The fee schedule saved (total, lines, any removed); paid on Paystack (the payment and its receipt number); an online payment that needs a look; a pay link sent; a service's second half dated seven days after its main output was shared (R36); money recorded by hand (amount, how, receipt number, what is left); a payment cancelled (the reason); a payment that needed a look accepted; a refund recorded or cancelled (amount, reason, reference); what was left of a fee written off (amount, note), and a write-off reversed (what it was, who, why) |
 | Retired, kept so older rows still read | `payment_proof_received`, `engagement_agreement_saved`, `engagement_agreement_sent`, `engagement_agreement_revised`, `engagement_agreement_accepted`, `engagement_fee_paid` | Proof of payment uploads (before Paystack); proposals and their acceptance (removed 6 November 2026); the Paid tick (replaced by the ledger, F1). Nothing writes them now |
 
 ## 3. JUMP-era tables (legacy)
@@ -226,12 +226,12 @@ authority is the union of their roles, any profile the Super Admin set, and the 
 | admin | Nothing by default (capabilities are granted one by one) |
 | desk_lead | view_all_businesses, manage_engagements, assign_engagements, review_engagements, manage_scheduling, manage_communications, view_financials |
 | analyst | view_assigned_businesses, manage_engagements |
-| partner | view_assigned_businesses, review_engagements, view_financials, approve_work_before_payment |
+| partner | view_assigned_businesses, review_engagements, view_financials, approve_work_before_payment, write_off_fees |
 | subject_matter_expert | view_assigned_businesses, contribute_engagements |
 | finance | manage_payments, view_financials |
 
 With batch F (approved 10 November 2026, section 2): a fee payment by hand moved from `manage_engagements` (the Paid
-tick) to `manage_payments` (built, F1); `write_off_fees` is added to the partner role with F2.
+tick) to `manage_payments` (F1); `write_off_fees`, for the partner role, writes off fees and reverses a write-off (F2).
 
 **Privileged access (migration 0012).** Everyone with an internal role signs in with a password and a six-digit code
 from an authenticator app. A role is given or removed only by someone whose own highest role ranks above it

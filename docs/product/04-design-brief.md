@@ -372,7 +372,10 @@ be previewed as the client sees it (**Preview as client**, read only).
   danger border; each fee shows what is paid and what is left, and opens to its payments (receipt number, day, how,
   amount, who); the actions sit beside the fee for those who may use them: **Record a payment** (an inline form on the
   brand tint), **Cancel** with a reason, **Accept**. A cancelled payment stays in the list, struck through and marked
-  cancelled. **Record a refund** and **Write off** come with F2. The engagement's Fees use the same list and form.
+  cancelled. **Record a refund** opens a form under the payment, and each refund sits under its payment, with
+  **Cancel**; **Write off** (a Partner or the Super Admin) asks for a note and its button is in the danger colour, and a
+  written-off fee shows who wrote it off and why, with **Reverse the write-off**. The engagement's Fees use the same
+  list and forms. A pay link for a fee closed by a write-off says *Nothing more to pay*.
 
 ## 13. Accessibility
 

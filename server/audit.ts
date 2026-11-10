@@ -74,6 +74,12 @@ export const AUDIT_ACTIONS = [
   "fee_payment_recorded",
   "fee_payment_cancelled",
   "payment_accepted",
+  // Refunds and write-offs (batch F2): a refund recorded against its payment, or cancelled when recorded by mistake;
+  // what is left of a fee written off by a Partner or the Super Admin, and a write-off reversed.
+  "payment_refund_recorded",
+  "payment_refund_cancelled",
+  "fee_written_off",
+  "fee_write_off_reversed",
   // Retired with the ledger (batch F): the Paid tick. No longer written, kept so older log rows still read.
   "engagement_fee_paid",
   // Retired with proposals (ET, 6 November 2026): no longer written, kept so older log rows still read.

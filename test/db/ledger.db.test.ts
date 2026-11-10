@@ -453,6 +453,132 @@ for (const target of targets) {
       });
     });
 
+    describe("refunds and write-offs (F2)", () => {
+      it("records a refund against a payment: the fee is owed again and the owner told; never more than is left; a refund recorded by mistake is cancelled", async () => {
+        const { email, owner, engagementId } = await digitalClient("refund");
+        const [first] = await feesOf(engagementId);
+        const finance = await staffMember(["finance"], "Fola Refund");
+        const paid = await (await finance.call()).engagement.finance.recordPayment(byHand(first.id, 470_000));
+        const [payment] = await ledgerOf(first.id);
+        const refund = (amount: number, extra: Partial<{ refundedOn: string; reason: string; reference: string | null }> = {}) =>
+          ({ paymentId: payment.id, amount, refundedOn: lagosDay(), reason: "Overpaid by mistake", reference: null as string | null, ...extra });
+        // Only Finance and the Super Admin record refunds; a Partner writes off, but does not record money.
+        for (const roles of [["analyst"], ["desk_lead", "partner"]] as const) {
+          await expect((await (await staffMember([...roles], `No refund ${roles.join(" ")}`)).call()).engagement.finance.recordRefund(refund(1000))).rejects.toMatchObject({ code: "FORBIDDEN" });
+        }
+        await expect((await finance.call()).engagement.finance.recordRefund(refund(1000, { refundedOn: addDays(lagosDay(), 1) }))).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        mocked.deliverEmail.mockClear();
+        expect(await (await finance.call()).engagement.finance.recordRefund(refund(100_000, { reference: "RF-1001" }))).toEqual({ success: true, left: 100_000 });
+        const told = emails().find(sent => sent.to === email)!;
+        expect(told.subject).toBe("Your refund: Month 1 service fee, payable on starting");
+        expect(told.body).toContain("We have refunded ₦100,000 of your payment for the Digital Marketing (Month 1 service fee, payable on starting)");
+        expect(told.body).toContain(`It was paid with receipt ${paid.receipt}.`);
+        expect(told.body).toContain("Refund reference: RF-1001");
+        expect((await feesOf(engagementId))[0].paidAt).toBeNull();
+        const room = (await (await owner.call()).engagement.client.room())!;
+        expect(room.fees[0]).toMatchObject({ paid: false, paidAmount: 370_000, left: 100_000, receipts: [{ number: paid.receipt, amount: 470_000, refunded: 100_000 }] });
+
+        await expect((await finance.call()).engagement.finance.recordRefund(refund(400_000))).rejects.toMatchObject({ code: "BAD_REQUEST", message: "Only ₦370,000 of this payment is left to refund." });
+        await (await finance.call()).engagement.finance.recordRefund(refund(370_000));
+        expect((await ledgerOf(first.id))[0]).toMatchObject({ status: "refunded" });
+        // A payment with a refund against it is refunded, not cancelled.
+        await expect((await finance.call()).engagement.finance.cancelPayment({ paymentId: payment.id, reason: "Wrong client" })).rejects.toMatchObject({ code: "CONFLICT" });
+
+        // The second refund was recorded by mistake: cancelled, it stays on the record and the payment counts again.
+        const refunds = await db.select().from(schema.paymentRefunds).where(eq(schema.paymentRefunds.paymentId, payment.id)).orderBy(schema.paymentRefunds.id);
+        expect(await (await finance.call()).engagement.finance.cancelRefund({ refundId: refunds[1].id, reason: "Recorded twice" })).toEqual({ success: true, left: 100_000 });
+        expect((await ledgerOf(first.id))[0]).toMatchObject({ status: "paid" });
+        expect(await db.select().from(schema.paymentRefunds).where(eq(schema.paymentRefunds.paymentId, payment.id))).toHaveLength(2);
+        await expect((await finance.call()).engagement.finance.cancelRefund({ refundId: refunds[1].id, reason: "Again" })).rejects.toMatchObject({ code: "CONFLICT" });
+      });
+
+      it("refunds a payment that needs a look: refunded in part, the rest is accepted; refunded in full, it leaves the list", async () => {
+        const { owner, engagementId } = await digitalClient("refund-look");
+        const [first, second] = await feesOf(engagementId);
+        const finance = await staffMember(["finance"], "Fola Look Refund");
+        // A checkout opens for the whole first fee, then ₦200,000 arrives by transfer: Paystack's ₦470,000 no longer fits.
+        const link = linkParts((await (await owner.call()).engagement.client.room())!.fees[0]!.payPath!);
+        await (await browser().call()).onlinePayment.feeStart(link);
+        const reference = paystack.initialized.at(-1)!.reference as string;
+        await (await finance.call()).engagement.finance.recordPayment(byHand(first.id, 200_000));
+        pay(reference);
+        await webhook(charged(reference));
+        const [looked] = (await ledgerOf(first.id)).filter((row: { status: string }) => row.status === "needs_a_look");
+        expect(looked.note).toBe("Only ₦270,000 was left to pay on this fee, so this payment is more than it.");
+        await expect((await finance.call()).engagement.finance.acceptPayment({ paymentId: looked.id })).rejects.toMatchObject({ code: "CONFLICT" });
+        // ₦200,000 goes back through Paystack and is recorded; the rest fits and counts.
+        await (await finance.call()).engagement.finance.recordRefund({ paymentId: looked.id, amount: 200_000, refundedOn: lagosDay(), reason: "Paid by transfer as well", reference: null });
+        expect((await ledgerOf(first.id)).find((row: { id: number }) => row.id === looked.id)).toMatchObject({ status: "needs_a_look" });
+        expect(await (await finance.call()).engagement.finance.acceptPayment({ paymentId: looked.id })).toMatchObject({ success: true, left: 0 });
+        expect((await feesOf(engagementId))[0].paidAt).not.toBeNull();
+
+        // A second payment for a fee already paid (an old checkout completed later), refunded in full: it never
+        // counted, and it leaves the list.
+        await (await finance.call()).engagement.finance.recordPayment(byHand(second.id, 470_000));
+        const twice = `${(await (await superAdmin.call()).engagement.staff.fees({ engagementId })).feeLines[1]!.reference}-0a0b0c0d`;
+        paystack.transactions.set(twice, { reference: twice, status: "success", amount: 47_000_000, currency: "NGN" });
+        await webhook(charged(twice));
+        const [again] = (await ledgerOf(second.id)).filter((row: { status: string }) => row.status === "needs_a_look");
+        expect(again).toMatchObject({ paystackReference: twice, amount: 470_000 });
+        await (await finance.call()).engagement.finance.recordRefund({ paymentId: again.id, amount: 470_000, refundedOn: lagosDay(), reason: "Paid twice", reference: "RF-2" });
+        expect((await ledgerOf(second.id)).find((row: { id: number }) => row.id === again.id)).toMatchObject({ status: "refunded", receiptNumber: null });
+        expect((await (await finance.call()).engagement.finance.list()).needsALook.find(item => item.id === again.id)).toBeUndefined();
+        expect((await feesOf(engagementId))[1].paidAt).not.toBeNull();
+        // Cancelled by mistake, the refund no longer stands and the payment needs a look again: it never counted.
+        const [refund] = await db.select().from(schema.paymentRefunds).where(eq(schema.paymentRefunds.paymentId, again.id));
+        await (await finance.call()).engagement.finance.cancelRefund({ refundId: refund.id, reason: "Not refunded yet" });
+        expect((await ledgerOf(second.id)).find((row: { id: number }) => row.id === again.id)).toMatchObject({ status: "needs_a_look" });
+      });
+
+      it("writes off what is left, by a Partner or the Super Admin with a note: nothing more to pay, never late, reversible", async () => {
+        const { owner, engagementId } = await digitalClient("write-off");
+        const lines = await feesOf(engagementId);
+        const first = lines[0];
+        // Month 1 was due ten days ago: it is late and the work is paused.
+        await (await superAdmin.call()).engagement.staff.openRoomNow({ engagementId });
+        const schedule = (overrides: Record<number, Partial<{ amount: number; dueOn: string | null }>> = {}) =>
+          lines.map((line: { id: number; label: string; amount: number; dueOn: string | null }, index: number) => ({ id: line.id, label: line.label, amount: line.amount, dueOn: index === 0 ? addDays(lagosDay(), -10) : line.dueOn, ...overrides[index] }));
+        await (await superAdmin.call()).engagement.staff.saveFees({ engagementId, feeLines: schedule() });
+        expect((await (await owner.call()).engagement.client.room())!.hold).toMatchObject({ state: "paused" });
+        const sent = await (await superAdmin.call()).engagement.staff.sendFeeLink({ feeLineId: first.id });
+        const link = { feeLineId: first.id, token: sent.url.split("/").at(-1)! };
+        const finance = await staffMember(["finance"], "Fola Write");
+        await (await finance.call()).engagement.finance.recordPayment(byHand(first.id, 200_000));
+
+        // Finance records money but does not write it off; nor does a Vice President or Senior Associate.
+        await expect((await finance.call()).engagement.finance.writeOff({ feeLineId: first.id, note: "Goodwill" })).rejects.toMatchObject({ code: "FORBIDDEN", message: "Only a Partner or the Super Admin can write off a fee." });
+        await expect((await (await staffMember(["desk_lead"], "Desk Write")).call()).engagement.finance.writeOff({ feeLineId: first.id, note: "Goodwill" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        const partner = await staffMember(["desk_lead", "partner"], "Pat Partner");
+        await expect((await partner.call()).engagement.finance.writeOff({ feeLineId: first.id, note: "no" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        expect(await (await partner.call()).engagement.finance.writeOff({ feeLineId: first.id, note: "Agreed on the call: goodwill for the delay" })).toEqual({ success: true, writtenOff: 270_000 });
+
+        // The client sees nothing more to pay; it is not late and the work is not paused.
+        const room = (await (await owner.call()).engagement.client.room())!;
+        expect(room.fees[0]).toMatchObject({ paid: true, writtenOff: true, left: 0, payPath: null });
+        expect(room.hold).toBeNull();
+        expect(await (await browser().call()).onlinePayment.feePage(link)).toMatchObject({ state: "paid", writtenOff: true });
+        expect(await (await browser().call()).onlinePayment.feeStart(link)).toEqual({ alreadyPaid: true });
+        await expect((await finance.call()).engagement.finance.recordPayment(byHand(first.id, 1000))).rejects.toMatchObject({ code: "CONFLICT", message: "This fee is written off. Reverse the write-off first." });
+        await expect((await partner.call()).engagement.finance.writeOff({ feeLineId: first.id, note: "Again" })).rejects.toMatchObject({ code: "CONFLICT" });
+        await expect((await superAdmin.call()).engagement.staff.saveFees({ engagementId, feeLines: schedule({ 0: { amount: 300_000 } }) })).rejects.toMatchObject({ code: "CONFLICT" });
+        await expect((await superAdmin.call()).engagement.staff.saveFees({ engagementId, feeLines: schedule().slice(1) })).rejects.toMatchObject({ code: "CONFLICT" });
+        const listed = (await (await partner.call()).engagement.finance.list()).fees.find(fee => fee.id === first.id)!;
+        expect(listed).toMatchObject({ paid: true, left: 0, writtenOff: { amount: 270_000, by: "Pat Partner", note: "Agreed on the call: goodwill for the delay" } });
+
+        // A refund after the write-off is owed again; reversing the write-off makes what it covered owed too.
+        const [payment] = await ledgerOf(first.id);
+        await (await finance.call()).engagement.finance.recordRefund({ paymentId: payment.id, amount: 200_000, refundedOn: lagosDay(), reason: "Returned at the client's request", reference: null });
+        expect((await (await owner.call()).engagement.client.room())!.fees[0]).toMatchObject({ paid: false, left: 200_000 });
+        expect(await (await partner.call()).engagement.finance.reverseWriteOff({ feeLineId: first.id, reason: "The client asked to pay after all" })).toEqual({ success: true, left: 470_000 });
+        expect((await feesOf(engagementId))[0]).toMatchObject({ writtenOffAmount: null, writtenOffAt: null });
+        const audits = await db.select().from(schema.adminAccessAuditEvents).where(sql`${schema.adminAccessAuditEvents.action} in ('fee_written_off', 'fee_write_off_reversed')`);
+        expect(details(audits.filter((row: { details: string }) => JSON.parse(row.details).feeLineId === first.id))).toEqual([
+          expect.objectContaining({ feeLineId: first.id, amount: 270_000, note: "Agreed on the call: goodwill for the delay" }),
+          expect.objectContaining({ feeLineId: first.id, amount: 270_000, reason: "The client asked to pay after all" }),
+        ]);
+      });
+    });
+
     describe("payment requests", () => {
       it("puts a confirmed payment request into the ledger with its receipt number, and the receipt email names it", async () => {
         const check = await finishedCheck("request-ledger");

@@ -196,5 +196,57 @@ export async function addRequestPayment(tx: LedgerWriter, input: { paymentReques
   return receiptNumber;
 }
 
+/** Every refund of the payments given, oldest first, cancelled ones too (they stay on the record). */
+export async function refundsOfPayments(db: Reader, paymentIds: readonly number[]) {
+  if (!paymentIds.length) return [];
+  return db.select().from(paymentRefunds).where(inArray(paymentRefunds.paymentId, [...paymentIds])).orderBy(asc(paymentRefunds.id));
+}
+
+export async function refundById(db: Reader, refundId: number) {
+  return (await db.select().from(paymentRefunds).where(eq(paymentRefunds.id, refundId)).limit(1))[0] ?? null;
+}
+
+/**
+ * A payment's status follows its refunds: refunded in full, it is `refunded`. When a refund recorded by mistake is
+ * cancelled, it goes back to `paid` if it had counted (it has a receipt number), or to `needs_a_look` if it never did.
+ */
+async function settleRefunded(tx: LedgerWriter, paymentId: number) {
+  const [payment] = await tx.select().from(payments).where(eq(payments.id, paymentId));
+  if (!payment) return;
+  const [entry] = await withRefunds(tx, [payment]);
+  const full = entry!.refunded >= entry!.amount;
+  if (full && (entry!.status === "paid" || entry!.status === "needs_a_look")) await tx.update(payments).set({ status: "refunded" }).where(eq(payments.id, paymentId));
+  if (!full && entry!.status === "refunded") await tx.update(payments).set({ status: entry!.receiptNumber !== null ? "paid" : "needs_a_look" }).where(eq(payments.id, paymentId));
+}
+
+/** Money returned against a payment of a locked fee (F2), recorded with who, when and why. */
+export async function addRefund(tx: LedgerWriter, payment: LedgerPayment, input: { amount: number; refundedOn: string; reason: string; reference: string | null; recordedByUserId: number }) {
+  const [refund] = await tx.insert(paymentRefunds).values({ paymentId: payment.id, amount: input.amount, refundedOn: input.refundedOn, reason: input.reason, reference: input.reference, recordedByUserId: input.recordedByUserId }).returning();
+  await settleRefunded(tx, payment.id);
+  return refund!;
+}
+
+/** A refund recorded by mistake: kept, marked cancelled with who and why, and no longer counted. Null if already cancelled. */
+export async function cancelRefundRecord(tx: LedgerWriter, refundId: number, input: { cancelledByUserId: number; reason: string }) {
+  const [cancelled] = await tx.update(paymentRefunds).set({ cancelledAt: new Date(), cancelledByUserId: input.cancelledByUserId, cancelReason: input.reason })
+    .where(and(eq(paymentRefunds.id, refundId), isNull(paymentRefunds.cancelledAt))).returning();
+  if (cancelled) await settleRefunded(tx, cancelled.paymentId);
+  return cancelled ?? null;
+}
+
+/** What is left on a locked fee, written off by a Partner or the Super Admin (F2): never late, never a reason to pause. */
+export async function writeOffFee(tx: LedgerWriter, fee: FeeLine, input: { amount: number; note: string; writtenOffByUserId: number }) {
+  const values = { writtenOffAmount: input.amount, writtenOffAt: new Date(), writtenOffByUserId: input.writtenOffByUserId, writeOffNote: input.note };
+  await tx.update(engagementFeeLines).set(values).where(eq(engagementFeeLines.id, fee.id));
+  Object.assign(fee, values);
+}
+
+/** A write-off reversed: what was written off is owed again. The audit log keeps what it was, who and why. */
+export async function reverseFeeWriteOff(tx: LedgerWriter, fee: FeeLine) {
+  const values = { writtenOffAmount: null, writtenOffAt: null, writtenOffByUserId: null, writeOffNote: null };
+  await tx.update(engagementFeeLines).set(values).where(eq(engagementFeeLines.id, fee.id));
+  Object.assign(fee, values);
+}
+
 /** Payments that count, for a quick "has this engagement been paid anything" check. */
 export const counted = (entries: readonly LedgerEntry[]) => entries.filter(entry => countsTowardsFee(entry.status));

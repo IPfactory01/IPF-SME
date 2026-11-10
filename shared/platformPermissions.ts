@@ -26,6 +26,9 @@ export const PLATFORM_PERMISSIONS = [
   // Work before the first payment (ET, 10 November 2026): opening a client's room before it is paid, or moving the
   // first fee past the start date. Partners and the Super Admin only; terms otherwise follow what is bought (R36, D4).
   "approve_work_before_payment",
+  // Writing off what is left of a fee, and reversing a write-off (ET, 10 November 2026, batch F2): Partners and the
+  // Super Admin only. Recording money is Finance's (manage_payments); closing a fee without it is a Partner's decision.
+  "write_off_fees",
   "view_financials",
   "manage_scheduling",
   "manage_communications",
@@ -54,7 +57,7 @@ export const PLATFORM_ROLE_PERMISSIONS: Record<PlatformRole, readonly PlatformPe
   // The desk and partners see Finance (ET, 6 November 2026): read only; recording payments stays with manage_payments.
   desk_lead: ["view_all_businesses", "manage_engagements", "assign_engagements", "review_engagements", "manage_scheduling", "manage_communications", "view_financials"],
   analyst: ["view_assigned_businesses", "manage_engagements"],
-  partner: ["view_assigned_businesses", "review_engagements", "view_financials", "approve_work_before_payment"],
+  partner: ["view_assigned_businesses", "review_engagements", "view_financials", "approve_work_before_payment", "write_off_fees"],
   // Specialists hand in work on their own engagements (ET, 6 November 2026): team-side Work Plan items and draft files on
   // a Deliverable, seen by IP Factory only until the lead shares them. They do not see internal notes or fees.
   subject_matter_expert: ["view_assigned_businesses", "contribute_engagements"],

@@ -86,9 +86,11 @@ async function requireFee(db: Pick<Database, "select">, feeLineId: number, token
 export async function feePayPage(db: Pick<Database, "select">, input: { feeLineId: number; token: string }) {
   const { fee, engagement, businessName, title } = await requireFee(db, input.feeLineId, input.token);
   const contact = await mainContactOf(db, engagement.id);
-  const { paid, left } = feeBalance(fee, await paymentsOfFees(db, [fee.id]));
+  const { paid, left, writtenOff } = feeBalance(fee, await paymentsOfFees(db, [fee.id]));
   return {
     businessName, engagement: title, label: fee.label,
+    /** Closed without payment by a Partner: the page says there is nothing more to pay, never the team's word for it. */
+    writtenOff: left === 0 && writtenOff > 0,
     /** What the Pay button asks for: what is left on the fee. */
     amountNaira: left || fee.amount,
     totalNaira: fee.amount, paidNaira: paid,
@@ -204,7 +206,7 @@ export async function settleFee(db: Database, feeLineId: number, reference: stri
     const problem = !ours ? "The Paystack reference does not belong to this fee."
       : transaction.currency !== "NGN" ? `The payment was not in naira (${transaction.currency || "no currency given"}).`
         : !amountMatches(transaction, attempt.amount * 100) ? `The amount does not match: ${Number.isFinite(transaction.amount) ? formatNaira(transaction.amount / 100) : "no amount"} paid, ${formatNaira(attempt.amount)} expected.`
-          : left === 0 ? "This fee was already paid, so this may be a second payment for it."
+          : left === 0 ? (fee.writtenOffAt ? "This fee was written off, so nothing was left to pay on it." : "This fee was already paid, so this may be a second payment for it.")
             : attempt.amount > left ? `Only ${formatNaira(left)} was left to pay on this fee, so this payment is more than it.`
               : null;
     if (problem) {

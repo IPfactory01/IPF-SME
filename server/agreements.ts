@@ -25,8 +25,8 @@ import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { canSeeFees, requireStaffEngagement, type StaffActor } from "./engagements";
 import { feeReference, openRoomIfFirstPayment, sendFeeLink } from "./feePayments";
-import { anyCounted, namesOf, paymentView } from "./finance";
-import { carryOver, paymentsOfFees, refreshFeePaid } from "./ledger";
+import { anyCounted, namesOf, paymentView, writeOffView } from "./finance";
+import { carryOver, paymentsOfFees, refreshFeePaid, refundsOfPayments } from "./ledger";
 import { paystackMode } from "./paystack";
 import { authorityAllows } from "../shared/platformPermissions";
 
@@ -54,13 +54,14 @@ export async function staffFees(db: Database, actor: StaffActor, engagementId: n
   if (!canSeeFees(actor)) throw new TRPCError({ code: "FORBIDDEN", message: "Fees are for the team leading the engagement and Finance." });
   const feeLines = await feeLinesOf(db, engagementId);
   const ledger = await paymentsOfFees(db, feeLines.map(line => line.id));
-  const people = await namesOf(db, ledger.flatMap(entry => [entry.recordedByUserId, entry.cancelledByUserId]));
+  const refunds = await refundsOfPayments(db, ledger.map(entry => entry.id));
+  const people = await namesOf(db, [...ledger.flatMap(entry => [entry.recordedByUserId, entry.cancelledByUserId]), ...refunds.flatMap(refund => [refund.recordedByUserId, refund.cancelledByUserId]), ...feeLines.map(line => line.writtenOffByUserId)]);
   const seesNotes = authorityAllows(actor.authority, "view_financials");
   return {
     feeLines: feeLines.map(line => {
       const own = ledger.filter(entry => entry.feeLineId === line.id);
       const { paid, left } = feeBalance(line, own);
-      const shown = own.filter(entry => entry.status !== "started" && entry.status !== "failed").map(entry => paymentView(entry, people));
+      const shown = own.filter(entry => entry.status !== "started" && entry.status !== "failed").map(entry => paymentView(entry, people, refunds));
       return {
         id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn, paidAt: line.paidAt, reference: feeReference(line.id),
         paidOnline: own.some(entry => entry.method === "paystack" && (entry.status === "paid" || entry.status === "refunded")),
@@ -68,7 +69,8 @@ export async function staffFees(db: Database, actor: StaffActor, engagementId: n
         /** Billed: it has an invoice number or a payment, so it can be changed but not removed. */
         billed: line.invoiceNumber !== null || own.length > 0 || line.writtenOffAt !== null,
         invoice: line.invoiceNumber !== null ? invoiceNumberLabel(line.invoiceNumber) : null,
-        payments: seesNotes ? shown : shown.map(payment => ({ ...payment, note: null })),
+        payments: seesNotes ? shown : shown.map(payment => ({ ...payment, note: null, refunds: payment.refunds.map(refund => ({ ...refund, reason: "", reference: null })) })),
+        writtenOff: writeOffView(line, people),
       };
     }),
     total: feeTotal(feeLines),
@@ -76,7 +78,7 @@ export async function staffFees(db: Database, actor: StaffActor, engagementId: n
     /** Waiting for its first payment: the client sees only the fee to pay until one is paid. */
     opensOnPayment: engagement.opensOnPayment,
     online: paystackMode() !== "off",
-    can: { edit: authorityAllows(actor.authority, "manage_engagements"), sendLink: canSendLinks(actor), approveUnpaidWork: mayApproveUnpaidWork(actor), recordPayments: authorityAllows(actor.authority, "manage_payments") },
+    can: { edit: authorityAllows(actor.authority, "manage_engagements"), sendLink: canSendLinks(actor), approveUnpaidWork: mayApproveUnpaidWork(actor), recordPayments: authorityAllows(actor.authority, "manage_payments"), writeOff: authorityAllows(actor.authority, "write_off_fees") },
   };
 }
 

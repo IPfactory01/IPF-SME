@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DOCUMENT_NUMBER_KINDS, feeBalance, invoiceNumberLabel, LEDGER_PAYMENT_STATUSES, receiptNumberLabel } from "@shared/ledger";
+import { DOCUMENT_NUMBER_KINDS, feeBalance, invoiceNumberLabel, LEDGER_PAYMENT_METHODS, LEDGER_PAYMENT_STATUSES, paidBeforeLedger, PAYMENT_METHOD_LABELS, receiptNumberLabel } from "@shared/ledger";
 
 describe("the payments ledger's vocabulary", () => {
   it("shows receipt and invoice numbers with six digits, and more once they pass a million", () => {
@@ -33,5 +33,20 @@ describe("a fee's balance", () => {
     expect(feeBalance({ ...fee, paidAt: new Date() }, [{ status: "paid", amount: 470_000 }])).toEqual({ paid: 470_000, writtenOff: 0, left: 0 });
     expect(feeBalance({ ...fee, paidAt: "2026-11-09T10:00:00Z" }, [])).toEqual({ paid: 470_000, writtenOff: 0, left: 0 });
     expect(feeBalance({ ...fee, writtenOffAmount: 270_000 }, [{ status: "paid", amount: 200_000 }])).toEqual({ paid: 200_000, writtenOff: 270_000, left: 0 });
+  });
+
+  it("knows a fee marked paid before the ledger with no payment yet, which Finance lists as money in without a receipt (F4)", () => {
+    expect(paidBeforeLedger({ paidAt: "2026-11-09T10:00:00Z" }, [])).toBe(true);
+    // A checkout opened or a payment that needs a look is not a payment that counts; one that counts ends it.
+    expect(paidBeforeLedger({ paidAt: "2026-11-09T10:00:00Z" }, [{ status: "started" }, { status: "needs_a_look" }])).toBe(true);
+    expect(paidBeforeLedger({ paidAt: "2026-11-09T10:00:00Z" }, [{ status: "paid" }])).toBe(false);
+    expect(paidBeforeLedger({ paidAt: "2026-11-09T10:00:00Z" }, [{ status: "refunded" }])).toBe(false);
+    expect(paidBeforeLedger({ paidAt: null }, [])).toBe(false);
+  });
+});
+
+describe("how money came", () => {
+  it("names every way a payment can come, once, for Finance and the team", () => {
+    expect(LEDGER_PAYMENT_METHODS.map(method => PAYMENT_METHOD_LABELS[method])).toEqual(["Paystack", "Bank transfer", "Cash", "Other"]);
   });
 });

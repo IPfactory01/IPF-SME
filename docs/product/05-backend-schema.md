@@ -166,7 +166,10 @@ rows read.
 **Who sees it:** as for `engagement_fee_lines`, plus Finance (`view_financials`). Recording, cancelling, accepting and
 refunds need `manage_payments`; write-offs a new permission, `write_off_fees`, for the Partner role (and the Super
 Admin). The owner and full-access staff see each fee's state and what is left, and the receipt number, day and amount
-of each payment and refund; never a cancelled one, a note or who recorded it. Never a Specialist.
+of each payment and refund; never a cancelled one, a note or who recorded it. Never a Specialist. Finance's **Money in**
+(F4) reads every payment that counts, with its refunds, the fee or payment request it is for, its receipt number,
+Paystack reference and mode, its note and who recorded it, for `view_financials` only; its spreadsheet (CSV) is made in
+the browser from what is on screen, so nothing leaves the server that Finance cannot already see.
 
 ### The audit log: every action it records
 
@@ -264,6 +267,7 @@ procedure grants assigned-only access.
 | Engagement room: the team's side | — | — | Assigned only (`view_assigned_businesses`); works on it (`manage_engagements`); Specialists hand in team items and IP Factory only drafts (`contribute_engagements`), no internal notes or fees | Assigned only; partners approve (`review_engagements`) | ✅ all; assigns the team, approves prescriptions and plans | — | ✅ |
 | Engagement room: the client's side | — | ⚪ owner: everything shared; full staff: what the owner shares with them; contributors: their own requests and actions | — | — | — | — | — |
 | Session notes and findings | — | ⚪ owner by default; the owner widens to their staff | ✅ when assigned | ✅ when assigned | ✅ | — | ✅ |
+| Finance: every fee, payment, refund and write-off; Money in and its spreadsheet (F4) | — | — | — | Partner: ✅ sees (`view_financials`), writes off (`write_off_fees`); SME: — | ✅ sees (`view_financials`) | ✅ sees; records, cancels, accepts and refunds (`manage_payments`) | ✅ |
 
 ### How client isolation is enforced
 

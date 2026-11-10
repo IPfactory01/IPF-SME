@@ -592,5 +592,109 @@ for (const target of targets) {
         expect(confirmation.body).toContain(`Your receipt number is TS-RC-${String(rows[0].receiptNumber).padStart(6, "0")}.`);
       });
     });
+
+    describe("Finance from one source (F4)", () => {
+      type Payment = typeof schema.payments.$inferSelect;
+      const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+      /** The owner pays a fee online from the room, in full, on whichever Paystack keys are set; returns the reference. */
+      async function payOnline(owner: Browser, index: number) {
+        const room = (await (await owner.call()).engagement.client.room())!;
+        await (await browser().call()).onlinePayment.feeStart(linkParts(room.fees[index]!.payPath!));
+        const reference = paystack.initialized.at(-1)!.reference as string;
+        pay(reference);
+        expect(await webhook(charged(reference))).toBe(200);
+        return reference;
+      }
+
+      it("takes money in from the ledger, less refunds, with test payments apart and each payment's fee or request and reference: the totals equal the ledger", async () => {
+        const { owner, engagementId } = await digitalClient("one-source");
+        const [first, second, third] = await feesOf(engagementId);
+        const finance = await staffMember(["finance"], "Fola Source");
+        await (await finance.call()).engagement.finance.recordPayment(byHand(first.id, 200_000, { note: "Transfer 8801" }));
+        // The rest of the first fee on Paystack's test keys: no real money moved.
+        const testReference = await payOnline(owner, 0);
+        // The second fee on the live keys, then part of it refunded.
+        ENV.paystackSecretKey = LIVE_KEY;
+        const liveReference = await payOnline(owner, 1);
+        const [live] = (await ledgerOf(second.id)).filter((row: Payment) => row.status === "paid");
+        await (await finance.call()).engagement.finance.recordRefund({ paymentId: live.id, amount: 70_000, refundedOn: lagosDay(), reason: "Agreed discount", reference: "RF-8802" });
+        // A checkout opened on the third fee and never finished moved no money, so it is not money in.
+        const room = (await (await owner.call()).engagement.client.room())!;
+        await (await browser().call()).onlinePayment.feeStart(linkParts(room.fees[2]!.payPath!));
+        // A Business Review confirmed by hand.
+        const check = await assessmentAskedFor("one-source-request");
+        const request = await paymentOf(check.id, "current_state");
+        await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId: request.id, note: "Transfer 9902" });
+
+        const listed = await (await finance.call()).engagement.finance.list();
+        const [byHandRow, testRow] = await ledgerOf(first.id);
+        const entry = (paymentId: number) => listed.moneyIn.find(row => row.paymentId === paymentId);
+        expect(entry(byHandRow.id)).toMatchObject({ feeLineId: first.id, paymentRequestId: null, client: expect.stringContaining("Studio one-source"), engagement: "Digital Marketing", label: first.label, method: "bank_transfer", methodLabel: "Bank transfer", test: false, amount: 200_000, refunded: 0, paystackReference: null, note: "Transfer 8801", recordedBy: "Fola Source", receipt: `TS-RC-${String(byHandRow.receiptNumber).padStart(6, "0")}`, status: "paid", beforeLedger: false, receivedOn: lagosDay() });
+        expect(entry(testRow.id)).toMatchObject({ feeLineId: first.id, method: "paystack", test: true, amount: 270_000, paystackReference: testReference });
+        expect(entry(live.id)).toMatchObject({ feeLineId: second.id, method: "paystack", test: false, amount: 470_000, refunded: 70_000, paystackReference: liveReference, status: "paid" });
+        const [requestPayment] = await db.select().from(schema.payments).where(eq(schema.payments.paymentRequestId, request.id));
+        expect(entry(requestPayment.id)).toMatchObject({ feeLineId: null, paymentRequestId: request.id, engagement: null, label: "Business Review", method: "other", amount: request.amountNaira, note: "Transfer 9902", recordedBy: "Owner", test: false });
+        expect(listed.requests.find(row => row.id === request.id)).toMatchObject({ paid: true, receipt: entry(requestPayment.id)!.receipt });
+        expect(listed.moneyIn.some(row => row.feeLineId === third.id)).toBe(false);
+        // Newest first.
+        const days = listed.moneyIn.map(row => row.receivedOn ?? "");
+        expect(days).toEqual([...days].sort().reverse());
+
+        // The totals equal the ledger, read straight from its tables.
+        const payments: Payment[] = await db.select().from(schema.payments);
+        const refunds: Array<typeof schema.paymentRefunds.$inferSelect> = await db.select().from(schema.paymentRefunds);
+        const counted = payments.filter(row => row.status === "paid" || row.status === "refunded");
+        const refundedOn = (row: Payment) => sum(refunds.filter(refund => refund.paymentId === row.id && refund.cancelledAt === null).map(refund => refund.amount));
+        const net = (rows: Payment[]) => sum(rows.map(row => row.amount - refundedOn(row)));
+        const before = listed.moneyIn.filter(row => row.beforeLedger);
+        expect(listed.moneyIn.filter(row => !row.beforeLedger).map(row => row.paymentId).sort((a, b) => a! - b!)).toEqual(counted.map(row => row.id).sort((a, b) => a - b));
+        expect(listed.totals.paid).toBe(net(counted.filter(row => row.mode !== "test")) + sum(before.filter(row => !row.test).map(row => row.amount)));
+        expect(listed.totals.refunded).toBe(sum(counted.filter(row => row.mode !== "test").map(refundedOn)));
+        expect(listed.totals.test).toEqual({ paid: net(counted.filter(row => row.mode === "test")) + sum(before.filter(row => row.test).map(row => row.amount)), count: counted.filter(row => row.mode === "test").length + before.filter(row => row.test).length });
+        // What is owed: what is left on every fee after its payments, refunds and write-offs, and the requests not yet paid.
+        const feeLines: Array<typeof schema.engagementFeeLines.$inferSelect> = await db.select().from(schema.engagementFeeLines);
+        const paidOn = (fee: typeof feeLines[number]) => net(counted.filter(row => row.feeLineId === fee.id));
+        const owedOnFees = sum(feeLines.map(fee => (fee.paidAt ? 0 : Math.max(0, fee.amount - paidOn(fee) - (fee.writtenOffAmount ?? 0)))));
+        const requests: Array<typeof schema.paymentRequests.$inferSelect> = await db.select().from(schema.paymentRequests);
+        const owedOnRequests = sum(requests.filter(row => row.status !== "confirmed" && !counted.some(payment => payment.paymentRequestId === row.id)).map(row => row.amountNaira));
+        expect(listed.totals.owedOnRequests).toBe(owedOnRequests);
+        expect(listed.totals.owed).toBe(owedOnFees + owedOnRequests);
+        expect(listed.totals.writtenOff).toBe(sum(feeLines.map(fee => fee.writtenOffAmount ?? 0)));
+        // Every fee's paid amount is its money in.
+        for (const fee of listed.fees) expect(sum(listed.moneyIn.filter(row => row.feeLineId === fee.id).map(row => row.amount - row.refunded)), fee.label).toBe(fee.paidAmount);
+      });
+
+      it("lists a fee or a payment request marked paid before the ledger as money in without a receipt, until it is carried over", async () => {
+        const { engagementId } = await digitalClient("before-ledger");
+        const [first] = await feesOf(engagementId);
+        // As the code before the ledger left them in the minutes before the new code went live.
+        await db.update(schema.engagementFeeLines).set({ paidAt: new Date("2026-11-03T09:00:00Z") }).where(eq(schema.engagementFeeLines.id, first.id));
+        const check = await assessmentAskedFor("before-ledger-request");
+        const request = await paymentOf(check.id, "current_state");
+        await db.update(schema.paymentRequests).set({ status: "confirmed", confirmedAt: new Date("2026-11-04T09:00:00Z"), note: "TEST: Paid online with Paystack, reference TS-CS-000042-0a1b2c3d" }).where(eq(schema.paymentRequests.id, request.id));
+        const finance = await staffMember(["finance"], "Fola Before");
+        let listed = await (await finance.call()).engagement.finance.list();
+        expect(listed.moneyIn.find(row => row.key === `fee-${first.id}`)).toMatchObject({ paymentId: null, receipt: null, beforeLedger: true, amount: 470_000, receivedOn: "2026-11-03", method: "other", note: "Marked paid before the ledger", test: false });
+        expect(listed.moneyIn.find(row => row.key === `request-${request.id}`)).toMatchObject({ paymentId: null, receipt: null, beforeLedger: true, amount: request.amountNaira, receivedOn: "2026-11-04", method: "paystack", paystackReference: "TS-CS-000042-0a1b2c3d", test: true, note: null });
+        expect(listed.requests.find(row => row.id === request.id)).toMatchObject({ paid: true, receipt: null });
+        expect(listed.fees.find(row => row.id === first.id)).toMatchObject({ paid: true, paidAmount: 470_000 });
+
+        // Saving the fees carries the fee into the ledger: the same money, now with its receipt number.
+        const lines = await feesOf(engagementId);
+        await (await superAdmin.call()).engagement.staff.saveFees({ engagementId, feeLines: lines.map((line: { id: number; label: string; amount: number; dueOn: string | null }) => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn })) });
+        listed = await (await finance.call()).engagement.finance.list();
+        expect(listed.moneyIn.some(row => row.key === `fee-${first.id}`)).toBe(false);
+        expect(listed.moneyIn.filter(row => row.feeLineId === first.id)).toEqual([expect.objectContaining({ beforeLedger: false, amount: 470_000, receipt: expect.stringMatching(/^TS-RC-\d{6}$/), receivedOn: "2026-11-03" })]);
+      });
+
+      it("is for those who see Finance (view_financials) only", async () => {
+        const analyst = await staffMember(["analyst"], "Ade No Finance");
+        await expect((await analyst.call()).engagement.finance.list()).rejects.toMatchObject({ code: "FORBIDDEN" });
+        for (const roles of [["partner"], ["desk_lead"]] as const) {
+          const member = await staffMember([...roles], `Sees finance ${roles.join(" ")}`);
+          expect((await (await member.call()).engagement.finance.list()).moneyIn).toEqual(expect.any(Array));
+        }
+      });
+    });
   });
 }

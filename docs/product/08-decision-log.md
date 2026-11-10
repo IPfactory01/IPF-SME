@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Finance's Money in downloads as a spreadsheet (CSV) of what is shown, to match against Paystack's own export when reconciling; a cell a spreadsheet would run as a formula is kept as text. Paid counts real money only: test payments are shown apart with their own sum | Proposed while building F4 (the App flow asked for a view to reconcile Paystack from, with test payments apart); shown to ET in its preview, 10 November 2026 |
 | The Services page opens in the owner's words: "Sales slow? Cash tight? Need a loan?", then how we help and that every price is on the page in naira; "Help that does the work. Finished work in days. A fix in six weeks." read out of touch with the owners we serve, and goes from the page, search results and the share cards | ET, 10 November 2026 |
 | Batch F's design is approved (App flow 3.1). Only Finance and the Super Admin record money by hand (`manage_payments`, as decided on 6 November for payments), so the engagement team's Paid tick goes with batch F | ET, 10 November 2026 |
 | Writing off a fee is for a Partner or the Super Admin only (a new permission, `write_off_fees`, with batch F) | ET, 10 November 2026 |

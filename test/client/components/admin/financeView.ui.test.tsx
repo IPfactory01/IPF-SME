@@ -4,12 +4,15 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
- * Finance with the payments ledger (batch F; App flow 3.1): what is paid and left on each fee, payments that need a look
- * first; for Finance and the Super Admin only, Record a payment, Cancel, Accept and refunds; for a Partner or the Super
- * Admin, Write off and its reversal. A stand-in API records each call.
+ * Finance with the payments ledger (batch F; App flow 3.1 and 4.7): what is paid and left on each fee, payments that need
+ * a look first; for Finance and the Super Admin only, Record a payment, Cancel, Accept and refunds; for a Partner or the
+ * Super Admin, Write off and its reversal; and (F4) Money in, from the ledger, with test payments apart, each payment
+ * opening to its fee, narrowed to reconcile Paystack and downloaded as a spreadsheet. A stand-in API records each call.
  */
 const api = vi.hoisted(() => ({ data: undefined as unknown, calls: {} as Record<string, unknown[]> }));
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
+const saved = vi.hoisted(() => ({ files: [] as Array<{ name: string; text: string }> }));
+vi.mock("@/lib/csv", async importOriginal => ({ ...(await importOriginal<typeof import("@/lib/csv")>()), saveCsv: (name: string, text: string) => void saved.files.push({ name, text }) }));
 vi.mock("@/lib/trpc", () => {
   const mutation = (name: string) => (options?: { onSuccess?: (value: never) => void }) => ({
     isPending: false,
@@ -46,15 +49,29 @@ const fee = (over: Record<string, unknown>) => ({
   reference: "TS-F-000011", client: "Crown Studio", engagement: "Digital Marketing", late: true, payments: [payment({})], writtenOff: null as unknown, ...over,
 });
 const looked = payment({ id: 7, status: "needs_a_look", method: "paystack", methodLabel: "Paystack", amount: 1_000, receipt: null, note: "The amount does not match: ₦1,000 paid, ₦470,000 expected.", recordedBy: null, canCancel: false, paystackReference: "TS-F-000012-1a2b3c4d" });
+/** A row of Money in: one payment from the ledger and what it is for. */
+const money = (over: Record<string, unknown>) => ({
+  key: "payment-1", paymentId: 1, feeLineId: 11 as number | null, paymentRequestId: null as number | null, client: "Crown Studio", engagement: "Digital Marketing" as string | null,
+  label: "Month 1 service fee, payable on starting", receivedOn: "2026-11-10", receipt: "TS-RC-000004" as string | null, status: "paid", method: "bank_transfer", methodLabel: "Bank transfer",
+  test: false, amount: 200_000, refunded: 0, paystackReference: null as string | null, note: "Transfer 5521" as string | null, recordedBy: "Fola Finance" as string | null, beforeLedger: false, ...over,
+});
+const moneyIn = () => [
+  money({}),
+  money({ key: "payment-8", paymentId: 8, receivedOn: "2026-11-10", receipt: "TS-RC-000005", method: "paystack", methodLabel: "Paystack", test: true, amount: 270_000, paystackReference: "TS-F-000011-9f8e7d6c", note: null, recordedBy: null }),
+  money({ key: "payment-9", paymentId: 9, receivedOn: "2026-11-02", receipt: "TS-RC-000003", method: "paystack", methodLabel: "Paystack", amount: 100_000, refunded: 30_000, paystackReference: "TS-F-000011-1111aaaa", note: null, recordedBy: null }),
+  money({ key: "payment-3", paymentId: 3, feeLineId: null, paymentRequestId: 5, client: "=HYPERLINK(\"https://example.com\")", engagement: null, label: "Business Review", receivedOn: "2026-10-28", receipt: "TS-RC-000002", method: "paystack", methodLabel: "Paystack", amount: 250_000, paystackReference: "TS-BR-000005-0a1b2c3d", note: null, recordedBy: null }),
+];
+const request = { id: 5, item: "current_state", amount: 250_000, status: "confirmed", reference: "TS-BR-000005", requestedAt: new Date("2026-10-27T10:00:00Z"), confirmedAt: new Date("2026-10-28T10:00:00Z"), fullName: "Ada Obi", businessName: "Ada Foods", title: "Business Review", client: "Ada Foods", paid: true, receipt: "TS-RC-000002" };
 const finance = (record: boolean, writeOff = false) => ({
-  requests: [],
+  requests: [request],
   fees: [fee({}), fee({ id: 12, label: "Month 2 service fee, payable before day 31", paidAmount: 0, left: 470_000, late: false, dueOn: "2026-12-09", payments: [looked] })],
   needsALook: [{ ...looked, feeLineId: 12, label: "Month 2 service fee, payable before day 31", client: "Crown Studio", engagement: "Digital Marketing", left: 470_000 }],
-  totals: { paid: 200_000, owed: 740_000, late: 270_000 },
+  moneyIn: moneyIn(),
+  totals: { paid: 520_000, refunded: 30_000, owed: 740_000, owedOnRequests: 0, late: 270_000, writtenOff: 0, test: { paid: 270_000, count: 1 } },
   can: { record, writeOff },
 });
 
-beforeEach(() => { api.calls = {}; });
+beforeEach(() => { api.calls = {}; saved.files = []; });
 afterEach(cleanup);
 
 describe("Finance with the payments ledger", () => {
@@ -154,5 +171,92 @@ describe("Finance with the payments ledger", () => {
     fireEvent.change(all.getByLabelText("Why is the write-off reversed?"), { target: { value: "The client will pay" } });
     fireEvent.click(all.getByRole("button", { name: "Reverse the write-off" }));
     expect(api.calls.reverseWriteOff).toEqual([{ feeLineId: 11, reason: "The client will pay" }]);
+  });
+});
+
+describe("Money in, from one source (F4)", () => {
+  it("shows real money in, less refunds, with test payments apart, and what is owed with where it sits", () => {
+    api.data = { ...finance(false), totals: { ...finance(false).totals, owedOnRequests: 250_000, writtenOff: 120_000 } };
+    render(<FinanceView />);
+    const totals = within(screen.getByRole("group", { name: "Totals" }));
+    expect(totals.getByText("₦520,000")).toBeTruthy();
+    expect(totals.getByText("₦550,000 received, ₦30,000 refunded")).toBeTruthy();
+    expect(totals.getByText("₦250,000 of it on payment requests · ₦120,000 written off")).toBeTruthy();
+    expect(screen.getByText("Test payments are kept apart: 1 payment, ₦270,000. No real money moved, so they are not in Paid.")).toBeTruthy();
+    // The fees and payment requests come first; a paid request shows its receipt number.
+    expect(screen.getByRole("tab", { name: "Fees and requests" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Everything" }));
+    expect(within(screen.getByRole("region", { name: "Payment requests" })).getByText(/^Paid .* · TS-RC-000002$/)).toBeTruthy();
+  });
+
+  it("lists every payment newest first, keeps test payments apart, and narrows by how it came, month and reference", () => {
+    api.data = finance(false);
+    render(<FinanceView />);
+    fireEvent.click(screen.getByRole("tab", { name: "Money in 3" }));
+    const list = within(screen.getByRole("region", { name: "Money in" }));
+    const references = () => list.getAllByRole("row").slice(1).map(row => row.querySelectorAll("td")[5]?.textContent ?? "");
+    expect(references()).toEqual(["Transfer 5521Recorded by Fola Finance", "TS-F-000011-1111aaaa", "TS-BR-000005-0a1b2c3d"]);
+    expect(list.getByText("3 payments: ₦550,000 received, ₦30,000 refunded, ₦520,000 in.")).toBeTruthy();
+    expect(list.getByText("₦30,000 refunded")).toBeTruthy();
+    expect(list.queryByText("TS-F-000011-9f8e7d6c")).toBeNull();
+
+    fireEvent.change(list.getByLabelText("How it came"), { target: { value: "paystack" } });
+    expect(references()).toEqual(["TS-F-000011-1111aaaa", "TS-BR-000005-0a1b2c3d"]);
+    fireEvent.change(list.getByLabelText("Month"), { target: { value: "2026-10" } });
+    expect(references()).toEqual(["TS-BR-000005-0a1b2c3d"]);
+    expect(list.getByText("1 payment: ₦250,000 in.")).toBeTruthy();
+    fireEvent.change(list.getByLabelText("Month"), { target: { value: "" } });
+    fireEvent.change(list.getByLabelText("Find"), { target: { value: "1111AAAA" } });
+    expect(references()).toEqual(["TS-F-000011-1111aaaa"]);
+    fireEvent.change(list.getByLabelText("Find"), { target: { value: "TS-RC-000002" } });
+    expect(references()).toEqual(["TS-BR-000005-0a1b2c3d"]);
+
+    // Test payments are a list of their own, and never mixed with real money.
+    fireEvent.change(list.getByLabelText("Find"), { target: { value: "" } });
+    fireEvent.change(list.getByLabelText("How it came"), { target: { value: "" } });
+    fireEvent.click(list.getByRole("button", { name: "Test payments (1)" }));
+    expect(references()).toEqual(["TS-F-000011-9f8e7d6c"]);
+    expect(list.getByText("Paystack test")).toBeTruthy();
+    expect(list.getByText("1 test payment: ₦270,000. No real money moved.")).toBeTruthy();
+  });
+
+  it("opens each payment's fee, or its payment request, in the fees view", () => {
+    api.data = finance(false);
+    render(<FinanceView />);
+    fireEvent.click(screen.getByRole("tab", { name: "Money in 3" }));
+    fireEvent.click(within(screen.getByRole("region", { name: "Money in" })).getAllByRole("button", { name: "Digital Marketing · Month 1 service fee, payable on starting" })[0]!);
+    expect(screen.getByRole("tab", { name: "Fees and requests" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("button", { name: "Everything" }).getAttribute("aria-pressed")).toBe("true");
+    const fees = within(screen.getByRole("region", { name: "Engagement fees" }));
+    expect(fees.getByRole("button", { name: "Hide payments" })).toBeTruthy();
+    expect(fees.getByText(/TS-RC-000004 · .* · Bank transfer/)).toBeTruthy();
+    expect(document.getElementById("fee-11")!.className).toContain("bg-brand-tint");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Money in 3" }));
+    fireEvent.click(screen.getByRole("button", { name: "Business Review (payment request)" }));
+    expect(document.getElementById("request-5")!.className).toContain("bg-brand-tint");
+    expect(document.getElementById("fee-11")!.className).not.toContain("bg-brand-tint");
+  });
+
+  it("downloads what is shown as a spreadsheet, with a typed name never run as a formula", () => {
+    api.data = finance(false);
+    render(<FinanceView />);
+    fireEvent.click(screen.getByRole("tab", { name: "Money in 3" }));
+    const list = within(screen.getByRole("region", { name: "Money in" }));
+    fireEvent.change(list.getByLabelText("How it came"), { target: { value: "paystack" } });
+    fireEvent.click(list.getByRole("button", { name: "Download CSV" }));
+    expect(saved.files).toHaveLength(1);
+    const [file] = saved.files;
+    expect(file!.name).toBe("money-in-all.csv");
+    const lines = file!.text.replace(/^\uFEFF/, "").trim().split("\r\n");
+    expect(lines[0]).toBe('"Received","Receipt","Client","Engagement","For","How","Mode","Paystack reference","Note","Recorded by","Amount (NGN)","Refunded (NGN)","Net (NGN)","Status"');
+    expect(lines.slice(1)).toEqual([
+      '"2026-11-02","TS-RC-000003","Crown Studio","Digital Marketing","Month 1 service fee, payable on starting","Paystack","Live","TS-F-000011-1111aaaa",,,100000,30000,70000,"Part refunded"',
+      '"2026-10-28","TS-RC-000002","\'=HYPERLINK(""https://example.com"")",,"Business Review (payment request)","Paystack","Live","TS-BR-000005-0a1b2c3d",,,250000,0,250000,"Paid"',
+    ]);
+    // Nothing to download, nothing offered.
+    fireEvent.change(list.getByLabelText("Find"), { target: { value: "no such reference" } });
+    expect(list.getByText("No payments here.")).toBeTruthy();
+    expect(list.getByRole("button", { name: "Download CSV" }).hasAttribute("disabled")).toBe(true);
   });
 });

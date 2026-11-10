@@ -377,6 +377,14 @@ be previewed as the client sees it (**Preview as client**, read only).
   **Cancel**; **Write off** (a Partner or the Super Admin) asks for a note and its button is in the danger colour, and a
   written-off fee shows who wrote it off and why, with **Reverse the write-off**. The engagement's Fees use the same
   list and forms. A pay link for a fee closed by a write-off says *Nothing more to pay*.
+- **Finance from one source** (F4, App flow 4.7; `MoneyIn.tsx`): each total carries a muted line saying what is in it
+  (received and refunded under Paid; payment requests and write-offs under Owed), and a muted line under the totals says
+  test payments are kept apart. Two views sit under the needs-a-look box, as square tabs like the Pipeline's stages:
+  **Fees and requests**, and **Money in** with its count. Money in has one row of controls (**Real money** or **Test
+  payments** when there are any, Month, How it came, Find, **Download CSV**), then the sum of what is shown, then a
+  dense table: day, receipt number, client, what it is for, how, reference, amount, with a refund in the danger colour
+  under the amount. What it is for is a link: it opens the fee in the fees view with its payments open, marked on the
+  brand tint.
 
 ## 13. Accessibility
 

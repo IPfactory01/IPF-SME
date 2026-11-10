@@ -170,6 +170,7 @@ How it is built:
 | Audit | `recordAudit` for staff sign-in, roles, payments, reports and onboarding; details never contain secrets. System actors (Paystack) are recorded with a null actor and `via` in the details |
 | Security headers | `applySecurityHeaders` on the server; `vercel.json` for static files |
 | Personal data | No real personal data in the repository; tests use fictional people and `@example.com` |
+| Spreadsheets from the console | Finance's Money in downloads as a CSV made in the browser from what is on screen (`client/src/lib/csv.ts`, F4). A business name typed on the free check can reach a cell, so every text cell is quoted and one a spreadsheet would run as a formula (it starts with =, +, -, @, a tab or a return) starts with an apostrophe |
 
 Known gaps to close are listed in [5. Backend schema](05-backend-schema.md) §6.
 

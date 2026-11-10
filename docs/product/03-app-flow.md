@@ -82,11 +82,12 @@ lead sets those dates by hand in the engagement's Fees (I4).
 **Built (F1, 10 November 2026):** paying online for what is left, recording money by hand in part or in full, cancelling a
 payment recorded by mistake, accepting a payment that needs a look, receipt and invoice numbers, and fees saved in
 place (live 10 November 2026). **Built (F2):** refunds against a payment, cancelling a refund recorded by mistake,
-and write-offs with their reversal.
+and write-offs with their reversal. **Built (F4):** Finance from one source: money in from the payments, with test
+payments apart, each payment opening to its fee and its Paystack reference (section 4.7).
 
 Every naira that comes in is one **payment** against one fee: a Paystack transaction, or money that came another way
 and was recorded by hand. Until the Business Review and the Full Report become fees (F3, R13), a payment can instead be
-against their payment request. Finance reads money in from the payments and money owed from the fees (F4), so every
+against their payment request. Finance reads money in from the payments and money owed from the fees (built, F4), so every
 naira traces to one fee and one Paystack reference, or to the person who recorded it. Nothing about money is deleted: a
 payment recorded by mistake is cancelled, a refund is recorded against the payment it returns, and a write-off can be
 reversed; each keeps who did it, when and why.
@@ -221,11 +222,11 @@ fee date, or send a payment link on a schedule.
 
 | Step | Finance | Platform | Built? |
 |---|---|---|---|
-| 1 | Opens **Finance**: paid, owed, late; every fee and every payment request | Counts each fee by its terms (section 3): paid and left from the payments ledger, less refunds and write-offs | Built (F1); a list of money in, with test payments apart, to build (F4) |
+| 1 | Opens **Finance**: paid, owed, late; every fee and every payment request; **Money in**, every payment that counts | Counts each fee by its terms (section 3): paid and left from the payments ledger, less refunds and write-offs. **Paid** is real money in, less refunds; test payments (Paystack's test keys) are kept apart, with their own count and sum. **Owed** is what is left on the fees, after write-offs, and the payment requests not yet paid (until F3), with each part named under it | Built (F1, F4) |
 | 2 | Sees a payment that needs a look (wrong amount, paid twice) | Emails the office with the Paystack reference, and lists it at the top of Finance until it is accepted or refunded | Built (F1) |
 | 3 | Checks it in Paystack, then accepts it, or refunds it in Paystack and records the refund | Asks Paystack again what it received before it counts; keeps a refund against its payment, with who and why; the fee is owed again unless a Partner writes it off | Built (F1, F2) |
 | 4 | Records money that came another way, in part or in full: the day, how, and the bank's reference; cancels one recorded by mistake | Gives each payment the next receipt number; keeps a cancelled payment, marked cancelled | Built (F1) |
-| 5 | Reconciles Paystack's settlements against payments | One payment row per Paystack transaction, with its reference and mode | Rows built (F1); the view to reconcile from to build (F4) |
+| 5 | Reconciles Paystack's settlements against payments: in **Money in**, narrows to a month, to Paystack, or to a reference, receipt number or client, and downloads what is shown as a spreadsheet (CSV) to match Paystack's own export | One payment row per Paystack transaction, with its reference and mode. Money in lists each payment newest first: the day, receipt number, client, what it is for, how it came, the Paystack reference or the note, and the amount with any refunds; a sum of what is shown. Each row opens to its fee (or payment request) in the fees view, with its payments open. A cell a spreadsheet would run as a formula stays text | Built (F1, F4) |
 | 6 | A Partner or the Super Admin writes off what is left of a fee, with a note, or reverses a write-off | The fee is closed: not owed, not late, never a reason to pause; a later refund on it is owed again | Built (F2) |
 
 ### 4.8 The Super Admin
@@ -397,7 +398,7 @@ checks every action again. Under the person's name is their level.
 | **Pipeline** | `manage_client_onboarding` | Prospects | Business Health Checks (metrics, stage filter, search); Discovery Calls (requests, bookings, the call summary, outcome); Client Onboarding (invitations) |
 | **Engagements** | `view_all_businesses`, or `view_assigned_businesses` for one's own | Delivery | My projects; Clients asking for another service; New engagement; Paid but no engagement yet; every engagement in scope; the engagement record (below) |
 | **Clients** | `view_all_businesses` | Accounts | Businesses and their members; client accounts (reset link, suspend, reinstate, reset two-step, remove access) |
-| **Finance** | `view_financials` | Money | Paid, owed, late; every fee and payment request, from the ledger; payments that need a look at the top; each fee's payments (section 3.1). Finance and the Super Admin record, cancel and accept payments and record and cancel refunds (`manage_payments`); a Partner or the Super Admin writes off and reverses (`write_off_fees`) |
+| **Finance** | `view_financials` | Money | Paid (real money in, less refunds; test payments apart), owed, late, all from the ledger; payments that need a look at the top; two views: **Fees and requests** (every fee and payment request, each fee's payments, section 3.1) and **Money in** (every payment, each opening to its fee, to reconcile Paystack; section 4.7). Finance and the Super Admin record, cancel and accept payments and record and cancel refunds (`manage_payments`); a Partner or the Super Admin writes off and reverses (`write_off_fees`) |
 | **Team** | `manage_roles` | Our people | Everyone by level; invite by level; access ends; System status |
 
 **The engagement record** (the drawer in Engagements), top to bottom:

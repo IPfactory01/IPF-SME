@@ -19,14 +19,14 @@ import { BRAND } from "../shared/brand";
 import { formatNaira } from "../shared/businessSupport";
 import { dayLabel } from "../shared/engagementWork";
 import { engagementTitle } from "../shared/engagementTypes";
-import { countsTowardsFee, feeBalance, receiptNumberLabel, type LedgerPaymentMethod } from "../shared/ledger";
+import { countsTowardsFee, feeBalance, paidBeforeLedger, PAYMENT_METHOD_LABELS, receiptNumberLabel, type LedgerPaymentMethod } from "../shared/ledger";
 import { PAYMENT_ITEM_TITLES } from "../shared/payments";
 import { authorityAllows, type Authority } from "../shared/platformPermissions";
 import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { deliverEmail } from "./email";
 import { feeContext, feeReference, openRoomIfFirstPayment, sendFeeReceipt } from "./feePayments";
-import { acceptLooked, addPaymentByHand, addRefund, balanceOf, cancelPaymentByHand, cancelRefundRecord, carryOver, lockFee, paymentById, paymentsOfFees, refreshFeePaid, refundById, refundsOfPayments, reverseFeeWriteOff, writeOffFee, type LedgerEntry } from "./ledger";
+import { acceptLooked, addPaymentByHand, addRefund, balanceOf, cancelPaymentByHand, cancelRefundRecord, carryOver, lockFee, paymentById, paymentsOfFees, paymentsOfRequests, refreshFeePaid, refundById, refundsOfPayments, reverseFeeWriteOff, writeOffFee, type LedgerEntry } from "./ledger";
 import type { paymentRefunds } from "../drizzle/schema";
 import { requireOnlinePayment } from "./onlinePayment";
 import { verifyTransaction } from "./paystack";
@@ -36,8 +36,6 @@ export type FinanceActor = { id: number; authority: Authority };
 
 const lagosToday = (now: number) => lagosDay(now);
 
-/** How a payment came, as Finance reads it. */
-export const PAYMENT_METHOD_LABELS: Record<LedgerPaymentMethod, string> = { paystack: "Paystack", bank_transfer: "Bank transfer", cash: "Cash", other: "Other" };
 
 const refused = (code: "FORBIDDEN" | "BAD_REQUEST" | "CONFLICT" | "NOT_FOUND" | "PRECONDITION_FAILED", message: string) => new TRPCError({ code, message });
 const requirePayments = (actor: FinanceActor) => {
@@ -48,48 +46,127 @@ const requireWriteOff = (actor: FinanceActor) => {
 };
 type Refund = typeof paymentRefunds.$inferSelect;
 
+/** What a row of Money in is for: a fee of an engagement, or (until F3) a payment request. */
+type MoneyInOwner = { feeLineId: number | null; paymentRequestId: number | null; client: string; engagement: string | null; label: string };
+
+/**
+ * One row of Money in (F4): a payment that counts (paid, or refunded in part or in full), with the refunds against it,
+ * how it came, its Paystack reference and mode, and what it is for. A fee or payment request marked paid before the
+ * ledger, with no payment yet, is listed too, without a receipt number, so the totals still add up.
+ */
+export type MoneyInEntry = MoneyInOwner & {
+  key: string; paymentId: number | null; receivedOn: string | null; receipt: string | null; status: "paid" | "refunded";
+  method: LedgerPaymentMethod; methodLabel: string; test: boolean; amount: number; refunded: number;
+  paystackReference: string | null; note: string | null; recordedBy: string | null; beforeLedger: boolean;
+};
+
+/** The Paystack reference and test mark the platform wrote on a payment request it confirmed before the ledger. */
+const ONLINE_NOTE = /Paid online with Paystack, reference (TS-[A-Z]+-[0-9]+-[0-9a-f]+)/;
+
+/**
+ * Finance from one source (F4, App flow 4.7): money in from the payments ledger (payments less their refunds), with
+ * test payments apart from real money; money owed from what is left on the fees (after write-offs) and the payment
+ * requests not yet paid; each payment with its fee or request, receipt number and Paystack reference, so Paystack's
+ * settlements can be reconciled against it.
+ */
 export async function listFinance(db: Pick<Database, "select">, actor: { authority: Authority }, now = Date.now()) {
   if (!authorityAllows(actor.authority, "view_financials")) throw new TRPCError({ code: "FORBIDDEN", message: "Your role does not include finance." });
   const today = lagosToday(now);
   const requestRows = await db.select({
     id: paymentRequests.id, item: paymentRequests.item, amount: paymentRequests.amountNaira, status: paymentRequests.status, reference: paymentRequests.reference,
-    requestedAt: paymentRequests.requestedAt, confirmedAt: paymentRequests.confirmedAt, fullName: businessChecks.fullName, businessName: businessChecks.businessName,
+    requestedAt: paymentRequests.requestedAt, confirmedAt: paymentRequests.confirmedAt, note: paymentRequests.note, confirmedByUserId: paymentRequests.confirmedByUserId,
+    fullName: businessChecks.fullName, businessName: businessChecks.businessName,
   }).from(paymentRequests).innerJoin(businessChecks, eq(paymentRequests.businessCheckId, businessChecks.id)).orderBy(desc(paymentRequests.id));
   const feeRows = await db.select({
     id: engagementFeeLines.id, engagementId: engagementFeeLines.engagementId, label: engagementFeeLines.label, amount: engagementFeeLines.amount, dueOn: engagementFeeLines.dueOn, paidAt: engagementFeeLines.paidAt,
+    paidReference: engagementFeeLines.paidReference,
     writtenOffAmount: engagementFeeLines.writtenOffAmount, writtenOffAt: engagementFeeLines.writtenOffAt, writtenOffByUserId: engagementFeeLines.writtenOffByUserId, writeOffNote: engagementFeeLines.writeOffNote,
     type: engagements.type, service: engagements.service, businessName: businesses.name, contactName: engagements.contactName, checkBusinessName: businessChecks.businessName,
   }).from(engagementFeeLines).innerJoin(engagements, eq(engagementFeeLines.engagementId, engagements.id))
     .leftJoin(businesses, eq(engagements.businessId, businesses.id)).leftJoin(businessChecks, eq(engagements.businessCheckId, businessChecks.id))
     .orderBy(asc(engagementFeeLines.dueOn), asc(engagementFeeLines.id));
   const ledger = await paymentsOfFees(db, feeRows.map(row => row.id));
+  const requestLedger = await paymentsOfRequests(db, requestRows.map(row => row.id));
   const refunds = await refundsOfPayments(db, ledger.map(entry => entry.id));
-  const people = await namesOf(db, [...ledger.flatMap(entry => [entry.recordedByUserId, entry.cancelledByUserId]), ...refunds.flatMap(refund => [refund.recordedByUserId, refund.cancelledByUserId]), ...feeRows.map(row => row.writtenOffByUserId)]);
-  const requests = requestRows.map(row => ({ ...row, title: PAYMENT_ITEM_TITLES[row.item], client: row.businessName || row.fullName, paid: row.status === "confirmed" }));
+  const people = await namesOf(db, [
+    ...[...ledger, ...requestLedger].flatMap(entry => [entry.recordedByUserId, entry.cancelledByUserId]),
+    ...refunds.flatMap(refund => [refund.recordedByUserId, refund.cancelledByUserId]), ...feeRows.map(row => row.writtenOffByUserId), ...requestRows.map(row => row.confirmedByUserId),
+  ]);
+  const nameOf = (id: number | null) => (id !== null ? people.get(id) ?? null : null);
+  const moneyIn: MoneyInEntry[] = [];
+  const counts = (entry: LedgerEntry) => countsTowardsFee(entry.status);
+  const received = (entry: LedgerEntry, owner: MoneyInOwner): MoneyInEntry => ({
+    ...owner, key: `payment-${entry.id}`, paymentId: entry.id, receivedOn: entry.receivedOn ?? (entry.paidAt ? lagosDay(entry.paidAt) : null),
+    receipt: entry.receiptNumber !== null ? receiptNumberLabel(entry.receiptNumber) : null, status: entry.status === "refunded" ? "refunded" : "paid",
+    method: entry.method, methodLabel: PAYMENT_METHOD_LABELS[entry.method], test: entry.mode === "test", amount: entry.amount, refunded: entry.refunded,
+    paystackReference: entry.paystackReference, note: entry.note, recordedBy: nameOf(entry.recordedByUserId), beforeLedger: false,
+  });
+
+  const requests = requestRows.map(({ note, confirmedByUserId, ...row }) => {
+    const owner: MoneyInOwner = { feeLineId: null, paymentRequestId: row.id, client: row.businessName || row.fullName, engagement: null, label: PAYMENT_ITEM_TITLES[row.item] };
+    const own = requestLedger.filter(entry => entry.paymentRequestId === row.id && counts(entry));
+    moneyIn.push(...own.map(entry => received(entry, owner)));
+    if (row.status === "confirmed" && !own.length) {
+      // Confirmed before the ledger and never carried into it: listed as 0022's backfill would have recorded it.
+      const online = ONLINE_NOTE.exec(note ?? "");
+      moneyIn.push({
+        ...owner, key: `request-${row.id}`, paymentId: null, receivedOn: lagosDay(row.confirmedAt ?? row.requestedAt), receipt: null, status: "paid",
+        method: online ? "paystack" : "other", methodLabel: PAYMENT_METHOD_LABELS[online ? "paystack" : "other"], test: Boolean(online) && (note ?? "").startsWith("TEST: "),
+        amount: row.amount, refunded: 0, paystackReference: online?.[1] ?? null, note: online ? null : note || "Confirmed before the ledger", recordedBy: nameOf(confirmedByUserId), beforeLedger: true,
+      });
+    }
+    const paidWith = own[0];
+    return { ...row, title: owner.label, client: owner.client, paid: own.length > 0 || row.status === "confirmed", receipt: paidWith?.receiptNumber != null ? receiptNumberLabel(paidWith.receiptNumber) : null };
+  });
   const fees = feeRows.map(row => {
     const own = ledger.filter(entry => entry.feeLineId === row.id);
     const { paid, left } = feeBalance(row, own);
+    const client = row.businessName ?? row.checkBusinessName ?? row.contactName ?? "";
+    const engagement = engagementTitle(row.type, row.service);
+    const owner: MoneyInOwner = { feeLineId: row.id, paymentRequestId: null, client, engagement, label: row.label };
+    moneyIn.push(...own.filter(counts).map(entry => received(entry, owner)));
+    if (paidBeforeLedger(row, own)) {
+      moneyIn.push({
+        ...owner, key: `fee-${row.id}`, paymentId: null, receivedOn: lagosDay(row.paidAt!), receipt: null, status: "paid", method: row.paidReference ? "paystack" : "other",
+        methodLabel: PAYMENT_METHOD_LABELS[row.paidReference ? "paystack" : "other"], test: false, amount: row.amount, refunded: 0, paystackReference: row.paidReference,
+        note: "Marked paid before the ledger", recordedBy: null, beforeLedger: true,
+      });
+    }
     return {
       id: row.id, engagementId: row.engagementId, label: row.label, amount: row.amount, dueOn: row.dueOn, paid: left === 0, paidAt: row.paidAt,
       paidAmount: paid, left, reference: feeReference(row.id),
       writtenOff: writeOffView(row, people),
-      client: row.businessName ?? row.checkBusinessName ?? row.contactName ?? "", engagement: engagementTitle(row.type, row.service),
+      client, engagement,
       // A fee is owed once it is set (there are no proposals to sign), and late once its due date passes with something left.
       late: left > 0 && row.dueOn !== null && row.dueOn < today,
       // Attempts that never moved money are left out; a cancelled payment stays, marked cancelled.
       payments: own.filter(entry => entry.status !== "started" && entry.status !== "failed").map(entry => paymentView(entry, people, refunds)),
     };
   });
+  // Newest first: the day the money arrived, then the order it was recorded in.
+  moneyIn.sort((a, b) => (b.receivedOn ?? "").localeCompare(a.receivedOn ?? "") || (b.paymentId ?? 0) - (a.paymentId ?? 0));
   const needsALook = fees.flatMap(fee => fee.payments.filter(payment => payment.status === "needs_a_look").map(payment => ({ ...payment, feeLineId: fee.id, label: fee.label, client: fee.client, engagement: fee.engagement, left: fee.left })));
   const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+  const net = (entries: MoneyInEntry[]) => sum(entries.map(entry => entry.amount - entry.refunded));
+  const real = moneyIn.filter(entry => !entry.test);
+  const test = moneyIn.filter(entry => entry.test);
+  const owedOnRequests = sum(requests.filter(row => !row.paid).map(row => row.amount));
   return {
     requests,
     fees,
     needsALook,
+    moneyIn,
     totals: {
-      paid: sum(requests.filter(row => row.paid).map(row => row.amount)) + sum(fees.map(row => row.paidAmount)),
-      owed: sum(requests.filter(row => !row.paid).map(row => row.amount)) + sum(fees.map(row => row.left)),
+      /** Real money in: payments that count, less their refunds; test payments are kept apart. */
+      paid: net(real),
+      refunded: sum(real.map(entry => entry.refunded)),
+      /** What is left on the fees (after payments, refunds and write-offs), plus the payment requests not yet paid. */
+      owed: sum(fees.map(row => row.left)) + owedOnRequests,
+      owedOnRequests,
       late: sum(fees.filter(row => row.late).map(row => row.left)),
+      writtenOff: sum(fees.map(row => row.writtenOff?.amount ?? 0)),
+      /** Paystack's test keys move no real money: shown apart, never in paid. */
+      test: { paid: net(test), count: test.length },
     },
     can: { record: authorityAllows(actor.authority, "manage_payments"), writeOff: authorityAllows(actor.authority, "write_off_fees") },
   };

@@ -1048,6 +1048,23 @@ describe("payments", () => {
     expect(within(screen.getByRole("region", { name: "Summary" })).getByText("₦940,000")).toBeTruthy();
   });
 
+  it("lists a service's two halves: the first paid, the second due seven days after delivery until it has a date, and no pay step before then (R36)", () => {
+    const halves = [
+      { id: -4, label: "Business Review: half to start", amount: 300000, dueOn: null, paid: true, reference: "TS-CS-000004", payPath: null },
+      { id: 21, label: "Business Review: half on delivery", amount: 300000, dueOn: null, paid: false, reference: "TS-F-000021", payPath: "/pay/fee/21/abcdefghijklmnopqrstuvwxyz012345" },
+    ];
+    const planned = [{ id: 1, title: "Business Review Session 1", scheduledFor: new Date("2026-11-12T09:00:00Z"), durationMinutes: 90, meetingLink: null, status: "planned" as const, weekNumber: 1, sortOrder: 1, agenda: null, notes: null, notesSharedAt: null, notesAudience: null }];
+    render(<EngagementRoom room={room({ fees: halves, sessions: planned, nextSession: null })} />);
+    // The second half is not a first thing to do: it falls due on delivery.
+    const week = within(within(screen.getByRole("region", { name: "Getting started" })).getByRole("list", { name: "First things to do" }));
+    expect(week.queryByRole("link", { name: /^Pay / })).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: /^Payments/ }));
+    const list = within(screen.getByRole("region", { name: "Fees" }));
+    expect(list.getByText("TS-CS-000004")).toBeTruthy();
+    expect(list.getByText("Due seven days after delivery · TS-F-000021")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Summary" })).getByText("₦600,000")).toBeTruthy();
+  });
+
   it("shows only the first fee to pay until it is paid, and no tabs", () => {
     render(<EngagementRoom room={room({ fees: fees.map(fee => ({ ...fee, paid: false, payPath: `/pay/fee/${fee.id}/abcdefghijklmnopqrstuvwxyz012345` })), awaitingPayment: true })} />);
     const gate = within(screen.getByRole("region", { name: "First payment" }));

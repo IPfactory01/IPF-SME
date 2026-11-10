@@ -93,7 +93,11 @@ function previewInsight() {
 /** A client on day four of the Business Review: what an owner sees in their room. Sample data only. */
 const SAMPLE_ROOM = {
   engagementId: 1,
-  fees: [{ id: 1, label: "Business Review, payable before work begins", amount: 600_000, dueOn: null, paid: true, reference: "TS-F-000001", payPath: null }],
+  // Paid half to start and half on delivery (R36): the second half has no date until the Findings are shared.
+  fees: [
+    { id: -1, label: "Business Review: half to start", amount: 300_000, dueOn: null, paid: true, reference: "TS-CS-000001", payPath: null },
+    { id: 1, label: "Business Review: half on delivery", amount: 300_000, dueOn: null, paid: false, reference: "TS-F-000001", payPath: "/pay/fee/1/preview" },
+  ],
   awaitingPayment: false,
   content: [],
   contentTargets: [],

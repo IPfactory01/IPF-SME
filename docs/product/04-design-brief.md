@@ -384,7 +384,8 @@ be previewed as the client sees it (**Preview as client**, read only).
   payments** when there are any, Month, How it came, Find, **Download CSV**), then the sum of what is shown, then a
   dense table: day, receipt number, client, what it is for, how, reference, amount, with a refund in the danger colour
   under the amount. What it is for is a link: it opens the fee in the fees view with its payments open, marked on the
-  brand tint.
+  brand tint. A reference stays on one line, whole, so it can be read against Paystack. On a phone each payment is two
+  columns: who paid and what for, with the day, receipt and how it came under it; and the amount.
 
 ## 13. Accessibility
 

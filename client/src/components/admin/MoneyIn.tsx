@@ -66,27 +66,27 @@ export default function MoneyIn({ entries, onOpen }: { entries: readonly MoneyIn
     <section aria-label="Money in" className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
         {testCount > 0 && (
-          <div role="group" aria-label="Real or test" className="inline-flex border border-line bg-white p-0.5 text-sm">
+          <div role="group" aria-label="Real or test" className="flex w-full border border-line bg-white p-0.5 text-sm sm:inline-flex sm:w-auto">
             {(["real", "test"] as const).map(value => (
-              <button key={value} type="button" aria-pressed={shown === value} onClick={() => setKind(value)} className={`px-3 py-1 ${shown === value ? "bg-brand text-white" : "text-ink-600"}`}>{value === "real" ? "Real money" : `Test payments (${testCount})`}</button>
+              <button key={value} type="button" aria-pressed={shown === value} onClick={() => setKind(value)} className={`flex-1 px-3 py-1 sm:flex-none ${shown === value ? "bg-brand text-white" : "text-ink-600"}`}>{value === "real" ? "Real money" : `Test payments (${testCount})`}</button>
             ))}
           </div>
         )}
-        <label>
+        <label className="min-w-0 flex-1 sm:flex-none">
           <span className={LABEL}>Month</span>
-          <select className={FIELD} value={month} onChange={event => setMonth(event.target.value)}>
+          <select className={`${FIELD} w-full sm:w-auto`} value={month} onChange={event => setMonth(event.target.value)}>
             <option value="">Every month</option>
             {months.map(value => <option key={value} value={value}>{monthLabel(value)}</option>)}
           </select>
         </label>
-        <label>
+        <label className="min-w-0 flex-1 sm:flex-none">
           <span className={LABEL}>How it came</span>
-          <select className={FIELD} value={how} onChange={event => setHow(event.target.value as LedgerPaymentMethod | "")}>
+          <select className={`${FIELD} w-full sm:w-auto`} value={how} onChange={event => setHow(event.target.value as LedgerPaymentMethod | "")}>
             <option value="">Every way</option>
             {LEDGER_PAYMENT_METHODS.map(value => <option key={value} value={value}>{PAYMENT_METHOD_LABELS[value]}</option>)}
           </select>
         </label>
-        <label className="min-w-0 flex-1 sm:max-w-xs">
+        <label className="w-full min-w-0 sm:w-auto sm:min-w-64 sm:max-w-xs sm:flex-1">
           <span className={LABEL}>Find</span>
           <input className={`${FIELD} w-full`} value={find} onChange={event => setFind(event.target.value)} placeholder="Reference, receipt number or client" />
         </label>
@@ -95,26 +95,36 @@ export default function MoneyIn({ entries, onOpen }: { entries: readonly MoneyIn
       <p className="text-sm text-ink" role="status">{summary}</p>
       <div className="overflow-x-auto border border-line bg-white">
         <table className="w-full">
-          <thead><tr className="border-b border-line"><th className={TH}>Received</th><th className={TH}>Receipt</th><th className={TH}>Client</th><th className={TH}>For</th><th className={TH}>How</th><th className={TH}>Reference</th><th className={`${TH} text-right`}>Amount</th></tr></thead>
+          {/* On a phone each payment is two columns: who paid and what for, with the day, receipt and reference under it; and the amount. */}
+          <thead><tr className="border-b border-line"><th className={`${TH} hidden sm:table-cell`}>Received</th><th className={`${TH} hidden sm:table-cell`}>Receipt</th><th className={`${TH} hidden sm:table-cell`}>Client</th><th className={TH}>For</th><th className={`${TH} hidden sm:table-cell`}>How</th><th className={`${TH} hidden sm:table-cell`}>Reference</th><th className={`${TH} text-right`}>Amount</th></tr></thead>
           <tbody>
-            {rows.map(row => (
-              <tr key={row.key} className="border-b border-line-soft">
-                <td className={`${TD} whitespace-nowrap`}>{dayOf(row.receivedOn)}</td>
-                <td className={`${TD} whitespace-nowrap`}>{row.receipt ?? <span className="text-ink-muted">{row.beforeLedger ? "Before the ledger" : "None"}</span>}</td>
-                <td className={TD}>{row.client}</td>
-                <td className={TD}><button type="button" className="text-left font-semibold text-brand underline" title={row.feeLineId !== null ? "Open the fee" : "Open the payment request"} onClick={() => onOpen(row)}>{moneyInFor(row)}</button></td>
-                <td className={`${TD} whitespace-nowrap`}>{row.methodLabel}{row.test ? " test" : ""}</td>
-                <td className={`${TD} break-all`}>
-                  {row.paystackReference ?? row.note ?? "-"}
-                  {row.paystackReference && row.note && <span className="block text-xs text-ink-muted">{row.note}</span>}
-                  {row.recordedBy && <span className="block text-xs text-ink-muted">Recorded by {row.recordedBy}</span>}
-                </td>
-                <td className={`${TD} whitespace-nowrap text-right tabular-nums`}>
-                  {formatNaira(row.amount)}
-                  {row.refunded > 0 && <span className="block text-xs text-danger">{row.refunded >= row.amount ? "Refunded" : `${formatNaira(row.refunded)} refunded`}</span>}
-                </td>
-              </tr>
-            ))}
+            {rows.map(row => {
+              const receipt = row.receipt ?? (row.beforeLedger ? "Before the ledger" : "No receipt");
+              const how = `${row.methodLabel}${row.test ? " test" : ""}`;
+              return (
+                <tr key={row.key} className="border-b border-line-soft">
+                  <td className={`${TD} hidden whitespace-nowrap sm:table-cell`}>{dayOf(row.receivedOn)}</td>
+                  <td className={`${TD} hidden whitespace-nowrap sm:table-cell`}>{row.receipt ?? <span className="text-ink-muted">{receipt}</span>}</td>
+                  <td className={`${TD} hidden sm:table-cell`}>{row.client}</td>
+                  <td className={TD}>
+                    <span className="block text-ink sm:hidden">{row.client}</span>
+                    <button type="button" className="text-left font-medium text-brand underline decoration-brand-line-strong underline-offset-2 hover:decoration-brand" title={row.feeLineId !== null ? "Open the fee" : "Open the payment request"} onClick={() => onOpen(row)}>{moneyInFor(row)}</button>
+                    <span className="mt-0.5 block text-xs text-ink-muted sm:hidden">{dayOf(row.receivedOn)} · {receipt}</span>
+                    <span className="block text-xs text-ink-muted sm:hidden">{how} · <span className="whitespace-nowrap">{row.paystackReference ?? row.note ?? "-"}</span></span>
+                  </td>
+                  <td className={`${TD} hidden whitespace-nowrap sm:table-cell`}>{how}</td>
+                  <td className={`${TD} hidden break-words sm:table-cell`}>
+                    {row.paystackReference ? <span className="whitespace-nowrap">{row.paystackReference}</span> : row.note ?? "-"}
+                    {row.paystackReference && row.note && <span className="block text-xs text-ink-muted">{row.note}</span>}
+                    {row.recordedBy && <span className="block text-xs text-ink-muted">Recorded by {row.recordedBy}</span>}
+                  </td>
+                  <td className={`${TD} whitespace-nowrap text-right tabular-nums`}>
+                    {formatNaira(row.amount)}
+                    {row.refunded > 0 && <span className="block text-xs text-danger">{row.refunded >= row.amount ? "Refunded" : `${formatNaira(row.refunded)} refunded`}</span>}
+                  </td>
+                </tr>
+              );
+            })}
             {rows.length === 0 && <tr><td colSpan={7} className={`${TD} text-ink-muted`}>No payments here.</td></tr>}
           </tbody>
         </table>

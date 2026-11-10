@@ -17,7 +17,7 @@ type Row = inferRouterOutputs<AppRouter>["engagement"]["staff"]["list"]["items"]
 export type StorageStatus = inferRouterOutputs<AppRouter>["engagement"]["staff"]["storageStatus"];
 
 /**
- * Every engagement this person may see: the desk lead and the Super Admin see all; analysts, partners and specialists
+ * Every engagement this person may see: a Partner, Vice President or Senior Associate and the Super Admin see all; analysts, partners and specialists
  * see the ones they are on. The server decides the list; this only shows it.
  */
 export default function EngagementsView() {

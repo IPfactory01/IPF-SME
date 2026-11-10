@@ -22,6 +22,7 @@ import {
   requiresTwoStep,
   isPlatformPermission,
   isPlatformRole,
+  LEVEL_ROLES,
   resolveAuthority,
 } from "@shared/platformPermissions";
 
@@ -42,6 +43,17 @@ describe("platform roles are separate from business roles", () => {
 
   it("never gives a business role a platform permission or the other way round", () => {
     for (const permission of PLATFORM_PERMISSIONS) expect((BUSINESS_CAPABILITIES as readonly string[]).includes(permission)).toBe(false);
+  });
+});
+
+describe("work before the first payment (ET, 10 November 2026)", () => {
+  it("is a Partner's decision or the Super Admin's: no other level or role grants it", () => {
+    const holders = PLATFORM_ROLES.filter((role) => PLATFORM_ROLE_PERMISSIONS[role].includes("approve_work_before_payment"));
+    expect(holders).toEqual(["super_admin", "partner"]);
+    // A Partner is invited with the desk-lead bundle and the partner one; a Vice President or Senior Associate with the first only.
+    expect(LEVEL_ROLES.Partner).toContain("partner");
+    expect(LEVEL_ROLES["Vice President"]).not.toContain("partner");
+    expect(LEVEL_ROLES["Senior Associate"]).not.toContain("partner");
   });
 });
 

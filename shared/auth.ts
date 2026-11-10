@@ -27,6 +27,13 @@ export type AccountStatus = (typeof ACCOUNT_STATUSES)[number];
  */
 export const PLATFORM_ROLES = ["super_admin", "admin", "desk_lead", "analyst", "partner", "subject_matter_expert", "finance"] as const;
 export type PlatformRole = (typeof PLATFORM_ROLES)[number];
+/**
+ * What each role is called where a person sees it. Staff are known by their level (Partner, Vice President, Senior
+ * Associate...); `desk_lead` is the bundle those three share, so it is never shown as "desk lead".
+ */
+export const PLATFORM_ROLE_LABELS: Record<PlatformRole, string> = {
+  super_admin: "Super Admin", admin: "Admin", desk_lead: "Engagement lead", analyst: "Analyst", partner: "Partner", subject_matter_expert: "Specialist", finance: "Finance",
+};
 
 export const ACCOUNT_AUTH_ERRORS = {
   signInRequired: "Please sign in to continue.",

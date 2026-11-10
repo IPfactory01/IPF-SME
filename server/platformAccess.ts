@@ -3,7 +3,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { adminPermissionProfiles, engagementTeam, userPlatformRoles, users, userSessions, userTwoStep } from "../drizzle/schema";
 import { parseAdminPermissions } from "../shared/adminPermissions";
-import type { PlatformRole } from "../shared/auth";
+import { PLATFORM_ROLE_LABELS, type PlatformRole } from "../shared/auth";
 import {
   authorityAllows,
   canGrantRole,
@@ -25,16 +25,7 @@ import { alertSuperAdmins } from "./securityAlerts";
 /** A role counts while it has no end date or its end date is still ahead. */
 export const roleIsCurrent = () => or(isNull(userPlatformRoles.expiresAt), gt(userPlatformRoles.expiresAt, new Date()));
 
-const ROLE_LABELS: Record<PlatformRole, string> = {
-  super_admin: "Super Admin",
-  admin: "Admin",
-  desk_lead: "Engagement lead",
-  analyst: "Analyst",
-  partner: "Partner",
-  subject_matter_expert: "Specialist",
-  finance: "Finance",
-};
-export const roleLabel = (role: PlatformRole) => ROLE_LABELS[role];
+export const roleLabel = (role: PlatformRole) => PLATFORM_ROLE_LABELS[role];
 
 type Person = { id: number; role: "user" | "admin"; email: string | null; status: "active" | "suspended" | "disabled" };
 

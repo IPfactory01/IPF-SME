@@ -284,7 +284,7 @@ export async function startEngagementSafely(db: Database, input: { businessCheck
 export const canStart = (actor: StaffActor) => canSeeAll(actor) && authorityAllows(actor.authority, "manage_engagements");
 function requireStart(actor: StaffActor) {
   if (!canStart(actor)) {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Only the desk lead can start an engagement by hand." });
+    throw new TRPCError({ code: "FORBIDDEN", message: "Only a Partner, Vice President or Senior Associate can start an engagement by hand." });
   }
 }
 
@@ -798,10 +798,10 @@ export async function canReviewEngagement(db: Pick<Database, "select">, actor: S
   return Boolean(mine && ENGAGEMENT_REVIEW_ROLES.includes(mine.role));
 }
 
-/** The desk lead, a partner, or the engagement's own Engagement Manager or Lead Consultant approves a prescription or plan. */
+/** A Partner, Vice President or Senior Associate, or the engagement's own Engagement Manager or Lead Consultant, approves a prescription or plan. */
 export async function approveDeliverable(db: Database, actor: StaffActor, input: { deliverableId: number }) {
   const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
-  if (!(await canReviewEngagement(db, actor, deliverable.engagementId))) throw new TRPCError({ code: "FORBIDDEN", message: "Only the desk lead, a partner or this engagement's Engagement Manager or Lead Consultant can approve this." });
+  if (!(await canReviewEngagement(db, actor, deliverable.engagementId))) throw new TRPCError({ code: "FORBIDDEN", message: "Only a Partner, Vice President or Senior Associate, or this engagement's Engagement Manager or Lead Consultant, can approve this." });
   if (deliverable.status === "shared") throw new TRPCError({ code: "CONFLICT", message: "This is already shared." });
   await db.transaction(async tx => {
     await tx.update(engagementDeliverables).set({ status: "approved", approvedAt: new Date(), approvedByUserId: actor.id }).where(eq(engagementDeliverables.id, deliverable.id));
@@ -815,7 +815,7 @@ export async function shareDeliverable(db: Database, actor: StaffActor, input: {
   requireManage(actor);
   const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
   if (DELIVERABLES_NEEDING_APPROVAL.includes(deliverable.kind) && deliverable.status !== "approved" && deliverable.status !== "shared") {
-    throw new TRPCError({ code: "FORBIDDEN", message: `The desk lead approves every ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]} before the client sees it.` });
+    throw new TRPCError({ code: "FORBIDDEN", message: `Every ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]} is approved before the client sees it, by a Partner, Vice President or Senior Associate, or this engagement's lead.` });
   }
   await db.transaction(async tx => {
     await tx.update(engagementDeliverables).set({ status: "shared", audience: input.audience, sharedAt: new Date(), sharedByUserId: actor.id }).where(eq(engagementDeliverables.id, deliverable.id));

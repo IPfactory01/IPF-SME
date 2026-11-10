@@ -230,7 +230,7 @@ describe("the team's engagements", () => {
     expect(screen.getByRole("note").textContent).toContain("migration 0008");
   });
 
-  it("lets the desk lead add an analyst and approve a prescription before it is shared", () => {
+  it("lets a Partner, Vice President or Senior Associate add an analyst and approve a prescription before it is shared", () => {
     api.detail = detail({ manage: true, assign: true, review: true });
     render(<EngagementsView />);
     fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
@@ -263,7 +263,7 @@ describe("the team's engagements", () => {
     const drawer = within(screen.getByRole("dialog"));
     expect(drawer.queryByLabelText("Add to the team")).toBeNull();
     expect(drawer.queryByRole("button", { name: "Approve" })).toBeNull();
-    expect(drawer.getByText("The desk lead approves this before it can be shared.")).toBeTruthy();
+    expect(drawer.getByText("A Partner, Vice President or Senior Associate, or this engagement's lead, approves this before it can be shared.")).toBeTruthy();
   });
 
   it("saves notes without sharing, and shares only notes that are saved", () => {
@@ -547,11 +547,25 @@ describe("fees on the team's side", () => {
     expect(api.calls.saveFees).toEqual([{ engagementId: row.id, feeLines: [{ label: "Business Review, payable before work begins", amount: 600000, dueOn: null }, { label: "Travel to Abuja", amount: 50000, dueOn: null }] }]);
   });
 
-  it("sends a fee's payment link, opens the room early, and records a payment by hand", () => {
+  it("offers opening the room before payment only to a Partner or the Super Admin, and says so to everyone else", () => {
     api.list = { setUp: true, items: [row], canStart: true, seesAll: true } as never;
     api.calls = {};
     const before = api.fees;
-    api.fees = { feeLines: [{ id: 81, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-09", paidAt: null, paidOnline: false, reference: "TS-F-000081" }], total: 470000, suggested: null, opensOnPayment: true, online: true, can: { edit: true, sendLink: true } };
+    api.fees = { feeLines: [{ id: 81, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-09", paidAt: null, paidOnline: false, reference: "TS-F-000081" }], total: 470000, suggested: null, opensOnPayment: true, online: true, can: { edit: true, sendLink: true, approveUnpaidWork: false } } as unknown;
+    api.detail = detail({ manage: true, assign: true, review: true });
+    render(<EngagementsView />);
+    fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
+    const section = within(within(screen.getByRole("dialog")).getByText("Fees").closest("section")!);
+    expect(section.queryByRole("button", { name: "Open the room now" })).toBeNull();
+    expect(section.getByText("Only a Partner can open it before payment, or move the first fee past the start date.")).toBeTruthy();
+    api.fees = before;
+  });
+
+  it("sends a fee's payment link, opens the room early (a Partner), and records a payment by hand", () => {
+    api.list = { setUp: true, items: [row], canStart: true, seesAll: true } as never;
+    api.calls = {};
+    const before = api.fees;
+    api.fees = { feeLines: [{ id: 81, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-09", paidAt: null, paidOnline: false, reference: "TS-F-000081" }], total: 470000, suggested: null, opensOnPayment: true, online: true, can: { edit: true, sendLink: true, approveUnpaidWork: true } };
     api.detail = detail({ manage: true, assign: true, review: true });
     render(<EngagementsView />);
     fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);

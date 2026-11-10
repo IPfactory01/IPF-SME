@@ -596,7 +596,7 @@ function Deliverables({ data, engagementId }: { data: Detail; engagementId: numb
   const [adding, setAdding] = useState(false);
   return (
     <DetailSection title="Deliverables">
-      <p className="text-xs text-ink-muted">Findings, the problem statement, the prescription, tools and the plan. The desk lead approves every prescription and plan before the client sees it. Editing a shared item takes it back to draft.</p>
+      <p className="text-xs text-ink-muted">Findings, the problem statement, the prescription, tools and the plan. A Partner, Vice President or Senior Associate, or this engagement's lead, approves every prescription and plan before the client sees it. Editing a shared item takes it back to draft.</p>
       {data.deliverables.map(item => <DeliverableCard key={item.id} item={item} data={data} engagementId={engagementId} />)}
       {adding ? <DeliverableCard data={data} engagementId={engagementId} onDone={() => setAdding(false)} /> : data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add a deliverable</Button>}
     </DetailSection>
@@ -646,7 +646,7 @@ function DeliverableCard({ item, data, engagementId, onDone }: { item?: Delivera
         )}
       </div>
       {item && <StaffFiles files={item.files} engagementId={engagementId} target={{ kind: "deliverable", id: item.id }} canUpload={data.uploadsEnabled && (data.can.manage || data.can.contribute)} canManage={data.can.manage} />}
-      {item && needsApproval && !approved && <p className="text-xs text-ink-muted">The desk lead approves this before it can be shared.</p>}
+      {item && needsApproval && !approved && <p className="text-xs text-ink-muted">A Partner, Vice President or Senior Associate, or this engagement's lead, approves this before it can be shared.</p>}
       {item && item.status !== "shared" && data.can.manage && <DeliveryShareNote type={data.engagement.type} kind={item.kind} balanceWaiting={data.balanceOnDelivery} />}
       {item && (
         <div className="space-y-1 border-t border-line-soft pt-2">
@@ -771,7 +771,8 @@ function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { na
       {data.opensOnPayment && (
         <div role="status" className="flex flex-wrap items-center justify-between gap-2 border border-brand-line bg-brand-tint p-2 text-xs text-ink">
           <span>The client's room opens once the first fee is paid. Until then they see only the fee to pay.</span>
-          {data.can.edit && <button type="button" className="font-semibold text-brand underline" disabled={openNow.isPending} onClick={() => openNow.mutate({ engagementId })}>Open the room now</button>}
+          {data.can.edit && data.can.approveUnpaidWork && <button type="button" className="font-semibold text-brand underline" disabled={openNow.isPending} onClick={() => openNow.mutate({ engagementId })}>Open the room now</button>}
+          {data.can.edit && !data.can.approveUnpaidWork && <span className="text-ink-muted">Only a Partner can open it before payment, or move the first fee past the start date.</span>}
         </div>
       )}
       <ul aria-label="Fee lines" className="space-y-1">

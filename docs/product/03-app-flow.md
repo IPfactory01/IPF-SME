@@ -68,8 +68,9 @@ flowchart LR
 | Digital marketing | Each month's fee | Day 0, 30 and 60 from the kickoff |
 | A Monthly Service | A quarter at a time, before the quarter starts | The start of each quarter |
 
-The room opens on the first payment (built, R11). Finance counts every unpaid fee as owed, and a fee as late once its
-date passes unpaid. A second half has no date until delivery, so it is owed but cannot be late. Work pauses seven days
+The room opens on the first payment (built, R11). Only a Partner or the Super Admin can open it sooner, or move the
+first fee past the start date before anything is paid (`approve_work_before_payment`); each is recorded. Finance counts
+every unpaid fee as owed, and a fee as late once its date passes unpaid. A second half has no date until delivery, so it is owed but cannot be late. Work pauses seven days
 after a missed date, with the client told at three days (D6, R51).
 
 Today's clients: **Marcelle (Digital marketing)** pays at 30, 60 and 90 days from her kickoff, as agreed with her; her
@@ -151,7 +152,7 @@ flowchart TD
 
 | Person | Starts from | Daily work | Cannot |
 |---|---|---|---|
-| **Lead** (Engagement Manager or Lead Consultant on the engagement; Partner, Vice President, Senior Associate, or an Associate leading it) | **My projects** in Engagements | Opens engagements and sets terms; staffs them; approves Deliverables; shares notes; sends fee links; opens a room early | Approve on an engagement they do not lead, unless their level approves everywhere |
+| **Lead** (Engagement Manager or Lead Consultant on the engagement; Partner, Vice President, Senior Associate, or an Associate leading it) | **My projects** in Engagements | Opens engagements (their terms follow what was bought); staffs them; approves Deliverables; shares notes; sends fee links; a Partner can open a room before payment | Approve on an engagement they do not lead, unless their level approves everywhere |
 | **Analyst** (Senior Business Analyst, Business Analyst) | **My projects** | Keeps the Work Plan and Data Request current; matches files; drafts Deliverables; records check-ins; records payments by hand | Approve, staff, or see engagements they are not on |
 | **Specialist** | Invited by the Super Admin at Specialist level with an end date; then **added to an engagement** by a lead with `assign_engagements` (Partner, Vice President, Senior Associate), who sets the role Specialist; the Specialist is emailed *You are on {business} as Specialist* and it appears in **My projects**; one step from the engagement with R58 | Adds team items; attaches drafts to Deliverables for the lead to share | See internal notes or fees; change anything already there; reach the client directly |
 | **Digital Marketer** (a project role on a Digital marketing engagement; R45) | **My projects** | The content plan, publishing, the monthly numbers; the client's main contact, on WhatsApp | As their level allows |
@@ -270,7 +271,7 @@ info@ipfactory.co.
 | A client forgets their password | "Forgot your password?" on `/login` | Emails a 20-minute single-use link; same answer whether or not the account exists | — | Built (sign-in links replace this with R41) |
 | A fee goes unpaid | Reminders; the Payments tab shows it late | Reminds at 5 days before, on the day, at 3 and 7 days after | Told at 7 days; work pauses (D6) | To build (R12) |
 | A client goes quiet on records | Reminders | Reminds before and after each date | Told what is still outstanding | To build (R16) |
-| A client should get in before paying | — | — | **Open the room now** (recorded) | Built |
+| A client should get in before paying | — | — | A Partner or the Super Admin: **Open the room now** (recorded) | Built |
 | Footage is too large to upload | **Send a link** on the item: "A link to a shared folder on Google Drive, Dropbox, WeTransfer or iCloud. Videos always come this way, or on WhatsApp." A video file is refused with the same advice | Stores the link, never the video | The Content Producer opens it from the item (**Open the link**) | Built (R43); Send on WhatsApp to {name} with R44 |
 | A wrong or private file was sent | **Remove** beside their own file until the team has matched it or accepted its item; after that, they ask the team | Deletes the stored file and the record; an item back to "To do" if that file was its only answer | Remove any file with a reason, recorded | Built (R61) |
 | The client does not know whom to message | Each team member with **WhatsApp {first name}**, once that person agreed in their Account settings; an item offers **Send on WhatsApp to {name}** (the person who asked for it, or the main contact) | Shows a number only once agreed, and only to clients of that person's engagements | Each person adds their number and agrees in Account settings | Built (R44, R45); numbers wait on each person |
@@ -347,7 +348,7 @@ checks every action again. Under the person's name is their level.
 |---|---|---|
 | The client | Owner, email, WhatsApp, account; **Send sign-in link**; **Preview as client** (read only, logged) | Anyone on it; sign-in link with `manage_client_onboarding` |
 | Stage and team | Stage; people and their role on the engagement (each emailed when added) | Stage: `manage_engagements`; team: `assign_engagements` |
-| Fees | Each fee: amount, date, Paid or Paid online; **Send link**; **Open the room now** while it waits for its first payment; payment terms (R36, to build) | `manage_engagements`; links also `manage_payments`; never a Specialist |
+| Fees | Each fee: amount, date, Paid or Paid online; **Send link**; **Open the room now** while it waits for its first payment (a Partner or the Super Admin; others see who can); terms follow what was bought (R36) | `manage_engagements`; links also `manage_payments`; opening early or moving the first fee past the start date also `approve_work_before_payment`; never a Specialist |
 | The problem | The one problem and its statement | `manage_engagements` |
 | Sessions | Time, link, agenda; client notes and internal notes; share the client notes | `manage_engagements`; internal notes never to a Specialist |
 | Content (Digital marketing) | Reels, posts, stories by month and status | `manage_engagements` |
@@ -409,6 +410,7 @@ server action.
 | `review_engagements` | Approve Deliverables on any engagement in scope; see internal notes and fees | Partner, Vice President, Senior Associate | Approve, internal notes, fees |
 | `contribute_engagements` | Add team-side Work Plan items and draft files, seen by IP Factory only until shared | Specialist | Team items, draft uploads |
 | `manage_payments` | Payment requests, confirming money by hand, sending payment and fee links | Finance | `businessSupport` payment actions, Send link |
+| `approve_work_before_payment` | Work before the first payment: **Open the room now**, or moving the first fee past the start date before anything is paid (ET, 10 November 2026; D4) | Partner (and the Super Admin) | Open the room now, Save the fees |
 | `view_financials` | Finance: paid, owed, late; fees on an engagement | Partner, Vice President, Senior Associate, Finance | Finance, fees |
 | `manage_scheduling` | Scheduling settings (the older admin scheduling capability) | Partner, Vice President, Senior Associate | Nothing yet (C18); calls are booked under `manage_client_onboarding` |
 | `manage_communications` | Communication settings (the older admin communications capability) | Partner, Vice President, Senior Associate | Nothing yet (C18) |

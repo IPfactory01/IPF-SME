@@ -76,7 +76,7 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 | | Seen by the team, previewed as client | Team | `staff.list`, `detail`, `previewRoom` | 8.3 | Lead, Analyst: Starts from My projects | Built |
 | | Seen by the client | Client | `client.room` | 4.4 #0–#1 | Client: First visit | Built (first visit R46) |
 | | Stage changed, problem set | Lead | `staff.setStage`, `saveProblem` | 5 Engagement | — | Built |
-| | Opened before payment | Lead | `staff.openRoomNow` | 4.3 #3 | Lead: Opens a room early | Built |
+| | Opened before payment | Partner or Super Admin | `staff.openRoomNow` | 4.3 #3 | Partner: opens a room before payment | Built |
 | | Paused, resumed | Platform, lead | — | 4.4 #7b | Client: Late: work pauses | To build (R51) |
 | | Closed with its result | Lead | `staff.setStage` (closed, no result recorded) | 4.5 #1 | Lead: Closes the engagement | Partly built (R26) |
 | | Archived or deleted when opened by mistake | — | Not possible | — | — | **C7** |

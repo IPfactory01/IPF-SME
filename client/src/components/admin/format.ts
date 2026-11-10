@@ -1,4 +1,5 @@
 /** Display helpers for the admin console. Presentation only: nothing here decides access or changes a record. */
+import { PLATFORM_ROLE_LABELS } from "@shared/auth";
 
 type Dateish = Date | string | null | undefined;
 
@@ -36,17 +37,9 @@ export function combineDateAndTime(date: string, time: string): Date | null {
   return Number.isNaN(combined.getTime()) ? null : combined;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  super_admin: "Super Admin",
-  admin: "Admin",
-  desk_lead: "Desk Lead",
-  analyst: "Analyst",
-  partner: "Partner",
-  subject_matter_expert: "Subject Matter Expert",
-  finance: "Finance",
-};
+const ROLE_LABELS: Record<string, string> = PLATFORM_ROLE_LABELS;
 
-/** "Super Admin", or "Super Admin · Desk Lead". The plain Admin role is implied by Super Admin, so it is not repeated. */
+/** "Super Admin", or "Super Admin · Engagement lead". The plain Admin role is implied by Super Admin, so it is not repeated. */
 export function roleDisplay(roles: readonly string[] | undefined): string {
   const shown = (roles ?? []).filter(role => !(role === "admin" && roles?.includes("super_admin")));
   return shown.map(role => ROLE_LABELS[role] ?? role.replace(/_/g, " ")).join(" · ");

@@ -148,8 +148,10 @@ is no payment in arrears (D4):
 | Digital Marketing | Each month before it starts: day 0, 30 and 60 from the kickoff |
 | A Monthly Service | A quarter at a time, before the quarter starts |
 
-The room opens on the first payment. Work pauses seven days after a missed date (decision D6; section 22 of the Terms
-allows IP Factory to suspend for unresolved payment issues).
+The room opens on the first payment. Only a Partner or the Super Admin can open it sooner, or move the first fee past the
+start date before anything is paid (`approve_work_before_payment`, ET 10 November 2026); each is recorded. Work pauses
+seven days after a missed date (decision D6; section 22 of the Terms allows IP Factory to suspend for unresolved
+payment issues).
 
 | Product | Way to buy | Price | Delivery | Front door |
 |---|---|---|---|---|

@@ -496,7 +496,9 @@ describe("account dashboard", () => {
     api.state.me = STAFF;
     renderAt("/dashboard", <AccountDashboard />);
     expect(screen.getByText("Internal workspace")).toBeTruthy();
-    expect(screen.getByText(/desk lead/)).toBeTruthy();
+    // Staff are known by their level; the desk-lead bundle reads "Engagement lead", never "desk lead".
+    expect(screen.getByText(/Engagement lead/)).toBeTruthy();
+    expect(screen.queryByText(/desk lead/)).toBeNull();
     expect(screen.getByRole("link", { name: "Open the internal area" }).getAttribute("href")).toBe("/admin");
     expect(screen.queryByText("You are not a member of a business yet.")).toBeNull();
     expect(screen.queryByText("Your business")).toBeNull();

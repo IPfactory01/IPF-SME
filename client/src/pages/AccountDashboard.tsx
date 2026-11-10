@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { isRefusal } from "@/lib/readPolicy";
 import { trpc } from "@/lib/trpc";
+import { PLATFORM_ROLE_LABELS } from "@shared/auth";
 import { useRoomProject } from "@/lib/roomProject";
 import { CURRENT_STATE } from "@shared/businessSupport";
 import type { AccountSessionView } from "@shared/auth";
@@ -70,7 +71,7 @@ function Dashboard({ account }: { account: AccountSessionView }) {
             <CardTitle className="text-lg font-semibold">Internal workspace</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
-            <p className="text-ink-muted">Your responsibilities: {account.platformRoles.map(role => role.replace(/_/g, " ")).join(", ")}.</p>
+            <p className="text-ink-muted">Your responsibilities: {account.platformRoles.map(role => PLATFORM_ROLE_LABELS[role]).join(", ")}.</p>
             <Button asChild variant="outline" className="rounded-none text-sm font-medium"><a href="/admin">Open the internal area</a></Button>
           </CardContent>
         </Card>

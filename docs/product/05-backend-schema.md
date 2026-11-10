@@ -179,7 +179,7 @@ authority is the union of their roles, any profile the Super Admin set, and the 
 | admin | Nothing by default (capabilities are granted one by one) |
 | desk_lead | view_all_businesses, manage_engagements, assign_engagements, review_engagements, manage_scheduling, manage_communications, view_financials |
 | analyst | view_assigned_businesses, manage_engagements |
-| partner | view_assigned_businesses, review_engagements, view_financials |
+| partner | view_assigned_businesses, review_engagements, view_financials, approve_work_before_payment |
 | subject_matter_expert | view_assigned_businesses, contribute_engagements |
 | finance | manage_payments, view_financials |
 

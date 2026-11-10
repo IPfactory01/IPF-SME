@@ -29,6 +29,12 @@ const notFound = () => new TRPCError({ code: "NOT_FOUND", message: "Not found." 
 const requireManage = (actor: StaffActor) => {
   if (!authorityAllows(actor.authority, "manage_engagements")) throw new TRPCError({ code: "FORBIDDEN", message: "Your role does not include working on engagements." });
 };
+/** Work before the first payment is a Partner's decision, or the Super Admin's (ET, 10 November 2026). */
+const mayApproveUnpaidWork = (actor: StaffActor) => authorityAllows(actor.authority, "approve_work_before_payment");
+export const UNPAID_WORK_REFUSALS = {
+  openRoom: "Only a Partner or the Super Admin can open a client's room before the first payment.",
+  firstFee: "Only a Partner or the Super Admin can move the first fee past the start date before it is paid.",
+} as const;
 
 async function feeLinesOf(db: Pick<Database, "select">, engagementId: number) {
   return db.select().from(engagementFeeLines).where(eq(engagementFeeLines.engagementId, engagementId)).orderBy(asc(engagementFeeLines.sortOrder), asc(engagementFeeLines.id));
@@ -46,7 +52,7 @@ export async function staffFees(db: Database, actor: StaffActor, engagementId: n
     /** Waiting for its first payment: the client sees only the fee to pay until one is paid. */
     opensOnPayment: engagement.opensOnPayment,
     online: paystackMode() !== "off",
-    can: { edit: authorityAllows(actor.authority, "manage_engagements"), sendLink: canSendLinks(actor) },
+    can: { edit: authorityAllows(actor.authority, "manage_engagements"), sendLink: canSendLinks(actor), approveUnpaidWork: mayApproveUnpaidWork(actor) },
   };
 }
 
@@ -65,6 +71,14 @@ export async function saveFees(db: Database, actor: StaffActor, input: { engagem
     if (!Number.isInteger(line.amount) || line.amount <= 0 || line.amount > AGREEMENT_LIMITS.amount) throw new TRPCError({ code: "BAD_REQUEST", message: "Every fee needs an amount in naira." });
   }
   const existing = await feeLinesOf(db, input.engagementId);
+  // Before anything is paid, the first fee is due on the start date (terms follow what is bought, R36). Moving it later,
+  // or taking its date away, is work before payment: a Partner's decision. A first fee already moved stays as it is.
+  const firstDue = (lines: readonly { dueOn: string | null }[]) => lines[0]?.dueOn || null;
+  const unpaidYet = engagement.paymentRequestId === null && !existing.some(line => line.paidAt);
+  const startsOn = engagement.startedOn ?? null;
+  const newFirstDue = firstDue(input.feeLines);
+  const defersFirstFee = unpaidYet && startsOn !== null && input.feeLines.length > 0 && (newFirstDue === null || newFirstDue > startsOn) && newFirstDue !== (existing.length ? firstDue(existing) : startsOn);
+  if (defersFirstFee && !mayApproveUnpaidWork(actor)) throw new TRPCError({ code: "FORBIDDEN", message: UNPAID_WORK_REFUSALS.firstFee });
   const same = (a: readonly FeeLineDraft[], b: readonly FeeLineDraft[]) => a.length === b.length && a.every((line, index) => line.label.trim() === b[index]!.label.trim() && line.amount === b[index]!.amount && (line.dueOn || null) === (b[index]!.dueOn || null));
   const changed = !same(existing, input.feeLines);
   await db.transaction(async tx => {
@@ -75,7 +89,7 @@ export async function saveFees(db: Database, actor: StaffActor, input: { engagem
         paidAt: existing.find(old => old.label === line.label.trim() && old.amount === line.amount)?.paidAt ?? null,
       })));
     }
-    await recordAudit(tx, { action: "engagement_fees_saved", actorUserId: actor.id, details: { engagementId: input.engagementId, total: feeTotal(input.feeLines), lines: input.feeLines.length } });
+    await recordAudit(tx, { action: "engagement_fees_saved", actorUserId: actor.id, details: { engagementId: input.engagementId, total: feeTotal(input.feeLines), lines: input.feeLines.length, ...(defersFirstFee ? { firstFeeMovedTo: newFirstDue ?? "no date", startedOn: startsOn } : {}) } });
   });
   // The owner is told when the fees change once they have the room (R47): the schedule as it now stands.
   const notified = changed ? await tellOwnerFeesChanged(db, engagement, input.feeLines) : false;
@@ -150,6 +164,7 @@ export async function staffSendFeeLink(db: Database, actor: StaffActor, input: {
 /** "Open the room now": the lead lets a client in before the first payment (a payment arranged another way). */
 export async function openRoomNow(db: Database, actor: StaffActor, input: { engagementId: number }) {
   requireManage(actor);
+  if (!mayApproveUnpaidWork(actor)) throw new TRPCError({ code: "FORBIDDEN", message: UNPAID_WORK_REFUSALS.openRoom });
   await requireStaffEngagement(db, actor, input.engagementId);
   const opened = await openRoomIfFirstPayment(db, input.engagementId);
   if (opened) await recordAudit(db, { action: "engagement_room_opened", actorUserId: actor.id, details: { engagementId: input.engagementId, before: "first payment" } });

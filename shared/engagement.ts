@@ -137,7 +137,7 @@ export const ENGAGEMENT_DELIVERABLE_KINDS = ["findings", "problem_statement", "p
 export type EngagementDeliverableKind = (typeof ENGAGEMENT_DELIVERABLE_KINDS)[number];
 export const ENGAGEMENT_DELIVERABLE_KIND_LABELS: Record<EngagementDeliverableKind, string> = { findings: "Findings", problem_statement: "Problem Statement", prescription: "Prescription", tools: "Tools", plan: "Plan", other: "Document" };
 
-/** O3: the desk lead approves every prescription and plan before the client sees it. */
+/** O3: a Partner, Vice President or Senior Associate, or the engagement's lead, approves every prescription and plan before the client sees it. */
 export const DELIVERABLES_NEEDING_APPROVAL: readonly EngagementDeliverableKind[] = ["prescription", "plan"];
 
 export const ENGAGEMENT_DELIVERABLE_STATUSES = ["draft", "awaiting_approval", "approved", "shared"] as const;

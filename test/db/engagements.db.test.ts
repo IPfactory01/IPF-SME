@@ -534,6 +534,45 @@ for (const target of targets) {
       });
     });
 
+    describe("work before the first payment: Partners and the Super Admin only (ET, 10 November 2026)", () => {
+      const schedule = (first: string | null) => [
+        { label: "Month 1 service fee, payable on starting", amount: 470_000, dueOn: first },
+        { label: "Month 2 service fee, payable before day 31", amount: 470_000, dueOn: "2026-12-16" },
+        { label: "Month 3 service fee, payable before day 61", amount: 470_000, dueOn: "2027-01-15" },
+      ];
+
+      it("lets only a Partner or the Super Admin open a room before payment, or move the first fee past the start date", async () => {
+        const opened = await (await superAdmin.call()).engagement.staff.createDirect({ type: "digital_marketing", businessName: "Early Studio", contactName: "Efe Early", contactEmail: uniqueEmail("early-studio"), startedOn: "2026-11-16" });
+        const engagementId = opened.engagementId;
+        // A Senior Associate (the desk-lead bundle) runs engagements but does not decide to work before being paid.
+        const associate = await signIn(await person(["desk_lead"]), true);
+        await expect((await associate.call()).engagement.staff.openRoomNow({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN", message: "Only a Partner or the Super Admin can open a client's room before the first payment." });
+        await expect((await associate.call()).engagement.staff.saveFees({ engagementId, feeLines: schedule("2026-12-16") })).rejects.toMatchObject({ code: "FORBIDDEN", message: "Only a Partner or the Super Admin can move the first fee past the start date before it is paid." });
+        await expect((await associate.call()).engagement.staff.saveFees({ engagementId, feeLines: schedule(null) })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        expect((await (await associate.call()).engagement.staff.fees({ engagementId })).can).toMatchObject({ edit: true, approveUnpaidWork: false });
+        // Other changes, with the first fee on the start date, are theirs to make.
+        expect(await (await associate.call()).engagement.staff.saveFees({ engagementId, feeLines: [...schedule("2026-11-16").slice(0, 2), { label: "Month 3 service fee, payable before day 61", amount: 450_000, dueOn: "2027-01-15" }] })).toMatchObject({ success: true });
+
+        // A Partner (both bundles) may, and the change is on the record.
+        const partner = await signIn(await person(["desk_lead", "partner"]), true);
+        expect((await (await partner.call()).engagement.staff.fees({ engagementId })).can).toMatchObject({ approveUnpaidWork: true });
+        expect(await (await partner.call()).engagement.staff.saveFees({ engagementId, feeLines: schedule("2026-12-01") })).toMatchObject({ success: true });
+        const saved = (await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_fees_saved"))).map((row: { details: string }) => JSON.parse(row.details));
+        expect(saved).toContainEqual(expect.objectContaining({ engagementId, firstFeeMovedTo: "2026-12-01", startedOn: "2026-11-16" }));
+        // A first fee a Partner moved stays as it is when someone else edits the rest.
+        expect(await (await associate.call()).engagement.staff.saveFees({ engagementId, feeLines: [schedule("2026-12-01")[0]!, { label: "Month 2 service fee, payable before day 31", amount: 470_000, dueOn: "2026-12-20" }, schedule("2026-12-01")[2]!] })).toMatchObject({ success: true });
+        expect(await (await partner.call()).engagement.staff.openRoomNow({ engagementId })).toMatchObject({ opened: true });
+      });
+
+      it("leaves a Business Review paid through the check, or an engagement already paid, to the team", async () => {
+        const { engagementId } = await client("paid-first");
+        const associate = await signIn(await person(["desk_lead"]), true);
+        const fees = (await (await associate.call()).engagement.staff.fees({ engagementId })).feeLines;
+        // Its first half was paid on the check's payment request; the second half has no date until delivery.
+        expect(await (await associate.call()).engagement.staff.saveFees({ engagementId, feeLines: [...fees.map((line: { label: string; amount: number; dueOn: string | null }) => ({ label: line.label, amount: line.amount, dueOn: line.dueOn })), { label: "Travel to Abuja", amount: 50_000, dueOn: null }] })).toMatchObject({ success: true });
+      });
+    });
+
     describe("Digital Marketing from the menu (R35)", () => {
       it("opens a client's request for Digital Marketing as its own programme, with its three months' fees, not as a Monthly Service", async () => {
         const { owner, businessId } = await client("wants-reels");

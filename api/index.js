@@ -920,6 +920,15 @@ var ACCOUNT_LOCKOUT_MS = 15 * 60 * 1e3;
 var ACCOUNT_FULL_NAME_MAX_LENGTH = 255;
 var ACCOUNT_EMAIL_MAX_LENGTH = 320;
 var PLATFORM_ROLES = ["super_admin", "admin", "desk_lead", "analyst", "partner", "subject_matter_expert", "finance"];
+var PLATFORM_ROLE_LABELS = {
+  super_admin: "Super Admin",
+  admin: "Admin",
+  desk_lead: "Engagement lead",
+  analyst: "Analyst",
+  partner: "Partner",
+  subject_matter_expert: "Specialist",
+  finance: "Finance"
+};
 var ACCOUNT_AUTH_ERRORS = {
   signInRequired: "Please sign in to continue.",
   invalidCredentials: "Your email or password is not correct.",
@@ -1060,6 +1069,9 @@ var PLATFORM_PERMISSIONS = [
   "review_engagements",
   "contribute_engagements",
   "manage_payments",
+  // Work before the first payment (ET, 10 November 2026): opening a client's room before it is paid, or moving the
+  // first fee past the start date. Partners and the Super Admin only; terms otherwise follow what is bought (R36, D4).
+  "approve_work_before_payment",
   "view_financials",
   "manage_scheduling",
   "manage_communications",
@@ -1074,7 +1086,7 @@ var PLATFORM_ROLE_PERMISSIONS = {
   // The desk and partners see Finance (ET, 6 November 2026): read only; recording payments stays with manage_payments.
   desk_lead: ["view_all_businesses", "manage_engagements", "assign_engagements", "review_engagements", "manage_scheduling", "manage_communications", "view_financials"],
   analyst: ["view_assigned_businesses", "manage_engagements"],
-  partner: ["view_assigned_businesses", "review_engagements", "view_financials"],
+  partner: ["view_assigned_businesses", "review_engagements", "view_financials", "approve_work_before_payment"],
   // Specialists hand in work on their own engagements (ET, 6 November 2026): team-side Work Plan items and draft files on
   // a Deliverable, seen by IP Factory only until the lead shares them. They do not see internal notes or fees.
   subject_matter_expert: ["view_assigned_businesses", "contribute_engagements"],
@@ -3489,16 +3501,7 @@ async function alertSuperAdmins(db, alert) {
 
 // server/platformAccess.ts
 var roleIsCurrent = () => or(isNull2(userPlatformRoles.expiresAt), gt2(userPlatformRoles.expiresAt, /* @__PURE__ */ new Date()));
-var ROLE_LABELS = {
-  super_admin: "Super Admin",
-  admin: "Admin",
-  desk_lead: "Engagement lead",
-  analyst: "Analyst",
-  partner: "Partner",
-  subject_matter_expert: "Specialist",
-  finance: "Finance"
-};
-var roleLabel = (role) => ROLE_LABELS[role];
+var roleLabel = (role) => PLATFORM_ROLE_LABELS[role];
 var NO_AUTHORITY = { roles: [], permissions: [], legacyCapabilities: [], isSuperAdmin: false };
 async function loadAuthority(db, person) {
   const [stored, profile] = await Promise.all([
@@ -7140,6 +7143,11 @@ var notFound3 = () => new TRPCError11({ code: "NOT_FOUND", message: "Not found."
 var requireManage = (actor) => {
   if (!authorityAllows(actor.authority, "manage_engagements")) throw new TRPCError11({ code: "FORBIDDEN", message: "Your role does not include working on engagements." });
 };
+var mayApproveUnpaidWork = (actor) => authorityAllows(actor.authority, "approve_work_before_payment");
+var UNPAID_WORK_REFUSALS = {
+  openRoom: "Only a Partner or the Super Admin can open a client's room before the first payment.",
+  firstFee: "Only a Partner or the Super Admin can move the first fee past the start date before it is paid."
+};
 async function feeLinesOf(db, engagementId) {
   return db.select().from(engagementFeeLines).where(eq13(engagementFeeLines.engagementId, engagementId)).orderBy(asc3(engagementFeeLines.sortOrder), asc3(engagementFeeLines.id));
 }
@@ -7154,7 +7162,7 @@ async function staffFees(db, actor, engagementId) {
     /** Waiting for its first payment: the client sees only the fee to pay until one is paid. */
     opensOnPayment: engagement.opensOnPayment,
     online: paystackMode() !== "off",
-    can: { edit: authorityAllows(actor.authority, "manage_engagements"), sendLink: canSendLinks(actor) }
+    can: { edit: authorityAllows(actor.authority, "manage_engagements"), sendLink: canSendLinks(actor), approveUnpaidWork: mayApproveUnpaidWork(actor) }
   };
 }
 function initialFeeRows(engagementId, lines) {
@@ -7169,6 +7177,12 @@ async function saveFees(db, actor, input) {
     if (!Number.isInteger(line.amount) || line.amount <= 0 || line.amount > AGREEMENT_LIMITS.amount) throw new TRPCError11({ code: "BAD_REQUEST", message: "Every fee needs an amount in naira." });
   }
   const existing = await feeLinesOf(db, input.engagementId);
+  const firstDue = (lines) => lines[0]?.dueOn || null;
+  const unpaidYet = engagement.paymentRequestId === null && !existing.some((line) => line.paidAt);
+  const startsOn = engagement.startedOn ?? null;
+  const newFirstDue = firstDue(input.feeLines);
+  const defersFirstFee = unpaidYet && startsOn !== null && input.feeLines.length > 0 && (newFirstDue === null || newFirstDue > startsOn) && newFirstDue !== (existing.length ? firstDue(existing) : startsOn);
+  if (defersFirstFee && !mayApproveUnpaidWork(actor)) throw new TRPCError11({ code: "FORBIDDEN", message: UNPAID_WORK_REFUSALS.firstFee });
   const same = (a, b) => a.length === b.length && a.every((line, index2) => line.label.trim() === b[index2].label.trim() && line.amount === b[index2].amount && (line.dueOn || null) === (b[index2].dueOn || null));
   const changed = !same(existing, input.feeLines);
   await db.transaction(async (tx) => {
@@ -7183,7 +7197,7 @@ async function saveFees(db, actor, input) {
         paidAt: existing.find((old) => old.label === line.label.trim() && old.amount === line.amount)?.paidAt ?? null
       })));
     }
-    await recordAudit(tx, { action: "engagement_fees_saved", actorUserId: actor.id, details: { engagementId: input.engagementId, total: feeTotal(input.feeLines), lines: input.feeLines.length } });
+    await recordAudit(tx, { action: "engagement_fees_saved", actorUserId: actor.id, details: { engagementId: input.engagementId, total: feeTotal(input.feeLines), lines: input.feeLines.length, ...defersFirstFee ? { firstFeeMovedTo: newFirstDue ?? "no date", startedOn: startsOn } : {} } });
   });
   const notified = changed ? await tellOwnerFeesChanged(db, engagement, input.feeLines) : false;
   return { success: true, notified };
@@ -7242,6 +7256,7 @@ async function staffSendFeeLink(db, actor, input) {
 }
 async function openRoomNow(db, actor, input) {
   requireManage(actor);
+  if (!mayApproveUnpaidWork(actor)) throw new TRPCError11({ code: "FORBIDDEN", message: UNPAID_WORK_REFUSALS.openRoom });
   await requireStaffEngagement(db, actor, input.engagementId);
   const opened = await openRoomIfFirstPayment(db, input.engagementId);
   if (opened) await recordAudit(db, { action: "engagement_room_opened", actorUserId: actor.id, details: { engagementId: input.engagementId, before: "first payment" } });
@@ -9944,7 +9959,7 @@ async function startEngagementSafely(db, input) {
 var canStart = (actor) => canSeeAll(actor) && authorityAllows(actor.authority, "manage_engagements");
 function requireStart(actor) {
   if (!canStart(actor)) {
-    throw new TRPCError14({ code: "FORBIDDEN", message: "Only the desk lead can start an engagement by hand." });
+    throw new TRPCError14({ code: "FORBIDDEN", message: "Only a Partner, Vice President or Senior Associate can start an engagement by hand." });
   }
 }
 async function listAwaitingStart(db, actor) {
@@ -10355,7 +10370,7 @@ async function canReviewEngagement(db, actor, engagementId) {
 }
 async function approveDeliverable(db, actor, input) {
   const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
-  if (!await canReviewEngagement(db, actor, deliverable.engagementId)) throw new TRPCError14({ code: "FORBIDDEN", message: "Only the desk lead, a partner or this engagement's Engagement Manager or Lead Consultant can approve this." });
+  if (!await canReviewEngagement(db, actor, deliverable.engagementId)) throw new TRPCError14({ code: "FORBIDDEN", message: "Only a Partner, Vice President or Senior Associate, or this engagement's Engagement Manager or Lead Consultant, can approve this." });
   if (deliverable.status === "shared") throw new TRPCError14({ code: "CONFLICT", message: "This is already shared." });
   await db.transaction(async (tx) => {
     await tx.update(engagementDeliverables).set({ status: "approved", approvedAt: /* @__PURE__ */ new Date(), approvedByUserId: actor.id }).where(eq16(engagementDeliverables.id, deliverable.id));
@@ -10367,7 +10382,7 @@ async function shareDeliverable(db, actor, input) {
   requireManage2(actor);
   const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
   if (DELIVERABLES_NEEDING_APPROVAL.includes(deliverable.kind) && deliverable.status !== "approved" && deliverable.status !== "shared") {
-    throw new TRPCError14({ code: "FORBIDDEN", message: `The desk lead approves every ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]} before the client sees it.` });
+    throw new TRPCError14({ code: "FORBIDDEN", message: `Every ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]} is approved before the client sees it, by a Partner, Vice President or Senior Associate, or this engagement's lead.` });
   }
   await db.transaction(async (tx) => {
     await tx.update(engagementDeliverables).set({ status: "shared", audience: input.audience, sharedAt: /* @__PURE__ */ new Date(), sharedByUserId: actor.id }).where(eq16(engagementDeliverables.id, deliverable.id));

@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Only a Partner or the Super Admin may let work start before the first payment: opening a room early, or moving the first fee past the start date before anything is paid (a new permission, `approve_work_before_payment`); "desk lead" is no longer a name staff see, only the bundle Partners, Vice Presidents and Senior Associates share | ET, 10 November 2026 |
 | Digital Marketing is sold on what it brings, not on posts: visibility, engagement, enquiries (leads) and sales (conversion), the path its page tells ("From seen to sold") and each month's review counts | ET, 10 November 2026 |
 | On the home page, "Sales are flat and I need more customers every month" leads to Digital Marketing (it led to the Six-Week Fix) | ET, 10 November 2026 |
 | Digital Marketing covers the whole digital space, not one platform: Instagram, TikTok, Facebook and the Google Business Profile, each named on its page; new clients are asked for access to all four | ET, 10 November 2026 |

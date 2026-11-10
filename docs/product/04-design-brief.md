@@ -223,7 +223,7 @@ The site speaks the business owner's language (concept note, front matter):
 - Every promise is followed by what happens next and what it costs.
 - The business check keeps the proper term and says what it means ("Strategic intent: where the business is going").
 - Say plainly that analysts and AI do the analysis under a named IP Factory consultant.
-- **Money in plain words.** To a client a fee is *Paid*, *Due*, *Late*, or (from batch F) *₦150,000 of ₦300,000 paid* or
+- **Money in plain words.** To a client a fee is *Paid*, *Due*, *Late*, *₦150,000 of ₦300,000 paid* (batch F1) or
   *Nothing more to pay*; a late fee says the day work pauses. "Write-off", "needs a look" and "cancelled" are the
   team's words and never reach a client's screen.
 
@@ -309,8 +309,8 @@ and `paymentsStatementName`), the reference, the receipt by email, and **Questio
 (the engagement's main contact, once agreed) or **WhatsApp IP Factory** (`BRAND.officeWhatsapp`). What it is for is the
 page's heading, so the box does not repeat it, and the receipt is said once. The Pay button is the
 page's one gradient action (`PAY_BUTTON`), with 8 px corners; so is **Try again** on the return page.
-From batch F (designed, App flow 3.1), a fee paid in part says what is paid under its heading ("₦150,000 of ₦300,000
-paid") and the button asks only for what is left ("Pay ₦150,000 securely with Paystack").
+A fee paid in part (batch F1, App flow 3.1) says what is paid under the amount ("₦150,000 of ₦300,000 is paid already.
+This is what is left.") and the button asks only for what is left ("Pay ₦150,000 securely with Paystack").
 
 ### 12.4 Signing in and joining
 
@@ -333,7 +333,8 @@ The room follows document 07 in its third version (the "ClickUp" layout):
   Waiting on you, the team, Your projects, Fix the next problem); Content for Digital marketing (the month's pieces against
   the programme; approve or ask for changes); Work Plan by week; Data Request by section with the drop box; Sessions;
   Business and Founder (from the check or the Full Report); Deliverables; Payments (each fee with its date, reference and
-  Pay button; from batch F, what is paid and what is left, and each payment's receipt number and day). Which views show, and who sees them, is in the App flow (8.4).
+  Pay button; a fee paid in part shows what is paid and what is left, with Pay for the rest, and each payment's receipt
+  number, amount and day, batch F1). Which views show, and who sees them, is in the App flow (8.4).
 - **The stage band:** done stages in `brand` with a tick, the current one in `brand-plum`, those to come in a neutral;
   the four figures under it link to the view behind them. People share one avatar tone; in the Data Request only high
   priority and an overdue date carry colour; item references (A1, B3) are tabular.
@@ -367,10 +368,11 @@ be previewed as the client sees it (**Preview as client**, read only).
 - **Fee late** and **Paused** (E5, `FeeHoldBadge`): a chip beside the engagement on the list and on its record, Fee late
   on the Watch tint and Paused on the Stuck tint, with the day work pauses (or paused) in its title; the record adds a
   note saying what lifts it: paying, or a new date in Fees. Never the amount, so it can sit on any list.
-- **Finance, from batch F** (designed, App flow 3.1): payments that need a look are listed first; each fee opens to its
-  payments and refunds (receipt number, day, how, amount, who), and the actions sit beside the fee for those who may use
-  them: **Record a payment**, **Cancel**, **Accept**, **Record a refund**, **Write off**. A cancelled payment stays in the
-  list, struck through and marked cancelled.
+- **Finance** (batch F1, App flow 3.1; `FeePayments.tsx`): payments that need a look are listed first, in a box with a
+  danger border; each fee shows what is paid and what is left, and opens to its payments (receipt number, day, how,
+  amount, who); the actions sit beside the fee for those who may use them: **Record a payment** (an inline form on the
+  brand tint), **Cancel** with a reason, **Accept**. A cancelled payment stays in the list, struck through and marked
+  cancelled. **Record a refund** and **Write off** come with F2. The engagement's Fees use the same list and form.
 
 ## 13. Accessibility
 

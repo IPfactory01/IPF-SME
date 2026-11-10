@@ -95,8 +95,8 @@ const SAMPLE_ROOM = {
   engagementId: 1,
   // Paid half to start and half on delivery (R36): the second half has no date until the Findings are shared.
   fees: [
-    { id: -1, label: "Business Review: half to start", amount: 300_000, dueOn: null, paid: true, reference: "TS-CS-000001", payPath: null },
-    { id: 1, label: "Business Review: half on delivery", amount: 300_000, dueOn: null, paid: false, reference: "TS-F-000001", payPath: "/pay/fee/1/preview" },
+    { id: -1, label: "Business Review: half to start", amount: 300_000, dueOn: null, paid: true, paidAmount: 300_000, left: 0, writtenOff: false, reference: "TS-CS-000001", payPath: null, receipts: [{ number: "TS-RC-000001", amount: 300_000, refunded: 0, receivedOn: day(-4).toISOString().slice(0, 10) }] },
+    { id: 1, label: "Business Review: half on delivery", amount: 300_000, dueOn: null, paid: false, paidAmount: 0, left: 300_000, writtenOff: false, reference: "TS-F-000001", payPath: "/pay/fee/1/preview", receipts: [] },
   ],
   awaitingPayment: false,
   hold: null,

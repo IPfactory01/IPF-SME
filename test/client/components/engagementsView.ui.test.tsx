@@ -12,7 +12,7 @@ const api = vi.hoisted(() => ({
   storageError: null as { message: string } | null,
   storage: { configured: true, missing: [] as string[], bucket: "engagement-files", bucketFound: true as boolean | null, bucketPublic: false as boolean | null, problem: null as string | null },
   requests: [] as unknown[],
-  fees: { feeLines: [], total: 0, suggested: [{ label: "Business Review, payable before work begins", amount: 600000, dueOn: null }], opensOnPayment: false, online: true, can: { edit: true, sendLink: true } } as unknown,
+  fees: { feeLines: [], total: 0, suggested: [{ label: "Business Review, payable before work begins", amount: 600000, dueOn: null }], opensOnPayment: false, online: true, can: { edit: true, sendLink: true, recordPayments: false } } as unknown,
   calls: {} as Record<string, unknown[]>,
   failed: {} as Record<string, boolean>,
   refetched: [] as string[],
@@ -26,10 +26,12 @@ const mutation = (name: string) => (options?: { onSuccess?: (value: never, input
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, list: { invalidate: () => undefined }, awaitingStart: { invalidate: () => undefined }, serviceRequests: { invalidate: () => undefined }, fees: { invalidate: () => undefined } } } }),
+    useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, list: { invalidate: () => undefined }, awaitingStart: { invalidate: () => undefined }, serviceRequests: { invalidate: () => undefined }, fees: { invalidate: () => undefined } }, finance: { list: { invalidate: () => undefined } } } }),
     onboarding: { sendSignInLink: { useMutation: mutation("sendSignInLink") } },
     businessSupport: { emailDeliveryStatus: { useQuery: () => ({ data: [], isLoading: false, error: undefined }) } },
     engagement: {
+      // Recording money (batch F): Finance and the Super Admin, from the engagement's Fees or the Finance tab.
+      finance: Object.fromEntries(["recordPayment", "cancelPayment", "acceptPayment"].map(name => [name, { useMutation: mutation(name) }])),
       staff: {
         list: { useQuery: () => ({ data: api.failed.list ? undefined : api.list, isLoading: false, error: api.failed.list ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("list"); } }) },
         awaitingStart: { useQuery: () => ({ data: api.failed.awaiting ? undefined : api.awaiting, error: api.failed.awaiting ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("awaiting"); } }) },
@@ -39,7 +41,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         fees: { useQuery: () => ({ data: api.failed.fees ? undefined : api.fees, error: api.failed.fees ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("fees"); } }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "loadDataRequest", "setFeePaid", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -575,13 +577,16 @@ describe("fees on the team's side", () => {
     api.list = { setUp: true, items: [row], canStart: true, seesAll: true } as never;
     api.calls = {};
     const before = api.fees;
-    api.fees = { feeLines: [{ id: 81, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-09", paidAt: null, paidOnline: false, reference: "TS-F-000081" }], total: 470000, suggested: null, opensOnPayment: true, online: true, can: { edit: true, sendLink: true, approveUnpaidWork: false } } as unknown;
+    api.fees = { feeLines: [{ id: 81, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-09", paidAt: null, paidOnline: false, reference: "TS-F-000081", paidAmount: 0, left: 470000, billed: false, invoice: null, payments: [] }], total: 470000, suggested: null, opensOnPayment: true, online: true, can: { edit: true, sendLink: true, approveUnpaidWork: false, recordPayments: false } } as unknown;
     api.detail = detail({ manage: true, assign: true, review: true });
     render(<EngagementsView />);
     fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
     const section = within(within(screen.getByRole("dialog")).getByText("Fees").closest("section")!);
     expect(section.queryByRole("button", { name: "Open the room now" })).toBeNull();
     expect(section.getByText("Only a Partner can open it before payment, or move the first fee past the start date.")).toBeTruthy();
+    // Recording money is for Finance and the Super Admin (ET, 10 November 2026): the team is told who does it.
+    expect(section.queryByRole("button", { name: "Record a payment" })).toBeNull();
+    expect(section.getByText(/Money that came another way is recorded by Finance/)).toBeTruthy();
     api.fees = before;
   });
 
@@ -589,7 +594,7 @@ describe("fees on the team's side", () => {
     api.list = { setUp: true, items: [row], canStart: true, seesAll: true } as never;
     api.calls = {};
     const before = api.fees;
-    api.fees = { feeLines: [{ id: 81, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-09", paidAt: null, paidOnline: false, reference: "TS-F-000081" }], total: 470000, suggested: null, opensOnPayment: true, online: true, can: { edit: true, sendLink: true, approveUnpaidWork: true } };
+    api.fees = { feeLines: [{ id: 81, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-09", paidAt: null, paidOnline: false, reference: "TS-F-000081", paidAmount: 0, left: 470000, billed: false, invoice: null, payments: [] }], total: 470000, suggested: null, opensOnPayment: true, online: true, can: { edit: true, sendLink: true, approveUnpaidWork: true, recordPayments: true } };
     api.detail = detail({ manage: true, assign: true, review: true });
     render(<EngagementsView />);
     fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
@@ -601,8 +606,17 @@ describe("fees on the team's side", () => {
     expect(section.getByText("https://ipf-sme.example.test/pay/fee/81/abcdefghijklmnopqrstuvwxyz012345")).toBeTruthy();
     fireEvent.click(section.getByRole("button", { name: "Open the room now" }));
     expect(api.calls.openRoomNow).toEqual([{ engagementId: row.id }]);
-    fireEvent.click(section.getByRole("checkbox"));
-    expect(api.calls.setFeePaid).toEqual([{ feeLineId: 81, paid: true }]);
+    // Money that came another way: recorded with the amount, the day, how and the bank's reference (Finance or the
+    // Super Admin, who sees this button; the server checks again). The Paid tick is gone.
+    expect(section.queryByRole("checkbox")).toBeNull();
+    fireEvent.click(section.getByRole("button", { name: "Record a payment" }));
+    const form = within(section.getByRole("form", { name: "Record a payment for Month 1 service fee, payable on starting" }));
+    expect((form.getByLabelText("Amount received") as HTMLInputElement).value).toBe("470000");
+    fireEvent.change(form.getByLabelText("Amount received"), { target: { value: "200000" } });
+    expect(form.getByRole("button", { name: "Record ₦200,000" }).hasAttribute("disabled")).toBe(true);
+    fireEvent.change(form.getByLabelText("Reference or note"), { target: { value: "Transfer 3301" } });
+    fireEvent.click(form.getByRole("button", { name: "Record ₦200,000" }));
+    expect(api.calls.recordPayment).toEqual([{ feeLineId: 81, amount: 200000, receivedOn: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), method: "bank_transfer", note: "Transfer 3301" }]);
     api.fees = before;
   });
 });

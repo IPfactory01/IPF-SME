@@ -57,9 +57,14 @@ vi.mock("@/lib/trpc", () => ({
 
 const { default: EngagementRoom, dueFlag } = await import("@/components/EngagementRoom");
 
+/** A fee as the room receives it (the ledger, batch F): paid in full or owed in full unless the test says otherwise. */
+type FeeFixture = { id: number; label: string; amount: number; dueOn: string | null; paid: boolean; reference: string; payPath: string | null };
+const feeRow = (row: FeeFixture & Partial<{ paidAmount: number; left: number; writtenOff: boolean; receipts: { number: string; amount: number; refunded: number; receivedOn: string | null }[] }>) =>
+  ({ paidAmount: row.paid ? row.amount : 0, left: row.paid ? 0 : row.amount, writtenOff: false, receipts: [] as { number: string; amount: number; refunded: number; receivedOn: string | null }[], ...row });
+
 const room = (over: Record<string, unknown> = {}) => ({
   engagementId: 4,
-  fees: [] as { id: number; label: string; amount: number; dueOn: string | null; paid: boolean; reference: string; payPath: string | null }[],
+  fees: [] as ReturnType<typeof feeRow>[],
   awaitingPayment: false,
   hold: null,
   content: [] as { id: number; kind: "reel" | "post" | "story"; kindLabel: string; title: string; month: number; status: "planned" | "in_edit" | "for_approval" | "changes_requested" | "approved" | "published"; statusLabel: string; dueOn: string | null; link: string | null; clientNote: string | null; approvedAt: Date | null; publishedAt: Date | null }[],
@@ -248,7 +253,7 @@ describe("the client's room", () => {
 
 describe("the first visit (R46) and What we will do (R47)", () => {
   const planned = [{ id: 1, title: "Business Review Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: null, status: "planned" as const, weekNumber: 1, sortOrder: 1, agenda: null, notes: null, notesSharedAt: null, notesAudience: null }];
-  const unpaid = { id: 31, label: "Business Review, payable before work begins", amount: 600000, dueOn: "2026-10-20", paid: false, reference: "IPF-F-31", payPath: "/pay/fee/31" };
+  const unpaid = feeRow({ id: 31, label: "Business Review, payable before work begins", amount: 600000, dueOn: "2026-10-20", paid: false, reference: "IPF-F-31", payPath: "/pay/fee/31" });
 
   it("welcomes the owner until the first Session is held: the experts with WhatsApp, three things to do first, each linked to its place, and what happens next", () => {
     const team = [{ name: "Lewis Lead", roleLabel: "Engagement Manager", jobTitle: null, whatsapp: "2348030000001" }, { name: "Ola Analyst", roleLabel: "Analyst", jobTitle: null, whatsapp: null }];
@@ -676,7 +681,7 @@ describe("the room on a laptop or desktop", () => {
   it("lets every card in the Overview's and Payments' grids shrink to a phone's width, so a long Work Plan row cannot cut off the cards beside it", () => {
     // A grid item is as wide as its widest line unless it may shrink: the open timeline step made the one phone column
     // 669 px on a 390 px screen, and the panels' clip cut off What we will do and the seat card under it.
-    render(<EngagementRoom room={room({ fees: [{ id: 31, label: "Business Review, payable before work begins", amount: 600000, dueOn: null, paid: false, reference: "IPF-F-31", payPath: "/pay/fee/31" }] })} />);
+    render(<EngagementRoom room={room({ fees: [feeRow({ id: 31, label: "Business Review, payable before work begins", amount: 600000, dueOn: null, paid: false, reference: "IPF-F-31", payPath: "/pay/fee/31" })] })} />);
     const panels = screen.getAllByRole("tabpanel", { hidden: true });
     const grids = panels.flatMap(panel => [...panel.querySelectorAll<HTMLElement>(".grid")]).filter(grid => /\bgap-5\b/.test(grid.className));
     expect(grids.length).toBeGreaterThanOrEqual(3);
@@ -1082,8 +1087,8 @@ describe("Fix the next problem", () => {
 
 describe("payments", () => {
   const fees = [
-    { id: 11, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-09", paid: true, reference: "TS-F-000011", payPath: null },
-    { id: 12, label: "Month 2 service fee, payable before day 31", amount: 470000, dueOn: "2026-12-09", paid: false, reference: "TS-F-000012", payPath: "/pay/fee/12/abcdefghijklmnopqrstuvwxyz012345" },
+    feeRow({ id: 11, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-09", paid: true, reference: "TS-F-000011", payPath: null, receipts: [{ number: "TS-RC-000007", amount: 470000, refunded: 0, receivedOn: "2026-11-09" }] }),
+    feeRow({ id: 12, label: "Month 2 service fee, payable before day 31", amount: 470000, dueOn: "2026-12-09", paid: false, reference: "TS-F-000012", payPath: "/pay/fee/12/abcdefghijklmnopqrstuvwxyz012345" }),
   ];
 
   it("lists the fees with what is paid and a Pay button for each fee due", () => {
@@ -1095,10 +1100,29 @@ describe("payments", () => {
     expect(within(screen.getByRole("region", { name: "Summary" })).getByText("₦940,000")).toBeTruthy();
   });
 
+  it("shows a fee paid in part with what is left and its receipts, Pay for the rest, and a closed fee as nothing more to pay (batch F)", () => {
+    const parts = [
+      feeRow({ id: 11, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-09", paid: false, paidAmount: 200000, left: 270000, reference: "TS-F-000011", payPath: "/pay/fee/11/abcdefghijklmnopqrstuvwxyz012345", receipts: [{ number: "TS-RC-000004", amount: 200000, refunded: 0, receivedOn: "2026-11-10" }] }),
+      feeRow({ id: 12, label: "Month 2 service fee, payable before day 31", amount: 470000, dueOn: "2026-12-09", paid: true, paidAmount: 0, left: 0, writtenOff: true, reference: "TS-F-000012", payPath: null }),
+    ];
+    render(<EngagementRoom room={room({ fees: parts })} />);
+    fireEvent.click(screen.getByRole("tab", { name: /^Payments/ }));
+    const list = within(screen.getByRole("region", { name: "Fees" }));
+    expect(list.getByText("₦200,000 of ₦470,000 paid, ₦270,000 left")).toBeTruthy();
+    expect(list.getByText(/^Receipt TS-RC-000004 · ₦200,000/)).toBeTruthy();
+    expect(list.getByRole("link", { name: "Pay ₦270,000" }).getAttribute("href")).toBe("/pay/fee/11/abcdefghijklmnopqrstuvwxyz012345");
+    expect(list.getByText("Nothing more to pay")).toBeTruthy();
+    expect(list.queryByText(/written off/i)).toBeNull();
+    const summary = within(screen.getByRole("region", { name: "Summary" }));
+    expect(summary.getByText("₦940,000")).toBeTruthy();
+    expect(summary.getByText("₦200,000")).toBeTruthy();
+    expect(summary.getByText("₦270,000")).toBeTruthy();
+  });
+
   it("lists a service's two halves: the first paid, the second due seven days after delivery until it has a date, and no pay step before then (R36)", () => {
     const halves = [
-      { id: -4, label: "Business Review: half to start", amount: 300000, dueOn: null, paid: true, reference: "TS-CS-000004", payPath: null },
-      { id: 21, label: "Business Review: half on delivery", amount: 300000, dueOn: null, paid: false, reference: "TS-F-000021", payPath: "/pay/fee/21/abcdefghijklmnopqrstuvwxyz012345" },
+      feeRow({ id: -4, label: "Business Review: half to start", amount: 300000, dueOn: null, paid: true, reference: "TS-CS-000004", payPath: null }),
+      feeRow({ id: 21, label: "Business Review: half on delivery", amount: 300000, dueOn: null, paid: false, reference: "TS-F-000021", payPath: "/pay/fee/21/abcdefghijklmnopqrstuvwxyz012345" }),
     ];
     const planned = [{ id: 1, title: "Business Review Session 1", scheduledFor: new Date("2026-11-12T09:00:00Z"), durationMinutes: 90, meetingLink: null, status: "planned" as const, weekNumber: 1, sortOrder: 1, agenda: null, notes: null, notesSharedAt: null, notesAudience: null }];
     render(<EngagementRoom room={room({ fees: halves, sessions: planned, nextSession: null })} />);
@@ -1113,7 +1137,7 @@ describe("payments", () => {
   });
 
   it("shows only the first fee to pay until it is paid, and no tabs", () => {
-    render(<EngagementRoom room={room({ fees: fees.map(fee => ({ ...fee, paid: false, payPath: `/pay/fee/${fee.id}/abcdefghijklmnopqrstuvwxyz012345` })), awaitingPayment: true })} />);
+    render(<EngagementRoom room={room({ fees: fees.map(fee => feeRow({ id: fee.id, label: fee.label, amount: fee.amount, dueOn: fee.dueOn, reference: fee.reference, paid: false, payPath: `/pay/fee/${fee.id}/abcdefghijklmnopqrstuvwxyz012345` })), awaitingPayment: true })} />);
     const gate = within(screen.getByRole("region", { name: "First payment" }));
     expect(gate.getByText("Your room opens once the first payment is made")).toBeTruthy();
     expect(gate.getByText("₦470,000")).toBeTruthy();

@@ -14,6 +14,8 @@ import { createOnboardingInvitation, effectiveInvitationStatus } from "./clientO
 import { deliverEmail } from "./email";
 import { issueReportLink } from "./fullReport/service";
 import { lagosTime } from "./lagosTime";
+import { addRequestPayment } from "./ledger";
+import { receiptNumberLabel } from "../shared/ledger";
 import { paystackMode } from "./paystack";
 import { getTrustedApplicationOrigin } from "./security";
 
@@ -89,9 +91,10 @@ export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem
  * The email that tells the owner their payment arrived, and what happens next. The report's comes with its form link.
  * A payment made on Paystack's test keys says so in capitals.
  */
-export function paymentConfirmedEmail(input: { fullName: string; item: PaymentItem; reference: string; reportLink?: string | null; testMode?: boolean; amountNaira: number }) {
+export function paymentConfirmedEmail(input: { fullName: string; item: PaymentItem; reference: string; reportLink?: string | null; testMode?: boolean; amountNaira: number; receipt?: string | null }) {
   const received = [
     `Thank you. We have received your payment of ${formatNaira(input.amountNaira)} (reference ${input.reference}).`,
+    ...(input.receipt ? [`Your receipt number is ${input.receipt}.`] : []),
     ...(input.testMode ? ["", EMAIL_TEST_NOTICE, "This payment was made in Paystack's test mode, so no real money moved."] : []),
   ].join("\n");
   if (input.item === "full_report") {
@@ -267,7 +270,7 @@ export async function confirmPayment(db: Database, input: { paymentRequestId: nu
   const stageTo: PipelineStage = request.item === "current_state" ? "won" : check.pipelineStage;
   const note = input.online ? onlinePaymentNote(input.online) : input.note || null;
   const via = viaDetails(input.online);
-  let outcome: { reportLink: string | null } | null;
+  let outcome: { reportLink: string | null; receiptNumber: number | null } | null;
   try {
     outcome = await db.transaction(async tx => {
       const [claimed] = await tx.update(paymentRequests)
@@ -283,7 +286,12 @@ export async function confirmPayment(db: Database, input: { paymentRequestId: nu
       });
       // The report's Report Intake link is issued in the same transaction, so the email can carry it and a failure here confirms nothing.
       const reportLink = request.item === "full_report" ? await issueReportLink(tx, { businessCheckId: check.id, paymentRequestId: request.id }) : null;
-      return { reportLink };
+      // Every naira paid is in the ledger with its receipt number (batch F), in the same transaction as the confirmation.
+      const receiptNumber = await addRequestPayment(tx, {
+        paymentRequestId: request.id, amount: request.amountNaira, paystackReference: input.online?.reference ?? null, mode: input.online?.mode ?? null,
+        note: input.online ? null : note, recordedByUserId: input.actorUserId,
+      });
+      return { reportLink, receiptNumber };
     });
   } catch (error) {
     if (isMissingPaymentTable(error)) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "The Full Report table is not set up yet (migration 0007). Nothing was confirmed." });
@@ -293,7 +301,7 @@ export async function confirmPayment(db: Database, input: { paymentRequestId: nu
 
   // Email after the commit: a delivery problem never undoes a confirmation. What happened to the email is recorded, so
   // the console can show it and send it again.
-  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink, amountNaira: request.amountNaira, testMode: input.online?.mode === "test" });
+  const message = paymentConfirmedEmail({ fullName: check.fullName, item: request.item, reference: request.reference, reportLink: outcome.reportLink, amountNaira: request.amountNaira, testMode: input.online?.mode === "test", receipt: outcome.receiptNumber !== null ? receiptNumberLabel(outcome.receiptNumber) : null });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check.id, idempotencyKey: `payment_requests:${request.id}:confirmed` })
     .catch((error: unknown) => ({ status: "Failed" as const, reason: error instanceof Error ? error.message : "Unknown error" }));
   await recordAudit(db, { action: "payment_confirmation_sent", actorUserId: input.actorUserId, targetEmail: check.email, details: { businessCheckId: check.id, item: request.item, reference: request.reference, delivery: delivery.status, again: false, ...via } });

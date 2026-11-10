@@ -4,8 +4,8 @@
 the room was rebuilt to it (`client/src/components/EngagementRoom.tsx`, design brief §9). Iterate from here.*
 
 *Updated 10 November 2026. The room is in its third version (Design brief 12.5), with a Content view for Digital
-Marketing. Sections 2, 4, 6 and 8 add what the room says about money: the pause (built, E5) and, from batch F (designed,
-App flow 3.1), part payments, receipts and refunds.*
+Marketing. Sections 2, 4, 6 and 8 add what the room says about money: the pause (built, E5), part payments and receipts
+(built, batch F1, App flow 3.1), and refunds (F2).*
 
 ## 1. Objective
 
@@ -88,7 +88,7 @@ For the implementation plan, once the mock is approved:
 | "Now" | The stage only | Day X of 14 and week X of 6 from the stage dates |
 | Day 30 | Planned (migration 0009) | As planned |
 | The pause for a late fee | **Built 10 November (E5):** worked out from the fees' dates on every load, nothing stored; paying or a new date lifts it | Done |
-| Part payments, receipts and refunds | One paid or unpaid mark on each fee | **Designed 10 November (batch F, App flow 3.1):** a payments ledger, migration 0022 |
+| Part payments, receipts and refunds | One paid or unpaid mark on each fee | **Built 10 November (batch F1, App flow 3.1):** a payments ledger, migration 0022; refunds with F2 |
 
 ## 7. How we know it works
 
@@ -109,6 +109,7 @@ The owner meets money at three moments, and the room answers each where they alr
    that work is paused and what to pay to continue. The room stays readable and uploads stay open, so nothing the owner
    has sent is lost. Paying lifts it at once.
 
-From batch F (designed, App flow 3.1): a fee paid in part shows *₦150,000 of ₦300,000 paid* and **Pay** asks only for
-what is left; each payment shows its receipt number and day, and each refund its amount and day; a fee a Partner has
-closed shows *Nothing more to pay*. The team's words (write-off, needs a look, cancelled) never reach the room.
+Built with batch F1 (App flow 3.1): a fee paid in part shows *₦150,000 of ₦300,000 paid, ₦150,000 left* and **Pay**
+asks only for what is left; each payment shows its receipt number, amount and day, and a refund (F2) its amount; a fee a
+Partner has closed (F2) shows *Nothing more to pay*. The team's words (write-off, needs a look, cancelled) never reach
+the room.

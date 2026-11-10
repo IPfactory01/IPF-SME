@@ -135,3 +135,13 @@ describe("paying an engagement fee", () => {
     expect(screen.getByText(/Online payment is not open yet/)).toBeTruthy();
   });
 });
+
+describe("a fee paid in part (the ledger, batch F)", () => {
+  it("asks only for what is left, and says how much of the fee is paid already", () => {
+    api.page = { ...(api.page as Record<string, unknown>), amountNaira: 270_000, totalNaira: 470_000, paidNaira: 200_000 };
+    renderPage();
+    expect(screen.getByText("₦270,000")).toBeTruthy();
+    expect(screen.getByText("₦200,000 of ₦470,000 is paid already. This is what is left.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Pay ₦270,000 securely with Paystack/ })).toBeTruthy();
+  });
+});

@@ -53,7 +53,7 @@ export default function FeePayPage() {
   }
   if (page.error || !page.data) return invalid(page.error?.message);
 
-  const { businessName, engagement, label, amountNaira, reference, mode, state, contact } = page.data;
+  const { businessName, engagement, label, amountNaira, totalNaira, paidNaira, reference, mode, state, contact } = page.data;
   const amount = formatNaira(amountNaira);
   const banner = mode === "test" ? <TestModeBanner /> : null;
 
@@ -77,6 +77,7 @@ export default function FeePayPage() {
       <h1 className="mt-2 font-serif text-3xl font-normal sm:text-4xl">{engagement}</h1>
       <p className="mt-3 text-ink-soft">{label}</p>
       <p className="mt-6 font-sans text-5xl font-semibold tracking-tight tabular-nums text-ink">{amount}</p>
+      {paidNaira > 0 && <p className="mt-2 text-sm text-ink-soft">{formatNaira(paidNaira)} of {formatNaira(totalNaira)} is paid already. This is what is left.</p>}
 
       {mode === "off" ? (
         <p className="mt-6 rounded-lg border border-line bg-paper-raised p-4 text-sm text-ink-soft">

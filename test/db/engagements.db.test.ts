@@ -331,13 +331,21 @@ for (const target of targets) {
         const saved = await desk.engagement.staff.fees({ engagementId });
         expect(saved).toMatchObject({ total: 600000, suggested: null, feeLines: [{ label: "To start", paidAt: null }, { label: "With the Findings" }] });
 
-        // An analyst on the team records a payment; it survives a later change to another line.
+        // Only Finance and the Super Admin record money (ET, 10 November 2026): an analyst on the team cannot. A payment
+        // Finance records survives a later change to another line, because saving keeps each fee's id.
         const analystUser = await person(["analyst"]);
         await desk.engagement.staff.assign({ engagementId, userId: analystUser.id, role: "analyst" });
         const analyst = await signIn(analystUser, true);
-        await (await analyst.call()).engagement.staff.setFeePaid({ feeLineId: saved.feeLines[0]!.id, paid: true });
-        await desk.engagement.staff.saveFees({ engagementId, feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-11-10" }, { label: "With the Findings", amount: 350000, dueOn: null }] });
-        expect((await desk.engagement.staff.fees({ engagementId })).feeLines.map(line => [line.label, line.amount, line.paidAt !== null])).toEqual([["To start", 300000, true], ["With the Findings", 350000, false]]);
+        const payment = { feeLineId: saved.feeLines[0]!.id, amount: 300000, receivedOn: lagosDay(), method: "bank_transfer" as const, note: "Transfer 4471" };
+        await expect((await analyst.call()).engagement.finance.recordPayment(payment)).rejects.toMatchObject({ code: "FORBIDDEN" });
+        const finance = await signIn(await person(["finance"]), true);
+        await expect((await finance.call()).engagement.finance.recordPayment(payment)).resolves.toMatchObject({ success: true, left: 0, receipt: expect.stringMatching(/^TS-RC-\d{6}$/) });
+        await desk.engagement.staff.saveFees({ engagementId, feeLines: [{ id: saved.feeLines[0]!.id, label: "To start", amount: 300000, dueOn: "2026-11-10" }, { id: saved.feeLines[1]!.id, label: "With the Findings", amount: 350000, dueOn: null }] });
+        const changed = await desk.engagement.staff.fees({ engagementId });
+        expect(changed.feeLines.map(line => [line.id, line.label, line.amount, line.paidAt !== null])).toEqual([[saved.feeLines[0]!.id, "To start", 300000, true], [saved.feeLines[1]!.id, "With the Findings", 350000, false]]);
+        // A paid fee has been billed: it cannot be removed, and it cannot be made less than what is paid on it.
+        await expect(desk.engagement.staff.saveFees({ engagementId, feeLines: [{ id: saved.feeLines[1]!.id, label: "With the Findings", amount: 350000, dueOn: null }] })).rejects.toMatchObject({ code: "CONFLICT" });
+        await expect(desk.engagement.staff.saveFees({ engagementId, feeLines: [{ id: saved.feeLines[0]!.id, label: "To start", amount: 200000, dueOn: "2026-11-10" }, { id: saved.feeLines[1]!.id, label: "With the Findings", amount: 350000, dueOn: null }] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
 
         // The client sees the fees on the room's Payments tab, with the paid one marked, and has nothing to sign; the
         // team's fee screen stays the team's.
@@ -553,14 +561,16 @@ for (const target of targets) {
         expect((await desk.engagement.staff.list()).items.find(item => item.id === engagementId)!.hold).toEqual({ state: "paused", pausesOn: addDays(today, -3) });
         expect((await desk.engagement.staff.detail({ engagementId })).hold).toMatchObject({ state: "paused", dueOn: addDays(today, -10) });
 
-        // Paying it lifts the pause at once.
+        // Part of it paid by hand: still paused, and the room asks for what is left. Paying the rest lifts the pause at once.
         const lines = (await desk.engagement.staff.fees({ engagementId })).feeLines;
-        await desk.engagement.staff.setFeePaid({ feeLineId: lines[0]!.id, paid: true });
+        await desk.engagement.finance.recordPayment({ feeLineId: lines[0]!.id, amount: 200_000, receivedOn: today, method: "bank_transfer", note: "Transfer 1" });
+        expect((await (await owner.call()).engagement.client.room())!.hold).toMatchObject({ state: "paused", amount: 270_000 });
+        await desk.engagement.finance.recordPayment({ feeLineId: lines[0]!.id, amount: 270_000, receivedOn: today, method: "cash", note: "Cash at the office" });
         room = (await (await owner.call()).engagement.client.room())!;
         expect(room.hold).toBeNull();
 
         // Month 2 three days late: Late, pausing four days on; a new date gives more time and lifts it.
-        const draft = (month2: string) => lines.map((line: { label: string; amount: number; dueOn: string | null }, index: number) => ({ label: line.label, amount: line.amount, dueOn: index === 1 ? month2 : line.dueOn }));
+        const draft = (month2: string) => lines.map((line: { id: number; label: string; amount: number; dueOn: string | null }, index: number) => ({ id: line.id, label: line.label, amount: line.amount, dueOn: index === 1 ? month2 : line.dueOn }));
         await desk.engagement.staff.saveFees({ engagementId, feeLines: draft(addDays(today, -3)) });
         expect((await (await owner.call()).engagement.client.room())!.hold).toMatchObject({ state: "late", pausesOn: addDays(today, 4), label: "Month 2 service fee, payable before day 31" });
         expect((await desk.engagement.staff.list()).items.find(item => item.id === engagementId)!.hold).toEqual({ state: "late", pausesOn: addDays(today, 4) });

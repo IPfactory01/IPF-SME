@@ -119,15 +119,16 @@ and the room says it is not set up. Vocabulary and the who-sees-what rules: `sha
 | `engagement_content_items` | The content board of a Digital marketing engagement (0017): kind (reel, post, story), title, month, status (planned, in edit, for approval, changes requested, approved, published), due date, link, the client's note and approval | Only the team changes an item; only the owner or full-access staff approve or ask for changes, and only on an item waiting for approval; counted towards the month once approved | Client content and approvals |
 | `service_requests` | "Fix the next problem" (0018): a client asks, from their room, for another service; the business, the engagement they were in, who asked, the service (a product id), their note, and open, done or declined | Anyone in the business asks, for their own business only; one open request per service; the desk (`view_all_businesses` and `manage_engagements`) lists and handles them; the desk is emailed | Who asked, their note |
 | `engagement_agreements` | Retired (6 November 2026: there are no proposals or agreements on the platform). Kept from 0019 so nothing recorded is lost; nothing reads or writes it | — | Scope, terms and any typed name already recorded |
-| `engagement_fee_lines` | The fees of an engagement (0019): label, amount in whole naira, due date, paid date, and (0020) the Paystack reference that paid it. Its reference is `TS-F-` and the id; its pay link carries an HMAC of the id (`server/feePayments.ts`) | Filled in when the engagement opens (`shared/agreement.ts`, `defaultFees`); changed and paid with `manage_engagements`; read by those who work on or approve engagements and by `view_financials` (`canSeeFees`); shown to the owner and full-access staff on the room's Payments tab with each unpaid fee's pay link; never to a Specialist | Fees and payments |
+| `engagement_fee_lines` | The fees of an engagement (0019): label, amount in whole naira, due date, paid date, and (0020) the Paystack reference that paid it. Its reference is `TS-F-` and the id; its pay link carries an HMAC of the id (`server/feePayments.ts`) | Filled in when the engagement opens (`shared/agreement.ts`, `defaultFees`); changed with `manage_engagements`, in place (ids kept, a billed fee never removed); paid through the ledger (`payments`: Paystack, or Finance and the Super Admin by hand); read by those who work on or approve engagements and by `view_financials` (`canSeeFees`); shown to the owner and full-access staff on the room's Payments tab with each unpaid fee's pay link; never to a Specialist | Fees and payments |
 | `engagement_measures` | The fix's one number: name, definition, unit, baseline, target | One per engagement (D3) | Business figures |
 | `engagement_checkins` | One row per fix week: the five-question check-in, the reading, the questions asked and the hours by role (concept note §17) | Unique (engagement, week); week N is recorded only after week N-1 | The client sees the reading and the next step only; hours, blockers, questions and AI use stay with the team |
 | `business_member_access` | The owner's staff: `full` or `contributor` | One per membership; no row means full (owners and business admins never have one) | — |
 | `account_invitations` | Invitations that create an account for the owner of a business opened directly (`business_owner`, 0016), for IP Factory staff (with a role, or by level, `jobTitle`, 0015, which gives the level's roles and title) or the owner's staff (with an access level) | Token stored as a hash; single use, expiring, revocable; one pending per email. Staff: `manage_roles` invites, never Super Admin. Seats: the owner of the business in use, within `TEAM_SEATS_INCLUDED` | Email and name |
 
-### The payments ledger (migration 0022, batch F: approved 10 November 2026; written, applied with the ledger code)
+### The payments ledger (migration 0022, batch F: approved 10 November 2026; F1 built, applied with the ledger code)
 
-What it does and who does it is in the App flow (section 3.1). Additive: three new tables and five columns on
+What it does and who does it is in the App flow (section 3.1); the code that writes it is `server/ledger.ts`, the
+only writer of the payments, the counters and a fee's paid state. Refunds and write-offs come with F2. Additive: three new tables and five columns on
 `engagement_fee_lines`; nothing is dropped. It is applied just before the ledger code ships, not earlier: until then
 Save the fees deletes and re-adds every fee, which the ledger's link from a payment to its fee refuses
 (`docs/database-migrations.md`).
@@ -157,9 +158,10 @@ its note and who confirmed it. Receipt numbers go to these in the order they wer
 in the order they were set, and each counter is left at the last number given. Each statement skips what is already
 there, so it can run again. Its guarded apply script is `drizzle/supabase/apply-0022-payments-ledger.sql`.
 
-**Audit actions to add:** `fee_payment_recorded`, `fee_payment_cancelled`, `payment_accepted`,
-`payment_refund_recorded`, `payment_refund_cancelled`, `fee_written_off` and `fee_write_off_reversed`, each with the
-fee or payment, the amount and the reason. `engagement_fee_paid` (the Paid tick) is retired and kept so older rows read.
+**Audit actions:** `fee_payment_recorded`, `fee_payment_cancelled` and `payment_accepted` (built, F1; in the audit
+table below); to add with F2: `payment_refund_recorded`, `payment_refund_cancelled`, `fee_written_off` and
+`fee_write_off_reversed`, each with the fee or payment, the amount and the reason. `engagement_fee_paid` (the Paid tick)
+is retired and kept so older rows read.
 
 **Who sees it:** as for `engagement_fee_lines`, plus Finance (`view_financials`). Recording, cancelling, accepting and
 refunds need `manage_payments`; write-offs a new permission, `write_off_fees`, for the Partner role (and the Super
@@ -190,8 +192,8 @@ or one listed there is missing here.
 | Deliverables and content | `engagement_deliverable_approved`, `engagement_deliverable_shared`, `engagement_deliverable_accepted`, `engagement_content_saved`, `engagement_content_deleted`, `engagement_content_approved`, `engagement_content_changes_requested` | A Deliverable approved, shared or signed off; a content piece saved or deleted by the team, approved or sent back by the owner |
 | The fix | `engagement_measure_saved`, `engagement_checkin_recorded` | The Measure of Success set; a Weekly Check-in recorded |
 | More work | `service_requested`, `service_request_handled` | A client asking for another service; the desk handling or declining it |
-| Fees | `engagement_fees_saved`, `engagement_fee_paid`, `engagement_fee_paid_online`, `engagement_fee_online_refused`, `engagement_fee_link_sent`, `engagement_fees_dated_on_delivery` | The fee schedule saved (total, lines); a fee marked paid or unpaid by hand; paid on Paystack; an online payment refused; a pay link sent; a service's second half dated seven days after its main output was shared (R36) |
-| Retired, kept so older rows still read | `payment_proof_received`, `engagement_agreement_saved`, `engagement_agreement_sent`, `engagement_agreement_revised`, `engagement_agreement_accepted` | Proof of payment uploads (before Paystack); proposals and their acceptance (removed 6 November 2026). Nothing writes them now |
+| Fees | `engagement_fees_saved`, `engagement_fee_paid_online`, `engagement_fee_online_refused`, `engagement_fee_link_sent`, `engagement_fees_dated_on_delivery`, `fee_payment_recorded`, `fee_payment_cancelled`, `payment_accepted` | The fee schedule saved (total, lines, any removed); paid on Paystack (the payment and its receipt number); an online payment that needs a look; a pay link sent; a service's second half dated seven days after its main output was shared (R36); money recorded by hand (amount, how, receipt number, what is left); a payment cancelled (the reason); a payment that needed a look accepted |
+| Retired, kept so older rows still read | `payment_proof_received`, `engagement_agreement_saved`, `engagement_agreement_sent`, `engagement_agreement_revised`, `engagement_agreement_accepted`, `engagement_fee_paid` | Proof of payment uploads (before Paystack); proposals and their acceptance (removed 6 November 2026); the Paid tick (replaced by the ledger, F1). Nothing writes them now |
 
 ## 3. JUMP-era tables (legacy)
 
@@ -228,8 +230,8 @@ authority is the union of their roles, any profile the Super Admin set, and the 
 | subject_matter_expert | view_assigned_businesses, contribute_engagements |
 | finance | manage_payments, view_financials |
 
-With batch F (approved 10 November 2026, section 2): `write_off_fees` is added to the partner role, and a fee payment by hand moves from
-`manage_engagements` (the Paid tick) to `manage_payments`.
+With batch F (approved 10 November 2026, section 2): a fee payment by hand moved from `manage_engagements` (the Paid
+tick) to `manage_payments` (built, F1); `write_off_fees` is added to the partner role with F2.
 
 **Privileged access (migration 0012).** Everyone with an internal role signs in with a password and a six-digit code
 from an authenticator app. A role is given or removed only by someone whose own highest role ranks above it

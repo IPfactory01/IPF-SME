@@ -56,6 +56,7 @@ import { DetailField, DetailSection } from "./AdminPrimitives";
 import DeliveryShareNote from "./DeliveryShareNote";
 import { combineDateAndTime, formatDate, formatDateTime, toDateInput, toTimeInput, whatsappLink } from "./format";
 import { FeeHoldNote } from "./FeeHoldBadge";
+import { FeePaymentList, RecordPaymentForm } from "./FeePayments";
 
 type Detail = inferRouterOutputs<AppRouter>["engagement"]["staff"]["detail"];
 type Session = Detail["sessions"][number];
@@ -743,33 +744,43 @@ function CheckinCard({ checkin, weekNumber, engagementId, canManage, unit, onDon
   );
 }
 
+/** A fee line as the team edits it: `id` for a fee already on the engagement, so saving keeps it (and its pay link). */
+type DraftFee = FeeLineDraft & { id?: number };
+
 /**
- * The engagement's fees: filled in from the service's price or the type's monthly fee when it is opened, changed here,
- * and each payment recorded with Paid. There is no proposal to send: a client agrees by paying, or on the call, under the
- * Terms and Conditions (ET, 6 November 2026). Finance counts a fee as owed once it is saved here.
+ * The engagement's fees: filled in from the service's price or the type's monthly fee when it is opened, and changed
+ * here. Saving keeps each fee (its id, its pay link); a fee that has been billed cannot be removed. Each fee shows what
+ * is paid and what is left, and its payments; money that came another way is recorded by Finance or the Super Admin
+ * (App flow 3.1). There is no proposal to send: a client agrees by paying, or on the call, under the Terms and
+ * Conditions (ET, 6 November 2026). Finance counts a fee as owed once it is saved here.
  */
 function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { name: string; whatsapp: string | null } | null }) {
   const utils = trpc.useUtils();
   const query = trpc.engagement.staff.fees.useQuery({ engagementId });
-  const [draft, setDraft] = useState<FeeLineDraft[] | null>(null);
-  const done = (message: string) => ({ onSuccess: () => { void utils.engagement.staff.fees.invalidate({ engagementId }); toast.success(message); }, onError: (error: { message: string }) => toast.error(error.message) });
+  const [draft, setDraft] = useState<DraftFee[] | null>(null);
+  const [recording, setRecording] = useState<number | null>(null);
+  const refresh = () => { void utils.engagement.staff.fees.invalidate({ engagementId }); void utils.engagement.finance.list.invalidate(); };
+  const done = (message: string) => ({ onSuccess: () => { refresh(); toast.success(message); }, onError: (error: { message: string }) => toast.error(error.message) });
   const save = trpc.engagement.staff.saveFees.useMutation(done("Fees saved."));
-  const paid = trpc.engagement.staff.setFeePaid.useMutation({ onSuccess: result => { void utils.engagement.staff.fees.invalidate({ engagementId }); toast.success(result.opened ? "Payment recorded. The client's room is now open." : "Payment recorded."); }, onError: error => toast.error(error.message) });
   const [sentLink, setSentLink] = useState<{ feeLineId: number; url: string } | null>(null);
-  const sendLink = trpc.engagement.staff.sendFeeLink.useMutation({ onSuccess: (result, input) => { setSentLink({ feeLineId: input.feeLineId, url: result.url }); toast.success(result.deliveryStatus === "Failed" ? "The email did not go. Copy the link below and send it yourself." : "Payment link emailed to the client."); }, onError: error => toast.error(error.message) });
+  const sendLink = trpc.engagement.staff.sendFeeLink.useMutation({ onSuccess: (result, input) => { setSentLink({ feeLineId: input.feeLineId, url: result.url }); refresh(); toast.success(result.deliveryStatus === "Failed" ? "The email did not go. Copy the link below and send it yourself." : "Payment link emailed to the client."); }, onError: error => toast.error(error.message) });
   const openNow = trpc.engagement.staff.openRoomNow.useMutation(done("The client's room is open."));
   if (query.error && query.data === undefined) return <DetailSection title="Fees"><Failed error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} /></DetailSection>;
   const data = query.data;
   if (!data) return <DetailSection title="Fees"><Loading label="Loading the fees" rows={2} /></DetailSection>;
-  const saved = data.feeLines.map(line => ({ label: line.label, amount: line.amount, dueOn: line.dueOn }));
+  const saved: DraftFee[] = data.feeLines.map(line => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn }));
   // Unsaved: the suggestion from the service, until the team saves a schedule.
-  const current = draft ?? (data.suggested ?? saved);
+  const current: DraftFee[] = draft ?? (data.suggested ?? saved);
   const unsaved = draft !== null || data.suggested !== null;
-  const setLine = (index: number, patch: Partial<FeeLineDraft>) => setDraft(current.map((line, at) => (at === index ? { ...line, ...patch } : line)));
+  const setLine = (index: number, patch: Partial<DraftFee>) => setDraft(current.map((line, at) => (at === index ? { ...line, ...patch } : line)));
+  const storedOf = (line: DraftFee) => (line.id === undefined ? undefined : data.feeLines.find(stored => stored.id === line.id));
   const fees = current.filter(line => line.label.trim() && line.amount > 0);
+  const help = data.suggested ? "Filled in from the service's price. Check the amounts and dates, then save."
+    : data.online ? `Send each fee's payment link; Paystack records the payment when the client pays. ${data.can.recordPayments ? "Record money that came another way with Record a payment." : "Money that came another way is recorded by Finance."}`
+      : `Online payment is off. ${data.can.recordPayments ? "Record each payment when the money arrives." : "Finance records each payment when the money arrives."} Finance counts each fee as owed, and as late once its date passes.`;
   return (
     <DetailSection title="Fees">
-      <p className="text-xs text-ink-muted">{data.suggested ? "Filled in from the service's price. Check the amounts and dates, then save." : data.online ? "Send each fee's payment link; Paystack marks it Paid when the client pays. Tick Paid yourself only for money that came another way." : "Online payment is off, so tick Paid when the money arrives. Finance counts each fee as owed, and as late once its date passes."}</p>
+      <p className="text-xs text-ink-muted">{help}</p>
       {data.opensOnPayment && (
         <div role="status" className="flex flex-wrap items-center justify-between gap-2 border border-brand-line bg-brand-tint p-2 text-xs text-ink">
           <span>The client's room opens once the first fee is paid. Until then they see only the fee to pay.</span>
@@ -777,22 +788,27 @@ function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { na
           {data.can.edit && !data.can.approveUnpaidWork && <span className="text-ink-muted">Only a Partner can open it before payment, or move the first fee past the start date.</span>}
         </div>
       )}
-      <ul aria-label="Fee lines" className="space-y-1">
+      <ul aria-label="Fee lines" className="space-y-2">
         {current.map((line, index) => {
-          const stored = !unsaved ? data.feeLines[index] : undefined;
+          const stored = storedOf(line);
+          const status = !stored ? null
+            : stored.left === 0 ? (stored.paidOnline ? "Paid online" : "Paid")
+              : stored.paidAmount > 0 ? `${formatNaira(stored.paidAmount)} paid, ${formatNaira(stored.left)} left` : "Owed";
           return (
-            <li key={stored?.id ?? `new-${index}`} className="grid grid-cols-[minmax(0,1fr)_7rem_8.5rem_10rem] items-center gap-1">
-              <input aria-label={`Fee ${index + 1}`} title={stored?.reference} className={FIELD} disabled={!data.can.edit} value={line.label} onChange={event => setLine(index, { label: event.target.value })} />
-              <input aria-label={`Amount ${index + 1}`} type="number" min={1} className={FIELD} disabled={!data.can.edit} value={line.amount || ""} onChange={event => setLine(index, { amount: Math.round(Number(event.target.value) || 0) })} />
-              <input aria-label={`Due ${index + 1}`} type="date" className={FIELD} disabled={!data.can.edit} value={line.dueOn ?? ""} onChange={event => setLine(index, { dueOn: event.target.value || null })} />
-              {stored ? (
-                <span className="flex items-center gap-2 text-xs text-ink-muted">
-                  <label className="flex items-center gap-1"><input type="checkbox" checked={Boolean(stored.paidAt)} disabled={!data.can.edit || paid.isPending} onChange={event => paid.mutate({ feeLineId: stored.id, paid: event.target.checked })} />{stored.paidAt && stored.paidOnline ? "Paid online" : "Paid"}</label>
-                  {!stored.paidAt && data.online && data.can.sendLink && <button type="button" className="font-semibold text-brand underline" disabled={sendLink.isPending} onClick={() => sendLink.mutate({ feeLineId: stored.id })}>Send link</button>}
+            <li key={line.id ?? `new-${index}`} className="space-y-1">
+              <div className="grid grid-cols-[minmax(0,1fr)_7rem_8.5rem_10rem] items-center gap-1">
+                <input aria-label={`Fee ${index + 1}`} title={[stored?.reference, stored?.invoice].filter(Boolean).join(" · ")} className={FIELD} disabled={!data.can.edit} value={line.label} onChange={event => setLine(index, { label: event.target.value })} />
+                <input aria-label={`Amount ${index + 1}`} type="number" min={1} className={FIELD} disabled={!data.can.edit} value={line.amount || ""} onChange={event => setLine(index, { amount: Math.round(Number(event.target.value) || 0) })} />
+                <input aria-label={`Due ${index + 1}`} type="date" className={FIELD} disabled={!data.can.edit} value={line.dueOn ?? ""} onChange={event => setLine(index, { dueOn: event.target.value || null })} />
+                <span className="flex flex-wrap items-center gap-x-2 text-xs text-ink-muted">
+                  {status && <span className={stored?.left === 0 ? "text-health-clear-strong" : undefined}>{status}</span>}
+                  {stored && stored.left > 0 && !unsaved && data.online && data.can.sendLink && <button type="button" className="font-semibold text-brand underline" disabled={sendLink.isPending} onClick={() => sendLink.mutate({ feeLineId: stored.id })}>Send link</button>}
+                  {stored && stored.left > 0 && !unsaved && data.can.recordPayments && recording !== stored.id && <button type="button" className="font-semibold text-brand underline" onClick={() => setRecording(stored.id)}>Record a payment</button>}
+                  {data.can.edit && !stored?.billed && <button type="button" className="text-danger underline" aria-label={`Remove fee ${index + 1}`} onClick={() => setDraft(current.filter((_, at) => at !== index))}>Remove</button>}
                 </span>
-              ) : data.can.edit ? (
-                <button type="button" className="text-xs text-danger underline" aria-label={`Remove fee ${index + 1}`} onClick={() => setDraft(current.filter((_, at) => at !== index))}>Remove</button>
-              ) : <span />}
+              </div>
+              {stored && <FeePaymentList payments={stored.payments} canRecord={data.can.recordPayments} onChanged={refresh} />}
+              {stored && recording === stored.id && <RecordPaymentForm feeLineId={stored.id} label={stored.label} left={stored.left} onDone={recorded => { setRecording(null); if (recorded) refresh(); }} />}
             </li>
           );
         })}
@@ -804,7 +820,7 @@ function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { na
           <p className="text-ink-muted">Emailed to the client. Shown here in case the email does not arrive.</p>
           {(() => {
             const line = data.feeLines.find(item => item.id === sentLink.feeLineId);
-            return <WhatsAppShare number={owner?.whatsapp} message={`Hello ${firstNameOf(owner?.name ?? "")}, here is the payment link for ${line?.label ?? "your fee"}${line ? ` (${formatNaira(line.amount)})` : ""}: ${sentLink.url}`} />;
+            return <WhatsAppShare number={owner?.whatsapp} message={`Hello ${firstNameOf(owner?.name ?? "")}, here is the payment link for ${line?.label ?? "your fee"}${line ? ` (${formatNaira(line.left || line.amount)})` : ""}: ${sentLink.url}`} />;
           })()}
         </div>
       )}

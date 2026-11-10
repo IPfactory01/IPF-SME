@@ -32,3 +32,23 @@ export const receiptNumberLabel = (value: number) => `TS-RC-${padded(value)}`;
 
 /** An invoice's number as people see it: TS-IN-000001. */
 export const invoiceNumberLabel = (value: number) => `TS-IN-${padded(value)}`;
+
+/** A payment that counts towards its fee: received, and not cancelled. A refunded one counts less its refunds. */
+export const countsTowardsFee = (status: LedgerPaymentStatus) => status === "paid" || status === "refunded";
+
+/**
+ * What has been paid on a fee and what is left. `received` is the fee's payments with the refunds against each (cancelled
+ * refunds left out). A fee marked paid in full (`paidAt`) has nothing left; one marked paid before the ledger, with no
+ * payment yet, counts as paid in full. A write-off closes the rest without the money.
+ */
+export function feeBalance(
+  fee: { amount: number; paidAt: Date | string | null; writtenOffAmount?: number | null },
+  received: readonly { status: LedgerPaymentStatus; amount: number; refunded?: number }[],
+) {
+  const counted = received.filter(payment => countsTowardsFee(payment.status));
+  const fromPayments = counted.reduce((sum, payment) => sum + payment.amount - (payment.refunded ?? 0), 0);
+  const paid = fee.paidAt && !counted.length ? fee.amount : fromPayments;
+  const writtenOff = fee.writtenOffAmount ?? 0;
+  const left = fee.paidAt ? 0 : Math.max(0, fee.amount - paid - writtenOff);
+  return { paid, writtenOff, left };
+}

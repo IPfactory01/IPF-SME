@@ -69,6 +69,12 @@ export const AUDIT_ACTIONS = [
   "engagement_fee_link_sent",
   "engagement_fees_dated_on_delivery",
   "engagement_room_opened",
+  // The payments ledger (batch F): money recorded by hand by Finance or the Super Admin, cancelled when recorded by
+  // mistake, and a Paystack payment that needed a look accepted.
+  "fee_payment_recorded",
+  "fee_payment_cancelled",
+  "payment_accepted",
+  // Retired with the ledger (batch F): the Paid tick. No longer written, kept so older log rows still read.
   "engagement_fee_paid",
   // Retired with proposals (ET, 6 November 2026): no longer written, kept so older log rows still read.
   "engagement_agreement_saved",

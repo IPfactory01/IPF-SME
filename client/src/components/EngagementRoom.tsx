@@ -218,7 +218,7 @@ function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps)
       : room.nextSession ? { text: `Your first ${METHOD.session} is booked: ${lagos(room.nextSession.scheduledFor)}`, done: true }
       : { text: `Your team sends you a time for your first ${METHOD.session}`, done: false },
     ...(counts.dataRequests ? [firstRecords.length ? { text: `Send your first records: ${firstRecords.length} on the ${METHOD.dataRequest}`, done: false, href: "#data" } : { text: `Your records on the ${METHOD.dataRequest} are in`, done: true }] : []),
-    ...(firstFee ? [{ text: `Pay ${firstFee.label}: ${formatNaira(firstFee.amount)}`, done: false, href: firstFee.payPath ?? "#payments" }] : []),
+    ...(firstFee ? [{ text: `Pay ${firstFee.label}: ${formatNaira(firstFee.left)}`, done: false, href: firstFee.payPath ?? "#payments" }] : []),
   ];
   const nextLine = DATED_TYPES[room.type]?.stages[0]?.summary ?? (room.type === "business_review" ? CURRENT_STATE.start : room.serviceStep !== null ? "Once your records are in, we do the work. A consultant checks it before you see it." : here.line);
   const firstWeek = !room.sessions.some(session => session.status === "held") && room.stage !== "closed" ? (
@@ -389,11 +389,16 @@ const dueCount = (room: Room) => room.fees.filter(fee => !fee.paid).length;
 
 // ---- Payments (R11) --------------------------------------------------------------------------------------------------
 
-/** The engagement's fees: what is paid, what is due, and a Pay button for each unpaid fee (Paystack). */
+/**
+ * The engagement's fees: what is paid, what is left, and a Pay button for what is left on each (Paystack), with the
+ * receipt number of every payment. A fee closed without payment reads "Nothing more to pay"; the team's words for it
+ * never reach the room.
+ */
 function PaymentsView({ room }: { room: Room }) {
   const preview = useRoomPreview();
   const total = room.fees.reduce((sum, fee) => sum + fee.amount, 0);
-  const paid = room.fees.filter(fee => fee.paid).reduce((sum, fee) => sum + fee.amount, 0);
+  const paid = room.fees.reduce((sum, fee) => sum + fee.paidAmount, 0);
+  const left = room.fees.reduce((sum, fee) => sum + fee.left, 0);
   return (
     <div className="grid items-start gap-5 lg:grid-cols-3 [&>*]:min-w-0">
       <section aria-label="Fees" className={`${CARD} lg:col-span-2`}>
@@ -407,12 +412,22 @@ function PaymentsView({ room }: { room: Room }) {
               </span>
               <span className="flex items-center gap-3">
                 <span className="text-sm font-medium tabular-nums text-ink">{formatNaira(fee.amount)}</span>
-                {fee.paid
-                  ? <span className="rounded-full bg-health-clear-tint px-2.5 py-0.5 text-xs font-medium text-health-clear-strong">Paid</span>
-                  : fee.payPath && !preview
-                    ? <a href={fee.payPath} className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-deep-hover">Pay</a>
-                    : <span className="text-xs text-ink-muted">To pay</span>}
+                {fee.writtenOff
+                  ? <span className="text-xs text-ink-muted">Nothing more to pay</span>
+                  : fee.paid
+                    ? <span className="rounded-full bg-health-clear-tint px-2.5 py-0.5 text-xs font-medium text-health-clear-strong">Paid</span>
+                    : fee.payPath && !preview
+                      ? <a href={fee.payPath} className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-deep-hover">Pay{fee.paidAmount > 0 ? ` ${formatNaira(fee.left)}` : ""}</a>
+                      : <span className="text-xs text-ink-muted">To pay</span>}
               </span>
+              {(fee.receipts.length > 0 || (!fee.paid && fee.paidAmount > 0)) && (
+                <span className="block w-full space-y-0.5 text-xs text-ink-muted">
+                  {!fee.paid && fee.paidAmount > 0 && <span className="block text-ink">{formatNaira(fee.paidAmount)} of {formatNaira(fee.amount)} paid, {formatNaira(fee.left)} left</span>}
+                  {fee.receipts.map(receipt => (
+                    <span key={receipt.number} className="block">Receipt {receipt.number} · {formatNaira(receipt.amount)}{receipt.receivedOn ? ` · ${dateOnly(receipt.receivedOn)}` : ""}{receipt.refunded > 0 ? ` · ${formatNaira(receipt.refunded)} refunded` : ""}</span>
+                  ))}
+                </span>
+              )}
             </li>
           ))}
         </ul>
@@ -421,9 +436,9 @@ function PaymentsView({ room }: { room: Room }) {
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between"><dt className="text-ink-muted">Total</dt><dd className="font-semibold tabular-nums">{formatNaira(total)}</dd></div>
           <div className="flex justify-between"><dt className="text-ink-muted">Paid</dt><dd className="tabular-nums text-health-clear-strong">{formatNaira(paid)}</dd></div>
-          <div className="flex justify-between"><dt className="text-ink-muted">To pay</dt><dd className="tabular-nums">{formatNaira(total - paid)}</dd></div>
+          <div className="flex justify-between"><dt className="text-ink-muted">To pay</dt><dd className="tabular-nums">{formatNaira(left)}</dd></div>
         </dl>
-        <p className="mt-3 text-xs text-ink-muted">Paystack takes card, bank transfer or USSD. A receipt comes by email.</p>
+        <p className="mt-3 text-xs text-ink-muted">Paystack takes card, bank transfer or USSD. A receipt, with its number, comes by email for every payment.</p>
       </section>
     </div>
   );
@@ -441,7 +456,7 @@ function PaymentGate({ room }: { room: Room }) {
         {first ? (
           <>
             <p className="text-sm text-ink-600">{first.label}</p>
-            <p className="font-sans text-4xl font-semibold tabular-nums text-ink">{formatNaira(first.amount)}</p>
+            <p className="font-sans text-4xl font-semibold tabular-nums text-ink">{formatNaira(first.left)}</p>
             {first.payPath && !preview
               ? <a href={first.payPath} className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-deep-hover">Pay securely with Paystack<ArrowRight className="h-4 w-4" aria-hidden /></a>
               : <p className="text-sm text-ink-muted">Use the payment link in your email, or reply to it for help.</p>}

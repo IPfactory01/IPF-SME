@@ -7,28 +7,32 @@
  *
  * An engagement opened before it is paid (`opensOnPayment`) shows the client only the first fee to pay until a fee is
  * paid, online or by hand; the first payment opens the room.
+ *
+ * With the ledger (batch F, server/ledger.ts) every attempt is a row in `payments`, recorded before Paystack is asked, and
+ * Paystack is asked only for what is left on the fee, so a fee paid in part is finished online. A confirmation must
+ * match its attempt's amount and still fit the fee; money that does not fit needs a look and waits for Finance.
  */
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { businessMemberships, businesses, engagementFeeLines, engagements, paymentRequests, users } from "../drizzle/schema";
-import { addDays, BALANCE_DUE_DAYS } from "../shared/agreement";
+import { addDays, BALANCE_DUE_DAYS, lagosDay } from "../shared/agreement";
 import { BRAND } from "../shared/brand";
 import { CURRENT_STATE, formatNaira } from "../shared/businessSupport";
 import { dayLabel } from "../shared/engagementWork";
 import { engagementTitle } from "../shared/engagementTypes";
+import { countsTowardsFee, feeBalance, receiptNumberLabel } from "../shared/ledger";
 import { PAY_RETURN_PATH, type OnlinePaymentMode, type OnlinePaymentStatus } from "../shared/payments";
 import { ENV } from "./_core/env";
 import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { BUSINESS_SUPPORT_MAILBOX, deliverEmail } from "./email";
 import { lagosTime } from "./lagosTime";
+import { balanceOf, billFee, carryOver, claimAttempt, lockAttempt, lockFee, markFailed, markNeedsALook, paymentByReference, paymentsOfFees, paymentsOfRequests, refreshFeePaid, startAttempt, type FeeLine } from "./ledger";
 import { amountMatches, requireOnlinePayment } from "./onlinePayment";
 import { initializeTransaction, onlineReference, paystackMode, verifyTransaction } from "./paystack";
 import { getTrustedApplicationOrigin } from "./security";
 import { mainContactOf } from "./teamContact";
-
-type FeeLine = typeof engagementFeeLines.$inferSelect;
 
 const notFound = () => new TRPCError({ code: "NOT_FOUND", message: "We could not find this payment. Use the link in your payment email." });
 
@@ -54,7 +58,8 @@ const tokenMatches = (feeLineId: number, token: string) => {
 export const feePayPath = (feeLineId: number) => `/pay/fee/${feeLineId}/${feePayToken(feeLineId)}`;
 export const feePayUrl = (feeLineId: number) => `${getTrustedApplicationOrigin()}${feePayPath(feeLineId)}`;
 
-async function feeContext(db: Pick<Database, "select">, feeLineId: number) {
+/** A fee with its engagement, the business, who pays it and the engagement's name. */
+export async function feeContext(db: Pick<Database, "select">, feeLineId: number) {
   const fee = (await db.select().from(engagementFeeLines).where(eq(engagementFeeLines.id, feeLineId)).limit(1))[0];
   if (!fee) return null;
   const engagement = (await db.select().from(engagements).where(eq(engagements.id, fee.engagementId)).limit(1))[0];
@@ -74,33 +79,54 @@ async function requireFee(db: Pick<Database, "select">, feeLineId: number, token
 }
 
 /**
- * The pay page: the business, the engagement, the fee, its amount, the mode and whether it is paid, and whom to ask on
- * WhatsApp before paying (R72): the engagement's main contact, only if they agreed to show their number; else the page
- * offers the office. Nothing else.
+ * The pay page: the business, the engagement, the fee, what is left to pay on it, the mode and whether it is paid, and
+ * whom to ask on WhatsApp before paying (R72): the engagement's main contact, only if they agreed to show their number;
+ * else the page offers the office. Nothing else.
  */
 export async function feePayPage(db: Pick<Database, "select">, input: { feeLineId: number; token: string }) {
   const { fee, engagement, businessName, title } = await requireFee(db, input.feeLineId, input.token);
   const contact = await mainContactOf(db, engagement.id);
-  return { businessName, engagement: title, label: fee.label, amountNaira: fee.amount, dueOn: fee.dueOn, reference: feeReference(fee.id), mode: paystackMode(), state: fee.paidAt ? "paid" as const : "open" as const, contact };
+  const { paid, left } = feeBalance(fee, await paymentsOfFees(db, [fee.id]));
+  return {
+    businessName, engagement: title, label: fee.label,
+    /** What the Pay button asks for: what is left on the fee. */
+    amountNaira: left || fee.amount,
+    totalNaira: fee.amount, paidNaira: paid,
+    dueOn: fee.dueOn, reference: feeReference(fee.id), mode: paystackMode(), state: left === 0 ? "paid" as const : "open" as const, contact,
+  };
 }
 
-/** Opens a Paystack transaction for the fee, for its amount in the database, and returns the checkout page. */
+/**
+ * Opens a Paystack transaction for what is left on the fee and returns the checkout page. The attempt is recorded first,
+ * with its amount, so Paystack's confirmation always finds it; it also bills the fee (its invoice number).
+ */
 export async function startFeePayment(db: Database, input: { feeLineId: number; token: string }): Promise<{ alreadyPaid: true } | { alreadyPaid: false; url: string }> {
   requireOnlinePayment();
-  const { fee, payer, engagement } = await requireFee(db, input.feeLineId, input.token);
-  if (fee.paidAt) return { alreadyPaid: true };
+  const { payer, engagement } = await requireFee(db, input.feeLineId, input.token);
   if (!payer) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "We do not have an email for this payment yet. Reply to your payment email and we will sort it out." });
+  const mode = paystackMode() === "live" ? "live" as const : "test" as const;
+  const reference = onlineReference(feeReference(input.feeLineId));
+  const attempt = await db.transaction(async tx => {
+    const fee = await lockFee(tx, input.feeLineId);
+    if (!fee) throw notFound();
+    await carryOver(tx, fee);
+    const { left } = await balanceOf(tx, fee);
+    if (left === 0) return null;
+    return startAttempt(tx, fee, { amount: left, reference, mode });
+  });
+  if (!attempt) return { alreadyPaid: true };
   try {
     const { authorizationUrl } = await initializeTransaction({
       email: payer.email,
-      amountKobo: fee.amount * 100,
-      reference: onlineReference(feeReference(fee.id)),
+      amountKobo: attempt.amount * 100,
+      reference,
       callbackUrl: `${getTrustedApplicationOrigin()}${PAY_RETURN_PATH}`,
-      metadata: { feeLineId: fee.id, engagementId: engagement.id },
+      metadata: { feeLineId: input.feeLineId, engagementId: engagement.id },
     });
     return { alreadyPaid: false, url: authorizationUrl };
   } catch (error) {
-    console.error(`[Paystack] Could not open a payment for ${feeReference(fee.id)}:`, error instanceof Error ? error.message : "unknown error");
+    console.error(`[Paystack] Could not open a payment for ${feeReference(input.feeLineId)}:`, error instanceof Error ? error.message : "unknown error");
+    await markFailed(db, attempt.id, "Paystack did not open the payment.").catch(() => undefined);
     throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "We could not open Paystack just now. Please try again in a minute." });
   }
 }
@@ -113,60 +139,108 @@ async function tellOffice(subject: string, lines: string[], key: string) {
     .catch((error: unknown) => console.error("[Paystack] The office notice could not be sent:", error instanceof Error ? error.message : "unknown error"));
 }
 
+/** "Payment received: {fee}": the receipt, for every payment, online or by hand. */
+export function feeReceiptEmail(input: {
+  name: string; title: string; label: string; amount: number; left: number; receipt: string; reference: string;
+  paid: { at: Date } | { on: string }; test: boolean; opened: boolean;
+}) {
+  const url = `${getTrustedApplicationOrigin()}/dashboard`;
+  return {
+    subject: `${input.test ? "TEST: " : ""}Payment received: ${input.label}`,
+    body: [
+      ...(input.test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : []),
+      `Hello ${input.name.split(" ")[0] ?? ""},`, "",
+      `We have received ${formatNaira(input.amount)} for the ${input.title}: ${input.label}. Thank you.`,
+      ...(input.left > 0 ? [`${formatNaira(input.left)} is left to pay on it.`] : []), "",
+      `Receipt: ${input.receipt}`, `Reference: ${input.reference}`,
+      "at" in input.paid ? `Paid: ${lagosTime(input.paid.at)} (Lagos time)` : `Received: ${dayLabel(input.paid.on)}`, "",
+      input.opened ? `Your room is open: ${url}` : `Everything about the engagement is in your room: ${url}`, "",
+      BRAND.organisationName,
+    ].join("\n"),
+  };
+}
+
+/** Emails the payer the receipt for one payment, once (its idempotency key names the payment). A failed send is logged. */
+export async function sendFeeReceipt(db: Pick<Database, "select">, input: { feeLineId: number; paymentId: number; amount: number; left: number; receiptNumber: number; paid: { at: Date } | { on: string }; test: boolean; opened: boolean }) {
+  const found = await feeContext(db, input.feeLineId);
+  if (!found?.payer) return;
+  const message = feeReceiptEmail({ name: found.payer.name, title: found.title, label: found.fee.label, amount: input.amount, left: input.left, receipt: receiptNumberLabel(input.receiptNumber), reference: feeReference(input.feeLineId), paid: input.paid, test: input.test, opened: input.opened });
+  await deliverEmail({ to: found.payer.email, sender: "business_support", idempotencyKey: `payments:${input.paymentId}:receipt`, subject: message.subject, body: message.body })
+    .catch((error: unknown) => console.error("[Fees] The receipt could not be sent:", error instanceof Error ? error.message : "unknown error"));
+}
+
 /**
- * Confirms a fee from one Paystack transaction. The transaction is fetched from Paystack again and must match the fee's
- * reference, succeed, be in naira and be for the fee's amount. The fee is claimed once (paidAt is set only where it is
- * empty), so the webhook and the return page arriving together send one receipt. Money that moved but does not match, or
- * a second payment for a fee already paid, is sent to Business Support to check in Paystack.
+ * Confirms a fee payment from one Paystack transaction. The transaction is fetched from Paystack again and must belong to
+ * the fee, succeed, be in naira, be for its attempt's amount and still fit what is left on the fee. The attempt is claimed
+ * once, under the fee's lock, so the webhook and the return page arriving together record one payment and send one
+ * receipt. Money that moved but does not fit (another amount, or more than is left, such as a second payment for a fee
+ * already paid) needs a look: it is kept on the attempt and sent to Business Support to accept or refund in Finance.
  */
 export async function settleFee(db: Database, feeLineId: number, reference: string, source: "webhook" | "return"): Promise<FeeSettlement> {
   const found = await feeContext(db, feeLineId);
   if (!found) return "unknown";
-  const { fee, engagement, businessName, payer, title } = found;
-  if (fee.paidAt && fee.paidReference === reference) return "already_paid";
+  const { businessName, payer, title } = found;
+  const known = await paymentByReference(db, reference);
+  if (known && known.feeLineId === feeLineId && (countsTowardsFee(known.status) || known.status === "cancelled")) return "already_paid";
+  if (known?.status === "needs_a_look") return "refused";
   const transaction = await verifyTransaction(reference);
   if (!transaction || transaction.reference !== reference) return "failed";
-  const ours = transaction.reference.startsWith(`${feeReference(fee.id)}-`);
-  if (ours && transaction.status !== "success") return STILL_OPEN.has(transaction.status) ? "pending" : "failed";
-  const problem = !ours ? "The Paystack reference does not belong to this fee."
-    : transaction.currency !== "NGN" ? `The payment was not in naira (${transaction.currency || "no currency given"}).`
-      : !amountMatches(transaction, fee.amount * 100) ? `The amount does not match: ${Number.isFinite(transaction.amount) ? formatNaira(transaction.amount / 100) : "no amount"} paid, ${formatNaira(fee.amount)} expected.`
-        : fee.paidAt ? "This fee was already paid, so this may be a second payment for it." : null;
-  if (problem) {
-    console.error(`[Paystack] ${source}: ${reference} was not confirmed for ${feeReference(fee.id)}.`);
-    await recordAudit(db, { action: "engagement_fee_online_refused", actorUserId: null, targetEmail: payer?.email ?? null, details: { engagementId: engagement.id, feeLineId: fee.id, paystackReference: reference, reason: problem } });
-    await tellOffice(`Paystack payment needs a look: ${feeReference(fee.id)}`, [
-      "A fee payment on Paystack was not confirmed automatically. Check it in Paystack, then tick Paid on the engagement's Fees or refund it.",
-      "", `Reason: ${problem}`, `Fee: ${fee.label} (${formatNaira(fee.amount)})`, `Client: ${businessName}`, `Engagement: ${title}`, `Paystack reference: ${reference}`,
-    ], `paystack:${reference}:fee:office`);
+  const ours = transaction.reference.startsWith(`${feeReference(feeLineId)}-`);
+  if (ours && transaction.status !== "success") {
+    if (STILL_OPEN.has(transaction.status)) return "pending";
+    if (known?.status === "started") await markFailed(db, known.id);
+    return "failed";
+  }
+  const mode = known?.mode ?? (paystackMode() === "live" ? "live" : "test");
+  const outcome = await db.transaction(async tx => {
+    const fee = await lockFee(tx, feeLineId);
+    if (!fee) return { kind: "unknown" as const };
+    await carryOver(tx, fee);
+    const { left } = await balanceOf(tx, fee);
+    // An attempt from before the ledger has no row: it was opened for the whole of what was then owed.
+    const attempt = await lockAttempt(tx, fee, { reference, amount: known?.amount ?? (left || fee.amount), mode });
+    if (countsTowardsFee(attempt.status) || attempt.status === "cancelled") return { kind: "already_paid" as const };
+    if (attempt.status === "needs_a_look") return { kind: "refused" as const, fee, problem: null };
+    const problem = !ours ? "The Paystack reference does not belong to this fee."
+      : transaction.currency !== "NGN" ? `The payment was not in naira (${transaction.currency || "no currency given"}).`
+        : !amountMatches(transaction, attempt.amount * 100) ? `The amount does not match: ${Number.isFinite(transaction.amount) ? formatNaira(transaction.amount / 100) : "no amount"} paid, ${formatNaira(attempt.amount)} expected.`
+          : left === 0 ? "This fee was already paid, so this may be a second payment for it."
+            : attempt.amount > left ? `Only ${formatNaira(left)} was left to pay on this fee, so this payment is more than it.`
+              : null;
+    if (problem) {
+      const receivedNaira = Number.isFinite(transaction.amount) && transaction.amount > 0 ? Math.floor(transaction.amount / 100) : 0;
+      await markNeedsALook(tx, attempt, { receivedNaira: transaction.currency === "NGN" ? receivedNaira : 0, problem });
+      await recordAudit(tx, { action: "engagement_fee_online_refused", actorUserId: null, targetEmail: payer?.email ?? null, details: { engagementId: fee.engagementId, feeLineId: fee.id, paymentId: attempt.id, paystackReference: reference, reason: problem } });
+      return { kind: "refused" as const, fee, problem };
+    }
+    const paid = await claimAttempt(tx, fee, attempt);
+    if (!paid) return { kind: "already_paid" as const };
+    const after = await refreshFeePaid(tx, fee);
+    await recordAudit(tx, { action: "engagement_fee_paid_online", actorUserId: null, targetEmail: payer?.email ?? null, details: { engagementId: fee.engagementId, feeLineId: fee.id, paymentId: paid.id, amount: paid.amount, receiptNumber: paid.receiptNumber, via: "paystack", paystackReference: reference, mode } });
+    const opened = await openRoomIfFirstPayment(tx, fee.engagementId);
+    return { kind: "confirmed" as const, fee, payment: paid, left: after.left, opened };
+  });
+  if (outcome.kind === "unknown") return "unknown";
+  if (outcome.kind === "already_paid") return "already_paid";
+  if (outcome.kind === "refused") {
+    if (outcome.problem) {
+      console.error(`[Paystack] ${source}: ${reference} was not confirmed for ${feeReference(feeLineId)}.`);
+      await tellOffice(`Paystack payment needs a look: ${feeReference(feeLineId)}`, [
+        "A fee payment on Paystack was not confirmed automatically. Check it in Paystack, then accept it in Finance, or refund it in Paystack and record the refund.",
+        "", `Reason: ${outcome.problem}`, `Fee: ${outcome.fee.label} (${formatNaira(outcome.fee.amount)})`, `Client: ${businessName}`, `Engagement: ${title}`, `Paystack reference: ${reference}`,
+      ], `paystack:${reference}:fee:office`);
+    }
     return "refused";
   }
-  const mode = paystackMode();
-  const claimed = await db.update(engagementFeeLines).set({ paidAt: new Date(), paidReference: reference })
-    .where(and(eq(engagementFeeLines.id, fee.id), isNull(engagementFeeLines.paidAt))).returning({ id: engagementFeeLines.id });
-  if (!claimed.length) return "already_paid";
-  await recordAudit(db, { action: "engagement_fee_paid_online", actorUserId: null, targetEmail: payer?.email ?? null, details: { engagementId: engagement.id, feeLineId: fee.id, amount: fee.amount, via: "paystack", paystackReference: reference, mode } });
-  const opened = await openRoomIfFirstPayment(db, engagement.id);
+  const { fee, payment, left, opened } = outcome;
   const test = mode === "test";
-  if (payer) {
-    await deliverEmail({
-      to: payer.email, sender: "business_support", idempotencyKey: `engagement_fee_lines:${fee.id}:paid:client`,
-      subject: `${test ? "TEST: " : ""}Payment received: ${fee.label}`,
-      body: [
-        ...(test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : []),
-        `Hello ${payer.name.split(" ")[0] ?? ""},`, "",
-        `We have received ${formatNaira(fee.amount)} for the ${title}: ${fee.label}. Thank you.`, "",
-        `Reference: ${feeReference(fee.id)}`, `Paid: ${lagosTime(new Date())} (Lagos time)`, "",
-        opened ? `Your room is open: ${getTrustedApplicationOrigin()}/dashboard` : `Everything about the engagement is in your room: ${getTrustedApplicationOrigin()}/dashboard`, "",
-        BRAND.organisationName,
-      ].join("\n"),
-    }).catch((error: unknown) => console.error("[Paystack] The receipt could not be sent:", error instanceof Error ? error.message : "unknown error"));
-  }
+  await sendFeeReceipt(db, { feeLineId: fee.id, paymentId: payment.id, amount: payment.amount, left, receiptNumber: payment.receiptNumber!, paid: { at: payment.paidAt! }, test, opened });
   await tellOffice(`${test ? "TEST: " : ""}Paid online: ${businessName}, ${fee.label}`, [
     ...(test ? ["TEST MODE - NO REAL MONEY MOVED", ""] : []),
-    `${businessName} paid ${formatNaira(fee.amount)} for the ${title} (${fee.label}) with Paystack. It is marked Paid: nothing to do.`,
-    "", `Reference: ${feeReference(fee.id)}`, `Paystack reference: ${reference}`, opened ? "This was the first payment: the client's room is now open." : "",
-  ], `engagement_fee_lines:${fee.id}:paid:office`);
+    `${businessName} paid ${formatNaira(payment.amount)} for the ${title} (${fee.label}) with Paystack. It is recorded: nothing to do.`,
+    left > 0 ? `${formatNaira(left)} is left to pay on this fee.` : "",
+    "", `Receipt: ${receiptNumberLabel(payment.receiptNumber!)}`, `Reference: ${feeReference(fee.id)}`, `Paystack reference: ${reference}`, opened ? "This was the first payment: the client's room is now open." : "",
+  ], `payments:${payment.id}:office`);
   return "confirmed";
 }
 
@@ -180,80 +254,118 @@ export async function openRoomIfFirstPayment(db: Pick<Database, "update">, engag
 export async function feePaymentStatus(db: Database, feeLineId: number, reference: string): Promise<{ status: OnlinePaymentStatus; item: "fee"; mode: OnlinePaymentMode }> {
   const mode = paystackMode();
   const answer = (status: OnlinePaymentStatus) => ({ status, item: "fee" as const, mode });
-  const fee = (await db.select().from(engagementFeeLines).where(eq(engagementFeeLines.id, feeLineId)).limit(1))[0];
+  const paidByThis = async () => {
+    const attempt = await paymentByReference(db, reference);
+    return Boolean(attempt && attempt.feeLineId === feeLineId && countsTowardsFee(attempt.status));
+  };
+  const fee = (await db.select({ id: engagementFeeLines.id }).from(engagementFeeLines).where(eq(engagementFeeLines.id, feeLineId)).limit(1))[0];
   if (!fee) return answer(mode === "off" ? "pending" : "failed");
-  const paidByThis = Boolean(fee.paidAt) && fee.paidReference === reference;
-  if (mode === "off") return answer(paidByThis ? "paid" : "pending");
+  if (await paidByThis()) return answer("paid");
+  if (mode === "off") return answer("pending");
   try {
     const settlement = await settleFee(db, feeLineId, reference, "return");
     if (settlement === "confirmed") return answer("paid");
-    if (settlement === "already_paid") return answer(paidByThis || (await db.select({ paidReference: engagementFeeLines.paidReference }).from(engagementFeeLines).where(eq(engagementFeeLines.id, feeLineId)).limit(1))[0]?.paidReference === reference ? "paid" : "pending");
-    if (settlement === "failed") return answer("failed");
+    if (settlement === "already_paid") return answer((await paidByThis()) ? "paid" : "pending");
+    if (settlement === "failed" || settlement === "unknown") return answer("failed");
     return answer("pending");
   } catch (error) {
     console.error(`[Paystack] Could not check ${reference} for the return page:`, error instanceof Error ? error.message : "unknown error");
-    return answer(paidByThis ? "paid" : "pending");
+    return answer("pending");
   }
 }
 
 /**
- * Emails the client the pay link for one fee (the team's "Send the payment link"). Needs a fee not yet paid, Paystack on
- * and an email for the client. Returns the link, shown once, in case the email does not arrive.
+ * Emails the client the pay link for one fee (the team's "Send the payment link"), for what is left on it. Needs a fee
+ * with something left to pay, Paystack on and an email for the client; it bills the fee (its invoice number). Returns the
+ * link, shown once, in case the email does not arrive.
  */
 export async function sendFeeLink(db: Database, input: { feeLineId: number; actorUserId: number }) {
   requireOnlinePayment();
   const found = await feeContext(db, input.feeLineId);
   if (!found) throw notFound();
-  const { fee, payer, title, businessName, engagement } = found;
-  if (fee.paidAt) throw new TRPCError({ code: "BAD_REQUEST", message: "This fee is already paid." });
+  const { payer, title, businessName, engagement } = found;
   if (!payer) throw new TRPCError({ code: "BAD_REQUEST", message: "There is no client email on this engagement." });
+  const billed = await db.transaction(async tx => {
+    const fee = await lockFee(tx, input.feeLineId);
+    if (!fee) throw notFound();
+    await carryOver(tx, fee);
+    const balance = await balanceOf(tx, fee);
+    if (balance.left === 0) return null;
+    await billFee(tx, fee);
+    return { fee, ...balance };
+  });
+  if (!billed) throw new TRPCError({ code: "BAD_REQUEST", message: "This fee is already paid." });
+  const { fee, paid, left } = billed;
   const url = feePayUrl(fee.id);
   const test = paystackMode() === "test";
   const delivery = await deliverEmail({
     to: payer.email, sender: "business_support",
-    subject: `${test ? "TEST: " : ""}${fee.label}: ${formatNaira(fee.amount)} for the ${title}`,
+    subject: `${test ? "TEST: " : ""}${fee.label}: ${formatNaira(left)} for the ${title}`,
     body: [
       ...(test ? ["TEST MODE - NO REAL MONEY MOVES", ""] : []),
       `Hello ${payer.name.split(" ")[0] ?? ""},`, "",
-      `Your payment for the ${title} is ready: ${fee.label}, ${formatNaira(fee.amount)}${fee.dueOn ? `, due ${lagosTime(new Date(`${fee.dueOn}T12:00:00Z`)).split(",")[0]}` : ""}.`,
+      `Your payment for the ${title} is ready: ${fee.label}, ${formatNaira(left)}${fee.dueOn ? `, due ${lagosTime(new Date(`${fee.dueOn}T12:00:00Z`)).split(",")[0]}` : ""}.`,
+      paid > 0 ? `${formatNaira(paid)} of its ${formatNaira(fee.amount)} is paid already.` : "",
       engagement.opensOnPayment ? "Your room opens as soon as it is paid." : "",
       "", `Pay online: ${url}`, "", "Paystack takes card, bank transfer or USSD. Any questions, reply to this email.", "", `Reference: ${feeReference(fee.id)}`, "", BRAND.organisationName,
     ].join("\n"),
   }).catch((error: unknown) => ({ status: "Failed" as const, reason: error instanceof Error ? error.message : "Unknown error" }));
-  await recordAudit(db, { action: "engagement_fee_link_sent", actorUserId: input.actorUserId, targetEmail: payer.email, details: { engagementId: engagement.id, feeLineId: fee.id, amount: fee.amount, business: businessName } });
+  await recordAudit(db, { action: "engagement_fee_link_sent", actorUserId: input.actorUserId, targetEmail: payer.email, details: { engagementId: engagement.id, feeLineId: fee.id, amount: left, business: businessName } });
   return { url, deliveryStatus: delivery.status };
 }
 
 /**
- * The fees a client sees in their room (owner and full-access staff): each with its status and, when unpaid, its pay link.
- * A Business Review started from the check paid its first half on the check's payment request (R36): it is shown first,
- * paid, so the room lists both halves.
+ * The fees a client sees in their room (owner and full-access staff): each with what is paid and what is left, its
+ * receipts, and while something is left, its pay link. A Business Review started from the check paid its first half on
+ * the check's payment request (R36): it is shown first, paid, so the room lists both halves.
  */
 export async function clientFees(db: Pick<Database, "select">, engagementId: number) {
   const lines = await db.select().from(engagementFeeLines).where(eq(engagementFeeLines.engagementId, engagementId)).orderBy(asc(engagementFeeLines.sortOrder), asc(engagementFeeLines.id));
   const online = paystackMode() !== "off" && Boolean(ENV.cookieSecret);
   const started = (await db.select({ paymentRequestId: engagements.paymentRequestId }).from(engagements).where(eq(engagements.id, engagementId)).limit(1))[0];
   const request = started?.paymentRequestId ? (await db.select().from(paymentRequests).where(eq(paymentRequests.id, started.paymentRequestId)).limit(1))[0] : undefined;
+  const ledger = await paymentsOfFees(db, lines.map(line => line.id));
+  const receiptsOf = (entries: typeof ledger) => entries.filter(entry => countsTowardsFee(entry.status) && entry.receiptNumber !== null)
+    .map(entry => ({ number: receiptNumberLabel(entry.receiptNumber!), amount: entry.amount, refunded: entry.refunded, receivedOn: entry.receivedOn }));
   const firstHalfPaid = request && request.item === "current_state" && request.status === "confirmed" && lines.some(line => line.label === `${CURRENT_STATE.name}: half on delivery`)
-    ? [{ id: -request.id, label: `${CURRENT_STATE.name}: half to start`, amount: request.amountNaira, dueOn: null, paid: true, reference: request.reference, payPath: null }]
+    ? [{ id: -request.id, label: `${CURRENT_STATE.name}: half to start`, amount: request.amountNaira, dueOn: null, paid: true, paidAmount: request.amountNaira, left: 0, writtenOff: false, reference: request.reference, payPath: null, receipts: receiptsOf(await paymentsOfRequests(db, [request.id])) }]
     : [];
-  return [...firstHalfPaid, ...lines.map((line: FeeLine) => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn, paid: line.paidAt !== null, reference: feeReference(line.id), payPath: !line.paidAt && online ? feePayPath(line.id) : null }))];
+  return [...firstHalfPaid, ...lines.map((line: FeeLine) => {
+    const own = ledger.filter(entry => entry.feeLineId === line.id);
+    const balance = feeBalance(line, own);
+    return {
+      id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn,
+      /** Nothing left to pay: paid in full, or closed by a write-off. */
+      paid: balance.left === 0,
+      paidAmount: balance.paid, left: balance.left, writtenOff: balance.left === 0 && balance.writtenOff > 0,
+      reference: feeReference(line.id), payPath: balance.left > 0 && online ? feePayPath(line.id) : null,
+      receipts: receiptsOf(own),
+    };
+  })];
 }
 
 /**
  * A service's delivery (R36): sharing its main output dates every unpaid fee that has no date yet seven days ahead
- * (BALANCE_DUE_DAYS, ET 10 November 2026) and emails the owner each one's pay link. A fee that already has a date is
- * left alone, so sharing again sends nothing. `deliverable` is what was shared, by its method name ("Findings", "Plan").
- * Returns how many fees it dated.
+ * (BALANCE_DUE_DAYS, ET 10 November 2026), bills it (its invoice number) and emails the owner each one's pay link. A fee
+ * that already has a date is left alone, so sharing again sends nothing. `deliverable` is what was shared, by its method
+ * name ("Findings", "Plan"). Returns how many fees it dated.
  */
 export async function dateBalancesOnDelivery(db: Database, input: { engagementId: number; deliverable: string; actorUserId: number; today?: string }) {
-  const today = input.today ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date());
+  const today = input.today ?? lagosDay();
   const dueOn = addDays(today, BALANCE_DUE_DAYS);
-  const dated = await db.update(engagementFeeLines).set({ dueOn })
-    .where(and(eq(engagementFeeLines.engagementId, input.engagementId), isNull(engagementFeeLines.paidAt), isNull(engagementFeeLines.dueOn)))
-    .returning({ id: engagementFeeLines.id, label: engagementFeeLines.label, amount: engagementFeeLines.amount });
+  const dated = await db.transaction(async tx => {
+    const rows = await tx.update(engagementFeeLines).set({ dueOn })
+      .where(and(eq(engagementFeeLines.engagementId, input.engagementId), isNull(engagementFeeLines.paidAt), isNull(engagementFeeLines.dueOn), isNull(engagementFeeLines.writtenOffAt)))
+      .returning();
+    const billed: { id: number; label: string; amount: number; left: number }[] = [];
+    for (const row of rows) {
+      await billFee(tx, row);
+      billed.push({ id: row.id, label: row.label, amount: row.amount, left: (await balanceOf(tx, row)).left || row.amount });
+    }
+    if (billed.length) await recordAudit(tx, { action: "engagement_fees_dated_on_delivery", actorUserId: input.actorUserId, details: { engagementId: input.engagementId, dueOn, feeLineIds: billed.map(fee => fee.id), total: billed.reduce((sum, fee) => sum + fee.amount, 0) } });
+    return billed;
+  });
   if (!dated.length) return 0;
-  await recordAudit(db, { action: "engagement_fees_dated_on_delivery", actorUserId: input.actorUserId, details: { engagementId: input.engagementId, dueOn, feeLineIds: dated.map(fee => fee.id), total: dated.reduce((sum, fee) => sum + fee.amount, 0) } });
   const found = await feeContext(db, dated[0]!.id);
   if (!found?.payer) return dated.length;
   const { payer, title } = found;
@@ -262,12 +374,12 @@ export async function dateBalancesOnDelivery(db: Database, input: { engagementId
   for (const fee of dated) {
     await deliverEmail({
       to: payer.email, sender: "business_support", idempotencyKey: `engagement_fee_lines:${fee.id}:due-on-delivery`,
-      subject: `${test ? "TEST: " : ""}${fee.label}: ${formatNaira(fee.amount)} due by ${dayLabel(dueOn)}`,
+      subject: `${test ? "TEST: " : ""}${fee.label}: ${formatNaira(fee.left)} due by ${dayLabel(dueOn)}`,
       body: [
         ...(test ? ["TEST MODE - NO REAL MONEY MOVES", ""] : []),
         `Hello ${payer.name.split(" ")[0] ?? ""},`, "",
         `We have shared your ${input.deliverable} for your ${title} in your room.`,
-        `The second half, ${formatNaira(fee.amount)}, is due by ${dayLabel(dueOn)}.`, "",
+        `The second half, ${formatNaira(fee.left)}, is due by ${dayLabel(dueOn)}.`, "",
         online ? `Pay online: ${feePayUrl(fee.id)}` : "Reply to this email and we will send you a link to pay.", "",
         "Paystack takes card, bank transfer or USSD. Any questions, reply to this email.", "", `Reference: ${feeReference(fee.id)}`, "", BRAND.organisationName,
       ].join("\n"),

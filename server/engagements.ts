@@ -408,8 +408,9 @@ export async function listStaffEngagements(db: Database, actor: StaffActor) {
     // Files in the drop box (on no request or deliverable yet), and which of them the team has matched.
     db.select({ id: engagementFiles.id, engagementId: engagementFiles.engagementId }).from(engagementFiles).where(and(inArray(engagementFiles.engagementId, ids), isNull(engagementFiles.taskId), isNull(engagementFiles.deliverableId))),
     db.select({ fileId: engagementFileMatches.fileId }).from(engagementFileMatches).innerJoin(engagementFiles, eq(engagementFileMatches.fileId, engagementFiles.id)).where(inArray(engagementFiles.engagementId, ids)),
-    // Unpaid fees, for Late and Paused (D6): the team sees the state, not the amounts.
-    db.select({ engagementId: engagementFeeLines.engagementId, dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and(inArray(engagementFeeLines.engagementId, ids), isNull(engagementFeeLines.paidAt))),
+    // Fees with something left to pay (not paid in full, not written off), for Late and Paused (D6): the team sees the
+    // state, not the amounts.
+    db.select({ engagementId: engagementFeeLines.engagementId, dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and(inArray(engagementFeeLines.engagementId, ids), isNull(engagementFeeLines.paidAt), isNull(engagementFeeLines.writtenOffAt))),
   ]);
   const now = Date.now();
   const today = lagosDay(now);
@@ -469,8 +470,9 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     measureOf(db, engagementId),
     checkinsOf(db, engagementId),
     matchesOf(db, engagementId),
-    // Unpaid fees: a second half not dated yet (sharing the main output dates it, R36), and Late or Paused (D6).
-    db.select({ dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and(eq(engagementFeeLines.engagementId, engagementId), isNull(engagementFeeLines.paidAt))),
+    // Fees with something left to pay: a second half not dated yet (sharing the main output dates it, R36), and Late
+    // or Paused (D6).
+    db.select({ dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and(eq(engagementFeeLines.engagementId, engagementId), isNull(engagementFeeLines.paidAt), isNull(engagementFeeLines.writtenOffAt))),
   ]);
   const held = engagement.opensOnPayment ? null : feeHold(waiting.map(fee => ({ dueOn: fee.dueOn, paid: false })), lagosDay());
   const staffFile = (file: EngagementFile) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt });
@@ -1017,7 +1019,8 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
     engagementId: engagement.id,
     /** The engagement's fees, each with its status and pay link while unpaid: for the owner and full-access staff. */
     fees: fullView ? roomFees : [],
-    hold: held ? { state: held.state, pausesOn: held.pausesOn, dueOn: held.fee.dueOn, ...(fullView ? { label: held.fee.label, amount: held.fee.amount, payPath: held.fee.payPath } : {}) } : null,
+    // What to pay to continue: what is left on the late fee.
+    hold: held ? { state: held.state, pausesOn: held.pausesOn, dueOn: held.fee.dueOn, ...(fullView ? { label: held.fee.label, amount: held.fee.left, payPath: held.fee.payPath } : {}) } : null,
     /** Waiting for its first payment (R11): the room shows only the fee to pay until one is paid. */
     awaitingPayment: engagement.opensOnPayment,
     // The content board (Digital marketing): the owner and full-access staff see it and approve.

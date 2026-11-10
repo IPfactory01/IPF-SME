@@ -21,8 +21,8 @@ import {
 } from "../../shared/engagement";
 import { authorityAllows } from "../../shared/platformPermissions";
 import { AGREEMENT_LIMITS } from "../../shared/agreement";
-import { listFinance } from "../finance";
-import { openRoomNow, saveFees, setFeePaid, staffFees, staffSendFeeLink } from "../agreements";
+import { acceptPayment, cancelPayment, listFinance, recordPayment } from "../finance";
+import { openRoomNow, saveFees, staffFees, staffSendFeeLink } from "../agreements";
 import {
   acceptDeliverable,
   approveDeliverable,
@@ -206,15 +206,15 @@ const staffRouter = router({
       priority: z.enum(ENGAGEMENT_TASK_PRIORITIES).nullable(), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(),
     })).min(1).max(120),
   })).mutation(async ({ ctx, input }) => guarded(async () => loadDataRequest(await engagementDb(), ctx.actor, input))),
-  /** The engagement's fee schedule, and recording each payment. */
+  /** The engagement's fee schedule, with each fee's payments; payments are recorded in Finance (financeRouter). */
   fees: staff.input(z.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => staffFees(await engagementDb(), ctx.actor, input.engagementId))),
+  /** Saved in place: a fee already on the engagement carries its id; a new one has none. */
   saveFees: staff.input(z.object({
     engagementId: id,
-    feeLines: z.array(z.object({ label: text(AGREEMENT_LIMITS.label), amount: z.number().int().positive().max(AGREEMENT_LIMITS.amount), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable() })).max(AGREEMENT_LIMITS.feeLines),
+    feeLines: z.array(z.object({ id: id.optional(), label: text(AGREEMENT_LIMITS.label), amount: z.number().int().positive().max(AGREEMENT_LIMITS.amount), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable() })).max(AGREEMENT_LIMITS.feeLines),
   })).mutation(async ({ ctx, input }) => guarded(async () => saveFees(await engagementDb(), ctx.actor, input))),
   sendFeeLink: staff.input(z.object({ feeLineId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffSendFeeLink(await engagementDb(), ctx.actor, input))),
   openRoomNow: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => openRoomNow(await engagementDb(), ctx.actor, input))),
-  setFeePaid: staff.input(z.object({ feeLineId: id, paid: z.boolean() })).mutation(async ({ ctx, input }) => guarded(async () => setFeePaid(await engagementDb(), ctx.actor, input))),
   /** "Fix the next problem": the clients' requests for another service, and handling one. Desk only. */
   serviceRequests: staff.query(async ({ ctx }) => listServiceRequests(await engagementDb(), ctx.actor)),
   handleRequest: staff.input(z.object({ requestId: id, status: z.enum(["done", "declined"]) })).mutation(async ({ ctx, input }) => guarded(async () => handleServiceRequest(await engagementDb(), ctx.actor, input))),
@@ -285,9 +285,24 @@ const clientRouter = router({
   removeFile: accountProcedure.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => clientRemoveFile(await engagementDb(), ctx.account, input))),
 });
 
-/** Finance: money across every client (payment requests and engagement fees). view_financials only; read only. */
+/**
+ * Finance: money across every client (payment requests and engagement fees). Authentication: the internal area. Seeing
+ * it: view_financials. Recording money by hand, cancelling it and accepting a payment that needs a look:
+ * manage_payments (Finance and the Super Admin, ET 10 November 2026), on any fee: Finance works across every client.
+ */
+const finance = adminProcedure.use(async ({ ctx, next }) => next({ ctx: { ...ctx, actor: { id: ctx.user!.id, authority: await loadAuthority(await engagementDb(), ctx.user!) } } }));
 const financeRouter = router({
-  list: adminProcedure.query(async ({ ctx }) => guarded(async () => listFinance(await engagementDb(), { authority: await loadAuthority(await engagementDb(), ctx.user!) }))),
+  list: finance.query(async ({ ctx }) => guarded(async () => listFinance(await engagementDb(), ctx.actor))),
+  recordPayment: finance.input(z.object({
+    feeLineId: id,
+    amount: z.number().int("Whole naira only.").positive("Enter the amount received.").max(AGREEMENT_LIMITS.amount),
+    receivedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the day the money arrived."),
+    method: z.enum(["bank_transfer", "cash", "other"]),
+    note: text(500).min(1, "Add the bank's reference, or say how the money came."),
+  })).mutation(async ({ ctx, input }) => guarded(async () => recordPayment(await engagementDb(), ctx.actor, input))),
+  cancelPayment: finance.input(z.object({ paymentId: id, reason: text(500).min(3, "Say why the payment is cancelled.") }))
+    .mutation(async ({ ctx, input }) => guarded(async () => cancelPayment(await engagementDb(), ctx.actor, input))),
+  acceptPayment: finance.input(z.object({ paymentId: id })).mutation(async ({ ctx, input }) => guarded(async () => acceptPayment(await engagementDb(), ctx.actor, input))),
 });
 
 export const engagementRouter = router({ staff: staffRouter, client: clientRouter, finance: financeRouter });

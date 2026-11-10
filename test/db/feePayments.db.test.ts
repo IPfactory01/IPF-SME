@@ -51,6 +51,7 @@ import { handlePaystackWebhook } from "@server/onlinePayment";
 import { EMAIL_TEST_NOTICE } from "@server/payments";
 import { ACCOUNT_SESSION_COOKIE } from "@shared/auth";
 import { cleanAnswers } from "@shared/businessCheck/engine";
+import { lagosDay } from "@shared/agreement";
 import type { TrpcContext } from "@server/_core/context";
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -251,8 +252,11 @@ for (const target of targets) {
         expect(await webhook(charged(reference))).toBe(200);
         expect(await webhook(charged(reference))).toBe(200);
         const [line] = await feesOf(engagementId);
-        expect(line).toMatchObject({ paidReference: reference });
         expect(line.paidAt).not.toBeNull();
+        // The ledger holds the attempt that paid, once, with its receipt number; the fee is billed (its invoice number).
+        const recorded = await db.select().from(schema.payments).where(eq(schema.payments.feeLineId, line.id));
+        expect(recorded).toEqual([expect.objectContaining({ paystackReference: reference, status: "paid", amount: 470000, method: "paystack", mode: "test", receiptNumber: expect.any(Number) })]);
+        expect(line.invoiceNumber).toEqual(expect.any(Number));
         expect(emails().filter(sent => sent.to === email).map(sent => sent.subject)).toEqual(["TEST: Payment received: Month 1 service fee, payable on starting"]);
         expect(emails().filter(sent => sent.to === OFFICE).map(sent => sent.subject)).toEqual(["TEST: Paid online: Studio first-pay, Month 1 service fee, payable on starting"]);
         expect(emails().find(sent => sent.to === email)!.body).toContain("Your room is open");
@@ -286,8 +290,8 @@ for (const target of targets) {
       it("opens the room when the team records the first payment by hand, or opens it early", async () => {
         const a = await digitalClient("by-hand");
         const [line] = await feesOf(a.engagementId);
-        const result = await (await superAdmin.call()).engagement.staff.setFeePaid({ feeLineId: line.id, paid: true });
-        expect(result).toMatchObject({ opened: true });
+        const result = await (await superAdmin.call()).engagement.finance.recordPayment({ feeLineId: line.id, amount: line.amount, receivedOn: lagosDay(), method: "bank_transfer", note: "Transfer 8812" });
+        expect(result).toMatchObject({ opened: true, left: 0 });
         expect((await (await a.owner.call()).engagement.client.room())!.awaitingPayment).toBe(false);
 
         const b = await digitalClient("open-early");

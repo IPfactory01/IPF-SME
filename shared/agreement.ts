@@ -59,6 +59,27 @@ export function defaultFees(type: EngagementType, service: string | null, starts
   return product ? feeLinesFor(product, startsOn) : [];
 }
 
+/** A month paid in arrears falls due this many days after it: day 30, 60 and 90 from the kickoff (R74, ET 10 November 2026). */
+export const ARREARS_MONTH_DAYS = 30;
+
+/** Whether an engagement can be paid in arrears: only one paid by the month, such as Digital Marketing (R74). */
+export function arrearsOffered(type: EngagementType, service: string | null) {
+  return PRODUCTS.find(item => item.id === (service ?? TYPE_PRODUCT[type]))?.price.kind === "monthly";
+}
+
+/**
+ * A monthly engagement's fees from its kickoff, which officially starts it: in advance, each month's fee on the month's
+ * first day (day 0, 30 and 60); in arrears, 30 days after the month (day 30, 60 and 90), with labels that say so (R74).
+ */
+export function monthlyFees(type: EngagementType, service: string | null, kickoffOn: string, inArrears: boolean): FeeLineDraft[] {
+  const fees = defaultFees(type, service, kickoffOn);
+  if (!inArrears) return fees;
+  return fees.map((fee, index) => {
+    const days = (index + 1) * ARREARS_MONTH_DAYS;
+    return { ...fee, label: `Month ${index + 1} service fee, due ${days} days after kickoff`, dueOn: addDays(kickoffOn, days) };
+  });
+}
+
 /** How many days after delivery a service's second half falls due (ET, 10 November 2026). */
 export const BALANCE_DUE_DAYS = 7;
 

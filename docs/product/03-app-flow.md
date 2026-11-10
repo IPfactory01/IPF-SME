@@ -65,11 +65,15 @@ flowchart LR
 |---|---|---|
 | A product bought online (the Full Report, a readiness assessment, a Done for You piece bought without a call) | In full, before we start | The start date |
 | A service agreed on a call: the Business Review, the Business Plan, the Pricing and Unit Cost Review, the Funding Application Pack, the Six-Week Fix | Half to start, half on delivery (the Six-Week Fix too; paying in full at the start still saves 5%) | Half on the start date; the second half seven days after the main output is shared: the Findings of a Business Review, the result of a Six-Week Fix (Your Plan), the finished work of a Done for You service |
-| Digital marketing | Each month's fee | Day 0, 30 and 60 from the kickoff |
+| Digital marketing | Each month's fee | Day 0, 30 and 60 from the kickoff; paid in arrears, day 30, 60 and 90 (R74) |
 | A Monthly Service | A quarter at a time, before the quarter starts | The start of each quarter |
 
 The room opens on the first payment (built, R11). Only a Partner or the Super Admin can open it sooner, or move the
-first fee past the start date before anything is paid (`approve_work_before_payment`); each is recorded. Finance counts
+first fee past the start date before anything is paid (`approve_work_before_payment`); each is recorded. **Paid in
+arrears (R74)** is the third such choice, for Digital Marketing: on the engagement's Fees, a Partner or the Super Admin
+sets the kickoff date and chooses **Pay in arrears**. Each month's fee then falls due 30, 60 and 90 days after the
+kickoff, its label says so, and the room opens at once. A new kickoff date moves every fee not yet paid; **Pay in
+advance** puts the days back to 0, 30 and 60 and the labels back to the standard ones. Each change is recorded. Finance counts
 every unpaid fee as owed, and a fee as late once its date passes unpaid. A second half has no date until delivery, so it is owed but cannot be late. Work pauses seven days
 after a missed date (D6, R51): the room says so from the first late day, and the team sees **Fee late**, then **Paused**
 (built, E5); the emails, telling the client at three days, come with reminders (R12).
@@ -364,7 +368,7 @@ info@ipfactory.co.
 | A client forgets their password | "Forgot your password?" on `/login` | Emails a 20-minute single-use link; same answer whether or not the account exists | — | Built (sign-in links replace this with R41) |
 | A fee goes unpaid | The room's banner: late, then paused seven days after its date (built, E5); reminders by email (to build) | Reminds at 5 days before, on the day, at 3 and 7 days after | Sees **Fee late**, then **Paused**; work pauses (D6) | Banner and badges built; reminders to build (R12) |
 | A client goes quiet on records | Reminders | Reminds before and after each date | Told what is still outstanding | To build (R16) |
-| A client should get in before paying | — | — | A Partner or the Super Admin: **Open the room now** (recorded) | Built |
+| A client should get in before paying | — | — | A Partner or the Super Admin: **Open the room now**, or **Pay in arrears** for a Digital Marketing client (both recorded) | Built |
 | A prospect does not pay the Business Review link | — | Keeps the first half owed; late in Finance after its date; it never pauses work | A Partner writes off the first half with a note; the team moves the check to Lost or Nurture | Built (F3) |
 | An owner opens a Business Review link sent before F3, after a new one went out | "This payment link has passed" | The old link takes no payment and cannot be confirmed by hand; the new fee is the one to pay | Records money that came another way on the fee | Built (F3) |
 | Footage is too large to upload | **Send a link** on the item: "A link to a shared folder on Google Drive, Dropbox, WeTransfer or iCloud. Videos always come this way, or on WhatsApp." A video file is refused with the same advice | Stores the link, never the video | The Content Producer opens it from the item (**Open the link**) | Built (R43); Send on WhatsApp to {name} with R44 |
@@ -444,7 +448,7 @@ checks every action again. Under the person's name is their level.
 |---|---|---|
 | The client | Owner, email, WhatsApp, account; **Send sign-in link**; **Preview as client** (read only, logged) | Anyone on it; sign-in link with `manage_client_onboarding` |
 | Stage and team | Stage; people and their role on the engagement (each emailed when added) | Stage: `manage_engagements`; team: `assign_engagements` |
-| Fees | Each fee: amount, date, what is paid and left, each payment with its receipt number; **Send link**; **Record a payment** for Finance and the Super Admin; **Open the room now** while it waits for its first payment (a Partner or the Super Admin; others see who can); terms follow what was bought (R36). Saving keeps each fee, and a billed fee cannot be removed (section 3.1) | `manage_engagements`; links also `manage_payments`; payments `manage_payments`; opening early or moving the first fee past the start date also `approve_work_before_payment`; never a Specialist |
+| Fees | Each fee: amount, date, what is paid and left, each payment with its receipt number; **Send link**; **Record a payment** for Finance and the Super Admin; **Open the room now** while it waits for its first payment; **Pay in arrears**, with the kickoff date, on a Digital Marketing engagement (a Partner or the Super Admin; others see who can); terms follow what was bought (R36). Saving keeps each fee, and a billed fee cannot be removed (section 3.1) | `manage_engagements`; links also `manage_payments`; payments `manage_payments`; opening early or moving the first fee past the start date also `approve_work_before_payment`; never a Specialist |
 | The problem | The one problem and its statement | `manage_engagements` |
 | Sessions | Time, link, agenda; client notes and internal notes; share the client notes | `manage_engagements`; internal notes never to a Specialist |
 | Content (Digital marketing) | Reels, posts, stories by month and status | `manage_engagements` |
@@ -506,7 +510,7 @@ server action.
 | `review_engagements` | Approve Deliverables on any engagement in scope; see internal notes and fees | Partner, Vice President, Senior Associate | Approve, internal notes, fees |
 | `contribute_engagements` | Add team-side Work Plan items and draft files, seen by IP Factory only until shared | Specialist | Team items, draft uploads |
 | `manage_payments` | Payment requests, confirming money by hand, sending payment and fee links; a fee's payments by hand (in part or in full), cancelling one recorded by mistake, accepting a payment that needs a look, and recording a refund or cancelling one recorded by mistake (section 3.1) | Finance | `businessSupport` payment actions, Send link, `finance.recordPayment`, `cancelPayment`, `acceptPayment`, `recordRefund`, `cancelRefund` |
-| `approve_work_before_payment` | Work before the first payment: **Open the room now**, or moving the first fee past the start date before anything is paid (ET, 10 November 2026; D4) | Partner (and the Super Admin) | Open the room now, Save the fees |
+| `approve_work_before_payment` | Work before the first payment: **Open the room now**, moving the first fee past the start date before anything is paid, or paying Digital Marketing in arrears (ET, 10 November 2026; D4, R74) | Partner (and the Super Admin) | Open the room now, Save the fees, Pay in arrears |
 | `write_off_fees` | Writing off what is left of a fee, and reversing a write-off (ET, 10 November 2026; batch F2) | Partner (and the Super Admin) | `finance.writeOff`, `finance.reverseWriteOff` |
 | `view_financials` | Finance: paid, owed, late; fees on an engagement | Partner, Vice President, Senior Associate, Finance | Finance, fees |
 | `manage_scheduling` | Scheduling settings (the older admin scheduling capability) | Partner, Vice President, Senior Associate | Nothing yet (C18); calls are booked under `manage_client_onboarding` |

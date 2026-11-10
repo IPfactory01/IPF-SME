@@ -652,6 +652,56 @@ for (const target of targets) {
         expect(await (await partner.call()).engagement.staff.openRoomNow({ engagementId })).toMatchObject({ opened: true });
       });
 
+      it("pays a Digital Marketing client in arrears from the kickoff: 30, 60 and 90 days, the room open, a new kickoff moving what is unpaid (R74)", async () => {
+        const opened = await (await superAdmin.call()).engagement.staff.createDirect({ type: "digital_marketing", businessName: "Arrears Studio", contactName: "Ari Arrears", contactEmail: uniqueEmail("arrears-studio"), startedOn: "2026-11-11" });
+        const engagementId = opened.engagementId;
+        // A Senior Associate runs the engagement but does not decide that a client pays later.
+        const associate = await signIn(await person(["desk_lead"]), true);
+        await expect((await associate.call()).engagement.staff.setFeeTiming({ engagementId, inArrears: true, kickoffOn: "2026-11-11" })).rejects.toMatchObject({ code: "FORBIDDEN", message: "Only a Partner or the Super Admin can choose whether a client pays in arrears or in advance." });
+        const partner = await signIn(await person(["desk_lead", "partner"]), true);
+        const before = await (await partner.call()).engagement.staff.fees({ engagementId });
+        expect(before).toMatchObject({ opensOnPayment: true, timing: { offered: true, inArrears: false, kickoffOn: "2026-11-11" } });
+
+        expect(await (await partner.call()).engagement.staff.setFeeTiming({ engagementId, inArrears: true, kickoffOn: "2026-11-11" })).toEqual({ success: true, moved: 3, opened: true });
+        const after = await (await partner.call()).engagement.staff.fees({ engagementId });
+        expect(after.feeLines.map(fee => [fee.label, fee.dueOn])).toEqual([
+          ["Month 1 service fee, due 30 days after kickoff", "2026-12-11"],
+          ["Month 2 service fee, due 60 days after kickoff", "2027-01-10"],
+          ["Month 3 service fee, due 90 days after kickoff", "2027-02-09"],
+        ]);
+        expect(after).toMatchObject({ opensOnPayment: false, timing: { inArrears: true, kickoffOn: "2026-11-11" } });
+
+        // Month 1 is paid; then the kickoff moves a week. The two fees not yet paid move with it; the paid one stays.
+        const month1 = after.feeLines[0]!;
+        await (await superAdmin.call()).engagement.finance.recordPayment({ feeLineId: month1.id, amount: month1.amount, receivedOn: lagosDay(), method: "bank_transfer", note: "Month 1 by transfer" });
+        expect(await (await partner.call()).engagement.staff.setFeeTiming({ engagementId, inArrears: true, kickoffOn: "2026-11-18" })).toEqual({ success: true, moved: 2, opened: false });
+        expect((await (await partner.call()).engagement.staff.fees({ engagementId })).feeLines.map(fee => fee.dueOn)).toEqual(["2026-12-11", "2027-01-17", "2027-02-16"]);
+
+        // Pay in advance puts the standard days and labels back on what is unpaid.
+        expect(await (await partner.call()).engagement.staff.setFeeTiming({ engagementId, inArrears: false, kickoffOn: "2026-11-18" })).toMatchObject({ moved: 2 });
+        const back = await (await partner.call()).engagement.staff.fees({ engagementId });
+        expect(back.feeLines.map(fee => [fee.label, fee.dueOn])).toEqual([
+          ["Month 1 service fee, due 30 days after kickoff", "2026-12-11"],
+          ["Month 2 service fee, payable before day 31", "2026-12-18"],
+          ["Month 3 service fee, payable before day 61", "2027-01-17"],
+        ]);
+        expect(back.timing).toMatchObject({ inArrears: false, kickoffOn: "2026-11-18" });
+
+        // Each change is on the record, and the room opening says why.
+        const rows = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_fee_timing_set"));
+        expect(rows.map((row: { details: string }) => JSON.parse(row.details)).filter((entry: { engagementId: number }) => entry.engagementId === engagementId)).toEqual([
+          { engagementId, inArrears: true, kickoffOn: "2026-11-11", moved: 3 },
+          { engagementId, inArrears: true, kickoffOn: "2026-11-18", moved: 2 },
+          { engagementId, inArrears: false, kickoffOn: "2026-11-18", moved: 2 },
+        ]);
+        const opening = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_room_opened"));
+        expect(opening.map((row: { details: string }) => JSON.parse(row.details))).toContainEqual({ engagementId, before: "first payment", via: "arrears" });
+
+        // Only an engagement paid by the month can be paid in arrears.
+        const plan = await (await superAdmin.call()).engagement.staff.createDirect({ type: "done_for_you", service: "business_plan", businessName: "Half Studio", contactName: "Hal Half", contactEmail: uniqueEmail("half-studio"), startedOn: "2026-11-16" });
+        await expect((await partner.call()).engagement.staff.setFeeTiming({ engagementId: plan.engagementId, inArrears: true, kickoffOn: "2026-11-16" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      });
+
       it("leaves a Business Review paid through the check, or an engagement already paid, to the team", async () => {
         const { engagementId } = await client("paid-first");
         const associate = await signIn(await person(["desk_lead"]), true);

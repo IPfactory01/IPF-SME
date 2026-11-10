@@ -754,6 +754,48 @@ type DraftFee = FeeLineDraft & { id?: number };
  * (App flow 3.1). There is no proposal to send: a client agrees by paying, or on the call, under the Terms and
  * Conditions (ET, 6 November 2026). Finance counts a fee as owed once it is saved here.
  */
+/**
+ * Paid in arrears or in advance, from the kickoff (R74): for an engagement paid by the month. A Partner or the Super
+ * Admin chooses it and sets the kickoff; the server moves every fee not yet paid and, in arrears, opens the room.
+ */
+function FeeTiming({ engagementId, timing, canChange, onChanged }: { engagementId: number; timing: { inArrears: boolean; kickoffOn: string | null }; canChange: boolean; onChanged: () => void }) {
+  const utils = trpc.useUtils();
+  const [kickoff, setKickoff] = useState(timing.kickoffOn ?? "");
+  const set = trpc.engagement.staff.setFeeTiming.useMutation({
+    onSuccess: (result, input) => {
+      onChanged();
+      void utils.engagement.staff.list.invalidate();
+      const fees = result.moved === 1 ? "1 fee" : `${result.moved} fees`;
+      toast.success(input.inArrears ? `Paid in arrears from the kickoff on ${formatDate(input.kickoffOn)}: ${fees} moved${result.opened ? ", and the room is open" : ""}.` : `Paid in advance from the kickoff on ${formatDate(input.kickoffOn)}: ${fees} moved.`);
+    },
+    onError: error => toast.error(error.message),
+  });
+  const choose = (inArrears: boolean) => set.mutate({ engagementId, inArrears, kickoffOn: kickoff });
+  return (
+    <section aria-label="How the fees are paid" className="space-y-2 border border-line bg-white p-3 text-xs">
+      <p className="text-ink">{timing.inArrears
+        ? `Paid in arrears: each month's fee falls due 30, 60 and 90 days after the kickoff${timing.kickoffOn ? ` on ${formatDate(timing.kickoffOn)}` : ""}.`
+        : `Paid in advance: each month's fee falls due on the month's first day, from the kickoff${timing.kickoffOn ? ` on ${formatDate(timing.kickoffOn)}` : ""}.`}</p>
+      {canChange ? (
+        <>
+          <div className="flex flex-wrap items-end gap-2">
+            <div><label className={LABEL} htmlFor={`kickoff-${engagementId}`}>Kickoff</label><input id={`kickoff-${engagementId}`} type="date" className={FIELD} value={kickoff} onChange={event => setKickoff(event.target.value)} /></div>
+            {timing.inArrears ? (
+              <>
+                <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={!kickoff || kickoff === timing.kickoffOn || set.isPending} onClick={() => choose(true)}>Move the fees to this kickoff</Button>
+                <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={!kickoff || set.isPending} onClick={() => choose(false)}>Pay in advance</Button>
+              </>
+            ) : <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={!kickoff || set.isPending} onClick={() => choose(true)}>Pay in arrears</Button>}
+          </div>
+          <p className="text-ink-muted">{timing.inArrears
+            ? "A new kickoff moves every fee not yet paid. Pay in advance puts the dates back to day 0, 30 and 60."
+            : "In arrears, each fee falls due 30, 60 and 90 days after the kickoff, and the client's room opens now. A fee already paid keeps its date."}</p>
+        </>
+      ) : <p className="text-ink-muted">Only a Partner or the Super Admin can change how this engagement is paid.</p>}
+    </section>
+  );
+}
+
 function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { name: string; whatsapp: string | null } | null }) {
   const utils = trpc.useUtils();
   const query = trpc.engagement.staff.fees.useQuery({ engagementId });
@@ -788,6 +830,7 @@ function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { na
           {data.can.edit && !data.can.approveUnpaidWork && <span className="text-ink-muted">Only a Partner can open it before payment, or move the first fee past the start date.</span>}
         </div>
       )}
+      {data.timing?.offered && <FeeTiming engagementId={engagementId} timing={data.timing} canChange={data.can.edit && data.can.approveUnpaidWork} onChanged={() => { setDraft(null); refresh(); }} />}
       <ul aria-label="Fee lines" className="space-y-2">
         {current.map((line, index) => {
           const stored = storedOf(line);

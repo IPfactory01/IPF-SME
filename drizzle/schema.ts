@@ -937,6 +937,8 @@ export const engagements = pgTable("engagements", {
   contactEmail: varchar("contactEmail", { length: 320 }),
   /** Opened before it was paid (0020): the room shows only the first fee to pay until a fee is paid, online or by hand. */
   opensOnPayment: boolean("opensOnPayment").default(false).notNull(),
+  /** Paid in arrears (0023, R74): each month's fee falls due 30 days after its month, from the kickoff (startedOn). */
+  paidInArrears: boolean("paidInArrears").default(false).notNull(),
   /** The confirmed Current State Assessment payment that started it. */
   paymentRequestId: integer("paymentRequestId").references(() => paymentRequests.id),
   stage: engagementsStageEnum("stage").default("setting_up").notNull(),

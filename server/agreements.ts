@@ -12,7 +12,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { businessMemberships, engagementFeeLines, users } from "../drizzle/schema";
+import { businessMemberships, engagementFeeLines, engagements, users } from "../drizzle/schema";
 import { feeBalance, invoiceNumberLabel } from "../shared/ledger";
 import { BRAND } from "../shared/brand";
 import { formatNaira } from "../shared/businessSupport";
@@ -20,7 +20,7 @@ import { engagementTitle } from "../shared/engagementTypes";
 import { dayLabel } from "../shared/engagementWork";
 import { deliverEmail } from "./email";
 import { getTrustedApplicationOrigin } from "./security";
-import { AGREEMENT_LIMITS, defaultFees, feeTotal, type FeeLineDraft } from "../shared/agreement";
+import { AGREEMENT_LIMITS, arrearsOffered, defaultFees, feeTotal, monthlyFees, type FeeLineDraft } from "../shared/agreement";
 import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { canSeeFees, requireStaffEngagement, type StaffActor } from "./engagements";
@@ -40,6 +40,7 @@ const mayApproveUnpaidWork = (actor: StaffActor) => authorityAllows(actor.author
 export const UNPAID_WORK_REFUSALS = {
   openRoom: "Only a Partner or the Super Admin can open a client's room before the first payment.",
   firstFee: "Only a Partner or the Super Admin can move the first fee past the start date before it is paid.",
+  arrears: "Only a Partner or the Super Admin can choose whether a client pays in arrears or in advance.",
 } as const;
 
 async function feeLinesOf(db: Pick<Database, "select">, engagementId: number) {
@@ -75,7 +76,9 @@ export async function staffFees(db: Database, actor: StaffActor, engagementId: n
       };
     }),
     total: feeTotal(feeLines),
-    suggested: feeLines.length ? null : defaultFees(engagement.type, engagement.service, engagement.startedOn ?? null),
+    suggested: feeLines.length ? null : engagement.paidInArrears && engagement.startedOn ? monthlyFees(engagement.type, engagement.service, engagement.startedOn, true) : defaultFees(engagement.type, engagement.service, engagement.startedOn ?? null),
+    /** Paid in arrears or in advance, from the kickoff (R74): offered only to an engagement paid by the month. */
+    timing: { offered: arrearsOffered(engagement.type, engagement.service), inArrears: engagement.paidInArrears, kickoffOn: engagement.startedOn ?? null },
     /** Waiting for its first payment: the client sees only the fee to pay until one is paid. */
     opensOnPayment: engagement.opensOnPayment,
     online: paystackMode() !== "off",
@@ -208,6 +211,45 @@ export async function staffSendFeeLink(db: Database, actor: StaffActor, input: {
   if (!line) throw notFound();
   await requireStaffEngagement(db, actor, line.engagementId);
   return sendFeeLink(db, { feeLineId: line.id, actorUserId: actor.id });
+}
+
+/**
+ * Paid in arrears or in advance (R74, ET 10 November 2026), from the kickoff, which officially starts the engagement: a
+ * Partner's decision, or the Super Admin's, for an engagement paid by the month. Every fee not yet paid takes its month's
+ * date (30, 60 and 90 days after the kickoff in arrears; day 0, 30 and 60 in advance), and a standard label follows; a
+ * fee paid in full or written off keeps its date, and a label the team wrote stays. In arrears the room opens at once.
+ * Calling it again with a new kickoff moves the fees again. Nothing is emailed: the room shows the new dates.
+ */
+export async function setFeeTiming(db: Database, actor: StaffActor, input: { engagementId: number; inArrears: boolean; kickoffOn: string }) {
+  requireManage(actor);
+  if (!mayApproveUnpaidWork(actor)) throw new TRPCError({ code: "FORBIDDEN", message: UNPAID_WORK_REFUSALS.arrears });
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (!arrearsOffered(engagement.type, engagement.service)) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Only an engagement paid by the month, such as Digital Marketing, can be paid in arrears." });
+  }
+  const target = monthlyFees(engagement.type, engagement.service, input.kickoffOn, input.inArrears);
+  const standard = new Set([...monthlyFees(engagement.type, engagement.service, input.kickoffOn, false), ...monthlyFees(engagement.type, engagement.service, input.kickoffOn, true)].map(fee => fee.label));
+  return db.transaction(async tx => {
+    const lines = await tx.select().from(engagementFeeLines).where(eq(engagementFeeLines.engagementId, input.engagementId))
+      .orderBy(asc(engagementFeeLines.sortOrder), asc(engagementFeeLines.id)).for("update");
+    const ledger = await paymentsOfFees(tx, lines.map(line => line.id));
+    let moved = 0;
+    for (let index = 0; index < lines.length; index++) {
+      const line = lines[index]!;
+      const month = target.at(index);
+      // A fee past the schedule, or one with nothing left to pay, keeps its date.
+      if (!month || feeBalance(line, ledger.filter(entry => entry.feeLineId === line.id)).left === 0) continue;
+      const label = standard.has(line.label) ? month.label : line.label;
+      if (line.dueOn === month.dueOn && line.label === label) continue;
+      await tx.update(engagementFeeLines).set({ dueOn: month.dueOn, label }).where(eq(engagementFeeLines.id, line.id));
+      moved += 1;
+    }
+    await tx.update(engagements).set({ paidInArrears: input.inArrears, startedOn: input.kickoffOn }).where(eq(engagements.id, input.engagementId));
+    const opened = input.inArrears && (await openRoomIfFirstPayment(tx, input.engagementId));
+    if (opened) await recordAudit(tx, { action: "engagement_room_opened", actorUserId: actor.id, details: { engagementId: input.engagementId, before: "first payment", via: "arrears" } });
+    await recordAudit(tx, { action: "engagement_fee_timing_set", actorUserId: actor.id, details: { engagementId: input.engagementId, inArrears: input.inArrears, kickoffOn: input.kickoffOn, moved } });
+    return { success: true, moved, opened } as const;
+  });
 }
 
 /** "Open the room now": the lead lets a client in before the first payment (a payment arranged another way). */

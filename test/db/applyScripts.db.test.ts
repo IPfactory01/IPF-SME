@@ -54,6 +54,14 @@ describe("the Supabase apply scripts", () => {
     await pg.close();
   }, 60_000);
 
+  it("0023: every engagement starts paid in advance (paidInArrears false, never empty)", async () => {
+    const pg = await databaseAt(23);
+    await pg.exec(readFileSync(join(SCRIPTS, scriptFor(23)!), "utf8"));
+    const column = await pg.query<{ column_default: string; is_nullable: string }>("select column_default, is_nullable from information_schema.columns where table_schema = 'public' and table_name = 'engagements' and column_name = 'paidInArrears'");
+    expect(column.rows).toEqual([{ column_default: "false", is_nullable: "NO" }]);
+    await pg.close();
+  }, 60_000);
+
   it("0021: the two Digital marketing roles and the three new columns exist", async () => {
     const pg = await databaseAt(21);
     await pg.exec(readFileSync(join(SCRIPTS, scriptFor(21)!), "utf8"));

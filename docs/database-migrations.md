@@ -164,3 +164,10 @@ SQL Editor and press Run; it stops, changing nothing, unless exactly `0000` to `
 table exists. The push follows at once. On 10 November it was reported applied at 16:00 and the ledger code went live,
 but the database the site uses was still at `0021` until the same evening, when the script was run there; health then
 counted 23 of 23. Between the two, every screen that reads the ledger failed.
+
+**`0023` and deployment order** (written 10 November 2026). Paid in arrears (R74): one column,
+`engagements.paidInArrears`, false for every engagement until a Partner or the Super Admin chooses it for a Digital
+Marketing client. Additive. **Apply it just before deploying the arrears code**, which reads the column on every
+engagement's fees. Paste `drizzle/supabase/apply-0023-engagement-paid-in-arrears.sql` into the Supabase SQL Editor of
+the project the site uses and press Run; it stops, changing nothing, unless exactly `0000` to `0022` are recorded and the
+column is not there yet. Health then counts 24 of 24.

@@ -1,0 +1,1 @@
+ALTER TABLE "engagements" ADD COLUMN "paidInArrears" boolean DEFAULT false NOT NULL;

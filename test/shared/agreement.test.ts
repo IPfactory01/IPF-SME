@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, BALANCE_DUE_DAYS, defaultFees, feeHold, isDelivery, PAUSE_AFTER_DAYS } from "@shared/agreement";
+import { addDays, arrearsOffered, BALANCE_DUE_DAYS, defaultFees, feeHold, isDelivery, monthlyFees, PAUSE_AFTER_DAYS } from "@shared/agreement";
 
 describe("the fees a new engagement starts with", () => {
   it("fills in Digital marketing as a monthly service fee of ₦470,000 for three months, each payable before it begins", () => {
@@ -71,3 +71,21 @@ describe("the pause, seven days after a missed fee date (D6)", () => {
   });
 });
 
+
+describe("paid in arrears (R74, ET 10 November 2026)", () => {
+  it("is offered only to an engagement paid by the month", () => {
+    expect(arrearsOffered("digital_marketing", null)).toBe(true);
+    expect(arrearsOffered("business_review", null)).toBe(false);
+    expect(arrearsOffered("done_for_you", "business_plan")).toBe(false);
+  });
+
+  it("dates each month 30 days after it from the kickoff, with labels that say so; in advance, on its first day", () => {
+    expect(monthlyFees("digital_marketing", null, "2026-11-11", true)).toEqual([
+      { label: "Month 1 service fee, due 30 days after kickoff", amount: 470_000, dueOn: "2026-12-11" },
+      { label: "Month 2 service fee, due 60 days after kickoff", amount: 470_000, dueOn: "2027-01-10" },
+      { label: "Month 3 service fee, due 90 days after kickoff", amount: 470_000, dueOn: "2027-02-09" },
+    ]);
+    expect(monthlyFees("digital_marketing", null, "2026-11-11", false)).toEqual(defaultFees("digital_marketing", null, "2026-11-11"));
+    expect(monthlyFees("digital_marketing", null, "2026-11-11", false).map(fee => fee.dueOn)).toEqual(["2026-11-11", "2026-12-11", "2027-01-10"]);
+  });
+});

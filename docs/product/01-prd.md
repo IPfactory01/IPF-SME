@@ -138,18 +138,19 @@ call; a product marked **Talk to an expert** starts with a Discovery Call. Every
 some buyers will only pay after speaking to someone. **Online ordering is off today** (`ONLINE_ORDERS_OPEN`), so every
 paid product starts with a call or the check until R13 is built.
 
-**Payment terms (ET, 10 November 2026; R36).** Terms follow what is bought, so no engagement chooses its own and there
-is no payment in arrears (D4):
+**Payment terms (ET, 10 November 2026; R36).** Terms follow what is bought, so no engagement chooses its own (D4). The
+one exception is Digital Marketing paid in arrears, a Partner's choice for a client (R74):
 
 | What is bought | When each fee falls due |
 |---|---|
 | A product bought online | In full, before we start |
 | A service agreed on a call (the Business Review, the Business Plan, the Pricing and Unit Cost Review, the Funding Application Pack, the Six-Week Fix) | Half on the start date; the second half seven days after its main output is shared |
-| Digital Marketing | Each month before it starts: day 0, 30 and 60 from the kickoff |
+| Digital Marketing | Each month before it starts: day 0, 30 and 60 from the kickoff. Paid in arrears (R74): day 30, 60 and 90 |
 | A Monthly Service | A quarter at a time, before the quarter starts |
 
 The room opens on the first payment. Only a Partner or the Super Admin can open it sooner, or move the first fee past the
-start date before anything is paid (`approve_work_before_payment`, ET 10 November 2026); each is recorded. Work pauses
+start date before anything is paid (`approve_work_before_payment`, ET 10 November 2026); each is recorded. An engagement
+paid in arrears opens at once. Work pauses
 seven days after a missed date (decision D6; section 22 of the Terms allows IP Factory to suspend for unresolved
 payment issues).
 
@@ -202,6 +203,7 @@ automatic refund. Management accounts only; the monthly tax note states record r
 | R6 | Book the Discovery Call from the result; record the outcome on the pipeline | M | A booking counts only when Calendly confirms | Built |
 | R7 | Open an engagement of any type for a new or existing client; many projects per client | M | The type's Data Request, Work Plan and Sessions load without a click | Built |
 | R36 | Payment terms follow what is bought (ET, 10 November 2026), so none is negotiated per engagement: a product bought online is paid before we start; a **service** agreed on a call (the Business Review, the Business Plan, the Pricing and Unit Cost Review, the Funding Application Pack, the Six-Week Fix) is paid **half to start and half on delivery**; Digital marketing is paid monthly; a Monthly Service a quarter at a time. The first part falls due at the start; the second half seven days after the main output is shared in the room (the Findings of a Business Review, the result of a Six-Week Fix, the finished work of a Done for You service), when the owner is emailed its pay link. Work pauses seven days after a missed date (D6, R51) | M | No terms negotiated one by one; a new client sees only the first part until it is paid; every fee has its date once its moment has come | Built (10 November 2026, batch E) |
+| R74 | **Paid in arrears (ET, 10 November 2026).** A Partner or the Super Admin can set a Digital Marketing engagement to be paid in arrears: each month's fee falls due 30, 60 and 90 days after the kickoff, which officially starts the engagement, with labels that say so; the room opens at once, without waiting for a payment; a new kickoff date moves every fee not yet paid. **Pay in advance** puts the days back to 0, 30 and 60. Every other engagement pays its first fee at the start (D4) | S | Nobody opens the room or re-dates a fee by hand for a client paid in arrears | Built (10 November 2026); live with migration 0023 |
 | R8 | No proposals or agreements to sign (ET, 6 November 2026): a client agrees on the call or by paying, under the Terms and Conditions; each engagement keeps a fee schedule filled in from the service's price or the type's monthly fee | M | Nothing for the client to sign; the fees are set when the engagement opens | Built |
 | R9 | The legal entity that contracts with clients named in the Terms and Conditions and on invoices and receipts | M | One entity, stated once | To build (decision D1) |
 
@@ -369,7 +371,7 @@ engagement without hurting the results above it.
 | A1 | Owners will send records as photos, voice notes and bank-app PDFs if we ask plainly | Assumption | Desk | Holding so far |
 | A2 | Business owners will pay online without a meeting once the call has set the work | Assumption | ET | To test with the first Digital marketing client |
 | A3 | Visitors will buy a fixed-price product online with no call, if the page shows the price, a named expert and WhatsApp | Assumption | ET | To test once R13 and R38 are built |
-| K8 | Late payment is common, and inflation erodes a price held for twelve months | Risk | Partners | No engagement is paid in arrears (D4); a second half falls due seven days after delivery and work pauses seven days after a missed date (R36, D6); only a quarterly price holds for twelve months |
+| K8 | Late payment is common, and inflation erodes a price held for twelve months | Risk | Partners | No engagement is paid in arrears unless a Partner chooses it for a Digital Marketing client (R74, D4); a second half falls due seven days after delivery and work pauses seven days after a missed date (R36, D6); only a quarterly price holds for twelve months |
 | K9 | Tracking needs consent under the Nigeria Data Protection Act 2023, and a cookie notice the site does not have yet | Dependency | ET | With R39 |
 | A4 | A 20-minute usability test with a live client (five tasks: send footage, approve a reel, find what is due, pay a fee, reach the expert) will show what to simplify in the room | Assumption | ET | Later (ET, 9 November 2026); R49 waits for it |
 | K10 | Raw footage is large; storing it would cost more than it is worth | Risk | Engineering | Video moves by link or WhatsApp, never stored (R43) |
@@ -413,7 +415,7 @@ Ordered by what each moves first: cash, then growth, then hours, then retention.
 | D1 | Which legal entity contracts with clients, and who owns the P&L | Name the entity once, in the Terms and on invoices. Payments are collected by Enzo Krypton & Co. through its Paystack account (ET, 10 November 2026), as the pay pages say; the Terms do not yet name who collects, so counsel adds that line with K5 | ET |
 | D2 | Full Session transcripts in the room | Reviewed notes by default; the transcript on request (as built) | ET |
 | D3 | Ongoing support after a fix: content and price | Offer a Monthly Service at close | ET |
-| D4 | How much payment in arrears IP Factory will carry | Decided (ET, 10 November 2026): no limit, because no engagement chooses its own terms. Terms follow what is bought: a product is paid in advance; a service is paid in milestones on one standard schedule (to agree); Digital marketing is paid monthly | ET |
+| D4 | How much payment in arrears IP Factory will carry | Decided (ET, 10 November 2026): no limit, because no engagement chooses its own terms. Terms follow what is bought: a product is paid in advance; a service is paid in milestones on one standard schedule (to agree); Digital marketing is paid monthly. Exception (ET, 10 November 2026): a Partner or the Super Admin may set Digital Marketing to be paid in arrears for a client, each month's fee 30 days after its month from the kickoff (R74) | ET |
 | D5 | The analytics tool | Google Analytics 4 linked to Search Console for the journey from search to page; payment and engagement measures from our own database | ET |
 | D6 | When work pauses for a late fee | Decided (ET, 10 November 2026): seven days after the due date, with the client told at three days. The Terms allow suspension for unresolved payment issues but set no period; counsel adds the period with K5 | ET |
 

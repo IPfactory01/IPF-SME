@@ -589,6 +589,18 @@ function defaultFees(type, service, startsOn = null) {
   const product2 = PRODUCTS.find((item2) => item2.id === (service ?? TYPE_PRODUCT[type]));
   return product2 ? feeLinesFor(product2, startsOn) : [];
 }
+var ARREARS_MONTH_DAYS = 30;
+function arrearsOffered(type, service) {
+  return PRODUCTS.find((item2) => item2.id === (service ?? TYPE_PRODUCT[type]))?.price.kind === "monthly";
+}
+function monthlyFees(type, service, kickoffOn, inArrears) {
+  const fees = defaultFees(type, service, kickoffOn);
+  if (!inArrears) return fees;
+  return fees.map((fee, index2) => {
+    const days = (index2 + 1) * ARREARS_MONTH_DAYS;
+    return { ...fee, label: `Month ${index2 + 1} service fee, due ${days} days after kickoff`, dueOn: addDays(kickoffOn, days) };
+  });
+}
 var BALANCE_DUE_DAYS = 7;
 var lagosDay = (now = Date.now()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date(now));
 var PAUSE_AFTER_DAYS = 7;
@@ -2004,6 +2016,8 @@ var engagements = pgTable("engagements", {
   contactEmail: varchar("contactEmail", { length: 320 }),
   /** Opened before it was paid (0020): the room shows only the first fee to pay until a fee is paid, online or by hand. */
   opensOnPayment: boolean("opensOnPayment").default(false).notNull(),
+  /** Paid in arrears (0023, R74): each month's fee falls due 30 days after its month, from the kickoff (startedOn). */
+  paidInArrears: boolean("paidInArrears").default(false).notNull(),
   /** The confirmed Current State Assessment payment that started it. */
   paymentRequestId: integer("paymentRequestId").references(() => paymentRequests.id),
   stage: engagementsStageEnum("stage").default("setting_up").notNull(),
@@ -4631,6 +4645,13 @@ var journal_default = {
       version: "7",
       when: 1794322710113,
       tag: "0022_payments_ledger",
+      breakpoints: true
+    },
+    {
+      idx: 23,
+      version: "7",
+      when: 1794340605524,
+      tag: "0023_engagement_paid_in_arrears",
       breakpoints: true
     }
   ]
@@ -8914,7 +8935,8 @@ var requireManage = (actor) => {
 var mayApproveUnpaidWork = (actor) => authorityAllows(actor.authority, "approve_work_before_payment");
 var UNPAID_WORK_REFUSALS = {
   openRoom: "Only a Partner or the Super Admin can open a client's room before the first payment.",
-  firstFee: "Only a Partner or the Super Admin can move the first fee past the start date before it is paid."
+  firstFee: "Only a Partner or the Super Admin can move the first fee past the start date before it is paid.",
+  arrears: "Only a Partner or the Super Admin can choose whether a client pays in arrears or in advance."
 };
 async function feeLinesOf(db, engagementId) {
   return db.select().from(engagementFeeLines).where(eq18(engagementFeeLines.engagementId, engagementId)).orderBy(asc6(engagementFeeLines.sortOrder), asc6(engagementFeeLines.id));
@@ -8950,7 +8972,9 @@ async function staffFees(db, actor, engagementId) {
       };
     }),
     total: feeTotal(feeLines),
-    suggested: feeLines.length ? null : defaultFees(engagement.type, engagement.service, engagement.startedOn ?? null),
+    suggested: feeLines.length ? null : engagement.paidInArrears && engagement.startedOn ? monthlyFees(engagement.type, engagement.service, engagement.startedOn, true) : defaultFees(engagement.type, engagement.service, engagement.startedOn ?? null),
+    /** Paid in arrears or in advance, from the kickoff (R74): offered only to an engagement paid by the month. */
+    timing: { offered: arrearsOffered(engagement.type, engagement.service), inArrears: engagement.paidInArrears, kickoffOn: engagement.startedOn ?? null },
     /** Waiting for its first payment: the client sees only the fee to pay until one is paid. */
     opensOnPayment: engagement.opensOnPayment,
     online: paystackMode() !== "off",
@@ -9056,6 +9080,35 @@ async function staffSendFeeLink(db, actor, input) {
   if (!line) throw notFound3();
   await requireStaffEngagement(db, actor, line.engagementId);
   return sendFeeLink(db, { feeLineId: line.id, actorUserId: actor.id });
+}
+async function setFeeTiming(db, actor, input) {
+  requireManage(actor);
+  if (!mayApproveUnpaidWork(actor)) throw new TRPCError15({ code: "FORBIDDEN", message: UNPAID_WORK_REFUSALS.arrears });
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (!arrearsOffered(engagement.type, engagement.service)) {
+    throw new TRPCError15({ code: "BAD_REQUEST", message: "Only an engagement paid by the month, such as Digital Marketing, can be paid in arrears." });
+  }
+  const target = monthlyFees(engagement.type, engagement.service, input.kickoffOn, input.inArrears);
+  const standard = new Set([...monthlyFees(engagement.type, engagement.service, input.kickoffOn, false), ...monthlyFees(engagement.type, engagement.service, input.kickoffOn, true)].map((fee) => fee.label));
+  return db.transaction(async (tx) => {
+    const lines = await tx.select().from(engagementFeeLines).where(eq18(engagementFeeLines.engagementId, input.engagementId)).orderBy(asc6(engagementFeeLines.sortOrder), asc6(engagementFeeLines.id)).for("update");
+    const ledger = await paymentsOfFees(tx, lines.map((line) => line.id));
+    let moved = 0;
+    for (let index2 = 0; index2 < lines.length; index2++) {
+      const line = lines[index2];
+      const month = target.at(index2);
+      if (!month || feeBalance(line, ledger.filter((entry) => entry.feeLineId === line.id)).left === 0) continue;
+      const label = standard.has(line.label) ? month.label : line.label;
+      if (line.dueOn === month.dueOn && line.label === label) continue;
+      await tx.update(engagementFeeLines).set({ dueOn: month.dueOn, label }).where(eq18(engagementFeeLines.id, line.id));
+      moved += 1;
+    }
+    await tx.update(engagements).set({ paidInArrears: input.inArrears, startedOn: input.kickoffOn }).where(eq18(engagements.id, input.engagementId));
+    const opened = input.inArrears && await openRoomIfFirstPayment(tx, input.engagementId);
+    if (opened) await recordAudit(tx, { action: "engagement_room_opened", actorUserId: actor.id, details: { engagementId: input.engagementId, before: "first payment", via: "arrears" } });
+    await recordAudit(tx, { action: "engagement_fee_timing_set", actorUserId: actor.id, details: { engagementId: input.engagementId, inArrears: input.inArrears, kickoffOn: input.kickoffOn, moved } });
+    return { success: true, moved, opened };
+  });
 }
 async function openRoomNow(db, actor, input) {
   requireManage(actor);
@@ -13932,6 +13985,8 @@ var staffRouter = router({
   })).mutation(async ({ ctx, input }) => guarded(async () => saveFees(await engagementDb(), ctx.actor, input))),
   sendFeeLink: staff.input(z15.object({ feeLineId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffSendFeeLink(await engagementDb(), ctx.actor, input))),
   openRoomNow: staff.input(z15.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => openRoomNow(await engagementDb(), ctx.actor, input))),
+  /** Paid in arrears or in advance from the kickoff (R74): a Partner or the Super Admin, on an engagement paid by the month. */
+  setFeeTiming: staff.input(z15.object({ engagementId: id, inArrears: z15.boolean(), kickoffOn: z15.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the kickoff date.") })).mutation(async ({ ctx, input }) => guarded(async () => setFeeTiming(await engagementDb(), ctx.actor, input))),
   /** "Fix the next problem": the clients' requests for another service, and handling one. Desk only. */
   serviceRequests: staff.query(async ({ ctx }) => listServiceRequests(await engagementDb(), ctx.actor)),
   handleRequest: staff.input(z15.object({ requestId: id, status: z15.enum(["done", "declined"]) })).mutation(async ({ ctx, input }) => guarded(async () => handleServiceRequest(await engagementDb(), ctx.actor, input))),

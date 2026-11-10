@@ -41,7 +41,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         fees: { useQuery: () => ({ data: api.failed.fees ? undefined : api.fees, error: api.failed.fees ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("fees"); } }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -593,6 +593,44 @@ describe("fees on the team's side", () => {
     // Recording money is for Finance and the Super Admin (ET, 10 November 2026): the team is told who does it.
     expect(section.queryByRole("button", { name: "Record a payment" })).toBeNull();
     expect(section.getByText(/Money that came another way is recorded by Finance/)).toBeTruthy();
+    api.fees = before;
+  });
+
+  it("lets a Partner pay a Digital Marketing client in arrears from the kickoff, and tells anyone else who may (R74)", () => {
+    api.list = { setUp: true, items: [row], canStart: true, seesAll: true } as never;
+    api.calls = {};
+    const before = api.fees;
+    const can = { edit: true, sendLink: true, approveUnpaidWork: true, recordPayments: false, writeOff: false };
+    const fees = { feeLines: [{ id: 81, label: "Month 1 service fee, payable on starting", amount: 470000, dueOn: "2026-11-11", paidAt: null, paidOnline: false, reference: "TS-F-000081", paidAmount: 0, left: 470000, billed: false, invoice: null, payments: [], writtenOff: null }], total: 470000, suggested: null, opensOnPayment: true, online: true, timing: { offered: true, inArrears: false, kickoffOn: "2026-11-11" }, can };
+    api.fees = fees as never;
+    api.detail = detail({ manage: true, assign: true, review: true });
+    const { unmount } = render(<EngagementsView />);
+    fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
+    const timing = within(within(screen.getByRole("dialog")).getByRole("region", { name: "How the fees are paid" }));
+    expect(timing.getByText("Paid in advance: each month's fee falls due on the month's first day, from the kickoff on 11 Nov 2026.")).toBeTruthy();
+    fireEvent.change(timing.getByLabelText("Kickoff"), { target: { value: "2026-11-18" } });
+    fireEvent.click(timing.getByRole("button", { name: "Pay in arrears" }));
+    expect(api.calls.setFeeTiming).toEqual([{ engagementId: row.id, inArrears: true, kickoffOn: "2026-11-18" }]);
+    unmount();
+
+    // Paid in arrears: the kickoff can move, or the client go back to paying in advance.
+    api.fees = { ...fees, timing: { offered: true, inArrears: true, kickoffOn: "2026-11-11" } } as never;
+    const second = render(<EngagementsView />);
+    fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
+    const inArrears = within(within(screen.getByRole("dialog")).getByRole("region", { name: "How the fees are paid" }));
+    expect(inArrears.getByText("Paid in arrears: each month's fee falls due 30, 60 and 90 days after the kickoff on 11 Nov 2026.")).toBeTruthy();
+    expect((inArrears.getByRole("button", { name: "Move the fees to this kickoff" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(inArrears.getByRole("button", { name: "Pay in advance" }));
+    expect(api.calls.setFeeTiming).toContainEqual({ engagementId: row.id, inArrears: false, kickoffOn: "2026-11-11" });
+    second.unmount();
+
+    // Anyone else sees how it is paid, and who may change it.
+    api.fees = { ...fees, can: { ...can, approveUnpaidWork: false } } as never;
+    render(<EngagementsView />);
+    fireEvent.click(screen.getAllByText("Ada Foods")[0]!.closest("tr")!);
+    const others = within(within(screen.getByRole("dialog")).getByRole("region", { name: "How the fees are paid" }));
+    expect(others.getByText("Only a Partner or the Super Admin can change how this engagement is paid.")).toBeTruthy();
+    expect(others.queryByRole("button", { name: "Pay in arrears" })).toBeNull();
     api.fees = before;
   });
 

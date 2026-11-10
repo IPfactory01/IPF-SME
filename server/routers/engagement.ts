@@ -23,7 +23,7 @@ import {
 import { authorityAllows } from "../../shared/platformPermissions";
 import { AGREEMENT_LIMITS } from "../../shared/agreement";
 import { acceptPayment, cancelPayment, cancelRefund, listFinance, recordPayment, recordRefund, reverseWriteOff, writeOff } from "../finance";
-import { openRoomNow, saveFees, staffFees, staffSendFeeLink } from "../agreements";
+import { openRoomNow, saveFees, setFeeTiming, staffFees, staffSendFeeLink } from "../agreements";
 import {
   acceptDeliverable,
   approveDeliverable,
@@ -219,6 +219,9 @@ const staffRouter = router({
   })).mutation(async ({ ctx, input }) => guarded(async () => saveFees(await engagementDb(), ctx.actor, input))),
   sendFeeLink: staff.input(z.object({ feeLineId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffSendFeeLink(await engagementDb(), ctx.actor, input))),
   openRoomNow: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => openRoomNow(await engagementDb(), ctx.actor, input))),
+  /** Paid in arrears or in advance from the kickoff (R74): a Partner or the Super Admin, on an engagement paid by the month. */
+  setFeeTiming: staff.input(z.object({ engagementId: id, inArrears: z.boolean(), kickoffOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the kickoff date.") }))
+    .mutation(async ({ ctx, input }) => guarded(async () => setFeeTiming(await engagementDb(), ctx.actor, input))),
   /** "Fix the next problem": the clients' requests for another service, and handling one. Desk only. */
   serviceRequests: staff.query(async ({ ctx }) => listServiceRequests(await engagementDb(), ctx.actor)),
   handleRequest: staff.input(z.object({ requestId: id, status: z.enum(["done", "declined"]) })).mutation(async ({ ctx, input }) => guarded(async () => handleServiceRequest(await engagementDb(), ctx.actor, input))),

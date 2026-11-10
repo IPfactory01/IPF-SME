@@ -590,6 +590,15 @@ function defaultFees(type, service, startsOn = null) {
   return product2 ? feeLinesFor(product2, startsOn) : [];
 }
 var BALANCE_DUE_DAYS = 7;
+var lagosDay = (now = Date.now()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date(now));
+var PAUSE_AFTER_DAYS = 7;
+function feeHold(fees, today) {
+  const late = fees.filter((fee) => !fee.paid && fee.dueOn !== null && fee.dueOn < today).sort((a, b) => a.dueOn.localeCompare(b.dueOn));
+  const first = late[0];
+  if (!first) return null;
+  const pausesOn = addDays(first.dueOn, PAUSE_AFTER_DAYS);
+  return { state: pausesOn <= today ? "paused" : "late", fee: first, pausesOn };
+}
 function isDelivery(type, kind) {
   if (type === "business_review" || type === "assessment") return kind === "findings";
   if (type === "six_week_fix") return kind === "plan";
@@ -10033,19 +10042,23 @@ async function listStaffEngagements(db, actor) {
     type: engagements.type,
     startedOn: engagements.startedOn,
     contactName: engagements.contactName,
-    contactEmail: engagements.contactEmail
+    contactEmail: engagements.contactEmail,
+    opensOnPayment: engagements.opensOnPayment
   }).from(engagements).leftJoin(businessChecks, eq16(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq16(engagements.businessId, businesses.id)).where(scope ? inArray3(engagements.id, scope) : void 0).orderBy(desc5(engagements.id));
   if (!rows.length) return [];
   const ids = rows.map((row) => row.id);
-  const [team, tasks, sessions, drops, matched] = await Promise.all([
+  const [team, tasks, sessions, drops, matched, unpaidFees] = await Promise.all([
     db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role, name: users.name, userId: engagementTeam.userId }).from(engagementTeam).innerJoin(users, eq16(engagementTeam.userId, users.id)).where(inArray3(engagementTeam.engagementId, ids)),
     db.select({ engagementId: engagementTasks.engagementId, side: engagementTasks.side, status: engagementTasks.status, dueOn: engagementTasks.dueOn }).from(engagementTasks).where(inArray3(engagementTasks.engagementId, ids)),
     db.select({ engagementId: engagementSessions.engagementId, title: engagementSessions.title, scheduledFor: engagementSessions.scheduledFor, status: engagementSessions.status }).from(engagementSessions).where(inArray3(engagementSessions.engagementId, ids)),
     // Files in the drop box (on no request or deliverable yet), and which of them the team has matched.
     db.select({ id: engagementFiles.id, engagementId: engagementFiles.engagementId }).from(engagementFiles).where(and10(inArray3(engagementFiles.engagementId, ids), isNull7(engagementFiles.taskId), isNull7(engagementFiles.deliverableId))),
-    db.select({ fileId: engagementFileMatches.fileId }).from(engagementFileMatches).innerJoin(engagementFiles, eq16(engagementFileMatches.fileId, engagementFiles.id)).where(inArray3(engagementFiles.engagementId, ids))
+    db.select({ fileId: engagementFileMatches.fileId }).from(engagementFileMatches).innerJoin(engagementFiles, eq16(engagementFileMatches.fileId, engagementFiles.id)).where(inArray3(engagementFiles.engagementId, ids)),
+    // Unpaid fees, for Late and Paused (D6): the team sees the state, not the amounts.
+    db.select({ engagementId: engagementFeeLines.engagementId, dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and10(inArray3(engagementFeeLines.engagementId, ids), isNull7(engagementFeeLines.paidAt)))
   ]);
   const now = Date.now();
+  const today = lagosDay(now);
   const matchedIds = new Set(matched.map((row) => row.fileId));
   return rows.map((row) => {
     const open = tasks.filter((task) => task.engagementId === row.id && task.side === "client" && (task.status === "open" || task.status === "needs_more"));
@@ -10072,7 +10085,11 @@ async function listStaffEngagements(db, actor) {
         const mine = team.find((member) => member.engagementId === row.id && member.userId === actor.id);
         return mine ? ENGAGEMENT_TEAM_ROLE_LABELS[mine.role] : null;
       })(),
-      unsortedFiles: drops.filter((file) => file.engagementId === row.id && !matchedIds.has(file.id)).length
+      unsortedFiles: drops.filter((file) => file.engagementId === row.id && !matchedIds.has(file.id)).length,
+      hold: (() => {
+        const held = row.opensOnPayment ? null : feeHold(unpaidFees.filter((fee) => fee.engagementId === row.id).map((fee) => ({ dueOn: fee.dueOn, paid: false })), today);
+        return held ? { state: held.state, pausesOn: held.pausesOn } : null;
+      })()
     };
   });
 }
@@ -10092,9 +10109,10 @@ async function getStaffEngagement(db, actor, engagementId) {
     measureOf(db, engagementId),
     checkinsOf(db, engagementId),
     matchesOf(db, engagementId),
-    // A second half not dated yet: sharing the main output dates it and emails the client its link (R36).
-    db.select({ id: engagementFeeLines.id }).from(engagementFeeLines).where(and10(eq16(engagementFeeLines.engagementId, engagementId), isNull7(engagementFeeLines.paidAt), isNull7(engagementFeeLines.dueOn))).limit(1)
+    // Unpaid fees: a second half not dated yet (sharing the main output dates it, R36), and Late or Paused (D6).
+    db.select({ dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and10(eq16(engagementFeeLines.engagementId, engagementId), isNull7(engagementFeeLines.paidAt)))
   ]);
+  const held = engagement.opensOnPayment ? null : feeHold(waiting.map((fee) => ({ dueOn: fee.dueOn, paid: false })), lagosDay());
   const staffFile = (file) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt });
   const filesFor = (where, id3) => files.filter((file) => file[where] === id3 || where === "taskId" && matches.some((match) => match.fileId === file.id && match.taskId === id3)).map(staffFile);
   return {
@@ -10115,7 +10133,8 @@ async function getStaffEngagement(db, actor, engagementId) {
     deliverables: deliverables.map((item2) => ({ ...item2, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item2.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item2.kind), comments: comments.filter((comment) => comment.deliverableId === item2.id), files: filesFor("deliverableId", item2.id) })),
     measure,
     checkins,
-    balanceOnDelivery: waiting.length > 0,
+    balanceOnDelivery: waiting.some((fee) => fee.dueOn === null),
+    hold: held ? { state: held.state, pausesOn: held.pausesOn, dueOn: held.fee.dueOn } : null,
     can: {
       manage: authorityAllows(actor.authority, "manage_engagements"),
       assign: authorityAllows(actor.authority, "assign_engagements"),
@@ -10509,10 +10528,13 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
   const scheduled = sessions.filter((item2) => item2.status !== "cancelled");
   const next = scheduled.filter((item2) => item2.status === "planned" && item2.scheduledFor && item2.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime())[0];
   const notesVisible = (item2) => Boolean(item2.notesSharedAt && item2.clientNotes && clientCanSee(item2.notesAudience, viewer));
+  const roomFees = await clientFees(db, engagement.id);
+  const held = engagement.opensOnPayment ? null : feeHold(roomFees, lagosDay());
   return {
     engagementId: engagement.id,
     /** The engagement's fees, each with its status and pay link while unpaid: for the owner and full-access staff. */
-    fees: fullView ? await clientFees(db, engagement.id) : [],
+    fees: fullView ? roomFees : [],
+    hold: held ? { state: held.state, pausesOn: held.pausesOn, dueOn: held.fee.dueOn, ...fullView ? { label: held.fee.label, amount: held.fee.amount, payPath: held.fee.payPath } : {} } : null,
     /** Waiting for its first payment (R11): the room shows only the fee to pay until one is paid. */
     awaitingPayment: engagement.opensOnPayment,
     // The content board (Digital marketing): the owner and full-access staff see it and approve.

@@ -62,6 +62,25 @@ export function defaultFees(type: EngagementType, service: string | null, starts
 /** How many days after delivery a service's second half falls due (ET, 10 November 2026). */
 export const BALANCE_DUE_DAYS = 7;
 
+/** Today in Lagos, as a date ("2026-11-10"): fee dates are Lagos days. */
+export const lagosDay = (now: Date | number = Date.now()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date(now));
+
+/** Work pauses this many days after an unpaid fee's date (D6, ET 10 November 2026). */
+export const PAUSE_AFTER_DAYS = 7;
+
+/**
+ * Where an engagement stands on its fees today (a Lagos date): *late* from the day after an unpaid fee's date, and
+ * *paused* from seven days after it (D6), named by its earliest late fee. Paying that fee, or giving it a new date,
+ * lifts it; nothing is stored, so the hold always follows the fees as they are.
+ */
+export function feeHold<T extends { dueOn: string | null; paid: boolean }>(fees: readonly T[], today: string): { state: "late" | "paused"; fee: T; pausesOn: string } | null {
+  const late = fees.filter(fee => !fee.paid && fee.dueOn !== null && fee.dueOn < today).sort((a, b) => a.dueOn!.localeCompare(b.dueOn!));
+  const first = late[0];
+  if (!first) return null;
+  const pausesOn = addDays(first.dueOn!, PAUSE_AFTER_DAYS);
+  return { state: pausesOn <= today ? "paused" : "late", fee: first, pausesOn };
+}
+
 /**
  * Whether sharing this Deliverable is the engagement's delivery, which dates its second half (R36): a Business Review's
  * Findings, a Six-Week Fix's Plan (its result), any work of a Done for You service. Digital marketing and Monthly

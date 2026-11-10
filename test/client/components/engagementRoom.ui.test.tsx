@@ -61,6 +61,7 @@ const room = (over: Record<string, unknown> = {}) => ({
   engagementId: 4,
   fees: [] as { id: number; label: string; amount: number; dueOn: string | null; paid: boolean; reference: string; payPath: string | null }[],
   awaitingPayment: false,
+  hold: null,
   content: [] as { id: number; kind: "reel" | "post" | "story"; kindLabel: string; title: string; month: number; status: "planned" | "in_edit" | "for_approval" | "changes_requested" | "approved" | "published"; statusLabel: string; dueOn: string | null; link: string | null; clientNote: string | null; approvedAt: Date | null; publishedAt: Date | null }[],
   contentTargets: [] as { label: string; count: number }[],
   service: null as string | null,
@@ -1013,6 +1014,39 @@ describe("one client, many projects", () => {
     const steps = Array.from(screen.getByRole("list", { name: "Engagement timeline" }).querySelectorAll(":scope > li"));
     expect(steps.map(item => item.querySelector("button span span span")?.textContent)).toEqual(["Records in", "In progress", "Delivered", "Sign-off"]);
     expect(steps[1]!.getAttribute("aria-current")).toBe("step");
+  });
+});
+
+describe("the pause, seven days after a missed fee date (D6)", () => {
+  const late = { state: "late" as const, dueOn: "2026-12-02", pausesOn: "2026-12-09", label: "Month 2 service fee, payable before day 31", amount: 470000, payPath: "/pay/fee/12/abcdefghijklmnopqrstuvwxyz012345" };
+
+  it("tells the owner a fee is late and when work pauses, with Pay, on every tab", () => {
+    render(<EngagementRoom room={room({ hold: late })} />);
+    const banner = within(screen.getByRole("region", { name: "A payment is late" }));
+    expect(banner.getByText("Month 2 service fee, payable before day 31, ₦470,000, was due on Wed 2 Dec. Work pauses on Wed 9 Dec if it is still unpaid.")).toBeTruthy();
+    expect(banner.getByRole("link", { name: /Pay ₦470,000/ }).getAttribute("href")).toBe("/pay/fee/12/abcdefghijklmnopqrstuvwxyz012345");
+    // The banner sits above the tabs, so it stays in view on every one.
+    fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
+    expect(screen.getByRole("region", { name: "A payment is late" })).toBeTruthy();
+  });
+
+  it("says work is paused and what to pay to continue; the room and uploads stay open", () => {
+    render(<EngagementRoom room={room({ type: "digital_marketing", typeLabel: "Digital Marketing", title: "Digital Marketing", startedOn: "2026-11-02", hold: { ...late, state: "paused", dueOn: "2026-11-02", pausesOn: "2026-11-09", label: "Month 1 service fee, payable on starting" } })} />);
+    const banner = within(screen.getByRole("region", { name: "Work is paused" }));
+    expect(banner.getByText("Work on your Digital Marketing is paused")).toBeTruthy();
+    expect(banner.getByText(/Pay it and the work starts again\. Your room and uploads stay open\./)).toBeTruthy();
+    expect(banner.getByRole("link", { name: /Pay ₦470,000/ })).toBeTruthy();
+    expect(screen.getByRole("tablist", { name: "Your engagement" })).toBeTruthy();
+  });
+
+  it("tells someone who cannot see the fees only that work is paused, and who can pay; no banner without a hold", () => {
+    const { unmount } = render(<EngagementRoom room={room({ hold: { state: "paused", dueOn: "2026-11-02", pausesOn: "2026-11-09" } })} />);
+    const banner = within(screen.getByRole("region", { name: "Work is paused" }));
+    expect(banner.getByText(/The owner of the business can pay it from the room/)).toBeTruthy();
+    expect(banner.queryByRole("link")).toBeNull();
+    unmount();
+    render(<EngagementRoom room={room()} />);
+    expect(screen.queryByRole("region", { name: /Work is paused|A payment is late/ })).toBeNull();
   });
 });
 

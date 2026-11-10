@@ -130,7 +130,7 @@ apply script; ET runs it and replies "0022 done".
 | E2 | **The Business Review's first half.** Its payment details ask for half (₦300,000 of ₦600,000); paying it opens the engagement with the second half as a fee; an older request paid in full adds nothing. The room's Payments tab shows the first half paid | R36 | PGlite: the request, the confirmation, the balance fee; the older request | — |
 | E3 | **Delivery dates the second half.** Sharing the main output (a Business Review's Findings, a Six-Week Fix's Plan, a Done for You service's work) dates every unpaid fee that has no date yet seven days ahead, and emails the owner its pay link (*{fee}: ₦{amount} due by {date}*) | R36 | PGlite: the date, the email once, nothing for a Digital marketing piece or a second share | — |
 | E4 | **The site says how each is paid:** How we work, Services, each service's page, the questions, the journey; the room's What we will do and the welcome email list each part | R36, R47 | UI and copy tests; the words the site avoids | Preview |
-| E5 | **The pause (D6).** Seven days after an unpaid fee's date the engagement shows *Paused* to the team and the room shows what to pay to continue, with **Pay**; paying, or a new date, lifts it | R51 | Unit and room UI tests | Preview |
+| E5 | **The pause (D6). Built 10 November 2026.** Seven days after an unpaid fee's date the engagement shows *Paused* to the team and the room shows what to pay to continue, with **Pay**; paying, or a new date, lifts it | R51 | Unit and room UI tests | Preview |
 
 ### Batch F: one payment model (about 4 days)
 

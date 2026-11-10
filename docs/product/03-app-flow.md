@@ -71,7 +71,8 @@ flowchart LR
 The room opens on the first payment (built, R11). Only a Partner or the Super Admin can open it sooner, or move the
 first fee past the start date before anything is paid (`approve_work_before_payment`); each is recorded. Finance counts
 every unpaid fee as owed, and a fee as late once its date passes unpaid. A second half has no date until delivery, so it is owed but cannot be late. Work pauses seven days
-after a missed date, with the client told at three days (D6, R51).
+after a missed date (D6, R51): the room says so from the first late day, and the team sees **Fee late**, then **Paused**
+(built, E5); the emails, telling the client at three days, come with reminders (R12).
 
 Today's clients: **Marcelle (Digital marketing)** pays at 30, 60 and 90 days from her kickoff, as agreed with her; her
 lead sets those dates by hand in the engagement's Fees (I4).
@@ -137,7 +138,7 @@ flowchart TD
 | 5 | Reads a shared Deliverable; comments; gives Sign-off, or asks for changes (R51, to build) | — | Drafts; a lead approves prescriptions and plans; shares with the owner or the owner and their team; Specialists hand in drafts the lead shares | Owner: *Engagement update: {title}* | Deliverable **draft** → **approved** → **shared**; Sign-off given | Built |
 | 6 | Sees the one number each week | Shows where it started, this week, where it is going | Records the weekly check-in: five questions, the reading, hours by role, AI used | — | — | Built |
 | 7 | Pays each later fee from the reminder (by email, with a WhatsApp button) or the Payments tab; keeps the PDF receipt | Sends each fee's link 5 days before its date, on the day, and 3 and 7 days after if unpaid, never between 9pm and 7am; confirms payment; sends the receipt and invoice as PDFs | Told at 7 days late; work pauses (D6) | Owner: reminders, receipt, invoice (reminders and PDFs to build). Lead: 7 days late (to build) | Fee **due** → **paid** or **late** | Built, except reminders (R12), PDFs (R53) and quiet hours (R57) |
-| 7b | Work paused for a late fee: sees the room as before, a banner saying what to pay to continue, uploads still open | Pauses at 7 days late; lifts the pause on payment | The lead decides whether to pause early or late | Owner: *Work on {engagement} is paused* (to write) | Engagement **paused** → **open** | To build (R51) |
+| 7b | A late fee: from the day after its date a banner says it is late and when work pauses, with **Pay**; from seven days after it, that work is paused and what to pay to continue. The room stays readable and uploads stay open; a team member without the fees is told only that work is paused | Shows **Fee late**, then **Paused**, on the list and the record; paying lifts it at once | Gives more time with a new date in Fees (the first fee before any payment: a Partner) | Owner: *Work on {engagement} is paused* and *has resumed* (to write, with R12 and G2) | Engagement **late** → **paused** → **open** | Built (E5); the emails to build |
 | 8 | Adds their own staff (one seat): full access or contributor; later, sends one staff member a link to answer one item without an account (R55) | Sends the seat invitation | — | Staff member: invitation | — | Built (the one-item link to design) |
 
 ### 4.5 Close, the Day-30 Review and the next fix (To build, R26 to R28)
@@ -204,7 +205,7 @@ receiving it, and a time it should take.
 |---|---|---|---|
 | **Pipeline** (a business check) | Lead → Qualified lead → Call booked → Opportunity → Won; Lost, Nurture, Referred | The first three, forward only, never over a stage the team set; Won on a confirmed Business Review payment | Opportunity, Refer, Lost; "Move to" any stage except Won |
 | **Order** (Buy now) | Awaiting payment → Paid → Engagement opened; Abandoned | All of them (R13) | — |
-| **Engagement** | Getting set up → (Business Review, Six-Week Fix) Business Review, The Fix, Your Plan → Closed; other types Open → Closed (a dated type also shows its stage from the start date); plus **awaiting first payment** and **paused** (R51) | Awaiting first payment clears on the first fee paid; paused at 7 days late and cleared on payment; a dated type's stage follows its start date | The stage; Close (R26); Open the room now; pause or lift a pause |
+| **Engagement** | Getting set up → (Business Review, Six-Week Fix) Business Review, The Fix, Your Plan → Closed; other types Open → Closed (a dated type also shows its stage from the start date); plus **awaiting first payment** and **paused** (R51) | Awaiting first payment clears on the first fee paid; late from the day after an unpaid fee's date and paused seven days after it, cleared when it is paid or given a new date (nothing stored); a dated type's stage follows its start date | The stage; Close (R26); Open the room now; pause or lift a pause |
 | **Fee** | Set → Due → Paid, or Late | Due and Late by date and terms; Paid on Paystack's confirmation | Paid by hand (money that came another way); undo |
 | **Payment** (one Paystack transaction) | Started → Paid, Failed, Needs a look, Refunded | Paid and Failed from Paystack | Needs a look resolved; Refunded recorded (R37) |
 | **Data Request item / action** | To do → Sent, we are checking → Received, or We need a bit more; Not available; Done; No longer needed | Sent when the client uploads or marks it | Received, We need a bit more, Done, No longer needed |
@@ -269,7 +270,7 @@ info@ipfactory.co.
 | An email does not arrive | — | Records the failure; shows it to the office | Copies the link shown once (invitations, fee links, resets) and sends it on WhatsApp | Built |
 | An invitation expires or is revoked | "Invitation unavailable", with sign-in | — | **Send sign-in link** from the engagement | Built |
 | A client forgets their password | "Forgot your password?" on `/login` | Emails a 20-minute single-use link; same answer whether or not the account exists | — | Built (sign-in links replace this with R41) |
-| A fee goes unpaid | Reminders; the Payments tab shows it late | Reminds at 5 days before, on the day, at 3 and 7 days after | Told at 7 days; work pauses (D6) | To build (R12) |
+| A fee goes unpaid | The room's banner: late, then paused seven days after its date (built, E5); reminders by email (to build) | Reminds at 5 days before, on the day, at 3 and 7 days after | Sees **Fee late**, then **Paused**; work pauses (D6) | Banner and badges built; reminders to build (R12) |
 | A client goes quiet on records | Reminders | Reminds before and after each date | Told what is still outstanding | To build (R16) |
 | A client should get in before paying | — | — | A Partner or the Super Admin: **Open the room now** (recorded) | Built |
 | Footage is too large to upload | **Send a link** on the item: "A link to a shared folder on Google Drive, Dropbox, WeTransfer or iCloud. Videos always come this way, or on WhatsApp." A video file is refused with the same advice | Stores the link, never the video | The Content Producer opens it from the item (**Open the link**) | Built (R43); Send on WhatsApp to {name} with R44 |

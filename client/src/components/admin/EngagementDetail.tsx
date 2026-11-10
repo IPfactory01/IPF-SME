@@ -55,6 +55,7 @@ import type { AppRouter } from "../../../../server/routers";
 import { DetailField, DetailSection } from "./AdminPrimitives";
 import DeliveryShareNote from "./DeliveryShareNote";
 import { combineDateAndTime, formatDate, formatDateTime, toDateInput, toTimeInput, whatsappLink } from "./format";
+import { FeeHoldNote } from "./FeeHoldBadge";
 
 type Detail = inferRouterOutputs<AppRouter>["engagement"]["staff"]["detail"];
 type Session = Detail["sessions"][number];
@@ -92,6 +93,7 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
   const data = detail.data;
   return (
     <>
+      <FeeHoldNote hold={data.hold} />
       <DetailSection title="The client">
         <DetailField label="Owner">{data.owner?.name ?? "-"}</DetailField>
         <DetailField label="Email">{data.owner?.email ?? "-"}</DetailField>

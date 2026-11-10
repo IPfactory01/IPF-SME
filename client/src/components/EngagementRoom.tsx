@@ -352,9 +352,36 @@ function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps)
         {notice && <div className="px-4 pt-4 sm:px-7">{notice}</div>}
         {!wide && view !== "overview" && !room.awaitingPayment ? compactHeader : header}
         {floating && <div aria-hidden data-room-header="floating" className="fixed inset-x-0 top-0 z-40 flex h-10 items-center justify-between gap-3 border-b border-line-soft bg-white px-4 text-sm font-semibold text-ink">{compactLine}</div>}
+        {!room.awaitingPayment && <FeeHoldBanner room={room} />}
         {room.awaitingPayment ? <PaymentGate room={room} /> : <RoomTabs label="Your engagement" initial="overview" tabs={tabs} onChange={setView} top={floating ? 40 : undefined} />}
       </div>
     </div>
+  );
+}
+
+/**
+ * Late, then paused seven days after a missed date (D6): on every tab, what to pay to continue, with Pay. The room stays
+ * readable and uploads stay open. Someone who cannot see the fees is told only that work is paused, and who can pay.
+ */
+function FeeHoldBanner({ room }: { room: Room }) {
+  const preview = useRoomPreview();
+  const hold = room.hold;
+  if (!hold) return null;
+  const paused = hold.state === "paused";
+  const fee = hold.label && hold.amount !== undefined ? `${hold.label}, ${formatNaira(hold.amount)},` : null;
+  const line = fee
+    ? (paused ? `${fee} was due on ${dateOnly(hold.dueOn!)}. Pay it and the work starts again. Your room and uploads stay open.` : `${fee} was due on ${dateOnly(hold.dueOn!)}. Work pauses on ${dateOnly(hold.pausesOn)} if it is still unpaid.`)
+    : (paused ? "A fee is more than a week late. The owner of the business can pay it from the room; your uploads stay open." : `A fee is late. Work pauses on ${dateOnly(hold.pausesOn)} if it is still unpaid.`);
+  return (
+    <section aria-label={paused ? "Work is paused" : "A payment is late"} className={`mx-4 mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 sm:mx-7 [&>*]:min-w-0 ${paused ? "border-health-stuck bg-health-stuck-tint" : "border-health-watch bg-health-watch-tint"}`}>
+      <div>
+        <p className="font-sans text-base font-semibold text-ink">{paused ? `Work on your ${room.title} is paused` : "A payment is late"}</p>
+        <p className="mt-1 text-sm text-ink-600">{line}</p>
+      </div>
+      {fee && hold.payPath && !preview && (
+        <a href={hold.payPath} className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-brand px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-deep-hover">Pay {formatNaira(hold.amount!)}<ArrowRight className="h-4 w-4" aria-hidden /></a>
+      )}
+    </section>
   );
 }
 

@@ -10,6 +10,7 @@ import * as schema from "../../drizzle/schema";
 import { createPgliteHarness, createRemoteHarness, type DbHarness } from "./harness";
 import { businessCheckProfiles } from "../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../fixtures/reportIntake";
+import { addDays, lagosDay } from "@shared/agreement";
 
 const holder = vi.hoisted(() => {
   process.env.DATABASE_URL = "postgresql://contract:contract@localhost:5432/contract";
@@ -531,6 +532,41 @@ for (const target of targets) {
         expect((await (await owner.call()).engagement.client.room())!.requests).toEqual([]);
         const audits = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "service_requested"));
         expect(audits.length).toBeGreaterThan(0);
+      });
+    });
+
+    describe("the pause, seven days after a missed fee date (D6, E5)", () => {
+      it("shows the client and the team Late, then Paused; paying the fee, or a new date, lifts it", async () => {
+        const today = lagosDay();
+        const email = uniqueEmail("late-studio");
+        const { engagementId, invitationUrl } = await (await superAdmin.call()).engagement.staff.createDirect({ type: "digital_marketing", businessName: "Late Studio", contactName: "Lara Late", contactEmail: email, startedOn: addDays(today, -10) });
+        const owner = browser();
+        await (await owner.call()).invitations.accept({ token: decodeURIComponent(invitationUrl!.split("/join/")[1]), email, fullName: "Lara Late", password: PASSWORD, confirmPassword: PASSWORD });
+        // Waiting for its first payment, the room shows the fee to pay, not a pause.
+        expect((await (await owner.call()).engagement.client.room())!).toMatchObject({ awaitingPayment: true, hold: null });
+        const desk = await superAdmin.call();
+        await desk.engagement.staff.openRoomNow({ engagementId });
+
+        // Month 1 was due ten days ago: work is paused, and the room says what to pay, with its link.
+        let room = (await (await owner.call()).engagement.client.room())!;
+        expect(room.hold).toMatchObject({ state: "paused", dueOn: addDays(today, -10), pausesOn: addDays(today, -3), label: "Month 1 service fee, payable on starting", amount: 470_000 });
+        expect((await desk.engagement.staff.list()).items.find(item => item.id === engagementId)!.hold).toEqual({ state: "paused", pausesOn: addDays(today, -3) });
+        expect((await desk.engagement.staff.detail({ engagementId })).hold).toMatchObject({ state: "paused", dueOn: addDays(today, -10) });
+
+        // Paying it lifts the pause at once.
+        const lines = (await desk.engagement.staff.fees({ engagementId })).feeLines;
+        await desk.engagement.staff.setFeePaid({ feeLineId: lines[0]!.id, paid: true });
+        room = (await (await owner.call()).engagement.client.room())!;
+        expect(room.hold).toBeNull();
+
+        // Month 2 three days late: Late, pausing four days on; a new date gives more time and lifts it.
+        const draft = (month2: string) => lines.map((line: { label: string; amount: number; dueOn: string | null }, index: number) => ({ label: line.label, amount: line.amount, dueOn: index === 1 ? month2 : line.dueOn }));
+        await desk.engagement.staff.saveFees({ engagementId, feeLines: draft(addDays(today, -3)) });
+        expect((await (await owner.call()).engagement.client.room())!.hold).toMatchObject({ state: "late", pausesOn: addDays(today, 4), label: "Month 2 service fee, payable before day 31" });
+        expect((await desk.engagement.staff.list()).items.find(item => item.id === engagementId)!.hold).toEqual({ state: "late", pausesOn: addDays(today, 4) });
+        await desk.engagement.staff.saveFees({ engagementId, feeLines: draft(addDays(today, 5)) });
+        expect((await (await owner.call()).engagement.client.room())!.hold).toBeNull();
+        expect((await desk.engagement.staff.detail({ engagementId })).hold).toBeNull();
       });
     });
 

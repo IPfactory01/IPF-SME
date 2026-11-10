@@ -12,6 +12,7 @@ import { ClickableRow, CopyButton, RecordDrawer, TD, TH } from "./AdminPrimitive
 import { ENGAGEMENT_TYPE_LABELS, ENGAGEMENT_TYPES, servicesFor, type EngagementType } from "@shared/engagementTypes";
 import EngagementDetail from "./EngagementDetail";
 import { formatDate, formatDateTime } from "./format";
+import FeeHoldBadge from "./FeeHoldBadge";
 
 type Row = inferRouterOutputs<AppRouter>["engagement"]["staff"]["list"]["items"][number];
 export type StorageStatus = inferRouterOutputs<AppRouter>["engagement"]["staff"]["storageStatus"];
@@ -78,7 +79,7 @@ export default function EngagementsView() {
               {list.data?.items.map(row => (
                 <ClickableRow key={row.id} onOpen={() => setOpenId(row.id)} selected={row.id === openId}>
                   <td className={TD}><span className="block font-medium">{row.businessName}</span><span className="block text-xs text-ink-muted">{row.ownerName}{row.hasAccount ? "" : " · no account yet"}</span></td>
-                  <td className={TD}><span className="block">{row.stageLabel}</span><span className="block text-xs text-ink-muted">{row.typeLabel}</span></td>
+                  <td className={TD}><span className="block">{row.stageLabel}<FeeHoldBadge hold={row.hold} /></span><span className="block text-xs text-ink-muted">{row.typeLabel}</span></td>
                   <td className={TD}>{row.team.length ? row.team.map(member => `${member.name} (${member.roleLabel})`).join(", ") : <span className="text-danger">No one yet</span>}</td>
                   <td className={TD}>{waitingOn(row)}</td>
                   <td className={TD}>{row.nextSession ? <><span className="block">{row.nextSession.title}</span><span className="block text-xs text-ink-muted">{formatDateTime(row.nextSession.scheduledFor)}</span></> : row.unscheduledSessions ? <span className="text-danger">{row.unscheduledSessions} not booked</span> : "-"}</td>
@@ -154,7 +155,7 @@ function MyProjects({ items, onOpen }: { items: Row[]; onOpen: (id: number) => v
         {mine.map(item => (
           <li key={item.id}>
             <button type="button" onClick={() => onOpen(item.id)} aria-label={`Open ${item.businessName}`} className="block w-full rounded-xl border border-line bg-white p-4 text-left transition-colors hover:border-brand">
-              <span className="flex items-baseline justify-between gap-2"><span className="truncate font-medium text-ink">{item.businessName}</span><span className="shrink-0 text-xs text-ink-muted">{item.stageLabel}</span></span>
+              <span className="flex items-baseline justify-between gap-2"><span className="truncate font-medium text-ink">{item.businessName}</span><span className="shrink-0 text-xs text-ink-muted">{item.stageLabel}<FeeHoldBadge hold={item.hold} /></span></span>
               <span className="mt-0.5 block text-xs text-brand">{item.myRole}</span>
               <span className="mt-3 grid grid-cols-3 gap-2 text-xs text-ink-muted">
                 <span><span className="block text-lg font-semibold tabular-nums text-ink">{item.openClientRequests}</span>with the client</span>

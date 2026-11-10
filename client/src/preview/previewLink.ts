@@ -99,6 +99,7 @@ const SAMPLE_ROOM = {
     { id: 1, label: "Business Review: half on delivery", amount: 300_000, dueOn: null, paid: false, reference: "TS-F-000001", payPath: "/pay/fee/1/preview" },
   ],
   awaitingPayment: false,
+  hold: null,
   content: [],
   contentTargets: [],
   service: null,

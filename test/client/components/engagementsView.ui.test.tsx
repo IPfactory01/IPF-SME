@@ -154,6 +154,30 @@ describe("the team's engagements", () => {
     for (const text of ["Getting set up", "No one yet", "5 outstanding", "2 overdue", "2 not booked"]) expect(tableRow.textContent).toContain(text);
   });
 
+  it("marks an engagement Paused seven days after a missed fee date, and says on the record what lifts it (D6)", () => {
+    const before = api.list;
+    api.list = { setUp: true, items: [{ ...row, hold: { state: "paused", pausesOn: "2026-11-09" } }], canStart: true, seesAll: true } as never;
+    api.detail = { ...detail({ manage: true, assign: true, review: true }), hold: { state: "paused", pausesOn: "2026-11-09", dueOn: "2026-11-02" } } as never;
+    render(<EngagementsView />);
+    const tableRow = screen.getAllByText("Ada Foods")[0]!.closest("tr")!;
+    expect(within(tableRow).getByText("Paused").getAttribute("title")).toBe("Work paused on 9 Nov 2026, seven days after a missed fee date");
+    fireEvent.click(tableRow);
+    expect(within(screen.getByRole("dialog")).getByText("Work is paused: a fee is more than seven days late (since 9 Nov 2026). Paying it, or a new date in Fees, lifts the pause. The client's room stays open.")).toBeTruthy();
+    api.list = before;
+  });
+
+  it("marks a late fee before it pauses, and nothing when the fees are in order", () => {
+    const before = api.list;
+    api.list = { setUp: true, items: [{ ...row, hold: { state: "late", pausesOn: "2026-12-09" } }], canStart: true, seesAll: true } as never;
+    const { unmount } = render(<EngagementsView />);
+    expect(within(screen.getAllByText("Ada Foods")[0]!.closest("tr")!).getByText("Fee late").getAttribute("title")).toBe("A fee is late; work pauses on 9 Dec 2026");
+    unmount();
+    api.list = { setUp: true, items: [{ ...row, hold: null }], canStart: true, seesAll: true } as never;
+    render(<EngagementsView />);
+    expect(screen.queryByText(/^(Paused|Fee late)$/)).toBeNull();
+    api.list = before;
+  });
+
   it("shows file uploads in System status (Team), not on the Engagements list", () => {
     api.detail = detail({ manage: true, assign: true, review: true });
     render(<EngagementsView />);

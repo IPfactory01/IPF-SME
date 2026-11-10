@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BALANCE_DUE_DAYS, defaultFees, isDelivery } from "@shared/agreement";
+import { addDays, BALANCE_DUE_DAYS, defaultFees, feeHold, isDelivery, PAUSE_AFTER_DAYS } from "@shared/agreement";
 
 describe("the fees a new engagement starts with", () => {
   it("fills in Digital marketing as a monthly service fee of ₦470,000 for three months, each payable before it begins", () => {
@@ -47,3 +47,27 @@ describe("the fees a new engagement starts with", () => {
     expect(isDelivery("monthly_service", "plan")).toBe(false);
   });
 });
+
+describe("the pause, seven days after a missed fee date (D6)", () => {
+  const fee = (dueOn: string | null, paid = false) => ({ label: `Fee due ${dueOn}`, dueOn, paid });
+
+  it("is late from the day after an unpaid fee's date, and paused from seven days after it", () => {
+    expect(PAUSE_AFTER_DAYS).toBe(7);
+    expect(feeHold([fee("2026-12-01")], "2026-12-01")).toBeNull();
+    expect(feeHold([fee("2026-12-01")], "2026-12-02")).toMatchObject({ state: "late", pausesOn: "2026-12-08" });
+    expect(feeHold([fee("2026-12-01")], "2026-12-07")).toMatchObject({ state: "late" });
+    expect(feeHold([fee("2026-12-01")], "2026-12-08")).toMatchObject({ state: "paused", pausesOn: "2026-12-08" });
+  });
+
+  it("names the earliest late fee, and ignores what is paid or has no date yet", () => {
+    const held = feeHold([fee("2026-12-20"), fee("2026-11-01", true), fee(null), fee("2026-12-05"), fee("2026-12-10")], "2026-12-15");
+    expect(held).toMatchObject({ state: "paused", fee: { dueOn: "2026-12-05" }, pausesOn: addDays("2026-12-05", 7) });
+    expect(feeHold([fee("2026-11-01", true), fee(null)], "2026-12-15")).toBeNull();
+  });
+
+  it("lifts when the fee is paid or given a new date", () => {
+    expect(feeHold([fee("2026-12-01", true)], "2026-12-10")).toBeNull();
+    expect(feeHold([fee("2026-12-12")], "2026-12-10")).toBeNull();
+  });
+});
+

@@ -44,7 +44,10 @@ export default function EngagementsView() {
   const canOpen = Boolean(list.data && "canStart" in list.data && list.data.canStart);
   if (list.error && list.data === undefined) return <div className="p-6"><Failed error={list.error} onRetry={() => void list.refetch()} retrying={list.isFetching} /></div>;
   if (list.data && !list.data.setUp) {
-    return <p role="note" className="m-6 border border-line bg-white p-4 text-sm text-ink-muted">The engagement room is not set up in the database yet. It starts working once migration 0008 is applied.</p>;
+    const missing = "missing" in list.data ? list.data.missing : null;
+    return <p role="note" className="m-6 border border-line bg-white p-4 text-sm text-ink-muted">{missing
+      ? `The engagements cannot load: the database is missing migration ${missing}. Run its script from drizzle/supabase in the Supabase SQL Editor of the project the site uses, then reload.`
+      : "The engagements cannot load: the database is missing a table or column this version of the site needs. Apply the latest migration, then reload."}</p>;
   }
   return (
     <div className="space-y-4 p-6">

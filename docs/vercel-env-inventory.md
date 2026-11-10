@@ -61,8 +61,13 @@ them once when it starts.
 `/api/health` also runs one `select 1` against the database (5 seconds at most) and answers `database: { ok }`, or
 `{ ok: false, code, reason }` with the driver's code and reason (for example `28P01` password authentication failed,
 `XX000` Tenant or user not found, `ECONNREFUSED`, `TIMEOUT`), never the connection string; it answers 503 when the
-database does not answer. Visitors never see a raw database error: an unplanned server failure reaches the browser
-as one plain sentence and the full error goes to the Vercel function log.
+database does not answer. It then counts the migrations recorded in `drizzle.__drizzle_migrations` against those this
+build needs (`drizzle/migrations/meta/_journal.json`, bundled at build) and answers `database: { ok, migrations:
+{ applied, expected } }`. A database behind the build answers 503 with `code: "MIGRATION_MISSING"` and the first
+migration it lacks (`migrations.missing`, for example `"0022"`), and Admin shows the same at the top of every tab. A
+database ahead of the build (a migration applied just before its code) is healthy. When the record cannot be read,
+health claims nothing about migrations. Visitors never see a raw database error: an unplanned server failure reaches
+the browser as one plain sentence and the full error goes to the Vercel function log.
 
 - **A basic API:** `NODE_ENV` (automatic), `APP_ORIGIN`
 - **B database:** `DATABASE_URL`

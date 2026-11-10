@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { describeDatabaseError, migrationState } from "../databaseHealth";
 import { CONTENT_KINDS, CONTENT_STATUSES, ENGAGEMENT_TYPES } from "../../shared/engagementTypes";
 import {
   ENGAGEMENT_DELIVERABLE_KINDS,
@@ -123,11 +124,14 @@ const staff = adminProcedure.use(async ({ ctx, next }) => {
 
 const staffRouter = router({
   list: staff.query(async ({ ctx }) => {
+    const db = await engagementDb();
     try {
-      return { setUp: true, items: await listStaffEngagements(await engagementDb(), ctx.actor), canStart: canStart(ctx.actor), seesAll: canSeeAll(ctx.actor) };
+      return { setUp: true, items: await listStaffEngagements(db, ctx.actor), canStart: canStart(ctx.actor), seesAll: canSeeAll(ctx.actor) };
     } catch (error) {
       if (!isMissingEngagementTable(error)) throw error;
-      return { setUp: false, items: [] };
+      // A missing table or column: the database is behind this build. Say which migration it lacks, never a guess.
+      console.error(`[Engagements] The list cannot load: ${describeDatabaseError(error).reason}`);
+      return { setUp: false, items: [], missing: (await migrationState(db))?.missing ?? null };
     }
   }),
   /** Paid assessments with no engagement yet (the safety net); empty before migration 0008. */

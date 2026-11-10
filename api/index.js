@@ -4466,6 +4466,190 @@ import superjson from "superjson";
 
 // server/databaseHealth.ts
 import { sql as sql4 } from "drizzle-orm";
+
+// drizzle/migrations/meta/_journal.json
+var journal_default = {
+  version: "7",
+  dialect: "postgresql",
+  entries: [
+    {
+      idx: 0,
+      version: "7",
+      when: 1791316468507,
+      tag: "0000_postgres_baseline",
+      breakpoints: true
+    },
+    {
+      idx: 1,
+      version: "7",
+      when: 1791369034554,
+      tag: "0001_business_check_pipeline",
+      breakpoints: true
+    },
+    {
+      idx: 2,
+      version: "7",
+      when: 1791373621377,
+      tag: "0002_universal_accounts_and_businesses",
+      breakpoints: true
+    },
+    {
+      idx: 3,
+      version: "7",
+      when: 1791380797338,
+      tag: "0003_client_onboarding_invitations",
+      breakpoints: true
+    },
+    {
+      idx: 4,
+      version: "7",
+      when: 1791383219816,
+      tag: "0004_platform_roles_and_active_workspace",
+      breakpoints: true
+    },
+    {
+      idx: 5,
+      version: "7",
+      when: 1791394880896,
+      tag: "0005_business_check_call_scheduled",
+      breakpoints: true
+    },
+    {
+      idx: 6,
+      version: "7",
+      when: 1791535201925,
+      tag: "0006_payment_requests",
+      breakpoints: true
+    },
+    {
+      idx: 7,
+      version: "7",
+      when: 1791537920380,
+      tag: "0007_full_reports",
+      breakpoints: true
+    },
+    {
+      idx: 8,
+      version: "7",
+      when: 1791582319780,
+      tag: "0008_engagement_room",
+      breakpoints: true
+    },
+    {
+      idx: 9,
+      version: "7",
+      when: 1791622182142,
+      tag: "0009_debrief_work_plan",
+      breakpoints: true
+    },
+    {
+      idx: 10,
+      version: "7",
+      when: 1791725383803,
+      tag: "0010_rate_limits_reset_tokens_indexes",
+      breakpoints: true
+    },
+    {
+      idx: 11,
+      version: "7",
+      when: 17921424e5,
+      tag: "0011_bitter_squadron_sinister",
+      breakpoints: true
+    },
+    {
+      idx: 12,
+      version: "7",
+      when: 1793836342055,
+      tag: "0012_two_step_and_access_expiry",
+      breakpoints: true
+    },
+    {
+      idx: 13,
+      version: "7",
+      when: 1793870126978,
+      tag: "0013_team_roles_and_titles",
+      breakpoints: true
+    },
+    {
+      idx: 14,
+      version: "7",
+      when: 1793873452546,
+      tag: "0014_drop_box_and_file_matches",
+      breakpoints: true
+    },
+    {
+      idx: 15,
+      version: "7",
+      when: 1793914624521,
+      tag: "0015_staff_invitation_level",
+      breakpoints: true
+    },
+    {
+      idx: 16,
+      version: "7",
+      when: 1793970366017,
+      tag: "0016_engagement_types",
+      breakpoints: true
+    },
+    {
+      idx: 17,
+      version: "7",
+      when: 1793972799152,
+      tag: "0017_content_board",
+      breakpoints: true
+    },
+    {
+      idx: 18,
+      version: "7",
+      when: 1793984177877,
+      tag: "0018_many_engagements_and_requests",
+      breakpoints: true
+    },
+    {
+      idx: 19,
+      version: "7",
+      when: 1793986767999,
+      tag: "0019_engagement_agreements",
+      breakpoints: true
+    },
+    {
+      idx: 20,
+      version: "7",
+      when: 1794003276368,
+      tag: "0020_engagement_fee_payments",
+      breakpoints: true
+    },
+    {
+      idx: 21,
+      version: "7",
+      when: 1794247577033,
+      tag: "0021_staff_whatsapp_marketing_roles_response_link",
+      breakpoints: true
+    },
+    {
+      idx: 22,
+      version: "7",
+      when: 1794322710113,
+      tag: "0022_payments_ledger",
+      breakpoints: true
+    }
+  ]
+};
+
+// server/databaseHealth.ts
+var EXPECTED_MIGRATIONS = journal_default.entries.map((entry) => entry.tag);
+async function migrationState(db) {
+  try {
+    const result = await db.execute(sql4`select count(*)::int as applied from drizzle.__drizzle_migrations`);
+    const rows = (Array.isArray(result) ? result : result?.rows) ?? [];
+    const applied = Number(rows[0]?.applied);
+    if (!Number.isInteger(applied)) return null;
+    const expected = EXPECTED_MIGRATIONS.length;
+    return { applied, expected, missing: applied < expected ? EXPECTED_MIGRATIONS[applied].slice(0, 4) : null };
+  } catch {
+    return null;
+  }
+}
 var CONNECTION_STRING = /\b[a-z][a-z0-9+.-]*:\/\/[^\s'"]+/gi;
 var PASSWORD_PAIR = /(password|pwd|secret|key)=\S+/gi;
 function describeDatabaseError(error) {
@@ -4486,13 +4670,17 @@ async function checkDatabase(db, timeoutMs = 5e3) {
   if (!db) return { ok: false, code: null, reason: "DATABASE_URL is not set" };
   let timer;
   try {
-    await Promise.race([
-      db.execute(sql4`select 1`),
+    const state = await Promise.race([
+      db.execute(sql4`select 1`).then(() => migrationState(db)),
       new Promise((_, reject) => {
         timer = setTimeout(() => reject(Object.assign(new Error(`No answer from the database within ${timeoutMs / 1e3} seconds`), { code: "TIMEOUT" })), timeoutMs);
       })
     ]);
-    return { ok: true };
+    if (!state) return { ok: true };
+    if (state.missing) {
+      return { ok: false, code: "MIGRATION_MISSING", reason: `The database is missing migration ${state.missing}: it has ${state.applied} of the ${state.expected} this build needs.`, migrations: state };
+    }
+    return { ok: true, migrations: { applied: state.applied, expected: state.expected } };
   } catch (error) {
     return { ok: false, ...describeDatabaseError(error) };
   } finally {
@@ -11420,7 +11608,7 @@ function isMissingEngagementTable(error) {
   const code = error?.code ?? error?.cause?.code;
   return code === "42P01" || code === "42703";
 }
-var MIGRATION_MISSING_MESSAGE = "The engagement room is not up to date in the database yet: apply migration 0009 (and 0008 if it is missing).";
+var MIGRATION_MISSING_MESSAGE = "The database is missing a table or column this version of the site needs. The note at the top of Admin says which migration to apply.";
 function addWorkingDays(from, days) {
   const lagos = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos", year: "numeric", month: "2-digit", day: "2-digit" }).format(from);
   const date2 = /* @__PURE__ */ new Date(`${lagos}T12:00:00Z`);
@@ -13641,11 +13829,13 @@ var staff = adminProcedure.use(async ({ ctx, next }) => {
 });
 var staffRouter = router({
   list: staff.query(async ({ ctx }) => {
+    const db = await engagementDb();
     try {
-      return { setUp: true, items: await listStaffEngagements(await engagementDb(), ctx.actor), canStart: canStart(ctx.actor), seesAll: canSeeAll(ctx.actor) };
+      return { setUp: true, items: await listStaffEngagements(db, ctx.actor), canStart: canStart(ctx.actor), seesAll: canSeeAll(ctx.actor) };
     } catch (error) {
       if (!isMissingEngagementTable(error)) throw error;
-      return { setUp: false, items: [] };
+      console.error(`[Engagements] The list cannot load: ${describeDatabaseError(error).reason}`);
+      return { setUp: false, items: [], missing: (await migrationState(db))?.missing ?? null };
     }
   }),
   /** Paid assessments with no engagement yet (the safety net); empty before migration 0008. */

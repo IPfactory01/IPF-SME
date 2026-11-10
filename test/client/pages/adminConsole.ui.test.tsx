@@ -127,9 +127,36 @@ beforeEach(() => {
   api.mutations = { schedule: [], outcome: [], saveDebrief: [], shareDebrief: [], stage: [], invite: [], revoke: [], requestPayment: [], confirmPayment: [], downloadReport: [], resendReportLink: [], resendConfirmation: [], emailsDealtWith: [] };
   api.failedEmails = { total: 0, emails: [] };
   api.debrief = { setUp: true, debrief: null };
+  health.body = { ok: true, service: "ipfactory-sme", build: null, database: { ok: true, migrations: { applied: 23, expected: 23 } } };
+  vi.stubGlobal("fetch", vi.fn(async () => ({ json: async () => health.body })));
   api.inviteResult = { invitationUrl: "https://app.example.test/onboarding/TOKEN123", deliveryStatus: "Simulated", expiresAt: new Date(), invitationId: 1 };
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+const health = { body: {} as unknown };
+
+describe("a database behind this version of the site (App flow 7)", () => {
+  it("says at the top of Admin, on every tab, which migration the database is missing and how to apply it", async () => {
+    health.body = { ok: false, service: "ipfactory-sme", build: "54f70ec", database: { ok: false, code: "MIGRATION_MISSING", reason: "The database is missing migration 0022: it has 22 of the 23 this build needs.", migrations: { applied: 22, expected: 23, missing: "0022" } } };
+    renderConsole();
+    const notice = await screen.findByRole("alert", { name: "The database is behind this version of the site" });
+    expect(within(notice).getByRole("heading", { name: "The database is missing migration 0022" })).toBeTruthy();
+    expect(notice.textContent).toContain("22 of 23 migrations are applied");
+    expect(notice.textContent).toContain("Run the 0022 script from drizzle/supabase in the Supabase SQL Editor of the project the site uses, then reload this page.");
+    openSection("Clients");
+    expect(screen.getByRole("alert", { name: "The database is behind this version of the site" })).toBeTruthy();
+  });
+
+  it("says nothing when the database is up to date, or when health cannot be read", async () => {
+    renderConsole();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith("/api/health", expect.anything()));
+    expect(screen.queryByRole("alert", { name: "The database is behind this version of the site" })).toBeNull();
+    cleanup();
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
+    renderConsole();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(screen.queryByRole("alert", { name: "The database is behind this version of the site" })).toBeNull();
+  });
+});
 
 describe("which sections each person sees (decided from what the server resolved)", () => {
   it("shows the Super Admin five sections, one job each, in the order work flows, opening on the Pipeline's Business Health Checks", () => {
@@ -505,7 +532,7 @@ describe("Discovery Call record drawer", () => {
     cleanup();
     api.debrief = { setUp: false, debrief: null };
     open();
-    expect(drawer().getByText("The Discovery Call record is not set up in the database yet (migration 0009).")).toBeTruthy();
+    expect(drawer().getByText("The Discovery Call summary cannot load: the database is missing a table this version of the site needs. The note at the top of Admin says which migration to apply.")).toBeTruthy();
   });
 
   it("offers Opportunity, Refer and Lost with different weight, and records them with the existing actions", () => {
@@ -935,7 +962,7 @@ describe("payments in Business Health Checks", () => {
     api.details[1] = detailFor({ payments: null });
     renderConsole();
     openRow("Ada Okafor");
-    expect(payments().getByText("Payments are not set up in the database yet (migration 0006).")).toBeTruthy();
+    expect(payments().getByText("Payments cannot load: the database is missing a table this version of the site needs. The note at the top of Admin says which migration to apply.")).toBeTruthy();
   });
 
   it("shows where a paid report stands: waiting for the form, with a resend, or sent, with a download", () => {

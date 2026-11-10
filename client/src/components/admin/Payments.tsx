@@ -248,7 +248,7 @@ function BusinessReviewFeeRow({ businessCheckId, review, sentAt }: { businessChe
 
 /** Both things an owner can pay for before the Business Review, in journey order. */
 export function PaymentsPanel({ businessCheckId, payments, report = null, businessReview = null, businessReviewSentAt = null }: { businessCheckId: number; payments: Payment[] | null | undefined; report?: ReportState; businessReview?: BusinessReviewFee | null; businessReviewSentAt?: Date | string | null }) {
-  if (payments === null) return <p className="text-sm text-ink-muted">Payments are not set up in the database yet (migration 0006).</p>;
+  if (payments === null) return <p className="text-sm text-ink-muted">Payments cannot load: the database is missing a table this version of the site needs. The note at the top of Admin says which migration to apply.</p>;
   return (
     <ul className="space-y-2.5">
       {PAYMENT_ITEMS.map(item => item === "current_state" && businessReview

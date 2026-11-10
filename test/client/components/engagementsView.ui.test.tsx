@@ -250,10 +250,16 @@ describe("the team's engagements", () => {
     expect(card.queryByRole("button", { name: "Start from the standard Findings outline" })).toBeNull();
   });
 
-  it("says so when the database is not ready, instead of failing", () => {
-    api.list = { setUp: false, items: [] };
+  it("names the migration the database is missing, instead of failing or guessing an old one", () => {
+    // The live case on 10 November 2026: a column from 0022 missing read as "migration 0008 is not applied".
+    api.list = { setUp: false, items: [], missing: "0022" } as never;
     render(<EngagementsView />);
-    expect(screen.getByRole("note").textContent).toContain("migration 0008");
+    expect(screen.getByRole("note").textContent).toBe("The engagements cannot load: the database is missing migration 0022. Run its script from drizzle/supabase in the Supabase SQL Editor of the project the site uses, then reload.");
+    cleanup();
+    api.list = { setUp: false, items: [], missing: null } as never;
+    render(<EngagementsView />);
+    expect(screen.getByRole("note").textContent).toBe("The engagements cannot load: the database is missing a table or column this version of the site needs. Apply the latest migration, then reload.");
+    expect(screen.getByRole("note").textContent).not.toContain("0008");
   });
 
   it("lets a Partner, Vice President or Senior Associate add an analyst and approve a prescription before it is shared", () => {

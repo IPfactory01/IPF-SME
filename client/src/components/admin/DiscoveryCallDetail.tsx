@@ -152,7 +152,7 @@ function DebriefSummary({ businessCheckId, heldAt }: { businessCheckId: number; 
   const share = trpc.businessSupport.shareDebrief.useMutation({ onSuccess: (_, input) => { toast.success(input.shared ? "The owner can see the Discovery Call in their room." : "The Discovery Call is internal again."); refresh(); }, onError: error => toast.error(error.message) });
   if (debrief.error && !isRefusal(debrief.error) && debrief.data === undefined) return <DetailSection title="Discovery Call summary"><Failed error={debrief.error} onRetry={() => void debrief.refetch()} retrying={debrief.isFetching} /></DetailSection>;
   if (!debrief.data) return debrief.isLoading ? <DetailSection title="Discovery Call summary"><Loading label="Loading the Discovery Call summary" rows={2} /></DetailSection> : null;
-  if (!debrief.data.setUp) return <DetailSection title="Discovery Call summary"><p className="text-sm text-ink-muted">The Discovery Call record is not set up in the database yet (migration 0009).</p></DetailSection>;
+  if (!debrief.data.setUp) return <DetailSection title="Discovery Call summary"><p className="text-sm text-ink-muted">The Discovery Call summary cannot load: the database is missing a table this version of the site needs. The note at the top of Admin says which migration to apply.</p></DetailSection>;
   const row = debrief.data.debrief;
   const busy = save.isPending || share.isPending;
   const filled = DEBRIEF_FIELDS.some(field => form[field.key].trim());

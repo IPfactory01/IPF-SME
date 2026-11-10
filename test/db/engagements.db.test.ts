@@ -38,6 +38,7 @@ import { createContext } from "@server/_core/context";
 import { resetBusinessCheckRateLimitsForTests } from "@server/routers/businessCheck";
 import { hashAdminPassword, OWNER_ADMIN_EMAIL } from "@server/adminSecurity";
 import { addWorkingDays } from "@server/engagements";
+import { checkDatabase } from "@server/databaseHealth";
 import { ENV } from "@server/_core/env";
 import { ACCOUNT_SESSION_COOKIE, type PlatformRole } from "@shared/auth";
 import { cleanAnswers } from "@shared/businessCheck/engine";
@@ -157,6 +158,31 @@ for (const target of targets) {
       resetBusinessCheckRateLimitsForTests();
       mocked.deliverEmail.mockReset();
       mocked.deliverEmail.mockResolvedValue({ status: "Simulated", reason: "test_sender" });
+    });
+
+    describe("a database behind this build (live, 10 November 2026)", () => {
+      // The live database lacked 0022: the list read its write-off column and said "migration 0008 is not applied".
+      it.skipIf(target.name !== "PGlite")("names the migration the database lacks, and lists again once it is applied", async () => {
+        const { id } = await finishedCheck("behind");
+        await payAssessment(id);
+        await harness.query(sql`create schema if not exists drizzle`);
+        await harness.query(sql`create table if not exists drizzle.__drizzle_migrations (id serial primary key, hash text not null, created_at bigint)`);
+        await harness.query(sql`insert into drizzle.__drizzle_migrations (hash, created_at) select 'recorded-' || n, n from generate_series(1, 22) as n`);
+        await harness.query(sql`alter table engagement_fee_lines rename column "writtenOffAt" to "writtenOffAtNotYet"`);
+        const logged = vi.spyOn(console, "error").mockImplementation(() => undefined);
+        try {
+          expect(await (await superAdmin.call()).engagement.staff.list()).toEqual({ setUp: false, items: [], missing: "0022" });
+          expect(logged).toHaveBeenCalledWith(expect.stringContaining("writtenOffAt"));
+          expect(await checkDatabase(db)).toMatchObject({ ok: false, code: "MIGRATION_MISSING", migrations: { applied: 22, missing: "0022" } });
+        } finally {
+          logged.mockRestore();
+          await harness.query(sql`alter table engagement_fee_lines rename column "writtenOffAtNotYet" to "writtenOffAt"`);
+          await harness.query(sql`drop schema drizzle cascade`);
+        }
+        const listed = await (await superAdmin.call()).engagement.staff.list();
+        expect(listed.setUp).toBe(true);
+        expect(listed.items.some(item => item.businessName === "Shop behind")).toBe(true);
+      });
     });
 
     describe("starting an engagement", () => {

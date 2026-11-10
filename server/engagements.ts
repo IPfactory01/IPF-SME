@@ -109,7 +109,7 @@ export function isMissingEngagementTable(error: unknown) {
   const code = (error as { code?: string })?.code ?? (error as { cause?: { code?: string } })?.cause?.code;
   return code === "42P01" || code === "42703";
 }
-export const MIGRATION_MISSING_MESSAGE = "The engagement room is not up to date in the database yet: apply migration 0009 (and 0008 if it is missing).";
+export const MIGRATION_MISSING_MESSAGE = "The database is missing a table or column this version of the site needs. The note at the top of Admin says which migration to apply.";
 
 /** The calendar date `days` working days (Monday to Friday) after `from`, in Lagos, as YYYY-MM-DD. */
 export function addWorkingDays(from: Date, days: number) {

@@ -62,6 +62,10 @@ docs/product/     These six documents
   the script and `pnpm db:migrate` give the same database. Applied through 0021. `pnpm db:verify` checks a database
   against the schema, read-only. 0022 (the payments ledger) is written and is applied just before the ledger
   code ships (`docs/database-migrations.md`).
+- `/api/health` counts the migrations the database has recorded against those the build needs (the journal, bundled at
+  build). A database behind the build answers 503 with `MIGRATION_MISSING` and the first migration it lacks, and Admin
+  shows it at the top of every tab. A push to `main` is checked live only once health shows the new build with every
+  migration counted, so code never runs ahead of its database unseen (added 10 November 2026, after the 0022 gap).
 - Never edit the database by hand. Migrations, major authentication changes and destructive changes go on a dedicated
   branch.
 

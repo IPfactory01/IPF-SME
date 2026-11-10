@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
-import { checkDatabase, describeDatabaseError, UNEXPECTED_ERROR_MESSAGE } from "@server/databaseHealth";
+import { checkDatabase, describeDatabaseError, EXPECTED_MIGRATIONS, migrationState, UNEXPECTED_ERROR_MESSAGE } from "@server/databaseHealth";
+import journal from "../../drizzle/migrations/meta/_journal.json";
 import { safeErrorShape } from "@server/_core/trpc";
 
 /** The shape Drizzle throws: "Failed query: …" with the driver's error underneath. */
@@ -37,6 +38,38 @@ describe("describing a database failure safely", () => {
     await vi.advanceTimersByTimeAsync(1000);
     expect(await pending).toMatchObject({ ok: false, code: "TIMEOUT" });
     vi.useRealTimers();
+  });
+});
+
+describe("whether the database has every migration this build needs", () => {
+  /** A database that answers `select 1` and has recorded `applied` migrations. */
+  const recorded = (applied: number) => ({ execute: async () => ({ rows: [{ applied }] }) });
+
+  it("knows the migrations this build was written for, from the journal, in order", () => {
+    expect(EXPECTED_MIGRATIONS).toEqual(journal.entries.map(entry => entry.tag));
+    expect(EXPECTED_MIGRATIONS[0]).toBe("0000_postgres_baseline");
+    expect(EXPECTED_MIGRATIONS.length).toBeGreaterThanOrEqual(23);
+  });
+
+  it("is healthy with every migration applied, and with more than this build knows (a migration applied just before its code)", async () => {
+    const expected = EXPECTED_MIGRATIONS.length;
+    expect(await checkDatabase(recorded(expected))).toEqual({ ok: true, migrations: { applied: expected, expected } });
+    expect(await checkDatabase(recorded(expected + 1))).toEqual({ ok: true, migrations: { applied: expected + 1, expected } });
+  });
+
+  it("is not healthy when the database is behind, and names the first migration it lacks", async () => {
+    // The live case on 10 November 2026: the code needed 0022, the database had 0000 to 0021.
+    const expected = EXPECTED_MIGRATIONS.length;
+    const behind = await checkDatabase(recorded(22));
+    expect(behind).toEqual({ ok: false, code: "MIGRATION_MISSING", reason: `The database is missing migration 0022: it has 22 of the ${expected} this build needs.`, migrations: { applied: 22, expected, missing: "0022" } });
+    expect(await migrationState(recorded(expected - 1))).toEqual({ applied: expected - 1, expected, missing: EXPECTED_MIGRATIONS[expected - 1].slice(0, 4) });
+  });
+
+  it("claims nothing when the migration record cannot be read", async () => {
+    let calls = 0;
+    const noRecord = { execute: async () => { calls += 1; if (calls > 1) throw Object.assign(new Error('relation "drizzle.__drizzle_migrations" does not exist'), { code: "42P01" }); return []; } };
+    expect(await checkDatabase(noRecord)).toEqual({ ok: true });
+    expect(await migrationState({ execute: async () => ({ rows: [] }) })).toBeNull();
   });
 });
 

@@ -3,6 +3,7 @@ import { ADMIN_SECTIONS, PIPELINE_STAGES, visibleAdminSections, type AdminAccess
 import React, { useState } from "react";
 import BusinessChecksView from "./BusinessChecksView";
 import ClientsView from "./ClientsView";
+import DatabaseBehind from "./DatabaseBehind";
 import DiscoveryCallsView from "./DiscoveryCallsView";
 import EngagementsView from "./EngagementsView";
 import FailedEmails from "./FailedEmails";
@@ -46,6 +47,8 @@ export default function BusinessSupportConsole({ access }: { access: Access }) {
           </div>
         )}
       </div>
+
+      <DatabaseBehind />
 
       {sections.length === 0 ? (
         <p role="note" className="border border-line bg-white p-6 text-sm text-ink-muted">Your account is signed in, but it has no level yet, so there is nothing to open here. A Super Admin sets your level in Admin › Team.</p>

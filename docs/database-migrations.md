@@ -4,6 +4,12 @@ The Supabase database is changed only by `pnpm db:migrate`; never by hand. The a
 run `pnpm db:verify` (read-only, needs `MIGRATION_DATABASE_URL`). It reports PASS only when every migration in
 `drizzle/migrations/meta/_journal.json` is recorded in `drizzle.__drizzle_migrations` with a matching hash.
 
+**Check after every apply and every deploy.** `https://www.ipfactory.co/api/health` counts the migrations the live
+database has recorded against those the live build needs: `database.migrations.applied` must equal `expected`. A
+database behind the build answers 503 with `MIGRATION_MISSING` and the first migration it lacks, and Admin says the
+same at the top of every tab. This was added on 10 November 2026, when the live database turned out not to have `0022`
+although its script had been run: the Engagements tab read a `0022` column and said "migration 0008 is not applied".
+
 ## Applied to the Supabase database (permanent `public` schema)
 
 | Migration | Applied | What it does |

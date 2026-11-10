@@ -376,6 +376,7 @@ info@ipfactory.co.
 | The payment check fails on the return page | "We could not check your payment. … If you have paid, your payment is safe with Paystack: please do not pay again.", with **Check again** | — | — | Built (R69) |
 | A first-time payer is unsure who receives the money | Before **Pay**, "Before you pay": *You pay Enzo Krypton & Co., the firm behind IP Factory, through Paystack. Look for Enzo on Paystack's page and on your bank statement*; the reference; the receipt by email (what it is for is the page's heading, above); and **Questions first? WhatsApp {first name}** (the engagement's main contact, once they agreed to show their number) or **WhatsApp IP Factory** (the office) | Names a team member only once they agreed (R44); offers the office otherwise | Answers on WhatsApp | Built (R72) |
 | A Specialist's access ends | — | Their role ends at the end of the day, Lagos time | — | Built |
+| The database is missing a migration this version of the site needs | Any screen that uses its tables says "Something went wrong on our side" | `/api/health` answers 503 and names the migration; Admin shows **The database is missing migration {number}** at the top of every tab, with what to run; the Engagements tab names it too, never an older migration | Runs that migration's script from `drizzle/supabase` in the Supabase SQL Editor of the project the site uses, then reloads; the notice goes once health counts every migration | Built (10 November 2026) |
 
 ## 8. Reference: pages, admin console, room, sign-in
 

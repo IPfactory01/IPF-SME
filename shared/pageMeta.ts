@@ -7,6 +7,15 @@ import { BRAND } from "./brand";
 import { storyOf } from "./productStories";
 import { priceLabel, type Product } from "./products";
 
+/**
+ * The Services page in the owner's own words (ET, 10 November 2026: "Help that does the work. Finished work in days. A
+ * fix in six weeks." read out of touch with the owners we serve). Its heading names their three commonest worries, each
+ * a question kept on one line; the line under it says how we help and what it costs. The page, search engines and the
+ * share card all read these.
+ */
+export const SERVICES_HEADING = "Sales slow? Cash tight? Need a loan?";
+export const SERVICES_SUB = "Pick the help your business needs. We do the work for you, or with you. Every price is on the page, in naira.";
+
 /** The site's public address. Every canonical link, sitemap entry and share card points here. */
 export const SITE_ORIGIN = "https://www.ipfactory.co";
 
@@ -49,7 +58,7 @@ export const SERVICE_SEARCH_TITLES: Partial<Record<Product["id"], string>> = {
 };
 
 export const PAGE_META = {
-  services: { title: "Services", description: `Every service of ${BRAND.productEndorsement}, with its price and delivery time: assessments, Done for You work, the Six-Week Fix and Monthly Services, for businesses across Nigeria.` },
+  services: { title: "Services", description: "Help with your sales, cash, records, prices and loans, for small businesses across Nigeria. Every service with its price in naira and its delivery time." },
   howWeWork: { title: "How we work", description: `How ${BRAND.productName} works: the free Business Health Check, the four ways to work with us and how each is paid, and what every piece of work comes with.` },
   experience: { title: "Experience", description: `The record behind ${BRAND.productName}: ${BRAND.trackRecord.clients} clients advised since ${BRAND.trackRecord.since}, the businesses we have worked with, and the research behind the method.` },
   guides: { title: "Guides for small business owners in Nigeria", description: "Plain answers to what owners search for: my business is struggling, how to get a business loan in Nigeria, what a business plan costs, cash flow problems and pricing for profit." },

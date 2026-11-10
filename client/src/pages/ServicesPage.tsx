@@ -14,7 +14,7 @@ import { displayPrice } from "@/lib/productPrice";
 import { ArrowRight } from "lucide-react";
 import React, { useState } from "react";
 import { Link } from "wouter";
-import { PAGE_META } from "@shared/pageMeta";
+import { PAGE_META, SERVICES_HEADING, SERVICES_SUB } from "@shared/pageMeta";
 
 /** The eyebrow over a page or section heading: small crimson capitals. */
 export const EYEBROW = "text-sm font-semibold text-brand";
@@ -35,8 +35,11 @@ export default function ServicesPage() {
   return (
     <SiteShell>
       <section className="container mx-auto max-w-6xl pt-16 pb-8 text-center sm:pt-20">
-        <h1 className="font-display mx-auto max-w-3xl text-[clamp(2.6rem,7vw,4.75rem)] font-semibold leading-[1.02] tracking-[-0.035em] text-ink">Help that does the work.</h1>
-        <p className="mx-auto mt-5 max-w-xl text-[clamp(1.15rem,2.4vw,1.45rem)] leading-snug text-ink-soft">Finished work in days. A fix in six weeks. Every price on the page.</p>
+        {/* The owner's three worries, each question kept on one line: "Sales slow? Cash tight?" then "Need a loan?". */}
+        <h1 className="font-display mx-auto max-w-5xl text-[clamp(2.6rem,7vw,4.75rem)] font-semibold leading-[1.02] tracking-[-0.035em] text-ink">
+          {SERVICES_HEADING.split(/(?<=\?)\s+/).map((question, index) => <React.Fragment key={question}>{index > 0 && " "}<span className="whitespace-nowrap">{question}</span></React.Fragment>)}
+        </h1>
+        <p className="mx-auto mt-5 max-w-2xl text-balance text-[clamp(1.15rem,2.4vw,1.45rem)] leading-snug text-ink-soft">{SERVICES_SUB}</p>
         <div role="group" aria-label="Filter by way to buy" className="mt-8 flex flex-wrap justify-center gap-2">
           {(["all", ...WAYS_TO_BUY] as const).map((option) => (
             <button key={option} type="button" aria-pressed={way === option} onClick={() => setWay(option)} className={`border px-4 py-2 text-sm font-semibold transition-colors ${way === option ? "border-ink bg-ink text-paper" : "border-line bg-paper-raised text-ink-soft hover:border-ink-muted"}`}>

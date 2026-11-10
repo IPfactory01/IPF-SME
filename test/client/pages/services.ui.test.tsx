@@ -38,6 +38,16 @@ const at = (path: string) => render(
 afterEach(cleanup);
 
 describe("the services page (/services), laid out as a store", () => {
+  it("opens in the owner's words: their commonest worries, how we help and that every price is shown in naira (ET, 10 November 2026)", () => {
+    at("/services");
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Sales slow? Cash tight? Need a loan?");
+    // Each question stays on one line, so a phone never breaks "Cash / tight?".
+    expect(Array.from(screen.getByRole("heading", { level: 1 }).querySelectorAll("span.whitespace-nowrap"), (part) => part.textContent)).toEqual(["Sales slow?", "Cash tight?", "Need a loan?"]);
+    expect(screen.getByText("Pick the help your business needs. We do the work for you, or with you. Every price is on the page, in naira.")).toBeTruthy();
+    // The consultant's shorthand it replaced is gone.
+    expect(screen.queryByText(/Help that does the work|Finished work in days/)).toBeNull();
+  });
+
   it("shows one tile per service with its promise, its price and its page, and the parent firm for larger work", () => {
     at("/services");
     const shelf = within(screen.getByRole("region", { name: "Products" }));

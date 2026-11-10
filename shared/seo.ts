@@ -11,7 +11,7 @@ import { QUESTION_GROUPS } from "./siteQuestions";
 import { GUIDES, guidePath } from "./guides";
 
 export { HOME_META, PAGE_META, pageTitle, productMeta, SERVICE_SEARCH_TITLES, SITE_ORIGIN } from "./pageMeta";
-import { HOME_META, PAGE_META, pageTitle, productMeta, SITE_ORIGIN, type Meta } from "./pageMeta";
+import { HOME_META, PAGE_META, pageTitle, productMeta, SERVICES_HEADING, SERVICES_SUB, SITE_ORIGIN, type Meta } from "./pageMeta";
 import { ABOUT_FAQ, ABOUT_HEADING, ABOUT_SUB } from "./about";
 
 const ORGANISATION_ID = `${SITE_ORIGIN}/#organisation`;
@@ -110,8 +110,8 @@ export function publicPages(): PublicPage[] {
     return { path, title: meta.title, description: meta.description, heading, body, jsonLd: [org, ...(trail.length ? [breadcrumbJsonLd(trail)] : []), ...extra], card: shareCard };
   };
   pagesCache = [
-    page("/", HOME_META, "Find it. Fix it. See the shift.", [HOME_META.description], [], HOME_META.title, { eyebrow: BRAND.productEndorsement, lines: ["Find it. Fix it.", "See the shift."], line: "Help for owner-run businesses in Nigeria. Finished work in days, or a fix in six weeks." }),
-    page("/services", PAGE_META.services, "Help that does the work.", [PAGE_META.services.description, ...MENU_PRODUCTS.map((product) => `${product.name}: ${priceLabel(product.price)}. ${product.short}`)], [], PAGE_META.services.title, { line: "Every service with its price and delivery time, for businesses across Nigeria." }),
+    page("/", HOME_META, "Find it. Fix it. See the shift.", [HOME_META.description], [], HOME_META.title, { eyebrow: BRAND.productEndorsement, lines: ["Find it. Fix it.", "See the shift."], line: "Help for owner-run businesses in Nigeria with sales, cash, prices, loans and staff." }),
+    page("/services", PAGE_META.services, SERVICES_HEADING, [SERVICES_SUB, PAGE_META.services.description, ...MENU_PRODUCTS.map((product) => `${product.name}: ${priceLabel(product.price)}. ${product.short}`)], [], PAGE_META.services.title, { lines: ["Sales slow? Cash tight?", "Need a loan?"], line: "Help with sales, cash, prices and loans, for businesses across Nigeria. Every price in naira." }),
     ...MENU_PRODUCTS.map((product) => {
       const story = storyOf(product.id);
       return page(servicePath(product), productMeta(product), story ? story.headline.join(" ") : product.name, [productMeta(product).description, ...product.youGet], [serviceJsonLd(product), ...(story?.faq.length ? [faqJsonLd(story.faq)] : [])], product.name, { eyebrow: product.name, lines: story ? story.headline : [product.name], line: product.short, badge: priceLabel(product.price) });

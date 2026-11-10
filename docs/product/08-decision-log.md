@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| The Services page opens in the owner's words: "Sales slow? Cash tight? Need a loan?", then how we help and that every price is on the page in naira; "Help that does the work. Finished work in days. A fix in six weeks." read out of touch with the owners we serve, and goes from the page, search results and the share cards | ET, 10 November 2026 |
 | Batch F's design is approved (App flow 3.1). Only Finance and the Super Admin record money by hand (`manage_payments`, as decided on 6 November for payments), so the engagement team's Paid tick goes with batch F | ET, 10 November 2026 |
 | Writing off a fee is for a Partner or the Super Admin only (a new permission, `write_off_fees`, with batch F) | ET, 10 November 2026 |
 | A fee can be paid in parts by hand as well as online; Paystack then charges only what is left | ET, 10 November 2026 |

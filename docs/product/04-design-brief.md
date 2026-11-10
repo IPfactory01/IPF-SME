@@ -223,6 +223,9 @@ The site speaks the business owner's language (concept note, front matter):
 - Every promise is followed by what happens next and what it costs.
 - The business check keeps the proper term and says what it means ("Strategic intent: where the business is going").
 - Say plainly that analysts and AI do the analysis under a named IP Factory consultant.
+- **Money in plain words.** To a client a fee is *Paid*, *Due*, *Late*, or (from batch F) *₦150,000 of ₦300,000 paid* or
+  *Nothing more to pay*; a late fee says the day work pauses. "Write-off", "needs a look" and "cancelled" are the
+  team's words and never reach a client's screen.
 
 ## 10. Email
 
@@ -278,6 +281,15 @@ the plain-text body so both versions say the same thing:
 - Every public page opens with a "Skip to content" link; a chart or table wider than a phone scrolls sideways inside a
   focusable, named region.
 - **Speed (R70):** see section 14.
+- **Service pages** (`/services/{slug}`) each tell one story (`shared/productStories.ts`): the promise as a line, a
+  two-line heading and a sub; a drawing of the work (`ProductArt`); a sample of it drawn from data (`StoryVisual`: a
+  line, bars, a table, a checklist, moves, a timeline or a Measure of Success), each marked *Sample*, with a caption that
+  starts with a capital; a statement; three features, each with its own sample; who it is not for, and what to start with
+  instead; the questions; a closing line and one route to start. **Digital Marketing** (R35, 10 November 2026) uses the
+  `content` drawing and tells the path from seen to sold once: *Month 1, step by step* (Seen, Engaged, Enquired, Bought,
+  each with a sample count), then *A week of content*, *In your room this week* (approved, waiting for your yes, changes
+  in round 1 of 2) and *Your 90 days* as a timeline. The four platforms are named on the page: Instagram, TikTok,
+  Facebook and Google.
 
 ### 12.2 The Business Health Check
 
@@ -297,6 +309,8 @@ and `paymentsStatementName`), the reference, the receipt by email, and **Questio
 (the engagement's main contact, once agreed) or **WhatsApp IP Factory** (`BRAND.officeWhatsapp`). What it is for is the
 page's heading, so the box does not repeat it, and the receipt is said once. The Pay button is the
 page's one gradient action (`PAY_BUTTON`), with 8 px corners; so is **Try again** on the return page.
+From batch F (designed, App flow 3.1), a fee paid in part says what is paid under its heading ("₦150,000 of ₦300,000
+paid") and the button asks only for what is left ("Pay ₦150,000 securely with Paystack").
 
 ### 12.4 Signing in and joining
 
@@ -319,7 +333,7 @@ The room follows document 07 in its third version (the "ClickUp" layout):
   Waiting on you, the team, Your projects, Fix the next problem); Content for Digital marketing (the month's pieces against
   the programme; approve or ask for changes); Work Plan by week; Data Request by section with the drop box; Sessions;
   Business and Founder (from the check or the Full Report); Deliverables; Payments (each fee with its date, reference and
-  Pay button). Which views show, and who sees them, is in the App flow (8.4).
+  Pay button; from batch F, what is paid and what is left, and each payment's receipt number and day). Which views show, and who sees them, is in the App flow (8.4).
 - **The stage band:** done stages in `brand` with a tick, the current one in `brand-plum`, those to come in a neutral;
   the four figures under it link to the view behind them. People share one avatar tone; in the Data Request only high
   priority and an overdue date carry colour; item references (A1, B3) are tabular.
@@ -329,6 +343,13 @@ The room follows document 07 in its third version (the "ClickUp" layout):
   the start in words, then where it started and where it is going, then week by week.
 - **The payment gate:** while an engagement in advance waits for its first payment, the room shows only "Your room opens
   once the first payment is made", the fee and the Pay button.
+- **The pause banner** (E5, built 10 November 2026; `FeeHoldBanner` in `EngagementRoom.tsx`), above the tabs on every
+  view: from the day after a fee's date, **A payment is late**, with the fee, its amount, the day it was due and the day
+  work pauses, on the Watch tint with a Watch border; from seven days after it, **Work on your {title} is paused**, with
+  what to pay and that the room and uploads stay open, on the Stuck tint with a Stuck border. Both carry **Pay {amount}**
+  for someone who sees the fees; the owner's staff without full access are told only that a fee is late or work is
+  paused, never which fee or how much, and that the owner can pay.
+  **Preview as client** shows the banner without the button.
 - Account and business details live in the settings pages (`AccountLayout`); the room shows nothing administrative.
 - **On a phone (R71):** off the Overview the header is one line, the project and its day, so each view starts near the top;
   on the Overview the full header scrolls away with the page and a one-line bar (fixed, 40 px) appears at the top once it
@@ -342,6 +363,14 @@ Five tabs, one job each: Pipeline, Engagements, Clients, Finance, Team (App flow
 status chips in the health and danger colours (never Tailwind's palette; Waitlisted uses the brand tint), record drawers
 from the right. Square today; it moves to 8 px corners screen by screen. Everything the team does to a client's room can
 be previewed as the client sees it (**Preview as client**, read only).
+
+- **Fee late** and **Paused** (E5, `FeeHoldBadge`): a chip beside the engagement on the list and on its record, Fee late
+  on the Watch tint and Paused on the Stuck tint, with the day work pauses (or paused) in its title; the record adds a
+  note saying what lifts it: paying, or a new date in Fees. Never the amount, so it can sit on any list.
+- **Finance, from batch F** (designed, App flow 3.1): payments that need a look are listed first; each fee opens to its
+  payments and refunds (receipt number, day, how, amount, who), and the actions sit beside the fee for those who may use
+  them: **Record a payment**, **Cancel**, **Accept**, **Record a refund**, **Write off**. A cancelled payment stays in the
+  list, struck through and marked cancelled.
 
 ## 13. Accessibility
 

@@ -77,6 +77,50 @@ after a missed date (D6, R51): the room says so from the first late day, and the
 Today's clients: **Marcelle (Digital marketing)** pays at 30, 60 and 90 days from her kickoff, as agreed with her; her
 lead sets those dates by hand in the engagement's Fees (I4).
 
+### 3.1 Recording money: the ledger (R37, batch F; designed 10 November 2026 for ET's approval, to build)
+
+Every naira that comes in is one **payment** against one fee: a Paystack transaction, or money that came another way
+and was recorded by hand. Until the Business Review and the Full Report become fees (F3, R13), a payment can instead be
+against their payment request. Finance reads money in from the payments and money owed from the fees (F4), so every
+naira traces to one fee and one Paystack reference, or to the person who recorded it. Nothing about money is deleted: a
+payment recorded by mistake is cancelled, a refund is recorded against the payment it returns, and a write-off can be
+reversed; each keeps who did it, when and why.
+
+| Action | Who | What it asks for | What changes | Email |
+|---|---|---|---|---|
+| Pay online, from the fee's pay page or the room | The owner, or anyone with the fee's link | — | A payment is **Started** for what is left on the fee; Paystack's confirmation makes it **Paid**, with the next receipt number | Owner: *Payment received: {fee}*, with the receipt number and anything left to pay. Office: *Paid online: …* |
+| Record a payment by hand | Finance or the Super Admin (`manage_payments`) | The amount (no more than is left; part of it is fine), the day it arrived (not in the future), how it came (bank transfer, cash or other) and a note, such as the bank's reference | A **Paid** payment, with the next receipt number and who recorded it. The first payment opens a room that waited for it, as today | Owner: *Payment received: {fee}* |
+| Cancel a payment recorded by hand by mistake | Finance or the Super Admin | A reason | The payment is **Cancelled**: it stays on the record with its receipt number, marked cancelled, and no longer counts, so its amount is owed again | Owner, if a receipt went out: *Your payment record has been corrected: {fee}* |
+| Accept a payment that needs a look | Finance or the Super Admin | — | It counts as **Paid**, with a receipt number. Only what fits: if it is more than is left, the difference is refunded and recorded first | Owner: *Payment received: {fee}* |
+| Record a refund, once the money has gone back through Paystack or the bank | Finance or the Super Admin | The amount (no more than the payment, less earlier refunds), the day, the reason and Paystack's or the bank's reference | The refund is kept against its payment, and that amount is owed again unless it is written off. Refunded in full, the payment shows **Refunded** | Owner: *Your refund: {fee}* |
+| Cancel a refund recorded by mistake | Finance or the Super Admin | A reason | The refund stays on the record, marked cancelled, and no longer counts | — |
+| Write off what is left of a fee | A Partner or the Super Admin (`write_off_fees`) | A note saying why | The fee is **Written off**: nothing more is owed, it is never late and it never pauses the work. The client sees *Nothing more to pay* | None: the Partner tells the client |
+| Reverse a write-off | A Partner or the Super Admin | A reason | What was written off is owed again | — |
+
+Today the engagement team ticks **Paid** in Fees, which can open a room or lift a pause without the money. From batch F
+only Finance and the Super Admin record money, in line with the 6 November rule that recording payments stays with
+`manage_payments`; the team sees each payment, and tells Finance when a client says they have paid another way.
+
+**The rules.**
+
+1. Paystack charges what is left on the fee when the checkout opens, so a part-paid fee is finished online. If a payment
+   recorded by hand lands while a checkout is open, the Paystack payment that no longer fits **needs a look**.
+2. A fee's amount cannot go below what is paid on it. Raising a fee that was paid in full makes it part paid again, and
+   the owner is told (*Your fees have changed*).
+3. A fee that has been billed cannot be removed: it is changed, or a Partner writes it off. A fee is billed, and gets its
+   invoice number, the first time its pay link is emailed or a payment is started or recorded against it.
+4. Cancelling a payment or recording a refund makes that amount owed again. If the fee's date has passed it is late
+   again, and the work can pause (D6). A cancelled payment never closes a room it opened.
+5. A write-off covers what is left at that moment, so a later refund on the fee is owed again unless it is written off
+   too. A written-off fee cannot be changed until the write-off is reversed. A write-off never opens a room:
+   **Open the room now** does.
+6. A Paystack payment is never cancelled, because the money moved: it is refunded.
+7. Each payment received gets the next receipt number (`TS-RC-000001`) and each billed fee the next invoice number
+   (`TS-IN-000001`): unique, in order and without gaps, ready for the PDFs of R53.
+8. The team's Fees and Finance show each fee's payments and refunds: receipt number, day, how, amount and who recorded
+   it. The client's Payments tab shows each fee's state, what is left with **Pay**, and the receipt number, day and
+   amount of each payment and refund; never a cancelled one, a note or who recorded it.
+
 ## 4. The journeys
 
 Columns: **Client** does · **Platform** does on its own · **Team** does · **Email** (to whom) · **Status** after · **Built?**
@@ -124,7 +168,7 @@ flowchart TD
 |---|---|---|---|---|---|---|
 | 1 | Agrees the work and the terms on the call | — | The lead opens **New engagement**: client (new or existing), type and service, start date | — | — | Built |
 | 2 | — | Loads the type's Data Request, Work Plan, Sessions and fee schedule, dated from the start; invites the owner (an existing client's project joins their account) | Checks the fee schedule, whose terms follow what was bought (R36) | Owner: *Your The Shift room for {business}*, with **What we will do** (the work, the start date, each fee and its date; R47) | Engagement **open**; **awaiting first payment** | Built |
-| 3 | Pays the first fee from the room or the email | Confirms the payment; opens the room; sends the receipt | Records money that came another way (ticks Paid), or **Open the room now** | Owner: receipt. Office: *Paid online: …* | Fee **paid**; room open | Built |
+| 3 | Pays the first fee from the room or the email | Confirms the payment; opens the room; sends the receipt | Records money that came another way (ticks Paid; from batch F, Finance records it, section 3.1), or **Open the room now** | Owner: receipt. Office: *Paid online: …* | Fee **paid**; room open | Built |
 
 ### 4.4 The client during delivery
 
@@ -137,8 +181,8 @@ flowchart TD
 | 4 | Approves reels, posts and stories, or asks for changes (Digital marketing); on a phone, previews each piece and approves several at once | Counts the month's pieces once approved | The Content Producer edits and sends for approval; the Digital Marketer plans and publishes | — | Content **For your approval** → **Approved** or **Changes requested** → **Published** | Built; previews and approving several at once to build (R54) |
 | 5 | Reads a shared Deliverable; comments; gives Sign-off, or asks for changes (R51, to build) | — | Drafts; a lead approves prescriptions and plans; shares with the owner or the owner and their team; Specialists hand in drafts the lead shares | Owner: *Engagement update: {title}* | Deliverable **draft** → **approved** → **shared**; Sign-off given | Built |
 | 6 | Sees the one number each week | Shows where it started, this week, where it is going | Records the weekly check-in: five questions, the reading, hours by role, AI used | — | — | Built |
-| 7 | Pays each later fee from the reminder (by email, with a WhatsApp button) or the Payments tab; keeps the PDF receipt | Sends each fee's link 5 days before its date, on the day, and 3 and 7 days after if unpaid, never between 9pm and 7am; confirms payment; sends the receipt and invoice as PDFs | Told at 7 days late; work pauses (D6) | Owner: reminders, receipt, invoice (reminders and PDFs to build). Lead: 7 days late (to build) | Fee **due** → **paid** or **late** | Built, except reminders (R12), PDFs (R53) and quiet hours (R57) |
-| 7b | A late fee: from the day after its date a banner says it is late and when work pauses, with **Pay**; from seven days after it, that work is paused and what to pay to continue. The room stays readable and uploads stay open; a team member without the fees is told only that work is paused | Shows **Fee late**, then **Paused**, on the list and the record; paying lifts it at once | Gives more time with a new date in Fees (the first fee before any payment: a Partner) | Owner: *Work on {engagement} is paused* and *has resumed* (to write, with R12 and G2) | Engagement **late** → **paused** → **open** | Built (E5); the emails to build |
+| 7 | Pays each later fee from the reminder (by email, with a WhatsApp button) or the Payments tab; keeps the PDF receipt | Sends each fee's link 5 days before its date, on the day, and 3 and 7 days after if unpaid, never between 9pm and 7am; confirms payment; sends the receipt and invoice as PDFs | Told at 7 days late; work pauses (D6) | Owner: reminders, receipt, invoice (reminders and PDFs to build). Lead: 7 days late (to build) | Fee **due** → **paid** or **late**; from batch F also **part paid** (section 3.1) | Built, except reminders (R12), PDFs (R53), quiet hours (R57) and part payments (batch F) |
+| 7b | A late fee: from the day after its date a banner says it is late and when work pauses, with **Pay**; from seven days after it, that work is paused and what to pay to continue (from batch F, what is left on the fee). The room stays readable and uploads stay open; a team member without the fees is told only that work is paused | Shows **Fee late**, then **Paused**, on the list and the record; paying lifts it at once | Gives more time with a new date in Fees (the first fee before any payment: a Partner) | Owner: *Work on {engagement} is paused* and *has resumed* (to write, with R12 and G2) | Engagement **late** → **paused** → **open** | Built (E5); the emails to build |
 | 8 | Adds their own staff (one seat): full access or contributor; later, sends one staff member a link to answer one item without an account (R55) | Sends the seat invitation | — | Staff member: invitation | — | Built (the one-item link to design) |
 
 ### 4.5 Close, the Day-30 Review and the next fix (To build, R26 to R28)
@@ -172,10 +216,12 @@ fee date, or send a payment link on a schedule.
 
 | Step | Finance | Platform | Built? |
 |---|---|---|---|
-| 1 | Opens **Finance**: paid, owed, late; every fee and every payment request | Counts each fee by its terms (section 3) | Built (terms with R36) |
-| 2 | Sees a payment that needs a look (wrong amount, paid twice) | Emails the office with the Paystack reference | Built |
-| 3 | Checks it in Paystack; confirms by hand or refunds | Records who confirmed and why | Built (refunds recorded with R37) |
-| 4 | Reconciles Paystack's settlements against payments | One payment row per Paystack transaction | To build (R37) |
+| 1 | Opens **Finance**: paid, owed, late; every fee and every payment request | Counts each fee by its terms (section 3). From batch F: money in from the payments, less refunds; money owed from what is left on each fee, less write-offs (F4) | Built (terms with R36); the ledger to build (F4) |
+| 2 | Sees a payment that needs a look (wrong amount, paid twice) | Emails the office with the Paystack reference. From batch F, also lists it at the top of Finance until it is accepted or refunded | Email built; the list to build (F1) |
+| 3 | Checks it in Paystack, then accepts it, or refunds it in Paystack and records the refund | Keeps the refund against its payment, with who and why; the fee is owed again unless a Partner writes it off | Today a payment is confirmed by hand with the Paid tick; accepting and refunds to build (F1, F2) |
+| 4 | Records money that came another way, in part or in full: the day, how, and the bank's reference; cancels one recorded by mistake | Gives each payment the next receipt number; keeps a cancelled payment, marked cancelled | To build (F1); today the engagement team ticks Paid |
+| 5 | Reconciles Paystack's settlements against payments | One payment row per Paystack transaction, with its reference and mode | To build (F1) |
+| 6 | A Partner or the Super Admin writes off what is left of a fee, with a note | The fee is closed: not owed, not late, never a reason to pause | To build (F2) |
 
 ### 4.8 The Super Admin
 
@@ -206,8 +252,8 @@ receiving it, and a time it should take.
 | **Pipeline** (a business check) | Lead → Qualified lead → Call booked → Opportunity → Won; Lost, Nurture, Referred | The first three, forward only, never over a stage the team set; Won on a confirmed Business Review payment | Opportunity, Refer, Lost; "Move to" any stage except Won |
 | **Order** (Buy now) | Awaiting payment → Paid → Engagement opened; Abandoned | All of them (R13) | — |
 | **Engagement** | Getting set up → (Business Review, Six-Week Fix) Business Review, The Fix, Your Plan → Closed; other types Open → Closed (a dated type also shows its stage from the start date); plus **awaiting first payment** and **paused** (R51) | Awaiting first payment clears on the first fee paid; late from the day after an unpaid fee's date and paused seven days after it, cleared when it is paid or given a new date (nothing stored); a dated type's stage follows its start date | The stage; Close (R26); Open the room now; pause or lift a pause |
-| **Fee** | Set → Due → Paid, or Late | Due and Late by date and terms; Paid on Paystack's confirmation | Paid by hand (money that came another way); undo |
-| **Payment** (one Paystack transaction) | Started → Paid, Failed, Needs a look, Refunded | Paid and Failed from Paystack | Needs a look resolved; Refunded recorded (R37) |
+| **Fee** | Set (no date yet) → Due → Paid, or Late. From batch F also **Part paid**, while its payments add up to less than its amount, and **Written off** (section 3.1) | Due and Late by date and terms; Paid on Paystack's confirmation, and from batch F once its payments, less refunds, add up to its amount | Today: Paid by hand (money that came another way), and undo. From batch F: a payment recorded by Finance, in part or in full; Written off, and reversed, by a Partner or the Super Admin |
+| **Payment** (one Paystack transaction; from batch F also money recorded by hand) | Started → Paid, Failed or Needs a look; Needs a look → Paid (accepted) or Refunded; Paid → Refunded (in full; a part refund leaves it Paid). Recorded by hand: Paid → Cancelled or Refunded | Paid and Failed from Paystack; Needs a look when the money does not fit the fee, reported to the office | From batch F, in Finance: accepted, refunded or cancelled (section 3.1). Today a payment is not stored apart from its fee |
 | **Data Request item / action** | To do → Sent, we are checking → Received, or We need a bit more; Not available; Done; No longer needed | Sent when the client uploads or marks it | Received, We need a bit more, Done, No longer needed |
 | **Deliverable** | Draft → Awaiting approval → Approved → Shared → Sign-off given, or Changes asked for (R51) → Draft | — | Each step; editing a shared one returns it to Draft |
 | **Content piece** | Planned → In edit → For your approval → Approved or Changes requested → Published | — | The team, except the owner's Approved or Changes requested |
@@ -238,7 +284,10 @@ info@ipfactory.co.
 | Added to an engagement, or role changed | Team member | *You are on {business} as {role}*; *Your role on {business}: {role}* | Built |
 | Fee link sent by the team | Owner | *{fee}: ₦{amount} for the {engagement}* | Built |
 | Fee paid online | Owner; office | *Payment received: {fee}*; *Paid online: {business}, {fee}* | Built |
-| Payment needs a look | Office | *Paystack payment needs a look: {reference}* | Built |
+| A payment recorded by hand, or one that needed a look accepted (batch F) | Owner | *Payment received: {fee}*, with the receipt number and anything left to pay | To build (F1) |
+| A payment recorded by hand cancelled after its receipt went out | Owner | *Your payment record has been corrected: {fee}*: what was recorded by mistake, and what is left to pay | To build (F1) |
+| A refund recorded | Owner | *Your refund: {fee}*: the amount, the day and the payment it returns; a bank can take some days to show it | To build (F2) |
+| Payment needs a look | Office | *Paystack payment needs a look: {reference}* (from batch F it says to accept it or record the refund in Finance) | Built |
 | Client asks for another service | Office | *{business} asked for the {product}* | Built |
 | Password reset | The person | *Reset your password on The Shift* | Built |
 | Staff invited | The invitee; Super Admins | *Join the IP Factory team on The Shift*; *Staff invitation: {level} for {email}* | Built |
@@ -252,7 +301,7 @@ info@ipfactory.co.
 | Administrator password reset (the older admin password) | The administrator | *Reset your administrator password on The Shift* | Built |
 | Fee due in 5 days, due today, 3 and 7 days late | Owner; lead at 7 days | To write; each with a WhatsApp button | To build (R12) |
 | Work paused; work resumed | Owner; lead | *Work on {engagement} is paused*; *… has resumed* | To build (R51) |
-| Payment received, with the receipt and invoice as PDFs | Owner | *Payment received: {fee}* (PDFs attached) | Email built; PDFs to build (R53) |
+| Payment received, with the receipt and invoice as PDFs | Owner | *Payment received: {fee}* (PDFs attached) | Email built; receipt and invoice numbers with batch F (F1); PDFs to build (R53) |
 | Check finished but no call or purchase: day 2, day 7; Nurture: day 30 | Owner | To write | To build (R48) |
 | Data Request item due in 2 days, 2 days late | Owner or assigned staff; lead after | To write | To build (R16) |
 | Buy-now order paid | Owner; office | Receipt and invitation; *New order: {product}, {business}* | To build (R13) |
@@ -265,7 +314,10 @@ info@ipfactory.co.
 |---|---|---|---|---|
 | Paystack is off (no key) | "Online payment is not open yet"; no Pay button | Refuses to open a payment; emails say a link is coming | Ticks Paid for money that came another way | Built |
 | A payment is abandoned or fails | "Payment not completed", with Try again | Nothing is marked paid | — | Built |
-| Paid the wrong amount, or paid twice | "Still confirming" (so they do not pay again) | Marks nothing paid; emails the office with the reference | Checks Paystack; confirms by hand or refunds | Built |
+| Paid the wrong amount, or paid twice | "Still confirming" (so they do not pay again) | Marks nothing paid; emails the office with the reference | Checks Paystack; confirms by hand or refunds. From batch F, accepts it in Finance, or refunds it in Paystack and records the refund (section 3.1) | Built; accepting and refund records to build (F1, F2) |
+| A client pays part of a fee by bank transfer | The room shows what is paid and what is left, with **Pay** for the rest | Paystack charges only what is left | Finance records the part payment, with the bank's reference | To build (F1) |
+| A payment was recorded by mistake | The fee is owed again; *Your payment record has been corrected* if a receipt went out | Keeps the payment, marked cancelled, with its receipt number | Finance cancels it, with a reason | To build (F1) |
+| A client will not, or need not, pay what is left | *Nothing more to pay* on the fee | The fee is no longer owed or late, and never pauses the work | A Partner or the Super Admin writes it off with a note, and tells the client | To build (F2) |
 | Paystack's notification fails | The return page confirms it instead | Answers 500 so Paystack sends it again | Alerted the same day (R42) | Built, except the alert |
 | An email does not arrive | — | Records the failure; shows it to the office | Copies the link shown once (invitations, fee links, resets) and sends it on WhatsApp | Built |
 | An invitation expires or is revoked | "Invitation unavailable", with sign-in | — | **Send sign-in link** from the engagement | Built |
@@ -340,7 +392,7 @@ checks every action again. Under the person's name is their level.
 | **Pipeline** | `manage_client_onboarding` | Prospects | Business Health Checks (metrics, stage filter, search); Discovery Calls (requests, bookings, the call summary, outcome); Client Onboarding (invitations) |
 | **Engagements** | `view_all_businesses`, or `view_assigned_businesses` for one's own | Delivery | My projects; Clients asking for another service; New engagement; Paid but no engagement yet; every engagement in scope; the engagement record (below) |
 | **Clients** | `view_all_businesses` | Accounts | Businesses and their members; client accounts (reset link, suspend, reinstate, reset two-step, remove access) |
-| **Finance** | `view_financials` | Money | Paid, owed, late; every fee and payment request; read only |
+| **Finance** | `view_financials` | Money | Paid, owed, late; every fee and payment request; read only today. From batch F (section 3.1): each fee's payments and refunds, and payments that need a look at the top; Finance records, cancels, accepts and refunds (`manage_payments`); a Partner writes off (`write_off_fees`) |
 | **Team** | `manage_roles` | Our people | Everyone by level; invite by level; access ends; System status |
 
 **The engagement record** (the drawer in Engagements), top to bottom:
@@ -349,7 +401,7 @@ checks every action again. Under the person's name is their level.
 |---|---|---|
 | The client | Owner, email, WhatsApp, account; **Send sign-in link**; **Preview as client** (read only, logged) | Anyone on it; sign-in link with `manage_client_onboarding` |
 | Stage and team | Stage; people and their role on the engagement (each emailed when added) | Stage: `manage_engagements`; team: `assign_engagements` |
-| Fees | Each fee: amount, date, Paid or Paid online; **Send link**; **Open the room now** while it waits for its first payment (a Partner or the Super Admin; others see who can); terms follow what was bought (R36) | `manage_engagements`; links also `manage_payments`; opening early or moving the first fee past the start date also `approve_work_before_payment`; never a Specialist |
+| Fees | Each fee: amount, date, Paid or Paid online; **Send link**; **Open the room now** while it waits for its first payment (a Partner or the Super Admin; others see who can); terms follow what was bought (R36). From batch F: what is paid and what is left, each payment and refund with its receipt number; money that came another way is recorded by Finance, and the Paid tick goes (section 3.1) | `manage_engagements`; links also `manage_payments`; opening early or moving the first fee past the start date also `approve_work_before_payment`; from batch F, payments `manage_payments` and write-offs `write_off_fees`; never a Specialist |
 | The problem | The one problem and its statement | `manage_engagements` |
 | Sessions | Time, link, agenda; client notes and internal notes; share the client notes | `manage_engagements`; internal notes never to a Specialist |
 | Content (Digital marketing) | Reels, posts, stories by month and status | `manage_engagements` |
@@ -410,8 +462,9 @@ server action.
 | `assign_engagements` | Put people on an engagement and take them off | Partner, Vice President, Senior Associate | `staff.assign`, `removeMember`, `assignableStaff` |
 | `review_engagements` | Approve Deliverables on any engagement in scope; see internal notes and fees | Partner, Vice President, Senior Associate | Approve, internal notes, fees |
 | `contribute_engagements` | Add team-side Work Plan items and draft files, seen by IP Factory only until shared | Specialist | Team items, draft uploads |
-| `manage_payments` | Payment requests, confirming money by hand, sending payment and fee links | Finance | `businessSupport` payment actions, Send link |
+| `manage_payments` | Payment requests, confirming money by hand, sending payment and fee links. From batch F also a fee's payments by hand (in part or in full) and cancelling one, refunds and cancelling one, and accepting a payment that needs a look (section 3.1) | Finance | `businessSupport` payment actions, Send link; from batch F, Finance's payment actions |
 | `approve_work_before_payment` | Work before the first payment: **Open the room now**, or moving the first fee past the start date before anything is paid (ET, 10 November 2026; D4) | Partner (and the Super Admin) | Open the room now, Save the fees |
+| `write_off_fees` | Writing off what is left of a fee, and reversing a write-off (ET, 10 November 2026; to add with batch F) | Partner (and the Super Admin) | From batch F: Write off, Reverse the write-off |
 | `view_financials` | Finance: paid, owed, late; fees on an engagement | Partner, Vice President, Senior Associate, Finance | Finance, fees |
 | `manage_scheduling` | Scheduling settings (the older admin scheduling capability) | Partner, Vice President, Senior Associate | Nothing yet (C18); calls are booked under `manage_client_onboarding` |
 | `manage_communications` | Communication settings (the older admin communications capability) | Partner, Vice President, Senior Associate | Nothing yet (C18) |

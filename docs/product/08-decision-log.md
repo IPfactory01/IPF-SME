@@ -8,6 +8,9 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Writing off a fee is for a Partner or the Super Admin only (a new permission, `write_off_fees`, with batch F) | ET, 10 November 2026 |
+| A fee can be paid in parts by hand as well as online; Paystack then charges only what is left | ET, 10 November 2026 |
+| A payment recorded by hand by mistake is cancelled, never deleted: it stays on the record, marked cancelled, with its receipt number | ET, 10 November 2026 |
 | The About page answers what people search for a firm like ours: "SME management consultants in Lekki, Lagos" (the home page keeps "small business consultant in Lagos"), who is behind it (Enzo Krypton & Co., 250+ clients since 2011), where it is, what it does with a link to each service, and its own questions; "We say so up front" is gone | ET, 10 November 2026 |
 | Only a Partner or the Super Admin may let work start before the first payment: opening a room early, or moving the first fee past the start date before anything is paid (a new permission, `approve_work_before_payment`); "desk lead" is no longer a name staff see, only the bundle Partners, Vice Presidents and Senior Associates share | ET, 10 November 2026 |
 | Digital Marketing is sold on what it brings, not on posts: visibility, engagement, enquiries (leads) and sales (conversion), the path its page tells ("From seen to sold") and each month's review counts | ET, 10 November 2026 |

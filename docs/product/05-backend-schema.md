@@ -121,6 +121,45 @@ and the room says it is not set up. Vocabulary and the who-sees-what rules: `sha
 | `business_member_access` | The owner's staff: `full` or `contributor` | One per membership; no row means full (owners and business admins never have one) | — |
 | `account_invitations` | Invitations that create an account for the owner of a business opened directly (`business_owner`, 0016), for IP Factory staff (with a role, or by level, `jobTitle`, 0015, which gives the level's roles and title) or the owner's staff (with an access level) | Token stored as a hash; single use, expiring, revocable; one pending per email. Staff: `manage_roles` invites, never Super Admin. Seats: the owner of the business in use, within `TEAM_SEATS_INCLUDED` | Email and name |
 
+### The payments ledger (migration 0022, batch F: designed 10 November 2026 for ET's approval; not built)
+
+What it does and who does it is in the App flow (section 3.1). Additive: three new tables and five columns on
+`engagement_fee_lines`; nothing is dropped, so the code from before 0022 keeps working until the new code ships.
+
+| Table | What it holds | Keys and rules | Personal or sensitive data |
+|---|---|---|---|
+| `payments` | One row per attempt to pay and per payment recorded by hand: the fee it pays, or (until F3 and R13) the payment request; how it came (`paystack`, `bank_transfer`, `cash`, `other`); its status (`started`, `paid`, `failed`, `needs_a_look`, `refunded`, `cancelled`); the amount in whole naira (asked, for an attempt; received, once paid); the Paystack reference and mode (`test`, `live`); the day the money arrived and when it was confirmed or recorded; the receipt number; a note (the bank's reference, or why it needs a look); who recorded it (null for Paystack, a system actor); for a cancelled one, when, who and why | Exactly one of the fee and the payment request is set; unique Paystack reference; unique receipt number; a status moves in one conditional statement (`started` to `paid` only where it is still `started`), so the webhook and the return page together record one payment and one receipt; only a payment recorded by hand is cancelled; never deleted; indexed by fee, by payment request and by status | Amounts, references, the team's notes |
+| `payment_refunds` | Money returned against one payment: the amount, the day, the reason, Paystack's or the bank's reference, who recorded it; for one recorded by mistake, when, who and why it was cancelled | The refunds of a payment, less cancelled ones, never add up to more than it; refunded in full, the payment's status becomes `refunded`; never deleted | Reasons, references |
+| `document_counters` | The last receipt number and the last invoice number given (`receipt`, `invoice`) | One row per kind; a number is taken in the same transaction as the payment or fee it numbers, so numbers are unique, in order and without gaps (a save that fails gives its number back) | — |
+
+New on `engagement_fee_lines`: `invoiceNumber` (`TS-IN-000001`, unique, given the first time the fee is billed and
+kept for good) and `writtenOffAmount`, `writtenOffAt`, `writtenOffByUserId` and `writeOffNote` (what was left when a
+Partner or the Super Admin wrote it off, when, who and why; cleared when the write-off is reversed, which the audit log
+records). `paidAt` stays and now means *paid in full*: set when the fee's payments, less refunds, reach its amount, and
+cleared when a refund, a cancellation or a higher amount opens it again. Only the ledger writes it, in the same
+transaction as the payment, holding a lock on the fee so two payments cannot both take what is left. `paidReference`
+is retired from 0022 (kept so older rows read; the payments hold every reference). A fee's state follows from these:
+written off, else paid, else late (dated and past), else due (dated), else set; part paid while something is paid.
+
+**Saving the fees** keeps each fee's id: lines are updated in place, new ones added, and a removed one deleted only if
+it was never billed (no invoice number and no payment). A fee's amount cannot go below what is paid on it.
+
+**The backfill**, in 0022's own SQL: every fee marked paid becomes one paid payment for its amount (`paystack` with its
+reference when it has one; otherwise `other`, noted "Marked paid before the ledger", and who ticked it stays in the
+audit log); every confirmed payment request becomes one paid payment for its amount, with the Paystack reference from
+its note and who confirmed it. Receipt numbers go to these in the order they were paid, invoice numbers to the paid fees
+in the order they were set, and each counter is left at the last number given. Its guarded apply script is
+`drizzle/supabase/apply-0022-*.sql`, as for 0021.
+
+**Audit actions to add:** `fee_payment_recorded`, `fee_payment_cancelled`, `payment_accepted`,
+`payment_refund_recorded`, `payment_refund_cancelled`, `fee_written_off` and `fee_write_off_reversed`, each with the
+fee or payment, the amount and the reason. `engagement_fee_paid` (the Paid tick) is retired and kept so older rows read.
+
+**Who sees it:** as for `engagement_fee_lines`, plus Finance (`view_financials`). Recording, cancelling, accepting and
+refunds need `manage_payments`; write-offs a new permission, `write_off_fees`, for the Partner role (and the Super
+Admin). The owner and full-access staff see each fee's state and what is left, and the receipt number, day and amount
+of each payment and refund; never a cancelled one, a note or who recorded it. Never a Specialist.
+
 ### The audit log: every action it records
 
 Each row of `admin_access_audit_events` names one of these actions (`AUDIT_ACTIONS` in `server/audit.ts`). Details hold
@@ -182,6 +221,9 @@ authority is the union of their roles, any profile the Super Admin set, and the 
 | partner | view_assigned_businesses, review_engagements, view_financials, approve_work_before_payment |
 | subject_matter_expert | view_assigned_businesses, contribute_engagements |
 | finance | manage_payments, view_financials |
+
+With batch F (designed, section 2): `write_off_fees` is added to the partner role, and a fee payment by hand moves from
+`manage_engagements` (the Paid tick) to `manage_payments`.
 
 **Privileged access (migration 0012).** Everyone with an internal role signs in with a password and a six-digit code
 from an authenticator app. A role is given or removed only by someone whose own highest role ranks above it

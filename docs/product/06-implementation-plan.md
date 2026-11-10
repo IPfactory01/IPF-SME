@@ -27,7 +27,8 @@ counting time spent waiting on a decision or a migration.
 | The design review fixes: the room fits a phone, readable health labels, 44 px taps (B1, B4, B10 to B12) | Design brief |
 
 Migrations are applied through **0021**. Release 0 still waits on the timed phone run with ET or Marcelle (B6) and the
-team's WhatsApp numbers (I1); batch C was built on 10 November. The document tests (`test/docs/productDocs.test.ts`) fail the build
+team's WhatsApp numbers (I1); batch C was built on 10 November. In Release 1, batch E is built and live (payment terms
+by what is bought, the pause, Digital Marketing on the menu); batch F is designed and waits on ET's approval. The document tests (`test/docs/productDocs.test.ts`) fail the build
 if a page, a table, a server action, a permission, a project role, an email or an audit action is added without being
 documented.
 
@@ -119,10 +120,11 @@ client told at three (D6). Batch E needs no migration: the terms come from what 
 
 **Needs first:** K5 (counsel adds to the Terms who collects payments, Enzo Krypton & Co., and the pause period).
 
-One migration, **0022**, for batch F (the ledger, refunds and receipt numbers), written on the branch with its guarded
-apply script; ET runs it and replies "0022 done".
+One migration, **0022**, for batch F (`payments`, `payment_refunds`, `document_counters` and five columns on the fees,
+with the backfill in its own SQL; Backend schema, section 2), written on the branch with its guarded apply script; ET
+runs it and replies "0022 done".
 
-### Batch E: payment terms by what is bought (no migration, about 3 days)
+### Batch E: payment terms by what is bought (no migration, about 3 days): built 10 November 2026
 
 | # | Task | Builds | Acceptance and test | Preview or input |
 |---|---|---|---|---|
@@ -134,12 +136,16 @@ apply script; ET runs it and replies "0022 done".
 
 ### Batch F: one payment model (about 4 days)
 
+Designed on 10 November 2026 for ET's approval, before any code: what each action does and who may do it is in the App
+flow (section 3.1), the tables in the Backend schema (section 2). Built in the order F1, F2, F4, then F3, so the ledger,
+refunds and Finance land before the Business Review moves onto fees.
+
 | # | Task | Builds | Acceptance and test | Preview or input |
 |---|---|---|---|---|
-| F1 | **The ledger (`payments`).** One row for each attempt to pay a fee: on Paystack (started, then paid or failed, with its reference and mode) or by hand (a bank transfer or cash: amount, date, a note and who recorded it, which replaces the bare *Paid* tick). A fee is paid when its paid payments add up to its amount, so a fee can be paid in parts by hand. Each paid payment gets the next receipt number (`TS-RC-000001`) and each fee an invoice number, ready for the PDFs of R53 | R37, R53 | PGlite: opening Paystack records the attempt; the webhook and the return page together record one payment and one receipt; two part payments settle a fee; a second Paystack payment for a paid fee *needs a look*; receipt numbers are unique and in order | — |
-| F2 | **Refunds.** After the team refunds in Paystack, the refund is recorded against the payment it returns (amount, date, reason, who); the fee is owed again unless the lead writes it off, which is also recorded | R37, R51 | PGlite: a refund reopens the fee; a write-off closes it; the audit rows; Finance shows both | — |
+| F1 | **The ledger (`payments`).** One row for each attempt to pay a fee: on Paystack (started, then paid, failed or *needs a look*, with its reference and mode; Paystack charges what is left on the fee) or by hand (amount, day, how, a note and who recorded it), which replaces the bare *Paid* tick. Finance or the Super Admin records money by hand, in part or in full (ET, 10 November 2026), cancels a payment recorded by mistake, which stays on the record marked cancelled (ET, 10 November 2026), and accepts a payment that needs a look. A fee is paid when its payments, less refunds, add up to its amount. Each payment received gets the next receipt number (`TS-RC-000001`) and each billed fee an invoice number (`TS-IN-000001`), ready for the PDFs of R53; every payment sends the receipt email. Saving the fees keeps their ids, and a billed fee cannot be removed. The confirmed payment requests (the Full Report, the Business Review) are recorded in the same ledger | R37, R38, R53 | PGlite: opening Paystack records the attempt for what is left; the webhook and the return page together record one payment and one receipt; two part payments settle a fee; a payment by hand over what is left is refused; a cancelled payment is kept and its amount owed again; a second Paystack payment for a paid fee *needs a look*; receipt numbers unique, in order and without gaps; the backfill gives each paid fee and confirmed request one payment; a billed fee cannot be removed; only `manage_payments` records money | — |
+| F2 | **Refunds and write-offs.** After the team refunds in Paystack or by bank, Finance records the refund against the payment it returns (amount, day, reason, reference, who), and can cancel one recorded by mistake; the fee is owed again unless a Partner or the Super Admin writes off what is left, with a note (`write_off_fees`, ET, 10 November 2026), which can be reversed. A written-off fee is never late and never pauses the work | R37, R51 | PGlite: a refund reopens the fee; refunds never exceed their payment; a write-off closes the fee and lifts a pause; only a Partner or the Super Admin writes off; the audit rows; Finance shows both | — |
 | F3 | **The Business Review moves onto the ledger.** Sending its payment details opens its engagement awaiting the first payment, with its fee, so it is paid through the fee pay page like any fee; paying it still moves the check to *Won*, opens the room and invites the owner. The Full Report records each payment in the same ledger until orders arrive (Release 3); payment requests from before stay as history | R37 | PGlite: the check-to-Business-Review route end to end; *Won* on payment; the owner's invitation; an older request still reads correctly | Preview of the changed admin step |
-| F4 | **Finance reads one source:** money in from the ledger, money owed from the fees; every naira paid opens to its fee and its reference | R37 | Finance test: the totals equal the ledger | Preview |
+| F4 | **Finance reads one source:** money in from the ledger (payments less refunds), money owed from the fees (what is left, less write-offs); every naira paid opens to its fee and its reference; payments that need a look are listed first | R37 | Finance test: the totals equal the ledger | Preview |
 
 ### Batch G: when a fee is late, and alerts (about 2 days)
 
@@ -149,8 +155,9 @@ apply script; ET runs it and replies "0022 done".
 | G2 | *Work on {engagement} has resumed*, to the owner and the lead, when a payment lifts a pause | R51 | Email test; the document test checks the email is in the App flow | — |
 | G3 | **Alerts.** A Paystack notification the server could not process (answered 500, so Paystack sends it again) emails the office at once, once per reference; a client email that failed shows at the top of the console's first tab until someone opens it. A daily summary joins the scheduled jobs in Release 2 | R42 | PGlite or unit: the failing webhook emails the office once; console UI test for the failed-email line | — |
 
-**Release 1 in total:** about 10 build days. The order: E1, then E2 to E6 once 0022 is applied and D4 is in, then F,
-then G once D6 is confirmed. Each batch is previewed at phone and laptop width before ET says "push it".
+**Release 1 in total:** about 10 build days. The order: E (built 10 November, with no migration), then F once ET has
+approved its design and applied 0022 (F1, F2, F4, then F3), then G. Each batch is previewed at phone and laptop width
+before ET says "push it".
 
 ## 5. Later releases (outline)
 

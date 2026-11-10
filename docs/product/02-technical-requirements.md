@@ -53,10 +53,14 @@ docs/product/     These six documents
   five connections per function instance (`DATABASE_POOL_MAX` overrides it), each query abandoned after 8 seconds so a
   stuck statement cannot hold the instance; migrations use `MIGRATION_DATABASE_URL` (session pooler, port 5432).
   `DATABASE_SSL_CA` pins the certificate.
-- Schema in `drizzle/schema.ts` (38 tables, 55 enums); explained in [5. Backend schema](05-backend-schema.md).
+- Schema in `drizzle/schema.ts` (60 tables and 77 enums on 10 November 2026); explained in [5. Backend schema](05-backend-schema.md).
 - Changes: edit the schema → `pnpm db:generate` → review the SQL → apply. Migrations 0006 and 0007 were applied with a
   guarded SQL script that records the Drizzle hash, so `drizzle.__drizzle_migrations` stays in step
-  (`docs/database-migrations.md`). `pnpm db:verify` checks a database against the schema, read-only.
+  (`docs/database-migrations.md`). Every migration from 0012 has its own guarded script,
+  `drizzle/supabase/apply-00NN-*.sql`, which `test/db/applyScripts.db.test.ts` checks against the migration (every
+  statement, the hash and the guard); ET runs it and replies "00NN done". A backfill goes in the migration's own SQL, so
+  the script and `pnpm db:migrate` give the same database. Applied through 0021. `pnpm db:verify` checks a database
+  against the schema, read-only.
 - Never edit the database by hand. Migrations, major authentication changes and destructive changes go on a dedicated
   branch.
 
@@ -90,6 +94,28 @@ example, exists only in Resend (shown once at creation) and in Vercel.
 | **File storage** | JUMP uploads only today | Manus "Forge" presigned S3 (`server/storage.ts`), served through `/manus-storage/*` | To be replaced by a private Supabase Storage bucket (implementation plan 1.1) |
 | **Paystack** | Paying online for the Full Report, the Business Review and each engagement fee (R11, `server/feePayments.ts`, references `TS-F-`; concept note §11) | Hosted checkout by redirect, so no Paystack script runs on the site and the security policy does not change (`server/paystack.ts`, `server/onlinePayment.ts`). `POST /transaction/initialize` with the amount in kobo from the payment request, `currency: "NGN"`, a reference per attempt (`TS-R-000123-` plus eight hex characters, because Paystack refuses a reference twice), `callback_url` `{APP_ORIGIN}/pay/return` and metadata (payment request, check, item). `GET /transaction/verify/:reference` before anything is confirmed. Bearer secret key; 10-second limit per call. The signed webhook `POST /api/paystack/webhook` (HMAC-SHA512 of the raw body with the secret key, compared in constant time) and the return page both confirm through `confirmPayment`, once. Paystack is the only way to pay (12 October): no bank details and no proof of payment; "Confirm by hand" stays as a fallback for a payment Paystack shows as paid that has not confirmed itself | Built. Takes payments once `PAYSTACK_SECRET_KEY` is in Vercel and the webhook address is set in Paystack. JUMP-era `initializePaystack` and `verifyPaystack` (`server/routers/registration.ts`) are separate and stay closed |
 | **Google (OAuth, Calendar, Gmail)** | JUMP-era sign-in, sessions and mailbox sync | `server/_core/oauth.ts`, `server/calendar.ts`, `server/workspaceMailbox.ts` | Legacy |
+
+### The payments ledger (batch F; designed 10 November 2026 for ET's approval, to build)
+
+What it does is in the App flow (section 3.1) and the tables are in the Backend schema (section 2, migration 0022).
+How it is built:
+
+- **One module owns money,** `server/payments.ts`. Every write to `payments`, `payment_refunds`, `document_counters` and
+  a fee's paid and write-off columns goes through it, in one transaction that first locks the fee's row
+  (`SELECT … FOR UPDATE`), so two payments cannot both take what is left. The lock lives inside the transaction, so it
+  works through the transaction pooler.
+- **Amounts** are whole naira in integers. Paystack is asked for what is left on the fee, from the database, times 100
+  kobo; never an amount from the browser. A confirmation must match the attempt's own amount and still fit the fee.
+- **Once only.** A Paystack reference is unique. The webhook and the return page call the same settle, which moves an
+  attempt from `started` to `paid` only where it is still `started`; the receipt email's idempotency key names the
+  payment, so it is sent once. A confirmation for a reference with no row (an attempt opened before 0022) creates it.
+- **Numbers without gaps.** A receipt or invoice number is taken by updating `document_counters` in the same transaction
+  as what it numbers, so a save that fails gives its number back.
+- **Nothing is deleted.** Cancelling a payment or a refund, and reversing a write-off, are updates that keep who, when
+  and why, each with its audit row.
+- **Tests** (PGlite, `test/db/`): every rule in App flow 3.1, including two part payments that settle a fee, the webhook
+  and the return page arriving together, a payment by hand while a checkout is open, refunds that would exceed their
+  payment, a failed save that leaves no gap, and the backfill of today's paid fees and payment requests.
 
 ## 7. Authentication and sessions
 
@@ -134,7 +160,7 @@ example, exists only in Resend (shown once at creation) and in Vercel.
 | Authorisation on the server for every protected procedure | Guards in `server/_core/trpc.ts`: `accountProcedure`, `adminProcedure`, `adminPermissionProcedure("<permission>")`; business checks in `requireBusinessMembership` and `requireBusinessCapability` |
 | Client isolation | A business id from the browser is never trusted; the same refusal for unknown and forbidden businesses |
 | Cross-site request protection | Every `/api` write must come from a trusted origin (`requireTrustedBrowserOrigin`); account actions also call `assertSameOrigin`. Exempt: `/api/scheduled/*` (bearer secret) and exactly `/api/paystack/webhook` (`ORIGIN_GUARD_EXEMPT_PATHS`), which has no browser Origin and is checked by its signature instead; it is registered before the JSON parser so it reads the raw body |
-| Payments from the browser | The browser never names an amount: Paystack is asked for `amountNaira × 100` from the payment request. A payment is confirmed only after the server verifies the transaction with Paystack and its reference starts with the request's own plus "-", its status is success, its currency NGN and its amount the request's exactly; anything else changes nothing and is logged. The pay page is keyed by the Business Check's unguessable token, never the sequential payment reference. The owner may start only the Full Report themselves, for a finished check (the summary email links to it); the Current State Assessment needs details the team sent; the return page learns only paid, pending or failed, and "paid" only for the attempt that paid: request references are sequential, so an invented attempt reference answers exactly as one for an unpaid request, or for no request at all |
+| Payments from the browser | The browser never names an amount: Paystack is asked for `amountNaira × 100` from the payment request (for an engagement fee, from the fee, keyed by its HMAC pay link, R11; from batch F, what is left on it). A payment is confirmed only after the server verifies the transaction with Paystack and its reference starts with the request's own plus "-", its status is success, its currency NGN and its amount the request's exactly; anything else changes nothing and is logged. The pay page is keyed by the Business Check's unguessable token, never the sequential payment reference. The owner may start only the Full Report themselves, for a finished check (the summary email links to it); the Current State Assessment needs details the team sent; the return page learns only paid, pending or failed, and "paid" only for the attempt that paid: request references are sequential, so an invented attempt reference answers exactly as one for an unpaid request, or for no request at all |
 | Rate limits | Counters shared by every function instance through `rate_limit_counters` (`server/rateLimit.ts`, migration 0010; this instance's memory stands in until it is applied), keyed by a hash of the address, email or link. Sign-in 5 per 15 minutes per IP and email, with the per-account lockout; onboarding and staff-invitation preview 60 and accept 10 per 15 minutes per IP; Business Check start 20 per IP and 5 per IP and email per 15 minutes, save 300 per check per 15 minutes, submit 3 per check per hour, Discovery Call or report request 5 per check per day; Report Intake 30 per link per hour, download 5 per link per day; legacy reset confirmation and invitation status 30 per IP per hour; pay page 60 and online payment start 10 per Business Check per hour, return-page status 20 per Paystack reference and 60 per IP per hour |
 | Tokens | Random 32 bytes (24 for the business check token), stored as SHA-256 (exception: the business check token is stored as is, see schema §6) |
 | Audit | `recordAudit` for staff sign-in, roles, payments, reports and onboarding; details never contain secrets. System actors (Paystack) are recorded with a null actor and `via` in the details |

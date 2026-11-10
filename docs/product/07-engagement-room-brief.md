@@ -3,6 +3,10 @@
 *Agreed with ET on 10 October 2026; the mock was approved the same day ("it feels a bit better, we iterate as we go") and
 the room was rebuilt to it (`client/src/components/EngagementRoom.tsx`, design brief §9). Iterate from here.*
 
+*Updated 10 November 2026. The room is in its third version (Design brief 12.5), with a Content view for Digital
+Marketing. Sections 2, 4, 6 and 8 add what the room says about money: the pause (built, E5) and, from batch F (designed,
+App flow 3.1), part payments, receipts and refunds.*
+
 ## 1. Objective
 
 In one glance on a phone, the owner sees **where their business stands, what we are doing about it this week, and the
@@ -23,6 +27,7 @@ The owner, and the one person they bring in, on a phone, between calls. They mee
 | Findings day | What did you find? What is the one problem? | The one problem in their words, the findings, the sign-off, when the fix starts |
 | The fix, weekly | Is it working? What do I do this week? | The number, this week's reading, this week's action, the next check-in |
 | Day 30 | Did it hold? What now? | The number then and now, what is still in use, what support looks like |
+| A fee falls due, or is late | What do I owe, and by when? Has the work stopped? | The fee, its amount and date, and **Pay**; from the day after its date, that it is late and the day work pauses; seven days after it, that work is paused and what to pay to continue |
 
 ## 3. The chain the room sits on
 
@@ -50,6 +55,8 @@ guide already requires, kept as a record. Without it the room cannot answer "whe
 
 In this order, one column, phone first:
 
+- **A late fee, above everything** (built 10 November 2026, E5): *A payment is late*, then *Work on your {title} is
+  paused*, with what to pay and **Pay** (section 8). It shows on every view, and the room under it stays readable.
 - **Now.** One headline: the stage and where in it ("Current State Assessment, week 1 of 2"), a progress line ("Day 4 of
   14"), one sentence on what this week is for.
 - **Your one thing.** The single next action for the owner, with its date and its button (upload, confirm, book, sign
@@ -80,6 +87,8 @@ For the implementation plan, once the mock is approved:
 | The check and the report in the room | Linked by id, not shown | The room reads the main finding, readiness and the report link |
 | "Now" | The stage only | Day X of 14 and week X of 6 from the stage dates |
 | Day 30 | Planned (migration 0009) | As planned |
+| The pause for a late fee | **Built 10 November (E5):** worked out from the fees' dates on every load, nothing stored; paying or a new date lifts it | Done |
+| Part payments, receipts and refunds | One paid or unpaid mark on each fee | **Designed 10 November (batch F, App flow 3.1):** a payments ledger, migration 0022 |
 
 ## 7. How we know it works
 
@@ -87,3 +96,19 @@ For the implementation plan, once the mock is approved:
 - Requests arrive on time; chasing on WhatsApp falls.
 - On calls, the owner can state the one problem and the one number without help.
 - No "where is that document" messages.
+
+## 8. Money in the room
+
+The owner meets money at three moments, and the room answers each where they already are:
+
+1. **Before the first payment.** An engagement paid in advance shows only the payment gate: *Your room opens once the
+   first payment is made*, the fee and **Pay**.
+2. **A fee is due.** The Payments view lists each fee with its amount, its date and **Pay**. A second half has no date until the
+   main output is shared; then it is due seven days later and the owner is emailed its link.
+3. **A fee is late.** From the day after its date a banner above every view says so and names the day work pauses; seven days after it,
+   that work is paused and what to pay to continue. The room stays readable and uploads stay open, so nothing the owner
+   has sent is lost. Paying lifts it at once.
+
+From batch F (designed, App flow 3.1): a fee paid in part shows *₦150,000 of ₦300,000 paid* and **Pay** asks only for
+what is left; each payment shows its receipt number and day, and each refund its amount and day; a fee a Partner has
+closed shows *Nothing more to pay*. The team's words (write-off, needs a look, cancelled) never reach the room.

@@ -22,17 +22,17 @@ export const WAY_DETAILS: Record<WayToBuy, { name: string; summary: string; char
   assessment: {
     name: "Assessment",
     summary: "Find out what needs fixing first: the free Business Health Check, the two-week Business Review, and short readiness assessments.",
-    charge: "Free, or paid before we start.",
+    charge: "Free, or paid before we start. The Business Review is half to start and half when you receive your Findings.",
   },
   done_for_you: {
     name: "Done for You",
     summary: "We deliver a finished piece of work, such as accounts, a forecast or a plan, from your records and answers. AI-assisted, checked by a consultant, in days.",
-    charge: "A fixed price, paid before we start.",
+    charge: "A fixed price. Bought online, it is paid before we start; agreed on a call, half to start and half on delivery.",
   },
   six_week_fix: {
     name: "Six-Week Fix",
     summary: "Six weeks on one problem with a weekly review. We prescribe and equip; your team does the work; we track one number.",
-    charge: "Half at the start, a quarter at the mid-point and a quarter at the result. Or pay in full and save 5%.",
+    charge: "Half at the start and half at the result. Or pay in full at the start and save 5%.",
   },
   monthly_service: {
     name: "Monthly Service",
@@ -57,8 +57,9 @@ export const NEED_DETAILS: Record<Need, { name: string; ownerWords: string }> = 
 
 /**
  * How a product is charged. Amounts are whole naira. `fixed` is one payment; `per_month` is a price for each month of
- * records with a minimum; `milestones` splits the price into stages (the Six-Week Fix: 50, 25, 25) with an optional
- * pay-in-full discount; `quarterly` is a monthly price paid three months at a time.
+ * records with a minimum; `milestones` splits the price into stages (the Six-Week Fix: half at the start, half at the
+ * result, since 10 November 2026) with an optional pay-in-full discount; `quarterly` is a monthly price paid three months
+ * at a time.
  */
 export type PriceModel =
   | { kind: "free" }
@@ -399,7 +400,7 @@ export const PRODUCTS: readonly Product[] = [
     short: "Six weeks on one problem: we prescribe and equip, your team does the work, and we review it with you every week.",
     forWhom: "Owners who know the problem and want it fixed, with someone checking every week.",
     youGet: ["The Prescription: what to do, the tools and who owns each step", "A Weekly Check-in for six weeks", "One Measure of Success, tracked every week", "A Day-30 Review after the six weeks"],
-    price: { kind: "milestones", total: 1_500_000, stages: [{ name: "At the start", percent: 50 }, { name: "At the mid-point", percent: 25 }, { name: "At the result", percent: 25 }], payInFullDiscountPercent: 5 },
+    price: { kind: "milestones", total: 1_500_000, stages: [{ name: "At the start", percent: 50 }, { name: "At the result", percent: 50 }], payInFullDiscountPercent: 5 },
     fallbackPrice: 1_200_000,
     delivery: "Six weeks from your first Session.",
     buy: "after_call",
@@ -477,6 +478,32 @@ export function priceLabel(price: PriceModel): string {
     // Paid a quarter at a time, so the quarter is the price; the month is shown beside it.
     case "quarterly": return `${formatNaira(quarterAmount(price))} a quarter`;
   }
+}
+
+/**
+ * A service agreed on a call (ET, 10 November 2026, R36): one-off work sold after the free call, paid half to start and
+ * half on delivery. A Monthly Service is billed by the quarter instead, and anything bought online is paid before we start.
+ */
+export const isService = (product: Pick<Product, "buy" | "price">) => product.buy === "after_call" && (product.price.kind === "fixed" || product.price.kind === "milestones");
+
+/** The first half of a price in whole naira (rounded up); the second half is the rest, so the two add up to the price. */
+export const firstHalf = (total: number) => Math.ceil(total / 2);
+
+/**
+ * What is left after a first half of `paid`, against the whole price today; 0 when `paid` was the whole price. The amount
+ * paid is the authority, so the second half is never more than the first: a token test price restored before the
+ * payment confirmed, or a price rise in between, cannot inflate it.
+ */
+export const secondHalf = (paid: number, wholePrice: number) => (paid < wholePrice ? Math.min(paid, wholePrice - paid) : 0);
+
+/** How a product is paid, in a line: a service's two halves, or the price's own terms. */
+export function paymentTerms(product: Pick<Product, "buy" | "price">): string {
+  const price = product.price;
+  if (isService(product) && price.kind === "fixed") {
+    const first = firstHalf(price.amount);
+    return `${formatNaira(first)} to start and ${formatNaira(price.amount - first)} on delivery, by transfer or card.`;
+  }
+  return priceTerms(price);
 }
 
 /** The line under the price: how it is paid. */

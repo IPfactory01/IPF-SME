@@ -224,7 +224,7 @@ for (const target of targets) {
         // The reference is shown before Pay (R72), as on the payment email.
         const reference = (await paymentOf(id, "full_report"))!.reference;
         expect(reference).toMatch(/^TS-R-\d{6}$/);
-        expect(await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).toEqual({ item: "full_report", name: "Full Report", amountNaira: 100_000, reference, mode: "test", state: "open" });
+        expect(await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).toEqual({ item: "full_report", name: "Full Report", amountNaira: 100_000, totalNaira: null, reference, mode: "test", state: "open" });
         await db.update(schema.paymentRequests).set({ status: "proof_received" }).where(eq(schema.paymentRequests.id, (await paymentOf(id, "full_report")).id));
         // An old record that noted proof of a bank transfer can still be paid online.
         expect((await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).state).toBe("open");
@@ -265,7 +265,7 @@ for (const target of targets) {
         const { token, email, id } = await finishedCheck("self-serve");
         expect(await paymentOf(id, "full_report")).toBeUndefined();
         // Nothing asked for yet, so no reference yet: the page leaves that line out (R72).
-        expect(await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).toEqual({ item: "full_report", name: "Full Report", amountNaira: 100_000, reference: null, mode: "test", state: "open" });
+        expect(await (await browser().call()).onlinePayment.page({ token, item: "full_report" })).toEqual({ item: "full_report", name: "Full Report", amountNaira: 100_000, totalNaira: null, reference: null, mode: "test", state: "open" });
         mocked.deliverEmail.mockClear();
 
         const reference = await start(token, "full_report");
@@ -422,7 +422,8 @@ for (const target of targets) {
         ENV.paystackSecretKey = LIVE_KEY;
         const { token, email, id } = await assessmentAskedFor("return-assessment");
         const reference = await start(token, "current_state");
-        expect(paystack.initialized[0].amount).toBe(60_000_000);
+        // The first half of ₦600,000, in kobo (R36).
+        expect(paystack.initialized[0].amount).toBe(30_000_000);
         pay(reference);
         mocked.deliverEmail.mockClear();
 

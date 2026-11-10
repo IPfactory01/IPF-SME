@@ -252,7 +252,9 @@ for (const target of targets) {
         expect((await rowFor(token)).pipelineStage).toBe("opportunity");
         const details = emails().find(sent => sent.to === email)!;
         expect(details.subject).toBe("Payment details for your Business Review");
-        expect(details.body).toContain("Amount: ₦600,000");
+        // A service agreed on a call is paid in halves (R36): the details ask for the first.
+        expect(details.body).toContain("Amount: ₦300,000, the first half of ₦600,000");
+        expect(details.body).toContain("The second half, ₦300,000, is due seven days after we share your Findings.");
 
         await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
         const rows = await paymentsOf(id);
@@ -281,7 +283,7 @@ for (const target of targets) {
         const confirmation = emails().find(sent => sent.subject === "Payment received: your Business Review is booked")!;
         expect(confirmation.body).toContain("We take three working days to get set up; the review starts at your first Session.");
         const audit = (await auditsFor("payment_confirmed", id)).map((event: { details: string }) => JSON.parse(event.details));
-        expect(audit).toEqual([expect.objectContaining({ item: "current_state", amountNaira: 600_000, from: "opportunity", to: "won" })]);
+        expect(audit).toEqual([expect.objectContaining({ item: "current_state", amountNaira: 300_000, from: "opportunity", to: "won" })]);
       });
 
       it("holds the link for 48 hours; after that the team sees it and can send a fresh link, and a late payment can still be confirmed by hand", async () => {

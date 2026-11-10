@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { businessChecks, paymentRequests, type BusinessCheck, type PaymentRequest } from "../drizzle/schema";
 import { BRAND } from "../shared/brand";
 import { formatNaira } from "../shared/businessSupport";
+import { secondHalf } from "../shared/products";
 import {
   effectivePaymentStatus, PAY_RETURN_PATH, PAYMENT_ITEM_DETAILS, PAYMENT_ITEM_TITLES, PAYMENT_ITEMS,
   type OnlinePaymentMode, type OnlinePaymentStatus, type PaymentDisplayStatus, type PaymentItem, type PayPageState,
@@ -13,7 +14,7 @@ import { recordAudit } from "./audit";
 import { getDb } from "./db";
 import { BUSINESS_SUPPORT_MAILBOX, deliverEmail } from "./email";
 import { lagosTime } from "./lagosTime";
-import { assertAmountAllowed, getBusinessSupportPrice } from "./businessSupportPrices";
+import { assertAmountAllowed, displayedPrices, getBusinessSupportPrice } from "./businessSupportPrices";
 import { askForFullReport } from "./fullReportRequest";
 import { confirmPayment, requestPayment, type OnlineConfirmation } from "./payments";
 import { initializeTransaction, isValidPaystackSignature, onlineReference, paymentReferenceOf, paystackMode, verifyTransaction, type VerifiedTransaction } from "./paystack";
@@ -61,6 +62,12 @@ const requestByReference = async (db: Pick<Database, "select">, reference: strin
 // An old record with proof of a bank transfer (from before Paystack only) can still be paid online.
 const PAGE_STATE = { requested: "open", expired: "expired", proof_received: "open", confirmed: "paid" } as const satisfies Record<PaymentDisplayStatus, PayPageState>;
 
+/** The Business Review's whole price, when its request is the first half; null for an older request paid in full. */
+function wholePrice(request: Pick<PaymentRequest, "amountNaira">) {
+  const rest = secondHalf(request.amountNaira, displayedPrices().currentState);
+  return rest > 0 ? request.amountNaira + rest : null;
+}
+
 /**
  * What the pay page needs, and nothing else: the item, its amount, its reference once asked for, whether online payment
  * is on, and where it stands. Nobody is named to ask before paying: the page offers the office (R72).
@@ -70,13 +77,15 @@ export async function onlinePaymentPage(db: Pick<Database, "select">, input: { t
   if (!request) {
     // Not asked for yet: the Full Report at today's price, filed when the owner presses pay.
     if (!ownerMayStart(check, input.item)) throw notFound();
-    return { item: input.item, name: PAYMENT_ITEM_TITLES[input.item], amountNaira: getBusinessSupportPrice(input.item), reference: null, mode: paystackMode(), state: "open" as PayPageState };
+    return { item: input.item, name: PAYMENT_ITEM_TITLES[input.item], amountNaira: getBusinessSupportPrice(input.item), totalNaira: null, reference: null, mode: paystackMode(), state: "open" as PayPageState };
   }
   const display = effectivePaymentStatus(request);
   return {
     item: request.item,
     name: PAYMENT_ITEM_TITLES[request.item],
     amountNaira: request.amountNaira,
+    // The Business Review is paid in halves (R36): the page names the whole price beside its first half.
+    totalNaira: request.item === "current_state" ? wholePrice(request) : null,
     reference: request.reference,
     mode: paystackMode(),
     // An owner's own Full Report link never dead-ends: pressing pay starts a new 48 hours.

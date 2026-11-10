@@ -68,7 +68,7 @@ var DELIVERY_REMEDY = "If we cannot deliver the service as agreed, contact us an
 var buildJourney = (prices = PRICES) => [
   { id: "check", name: "Free Business Health Check", body: "Ten minutes on your phone. A first read on where your business is stuck, in your own words." },
   { id: "first-step", name: "Your first step", body: `The check names the product that fits first, and the one after it. Want the detail behind it? The Full Report, ${formatNaira(prices.fullReport)}, by email.` },
-  { id: "pay", name: "Pay by link", body: `The price and the delivery time are on the page. You pay by transfer or card before we start. For a Business Review (${formatNaira(prices.currentState)}) or a Six-Week Fix, we talk first on a free 20-minute Discovery Call.` },
+  { id: "pay", name: "Pay by link", body: `The price and the delivery time are on the page. You pay by transfer or card: before we start for what you buy online, or half to start and half on delivery for work we agree on a call. For a Business Review (${formatNaira(prices.currentState)}) or a Six-Week Fix, we talk first on a free 20-minute Discovery Call.` },
   { id: "records", name: "Send your records", body: "Your statements and answers, through a secure form. We check they are complete and confirm your delivery date within one working day." },
   { id: "deliver", name: "We deliver", body: `Finished work, checked by a consultant who did not prepare it, with a 30-minute handover call. ${DELIVERY_REMEDY}` },
   { id: "next", name: "What comes next", body: "Thirty days on, we check in. If it helps, we suggest the next step, or a Monthly Service that keeps it going." }
@@ -355,7 +355,7 @@ var PRODUCTS = [
     short: "Six weeks on one problem: we prescribe and equip, your team does the work, and we review it with you every week.",
     forWhom: "Owners who know the problem and want it fixed, with someone checking every week.",
     youGet: ["The Prescription: what to do, the tools and who owns each step", "A Weekly Check-in for six weeks", "One Measure of Success, tracked every week", "A Day-30 Review after the six weeks"],
-    price: { kind: "milestones", total: 15e5, stages: [{ name: "At the start", percent: 50 }, { name: "At the mid-point", percent: 25 }, { name: "At the result", percent: 25 }], payInFullDiscountPercent: 5 },
+    price: { kind: "milestones", total: 15e5, stages: [{ name: "At the start", percent: 50 }, { name: "At the result", percent: 50 }], payInFullDiscountPercent: 5 },
     fallbackPrice: 12e5,
     delivery: "Six weeks from your first Session.",
     buy: "after_call",
@@ -419,6 +419,9 @@ function priceLabel(price) {
       return `${formatNaira(quarterAmount(price))} a quarter`;
   }
 }
+var isService = (product2) => product2.buy === "after_call" && (product2.price.kind === "fixed" || product2.price.kind === "milestones");
+var firstHalf = (total) => Math.ceil(total / 2);
+var secondHalf = (paid, wholePrice2) => paid < wholePrice2 ? Math.min(paid, wholePrice2 - paid) : 0;
 var stageAmount = (price, percent) => Math.round(price.total * percent / 100);
 var quarterAmount = (price) => price.perMonth * 3;
 var perMonthAmount = (price, months) => price.perMonth * months;
@@ -532,33 +535,51 @@ function serviceStarter(product2) {
 // shared/agreement.ts
 var AGREEMENT_STATUSES = ["draft", "sent", "accepted"];
 var AGREEMENT_LIMITS = { label: 200, feeLines: 24, amount: 1e8 };
-function feeLinesFor(product2) {
+var addDays = (day, days) => {
+  const date2 = /* @__PURE__ */ new Date(`${day}T12:00:00Z`);
+  date2.setUTCDate(date2.getUTCDate() + days);
+  return date2.toISOString().slice(0, 10);
+};
+function feeLinesFor(product2, startsOn = null) {
   const price = product2.price;
   switch (price.kind) {
     case "free":
       return [];
-    case "fixed":
-      return [{ label: `${product2.name}, payable before work begins`, amount: price.amount, dueOn: null }];
+    case "fixed": {
+      if (!isService(product2)) return [{ label: `${product2.name}, payable before work begins`, amount: price.amount, dueOn: startsOn }];
+      const first = firstHalf(price.amount);
+      return [
+        { label: `${product2.name}: half to start`, amount: first, dueOn: startsOn },
+        { label: `${product2.name}: half on delivery`, amount: price.amount - first, dueOn: null }
+      ];
+    }
     case "milestones":
-      return price.stages.map((stage) => ({ label: `${product2.name}: ${stage.name.toLowerCase()} (${stage.percent}%)`, amount: stageAmount(price, stage.percent), dueOn: null }));
+      return price.stages.map((stage, index2) => ({ label: `${product2.name}: ${stage.name.toLowerCase()} (${stage.percent}%)`, amount: stageAmount(price, stage.percent), dueOn: index2 === 0 ? startsOn : null }));
     case "per_month":
-      return [{ label: `${product2.name}: ${price.minMonths} months of records`, amount: perMonthAmount(price, price.minMonths), dueOn: null }];
+      return [{ label: `${product2.name}: ${price.minMonths} months of records`, amount: perMonthAmount(price, price.minMonths), dueOn: startsOn }];
     case "quarterly":
-      return [{ label: `${product2.name}: first quarter, payable before it starts`, amount: quarterAmount(price), dueOn: null }];
+      return [{ label: `${product2.name}: first quarter, payable before it starts`, amount: quarterAmount(price), dueOn: startsOn }];
   }
 }
-function defaultFees(type, service) {
+function defaultFees(type, service, startsOn = null) {
   const product2 = PRODUCTS.find((item2) => item2.id === (service ?? (type === "business_review" ? "business_review" : type === "six_week_fix" ? "six_week_fix" : "")));
-  if (product2) return feeLinesFor(product2);
+  if (product2) return feeLinesFor(product2, startsOn);
   if (type === "digital_marketing") {
     const fee = DIGITAL_MARKETING.monthlyFee ?? 0;
+    const on = (days) => startsOn ? addDays(startsOn, days) : null;
     return [
-      { label: "Month 1 service fee, payable on starting", amount: fee, dueOn: null },
-      { label: "Month 2 service fee, payable before day 31", amount: fee, dueOn: null },
-      { label: "Month 3 service fee, payable before day 61", amount: fee, dueOn: null }
+      { label: "Month 1 service fee, payable on starting", amount: fee, dueOn: on(0) },
+      { label: "Month 2 service fee, payable before day 31", amount: fee, dueOn: on(30) },
+      { label: "Month 3 service fee, payable before day 61", amount: fee, dueOn: on(60) }
     ];
   }
   return [];
+}
+var BALANCE_DUE_DAYS = 7;
+function isDelivery(type, kind) {
+  if (type === "business_review" || type === "assessment") return kind === "findings";
+  if (type === "six_week_fix") return kind === "plan";
+  return type === "done_for_you";
 }
 var feeTotal = (lines) => lines.reduce((sum, line) => sum + line.amount, 0);
 
@@ -6629,17 +6650,23 @@ async function lookup(db, token3, item2) {
 var ownerMayStart = (check, item2) => item2 === "full_report" && Boolean(check.completedAt);
 var requestByReference = async (db, reference2) => (await db.select().from(paymentRequests).where(eq10(paymentRequests.reference, reference2)).limit(1))[0];
 var PAGE_STATE = { requested: "open", expired: "expired", proof_received: "open", confirmed: "paid" };
+function wholePrice(request) {
+  const rest = secondHalf(request.amountNaira, displayedPrices().currentState);
+  return rest > 0 ? request.amountNaira + rest : null;
+}
 async function onlinePaymentPage(db, input) {
   const { check, request } = await lookup(db, input.token, input.item);
   if (!request) {
     if (!ownerMayStart(check, input.item)) throw notFound();
-    return { item: input.item, name: PAYMENT_ITEM_TITLES[input.item], amountNaira: getBusinessSupportPrice(input.item), reference: null, mode: paystackMode(), state: "open" };
+    return { item: input.item, name: PAYMENT_ITEM_TITLES[input.item], amountNaira: getBusinessSupportPrice(input.item), totalNaira: null, reference: null, mode: paystackMode(), state: "open" };
   }
   const display = effectivePaymentStatus(request);
   return {
     item: request.item,
     name: PAYMENT_ITEM_TITLES[request.item],
     amountNaira: request.amountNaira,
+    // The Business Review is paid in halves (R36): the page names the whole price beside its first half.
+    totalNaira: request.item === "current_state" ? wholePrice(request) : null,
     reference: request.reference,
     mode: paystackMode(),
     // An owner's own Full Report link never dead-ends: pressing pay starts a new 48 hours.
@@ -7052,7 +7079,46 @@ async function sendFeeLink(db, input) {
 async function clientFees(db, engagementId) {
   const lines = await db.select().from(engagementFeeLines).where(eq12(engagementFeeLines.engagementId, engagementId)).orderBy(asc2(engagementFeeLines.sortOrder), asc2(engagementFeeLines.id));
   const online = paystackMode() !== "off" && Boolean(ENV.cookieSecret);
-  return lines.map((line) => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn, paid: line.paidAt !== null, reference: feeReference(line.id), payPath: !line.paidAt && online ? feePayPath(line.id) : null }));
+  const started = (await db.select({ paymentRequestId: engagements.paymentRequestId }).from(engagements).where(eq12(engagements.id, engagementId)).limit(1))[0];
+  const request = started?.paymentRequestId ? (await db.select().from(paymentRequests).where(eq12(paymentRequests.id, started.paymentRequestId)).limit(1))[0] : void 0;
+  const firstHalfPaid = request && request.item === "current_state" && request.status === "confirmed" && lines.some((line) => line.label === `${CURRENT_STATE.name}: half on delivery`) ? [{ id: -request.id, label: `${CURRENT_STATE.name}: half to start`, amount: request.amountNaira, dueOn: null, paid: true, reference: request.reference, payPath: null }] : [];
+  return [...firstHalfPaid, ...lines.map((line) => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn, paid: line.paidAt !== null, reference: feeReference(line.id), payPath: !line.paidAt && online ? feePayPath(line.id) : null }))];
+}
+async function dateBalancesOnDelivery(db, input) {
+  const today = input.today ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(/* @__PURE__ */ new Date());
+  const dueOn = addDays(today, BALANCE_DUE_DAYS);
+  const dated = await db.update(engagementFeeLines).set({ dueOn }).where(and7(eq12(engagementFeeLines.engagementId, input.engagementId), isNull6(engagementFeeLines.paidAt), isNull6(engagementFeeLines.dueOn))).returning({ id: engagementFeeLines.id, label: engagementFeeLines.label, amount: engagementFeeLines.amount });
+  if (!dated.length) return 0;
+  await recordAudit(db, { action: "engagement_fees_dated_on_delivery", actorUserId: input.actorUserId, details: { engagementId: input.engagementId, dueOn, feeLineIds: dated.map((fee) => fee.id), total: dated.reduce((sum, fee) => sum + fee.amount, 0) } });
+  const found = await feeContext(db, dated[0].id);
+  if (!found?.payer) return dated.length;
+  const { payer, title } = found;
+  const online = paystackMode() !== "off" && Boolean(ENV.cookieSecret);
+  const test = paystackMode() === "test";
+  for (const fee of dated) {
+    await deliverEmail({
+      to: payer.email,
+      sender: "business_support",
+      idempotencyKey: `engagement_fee_lines:${fee.id}:due-on-delivery`,
+      subject: `${test ? "TEST: " : ""}${fee.label}: ${formatNaira(fee.amount)} due by ${dayLabel(dueOn)}`,
+      body: [
+        ...test ? ["TEST MODE - NO REAL MONEY MOVES", ""] : [],
+        `Hello ${payer.name.split(" ")[0] ?? ""},`,
+        "",
+        `We have shared your ${input.deliverable} for your ${title} in your room.`,
+        `The second half, ${formatNaira(fee.amount)}, is due by ${dayLabel(dueOn)}.`,
+        "",
+        online ? `Pay online: ${feePayUrl(fee.id)}` : "Reply to this email and we will send you a link to pay.",
+        "",
+        "Paystack takes card, bank transfer or USSD. Any questions, reply to this email.",
+        "",
+        `Reference: ${feeReference(fee.id)}`,
+        "",
+        BRAND.organisationName
+      ].join("\n")
+    }).catch((error) => console.error("[Fees] The second half's link could not be sent:", error instanceof Error ? error.message : "unknown error"));
+  }
+  return dated.length;
 }
 
 // server/agreements.ts
@@ -7070,7 +7136,7 @@ async function staffFees(db, actor, engagementId) {
   return {
     feeLines: feeLines.map((line) => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn, paidAt: line.paidAt, paidOnline: line.paidReference !== null, reference: feeReference(line.id) })),
     total: feeTotal(feeLines),
-    suggested: feeLines.length ? null : defaultFees(engagement.type, engagement.service),
+    suggested: feeLines.length ? null : defaultFees(engagement.type, engagement.service, engagement.startedOn ?? null),
     /** Waiting for its first payment: the client sees only the fee to pay until one is paid. */
     opensOnPayment: engagement.opensOnPayment,
     online: paystackMode() !== "off",
@@ -9721,9 +9787,16 @@ function addWorkingDays(from, days) {
   }
   return date2.toISOString().slice(0, 10);
 }
+async function businessReviewBalance(db, paymentRequestId) {
+  if (paymentRequestId === null) return 0;
+  const request = (await db.select({ item: paymentRequests.item, amountNaira: paymentRequests.amountNaira }).from(paymentRequests).where(eq16(paymentRequests.id, paymentRequestId)).limit(1))[0];
+  if (!request || request.item !== "current_state") return 0;
+  return secondHalf(request.amountNaira, displayedPrices().currentState);
+}
 async function startEngagement(db, input) {
   const now = input.now ?? /* @__PURE__ */ new Date();
   return db.transaction(async (tx) => {
+    const balance = await businessReviewBalance(tx, input.paymentRequestId);
     const accepted = (await tx.select({ businessId: clientOnboardingInvitations.businessId }).from(clientOnboardingInvitations).where(and10(eq16(clientOnboardingInvitations.businessCheckId, input.businessCheckId), eq16(clientOnboardingInvitations.status, "accepted"))).orderBy(desc5(clientOnboardingInvitations.id)).limit(1))[0];
     const [created] = await tx.insert(engagements).values({ businessCheckId: input.businessCheckId, paymentRequestId: input.paymentRequestId, businessId: accepted?.businessId ?? null }).onConflictDoNothing({ target: engagements.businessCheckId }).returning({ id: engagements.id });
     if (!created) return { engagementId: null, created: false };
@@ -9764,11 +9837,12 @@ async function startEngagement(db, input) {
       sortOrder: item2.order,
       createdByUserId: input.actorUserId
     })));
-    await recordAudit(tx, { action: "engagement_started", actorUserId: input.actorUserId, details: { engagementId: created.id, businessCheckId: input.businessCheckId } });
+    if (balance > 0) await tx.insert(engagementFeeLines).values(initialFeeRows(created.id, [{ label: `${CURRENT_STATE.name}: half on delivery`, amount: balance, dueOn: null }]));
+    await recordAudit(tx, { action: "engagement_started", actorUserId: input.actorUserId, details: { engagementId: created.id, businessCheckId: input.businessCheckId, ...balance > 0 ? { secondHalf: balance } : {} } });
     return { engagementId: created.id, created: true };
   });
 }
-var addDays = (day, days) => {
+var addDays2 = (day, days) => {
   const date2 = /* @__PURE__ */ new Date(`${day}T12:00:00Z`);
   date2.setUTCDate(date2.getUTCDate() + days);
   return date2.toISOString().slice(0, 10);
@@ -9782,7 +9856,7 @@ async function createDirectEngagement(db, actor, input) {
   }
   const dated = DATED_TYPES[input.type];
   const starter = dated ?? (product2 ? serviceStarter(product2) : null);
-  const dueFor = (week) => addDays(input.startedOn, (week - 1) * 7 + 3);
+  const dueFor = (week) => addDays2(input.startedOn, (week - 1) * 7 + 3);
   if (input.businessId) {
     const business = (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq16(businesses.id, input.businessId)).limit(1))[0];
     if (!business) throw notFound4();
@@ -9806,12 +9880,12 @@ async function createDirectEngagement(db, actor, input) {
     return { engagementId: id3, businessId: business.id };
   });
   if (existing) return { engagementId, invitationUrl: null, deliveryStatus: null, hasAccount: true };
-  const work = workLines({ type: input.type, service, startsOn: input.startedOn, fees: defaultFees(input.type, service) });
+  const work = workLines({ type: input.type, service, startsOn: input.startedOn, fees: defaultFees(input.type, service, input.startedOn) });
   const invitation = await inviteBusinessOwner(db, { email, fullName: contactName, businessId, businessName, actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName, work });
   return { engagementId, invitationUrl: invitation.invitationUrl, deliveryStatus: invitation.deliveryStatus, hasAccount: false };
 }
 async function insertDirect(tx, actor, input, at) {
-  const feeLines = defaultFees(input.type, at.service);
+  const feeLines = defaultFees(input.type, at.service, input.startedOn);
   const [created] = await tx.insert(engagements).values({
     businessId: at.businessId,
     type: input.type,
@@ -9978,7 +10052,7 @@ async function getStaffEngagement(db, actor, engagementId) {
   const check = engagement.businessCheckId !== null ? (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq16(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { id: null, fullName: engagement.contactName ?? "", email: engagement.contactEmail, whatsapp: null, businessName: null } : void 0;
   if (check) await syncSessionBookings(db, engagement, check.email);
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq16(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
-  const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins, matches] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins, matches, waiting] = await Promise.all([
     db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq16(engagementTeam.userId, users.id)).where(eq16(engagementTeam.engagementId, engagementId)).orderBy(asc4(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq16(engagementSessions.engagementId, engagementId)).orderBy(asc4(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq16(engagementTasks.engagementId, engagementId)).orderBy(asc4(engagementTasks.id)),
@@ -9988,7 +10062,9 @@ async function getStaffEngagement(db, actor, engagementId) {
     filesOf(db, engagementId),
     measureOf(db, engagementId),
     checkinsOf(db, engagementId),
-    matchesOf(db, engagementId)
+    matchesOf(db, engagementId),
+    // A second half not dated yet: sharing the main output dates it and emails the client its link (R36).
+    db.select({ id: engagementFeeLines.id }).from(engagementFeeLines).where(and10(eq16(engagementFeeLines.engagementId, engagementId), isNull7(engagementFeeLines.paidAt), isNull7(engagementFeeLines.dueOn))).limit(1)
   ]);
   const staffFile = (file) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt });
   const filesFor = (where, id3) => files.filter((file) => file[where] === id3 || where === "taskId" && matches.some((match) => match.fileId === file.id && match.taskId === id3)).map(staffFile);
@@ -10010,6 +10086,7 @@ async function getStaffEngagement(db, actor, engagementId) {
     deliverables: deliverables.map((item2) => ({ ...item2, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item2.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item2.kind), comments: comments.filter((comment) => comment.deliverableId === item2.id), files: filesFor("deliverableId", item2.id) })),
     measure,
     checkins,
+    balanceOnDelivery: waiting.length > 0,
     can: {
       manage: authorityAllows(actor.authority, "manage_engagements"),
       assign: authorityAllows(actor.authority, "assign_engagements"),
@@ -10225,7 +10302,7 @@ async function loadDataRequest(db, actor, input) {
       informs: item2.informs,
       format: item2.format,
       priority: item2.priority,
-      dueOn: item2.dueOn ?? (item2.priority ? addDays(today, DUE_DAYS[item2.priority]) : null),
+      dueOn: item2.dueOn ?? (item2.priority ? addDays2(today, DUE_DAYS[item2.priority]) : null),
       weekNumber: 1,
       sortOrder: order,
       createdByUserId: actor.id
@@ -10283,7 +10360,12 @@ async function shareDeliverable(db, actor, input) {
     await recordAudit(tx, { action: "engagement_deliverable_shared", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind, audience: input.audience } });
   });
   await notifyShared(db, deliverable.engagementId, input.audience, `your ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]}`, deliverable.title);
-  return { success: true };
+  const engagement = (await db.select({ type: engagements.type }).from(engagements).where(eq16(engagements.id, deliverable.engagementId)).limit(1))[0];
+  const balancesDated = engagement && isDelivery(engagement.type, deliverable.kind) ? await dateBalancesOnDelivery(db, { engagementId: deliverable.engagementId, deliverable: ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind], actorUserId: actor.id }).catch((error) => {
+    console.error("[Engagement] The second half was not dated on delivery:", error instanceof Error ? error.message : "unknown error");
+    return 0;
+  }) : 0;
+  return { success: true, balancesDated };
 }
 async function staffComment(db, actor, input) {
   const deliverable = await requireStaffDeliverable(db, actor, input.deliverableId);
@@ -11472,6 +11554,7 @@ function onlinePaymentOffer(publicToken, item2) {
 }
 function paymentDetailsEmail(input) {
   const report = input.item === "full_report";
+  const second = input.totalNaira === void 0 ? 0 : secondHalf(input.amountNaira, input.totalNaira);
   const afterwards = report ? `Then we send you the Report Intake, a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your Full Report is emailed to you the moment you finish it.` : `Then your ${CURRENT_STATE.name} is booked. ${CURRENT_STATE.start}`;
   return {
     subject: report ? "Payment details for your Full Report" : `Payment details for your ${CURRENT_STATE.name}`,
@@ -11482,7 +11565,7 @@ function paymentDetailsEmail(input) {
       "",
       ...input.online?.mode === "test" ? [EMAIL_TEST_NOTICE, "Online payment is in Paystack's test mode while we test it, so paying online moves no real money.", ""] : [],
       "HOW TO PAY",
-      `Amount: ${formatNaira(input.amountNaira)}`,
+      second ? `Amount: ${formatNaira(input.amountNaira)}, the first half of ${formatNaira(input.totalNaira)}` : `Amount: ${formatNaira(input.amountNaira)}`,
       `Reference: ${input.reference}`,
       // The owner's own Full Report link reopens by itself; the assessment's holds for the 48 hours after the call.
       ...report ? [] : [`Pay by: ${lagosTime(input.deadline)} (Lagos time)`],
@@ -11495,6 +11578,7 @@ function paymentDetailsEmail(input) {
       "AFTER YOU PAY",
       "There is nothing more to do. We email you as soon as Paystack confirms your payment.",
       afterwards,
+      ...second ? [`The second half, ${formatNaira(second)}, is due seven days after we share your Findings. We email you its link then.`] : [],
       ...report ? [] : ["", `If you need more than ${PAYMENT_WINDOW_HOURS} hours, reply to this email and we will send you a new link.`],
       "",
       BRAND.organisationName
@@ -11577,7 +11661,9 @@ async function requestPayment(db, input) {
   const existing = (await db.select().from(paymentRequests).where(and13(eq19(paymentRequests.businessCheckId, check.id), eq19(paymentRequests.item, input.item))).limit(1))[0];
   if (existing?.status === "confirmed") throw new TRPCError17({ code: "CONFLICT", message: "This has already been paid." });
   const reference2 = paymentReference(input.item, check.id);
-  const { amountNaira, lowPriceTesting } = resolveBusinessSupportPrice(input.item);
+  const priced = resolveBusinessSupportPrice(input.item);
+  const { lowPriceTesting } = priced;
+  const amountNaira = input.item === "current_state" ? firstHalf(priced.amountNaira) : priced.amountNaira;
   const stageTo = input.item === "current_state" && BEFORE_OPPORTUNITY.includes(check.pipelineStage) ? "opportunity" : check.pipelineStage;
   const request = await db.transaction(async (tx) => {
     const [row] = await tx.insert(paymentRequests).values({ businessCheckId: check.id, item: input.item, amountNaira, reference: reference2, requestedByUserId: input.actorUserId }).onConflictDoUpdate({ target: [paymentRequests.businessCheckId, paymentRequests.item], set: { amountNaira, requestedByUserId: input.actorUserId, requestedAt: /* @__PURE__ */ new Date() } }).returning();
@@ -11590,7 +11676,7 @@ async function requestPayment(db, input) {
     });
     return row;
   });
-  const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference: reference2, deadline: paymentDeadline(request.requestedAt), amountNaira: request.amountNaira, online: onlinePaymentOffer(check.publicToken, input.item) });
+  const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference: reference2, deadline: paymentDeadline(request.requestedAt), amountNaira: request.amountNaira, totalNaira: priced.amountNaira, online: onlinePaymentOffer(check.publicToken, input.item) });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check.id, idempotencyKey: `payment_requests:${request.id}:details:${request.requestedAt.getTime()}` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
   await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq19(paymentRequests.id, request.id));
   const deliveryProblem = delivery.status === "Failed" ? delivery.reason : null;

@@ -67,6 +67,7 @@ export const AUDIT_ACTIONS = [
   "engagement_fee_paid_online",
   "engagement_fee_online_refused",
   "engagement_fee_link_sent",
+  "engagement_fees_dated_on_delivery",
   "engagement_room_opened",
   "engagement_fee_paid",
   // Retired with proposals (ET, 6 November 2026): no longer written, kept so older log rows still read.

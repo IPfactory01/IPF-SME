@@ -103,10 +103,18 @@ describe("a service page (/services/:slug), told as a story", () => {
     expect(label.textContent).toBe("The lender's application form or checklist (if you have it)");
   });
 
-  it("shows the Six-Week Fix's four problems and its three payments", () => {
+  it("shows the Six-Week Fix's four problems and its two payments, half at the start and half at the result (R36)", () => {
     at("/services/six-week-fix");
     for (const name of ["Margin", "Sales", "Cash and Pricing", "Delegation and Structure"]) expect(screen.getByText(`Six-Week Fix: ${name}`)).toBeTruthy();
-    expect(screen.getAllByText(/₦750,000 at the start, ₦375,000 at the mid-point, ₦375,000 at the result\. Or ₦1,425,000 in full/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/₦750,000 at the start, ₦750,000 at the result\. Or ₦1,425,000 in full/).length).toBeGreaterThan(0);
+  });
+
+  it("says a service agreed on a call is paid half to start and half on delivery, and a product bought online before we start (R36)", () => {
+    at("/services/business-plan");
+    expect(screen.getByText("₦375,000 to start and ₦375,000 on delivery, by transfer or card.")).toBeTruthy();
+    cleanup();
+    at("/services/13-week-cash-flow-forecast");
+    expect(screen.getByText("Paid before we start, by transfer or card.")).toBeTruthy();
   });
 
   it("labels a service that answers several needs by its way to buy only, and lets keyboards reach wide sample charts", () => {

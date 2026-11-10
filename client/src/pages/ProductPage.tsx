@@ -13,7 +13,7 @@ import { EYEBROW } from "@/pages/ServicesPage";
 import { stepName } from "@shared/businessCheck/routing";
 import { storyOf } from "@shared/productStories";
 import {
-  NEED_DETAILS, nextProduct, priceLabel, priceTerms, productById, productBySlug, servicePath, startMode, WAY_DETAILS, type PriceModel, type Product,
+  NEED_DETAILS, nextProduct, paymentTerms, priceLabel, priceTerms, productById, productBySlug, servicePath, startMode, WAY_DETAILS, type PriceModel, type Product,
 } from "@shared/products";
 import { ArrowRight, Check, Minus } from "lucide-react";
 import React from "react";
@@ -32,7 +32,7 @@ export function stepsFor(product: Product, price: PriceModel): { title: string; 
     { title: "Decide what's next", body: "Book a free 20-minute call, or buy the Full Report for the detail." },
   ];
   if (product.way === "six_week_fix") return [
-    { title: "Talk to us first", body: "A free 20-minute call to agree the problem. We send your payment link after it." },
+    { title: "Talk to us first", body: "A free 20-minute call to agree the problem. We send the link for the first half after it." },
     { title: "Week 1: the Prescription", body: "What to do, the tools, and the Measure of Success, agreed with you." },
     { title: "Weeks 2 to 6: every week", body: "A Weekly Check-in on the number until it moves. Then a Day-30 Review." },
   ];
@@ -42,7 +42,7 @@ export function stepsFor(product: Product, price: PriceModel): { title: string; 
     { title: "Every month", body: product.delivery },
   ];
   if (mode === "after_call") return [
-    { title: "Talk to us first", body: "A free 20-minute call. If it fits, we send your payment link after it." },
+    { title: "Talk to us first", body: "A free 20-minute call. If it fits, we send the link for the first half after it." },
     { title: "Send your records", body: send },
     receive,
   ];
@@ -165,8 +165,8 @@ export default function ProductPage() {
               </li>
             ))}
           </ol>
-          {(product.price.kind === "milestones" || product.price.kind === "quarterly" || product.price.kind === "per_month") && (
-            <p className="mx-auto mt-8 max-w-2xl text-center text-ink-soft"><b className="text-ink">How you pay:</b> {priceTerms(price)}</p>
+          {product.price.kind !== "free" && (
+            <p className="mx-auto mt-8 max-w-2xl text-center text-ink-soft"><b className="text-ink">How you pay:</b> {paymentTerms({ ...product, price })}</p>
           )}
         </div>
       </section>

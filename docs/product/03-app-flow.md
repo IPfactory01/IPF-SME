@@ -44,29 +44,36 @@ named expert, the WhatsApp line and the "what happens next" block are to build.
 
 ## 3. Payment terms, and when the room opens
 
-Set on every engagement (R36, **to build**; today every engagement is in advance).
+Payment terms follow what is bought (ET, 10 November 2026, R36), so no engagement's terms are negotiated one by one.
 
 ```mermaid
 flowchart LR
-  O[Engagement opened] --> T{Payment terms}
-  T -->|In advance| A1[Owner invited at once]
-  A1 --> A2[Room shows only the first fee to pay]
-  A2 -->|First fee paid, online or by hand| A3[Room opens]
-  T -->|In arrears, partner approved| B1[Owner invited at once]
-  B1 --> B2[Room open from kickoff]
-  B2 --> B3[Fees fall due 30, 60, 90 days after kickoff]
+  O[Engagement opened] --> T{What was bought}
+  T -->|A product bought online| P1[Paid in full before we start]
+  T -->|A service agreed on a call| S1[Half to start]
+  S1 --> S2[Main output shared in the room]
+  S2 --> S3[Second half due 7 days later, pay link emailed]
+  T -->|Digital marketing| D1[Each month's fee]
+  T -->|A Monthly Service| M1[Each quarter before it starts]
+  P1 --> R[Room opens on the first payment]
+  S1 --> R
+  D1 --> R
+  M1 --> R
 ```
 
-| | In advance | In arrears |
+| What is bought | When it is paid | Fee dates |
 |---|---|---|
-| Fee dates | Fixed price: before work starts. Monthly: day 0, 30, 60 from kickoff. Six-Week Fix: start, mid-point, result | Monthly: day 30, 60, 90 from kickoff. Others as the lead sets |
-| Room | Opens on the first payment (built, R11) | Open from kickoff |
-| Finance | A fee is owed from when it is set, late after its date | A fee is owed from its date, late after it |
-| Late fee | Reminders (R12); the lead told at 7 days | The same; work pauses at 7 days (decision D6), with the client told at 3 |
-| Who sets it | Default; always for Buy now | The lead, with a partner's approval recorded on the engagement |
+| A product bought online (the Full Report, a readiness assessment, a Done for You piece bought without a call) | In full, before we start | The start date |
+| A service agreed on a call: the Business Review, the Business Plan, the Pricing and Unit Cost Review, the Funding Application Pack, the Six-Week Fix | Half to start, half on delivery (the Six-Week Fix too; paying in full at the start still saves 5%) | Half on the start date; the second half seven days after the main output is shared: the Findings of a Business Review, the result of a Six-Week Fix (Your Plan), the finished work of a Done for You service |
+| Digital marketing | Each month's fee | Day 0, 30 and 60 from the kickoff |
+| A Monthly Service | A quarter at a time, before the quarter starts | The start of each quarter |
 
-Today's clients: **Marcelle (Digital marketing) is in arrears**, at 30, 60 and 90 days from her kickoff. Until R36 is
-built, her lead sets those dates by hand in the engagement's Fees; her room is already open.
+The room opens on the first payment (built, R11). Finance counts every unpaid fee as owed, and a fee as late once its
+date passes unpaid. A second half has no date until delivery, so it is owed but cannot be late. Work pauses seven days
+after a missed date, with the client told at three days (D6, R51).
+
+Today's clients: **Marcelle (Digital marketing)** pays at 30, 60 and 90 days from her kickoff, as agreed with her; her
+lead sets those dates by hand in the engagement's Fees (I4).
 
 ## 4. The journeys
 
@@ -98,7 +105,7 @@ flowchart TD
 | 4b | Answers the 17-question Report Intake | Builds the Full Report by fixed rule and emails the PDF at once | — | Owner: *Your Full Report: {business}* (PDF). Office: *Full Report sent* | Report **delivered** | Built |
 | 5 | Books the Discovery Call in the embedded calendar | Records the booking only when Calendly confirms; picks up bookings made from the email | — | Office: *… asked for a free discovery call*. Calendly confirms to the owner | **Call booked** | Built |
 | 6 | Joins the 20-minute call | — | Holds it; writes up the Discovery Call summary; records Opportunity, Refer, Lost or Nurture; shares the summary with the owner as a separate step | A Nurture outcome: one follow-up at day 30 (R48, to build) | **Opportunity**, **Referred**, **Lost** or **Nurture** | Built (the day-30 follow-up to build) |
-| 7 | — | — | Opens the engagement (4.3), or for the Business Review today sends its payment link | Owner: *Payment details for your Business Review* | Payment **requested** (48 hours) | Built (moves onto fees with R37) |
+| 7 | — | — | Opens the engagement (4.3), or for the Business Review sends the link for its first half (₦300,000 of ₦600,000); paying it opens the engagement with the second half as a fee, due seven days after the Findings are shared (R36) | Owner: *Payment details for your Business Review* | Payment **requested** (48 hours) | Built (moves onto fees with R37) |
 
 ### 4.2 Prospect to client, by Buy now (To build, R13 and R38)
 
@@ -216,7 +223,8 @@ info@ipfactory.co.
 |---|---|---|---|
 | Check finished | Owner; office | *Your Business Health Check: Findings* (the summary); *Business Health Check: {business} ({path}, {area})* (every answer) | Built |
 | Full Report asked for | Owner; office | *Payment details for your Full Report*; *… asked for the Full Report* | Built |
-| Business Review link sent | Owner | *Payment details for your Business Review* | Built (moves to fee reminders with R37) |
+| Business Review link sent | Owner | *Payment details for your Business Review*: the first half, and when the second is due | Built (moves to fee reminders with R37) |
+| A service's main output shared (delivery) | Owner | *{fee}: ₦{amount} due by {date}*, the second half with its pay link (R36) | Built |
 | Business Review or Full Report paid | Owner; office | *Payment received: …*; *Paid online: …* | Built |
 | Report Intake sent again | Owner | *Your Report Intake* | Built |
 | Full Report built | Owner; office | *Your Full Report: {business}* (PDF); *Full Report sent* | Built |
@@ -293,7 +301,7 @@ info@ipfactory.co.
 | `/terms` | `LegalPage.tsx` | Footer, forms, pay pages | The Terms and Conditions |
 | `/privacy` | `LegalPage.tsx` | Footer, forms, pay pages | The Privacy Policy |
 | `/report/:token` | `FullReportPage.tsx` | *Payment received: your Full Report* | The Report Intake, then the download |
-| `/pay/:token/:item` | `PayPage.tsx` | The Full Report or Business Review payment email | Pay for the Full Report or the Business Review (₦600,000) on Paystack, after "Before you pay" (R72) |
+| `/pay/:token/:item` | `PayPage.tsx` | The Full Report or Business Review payment email | Pay for the Full Report, or the first half of the Business Review (₦300,000 of ₦600,000), on Paystack, after "Before you pay" (R72) |
 | `/pay/fee/:feeLineId/:token` | `FeePayPage.tsx` | A fee's email, the room's Payments tab | Pay one engagement fee on Paystack, after "Before you pay" (R72); the token is an HMAC of the fee's id |
 | `/pay/return` | `PayReturnPage.tsx` | Paystack | Paid, still confirming, or not completed |
 | `/onboarding/:token` | `OnboardingPage.tsx` | The Business Review account invitation | Create the client account |
@@ -345,7 +353,7 @@ checks every action again. Under the person's name is their level.
 | Content (Digital marketing) | Reels, posts, stories by month and status | `manage_engagements` |
 | Files the client sent | Match each file to the items it answers | `manage_engagements` |
 | Work Plan | Requests and actions by week; **Load a Data Request** (a template or rows pasted from Excel); Specialists add team items | `manage_engagements`; `contribute_engagements` for team items |
-| Deliverables | Draft, approve, share, comment; files (Specialist drafts are IP Factory only until shared) | Approve: `review_engagements` or the engagement's lead |
+| Deliverables | Draft, approve, share, comment; files (Specialist drafts are IP Factory only until shared). Sharing the main output while a second half waits says so first: it dates that half seven days ahead and emails the client its link (R36) | Approve: `review_engagements` or the engagement's lead |
 | The fix | The one number; one check-in a week | `manage_engagements` |
 | Close (R26, to build) | The final value, whether it moved, the next product | The lead |
 

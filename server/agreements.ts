@@ -42,7 +42,7 @@ export async function staffFees(db: Database, actor: StaffActor, engagementId: n
   return {
     feeLines: feeLines.map(line => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn, paidAt: line.paidAt, paidOnline: line.paidReference !== null, reference: feeReference(line.id) })),
     total: feeTotal(feeLines),
-    suggested: feeLines.length ? null : defaultFees(engagement.type, engagement.service),
+    suggested: feeLines.length ? null : defaultFees(engagement.type, engagement.service, engagement.startedOn ?? null),
     /** Waiting for its first payment: the client sees only the fee to pay until one is paid. */
     opensOnPayment: engagement.opensOnPayment,
     online: paystackMode() !== "off",

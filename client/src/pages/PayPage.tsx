@@ -77,7 +77,7 @@ export default function PayPage() {
     );
   }
 
-  const { name, amountNaira, reference, mode, state } = page.data;
+  const { name, amountNaira, totalNaira, reference, mode, state } = page.data;
   const amount = formatNaira(amountNaira);
   const banner = mode === "test" ? <TestModeBanner /> : null;
 
@@ -103,6 +103,8 @@ export default function PayPage() {
       <h1 className="mt-2 font-serif text-3xl font-normal sm:text-4xl">{name}</h1>
       <p className="mt-3 text-ink-soft">{MEANING[item]}</p>
       <p className="mt-6 font-sans text-5xl font-semibold tracking-tight tabular-nums text-ink">{amount}</p>
+      {/* The Business Review is paid in halves (R36): this is the first. */}
+      {totalNaira ? <p className="mt-2 text-sm text-ink-soft">The first half of {formatNaira(totalNaira)}. The second half is due seven days after we share your Findings.</p> : null}
 
       {state === "expired" && (
         <p role="alert" className="mt-6 rounded-lg border border-danger-line bg-danger-tint p-4 text-sm text-danger-strong">

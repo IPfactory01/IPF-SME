@@ -63,14 +63,16 @@ import {
 } from "../shared/engagement";
 import type { AccountSession, Database } from "./accountAuth";
 import { CONTENT_KIND_LABELS, CONTENT_STATUS_LABELS, DATED_TYPES, datedProgress, engagementTitle, ENGAGEMENT_TYPE_LABELS, SERVICE_TYPES, serviceStarter, servicesFor, serviceStep, SERVICE_STEPS, STAGED_TYPES, type ContentKind, type ContentStatus, type DatedEngagementType, type EngagementType } from "../shared/engagementTypes";
-import { PRODUCTS } from "../shared/products";
+import { PRODUCTS, secondHalf } from "../shared/products";
 import { inviteBusinessOwner } from "./accountInvitations";
 import { slugify } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { DUE_DAYS } from "../shared/dataRequestTemplates";
 import { initialFeeRows } from "./agreements";
-import { clientFees } from "./feePayments";
-import { defaultFees } from "../shared/agreement";
+import { clientFees, dateBalancesOnDelivery } from "./feePayments";
+import { defaultFees, isDelivery } from "../shared/agreement";
+import { CURRENT_STATE } from "../shared/businessSupport";
+import { displayedPrices } from "./businessSupportPrices";
 import { workLines } from "../shared/engagementWork";
 import { agreedWhatsapp, recipientOf } from "./teamContact";
 import { sharedDebriefFor } from "./debriefs";
@@ -129,9 +131,21 @@ export function addWorkingDays(from: Date, days: number) {
  * from the template, due in three working days. Runs once per business check; a second call changes nothing. If the
  * owner already has an account (invited by hand before paying), the engagement is linked to their business at once.
  */
+/**
+ * The Business Review's second half (R36): its payment request was the first half, so the engagement opens with the rest
+ * as a fee, dated when the Findings are shared. A request paid in full (before 10 November 2026) leaves nothing.
+ */
+async function businessReviewBalance(db: Pick<Database, "select">, paymentRequestId: number | null) {
+  if (paymentRequestId === null) return 0;
+  const request = (await db.select({ item: paymentRequests.item, amountNaira: paymentRequests.amountNaira }).from(paymentRequests).where(eq(paymentRequests.id, paymentRequestId)).limit(1))[0];
+  if (!request || request.item !== "current_state") return 0;
+  return secondHalf(request.amountNaira, displayedPrices().currentState);
+}
+
 export async function startEngagement(db: Database, input: { businessCheckId: number; paymentRequestId: number | null; actorUserId: number | null; now?: Date }) {
   const now = input.now ?? new Date();
   return db.transaction(async tx => {
+    const balance = await businessReviewBalance(tx, input.paymentRequestId);
     const accepted = (await tx.select({ businessId: clientOnboardingInvitations.businessId }).from(clientOnboardingInvitations)
       .where(and(eq(clientOnboardingInvitations.businessCheckId, input.businessCheckId), eq(clientOnboardingInvitations.status, "accepted")))
       .orderBy(desc(clientOnboardingInvitations.id)).limit(1))[0];
@@ -153,7 +167,8 @@ export async function startEngagement(db: Database, input: { businessCheckId: nu
     await tx.insert(engagementSessions).values(ASSESSMENT_TEMPLATE.sessions.map(item => ({
       engagementId: created.id, kind: item.kind, title: item.title, durationMinutes: item.durationMinutes, agenda: item.agenda, weekNumber: item.week, sortOrder: item.order, createdByUserId: input.actorUserId,
     })));
-    await recordAudit(tx, { action: "engagement_started", actorUserId: input.actorUserId, details: { engagementId: created.id, businessCheckId: input.businessCheckId } });
+    if (balance > 0) await tx.insert(engagementFeeLines).values(initialFeeRows(created.id, [{ label: `${CURRENT_STATE.name}: half on delivery`, amount: balance, dueOn: null }]));
+    await recordAudit(tx, { action: "engagement_started", actorUserId: input.actorUserId, details: { engagementId: created.id, businessCheckId: input.businessCheckId, ...(balance > 0 ? { secondHalf: balance } : {}) } });
     return { engagementId: created.id, created: true } as const;
   });
 }
@@ -211,7 +226,7 @@ export async function createDirectEngagement(db: Database, actor: StaffActor & {
   });
   if (existing) return { engagementId, invitationUrl: null, deliveryStatus: null, hasAccount: true } as const;
   // The welcome email says what we will do, when it starts and each fee (R47).
-  const work = workLines({ type: input.type, service, startsOn: input.startedOn, fees: defaultFees(input.type, service) });
+  const work = workLines({ type: input.type, service, startsOn: input.startedOn, fees: defaultFees(input.type, service, input.startedOn) });
   const invitation = await inviteBusinessOwner(db, { email, fullName: contactName, businessId, businessName, actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName, work });
   return { engagementId, invitationUrl: invitation.invitationUrl, deliveryStatus: invitation.deliveryStatus, hasAccount: false } as const;
 }
@@ -220,8 +235,9 @@ type Starter = Pick<DatedEngagementType, "dataRequests" | "clientActions" | "tea
 
 /** The engagement row and where it begins: the type's (or the service's) Work Plan, Data Request and Sessions. */
 async function insertDirect(tx: Pick<Database, "insert">, actor: StaffActor, input: DirectEngagementInput, at: { businessId: number; service: string | null; starter: Starter | null; dueFor: (week: number) => string; contactName: string | null; contactEmail: string | null }) {
-  // An engagement with fees opens to the client once its first fee is paid (R11), online or recorded by hand.
-  const feeLines = defaultFees(input.type, at.service);
+  // An engagement with fees opens to the client once its first fee is paid (R11), online or recorded by hand. Its fees
+  // follow what was bought, dated from the start day (R36).
+  const feeLines = defaultFees(input.type, at.service, input.startedOn);
   const [created] = await tx.insert(engagements).values({
     businessId: at.businessId, type: input.type, service: at.service, startedOn: input.startedOn, contactName: at.contactName, contactEmail: at.contactEmail, opensOnPayment: feeLines.length > 0,
     // The Six-Week Fix starts in the fix; every other direct engagement is getting set up.
@@ -433,7 +449,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
   // The team sees a Session the owner booked on Calendly without typing it in.
   if (check) await syncSessionBookings(db, engagement, check.email);
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
-  const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins, matches] = await Promise.all([
+  const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins, matches, waiting] = await Promise.all([
     db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, engagementId)).orderBy(asc(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq(engagementSessions.engagementId, engagementId)).orderBy(asc(engagementSessions.id)),
     db.select().from(engagementTasks).where(eq(engagementTasks.engagementId, engagementId)).orderBy(asc(engagementTasks.id)),
@@ -445,6 +461,8 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     measureOf(db, engagementId),
     checkinsOf(db, engagementId),
     matchesOf(db, engagementId),
+    // A second half not dated yet: sharing the main output dates it and emails the client its link (R36).
+    db.select({ id: engagementFeeLines.id }).from(engagementFeeLines).where(and(eq(engagementFeeLines.engagementId, engagementId), isNull(engagementFeeLines.paidAt), isNull(engagementFeeLines.dueOn))).limit(1),
   ]);
   const staffFile = (file: EngagementFile) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt });
   const filesFor = (where: "taskId" | "deliverableId", id: number) => files.filter(file => file[where] === id || (where === "taskId" && matches.some(match => match.fileId === file.id && match.taskId === id))).map(staffFile);
@@ -468,6 +486,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     deliverables: deliverables.map(item => ({ ...item, kindLabel: ENGAGEMENT_DELIVERABLE_KIND_LABELS[item.kind], needsApproval: DELIVERABLES_NEEDING_APPROVAL.includes(item.kind), comments: comments.filter(comment => comment.deliverableId === item.id), files: filesFor("deliverableId", item.id) })),
     measure,
     checkins,
+    balanceOnDelivery: waiting.length > 0,
     can: {
       manage: authorityAllows(actor.authority, "manage_engagements"),
       assign: authorityAllows(actor.authority, "assign_engagements"),
@@ -803,7 +822,14 @@ export async function shareDeliverable(db: Database, actor: StaffActor, input: {
     await recordAudit(tx, { action: "engagement_deliverable_shared", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind, audience: input.audience } });
   });
   await notifyShared(db, deliverable.engagementId, input.audience, `your ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]}`, deliverable.title);
-  return { success: true } as const;
+  // Sharing a service's main output is its delivery: the second half falls due seven days later (R36). The share has
+  // happened by now, so a failure here is logged rather than reported as a failed share; the lead can date it in Fees.
+  const engagement = (await db.select({ type: engagements.type }).from(engagements).where(eq(engagements.id, deliverable.engagementId)).limit(1))[0];
+  const balancesDated = engagement && isDelivery(engagement.type, deliverable.kind)
+    ? await dateBalancesOnDelivery(db, { engagementId: deliverable.engagementId, deliverable: ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind], actorUserId: actor.id })
+      .catch((error: unknown) => { console.error("[Engagement] The second half was not dated on delivery:", error instanceof Error ? error.message : "unknown error"); return 0; })
+    : 0;
+  return { success: true, balancesDated } as const;
 }
 
 export async function staffComment(db: Database, actor: StaffActor, input: { deliverableId: number; body: string }) {

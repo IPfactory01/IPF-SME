@@ -145,7 +145,7 @@ or one listed there is missing here.
 | Deliverables and content | `engagement_deliverable_approved`, `engagement_deliverable_shared`, `engagement_deliverable_accepted`, `engagement_content_saved`, `engagement_content_deleted`, `engagement_content_approved`, `engagement_content_changes_requested` | A Deliverable approved, shared or signed off; a content piece saved or deleted by the team, approved or sent back by the owner |
 | The fix | `engagement_measure_saved`, `engagement_checkin_recorded` | The Measure of Success set; a Weekly Check-in recorded |
 | More work | `service_requested`, `service_request_handled` | A client asking for another service; the desk handling or declining it |
-| Fees | `engagement_fees_saved`, `engagement_fee_paid`, `engagement_fee_paid_online`, `engagement_fee_online_refused`, `engagement_fee_link_sent` | The fee schedule saved (total, lines); a fee marked paid or unpaid by hand; paid on Paystack; an online payment refused; a pay link sent |
+| Fees | `engagement_fees_saved`, `engagement_fee_paid`, `engagement_fee_paid_online`, `engagement_fee_online_refused`, `engagement_fee_link_sent`, `engagement_fees_dated_on_delivery` | The fee schedule saved (total, lines); a fee marked paid or unpaid by hand; paid on Paystack; an online payment refused; a pay link sent; a service's second half dated seven days after its main output was shared (R36) |
 | Retired, kept so older rows still read | `payment_proof_received`, `engagement_agreement_saved`, `engagement_agreement_sent`, `engagement_agreement_revised`, `engagement_agreement_accepted` | Proof of payment uploads (before Paystack); proposals and their acceptance (removed 6 November 2026). Nothing writes them now |
 
 ## 3. JUMP-era tables (legacy)

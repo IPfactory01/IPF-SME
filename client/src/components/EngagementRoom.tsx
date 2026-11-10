@@ -211,7 +211,8 @@ function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps)
   // things to do (the first Session, the first records, any fee) and what happens next. Each line opens where it is done.
   // Not "Your first week": the first Session can fall in week two.
   const firstRecords = room.tasks.filter(task => task.side === "client" && task.kind === "data_request" && (task.status === "open" || task.status === "needs_more"));
-  const firstFee = room.fees.find(fee => !fee.paid);
+  // A fee that is due: a second half has no date until delivery, so it is not a first-week step (R36).
+  const firstFee = room.fees.find(fee => !fee.paid && fee.dueOn !== null);
   const firstWeekSteps: { text: string; done: boolean; href?: string; external?: boolean }[] = [
     room.booking ? { text: `Book your first ${METHOD.session}`, done: false, href: room.booking.url, external: true }
       : room.nextSession ? { text: `Your first ${METHOD.session} is booked: ${lagos(room.nextSession.scheduledFor)}`, done: true }
@@ -375,7 +376,7 @@ function PaymentsView({ room }: { room: Room }) {
             <li key={fee.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
               <span className="min-w-0">
                 <span className="block text-sm text-ink">{fee.label}</span>
-                <span className="block text-xs text-ink-muted">{fee.dueOn ? `Due ${dateOnly(fee.dueOn)}` : "Due as agreed"} · {fee.reference}</span>
+                <span className="block text-xs text-ink-muted">{[fee.dueOn ? `Due ${dateOnly(fee.dueOn)}` : fee.paid ? null : "Due seven days after delivery", fee.reference].filter(Boolean).join(" · ")}</span>
               </span>
               <span className="flex items-center gap-3">
                 <span className="text-sm font-medium tabular-nums text-ink">{formatNaira(fee.amount)}</span>

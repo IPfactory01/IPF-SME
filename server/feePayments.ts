@@ -11,9 +11,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { and, asc, eq, isNull } from "drizzle-orm";
-import { businessMemberships, businesses, engagementFeeLines, engagements, users } from "../drizzle/schema";
+import { businessMemberships, businesses, engagementFeeLines, engagements, paymentRequests, users } from "../drizzle/schema";
+import { addDays, BALANCE_DUE_DAYS } from "../shared/agreement";
 import { BRAND } from "../shared/brand";
-import { formatNaira } from "../shared/businessSupport";
+import { CURRENT_STATE, formatNaira } from "../shared/businessSupport";
+import { dayLabel } from "../shared/engagementWork";
 import { engagementTitle } from "../shared/engagementTypes";
 import { PAY_RETURN_PATH, type OnlinePaymentMode, type OnlinePaymentStatus } from "../shared/payments";
 import { ENV } from "./_core/env";
@@ -222,9 +224,54 @@ export async function sendFeeLink(db: Database, input: { feeLineId: number; acto
   return { url, deliveryStatus: delivery.status };
 }
 
-/** The fees a client sees in their room (owner and full-access staff): each with its status and, when unpaid, its pay link. */
+/**
+ * The fees a client sees in their room (owner and full-access staff): each with its status and, when unpaid, its pay link.
+ * A Business Review started from the check paid its first half on the check's payment request (R36): it is shown first,
+ * paid, so the room lists both halves.
+ */
 export async function clientFees(db: Pick<Database, "select">, engagementId: number) {
   const lines = await db.select().from(engagementFeeLines).where(eq(engagementFeeLines.engagementId, engagementId)).orderBy(asc(engagementFeeLines.sortOrder), asc(engagementFeeLines.id));
   const online = paystackMode() !== "off" && Boolean(ENV.cookieSecret);
-  return lines.map((line: FeeLine) => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn, paid: line.paidAt !== null, reference: feeReference(line.id), payPath: !line.paidAt && online ? feePayPath(line.id) : null }));
+  const started = (await db.select({ paymentRequestId: engagements.paymentRequestId }).from(engagements).where(eq(engagements.id, engagementId)).limit(1))[0];
+  const request = started?.paymentRequestId ? (await db.select().from(paymentRequests).where(eq(paymentRequests.id, started.paymentRequestId)).limit(1))[0] : undefined;
+  const firstHalfPaid = request && request.item === "current_state" && request.status === "confirmed" && lines.some(line => line.label === `${CURRENT_STATE.name}: half on delivery`)
+    ? [{ id: -request.id, label: `${CURRENT_STATE.name}: half to start`, amount: request.amountNaira, dueOn: null, paid: true, reference: request.reference, payPath: null }]
+    : [];
+  return [...firstHalfPaid, ...lines.map((line: FeeLine) => ({ id: line.id, label: line.label, amount: line.amount, dueOn: line.dueOn, paid: line.paidAt !== null, reference: feeReference(line.id), payPath: !line.paidAt && online ? feePayPath(line.id) : null }))];
+}
+
+/**
+ * A service's delivery (R36): sharing its main output dates every unpaid fee that has no date yet seven days ahead
+ * (BALANCE_DUE_DAYS, ET 10 November 2026) and emails the owner each one's pay link. A fee that already has a date is
+ * left alone, so sharing again sends nothing. `deliverable` is what was shared, by its method name ("Findings", "Plan").
+ * Returns how many fees it dated.
+ */
+export async function dateBalancesOnDelivery(db: Database, input: { engagementId: number; deliverable: string; actorUserId: number; today?: string }) {
+  const today = input.today ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date());
+  const dueOn = addDays(today, BALANCE_DUE_DAYS);
+  const dated = await db.update(engagementFeeLines).set({ dueOn })
+    .where(and(eq(engagementFeeLines.engagementId, input.engagementId), isNull(engagementFeeLines.paidAt), isNull(engagementFeeLines.dueOn)))
+    .returning({ id: engagementFeeLines.id, label: engagementFeeLines.label, amount: engagementFeeLines.amount });
+  if (!dated.length) return 0;
+  await recordAudit(db, { action: "engagement_fees_dated_on_delivery", actorUserId: input.actorUserId, details: { engagementId: input.engagementId, dueOn, feeLineIds: dated.map(fee => fee.id), total: dated.reduce((sum, fee) => sum + fee.amount, 0) } });
+  const found = await feeContext(db, dated[0]!.id);
+  if (!found?.payer) return dated.length;
+  const { payer, title } = found;
+  const online = paystackMode() !== "off" && Boolean(ENV.cookieSecret);
+  const test = paystackMode() === "test";
+  for (const fee of dated) {
+    await deliverEmail({
+      to: payer.email, sender: "business_support", idempotencyKey: `engagement_fee_lines:${fee.id}:due-on-delivery`,
+      subject: `${test ? "TEST: " : ""}${fee.label}: ${formatNaira(fee.amount)} due by ${dayLabel(dueOn)}`,
+      body: [
+        ...(test ? ["TEST MODE - NO REAL MONEY MOVES", ""] : []),
+        `Hello ${payer.name.split(" ")[0] ?? ""},`, "",
+        `We have shared your ${input.deliverable} for your ${title} in your room.`,
+        `The second half, ${formatNaira(fee.amount)}, is due by ${dayLabel(dueOn)}.`, "",
+        online ? `Pay online: ${feePayUrl(fee.id)}` : "Reply to this email and we will send you a link to pay.", "",
+        "Paystack takes card, bank transfer or USSD. Any questions, reply to this email.", "", `Reference: ${feeReference(fee.id)}`, "", BRAND.organisationName,
+      ].join("\n"),
+    }).catch((error: unknown) => console.error("[Fees] The second half's link could not be sent:", error instanceof Error ? error.message : "unknown error"));
+  }
+  return dated.length;
 }

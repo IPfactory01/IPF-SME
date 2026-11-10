@@ -53,6 +53,7 @@ import React, { useState } from "react";
 import { toast } from "sonner";
 import type { AppRouter } from "../../../../server/routers";
 import { DetailField, DetailSection } from "./AdminPrimitives";
+import DeliveryShareNote from "./DeliveryShareNote";
 import { combineDateAndTime, formatDate, formatDateTime, toDateInput, toTimeInput, whatsappLink } from "./format";
 
 type Detail = inferRouterOutputs<AppRouter>["engagement"]["staff"]["detail"];
@@ -612,7 +613,10 @@ function DeliverableCard({ item, data, engagementId, onDone }: { item?: Delivera
   const [comment, setComment] = useState("");
   const save = trpc.engagement.staff.saveDeliverable.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Saved as a draft."); onDone?.(); } });
   const approve = trpc.engagement.staff.approveDeliverable.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Approved."); } });
-  const share = trpc.engagement.staff.shareDeliverable.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Shared with the client."); } });
+  const share = trpc.engagement.staff.shareDeliverable.useMutation({
+    ...refresh,
+    onSuccess: result => { refresh.onSuccess(); toast.success(result.balancesDated ? "Shared with the client. The second half falls due in seven days, and they were emailed its link." : "Shared with the client."); },
+  });
   const addComment = trpc.engagement.staff.comment.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); setComment(""); } });
   const id = item?.id ?? "new";
   const changed = !item || item.kind !== kind || item.title !== title || (item.summary ?? "") !== summary;
@@ -643,6 +647,7 @@ function DeliverableCard({ item, data, engagementId, onDone }: { item?: Delivera
       </div>
       {item && <StaffFiles files={item.files} engagementId={engagementId} target={{ kind: "deliverable", id: item.id }} canUpload={data.uploadsEnabled && (data.can.manage || data.can.contribute)} canManage={data.can.manage} />}
       {item && needsApproval && !approved && <p className="text-xs text-ink-muted">The desk lead approves this before it can be shared.</p>}
+      {item && item.status !== "shared" && data.can.manage && <DeliveryShareNote type={data.engagement.type} kind={item.kind} balanceWaiting={data.balanceOnDelivery} />}
       {item && (
         <div className="space-y-1 border-t border-line-soft pt-2">
           {item.comments.map(entry => <p key={entry.id} className="text-sm"><span className="font-medium">{entry.authorName}</span> <span className="text-xs text-ink-muted">{formatDateTime(entry.createdAt)}</span><br />{entry.body}</p>)}

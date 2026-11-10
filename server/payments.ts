@@ -4,6 +4,7 @@ import { businessChecks, clientOnboardingInvitations, paymentRequests, type Paym
 import { BRAND } from "../shared/brand";
 import { CURRENT_STATE, FULL_REPORT, formatNaira } from "../shared/businessSupport";
 import { resolveBusinessSupportPrice } from "./businessSupportPrices";
+import { firstHalf, secondHalf } from "../shared/products";
 import { effectivePaymentStatus, ONLINE_TEST_NOTICE, PAYMENT_ITEM_DETAILS, PAYMENT_WINDOW_HOURS, paymentDeadline, paymentReference, payPath, type PaymentDisplayStatus, type PaymentItem } from "../shared/payments";
 import type { PipelineStage } from "../shared/businessCheck/pipeline";
 import type { Database } from "./accountAuth";
@@ -43,8 +44,10 @@ export function onlinePaymentOffer(publicToken: string, item: PaymentItem): Onli
  * here and nothing to send back. With online payment off (no Paystack key, which /api/health reports) it says the link
  * is coming, and the team sends it again once Paystack is on.
  */
-export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem; reference: string; deadline: Date; amountNaira: number; online?: OnlinePaymentOffer | null }) {
+/** `totalNaira`: the item's whole price, when the amount asked for is its first half (the Business Review, R36). */
+export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem; reference: string; deadline: Date; amountNaira: number; totalNaira?: number; online?: OnlinePaymentOffer | null }) {
   const report = input.item === "full_report";
+  const second = input.totalNaira === undefined ? 0 : secondHalf(input.amountNaira, input.totalNaira);
   const afterwards = report
     ? `Then we send you the Report Intake, a short form about your business (about ${FULL_REPORT.formMinutes} minutes). Your Full Report is emailed to you the moment you finish it.`
     : `Then your ${CURRENT_STATE.name} is booked. ${CURRENT_STATE.start}`;
@@ -59,7 +62,7 @@ export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem
       "",
       ...(input.online?.mode === "test" ? [EMAIL_TEST_NOTICE, "Online payment is in Paystack's test mode while we test it, so paying online moves no real money.", ""] : []),
       "HOW TO PAY",
-      `Amount: ${formatNaira(input.amountNaira)}`,
+      second ? `Amount: ${formatNaira(input.amountNaira)}, the first half of ${formatNaira(input.totalNaira!)}` : `Amount: ${formatNaira(input.amountNaira)}`,
       `Reference: ${input.reference}`,
       // The owner's own Full Report link reopens by itself; the assessment's holds for the 48 hours after the call.
       ...(report ? [] : [`Pay by: ${lagosTime(input.deadline)} (Lagos time)`]),
@@ -74,6 +77,7 @@ export function paymentDetailsEmail(input: { fullName: string; item: PaymentItem
       "AFTER YOU PAY",
       "There is nothing more to do. We email you as soon as Paystack confirms your payment.",
       afterwards,
+      ...(second ? [`The second half, ${formatNaira(second)}, is due seven days after we share your Findings. We email you its link then.`] : []),
       ...(report ? [] : ["", `If you need more than ${PAYMENT_WINDOW_HOURS} hours, reply to this email and we will send you a new link.`]),
       "",
       BRAND.organisationName,
@@ -183,8 +187,11 @@ export async function requestPayment(db: Database, input: { businessCheckId: num
   if (existing?.status === "confirmed") throw new TRPCError({ code: "CONFLICT", message: "This has already been paid." });
 
   const reference = paymentReference(input.item, check.id);
-  // The server's price, never the browser's. Sending the details again of an unpaid request prices it afresh.
-  const { amountNaira, lowPriceTesting } = resolveBusinessSupportPrice(input.item);
+  // The server's price, never the browser's. Sending the details again of an unpaid request prices it afresh. The
+  // Business Review is a service, paid half to start and half on its Findings (R36): its details ask for the first half.
+  const priced = resolveBusinessSupportPrice(input.item);
+  const { lowPriceTesting } = priced;
+  const amountNaira = input.item === "current_state" ? firstHalf(priced.amountNaira) : priced.amountNaira;
   const stageTo = input.item === "current_state" && BEFORE_OPPORTUNITY.includes(check.pipelineStage) ? "opportunity" : check.pipelineStage;
   // Recorded before the email goes, so a payment can always be matched to its reference.
   const request = await db.transaction(async tx => {
@@ -203,7 +210,7 @@ export async function requestPayment(db: Database, input: { businessCheckId: num
   });
 
   // The window starts when the details go out; sending them again starts a new one. The pay page is offered while Paystack is on.
-  const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference, deadline: paymentDeadline(request.requestedAt), amountNaira: request.amountNaira, online: onlinePaymentOffer(check.publicToken, input.item) });
+  const message = paymentDetailsEmail({ fullName: check.fullName, item: input.item, reference, deadline: paymentDeadline(request.requestedAt), amountNaira: request.amountNaira, totalNaira: priced.amountNaira, online: onlinePaymentOffer(check.publicToken, input.item) });
   const delivery = await deliverEmail({ to: check.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check.id, idempotencyKey: `payment_requests:${request.id}:details:${request.requestedAt.getTime()}` })
     .catch((error: unknown) => ({ status: "Failed" as const, reason: error instanceof Error ? error.message : "Unknown error" }));
   await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq(paymentRequests.id, request.id));

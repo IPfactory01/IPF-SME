@@ -100,40 +100,37 @@ alongside. Each batch is previewed at phone and laptop width before ET says "pus
 
 ## 4. Release 1: payment terms and one payment model
 
-**Requirements:** R36, R24 (in arrears), R37, R42, R51 (the pause screen and the resumed email), the groundwork for
+**Requirements:** R36, R24 (the monthly dates), R37, R42, R51 (the pause screen and the resumed email), the groundwork for
 R53. The App flow already sets out the behaviour: payment terms (section 3), the Fee and Payment states (section 5),
 journey step 7b (work paused) and the emails (section 6). **Moves:** cash collected on its date; Finance's numbers trusted
 without a spreadsheet; no client surprised by a pause.
 
-**Done when:** Marcelle's engagement is in arrears, approved by a partner, with her fees due 30, 60 and 90 days after
-her kickoff and her room open; a new in-advance client sees only the first fee until it is paid; Finance counts an
-in-arrears fee as owed only from its date and reads one ledger, in which every naira paid traces to one fee and one
-Paystack reference, or to a payment recorded by hand with who recorded it; a fee seven days late on an in-arrears
-engagement pauses the work, with a banner in the room saying what to pay; a refund is recorded against the payment it
+**Done when:** every engagement's fees follow what was bought, with no terms negotiated one by one; a new client sees
+only the first part until it is paid; sharing a service's main output dates its second half seven days ahead and
+emails the owner the pay link; Finance counts every unpaid fee as owed, late once its date passes, and reads one ledger, in which every naira paid
+traces to one fee and one Paystack reference, or to a payment recorded by hand with who recorded it; a fee seven days
+late pauses the work, with a banner in the room saying what to pay; a refund is recorded against the payment it
 returns; and a Paystack notification the server could not process reaches the office the same day.
 
-**Decided on 10 November (ET), which changes batch E:** there is no arrears limit, because no engagement chooses its
-own terms (D4): a product is paid in advance, a service in milestones on one standard schedule across services, and
-Digital marketing monthly. E2 and E3 are re-planned once the milestone schedule is agreed: the partner's approval and the
-limit go, and the fees follow the schedule. Work pauses seven days after a missed date, the client told at three (D6).
+**Decided on 10 November (ET):** there is no arrears limit, because no engagement chooses its own terms (D4): a product
+is paid before we start, a service agreed on a call half to start and half on delivery (the Six-Week Fix too),
+Digital marketing monthly and a Monthly Service by the quarter (R36). Work pauses seven days after a missed date, the
+client told at three (D6). Batch E needs no migration: the terms come from what is bought, and the dates sit on the fees.
 
-**Needs first:** the standard milestone schedule for services; K5 (counsel adds the pause period to the Terms, since they
-allow suspension but give no period, and names Enzo Krypton & Co. as the collector). The day-3 notice and the *paused* email fire on a date, not on an action,
-so they come with the scheduled reminders in Release 2.
+**Needs first:** K5 (counsel adds to the Terms who collects payments, Enzo Krypton & Co., and the pause period).
 
-One migration, **0022**, written first on the branch with its guarded apply script; ET runs it and replies "0022 done";
-then E, F and G, each previewed before `main`.
+One migration, **0022**, for batch F (the ledger, refunds and receipt numbers), written on the branch with its guarded
+apply script; ET runs it and replies "0022 done".
 
-### Batch E: payment terms (migration 0022, about 4 days)
+### Batch E: payment terms by what is bought (no migration, about 3 days)
 
 | # | Task | Builds | Acceptance and test | Preview or input |
 |---|---|---|---|---|
-| E1 | **Migration 0022:** `engagements.paymentTerms` (`in_advance`, the default, or `in_arrears`), `paymentTermsApprovedByUserId` and `paymentTermsApprovedAt`; the `payments` ledger (F1) with its receipt numbers, and an invoice number on each fee (R53); additive only, guarded to run only on a database at 0021 | R36, R37, R53 | PGlite tests for each column and constraint; the apply-script test, as for 0021; `pnpm db:verify` after it is applied | ET runs it |
-| E2 | **Fee dates follow the terms and the kickoff date.** In advance: a fixed price on the kickoff date; monthly fees on day 0, 30 and 60; the Six-Week Fix at its start, mid-point and result. In arrears: monthly fees on day 30, 60 and 90; any other fee on the date the lead sets. Filled in when the engagement opens, and worked out again when the terms or the kickoff date change while nothing is paid | R36, R24 | Unit tests for every type and service under both terms; PGlite: opening an engagement dates its fees; a paid fee is never moved | — |
-| E3 | **In arrears needs a partner.** The lead chooses it on **New engagement** or the engagement's Fees; it waits for a partner's approval (new permission `approve_payment_terms`: Partner, and the Super Admin), recorded with who and when (audit `engagement_terms_approved`); whoever chose it cannot approve it; an approval that would take IP Factory past the arrears limit (D4) is refused, with the total named; until approved the engagement stays in advance | R36 | PGlite: a lead is refused, a partner approves, the limit refuses, the audit row; the document test checks the permission and the audit action are documented | D4 |
-| E4 | **The room follows the terms.** In advance, only the first fee until it is paid (built); in arrears, the room is open from the kickoff and the Payments tab shows each fee with its date. What we will do and the welcome email name the terms | R36, R47 | Room UI tests for both terms; the welcome email test | Preview |
-| E5 | **Finance by terms.** An in-arrears fee is *Scheduled* before its date, owed from it and late after it; the totals show paid, owed, late and scheduled | R36 | Finance PGlite test for both terms | Preview |
-| E6 | **Marcelle's engagement** set to in arrears and approved in the console, her three dates worked out from her kickoff date; never by hand in the database | R36, I4 | Checked with ET on the live site | ET or Lewis |
+| E1 | **The schedule from what is bought.** A product: one fee before we start. A service agreed on a call: *half to start* and *half on delivery*, in whole naira that add up to the price; the Six-Week Fix moves from 50/25/25 to 50/50 (paying in full at the start still saves 5%). Digital marketing: three monthly fees on day 0, 30 and 60. A Monthly Service: the first quarter. The first part is dated the start day; the second half has no date until delivery | R36, R24 | Unit tests for every product, service and type | — |
+| E2 | **The Business Review's first half.** Its payment details ask for half (₦300,000 of ₦600,000); paying it opens the engagement with the second half as a fee; an older request paid in full adds nothing. The room's Payments tab shows the first half paid | R36 | PGlite: the request, the confirmation, the balance fee; the older request | — |
+| E3 | **Delivery dates the second half.** Sharing the main output (a Business Review's Findings, a Six-Week Fix's Plan, a Done for You service's work) dates every unpaid fee that has no date yet seven days ahead, and emails the owner its pay link (*{fee}: ₦{amount} due by {date}*) | R36 | PGlite: the date, the email once, nothing for a Digital marketing piece or a second share | — |
+| E4 | **The site says how each is paid:** How we work, Services, each service's page, the questions, the journey; the room's What we will do and the welcome email list each part | R36, R47 | UI and copy tests; the words the site avoids | Preview |
+| E5 | **The pause (D6).** Seven days after an unpaid fee's date the engagement shows *Paused* to the team and the room shows what to pay to continue, with **Pay**; paying, or a new date, lifts it | R51 | Unit and room UI tests | Preview |
 
 ### Batch F: one payment model (about 4 days)
 
@@ -148,7 +145,7 @@ then E, F and G, each previewed before `main`.
 
 | # | Task | Builds | Acceptance and test | Preview or input |
 |---|---|---|---|---|
-| G1 | **Work paused (in arrears).** Seven days after an unpaid fee's date (D6) the engagement shows *Paused* to the team, on the list and the record, and the room shows a banner saying what to pay to continue, with **Pay**; the room stays readable and uploads stay open. Paying lifts it at once. Moving the fee's date gives more time, lifts it and tells the owner (built: *Your fees have changed*) | R51 | Unit: the pause date from the terms and the dates; room UI: the banner and **Pay**; PGlite: a payment or a new date lifts it | D6; preview |
+| G1 | **Work paused** (moved to E5 on 10 November; kept here for the record). Seven days after an unpaid fee's date (D6) the engagement shows *Paused* to the team, on the list and the record, and the room shows a banner saying what to pay to continue, with **Pay**; the room stays readable and uploads stay open. Paying lifts it at once. Moving the fee's date gives more time, lifts it and tells the owner (built: *Your fees have changed*) | R51 | Unit: the pause date from the terms and the dates; room UI: the banner and **Pay**; PGlite: a payment or a new date lifts it | D6; preview |
 | G2 | *Work on {engagement} has resumed*, to the owner and the lead, when a payment lifts a pause | R51 | Email test; the document test checks the email is in the App flow | — |
 | G3 | **Alerts.** A Paystack notification the server could not process (answered 500, so Paystack sends it again) emails the office at once, once per reference; a client email that failed shows at the top of the console's first tab until someone opens it. A daily summary joins the scheduled jobs in Release 2 | R42 | PGlite or unit: the failing webhook emails the office once; console UI test for the failed-email line | — |
 

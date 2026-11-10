@@ -226,13 +226,95 @@ for (const target of targets) {
       });
     });
 
+    describe("paying a service in halves (R36, ET 10 November 2026)", () => {
+      const lagosDayPlus = (days: number) => {
+        const date = new Date(`${new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date())}T12:00:00Z`);
+        date.setUTCDate(date.getUTCDate() + days);
+        return date.toISOString().slice(0, 10);
+      };
+
+      it("asks the Business Review's first half, starts it with the second, and dates the second seven days after the Findings are shared, emailing its link once", async () => {
+        const { email, businessCheckId, engagementId } = await client("halves");
+        const request = (await db.select().from(schema.paymentRequests).where(and(eq(schema.paymentRequests.businessCheckId, businessCheckId), eq(schema.paymentRequests.item, "current_state"))))[0];
+        expect(request.amountNaira).toBe(300_000);
+        const desk = await superAdmin.call();
+        expect((await desk.engagement.staff.fees({ engagementId })).feeLines).toMatchObject([{ label: "Business Review: half on delivery", amount: 300_000, dueOn: null }]);
+        // The team is told before a share that bills.
+        expect((await desk.engagement.staff.detail({ engagementId })).balanceOnDelivery).toBe(true);
+
+        // A Prescription is not the Business Review's delivery; its Findings are.
+        const { deliverableId: prescription } = await desk.engagement.staff.saveDeliverable({ engagementId, kind: "prescription", title: "What to do", summary: "Price first." });
+        await desk.engagement.staff.approveDeliverable({ deliverableId: prescription });
+        expect(await desk.engagement.staff.shareDeliverable({ deliverableId: prescription, audience: "owner" })).toMatchObject({ balancesDated: 0 });
+        expect((await desk.engagement.staff.fees({ engagementId })).feeLines).toMatchObject([{ dueOn: null }]);
+        mocked.deliverEmail.mockClear();
+        const { deliverableId: findings } = await desk.engagement.staff.saveDeliverable({ engagementId, kind: "findings", title: "What we found", summary: "Cash leaks at the till." });
+        expect(await desk.engagement.staff.shareDeliverable({ deliverableId: findings, audience: "owner" })).toMatchObject({ balancesDated: 1 });
+        const dueOn = lagosDayPlus(7);
+        expect((await desk.engagement.staff.fees({ engagementId })).feeLines).toMatchObject([{ label: "Business Review: half on delivery", dueOn }]);
+        expect((await desk.engagement.staff.detail({ engagementId })).balanceOnDelivery).toBe(false);
+        const notice = emails().find(sent => sent.to === email && sent.subject.includes("Business Review: half on delivery: ₦300,000 due by"))!;
+        expect(notice.body).toContain("We have shared your Findings for your Business Review in your room.");
+        expect(notice.body).toContain("The second half, ₦300,000, is due by");
+        const dated = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_fees_dated_on_delivery"));
+        expect(dated.map((row: { details: string }) => JSON.parse(row.details).engagementId)).toContain(engagementId);
+
+        // Sharing again dates nothing and sends nothing.
+        mocked.deliverEmail.mockClear();
+        expect(await desk.engagement.staff.shareDeliverable({ deliverableId: findings, audience: "business" })).toMatchObject({ balancesDated: 0 });
+        expect(emails().filter(sent => sent.subject.includes("due by"))).toEqual([]);
+      });
+
+      it("adds no second half for a Business Review paid in full before the change", async () => {
+        const { id } = await finishedCheck("paid-in-full");
+        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
+        await db.update(schema.paymentRequests).set({ amountNaira: 600_000 }).where(eq(schema.paymentRequests.id, paymentRequestId));
+        await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId });
+        const engagement = await engagementOf(id);
+        expect(await db.select().from(schema.engagementFeeLines).where(eq(schema.engagementFeeLines.engagementId, engagement.id))).toEqual([]);
+      });
+
+      it("keeps the second half to what the first half was when a token test price is restored before the payment confirms", async () => {
+        const { id } = await finishedCheck("token-price");
+        vi.stubEnv("CURRENT_STATE_PRICE_NGN", "100");
+        const { paymentRequestId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" }).finally(() => vi.unstubAllEnvs());
+        expect((await db.select().from(schema.paymentRequests).where(eq(schema.paymentRequests.id, paymentRequestId)))[0].amountNaira).toBe(50);
+        await (await superAdmin.call()).businessSupport.confirmPayment({ paymentRequestId });
+        const engagement = await engagementOf(id);
+        expect((await db.select().from(schema.engagementFeeLines).where(eq(schema.engagementFeeLines.engagementId, engagement.id))).map((line: { label: string; amount: number }) => [line.label, line.amount]))
+          .toEqual([["Business Review: half on delivery", 50]]);
+      });
+
+      it("opens a service agreed on a call with its two halves, the first dated the start day, and dates the second on delivery", async () => {
+        const desk = await superAdmin.call();
+        const opened = await desk.engagement.staff.createDirect({ type: "done_for_you", service: "business_plan", businessName: "Plan Studio", contactName: "Pat Plan", contactEmail: uniqueEmail("plan-studio"), startedOn: "2026-11-16" });
+        expect((await desk.engagement.staff.fees({ engagementId: opened.engagementId })).feeLines.map(line => [line.label, line.amount, line.dueOn])).toEqual([
+          ["Business Plan: half to start", 375_000, "2026-11-16"],
+          ["Business Plan: half on delivery", 375_000, null],
+        ]);
+        const { deliverableId } = await desk.engagement.staff.saveDeliverable({ engagementId: opened.engagementId, kind: "other", title: "Your Business Plan", summary: "The plan." });
+        expect(await desk.engagement.staff.shareDeliverable({ deliverableId, audience: "owner" })).toMatchObject({ balancesDated: 1 });
+        expect((await desk.engagement.staff.fees({ engagementId: opened.engagementId })).feeLines.map(line => line.dueOn)).toEqual(["2026-11-16", lagosDayPlus(7)]);
+      });
+
+      it("dates Digital marketing's three months from the kickoff, and no shared piece moves them", async () => {
+        const desk = await superAdmin.call();
+        const opened = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Month Studio", contactName: "Mo Month", contactEmail: uniqueEmail("month-studio"), startedOn: "2026-11-02" });
+        expect((await desk.engagement.staff.fees({ engagementId: opened.engagementId })).feeLines.map(line => line.dueOn)).toEqual(["2026-11-02", "2026-12-02", "2027-01-01"]);
+        const { deliverableId } = await desk.engagement.staff.saveDeliverable({ engagementId: opened.engagementId, kind: "tools", title: "Content calendar", summary: "Month 1." });
+        expect(await desk.engagement.staff.shareDeliverable({ deliverableId, audience: "owner" })).toMatchObject({ balancesDated: 0 });
+      });
+    });
+
     describe("fees (there are no proposals)", () => {
-      it("suggests the service's price, saves the schedule, records payments, and shows the client nothing to sign", async () => {
+      it("starts a paid Business Review with its second half, saves the schedule, records payments, and shows the client nothing to sign", async () => {
         const { owner, email: ownerEmail, engagementId } = await client("fees");
         const desk = await superAdmin.call();
-        // A paid Business Review has no fee lines yet; the team sees what the service suggests.
+        // A Business Review paid its first half on the check's request (R36): it starts with the second half as a fee,
+        // dated when the Findings are shared, and the room lists both halves.
         const fresh = await desk.engagement.staff.fees({ engagementId });
-        expect(fresh).toMatchObject({ feeLines: [], suggested: [{ label: "Business Review, payable before work begins", amount: 600000, dueOn: null }], can: { edit: true } });
+        expect(fresh).toMatchObject({ feeLines: [{ label: "Business Review: half on delivery", amount: 300000, dueOn: null, paidAt: null }], suggested: null, can: { edit: true } });
+        expect((await (await owner.call()).engagement.client.room())!.fees.map(fee => [fee.label, fee.amount, fee.paid])).toEqual([["Business Review: half to start", 300000, true], ["Business Review: half on delivery", 300000, false]]);
         await expect(desk.engagement.staff.saveFees({ engagementId, feeLines: [{ label: " ", amount: 1000, dueOn: null }] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
         mocked.deliverEmail.mockClear();
         await expect(desk.engagement.staff.saveFees({ engagementId, feeLines: [{ label: "To start", amount: 300000, dueOn: "2026-11-10" }, { label: "With the Findings", amount: 300000, dueOn: null }] })).resolves.toEqual({ success: true, notified: true });
@@ -1032,7 +1114,8 @@ for (const target of targets) {
         await expect(specialist.engagement.staff.fees({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });
         // A partner keeps both.
         expect((await partner.engagement.staff.detail({ engagementId })).sessions.find(item => item.id === sessionId)!.internalNotes).toContain("under-reporting");
-        expect((await partner.engagement.staff.fees({ engagementId })).suggested).not.toBeNull();
+        // The partner reads the fees: the Business Review's second half (R36).
+        expect((await partner.engagement.staff.fees({ engagementId })).feeLines.map(line => line.label)).toEqual(["Business Review: half on delivery"]);
 
         const item = { engagementId, kind: "action" as const, title: "Draft the competitor scan", detail: null, assigneeUserId: null, dueOn: null, status: "open" as const, statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 9, factor: null };
         const { taskId } = await specialist.engagement.staff.saveTask({ ...item, side: "ipf" });

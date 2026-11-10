@@ -114,7 +114,7 @@ export type ServicePrices = { fullReport: number; currentState: number };
 export const buildJourney = (prices: ServicePrices = PRICES): readonly JourneyStep[] => [
   { id: "check", name: "Free Business Health Check", body: "Ten minutes on your phone. A first read on where your business is stuck, in your own words." },
   { id: "first-step", name: "Your first step", body: `The check names the product that fits first, and the one after it. Want the detail behind it? The Full Report, ${formatNaira(prices.fullReport)}, by email.` },
-  { id: "pay", name: "Pay by link", body: `The price and the delivery time are on the page. You pay by transfer or card before we start. For a Business Review (${formatNaira(prices.currentState)}) or a Six-Week Fix, we talk first on a free 20-minute Discovery Call.` },
+  { id: "pay", name: "Pay by link", body: `The price and the delivery time are on the page. You pay by transfer or card: before we start for what you buy online, or half to start and half on delivery for work we agree on a call. For a Business Review (${formatNaira(prices.currentState)}) or a Six-Week Fix, we talk first on a free 20-minute Discovery Call.` },
   { id: "records", name: "Send your records", body: "Your statements and answers, through a secure form. We check they are complete and confirm your delivery date within one working day." },
   { id: "deliver", name: "We deliver", body: `Finished work, checked by a consultant who did not prepare it, with a 30-minute handover call. ${DELIVERY_REMEDY}` },
   { id: "next", name: "What comes next", body: "Thirty days on, we check in. If it helps, we suggest the next step, or a Monthly Service that keeps it going." },

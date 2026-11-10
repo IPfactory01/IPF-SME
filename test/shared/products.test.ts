@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PRICES } from "@shared/businessSupport";
 import {
-  MENU_PRODUCTS, NEED_DETAILS, NEEDS, nextProduct, payInFullAmount, priceLabel, priceTerms, productById, productBySlug, PRODUCTS,
+  firstHalf, isService, secondHalf, MENU_PRODUCTS, NEED_DETAILS, NEEDS, nextProduct, payInFullAmount, paymentTerms, priceLabel, priceTerms, productById, productBySlug, PRODUCTS,
   menuEntry, productsForNeed, quarterAmount, stageAmount, startingPriceOf, startMode, WAY_DETAILS, WAYS_TO_BUY, type PriceModel,
 } from "@shared/products";
 
@@ -69,13 +69,31 @@ describe("the launch menu (Operational Business Plan, 22 October 2026)", () => {
     for (const id of ["pricing_unit_cost_review", "funding_application_pack", "business_review", "six_week_fix", "monthly_accounts", "monthly_adviser_review"]) expect(productById(id)!.buy, id).toBe("after_call");
   });
 
-  it("charges the Six-Week Fix 50/25/25, or in full at 5% off", () => {
+  it("charges the Six-Week Fix half at the start and half at the result (ET, 10 November 2026), or in full at 5% off", () => {
     const fix = productById("six_week_fix")!.price as Extract<PriceModel, { kind: "milestones" }>;
-    expect(fix.stages.map((stage) => stage.percent)).toEqual([50, 25, 25]);
+    expect(fix.stages.map((stage) => stage.percent)).toEqual([50, 50]);
     expect(fix.stages.reduce((sum, stage) => sum + stageAmount(fix, stage.percent), 0)).toBe(1_500_000);
     expect(payInFullAmount(fix)).toBe(1_425_000);
-    expect(priceTerms(fix)).toContain("₦750,000 at the start");
+    expect(priceTerms(fix)).toContain("₦750,000 at the start, ₦750,000 at the result");
     expect(productById("six_week_fix")!.variants!.map((variant) => variant.name)).toEqual(["Margin", "Sales", "Cash and Pricing", "Delegation and Structure"]);
+  });
+
+  it("pays a service agreed on a call half to start and half on delivery, and anything bought online before we start (R36)", () => {
+    // The services: one-off work sold after the free call. Monthly Services are billed by the quarter instead.
+    expect(PRODUCTS.filter(isService).map((product) => product.id)).toEqual(["business_review", "business_plan", "pricing_unit_cost_review", "funding_application_pack", "six_week_fix"]);
+    for (const product of PRODUCTS.filter((item) => item.buy === "self")) expect(isService(product), product.id).toBe(false);
+    expect(paymentTerms(productById("business_review")!)).toBe("₦300,000 to start and ₦300,000 on delivery, by transfer or card.");
+    expect(paymentTerms(productById("pitch_deck")!)).toBe("Paid before we start, by transfer or card.");
+    // Two halves always add up to the price, in whole naira.
+    expect([firstHalf(750_001), 750_001 - firstHalf(750_001)]).toEqual([375_001, 375_000]);
+    // The second half, from what was paid: the rest of the price, never more than the first half, nothing after a whole price.
+    expect(secondHalf(300_000, 600_000)).toBe(300_000);
+    expect(secondHalf(375_001, 750_001)).toBe(375_000);
+    expect(secondHalf(600_000, 600_000)).toBe(0);
+    expect(secondHalf(50, 600_000)).toBe(50);
+    expect(secondHalf(300_000, 700_000)).toBe(300_000);
+    expect(WAY_DETAILS.done_for_you.charge).toMatch(/Bought online, it is paid before we start; agreed on a call, half to start and half on delivery/);
+    expect(WAY_DETAILS.six_week_fix.charge).toMatch(/^Half at the start and half at the result/);
   });
 
   it("charges Monthly Services by the quarter, and the Catch-Up for at least three months", () => {

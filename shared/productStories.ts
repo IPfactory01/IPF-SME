@@ -116,7 +116,7 @@ export const PRODUCT_STORIES: Record<string, ProductStory> = {
     forYou: ["Several things are wrong at once", "You are not sure which to fix first", "You can give two Sessions of 90 minutes"],
     notForYou: [{ text: "You already know the one problem. Go straight to a Six-Week Fix.", productId: "six_week_fix" }],
     faq: [
-      { q: "How does it start?", a: "With a free 20-minute Discovery Call. If the Business Review fits, we send your payment link after it." },
+      { q: "How does it start?", a: "With a free 20-minute Discovery Call. If the Business Review fits, we send the link for the first half after it; the second half is due seven days after you receive your Findings." },
       { q: "What do I send you?", a: "A short list of Data Requests: usually bank statements, sales records and your main costs. Each has a date." },
       { q: "What happens after?", a: "Most owners go on to a Six-Week Fix on the problem the review names. You decide." },
     ],
@@ -233,7 +233,7 @@ export const PRODUCT_STORIES: Record<string, ProductStory> = {
     forYou: ["Your prices are set by feel or by copying competitors", "Costs have risen faster than your prices", "You suspect some lines lose money but cannot prove which"],
     notForYou: [{ text: "Your records are months behind. Start with the Bookkeeping Catch-Up.", productId: "bookkeeping_catch_up" }],
     faq: [
-      { q: "Why does it start with a call?", a: "Above ₦500,000 we talk first for 20 minutes, so you only buy what fits. We send your payment link after the call." },
+      { q: "Why does it start with a call?", a: "Above ₦500,000 we talk first for 20 minutes, so you only buy what fits. After the call you pay half to start, and the other half on delivery." },
       { q: "Will you change my prices for me?", a: "We recommend prices to test and what each is worth. You decide what to charge." },
       { q: "Is this financial advice?", a: NOT_ADVICE },
     ],
@@ -297,7 +297,7 @@ export const PRODUCT_STORIES: Record<string, ProductStory> = {
     notForYou: [{ text: "You are not sure you are ready. Start with the Funding Readiness Assessment.", productId: "funding_readiness_assessment" }],
     faq: [
       { q: "Do you guarantee the loan?", a: "No. The lender decides. We make sure the application is complete, consistent and built from your real numbers." },
-      { q: "Why does it start with a call?", a: "Above ₦500,000 we talk first for 20 minutes, to check the lender, the deadline and your records. We send your payment link after the call." },
+      { q: "Why does it start with a call?", a: "Above ₦500,000 we talk first for 20 minutes, to check the lender, the deadline and your records. After the call you pay half to start, and the other half on delivery." },
       { q: "When does the ten days start?", a: "When your records are complete. We confirm the date within one working day." },
     ],
     closer: "Apply ready, on time.",
@@ -337,7 +337,7 @@ export const PRODUCT_STORIES: Record<string, ProductStory> = {
     forYou: ["You know the problem and want it fixed", "Your team can give two to four hours a week", "You want someone checking every week"],
     notForYou: [{ text: "You are not sure what the problem is. Start with a Business Review.", productId: "business_review" }],
     faq: [
-      { q: "How do I pay?", a: "Half at the start, a quarter at the mid-point and a quarter at the result. Or pay in full at the start and save 5%." },
+      { q: "How do I pay?", a: "Half at the start and half at the result. Or pay in full at the start and save 5%." },
       { q: "What if the number does not move in six weeks?", a: "We extend your Six-Week Fix, at no charge, for up to two weeks." },
       { q: "Do you do the work?", a: "No. Your team does; that is how it lasts. We prescribe, equip and review it with you every week." },
     ],

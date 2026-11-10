@@ -20,8 +20,8 @@ export const ABOUT_FIGURES = [
 ] as const;
 
 export const ABOUT_FAQ = [
-  { q: `Who is behind ${BRAND.organisationName}?`, a: `${BRAND.organisationName} is the delivery and method arm of ${groupName}, a Nigerian management consulting firm. Its partners have advised more than ${clientCount} clients since ${since}.` },
-  { q: "Where are you based?", a: `Our office is at ${BRAND.officeAddress.oneLine}. We work with businesses across Nigeria, and most of the work happens online.` },
+  { q: `Who is behind ${BRAND.organisationName}?`, a: `${groupName}, a Nigerian management consulting firm. ${BRAND.organisationName} is its delivery and method arm: the firm's method, sized and priced for small and medium businesses.` },
+  { q: "Where are you based?", a: `Our office is at ${BRAND.officeAddress.oneLine}, the same office as ${groupName}.` },
   { q: "What size of business do you work with?", a: "Owner-run businesses in Nigeria that already trade. A smaller business usually starts with the free Business Health Check and a Done for You product; a larger one with a Business Review." },
   { q: "How do I start?", a: "Take the free Business Health Check, ten minutes on your phone, or book a free 20-minute Discovery Call. Either way you know what to fix first, and what it costs, before you pay anything." },
 ] as const;

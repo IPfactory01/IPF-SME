@@ -61,6 +61,11 @@ docs/product/     These six documents
   statement, the hash and the guard); ET runs it and replies "00NN done". A backfill goes in the migration's own SQL, so
   the script and `pnpm db:migrate` give the same database. Applied through 0023 (10 November 2026); 0024 (R78) written 11 November, applied before its code goes live. `pnpm db:verify` checks a
   database against the schema, read-only (`docs/database-migrations.md`).
+- **Reminders** (R12, R16, 11 November 2026): Vercel Cron calls `GET /api/scheduled/reminders` once a day at 06:31 UTC (07:31
+  Lagos), which works on every Vercel plan. The route answers only `Authorization: Bearer $CRON_SECRET` (compared in constant
+  time), sends nothing between 9pm and 7am Lagos time (R57), records each reminder in `engagement_reminders` before sending
+  it so none goes twice, and gives each one a window of days so a missed run catches up. Each run is recorded
+  (`reminders_run`); `/api/health` reports whether `CRON_SECRET` is set and when the last run was.
 - `/api/health` counts the migrations the database has recorded against those the build needs (the journal, bundled at
   build). A database behind the build answers 503 with `MIGRATION_MISSING` and the first migration it lacks, and Admin
   shows it at the top of every tab. A push to `main` is checked live only once health shows the new build with every

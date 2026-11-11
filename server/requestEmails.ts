@@ -80,7 +80,7 @@ export async function businessNameOf(db: Db, engagement: typeof engagements.$inf
 }
 
 /** The client's people an item reaches: the owner and anyone at the owner's level, and the person it is for. */
-async function clientPeopleFor(db: Db, businessId: number | null, assigneeUserId: number | null) {
+export async function clientPeopleFor(db: Db, businessId: number | null, assigneeUserId: number | null) {
   if (businessId === null) return [];
   const people = await db.select({ userId: users.id, name: users.name, email: users.email, role: businessMemberships.role }).from(businessMemberships)
     .innerJoin(users, eq(businessMemberships.userId, users.id))
@@ -89,7 +89,7 @@ async function clientPeopleFor(db: Db, businessId: number | null, assigneeUserId
 }
 
 /** The person on the team an item goes to, among those who still have access; the office when there is nobody. */
-async function teamPersonFor(db: Db, task: typeof engagementTasks.$inferSelect) {
+export async function teamPersonFor(db: Db, task: typeof engagementTasks.$inferSelect) {
   const person = followUpOwnerOf(await teamOf(db, task.engagementId, Date.now()), task);
   return person ? { userId: person.userId, name: person.name, email: person.email } : { userId: null, name: "", email: BUSINESS_SUPPORT_MAILBOX };
 }

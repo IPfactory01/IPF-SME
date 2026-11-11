@@ -6,6 +6,10 @@
     {
       "path": "/api/health",
       "schedule": "17 6 * * *"
+    },
+    {
+      "path": "/api/scheduled/reminders",
+      "schedule": "31 6 * * *"
     }
   ],
   "functions": {

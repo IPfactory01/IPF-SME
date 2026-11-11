@@ -29,7 +29,7 @@ counting time spent waiting on a decision or a migration.
 
 Migrations are applied through **0023** (paid in arrears, R74, live 10 November). Session emails with a calendar invitation (R75) and Preview as a team member (R76) were built the same day; the Digital Marketing plan was brought in line with the Crown Studio agreement on 11 November (R77). Asking the client with a conversation on each item, and the 48-hour First edit clock (R78), were built on 11 November with migration 0024, which goes on the live database just before its code. Release 0 still waits on the timed phone run with ET or Marcelle (B6) and the
 team's WhatsApp numbers (I1); batch C was built on 10 November. Release 1 is built (batches E, F and G, 10 November
-2026). Release 2, the reminders, needs a scheduled job on Vercel first; the sending domain is verified (K2, 10 November). The document tests (`test/docs/productDocs.test.ts`) fail the build
+2026). Release 2's fee and item reminders run every morning from 11 November (migration 0025; they need `CRON_SECRET` in Vercel); the sending domain is verified (K2, 10 November). The document tests (`test/docs/productDocs.test.ts`) fail the build
 if a page, a table, a server action, a permission, a project role, an email or an audit action is added without being
 documented.
 
@@ -168,7 +168,7 @@ Each release is planned in full, like sections 3 and 4, before it starts.
 | # | Release | Requirements | Needs first | Size |
 |---|---|---|---|---|
 | 1 | Payment terms and one payment model | R36, R37, R24, R42; the pause screen of R51; the groundwork for R53 | Planned in full in section 4 | M |
-| 2 | Fee, Data Request and Session reminders | R12, R16, R48, R57, R59, R64 | A scheduled job on Vercel; quiet hours (the sending domain is verified, K2) | M |
+| 2 | Fee, Data Request and Session reminders | R12, R16, R48, R57, R59, R64 | A scheduled job on Vercel; quiet hours (the sending domain is verified, K2) | M. **Fee and item reminders and the First edit clock built 11 November 2026** (R12, R16, R57 in part; migration 0025; one morning run at 07:31 Lagos, `/api/scheduled/reminders`, with `CRON_SECRET`); Session reminders an hour before need a run every hour (Vercel Pro), and wait with R48 and R64 |
 | 3 | Buy now and the trust layer | R13, R38 (R35 built early, 10 November 2026) | Paystack live (K1) | M |
 | 4 | Close, the Day-30 Review and the next fix | R26, R27, R28 | A migration for the close record | M |
 | 5 | The room and the team's day, after the usability test | R49, R50, R52, R54, the rest of R51 | The usability test with a live client (A4) | L |

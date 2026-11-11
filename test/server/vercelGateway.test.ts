@@ -146,7 +146,7 @@ describe("createApp and the Vercel gateway", () => {
   it("serves GET /api/health", async () => {
     const res = await request(createApp(), "/api/health");
     expect(res.status).toBe(200);
-    expect(JSON.parse(res.body)).toEqual({ ok: true, service: "ipfactory-sme", build: null, database: { ok: true } });
+    expect(JSON.parse(res.body)).toEqual({ ok: true, service: "ipfactory-sme", build: null, database: { ok: true }, reminders: { configured: false, lastRunAt: null } });
   });
 
   it("answers 503 with the database's code and reason when the database does not answer", async () => {
@@ -160,10 +160,25 @@ describe("createApp and the Vercel gateway", () => {
     }
   });
 
+  it("runs the morning reminders only for Vercel Cron's secret, and says when no secret is set (R12, R16)", async () => {
+    const { ENV } = await import("@server/_core/env");
+    const saved = ENV.cronSecret;
+    try {
+      ENV.cronSecret = "";
+      expect((await request(createApp(), "/api/scheduled/reminders")).status).toBe(503);
+      ENV.cronSecret = "a-long-random-test-secret";
+      expect((await request(createApp(), "/api/scheduled/reminders")).status).toBe(401);
+      const gateway = createVercelGateway(createApp());
+      expect((await request(gateway, "/api/index?__prefix=api&__path=scheduled%2Freminders")).status).toBe(401);
+    } finally {
+      ENV.cronSecret = saved;
+    }
+  });
+
   it("routes rewritten URLs to the original Express route", async () => {
     const gateway = createVercelGateway(createApp());
     const health = await request(gateway, "/api/index?__prefix=api&__path=health");
-    expect(JSON.parse(health.body)).toEqual({ ok: true, service: "ipfactory-sme", build: null, database: { ok: true } });
+    expect(JSON.parse(health.body)).toEqual({ ok: true, service: "ipfactory-sme", build: null, database: { ok: true }, reminders: { configured: false, lastRunAt: null } });
     // The JUMP portal's sign-in redirect is gone with JUMP (6 November 2026).
     expect((await request(gateway, "/api/index?__prefix=portal&__path=authenticate")).status).toBe(404);
     expect((await request(gateway, "/api/index?__prefix=nope&__path=x")).status).toBe(404);

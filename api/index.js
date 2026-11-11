@@ -2331,6 +2331,13 @@ var engagementTaskComments = pgTable("engagement_task_comments", {
   body: text("body").notNull(),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
 }, (table2) => [index("engagement_task_comments_task_idx").on(table2.taskId), index("engagement_task_comments_engagement_idx").on(table2.engagementId)]);
+var engagementReminders = pgTable("engagement_reminders", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  key: varchar("key", { length: 200 }).notNull().unique(),
+  kind: varchar("kind", { length: 40 }).notNull(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  sentAt: timestamp("sentAt", { withTimezone: true }).defaultNow().notNull()
+}, (table2) => [index("engagement_reminders_engagement_idx").on(table2.engagementId)]);
 var engagementMeasures = pgTable("engagement_measures", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   engagementId: integer("engagementId").notNull().unique().references(() => engagements.id, { onDelete: "cascade" }),
@@ -4699,6 +4706,13 @@ var journal_default = {
       version: "7",
       when: 1794380058630,
       tag: "0024_engagement_requests",
+      breakpoints: true
+    },
+    {
+      idx: 25,
+      version: "7",
+      when: 1794383509384,
+      tag: "0025_engagement_reminders",
       breakpoints: true
     }
   ]
@@ -14997,6 +15011,224 @@ async function handleResendWebhook(req, res) {
   }
 }
 
+// server/reminders.ts
+import { createHash as createHash2, timingSafeEqual as timingSafeEqual7 } from "node:crypto";
+import { and as and22, desc as desc12, eq as eq32, inArray as inArray15, ne as ne5 } from "drizzle-orm";
+var QUIET_FROM_HOUR = 21;
+var QUIET_UNTIL_HOUR = 7;
+var HOUR3 = 36e5;
+var FEE_STAGES = [
+  { stage: "soon", from: -5, to: -1 },
+  { stage: "today", from: 0, to: 2 },
+  { stage: "late_3", from: 3, to: 6 },
+  { stage: "late_7", from: 7, to: 13 }
+];
+var ITEM_STAGES = [
+  { stage: "soon", from: -2, to: -1 },
+  { stage: "late", from: 2, to: 6 },
+  { stage: "lead", from: 3, to: 10 }
+];
+var daysBetween = (from, to) => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 864e5);
+var feeStageOn = (dueOn, today) => {
+  const day = daysBetween(dueOn, today);
+  return FEE_STAGES.find((item2) => day >= item2.from && day <= item2.to)?.stage ?? null;
+};
+var itemStagesOn = (dueOn, today) => {
+  const day = daysBetween(dueOn, today);
+  return ITEM_STAGES.filter((item2) => day >= item2.from && day <= item2.to).map((item2) => item2.stage);
+};
+var lagosHour = (now) => Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", hour: "2-digit", hourCycle: "h23" }).format(now));
+var isQuietHour = (now) => {
+  const hour = lagosHour(now);
+  return hour >= QUIET_FROM_HOUR || hour < QUIET_UNTIL_HOUR;
+};
+var hello2 = (name) => `Hello${firstNameOf(name) ? ` ${firstNameOf(name)}` : ""},`;
+var sign2 = BRAND.organisationName;
+function feeReminderEmail(input) {
+  const amount = formatNaira(input.left);
+  const due = dayInWords(input.dueOn);
+  const subjects = {
+    soon: `Coming up: ${input.label}, ${amount} due ${due}`,
+    today: `Due today: ${input.label}, ${amount}`,
+    late_3: `Now late: ${input.label}, ${amount} was due ${due}`,
+    late_7: `Work on your ${input.title} is paused: ${input.label}`
+  };
+  const opening = {
+    soon: `A reminder that ${input.label} for your ${input.title} is due on ${due}: ${amount}.`,
+    today: `${input.label} for your ${input.title} is due today: ${amount}.`,
+    late_3: `${input.label} for your ${input.title} was due on ${due} and is not paid yet: ${amount} is left to pay.`,
+    late_7: `${input.label} for your ${input.title} was due on ${due} and is still not paid, so work on it is paused. Paying what is left, ${amount}, starts it again at once.`
+  };
+  const lines = [hello2(input.name), "", opening[input.stage], ""];
+  lines.push(input.payUrl ? `Pay securely with Paystack: ${input.payUrl}` : `Your room has the details to pay: ${input.roomUrl}`);
+  lines.push(`Reference: ${input.reference}`, "", "If you have already paid, thank you: you can ignore this email.", "", sign2);
+  return { subject: subjects[input.stage], body: lines.join("\n") };
+}
+function feePausedLeadEmail(input) {
+  return {
+    subject: `Work paused: ${input.businessName}, ${input.label}`,
+    body: [
+      "Hello,",
+      "",
+      `${input.businessName}'s ${input.title}: ${input.label} was due on ${dayInWords(input.dueOn)} and ${formatNaira(input.left)} is still unpaid, so work is paused (D6). The client has been sent the pay link four times.`,
+      "",
+      "To give them more time, set a new date in the engagement's Fees. Paying lifts the pause at once.",
+      "",
+      `${getTrustedApplicationOrigin()}/admin`,
+      "",
+      sign2
+    ].join("\n")
+  };
+}
+var whatOf = (items) => items.length === 1 ? items[0].title : `${items[0].title} and ${items.length - 1} more`;
+function itemsReminderEmail(input) {
+  const list2 = input.items.map((item2) => `\u2022 ${item2.title}, due ${dayInWords(item2.dueOn)}`);
+  return input.stage === "soon" ? {
+    subject: `Coming up: ${whatOf(input.items)}, due ${dayInWords(input.items[0].dueOn)}`,
+    body: [hello2(input.name), "", `${input.items.length === 1 ? "This is" : "These are"} due soon for your ${input.title}:`, "", ...list2, "", `Send ${input.items.length === 1 ? "it" : "them"}, or tell us if something is not available, in your room: ${input.roomUrl}`, "", sign2].join("\n")
+  } : {
+    subject: `Still waiting: ${whatOf(input.items)}`,
+    body: [hello2(input.name), "", `We are still waiting for ${input.items.length === 1 ? "this" : "these"} for your ${input.title}:`, "", ...list2, "", `Send ${input.items.length === 1 ? "it" : "them"} in your room, or say there if you do not have ${input.items.length === 1 ? "it" : "them"}: ${input.roomUrl}`, "", sign2].join("\n")
+  };
+}
+function outstandingLeadEmail(input) {
+  return {
+    subject: `Outstanding after reminders: ${input.businessName}`,
+    body: [
+      "Hello,",
+      "",
+      `${input.businessName} has been reminded, and these are still open:`,
+      "",
+      ...input.items.map((item2) => `\u2022 ${item2.title}, due ${dayInWords(item2.dueOn)} (${daysBetween(item2.dueOn, input.today)} days late)`),
+      "",
+      `Follow up with them, or move the dates in the Work Plan: ${getTrustedApplicationOrigin()}/admin`,
+      "",
+      sign2
+    ].join("\n")
+  };
+}
+function clockReminderEmail(input) {
+  const when = lagosTime(input.dueAt);
+  return {
+    subject: input.late ? `${input.label} past its time: ${input.title}, ${input.businessName}` : `${input.label} due within a day: ${input.title}`,
+    body: [
+      hello2(input.name),
+      "",
+      input.late ? `The ${input.label.toLowerCase()} from "${input.title}" for ${input.businessName} was due by ${when} (Lagos time), 48 hours after it arrived, and is not shared yet.` : `The ${input.label.toLowerCase()} from "${input.title}" for ${input.businessName} is due by ${when} (Lagos time).`,
+      "",
+      `Once it is on the content board, press "${input.label} shared" on the item: ${getTrustedApplicationOrigin()}/admin`,
+      "",
+      sign2
+    ].join("\n")
+  };
+}
+async function claim(db, key, kind, engagementId) {
+  const rows = await db.insert(engagementReminders).values({ key: key.slice(0, 200), kind, engagementId }).onConflictDoNothing().returning({ id: engagementReminders.id });
+  return rows.length > 0;
+}
+async function leadsOf(db, engagementId) {
+  const leads = await db.select({ email: users.email }).from(engagementTeam).innerJoin(users, eq32(engagementTeam.userId, users.id)).where(and22(eq32(engagementTeam.engagementId, engagementId), inArray15(engagementTeam.role, ["manager", "lead"]), eq32(users.status, "active")));
+  const emails = Array.from(new Set(leads.flatMap((lead) => lead.email ? [lead.email] : [])));
+  return emails.length ? emails : [BUSINESS_SUPPORT_MAILBOX];
+}
+async function send(to, message, businessCheckId) {
+  try {
+    await deliverEmail({ to, subject: message.subject, body: message.body, sender: "business_support", businessCheckId: businessCheckId ?? void 0 });
+    return 1;
+  } catch (error) {
+    console.error("[Reminders] An email could not be sent:", error instanceof Error ? error.message : error);
+    return 0;
+  }
+}
+async function runReminders(db, now = /* @__PURE__ */ new Date()) {
+  if (isQuietHour(now)) {
+    await recordAudit(db, { action: "reminders_run", actorUserId: null, details: { ran: false, reason: "quiet_hours" } });
+    return { ran: false, reason: "quiet_hours" };
+  }
+  const today = lagosDay(now);
+  const roomUrl = `${getTrustedApplicationOrigin()}/dashboard`;
+  const counts = { fees: 0, items: 0, leads: 0, clocks: 0 };
+  const open = await db.select().from(engagements).where(ne5(engagements.stage, "closed"));
+  for (const engagement of open) {
+    try {
+      for (const fee of await clientFees(db, engagement.id)) {
+        if (fee.id <= 0 || fee.paid || fee.left <= 0 || !fee.dueOn) continue;
+        const stage = feeStageOn(fee.dueOn, today);
+        if (!stage || !await claim(db, `fee:${fee.id}:${fee.dueOn}:${stage}`, `fee_${stage}`, engagement.id)) continue;
+        const found = await feeContext(db, fee.id);
+        if (!found) continue;
+        if (found.payer) {
+          const payUrl = fee.payPath ? `${getTrustedApplicationOrigin()}${fee.payPath}` : null;
+          counts.fees += await send(found.payer.email, feeReminderEmail({ stage, name: found.payer.name, title: found.title, label: fee.label, left: fee.left, dueOn: fee.dueOn, reference: fee.reference, payUrl, roomUrl }), engagement.businessCheckId);
+        }
+        if (stage === "late_7") for (const to of await leadsOf(db, engagement.id)) counts.leads += await send(to, feePausedLeadEmail({ businessName: found.businessName, title: found.title, label: fee.label, left: fee.left, dueOn: fee.dueOn }), null);
+      }
+      const tasks = await db.select().from(engagementTasks).where(and22(eq32(engagementTasks.engagementId, engagement.id), eq32(engagementTasks.side, "client")));
+      const businessName = await businessNameOf(db, engagement);
+      const title = engagementTitle(engagement.type, engagement.service);
+      if (!engagement.opensOnPayment && engagement.businessId !== null) {
+        const waiting = tasks.filter((task) => OPEN_TASK_STATUSES.includes(task.status) && task.dueOn);
+        const byStage = { soon: [], late: [], lead: [] };
+        for (const task of waiting) {
+          for (const stage of itemStagesOn(task.dueOn, today)) {
+            if (await claim(db, `item:${task.id}:${task.dueOn}:${stage}`, `item_${stage}`, engagement.id)) byStage[stage].push(task);
+          }
+        }
+        const sortByDue = (list2) => [...list2].sort((a, b) => a.dueOn.localeCompare(b.dueOn) || a.sortOrder - b.sortOrder || a.id - b.id);
+        for (const stage of ["soon", "late"]) {
+          const list2 = sortByDue(byStage[stage]);
+          if (!list2.length) continue;
+          const owners = await clientPeopleFor(db, engagement.businessId, null);
+          const assignees = Array.from(new Set(list2.map((task) => task.assigneeUserId).filter((id3) => id3 !== null)));
+          const people = new Map(owners.map((person) => [person.email.toLowerCase(), { ...person, items: list2 }]));
+          for (const assignee of assignees) {
+            for (const person of await clientPeopleFor(db, engagement.businessId, assignee)) {
+              if (!people.has(person.email.toLowerCase())) people.set(person.email.toLowerCase(), { ...person, items: list2.filter((task) => task.assigneeUserId === assignee) });
+            }
+          }
+          for (const person of Array.from(people.values())) {
+            counts.items += await send(person.email, itemsReminderEmail({ stage, name: person.name, title, items: person.items.map((task) => ({ title: task.title, dueOn: task.dueOn })), roomUrl }), engagement.businessCheckId);
+          }
+        }
+        const outstanding = sortByDue(byStage.lead);
+        if (outstanding.length) {
+          for (const to of await leadsOf(db, engagement.id)) counts.leads += await send(to, outstandingLeadEmail({ businessName, items: outstanding.map((task) => ({ title: task.title, dueOn: task.dueOn })), today }), null);
+        }
+      }
+      for (const task of tasks.filter((item2) => item2.turnaround && item2.followUpDueAt && !item2.followUpDoneAt && item2.status !== "cancelled")) {
+        const left = task.followUpDueAt.getTime() - now.getTime();
+        const late = left < 0;
+        if (!late && left > 24 * HOUR3) continue;
+        if (late && left < -7 * 24 * HOUR3) continue;
+        if (!await claim(db, `clock:${task.id}:${task.followUpDueAt.toISOString()}:${late ? "late" : "soon"}`, late ? "clock_late" : "clock_soon", engagement.id)) continue;
+        const label = TURNAROUND_LABELS[task.turnaround];
+        const person = await teamPersonFor(db, task);
+        counts.clocks += await send(person.email, clockReminderEmail({ late, name: person.name, label, title: task.title, businessName, dueAt: task.followUpDueAt }), null);
+        if (late) for (const to of (await leadsOf(db, engagement.id)).filter((email) => email !== person.email)) counts.leads += await send(to, clockReminderEmail({ late, name: "", label, title: task.title, businessName, dueAt: task.followUpDueAt }), null);
+      }
+    } catch (error) {
+      console.error(`[Reminders] Engagement ${engagement.id} was skipped:`, error instanceof Error ? error.message : error);
+    }
+  }
+  await recordAudit(db, { action: "reminders_run", actorUserId: null, details: { ran: true, today, ...counts } });
+  return { ran: true, ...counts };
+}
+function isCronRequest(authorization, secret3 = ENV.cronSecret) {
+  if (!secret3) return false;
+  const digest = (value) => createHash2("sha256").update(value).digest();
+  return timingSafeEqual7(digest(authorization ?? ""), digest(`Bearer ${secret3}`));
+}
+async function remindersStatus(db) {
+  const configured = Boolean(ENV.cronSecret);
+  if (!db) return { configured, lastRunAt: null };
+  try {
+    const last = (await db.select({ createdAt: adminAccessAuditEvents.createdAt }).from(adminAccessAuditEvents).where(eq32(adminAccessAuditEvents.action, "reminders_run")).orderBy(desc12(adminAccessAuditEvents.id)).limit(1))[0];
+    return { configured, lastRunAt: last?.createdAt ?? null };
+  } catch {
+    return { configured, lastRunAt: null };
+  }
+}
+
 // server/_core/app.ts
 function createApp() {
   const app = express();
@@ -15005,8 +15237,22 @@ function createApp() {
   app.use(applySecurityHeaders);
   app.get("/api/health", async (_req, res) => {
     const report = healthReport();
-    const database7 = await checkDatabase(await getDb().catch(() => null));
-    res.status(database7.ok ? report.status : 503).json({ ...report.body, ok: report.body.ok && database7.ok, database: database7 });
+    const db = await getDb().catch(() => null);
+    const database7 = await checkDatabase(db);
+    const reminders = database7.ok ? await remindersStatus(db) : { configured: Boolean(ENV.cronSecret), lastRunAt: null };
+    res.status(database7.ok ? report.status : 503).json({ ...report.body, ok: report.body.ok && database7.ok, database: database7, reminders });
+  });
+  app.get("/api/scheduled/reminders", async (req, res) => {
+    if (!ENV.cronSecret) return void res.status(503).json({ ok: false, reason: "CRON_SECRET is not set, so no reminder is sent." });
+    if (!isCronRequest(req.get("authorization"))) return void res.status(401).json({ ok: false });
+    const db = await getDb().catch(() => null);
+    if (!db) return void res.status(503).json({ ok: false, reason: "The database is not available." });
+    try {
+      res.json({ ok: true, ...await runReminders(db) });
+    } catch (error) {
+      console.error("[Reminders] The run failed:", error instanceof Error ? error.message : error);
+      res.status(500).json({ ok: false });
+    }
   });
   app.post(PAYSTACK_WEBHOOK_PATH, express.raw({ type: () => true, limit: "256kb" }), handlePaystackWebhook);
   app.post("/api/resend/webhook", express.raw({ type: () => true, limit: "256kb" }), handleResendWebhook);

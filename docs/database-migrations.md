@@ -180,3 +180,9 @@ edit; nothing else changes. **Apply it just before deploying the requests code**
 Work Plan. Paste `drizzle/supabase/apply-0024-engagement-requests.sql` into the Supabase SQL Editor of the project the
 site uses and press Run; it stops, changing nothing, unless exactly `0000` to `0023` are recorded and the table is not
 there yet. Health then counts 25 of 25.
+
+**`0025` and deployment order** (written 11 November 2026). The reminders (R12, R16): one table, `engagement_reminders`,
+a row for each reminder sent, so the morning run never sends one twice. Additive; nothing that exists changes. Apply it
+before deploying the reminders code. Paste `drizzle/supabase/apply-0025-engagement-reminders.sql` into the Supabase SQL
+Editor and press Run; it stops, changing nothing, unless exactly `0000` to `0024` are recorded and the table is not
+there yet. Health then counts 26 of 26. The reminders send nothing until `CRON_SECRET` is set in Vercel.

@@ -1308,6 +1308,18 @@ export const engagementTaskComments = pgTable("engagement_task_comments", {
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
 }, table => [index("engagement_task_comments_task_idx").on(table.taskId), index("engagement_task_comments_engagement_idx").on(table.engagementId)]);
 
+/**
+ * Each reminder sent (R12, R16, 0025): the key names what it was about and when (a fee, its date and stage; an item and
+ * its date; a First edit and its due time). The morning run claims the key before it sends, so nothing goes twice.
+ */
+export const engagementReminders = pgTable("engagement_reminders", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  key: varchar("key", { length: 200 }).notNull().unique(),
+  kind: varchar("kind", { length: 40 }).notNull(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  sentAt: timestamp("sentAt", { withTimezone: true }).defaultNow().notNull(),
+}, table => [index("engagement_reminders_engagement_idx").on(table.engagementId)]);
+
 /** The fix's one number (D3): recorded in fix week 1. */
 export const engagementMeasures = pgTable("engagement_measures", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),

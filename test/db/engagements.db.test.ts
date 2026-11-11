@@ -13,6 +13,7 @@ import { businessCheckProfiles } from "../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../fixtures/reportIntake";
 import { addDays, lagosDay } from "@shared/agreement";
 import { dayInWords, requestDueOn } from "@shared/requests";
+import { runReminders } from "@server/reminders";
 
 const holder = vi.hoisted(() => {
   process.env.DATABASE_URL = "postgresql://contract:contract@localhost:5432/contract";
@@ -335,6 +336,47 @@ for (const target of targets) {
         mocked.deliverEmail.mockClear();
         await markDone(tasks.find(task => task.id === own)!);
         expect(received()).toEqual([]);
+      });
+    });
+
+    describe("the morning reminders (R12, R16, R78; ET 11 November 2026)", () => {
+      it("reminds the owner of a late fee and open items, tells the lead, warns of a First edit due, sends each once, and nothing at night", async () => {
+        const desk = await superAdmin.call();
+        const today = lagosDay();
+        const email = uniqueEmail("remind");
+        const { engagementId, invitationUrl } = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Remind Studio", contactName: "Rita Remind", contactEmail: email, startedOn: addDays(today, -7) });
+        const owner = browser();
+        await (await owner.call()).invitations.accept({ token: decodeURIComponent(invitationUrl!.split("/join/")[1]), email, fullName: "Rita Remind", password: PASSWORD, confirmPassword: PASSWORD });
+        await desk.engagement.staff.openRoomNow({ engagementId });
+        const lead = await person(["analyst"], "Lola Lead");
+        const producer = await person(["subject_matter_expert"], "Kemi Producer");
+        await desk.engagement.staff.assign({ engagementId, userId: lead.id, role: "manager" });
+        await desk.engagement.staff.assign({ engagementId, userId: producer.id, role: "content_producer" });
+        const now = new Date(`${today}T07:31:00+01:00`);
+        const [footage] = await db.select().from(schema.engagementTasks).where(and(eq(schema.engagementTasks.engagementId, engagementId), eq(schema.engagementTasks.title, "Send week 1 footage")));
+        await db.update(schema.engagementTasks).set({ status: "done", receivedAt: new Date(now.getTime() - 43 * 3_600_000), followUpDueAt: new Date(now.getTime() + 5 * 3_600_000) }).where(eq(schema.engagementTasks.id, footage.id));
+        mocked.deliverEmail.mockClear();
+        const ours = () => emails().filter(sent => [email, lead.email, producer.email].includes(sent.to)).map(sent => [sent.to, sent.subject]);
+
+        const run = await runReminders(db, now);
+        expect(run).toMatchObject({ ran: true });
+        const sent = ours();
+        // The first month's fee is seven days late: work pauses, the owner and the lead hear.
+        expect(sent).toContainEqual([email, expect.stringMatching(/^Work on your Digital Marketing is paused: /)]);
+        expect(sent).toContainEqual([lead.email, expect.stringMatching(/^Work paused: Remind Studio, /)]);
+        // Week 1's records are four days late: one email to the owner, and the lead hears what is outstanding.
+        expect(sent.filter(([to, subject]) => to === email && subject.startsWith("Still waiting: "))).toHaveLength(1);
+        expect(sent).toContainEqual([lead.email, "Outstanding after reminders: Remind Studio"]);
+        // The First edit is due in five hours: the Content Producer is warned.
+        expect(sent).toContainEqual([producer.email, "First edit due within a day: Send week 1 footage"]);
+
+        // The same morning again: nothing twice. At night: nothing at all.
+        mocked.deliverEmail.mockClear();
+        await runReminders(db, new Date(now.getTime() + 3_600_000));
+        expect(ours()).toEqual([]);
+        expect(await runReminders(db, new Date(`${today}T22:30:00+01:00`))).toEqual({ ran: false, reason: "quiet_hours" });
+        const recorded = await db.select().from(schema.engagementReminders).where(eq(schema.engagementReminders.engagementId, engagementId));
+        expect(recorded.map((row: { kind: string }) => row.kind)).toEqual(expect.arrayContaining(["fee_late_7", "item_late", "item_lead", "clock_soon"]));
       });
     });
 

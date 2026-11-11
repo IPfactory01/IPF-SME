@@ -81,6 +81,7 @@ import {
   startAwaitingEngagement,
   addMissingPlan,
   askClient,
+  bookSeries,
   staffTaskComment,
   clientTaskComment,
   followUpShared,
@@ -178,6 +179,13 @@ const staffRouter = router({
     status: z.enum(ENGAGEMENT_SESSION_STATUSES),
     weekNumber: z.number().int().min(1).max(12).nullable().optional(),
   })).mutation(async ({ ctx, input }) => guarded(async () => saveSession(await engagementDb(), ctx.actor, input))),
+  /** Book the series (R79): one weekday and time (Lagos) and a Join link date every Check-in without a time. manage_engagements. */
+  bookSeries: staff.input(z.object({
+    engagementId: id,
+    weekday: z.number().int().min(0).max(6),
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Choose the time."),
+    meetingLink: z.string().trim().url("Paste the full meeting link, starting https://").max(512).nullable().or(z.literal("").transform(() => null)),
+  })).mutation(async ({ ctx, input }) => guarded(async () => bookSeries(await engagementDb(), ctx.actor, input))),
   saveNotes: staff.input(z.object({ sessionId: id, clientNotes: optionalText(20000), internalNotes: optionalText(20000) }))
     .mutation(async ({ ctx, input }) => guarded(async () => saveSessionNotes(await engagementDb(), ctx.actor, input))),
   shareNotes: staff.input(z.object({ sessionId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareSessionNotes(await engagementDb(), ctx.actor, input))),

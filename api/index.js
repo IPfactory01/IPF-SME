@@ -617,6 +617,12 @@ function starterDueOn(startsOn, week, weekday) {
   if (weekday === void 0) return addDays(first, 3);
   return addDays(first, (weekday - (/* @__PURE__ */ new Date(`${first}T12:00:00Z`)).getUTCDay() + 7) % 7);
 }
+var WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+var seriesStart = (startsOn, week, weekday, time) => /* @__PURE__ */ new Date(`${starterDueOn(startsOn, week, weekday)}T${time}:00+01:00`);
+function slotInWords(weekday, time) {
+  const [hour, minute] = time.split(":").map(Number);
+  return `${WEEKDAY_NAMES[weekday]} at ${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${hour < 12 ? "am" : "pm"}`;
+}
 var BALANCE_DUE_DAYS = 7;
 var lagosDay = (now = Date.now()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date(now));
 var PAUSE_AFTER_DAYS = 7;
@@ -7027,20 +7033,14 @@ function sessionChange(before, after, now = Date.now()) {
 var icsTime = (date2) => date2.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 var icsText = (text4) => text4.replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\r?\n/g, "\\n");
 var fold = (line) => line.length <= 75 ? line : line.match(/.{1,74}/g).map((part, index2) => index2 ? ` ${part}` : part).join("\r\n");
-function sessionInvitationIcs(input) {
-  const now = input.now ?? Date.now();
+function sessionEvent(input) {
   const end = new Date(input.start.getTime() + input.minutes * 6e4);
   const description = [input.meetingLink ? `Join: ${input.meetingLink}` : "The Join link will be in the room before the Session.", `Business: ${input.businessName}`].join("\n");
-  const lines = [
-    "BEGIN:VCALENDAR",
-    "PRODID:-//IP Factory//The Shift//EN",
-    "VERSION:2.0",
-    "CALSCALE:GREGORIAN",
-    `METHOD:${input.cancelled ? "CANCEL" : "REQUEST"}`,
+  return [
     "BEGIN:VEVENT",
     `UID:session-${input.sessionId}@ipfactory.co`,
-    `SEQUENCE:${Math.floor(now / 1e3)}`,
-    `DTSTAMP:${icsTime(new Date(now))}`,
+    `SEQUENCE:${Math.floor(input.now / 1e3)}`,
+    `DTSTAMP:${icsTime(new Date(input.now))}`,
     `DTSTART:${icsTime(input.start)}`,
     `DTEND:${icsTime(end)}`,
     `SUMMARY:${icsText(`${input.title}: ${input.businessName}`)}`,
@@ -7049,11 +7049,37 @@ function sessionInvitationIcs(input) {
     `ORGANIZER;CN=IP Factory:mailto:${BUSINESS_SUPPORT_MAILBOX}`,
     `ATTENDEE;CN=${icsText(input.attendee.name || input.attendee.email)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=FALSE:mailto:${input.attendee.email}`,
     `STATUS:${input.cancelled ? "CANCELLED" : "CONFIRMED"}`,
-    "END:VEVENT",
-    "END:VCALENDAR"
+    "END:VEVENT"
   ];
-  return `${lines.map(fold).join("\r\n")}\r
+}
+var calendar = (method, events) => `${["BEGIN:VCALENDAR", "PRODID:-//IP Factory//The Shift//EN", "VERSION:2.0", "CALSCALE:GREGORIAN", `METHOD:${method}`, ...events.flat(), "END:VCALENDAR"].map(fold).join("\r\n")}\r
 `;
+function sessionInvitationIcs(input) {
+  return calendar(input.cancelled ? "CANCEL" : "REQUEST", [sessionEvent({ ...input, now: input.now ?? Date.now() })]);
+}
+function sessionSeriesIcs(input) {
+  const now = input.now ?? Date.now();
+  return calendar("PUBLISH", input.events.map((event) => sessionEvent({ ...event, attendee: input.attendee, cancelled: false, now })));
+}
+function seriesEmail(input) {
+  const name = firstNameOf(input.name);
+  const withWhom = input.forClient ? "with your team at IP Factory" : `with ${input.businessName}`;
+  return {
+    subject: `Check-ins booked: every ${input.slot}`,
+    body: [
+      `Hello${name ? ` ${name}` : ""},`,
+      "",
+      `Your Check-ins ${withWhom} are booked for every ${input.slot} (Lagos time):`,
+      "",
+      ...input.sessions.map((session) => `\u2022 ${session.title}: ${lagosTime(session.start)}`),
+      "",
+      input.meetingLink ? `Join: ${input.meetingLink}` : "Join: the link will be in the room before each Check-in.",
+      "",
+      "The calendar file attached adds them all to your calendar. If one moves, you will be sent its new time.",
+      "",
+      input.forClient ? `Your room: ${input.origin}/dashboard` : `The engagement: ${input.origin}/admin`
+    ].join("\n")
+  };
 }
 function sessionEmail(input) {
   const when = lagosTime(input.start);
@@ -7134,6 +7160,39 @@ async function sendSessionEmails(db, input) {
     return { sent: results.filter((result) => result.status === "fulfilled").length };
   } catch (error) {
     console.error("[Sessions] The Session emails could not be sent:", error instanceof Error ? error.message : error);
+    return { sent: 0 };
+  }
+}
+async function sendSeriesEmails(db, input) {
+  const now = input.now ?? Date.now();
+  try {
+    const engagement = (await db.select().from(engagements).where(eq10(engagements.id, input.engagementId)).limit(1))[0];
+    if (!engagement || !input.sessionIds.length) return { sent: 0 };
+    const sessions = (await db.select().from(engagementSessions).where(inArray3(engagementSessions.id, input.sessionIds))).filter((session) => session.scheduledFor).sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime());
+    const business = engagement.businessId === null ? void 0 : (await db.select({ name: businesses.name }).from(businesses).where(eq10(businesses.id, engagement.businessId)).limit(1))[0];
+    const businessName = business?.name ?? engagement.contactName ?? "";
+    const people = /* @__PURE__ */ new Map();
+    for (const member of await teamOf(db, engagement.id, now)) people.set(member.email.toLowerCase(), { email: member.email, name: member.name, forClient: false });
+    const client = await clientOf(db, engagement);
+    if (client) people.set(client.email.toLowerCase(), { ...client, forClient: true });
+    const events = sessions.map((session) => ({ sessionId: session.id, title: session.title, businessName, start: session.scheduledFor, minutes: session.durationMinutes ?? DEFAULT_MINUTES, meetingLink: session.meetingLink }));
+    const meetingLink = sessions.find((session) => session.meetingLink)?.meetingLink ?? null;
+    const origin = getTrustedApplicationOrigin();
+    const results = await Promise.allSettled(Array.from(people.values()).map((person) => {
+      const message = seriesEmail({ name: person.name, forClient: person.forClient, businessName, slot: input.slot, sessions: sessions.map((session) => ({ title: session.title, start: session.scheduledFor })), meetingLink, origin });
+      return deliverEmail({
+        to: person.email,
+        subject: message.subject,
+        body: message.body,
+        icsContent: sessionSeriesIcs({ events, attendee: person, now }),
+        icsFilename: "check-ins.ics",
+        idempotencyKey: `series:${engagement.id}:${Math.floor(now / 1e3)}:${person.email.toLowerCase()}`,
+        businessCheckId: person.forClient ? engagement.businessCheckId ?? void 0 : void 0
+      });
+    }));
+    return { sent: results.filter((result) => result.status === "fulfilled").length };
+  } catch (error) {
+    console.error("[Sessions] The series emails could not be sent:", error instanceof Error ? error.message : error);
     return { sent: 0 };
   }
 }
@@ -12635,6 +12694,21 @@ async function saveSession(db, actor, input) {
   if (change) await sendSessionEmails(db, { sessionId: created.id, change, includeClient: true });
   return { sessionId: created.id };
 }
+async function bookSeries(db, actor, input) {
+  requireManage2(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (!engagement.startedOn) throw new TRPCError18({ code: "BAD_REQUEST", message: "Set the engagement's start date first: the series is dated from it." });
+  const now = (input.now ?? /* @__PURE__ */ new Date()).getTime();
+  const open = await db.select().from(engagementSessions).where(and16(eq24(engagementSessions.engagementId, engagement.id), eq24(engagementSessions.kind, "check_in"), eq24(engagementSessions.status, "planned"), isNull12(engagementSessions.scheduledFor)));
+  const dated = open.filter((session) => session.weekNumber !== null).map((session) => ({ session, start: seriesStart(engagement.startedOn, session.weekNumber, input.weekday, input.time) })).filter((item2) => item2.start.getTime() > now);
+  if (!dated.length) throw new TRPCError18({ code: "BAD_REQUEST", message: "Every Check-in already has a time, or its week has passed. Change one on its own below." });
+  await db.transaction(async (tx) => {
+    for (const item2 of dated) await tx.update(engagementSessions).set({ scheduledFor: item2.start, meetingLink: input.meetingLink ?? item2.session.meetingLink }).where(eq24(engagementSessions.id, item2.session.id));
+    await recordAudit(tx, { action: "engagement_series_booked", actorUserId: actor.id, details: { engagementId: engagement.id, weekday: input.weekday, time: input.time, sessions: dated.length } });
+  });
+  const { sent } = await sendSeriesEmails(db, { engagementId: engagement.id, sessionIds: dated.map((item2) => item2.session.id), slot: slotInWords(input.weekday, input.time) });
+  return { booked: dated.length, emailed: sent };
+}
 async function requireStaffSession(db, actor, sessionId) {
   const session = (await db.select().from(engagementSessions).where(eq24(engagementSessions.id, sessionId)).limit(1))[0];
   if (!session) throw notFound4();
@@ -14552,6 +14626,13 @@ var staffRouter = router({
     status: z15.enum(ENGAGEMENT_SESSION_STATUSES),
     weekNumber: z15.number().int().min(1).max(12).nullable().optional()
   })).mutation(async ({ ctx, input }) => guarded(async () => saveSession(await engagementDb(), ctx.actor, input))),
+  /** Book the series (R79): one weekday and time (Lagos) and a Join link date every Check-in without a time. manage_engagements. */
+  bookSeries: staff.input(z15.object({
+    engagementId: id,
+    weekday: z15.number().int().min(0).max(6),
+    time: z15.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Choose the time."),
+    meetingLink: z15.string().trim().url("Paste the full meeting link, starting https://").max(512).nullable().or(z15.literal("").transform(() => null))
+  })).mutation(async ({ ctx, input }) => guarded(async () => bookSeries(await engagementDb(), ctx.actor, input))),
   saveNotes: staff.input(z15.object({ sessionId: id, clientNotes: optionalText2(2e4), internalNotes: optionalText2(2e4) })).mutation(async ({ ctx, input }) => guarded(async () => saveSessionNotes(await engagementDb(), ctx.actor, input))),
   shareNotes: staff.input(z15.object({ sessionId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareSessionNotes(await engagementDb(), ctx.actor, input))),
   saveTask: staff.input(z15.object({

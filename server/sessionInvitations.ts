@@ -46,19 +46,17 @@ const fold = (line: string) => line.length <= 75 ? line : line.match(/.{1,74}/g)
  * The calendar invitation for one person: one UID per Session, a SEQUENCE that rises with each email (seconds since
  * 1970, so a later email always wins), from the office mailbox. A cancellation removes the event.
  */
-export function sessionInvitationIcs(input: {
-  sessionId: number; title: string; businessName: string; start: Date; minutes: number; meetingLink: string | null;
-  attendee: { name: string; email: string }; cancelled: boolean; now?: number;
-}) {
-  const now = input.now ?? Date.now();
+type IcsEvent = { sessionId: number; title: string; businessName: string; start: Date; minutes: number; meetingLink: string | null };
+
+/** One Session as a calendar event: one UID per Session, so a later invitation moves it. */
+function sessionEvent(input: IcsEvent & { attendee: { name: string; email: string }; cancelled: boolean; now: number }) {
   const end = new Date(input.start.getTime() + input.minutes * 60_000);
   const description = [input.meetingLink ? `Join: ${input.meetingLink}` : "The Join link will be in the room before the Session.", `Business: ${input.businessName}`].join("\n");
-  const lines = [
-    "BEGIN:VCALENDAR", "PRODID:-//IP Factory//The Shift//EN", "VERSION:2.0", "CALSCALE:GREGORIAN", `METHOD:${input.cancelled ? "CANCEL" : "REQUEST"}`,
+  return [
     "BEGIN:VEVENT",
     `UID:session-${input.sessionId}@ipfactory.co`,
-    `SEQUENCE:${Math.floor(now / 1000)}`,
-    `DTSTAMP:${icsTime(new Date(now))}`,
+    `SEQUENCE:${Math.floor(input.now / 1000)}`,
+    `DTSTAMP:${icsTime(new Date(input.now))}`,
     `DTSTART:${icsTime(input.start)}`,
     `DTEND:${icsTime(end)}`,
     `SUMMARY:${icsText(`${input.title}: ${input.businessName}`)}`,
@@ -67,9 +65,41 @@ export function sessionInvitationIcs(input: {
     `ORGANIZER;CN=IP Factory:mailto:${BUSINESS_SUPPORT_MAILBOX}`,
     `ATTENDEE;CN=${icsText(input.attendee.name || input.attendee.email)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=FALSE:mailto:${input.attendee.email}`,
     `STATUS:${input.cancelled ? "CANCELLED" : "CONFIRMED"}`,
-    "END:VEVENT", "END:VCALENDAR",
+    "END:VEVENT",
   ];
-  return `${lines.map(fold).join("\r\n")}\r\n`;
+}
+
+const calendar = (method: string, events: string[][]) =>
+  `${["BEGIN:VCALENDAR", "PRODID:-//IP Factory//The Shift//EN", "VERSION:2.0", "CALSCALE:GREGORIAN", `METHOD:${method}`, ...events.flat(), "END:VCALENDAR"].map(fold).join("\r\n")}\r\n`;
+
+export function sessionInvitationIcs(input: IcsEvent & { attendee: { name: string; email: string }; cancelled: boolean; now?: number }) {
+  return calendar(input.cancelled ? "CANCEL" : "REQUEST", [sessionEvent({ ...input, now: input.now ?? Date.now() })]);
+}
+
+/**
+ * A series of Sessions in one calendar file (R79): every Check-in booked at the standing slot. Published, since one
+ * invitation may hold one event only; each keeps its own UID, so a later change to one moves just that one (R75).
+ */
+export function sessionSeriesIcs(input: { events: IcsEvent[]; attendee: { name: string; email: string }; now?: number }) {
+  const now = input.now ?? Date.now();
+  return calendar("PUBLISH", input.events.map(event => sessionEvent({ ...event, attendee: input.attendee, cancelled: false, now })));
+}
+
+/** The email for a booked series: the slot, each date, and the Join link. */
+export function seriesEmail(input: { name: string; forClient: boolean; businessName: string; slot: string; sessions: { title: string; start: Date }[]; meetingLink: string | null; origin: string }) {
+  const name = firstNameOf(input.name);
+  const withWhom = input.forClient ? "with your team at IP Factory" : `with ${input.businessName}`;
+  return {
+    subject: `Check-ins booked: every ${input.slot}`,
+    body: [
+      `Hello${name ? ` ${name}` : ""},`, "",
+      `Your Check-ins ${withWhom} are booked for every ${input.slot} (Lagos time):`, "",
+      ...input.sessions.map(session => `• ${session.title}: ${lagosTime(session.start)}`), "",
+      input.meetingLink ? `Join: ${input.meetingLink}` : "Join: the link will be in the room before each Check-in.", "",
+      "The calendar file attached adds them all to your calendar. If one moves, you will be sent its new time.", "",
+      input.forClient ? `Your room: ${input.origin}/dashboard` : `The engagement: ${input.origin}/admin`,
+    ].join("\n"),
+  };
 }
 
 /** The email to one person about one change: the team's names the business; the client's names their team. */
@@ -169,6 +199,39 @@ export async function sendSessionEmails(db: Pick<Database, "select">, input: { s
     return { sent: results.filter(result => result.status === "fulfilled").length };
   } catch (error) {
     console.error("[Sessions] The Session emails could not be sent:", error instanceof Error ? error.message : error);
+    return { sent: 0 };
+  }
+}
+
+/** Emails everyone on the engagement the booked series, each with one calendar file of every Check-in in it (R79). Never throws. */
+export async function sendSeriesEmails(db: Pick<Database, "select">, input: { engagementId: number; sessionIds: number[]; slot: string; now?: number }) {
+  const now = input.now ?? Date.now();
+  try {
+    const engagement = (await db.select().from(engagements).where(eq(engagements.id, input.engagementId)).limit(1))[0];
+    if (!engagement || !input.sessionIds.length) return { sent: 0 };
+    const sessions = (await db.select().from(engagementSessions).where(inArray(engagementSessions.id, input.sessionIds)))
+      .filter(session => session.scheduledFor).sort((a, b) => a.scheduledFor!.getTime() - b.scheduledFor!.getTime());
+    const business = engagement.businessId === null ? undefined : (await db.select({ name: businesses.name }).from(businesses).where(eq(businesses.id, engagement.businessId)).limit(1))[0];
+    const businessName = business?.name ?? engagement.contactName ?? "";
+    const people = new Map<string, { email: string; name: string; forClient: boolean }>();
+    for (const member of await teamOf(db, engagement.id, now)) people.set(member.email.toLowerCase(), { email: member.email, name: member.name, forClient: false });
+    const client = await clientOf(db, engagement);
+    if (client) people.set(client.email.toLowerCase(), { ...client, forClient: true });
+    const events = sessions.map(session => ({ sessionId: session.id, title: session.title, businessName, start: session.scheduledFor!, minutes: session.durationMinutes ?? DEFAULT_MINUTES, meetingLink: session.meetingLink }));
+    const meetingLink = sessions.find(session => session.meetingLink)?.meetingLink ?? null;
+    const origin = getTrustedApplicationOrigin();
+    const results = await Promise.allSettled(Array.from(people.values()).map(person => {
+      const message = seriesEmail({ name: person.name, forClient: person.forClient, businessName, slot: input.slot, sessions: sessions.map(session => ({ title: session.title, start: session.scheduledFor! })), meetingLink, origin });
+      return deliverEmail({
+        to: person.email, subject: message.subject, body: message.body,
+        icsContent: sessionSeriesIcs({ events, attendee: person, now }), icsFilename: "check-ins.ics",
+        idempotencyKey: `series:${engagement.id}:${Math.floor(now / 1000)}:${person.email.toLowerCase()}`,
+        businessCheckId: person.forClient ? engagement.businessCheckId ?? undefined : undefined,
+      });
+    }));
+    return { sent: results.filter(result => result.status === "fulfilled").length };
+  } catch (error) {
+    console.error("[Sessions] The series emails could not be sent:", error instanceof Error ? error.message : error);
     return { sent: 0 };
   }
 }

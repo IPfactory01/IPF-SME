@@ -11,7 +11,7 @@ import { createPgliteHarness, createRemoteHarness, type DbHarness } from "./harn
 import { legacyBusinessReviewRequest } from "./legacyBusinessReview";
 import { businessCheckProfiles } from "../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../fixtures/reportIntake";
-import { addDays, lagosDay } from "@shared/agreement";
+import { addDays, lagosDay, seriesStart } from "@shared/agreement";
 import { dayInWords, requestDueOn } from "@shared/requests";
 import { runReminders } from "@server/reminders";
 
@@ -377,6 +377,43 @@ for (const target of targets) {
         expect(await runReminders(db, new Date(`${today}T22:30:00+01:00`))).toEqual({ ran: false, reason: "quiet_hours" });
         const recorded = await db.select().from(schema.engagementReminders).where(eq(schema.engagementReminders.engagementId, engagementId));
         expect(recorded.map((row: { kind: string }) => row.kind)).toEqual(expect.arrayContaining(["fee_late_7", "item_late", "item_lead", "clock_soon"]));
+      });
+    });
+
+    describe("Book the series (R79, ET 11 November 2026)", () => {
+      it("dates every Check-in without a time at the standing slot, keeps one already booked, emails everyone once, and is the lead's to do", async () => {
+        const desk = await superAdmin.call();
+        const today = lagosDay();
+        const email = uniqueEmail("series");
+        const startedOn = addDays(today, 3);
+        const { engagementId, invitationUrl } = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Series Studio", contactName: "Sola Series", contactEmail: email, startedOn });
+        const owner = browser();
+        await (await owner.call()).invitations.accept({ token: decodeURIComponent(invitationUrl!.split("/join/")[1]), email, fullName: "Sola Series", password: PASSWORD, confirmPassword: PASSWORD });
+        const checkins = (await desk.engagement.staff.detail({ engagementId })).sessions.filter(session => session.kind === "check_in");
+        expect(checkins.map(session => session.weekNumber)).toEqual([2, 3, 4, 7, 11]);
+        // Week 3's is already booked by hand: it keeps its time.
+        const kept = new Date(Date.parse(`${addDays(startedOn, 15)}T14:00:00+01:00`));
+        await desk.engagement.staff.saveSession({ engagementId, sessionId: checkins[1].id, kind: "check_in", title: checkins[1].title, scheduledFor: kept, durationMinutes: 30, meetingLink: null, agenda: null, status: "planned" });
+        const specialist = await person(["subject_matter_expert"], "Sam Specialist");
+        await desk.engagement.staff.assign({ engagementId, userId: specialist.id, role: "expert" });
+        await expect((await (await signIn(specialist, true)).call()).engagement.staff.bookSeries({ engagementId, weekday: 2, time: "10:00", meetingLink: null })).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+        mocked.deliverEmail.mockClear();
+        expect(await desk.engagement.staff.bookSeries({ engagementId, weekday: 2, time: "10:00", meetingLink: "https://zoom.example.test/j/series" })).toMatchObject({ booked: 4 });
+        const after = (await desk.engagement.staff.detail({ engagementId })).sessions.filter(session => session.kind === "check_in");
+        for (const session of after.filter(item => item.id !== checkins[1].id)) {
+          expect(new Date(session.scheduledFor!).toISOString()).toBe(seriesStart(startedOn, session.weekNumber!, 2, "10:00").toISOString());
+          expect(session.meetingLink).toBe("https://zoom.example.test/j/series");
+        }
+        expect(new Date(after.find(item => item.id === checkins[1].id)!.scheduledFor!).getTime()).toBe(kept.getTime());
+        // One email each, with every new Check-in in its calendar file.
+        type Sent = EmailCall & { icsContent?: string };
+        const sent = (mocked.deliverEmail.mock.calls.map(call => call[0] as Sent)).filter(item => item.subject === "Check-ins booked: every Tuesday at 10:00 am");
+        expect(sent.map(item => item.to)).toEqual(expect.arrayContaining([email]));
+        expect(sent.filter(item => item.to === email)).toHaveLength(1);
+        expect(sent[0].icsContent!.match(/BEGIN:VEVENT/g)).toHaveLength(4);
+        // Nothing left to book.
+        await expect(desk.engagement.staff.bookSeries({ engagementId, weekday: 2, time: "10:00", meetingLink: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });
       });
     });
 

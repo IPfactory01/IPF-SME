@@ -92,3 +92,20 @@ describe("the email", () => {
     expect(cancelled.body).not.toContain("Join:");
   });
 });
+
+describe("the series of Check-ins (R79)", () => {
+  it("puts every Check-in in one published calendar file, each with its own UID, and lists them in one email", async () => {
+    const { sessionSeriesIcs, seriesEmail } = await import("@server/sessionInvitations");
+    const events = [17, 24].map((day, index) => ({ sessionId: 40 + index, title: "Weekly Check-in", businessName: "Ada Foods", start: new Date(`2026-11-${day}T09:00:00Z`), minutes: 30, meetingLink: "https://zoom.example.test/j/1" }));
+    const ics = sessionSeriesIcs({ events, attendee: { name: "Ada Okafor", email: "ada@example.com" }, now: Date.parse("2026-11-11T10:00:00Z") }).replace(/\r\n /g, "");
+    expect(ics).toContain("METHOD:PUBLISH");
+    expect(ics.match(/BEGIN:VEVENT/g)).toHaveLength(2);
+    expect(ics).toContain("UID:session-40@ipfactory.co");
+    expect(ics).toContain("UID:session-41@ipfactory.co");
+    const email = seriesEmail({ name: "Ada Okafor", forClient: true, businessName: "Ada Foods", slot: "Tuesday at 10:00 am", sessions: events.map(event => ({ title: event.title, start: event.start })), meetingLink: "https://zoom.example.test/j/1", origin: "https://ipfactory.example.test" });
+    expect(email.subject).toBe("Check-ins booked: every Tuesday at 10:00 am");
+    expect(email.body).toContain("with your team at IP Factory are booked for every Tuesday at 10:00 am (Lagos time)");
+    expect(email.body).toContain("• Weekly Check-in: Tue, 17 Nov 2026, 10:00 am");
+    expect(email.body).toContain("Join: https://zoom.example.test/j/1");
+  });
+});

@@ -41,7 +41,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         fees: { useQuery: () => ({ data: api.failed.fees ? undefined : api.fees, error: api.failed.fees ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("fees"); } }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "bookSeries", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -326,6 +326,28 @@ describe("the team's engagements", () => {
     expect(drawer.queryByLabelText("Add to the team")).toBeNull();
     expect(drawer.queryByRole("button", { name: "Approve" })).toBeNull();
     expect(drawer.getByText("A Partner, Vice President or Senior Associate, or this engagement's lead, approves this before it can be shared.")).toBeTruthy();
+  });
+
+  it("books every Check-in without a time at one slot, and is offered only to whoever works on the engagement (R79)", () => {
+    replies.bookSeries = { booked: 2, emailed: 3 };
+    const checkin = (id: number, week: number, scheduledFor: Date | null) => ({ ...session, id, kind: "check_in", title: "Weekly Check-in", weekNumber: week, scheduledFor });
+    const base = detail({ manage: true, assign: false, review: false });
+    api.detail = { ...base, engagement: { ...base.engagement, startedOn: "2026-11-09" }, sessions: [checkin(61, 2, null), checkin(62, 3, null), checkin(63, 4, new Date("2026-11-24T09:00:00Z"))] };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const dialog = within(screen.getByRole("dialog"));
+    fireEvent.click(dialog.getByRole("button", { name: "Book the series (2 Check-ins)" }));
+    const form = within(dialog.getByRole("group", { name: "Book the series" }));
+    fireEvent.change(form.getByLabelText("Day"), { target: { value: "4" } });
+    fireEvent.change(form.getByLabelText("Time (Lagos)"), { target: { value: "15:30" } });
+    fireEvent.change(form.getByLabelText("Join link"), { target: { value: "https://zoom.example.test/j/7" } });
+    fireEvent.click(form.getByRole("button", { name: "Book every Thursday" }));
+    expect(api.calls.bookSeries).toEqual([{ engagementId: 4, weekday: 4, time: "15:30", meetingLink: "https://zoom.example.test/j/7" }]);
+    cleanup();
+    api.detail = { ...detail({ manage: false, assign: false, review: true }), engagement: { ...base.engagement, startedOn: "2026-11-09" }, sessions: [checkin(61, 2, null)] };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    expect(within(screen.getByRole("dialog")).queryByRole("button", { name: /Book the series/ })).toBeNull();
   });
 
   it("saves notes without sharing, and shares only notes that are saved", () => {

@@ -87,6 +87,7 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 | | Removed | Lead | `staff.removeMember` | 4.6 | — | Built (their items move: R51) |
 | Session | Created, booked, held, cancelled | Lead; client on Calendly | `staff.saveSession`; Calendly sync | 4.4 #2 | Client: Books the kickoff | Built |
 | | Everyone on the engagement emailed, with a calendar invitation | Platform | `staff.saveSession`; Calendly sync (`server/sessionInvitations.ts`) | 6 | Team: hears of a Session | Built (R75) |
+| | Booked as a series: every Check-in at one standing slot | Lead | `staff.bookSeries` | 4.4 #2b | Lead: books the Check-ins once | Built (R79) |
 | | Reminded before it starts | — | Nothing | — | — | **C3** |
 | | Notes saved, shared; audience chosen | Lead; owner | `staff.saveNotes`, `shareNotes`; `client.setAudience` | 4.4 #2 | Lead: Shares notes the same day | Built |
 | Data Request item and action | Created | Platform, team, Specialist (team side) | Loaded with the type; `staff.saveTask`, `loadDataRequest` | 4.3 #2, 4.6 | Analyst: Keeps the Work Plan current | Built |
@@ -248,6 +249,7 @@ person is not on is not found unless they see every engagement.
 | `engagement.staff.awaitingStart`, `engagement.staff.start`, `engagement.staff.clientBusinesses`, `engagement.staff.createDirect` | Paid with no engagement yet, and starting it; the businesses a new engagement can be for; New engagement | `view_all_businesses` and `manage_engagements` | Engagement |
 | `engagement.staff.setStage`, `engagement.staff.saveProblem` | The stage; the one problem and its statement | `manage_engagements` | Engagement |
 | `engagement.staff.assignableStaff`, `engagement.staff.assign`, `engagement.staff.removeMember` | Who can be added; add with a project role (emailed); take off | `assign_engagements` | Team assignment |
+| `engagement.staff.bookSeries` | Book the series (R79): date every Check-in without a time at one weekday and time, Lagos, with one Join link; one email to everyone with a calendar file of them all | `manage_engagements` | Session |
 | `engagement.staff.saveSession`, `engagement.staff.saveNotes`, `engagement.staff.shareNotes` | Sessions (a new time, length, link or title, or a cancellation, emails everyone on the engagement, R75); their notes; share the client notes | `manage_engagements`; internal notes also need `manage_engagements` or `review_engagements` to read | Session |
 | `engagement.staff.saveTask`, `engagement.staff.loadDataRequest`, `engagement.staff.addMissingPlan` | Work Plan items; load a Data Request; add what the current Digital Marketing plan has and the engagement lacks, dated from its kickoff (R77) | `manage_engagements`; team-side items also `contribute_engagements` | Data Request item |
 | `engagement.staff.requestUpload`, `engagement.staff.confirmUpload`, `engagement.staff.fileLink`, `engagement.staff.shareFile`, `engagement.staff.matchFile` | Upload (a signed address, then the record once the file exists); open; share with the client; match a drop-box file to its requests | `manage_engagements`; drafts, and the brief on a request the person made (R78), also `contribute_engagements` | File |

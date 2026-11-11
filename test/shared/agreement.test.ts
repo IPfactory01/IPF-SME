@@ -116,3 +116,15 @@ describe("the Digital Marketing plan (R77, ET 11 November 2026)", () => {
     expect(CONTENT_COUNTED).toEqual(["published"]);
   });
 });
+
+describe("the standing slot for the Check-ins (R79)", () => {
+  it("dates a week's Check-in on the slot's weekday in that week, at the time in Lagos", async () => {
+    const { seriesStart, slotInWords } = await import("@shared/agreement");
+    // Started Monday 9 November 2026: week 2's Tuesday is the 17th, at 10:00 Lagos (09:00 UTC).
+    expect(seriesStart("2026-11-09", 2, 2, "10:00").toISOString()).toBe("2026-11-17T09:00:00.000Z");
+    expect(seriesStart("2026-11-09", 7, 2, "16:30").toISOString()).toBe("2026-12-22T15:30:00.000Z");
+    expect(slotInWords(2, "10:00")).toBe("Tuesday at 10:00 am");
+    expect(slotInWords(4, "16:30")).toBe("Thursday at 4:30 pm");
+    expect(slotInWords(1, "12:05")).toBe("Monday at 12:05 pm");
+  });
+});

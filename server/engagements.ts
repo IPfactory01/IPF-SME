@@ -68,11 +68,11 @@ import { PRODUCTS, secondHalf } from "../shared/products";
 import { inviteBusinessOwner } from "./accountInvitations";
 import { slugify } from "./accountAuth";
 import { recordAudit } from "./audit";
-import { sendSessionEmails, sessionChange } from "./sessionInvitations";
+import { sendSeriesEmails, sendSessionEmails, sessionChange } from "./sessionInvitations";
 import { DUE_DAYS } from "../shared/dataRequestTemplates";
 import { initialFeeRows } from "./agreements";
 import { clientFees, dateBalancesOnDelivery } from "./feePayments";
-import { defaultFees, feeHold, isDelivery, lagosDay, starterDueOn } from "../shared/agreement";
+import { defaultFees, feeHold, isDelivery, lagosDay, seriesStart, slotInWords, starterDueOn } from "../shared/agreement";
 import { CURRENT_STATE } from "../shared/businessSupport";
 import { workLines } from "../shared/engagementWork";
 import { agreedWhatsapp, followUpOwnerOf, recipientOf } from "./teamContact";
@@ -771,6 +771,29 @@ export async function saveSession(db: Database, actor: StaffActor, input: Sessio
   const change = sessionChange(null, values);
   if (change) await sendSessionEmails(db, { sessionId: created.id, change, includeClient: true });
   return { sessionId: created.id } as const;
+}
+
+/**
+ * Book the series (R79, ET 11 November 2026): the standing slot agreed at the kick-off dates every Check-in in the plan
+ * that has no time yet, each on the slot's weekday in its own week, with one Join link. One already booked keeps its time;
+ * one whose day has passed is left. Everyone on the engagement gets one email with every Check-in in a calendar file.
+ */
+export async function bookSeries(db: Database, actor: StaffActor, input: { engagementId: number; weekday: number; time: string; meetingLink: string | null; now?: Date }) {
+  requireManage(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (!engagement.startedOn) throw new TRPCError({ code: "BAD_REQUEST", message: "Set the engagement's start date first: the series is dated from it." });
+  const now = (input.now ?? new Date()).getTime();
+  const open = await db.select().from(engagementSessions).where(and(eq(engagementSessions.engagementId, engagement.id), eq(engagementSessions.kind, "check_in"), eq(engagementSessions.status, "planned"), isNull(engagementSessions.scheduledFor)));
+  const dated = open.filter(session => session.weekNumber !== null)
+    .map(session => ({ session, start: seriesStart(engagement.startedOn!, session.weekNumber!, input.weekday, input.time) }))
+    .filter(item => item.start.getTime() > now);
+  if (!dated.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Every Check-in already has a time, or its week has passed. Change one on its own below." });
+  await db.transaction(async tx => {
+    for (const item of dated) await tx.update(engagementSessions).set({ scheduledFor: item.start, meetingLink: input.meetingLink ?? item.session.meetingLink }).where(eq(engagementSessions.id, item.session.id));
+    await recordAudit(tx, { action: "engagement_series_booked", actorUserId: actor.id, details: { engagementId: engagement.id, weekday: input.weekday, time: input.time, sessions: dated.length } });
+  });
+  const { sent } = await sendSeriesEmails(db, { engagementId: engagement.id, sessionIds: dated.map(item => item.session.id), slot: slotInWords(input.weekday, input.time) });
+  return { booked: dated.length, emailed: sent } as const;
 }
 
 async function requireStaffSession(db: Pick<Database, "select">, actor: StaffActor, sessionId: number) {

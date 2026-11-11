@@ -42,7 +42,8 @@ export const STAGED_TYPES: readonly EngagementType[] = ["business_review", "six_
 /** A stage on a dated engagement: from and to are days from the start (day 0 is the start date). */
 export type TypeStage = { title: string; summary: string; from: number; to: number };
 
-type StarterItem = { title: string; detail: string; week: number; order: number; section?: string; ref?: string; priority?: EngagementTaskPriority; informs?: string; format?: string };
+/** `weekday` (0 Sunday to 6 Saturday): the item falls due on that day of its week, not on day 3 (R77). */
+type StarterItem = { title: string; detail: string; week: number; order: number; section?: string; ref?: string; priority?: EngagementTaskPriority; informs?: string; format?: string; weekday?: number };
 type StarterSession = { kind: EngagementSessionKind; title: string; week: number; order: number; durationMinutes: number; agenda: string };
 
 export type DatedEngagementType = {
@@ -64,29 +65,40 @@ export const DIGITAL_MARKETING: DatedEngagementType = {
     { title: "Month 1", summary: "Reels, posts and stories go out each week; you approve before anything is published.", from: 7, to: 29 },
     { title: "Month 1 review", summary: "What went out, who it reached, the enquiries and sales it brought, and what changes for month 2.", from: 30, to: 30 },
     { title: "Month 2", summary: "The second month's content, shaped by the month 1 numbers.", from: 31, to: 59 },
-    { title: "Month 3", summary: "The third month's content, and the plan for after the quarter.", from: 60, to: 89 },
-    { title: "Quarter review", summary: "The 90 days in numbers, and what support looks like from here.", from: 90, to: 90 },
+    { title: "Month 2 review", summary: "The second month in numbers, what changes for month 3, and whether to continue.", from: 60, to: 60 },
+    { title: "Month 3", summary: "The third month's content, and the plan for after the quarter.", from: 61, to: 89 },
+    { title: "Month 3 review", summary: "The 90 days in numbers, against the Measures of Success, and what support looks like from here.", from: 90, to: 90 },
   ],
   monthly: [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }],
   dataRequests: [
+    { week: 1, order: 0, section: "K Kick-off", ref: "K1", priority: "high", title: "Kick-off questions", detail: "Before the kick-off: where the business is today, your goals for the 90 days, your best sellers, your typical customers, the competitors you watch, and what has worked before.", informs: "The goals and the Measures of Success we agree at the kick-off", format: "A note, or a voice note" },
     { week: 1, order: 1, section: "A Brand", ref: "A1", priority: "high", title: "Logo, colours and fonts", detail: "Whatever you use today: the logo files, and the colours and fonts if you have them.", informs: "So every reel and post looks like your business", format: "Any" },
     { week: 1, order: 2, section: "A Brand", ref: "A2", priority: "medium", title: "Past content that worked", detail: "Five to ten posts or videos you liked, yours or anyone's.", informs: "The style to build on", format: "Links or screenshots" },
     { week: 1, order: 3, section: "B Accounts", ref: "B1", priority: "high", title: "Access to your accounts", detail: "Instagram and Facebook through Meta Business Suite, TikTok, and your Google Business Profile. We send the steps for each. Never your password.", informs: "Posting, scheduling and the monthly numbers", format: "Partner or manager access" },
     { week: 1, order: 4, section: "C Offers", ref: "C1", priority: "high", title: "Your services and prices", detail: "What you sell, what each costs, and any offer you are running.", informs: "What the content sells", format: "A list or price board photo" },
     { week: 1, order: 5, section: "C Offers", ref: "C2", priority: "medium", title: "Your booking link and opening hours", detail: "Where a customer books, and when you are open.", informs: "The call to action in every post", format: "A link" },
   ],
+  // The weekly cycle (R77): footage every Thursday, edited within 48 hours, shared for approval on Saturday.
   clientActions: [
-    { week: 1, order: 6, priority: "high", title: "Send week 1 footage", detail: "Six or more vertical clips from this week. We edit within 48 hours of them arriving." },
+    ...Array.from({ length: 12 }, (_, index) => ({ week: index + 1, order: 6, weekday: 4, priority: "high" as const, title: `Send week ${index + 1} footage`, detail: "Six or more vertical clips by Thursday, filmed with your Content Producer's guidance for the week: they make next week's reels. We edit within 48 hours of them arriving." })),
     { week: 2, order: 1, priority: "high", title: "Approve the first reels", detail: "Nothing is published without your yes. Two rounds of changes are included." },
   ],
   teamActions: [
-    { week: 1, order: 7, title: "Content plan for month 1", detail: "The reels, posts and stories for the month, by week, with the offers they carry." },
+    { week: 1, order: 7, title: "Content plan for month 1", detail: "The reels, posts and stories for the month, by week, with the offers they carry. Shared in the room for the client's approval." },
     { week: 1, order: 8, title: "Baseline numbers", detail: "Reach, engagement, enquiries and sales from each platform today, to measure against." },
+    { week: 2, order: 3, title: "Google Business Profile assessment and growth plan", detail: "What the profile shows today, what to fix, and how it grows enquiries. Shared in the room." },
+    { week: 4, order: 3, title: "Content plan for month 2", detail: "Shaped by the month 1 numbers. Shared in the room for the client's approval before month 2 starts." },
+    { week: 8, order: 3, title: "Content plan for month 3", detail: "Shaped by the month 2 numbers. Shared in the room for the client's approval before month 3 starts." },
   ],
+  // Weekly Check-ins in month 1, then every two weeks; a review at the end of each month (R77).
   sessions: [
-    { kind: "other", title: "Kick-off", week: 1, order: 0, durationMinutes: 45, agenda: "The 90 days, the content plan, who does what, and the access we need." },
-    { kind: "check_in", title: "Weekly check-in", week: 2, order: 2, durationMinutes: 30, agenda: "What went out, what is next, anything to approve." },
+    { kind: "other", title: "Kick-off", week: 1, order: 0, durationMinutes: 45, agenda: "Where the business is, the 90-day goals, the Measures of Success with today's numbers, the weekly cycle, and who does what." },
+    ...[2, 3, 4].map(week => ({ kind: "check_in" as const, title: "Weekly Check-in", week, order: 2, durationMinutes: 30, agenda: "What went out, what is next, anything to approve." })),
     { kind: "review", title: "Month 1 review", week: 5, order: 1, durationMinutes: 45, agenda: "The month in numbers, and what changes for month 2." },
+    { kind: "check_in", title: "Check-in", week: 7, order: 2, durationMinutes: 30, agenda: "Every two weeks from month 2: what went out, what is next, anything to approve." },
+    { kind: "review", title: "Month 2 review", week: 9, order: 1, durationMinutes: 45, agenda: "The second month in numbers, what changes for month 3, and whether to continue." },
+    { kind: "check_in", title: "Check-in", week: 11, order: 2, durationMinutes: 30, agenda: "What went out, what is next, anything to approve." },
+    { kind: "review", title: "Month 3 review", week: 13, order: 1, durationMinutes: 60, agenda: "The 90 days in numbers against the Measures of Success, and what support looks like from here." },
   ],
 };
 
@@ -116,7 +128,8 @@ export const CONTENT_STATUS_LABELS: Record<ContentStatus, string> = {
   planned: "Planned", in_edit: "In edit", for_approval: "For your approval", changes_requested: "Changes requested", approved: "Approved", published: "Published",
 };
 /** Counted towards the month's numbers once the client has approved it. */
-export const CONTENT_COUNTED: readonly ContentStatus[] = ["approved", "published"];
+/** What counts towards the month: content published, not only approved (R77, as the Crown Studio agreement counts it). */
+export const CONTENT_COUNTED: readonly ContentStatus[] = ["published"];
 
 /** The engagement month a day falls in (1 for days 1 to 30, and so on), capped at the programme's last month. */
 export const monthOfDay = (day: number, durationDays: number) => Math.min(Math.max(1, Math.ceil(durationDays / 30)), Math.max(1, Math.ceil(day / 30)));

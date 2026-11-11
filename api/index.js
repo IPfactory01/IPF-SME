@@ -484,29 +484,40 @@ var DIGITAL_MARKETING = {
     { title: "Month 1", summary: "Reels, posts and stories go out each week; you approve before anything is published.", from: 7, to: 29 },
     { title: "Month 1 review", summary: "What went out, who it reached, the enquiries and sales it brought, and what changes for month 2.", from: 30, to: 30 },
     { title: "Month 2", summary: "The second month's content, shaped by the month 1 numbers.", from: 31, to: 59 },
-    { title: "Month 3", summary: "The third month's content, and the plan for after the quarter.", from: 60, to: 89 },
-    { title: "Quarter review", summary: "The 90 days in numbers, and what support looks like from here.", from: 90, to: 90 }
+    { title: "Month 2 review", summary: "The second month in numbers, what changes for month 3, and whether to continue.", from: 60, to: 60 },
+    { title: "Month 3", summary: "The third month's content, and the plan for after the quarter.", from: 61, to: 89 },
+    { title: "Month 3 review", summary: "The 90 days in numbers, against the Measures of Success, and what support looks like from here.", from: 90, to: 90 }
   ],
   monthly: [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }],
   dataRequests: [
+    { week: 1, order: 0, section: "K Kick-off", ref: "K1", priority: "high", title: "Kick-off questions", detail: "Before the kick-off: where the business is today, your goals for the 90 days, your best sellers, your typical customers, the competitors you watch, and what has worked before.", informs: "The goals and the Measures of Success we agree at the kick-off", format: "A note, or a voice note" },
     { week: 1, order: 1, section: "A Brand", ref: "A1", priority: "high", title: "Logo, colours and fonts", detail: "Whatever you use today: the logo files, and the colours and fonts if you have them.", informs: "So every reel and post looks like your business", format: "Any" },
     { week: 1, order: 2, section: "A Brand", ref: "A2", priority: "medium", title: "Past content that worked", detail: "Five to ten posts or videos you liked, yours or anyone's.", informs: "The style to build on", format: "Links or screenshots" },
     { week: 1, order: 3, section: "B Accounts", ref: "B1", priority: "high", title: "Access to your accounts", detail: "Instagram and Facebook through Meta Business Suite, TikTok, and your Google Business Profile. We send the steps for each. Never your password.", informs: "Posting, scheduling and the monthly numbers", format: "Partner or manager access" },
     { week: 1, order: 4, section: "C Offers", ref: "C1", priority: "high", title: "Your services and prices", detail: "What you sell, what each costs, and any offer you are running.", informs: "What the content sells", format: "A list or price board photo" },
     { week: 1, order: 5, section: "C Offers", ref: "C2", priority: "medium", title: "Your booking link and opening hours", detail: "Where a customer books, and when you are open.", informs: "The call to action in every post", format: "A link" }
   ],
+  // The weekly cycle (R77): footage every Thursday, edited within 48 hours, shared for approval on Saturday.
   clientActions: [
-    { week: 1, order: 6, priority: "high", title: "Send week 1 footage", detail: "Six or more vertical clips from this week. We edit within 48 hours of them arriving." },
+    ...Array.from({ length: 12 }, (_, index2) => ({ week: index2 + 1, order: 6, weekday: 4, priority: "high", title: `Send week ${index2 + 1} footage`, detail: "Six or more vertical clips by Thursday, filmed with your Content Producer's guidance for the week: they make next week's reels. We edit within 48 hours of them arriving." })),
     { week: 2, order: 1, priority: "high", title: "Approve the first reels", detail: "Nothing is published without your yes. Two rounds of changes are included." }
   ],
   teamActions: [
-    { week: 1, order: 7, title: "Content plan for month 1", detail: "The reels, posts and stories for the month, by week, with the offers they carry." },
-    { week: 1, order: 8, title: "Baseline numbers", detail: "Reach, engagement, enquiries and sales from each platform today, to measure against." }
+    { week: 1, order: 7, title: "Content plan for month 1", detail: "The reels, posts and stories for the month, by week, with the offers they carry. Shared in the room for the client's approval." },
+    { week: 1, order: 8, title: "Baseline numbers", detail: "Reach, engagement, enquiries and sales from each platform today, to measure against." },
+    { week: 2, order: 3, title: "Google Business Profile assessment and growth plan", detail: "What the profile shows today, what to fix, and how it grows enquiries. Shared in the room." },
+    { week: 4, order: 3, title: "Content plan for month 2", detail: "Shaped by the month 1 numbers. Shared in the room for the client's approval before month 2 starts." },
+    { week: 8, order: 3, title: "Content plan for month 3", detail: "Shaped by the month 2 numbers. Shared in the room for the client's approval before month 3 starts." }
   ],
+  // Weekly Check-ins in month 1, then every two weeks; a review at the end of each month (R77).
   sessions: [
-    { kind: "other", title: "Kick-off", week: 1, order: 0, durationMinutes: 45, agenda: "The 90 days, the content plan, who does what, and the access we need." },
-    { kind: "check_in", title: "Weekly check-in", week: 2, order: 2, durationMinutes: 30, agenda: "What went out, what is next, anything to approve." },
-    { kind: "review", title: "Month 1 review", week: 5, order: 1, durationMinutes: 45, agenda: "The month in numbers, and what changes for month 2." }
+    { kind: "other", title: "Kick-off", week: 1, order: 0, durationMinutes: 45, agenda: "Where the business is, the 90-day goals, the Measures of Success with today's numbers, the weekly cycle, and who does what." },
+    ...[2, 3, 4].map((week) => ({ kind: "check_in", title: "Weekly Check-in", week, order: 2, durationMinutes: 30, agenda: "What went out, what is next, anything to approve." })),
+    { kind: "review", title: "Month 1 review", week: 5, order: 1, durationMinutes: 45, agenda: "The month in numbers, and what changes for month 2." },
+    { kind: "check_in", title: "Check-in", week: 7, order: 2, durationMinutes: 30, agenda: "Every two weeks from month 2: what went out, what is next, anything to approve." },
+    { kind: "review", title: "Month 2 review", week: 9, order: 1, durationMinutes: 45, agenda: "The second month in numbers, what changes for month 3, and whether to continue." },
+    { kind: "check_in", title: "Check-in", week: 11, order: 2, durationMinutes: 30, agenda: "What went out, what is next, anything to approve." },
+    { kind: "review", title: "Month 3 review", week: 13, order: 1, durationMinutes: 60, agenda: "The 90 days in numbers against the Measures of Success, and what support looks like from here." }
   ]
 };
 var DATED_TYPES = { digital_marketing: DIGITAL_MARKETING };
@@ -600,6 +611,11 @@ function monthlyFees(type, service, kickoffOn, inArrears) {
     const days = (index2 + 1) * ARREARS_MONTH_DAYS;
     return { ...fee, label: `Month ${index2 + 1} service fee, due ${days} days after kickoff`, dueOn: addDays(kickoffOn, days) };
   });
+}
+function starterDueOn(startsOn, week, weekday) {
+  const first = addDays(startsOn, (week - 1) * 7);
+  if (weekday === void 0) return addDays(first, 3);
+  return addDays(first, (weekday - (/* @__PURE__ */ new Date(`${first}T12:00:00Z`)).getUTCDay() + 7) % 7);
 }
 var BALANCE_DUE_DAYS = 7;
 var lagosDay = (now = Date.now()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date(now));
@@ -7102,7 +7118,7 @@ function workOf(input) {
   if (input.type === "digital_marketing") {
     return {
       what: "Three months of content for your business, each piece approved by you before anything is published.",
-      youGet: [...DIGITAL_MARKETING.monthly.map((item2) => `${item2.count} ${item2.label.toLowerCase()} a month`), "A review at the end of each month, and of the quarter"]
+      youGet: [...DIGITAL_MARKETING.monthly.map((item2) => `${item2.count} ${item2.label.toLowerCase()} a month`), "A Weekly Check-in in month 1, then every two weeks", "A review at the end of each month"]
     };
   }
   return { what: "", youGet: [] };
@@ -11978,6 +11994,52 @@ async function createDirectEngagement(db, actor, input) {
   const invitation = await inviteBusinessOwner(db, { email, fullName: contactName, businessId, businessName, actorUserId: actor.id, inviterName: actor.name || BRAND.organisationName, work });
   return { engagementId, invitationUrl: invitation.invitationUrl, deliveryStatus: invitation.deliveryStatus, hasAccount: false };
 }
+function starterTaskRows(engagementId, starter, startsOn, actorUserId) {
+  return [
+    ...starter.dataRequests.map((item2) => ({ kind: "data_request", side: "client", ...item2 })),
+    ...starter.clientActions.map((item2) => ({ kind: "action", side: "client", ...item2 })),
+    ...starter.teamActions.map((item2) => ({ kind: "action", side: "ipf", ...item2 }))
+  ].map((item2) => ({
+    engagementId,
+    kind: item2.kind,
+    side: item2.side,
+    title: item2.title,
+    detail: item2.detail,
+    dueOn: starterDueOn(startsOn, item2.week, item2.weekday),
+    weekNumber: item2.week,
+    sortOrder: item2.order,
+    section: item2.section ?? null,
+    ref: item2.ref ?? null,
+    informs: item2.informs ?? null,
+    format: item2.format ?? null,
+    priority: item2.priority ?? null,
+    createdByUserId: actorUserId
+  }));
+}
+async function addMissingPlan(db, actor, input) {
+  requireManage2(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  const plan = DATED_TYPES[engagement.type];
+  if (!plan || !engagement.startedOn) {
+    throw new TRPCError18({ code: "BAD_REQUEST", message: "Only an engagement with a dated plan and a start date, such as Digital Marketing, takes the plan's new items." });
+  }
+  const startsOn = engagement.startedOn;
+  return db.transaction(async (tx) => {
+    const [tasks, sessions] = await Promise.all([
+      tx.select({ title: engagementTasks.title }).from(engagementTasks).where(eq23(engagementTasks.engagementId, engagement.id)),
+      tx.select({ title: engagementSessions.title, weekNumber: engagementSessions.weekNumber }).from(engagementSessions).where(eq23(engagementSessions.engagementId, engagement.id))
+    ]);
+    const key = (title) => title.trim().toLowerCase();
+    const haveTasks = new Set(tasks.map((row) => key(row.title)));
+    const haveSessions = new Set(sessions.map((row) => `${key(row.title)}|${row.weekNumber ?? ""}`));
+    const newTasks = starterTaskRows(engagement.id, plan, startsOn, actor.id).filter((row) => !haveTasks.has(key(row.title)));
+    const newSessions = plan.sessions.filter((item2) => !haveSessions.has(`${key(item2.title)}|${item2.week}`)).map((item2) => ({ engagementId: engagement.id, kind: item2.kind, title: item2.title, durationMinutes: item2.durationMinutes, agenda: item2.agenda, weekNumber: item2.week, sortOrder: item2.order, createdByUserId: actor.id }));
+    if (newTasks.length) await tx.insert(engagementTasks).values(newTasks);
+    if (newSessions.length) await tx.insert(engagementSessions).values(newSessions);
+    await recordAudit(tx, { action: "engagement_plan_updated", actorUserId: actor.id, details: { engagementId: engagement.id, sessions: newSessions.length, items: newTasks.length } });
+    return { success: true, sessions: newSessions.length, items: newTasks.length };
+  });
+}
 async function insertDirect(tx, actor, input, at) {
   const feeLines = defaultFees(input.type, at.service, input.startedOn);
   const [created] = await tx.insert(engagements).values({
@@ -11993,11 +12055,7 @@ async function insertDirect(tx, actor, input, at) {
     fixStartedAt: input.type === "six_week_fix" ? /* @__PURE__ */ new Date() : null
   }).returning({ id: engagements.id });
   const starter = at.starter;
-  const tasks = starter ? [
-    ...starter.dataRequests.map((item2) => ({ kind: "data_request", side: "client", ...item2 })),
-    ...starter.clientActions.map((item2) => ({ kind: "action", side: "client", ...item2 })),
-    ...starter.teamActions.map((item2) => ({ kind: "action", side: "ipf", ...item2 }))
-  ].map(({ week, order, ...item2 }) => ({ engagementId: created.id, kind: item2.kind, side: item2.side, title: item2.title, detail: item2.detail, dueOn: at.dueFor(week), weekNumber: week, sortOrder: order, section: item2.section ?? null, ref: item2.ref ?? null, informs: item2.informs ?? null, format: item2.format ?? null, priority: item2.priority ?? null, createdByUserId: actor.id })) : [
+  const tasks = starter ? starterTaskRows(created.id, starter, input.startedOn, actor.id) : [
     ...ASSESSMENT_TEMPLATE.dataRequests.map((item2) => ({ engagementId: created.id, kind: "data_request", side: "client", title: item2.title, detail: item2.detail, dueOn: at.dueFor(item2.week), weekNumber: item2.week, sortOrder: item2.order, factor: item2.factor, createdByUserId: actor.id })),
     ...ASSESSMENT_TEMPLATE.teamActions.map((item2) => ({ engagementId: created.id, kind: "action", side: "ipf", title: item2.title, detail: item2.detail, dueOn: at.dueFor(item2.week), weekNumber: item2.week, sortOrder: item2.order, factor: item2.factor, createdByUserId: actor.id }))
   ];
@@ -14200,6 +14258,8 @@ var staffRouter = router({
   })).mutation(async ({ ctx, input }) => guarded(async () => saveFees(await engagementDb(), ctx.actor, input))),
   sendFeeLink: staff.input(z15.object({ feeLineId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffSendFeeLink(await engagementDb(), ctx.actor, input))),
   openRoomNow: staff.input(z15.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => openRoomNow(await engagementDb(), ctx.actor, input))),
+  /** Adds what the type's current plan has and this engagement lacks, dated from its kickoff (R77). Nothing already there changes. */
+  addMissingPlan: staff.input(z15.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => addMissingPlan(await engagementDb(), ctx.actor, input))),
   /** Paid in arrears or in advance from the kickoff (R74): a Partner or the Super Admin, on an engagement paid by the month. */
   setFeeTiming: staff.input(z15.object({ engagementId: id, inArrears: z15.boolean(), kickoffOn: z15.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the kickoff date.") })).mutation(async ({ ctx, input }) => guarded(async () => setFeeTiming(await engagementDb(), ctx.actor, input))),
   /** "Fix the next problem": the clients' requests for another service, and handling one. Desk only. */

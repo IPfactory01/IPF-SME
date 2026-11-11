@@ -161,6 +161,49 @@ for (const target of targets) {
       mocked.deliverEmail.mockResolvedValue({ status: "Simulated", reason: "test_sender" });
     });
 
+    describe("the Digital Marketing plan for an engagement already open (R77, ET 11 November 2026)", () => {
+      it("adds what the plan has and the engagement lacks, dated from its kickoff, once, and changes nothing already there", async () => {
+        const desk = await superAdmin.call();
+        const { engagementId } = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Plan Studio", contactName: "Pat Plan", contactEmail: uniqueEmail("plan-studio-dm"), startedOn: "2026-11-09" });
+        // An engagement opened before the plan changed: one Weekly check-in, footage for week 1 only, no Month 2 review.
+        const sessions = await db.select().from(schema.engagementSessions).where(eq(schema.engagementSessions.engagementId, engagementId));
+        for (const session of sessions.filter((row: { title: string; weekNumber: number | null }) => !(row.title === "Kick-off" || row.title === "Month 1 review" || (row.title === "Weekly Check-in" && row.weekNumber === 2)))) {
+          await db.delete(schema.engagementSessions).where(eq(schema.engagementSessions.id, session.id));
+        }
+        await db.update(schema.engagementSessions).set({ title: "Weekly check-in", scheduledFor: new Date("2026-11-17T09:00:00Z") }).where(and(eq(schema.engagementSessions.engagementId, engagementId), eq(schema.engagementSessions.title, "Weekly Check-in")));
+        const tasks = await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.engagementId, engagementId));
+        for (const task of tasks.filter((row: { title: string }) => (/^Send week \d+ footage$/.test(row.title) && row.title !== "Send week 1 footage") || row.title === "Kick-off questions" || row.title.startsWith("Content plan for month ") && row.title !== "Content plan for month 1" || row.title.startsWith("Google Business Profile"))) {
+          await db.delete(schema.engagementTasks).where(eq(schema.engagementTasks.id, task.id));
+        }
+
+        // A specialist cannot; the lead can, and only once.
+        const specialist = await signIn(await person(["subject_matter_expert"], "Spec Ialist"), true);
+        await expect((await specialist.call()).engagement.staff.addMissingPlan({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        expect(await desk.engagement.staff.addMissingPlan({ engagementId })).toEqual({ success: true, sessions: 6, items: 15 });
+        expect(await desk.engagement.staff.addMissingPlan({ engagementId })).toEqual({ success: true, sessions: 0, items: 0 });
+
+        const after = await desk.engagement.staff.detail({ engagementId });
+        expect(after.sessions.map((row: { title: string; weekNumber: number | null }) => `${row.title} (week ${row.weekNumber})`).sort()).toEqual([
+          "Check-in (week 11)", "Check-in (week 7)", "Kick-off (week 1)", "Month 1 review (week 5)", "Month 2 review (week 9)", "Month 3 review (week 13)",
+          "Weekly Check-in (week 3)", "Weekly Check-in (week 4)", "Weekly check-in (week 2)",
+        ]);
+        // The Session already booked keeps its time; the new footage falls due on Thursdays from the kickoff.
+        expect(after.sessions.find((row: { weekNumber: number | null }) => row.weekNumber === 2)).toMatchObject({ scheduledFor: new Date("2026-11-17T09:00:00Z") });
+        const footage = after.tasks.filter((row: { title: string }) => /^Send week \d+ footage$/.test(row.title));
+        expect(footage).toHaveLength(12);
+        expect(footage.find((row: { title: string }) => row.title === "Send week 2 footage")).toMatchObject({ dueOn: "2026-11-19" });
+        expect(after.tasks.map((row: { title: string }) => row.title)).toEqual(expect.arrayContaining(["Kick-off questions", "Content plan for month 2", "Content plan for month 3", "Google Business Profile assessment and growth plan"]));
+        const recorded = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_plan_updated"));
+        expect(recorded.map((row: { details: string }) => JSON.parse(row.details)).filter((entry: { engagementId: number }) => entry.engagementId === engagementId)).toEqual([
+          { engagementId, sessions: 6, items: 15 }, { engagementId, sessions: 0, items: 0 },
+        ]);
+
+        // Only an engagement with a dated plan.
+        const plan = await desk.engagement.staff.createDirect({ type: "done_for_you", service: "business_plan", businessName: "Plain Plan", contactName: "Pia Plain", contactEmail: uniqueEmail("plain-plan"), startedOn: "2026-11-16" });
+        await expect(desk.engagement.staff.addMissingPlan({ engagementId: plan.engagementId })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      });
+    });
+
     describe("Preview as a team member (R76, ET 10 November 2026)", () => {
       it("shows the Super Admin Admin as an analyst sees it, refuses every change meanwhile, records it, and ends on Close preview", async () => {
         const owner = (await db.select().from(schema.users).where(sql`lower(${schema.users.email}) = ${OWNER_ADMIN_EMAIL.toLowerCase()}`))[0];
@@ -845,9 +888,15 @@ for (const target of targets) {
         await (await owner.call()).invitations.accept({ token, email, fullName: "Marie Tiogo", password: PASSWORD, confirmPassword: PASSWORD });
         const room = (await (await owner.call()).engagement.client.room())!;
         expect(room).toMatchObject({ type: "digital_marketing", typeLabel: "Digital Marketing", startedOn: "2026-11-02", businessName: "Crown Studio", viewer: { kind: "owner" }, check: null, insight: null });
-        expect(room.tasks.filter(task => task.kind === "data_request").map(task => task.ref)).toEqual(["A1", "A2", "B1", "C1", "C2"]);
+        // The plan as the Crown Studio agreement runs it (R77): the kick-off questions first, footage every Thursday,
+        // Weekly Check-ins in month 1 then every two weeks, and a review at the end of each month.
+        expect(room.tasks.filter(task => task.kind === "data_request").map(task => task.ref)).toEqual(["K1", "A1", "A2", "B1", "C1", "C2"]);
         expect(room.tasks.find(task => task.ref === "B1")).toMatchObject({ section: "B Accounts", priority: "high", dueOn: "2026-11-05" });
-        expect(room.sessions.map(item => item.title)).toEqual(["Kick-off", "Weekly check-in", "Month 1 review"]);
+        const footage = room.tasks.filter(task => /^Send week \d+ footage$/.test(task.title));
+        expect(footage).toHaveLength(12);
+        expect(footage.slice(0, 2).map(task => task.dueOn)).toEqual(["2026-11-05", "2026-11-12"]);
+        expect(footage.every(task => new Date(`${task.dueOn}T12:00:00Z`).getUTCDay() === 4)).toBe(true);
+        expect(room.sessions.map(item => item.title)).toEqual(["Kick-off", "Weekly Check-in", "Weekly Check-in", "Weekly Check-in", "Month 1 review", "Check-in", "Month 2 review", "Check-in", "Month 3 review"]);
         expect(room.people).toEqual([expect.objectContaining({ name: "Marie Tiogo", label: "Owner", you: true })]);
 
         // The team's record has no Business Health Check behind it, and names the contact.

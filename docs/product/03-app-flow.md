@@ -81,6 +81,14 @@ after a missed date (D6, R51): the room says so from the first late day, and the
 Today's clients: **Marcelle (Digital marketing)** pays at 30, 60 and 90 days from her kickoff, as agreed with her; her
 lead sets those dates by hand in the engagement's Fees (I4).
 
+**The Digital Marketing rhythm (R77, ET 11 November 2026, from the Crown Studio agreement).** The kick-off questions
+come first, as a Data Request answered before the kick-off. Then every week: the client sends footage by Thursday, the
+Content Producer edits within 48 hours, the Digital Marketer shares the next week's pieces for approval on Saturday, and
+the client approves or asks for changes by Monday (two rounds per piece). Weekly Check-ins in month 1, a Check-in every
+two weeks after; a review at the end of each month, the Month 2 review asking whether to continue. Each month's content
+plan is shared for approval, and the Google Business Profile has its own assessment and growth plan. A piece counts
+towards the month once it is published.
+
 ### 3.1 Recording money: the ledger (R37, batch F; approved by ET on 10 November 2026)
 
 **Built (F1, 10 November 2026):** paying online for what is left, recording money by hand in part or in full, cancelling a
@@ -218,7 +226,7 @@ flowchart TD
 | 1 | Opens the room: sees where things stand, the next action, the next Session | Shows one next action, chosen by rule: a fee the room waits for, approvals that hold up publishing, records past their date, records due this week, a Sign-off (R50) | — | — | — | Built (the rule to build, R50) |
 | 2 | Books the kickoff and Sessions on Calendly from the room | Copies each booking's time and link onto the next Session without one, and emails the team the time and link with a calendar invitation (R75) | Holds the Session; saves client notes and internal notes; shares client notes the same day | Owner (and the people the notes are shared with): *Engagement update: {title}* | Session **held** | Built |
 | 3 | Sends records: uploads files and voice notes into the drop box; for raw video, pastes a Drive (or Dropbox, WeTransfer, iCloud) link, or presses **Send on WhatsApp to {name}** and marks it sent another way; or "Not available" with a note | Keeps files private; never stores raw video; reminds two days before an item's date and two days after it if still open | The person it is for (the Content Producer for footage) opens the link or the WhatsApp; matches each file to the items it answers; marks an item received or asks for more | Owner: reminders (to build). Lead: what is still outstanding after the reminders (to build) | Item **Sent, we are checking** → **Received**, **We need a bit more**, **Not available** | Files, voice notes and links built (R43); a client can take back a file until it is taken in (R61); WhatsApp to build (R44); reminders (R16) |
-| 4 | Approves reels, posts and stories, or asks for changes (Digital marketing); on a phone, previews each piece and approves several at once | Counts the month's pieces once approved | The Content Producer edits and sends for approval; the Digital Marketer plans and publishes | — | Content **For your approval** → **Approved** or **Changes requested** → **Published** | Built; previews and approving several at once to build (R54) |
+| 4 | Approves reels, posts and stories, or asks for changes (Digital marketing); on a phone, previews each piece and approves several at once | Counts the month's pieces once published (R77) | The Content Producer edits and sends for approval; the Digital Marketer plans and publishes | — | Content **For your approval** → **Approved** or **Changes requested** → **Published** | Built; previews and approving several at once to build (R54) |
 | 5 | Reads a shared Deliverable; comments; gives Sign-off, or asks for changes (R51, to build) | — | Drafts; a lead approves prescriptions and plans; shares with the owner or the owner and their team; Specialists hand in drafts the lead shares | Owner: *Engagement update: {title}* | Deliverable **draft** → **approved** → **shared**; Sign-off given | Built |
 | 6 | Sees the one number each week | Shows where it started, this week, where it is going | Records the weekly check-in: five questions, the reading, hours by role, AI used | — | — | Built |
 | 7 | Pays each later fee from the reminder (by email, with a WhatsApp button) or the Payments tab; keeps the PDF receipt | Sends each fee's link 5 days before its date, on the day, and 3 and 7 days after if unpaid, never between 9pm and 7am; confirms payment; sends the receipt and invoice as PDFs | Told at 7 days late; work pauses (D6) | Owner: reminders, receipt, invoice (reminders and PDFs to build). Lead: 7 days late (to build) | Fee **due** → **paid** (or **part paid**, section 3.1) or **late** | Built, except reminders (R12), PDFs (R53) and quiet hours (R57) |
@@ -454,7 +462,7 @@ checks every action again. Under the person's name is their level.
 | Sessions | Time, link, agenda; client notes and internal notes; share the client notes | `manage_engagements`; internal notes never to a Specialist |
 | Content (Digital marketing) | Reels, posts, stories by month and status | `manage_engagements` |
 | Files the client sent | Match each file to the items it answers | `manage_engagements` |
-| Work Plan | Requests and actions by week; **Load a Data Request** (a template or rows pasted from Excel); Specialists add team items | `manage_engagements`; `contribute_engagements` for team items |
+| Work Plan | Requests and actions by week; **Load a Data Request** (a template or rows pasted from Excel); **Add what's missing from the plan** for a Digital Marketing engagement already open (R77: what the current plan has and it lacks, dated from its kickoff; nothing already there changes); Specialists add team items | `manage_engagements`; `contribute_engagements` for team items |
 | Deliverables | Draft, approve, share, comment; files (Specialist drafts are IP Factory only until shared). Sharing the main output while a second half waits says so first: it dates that half seven days ahead and emails the client its link (R36) | Approve: `review_engagements` or the engagement's lead |
 | The fix | The one number; one check-in a week | `manage_engagements` |
 | Close (R26, to build) | The final value, whether it moved, the next product | The lead |

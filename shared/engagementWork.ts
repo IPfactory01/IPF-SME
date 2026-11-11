@@ -16,7 +16,7 @@ export function workOf(input: { type: string; service: string | null }): { what:
   if (input.type === "digital_marketing") {
     return {
       what: "Three months of content for your business, each piece approved by you before anything is published.",
-      youGet: [...DIGITAL_MARKETING.monthly.map(item => `${item.count} ${item.label.toLowerCase()} a month`), "A review at the end of each month, and of the quarter"],
+      youGet: [...DIGITAL_MARKETING.monthly.map(item => `${item.count} ${item.label.toLowerCase()} a month`), "A Weekly Check-in in month 1, then every two weeks", "A review at the end of each month"],
     };
   }
   return { what: "", youGet: [] };

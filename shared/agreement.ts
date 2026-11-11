@@ -80,6 +80,16 @@ export function monthlyFees(type: EngagementType, service: string | null, kickof
   });
 }
 
+/**
+ * When a planned item falls due in week `week` of an engagement (week 1 starts on the start day): day 3 of the week, or
+ * the first `weekday` in it (0 Sunday to 6 Saturday), so the Digital Marketing footage falls due on a Thursday (R77).
+ */
+export function starterDueOn(startsOn: string, week: number, weekday?: number) {
+  const first = addDays(startsOn, (week - 1) * 7);
+  if (weekday === undefined) return addDays(first, 3);
+  return addDays(first, (weekday - new Date(`${first}T12:00:00Z`).getUTCDay() + 7) % 7);
+}
+
 /** How many days after delivery a service's second half falls due (ET, 10 November 2026). */
 export const BALANCE_DUE_DAYS = 7;
 

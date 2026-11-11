@@ -2,7 +2,7 @@ import { firstNameOf } from "@shared/whatsapp";
 import WhatsAppShare from "./WhatsAppShare";
 import { Failed, Loading } from "@/components/states";
 import { isRefusal } from "@/lib/readPolicy";
-import { STAGED_TYPES } from "@shared/engagementTypes";
+import { DATED_TYPES, STAGED_TYPES } from "@shared/engagementTypes";
 import { DATA_REQUEST_TEMPLATES, parsePastedDataRequest, templateById } from "@shared/dataRequestTemplates";
 import { feeTotal, type FeeLineDraft } from "@shared/agreement";
 import { formatNaira } from "@shared/businessSupport";
@@ -311,6 +311,28 @@ function Problem({ data, engagementId }: { data: Detail; engagementId: number })
   );
 }
 
+/**
+ * The type's current plan for an engagement already open (R77): adds the Sessions and items it does not have yet,
+ * dated from its kickoff. Nothing already there changes. The lead (manage_engagements) only; the server checks.
+ */
+function PlanUpdate({ engagementId }: { engagementId: number }) {
+  const utils = trpc.useUtils();
+  const add = trpc.engagement.staff.addMissingPlan.useMutation({
+    onSuccess: result => {
+      void utils.engagement.staff.detail.invalidate({ engagementId });
+      const count = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+      toast.success(result.sessions + result.items === 0 ? "This engagement already has everything in the plan." : `Added ${count(result.sessions, "Session")} and ${count(result.items, "item")} from the plan.`);
+    },
+    onError: error => toast.error(error.message),
+  });
+  return (
+    <div role="group" aria-label="The plan" className="flex flex-wrap items-center justify-between gap-2 border border-line bg-white p-2 text-xs">
+      <span className="min-w-0 flex-1 text-ink-muted">The plan has Weekly Check-ins in month 1 then every two weeks, a review each month, and footage every Thursday. Add what this engagement is missing, dated from its kickoff. Nothing already here changes.</span>
+      <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={add.isPending} onClick={() => add.mutate({ engagementId })}>Add what's missing from the plan</Button>
+    </div>
+  );
+}
+
 function Sessions({ data, engagementId }: { data: Detail; engagementId: number }) {
   const [adding, setAdding] = useState(false);
   return (
@@ -505,6 +527,7 @@ function Tasks({ data, engagementId }: { data: Detail; engagementId: number }) {
   return (
     <DetailSection title="Work Plan">
       <p className="text-xs text-ink-muted">Data Requests from the client and actions on both sides, by week and in order: the plan the Discovery Call shaped. The client sees their side and ours; contributors see only what is given to them.</p>
+      {DATED_TYPES[data.engagement.type] && data.can.manage && <PlanUpdate engagementId={engagementId} />}
       {weeks.map(week => (
         <div key={week ?? "none"} className="space-y-2">
           <p className={`${LABEL} mt-3`}>{week === null ? "No week" : `Week ${week}`}</p>

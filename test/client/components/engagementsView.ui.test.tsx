@@ -41,7 +41,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         fees: { useQuery: () => ({ data: api.failed.fees ? undefined : api.fees, error: api.failed.fees ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("fees"); } }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -84,6 +84,33 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("the team's engagements", () => {
+  it("offers the lead the plan's missing Sessions and items on a Digital Marketing engagement, and nobody else (R77)", async () => {
+    api.calls = {};
+    const marketing = detail({ manage: true, assign: true, review: true }, [], []) as { engagement: Record<string, unknown> };
+    marketing.engagement = { ...marketing.engagement, type: "digital_marketing" };
+    api.detail = marketing;
+    const { unmount } = render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods"));
+    const plan = within(await screen.findByRole("group", { name: "The plan" }));
+    fireEvent.click(plan.getByRole("button", { name: "Add what's missing from the plan" }));
+    expect(api.calls.addMissingPlan).toEqual([{ engagementId: row.id }]);
+    unmount();
+    // Another type has no dated plan; a contributor does not manage the plan.
+    api.detail = detail({ manage: true, assign: true, review: true }, [], []);
+    const second = render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods"));
+    await screen.findByLabelText("Role on the engagement");
+    expect(screen.queryByRole("group", { name: "The plan" })).toBeNull();
+    second.unmount();
+    const contributor = detail({ manage: false, assign: false, review: false }, [], []) as { engagement: Record<string, unknown> };
+    contributor.engagement = { ...contributor.engagement, type: "digital_marketing" };
+    api.detail = contributor;
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods"));
+    await screen.findByRole("dialog");
+    expect(screen.queryByRole("group", { name: "The plan" })).toBeNull();
+  });
+
   it("offers the Digital Marketer and the Content Producer only on a Digital marketing engagement (R45)", async () => {
     const options = async () => {
       render(<EngagementsView />);

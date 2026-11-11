@@ -9,7 +9,7 @@ describe("What we will do (R47)", () => {
   it("describes the work from the service bought, the Business Review, or the type", () => {
     expect(workOf({ type: "done_for_you", service: "pitch_deck" }).what).toMatch(/\w/);
     expect(workOf({ type: "business_review", service: null }).youGet).toContain("The one problem to fix first, in your words");
-    expect(workOf({ type: "digital_marketing", service: null }).youGet).toEqual(["15 reels a month", "5 posts a month", "20 stories a month", "A review at the end of each month, and of the quarter"]);
+    expect(workOf({ type: "digital_marketing", service: null }).youGet).toEqual(["15 reels a month", "5 posts a month", "20 stories a month", "A Weekly Check-in in month 1, then every two weeks", "A review at the end of each month"]);
     expect(workOf({ type: "assessment", service: null })).toEqual({ what: "", youGet: [] });
   });
 

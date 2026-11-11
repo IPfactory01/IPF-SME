@@ -886,7 +886,7 @@ describe("a Digital marketing room", () => {
     expect(screen.getByRole("progressbar", { name: "Day 19 of 90" })).toBeTruthy();
     const timeline = screen.getByRole("list", { name: "Engagement timeline" });
     const titles = within(timeline).getAllByRole("listitem").filter(item => item.id.startsWith("step-")).map(item => item.querySelector("button")!.textContent);
-    expect(titles).toEqual(["OnboardingMon 2 Nov to Sun 8 Nov", "Month 1NowMon 9 Nov to Tue 1 Dec", "Month 1 reviewWed 2 Dec", "Month 2Thu 3 Dec to Thu 31 Dec", "Month 3Fri 1 Jan to Sat 30 Jan", "Quarter reviewSun 31 Jan"]);
+    expect(titles).toEqual(["OnboardingMon 2 Nov to Sun 8 Nov", "Month 1NowMon 9 Nov to Tue 1 Dec", "Month 1 reviewWed 2 Dec", "Month 2Thu 3 Dec to Thu 31 Dec", "Month 2 reviewFri 1 Jan", "Month 3Sat 2 Jan to Sat 30 Jan", "Month 3 reviewSun 31 Jan"]);
     expect(within(screen.getByRole("region", { name: "Step 2: Month 1" })).getByRole("list", { name: "Week 1" })).toBeTruthy();
     // No Business Health Check behind it: no Founder or Business views.
     expect(screen.queryByRole("tab", { name: "Founder" })).toBeNull();
@@ -898,9 +898,9 @@ describe("a Digital marketing room", () => {
     const content = [item(1, "reel", "Reel 6: knotless braids", "for_approval"), item(2, "reel", "Reel 5", "approved"), item(3, "post", "December offer", "published"), item(4, "story", "Behind the chair", "planned"), item(5, "reel", "Month 2 reel", "approved", 2)];
     const targets = [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }];
     render(<EngagementRoom room={room({ type: "digital_marketing", typeLabel: "Digital marketing", startedOn: "2026-11-02", check: null, deliverables: [], content, contentTargets: targets })} now={now} />);
-    // The dashboard counts what is approved or published this month only.
+    // The dashboard counts what is published this month only (R77): an approved reel waits to go out.
     const board = within(screen.getByRole("region", { name: "Dashboard" }));
-    expect(board.getByText("Reels, month 1").closest("a")!.textContent).toContain("1 of 15");
+    expect(board.getByText("Reels, month 1").closest("a")!.textContent).toContain("0 of 15");
     expect(board.getByText("Posts, month 1").closest("a")!.textContent).toContain("1 of 5");
     expect(board.getByText("Stories, month 1").closest("a")!.textContent).toContain("0 of 20");
     // The Content view comes first in the work, counting what waits for approval.

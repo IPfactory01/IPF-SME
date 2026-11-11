@@ -21,7 +21,7 @@ const COLUMNS: { id: string; name: string; statuses: ContentStatus[] }[] = [
 
 const dateOnly = (value: string) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short" }).format(new Date(`${value}T12:00:00Z`));
 
-/** This month's numbers against the programme: approved or published counts. */
+/** This month's numbers against the programme: what is published counts (R77). */
 export function contentCounts(items: Item[], targets: Room["contentTargets"], month: number) {
   return targets.map(target => {
     const kind = target.label.toLowerCase().replace(/s$/, "") as ContentKind;

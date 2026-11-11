@@ -69,6 +69,7 @@ export const AUDIT_ACTIONS = [
   "engagement_fee_link_sent",
   "engagement_fees_dated_on_delivery",
   "engagement_room_opened",
+  "engagement_plan_updated",
   "engagement_fee_timing_set",
   "team_view_previewed",
   // The payments ledger (batch F): money recorded by hand by Finance or the Super Admin, cancelled when recorded by

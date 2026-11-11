@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { addDays, arrearsOffered, BALANCE_DUE_DAYS, defaultFees, feeHold, isDelivery, monthlyFees, PAUSE_AFTER_DAYS } from "@shared/agreement";
+import { addDays, arrearsOffered, BALANCE_DUE_DAYS, defaultFees, feeHold, isDelivery, monthlyFees, PAUSE_AFTER_DAYS, starterDueOn } from "@shared/agreement";
+import { CONTENT_COUNTED, DIGITAL_MARKETING } from "@shared/engagementTypes";
 
 describe("the fees a new engagement starts with", () => {
   it("fills in Digital marketing as a monthly service fee of ₦470,000 for three months, each payable before it begins", () => {
@@ -87,5 +88,31 @@ describe("paid in arrears (R74, ET 10 November 2026)", () => {
     ]);
     expect(monthlyFees("digital_marketing", null, "2026-11-11", false)).toEqual(defaultFees("digital_marketing", null, "2026-11-11"));
     expect(monthlyFees("digital_marketing", null, "2026-11-11", false).map(fee => fee.dueOn)).toEqual(["2026-11-11", "2026-12-11", "2027-01-10"]);
+  });
+});
+
+describe("the Digital Marketing plan (R77, ET 11 November 2026)", () => {
+  it("dates an item on day 3 of its week, or on a set weekday such as the Thursday footage", () => {
+    expect(starterDueOn("2026-11-09", 1)).toBe("2026-11-12");
+    expect(starterDueOn("2026-11-09", 2, 4)).toBe("2026-11-19");
+    // A kickoff on a Friday: the first Thursday is the next week's; on a Thursday, that same day.
+    expect(starterDueOn("2026-11-13", 1, 4)).toBe("2026-11-19");
+    expect(starterDueOn("2026-11-12", 1, 4)).toBe("2026-11-12");
+  });
+
+  it("runs Weekly Check-ins in month 1, then every two weeks, a review each month, and footage every Thursday", () => {
+    expect(DIGITAL_MARKETING.sessions.map(session => [session.title, session.week])).toEqual([
+      ["Kick-off", 1], ["Weekly Check-in", 2], ["Weekly Check-in", 3], ["Weekly Check-in", 4], ["Month 1 review", 5],
+      ["Check-in", 7], ["Month 2 review", 9], ["Check-in", 11], ["Month 3 review", 13],
+    ]);
+    const footage = DIGITAL_MARKETING.clientActions.filter(item => /^Send week \d+ footage$/.test(item.title));
+    expect(footage.map(item => [item.week, item.weekday])).toEqual(Array.from({ length: 12 }, (_, index) => [index + 1, 4]));
+    expect(DIGITAL_MARKETING.dataRequests[0]).toMatchObject({ ref: "K1", title: "Kick-off questions", week: 1 });
+    expect(DIGITAL_MARKETING.teamActions.map(item => item.title)).toEqual(["Content plan for month 1", "Baseline numbers", "Google Business Profile assessment and growth plan", "Content plan for month 2", "Content plan for month 3"]);
+    expect(DIGITAL_MARKETING.stages.map(stage => stage.title)).toEqual(["Onboarding", "Month 1", "Month 1 review", "Month 2", "Month 2 review", "Month 3", "Month 3 review"]);
+  });
+
+  it("counts a piece towards the month once it is published, as the agreement does", () => {
+    expect(CONTENT_COUNTED).toEqual(["published"]);
   });
 });

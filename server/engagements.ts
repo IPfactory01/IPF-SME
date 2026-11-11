@@ -71,7 +71,7 @@ import { sendSessionEmails, sessionChange } from "./sessionInvitations";
 import { DUE_DAYS } from "../shared/dataRequestTemplates";
 import { initialFeeRows } from "./agreements";
 import { clientFees, dateBalancesOnDelivery } from "./feePayments";
-import { defaultFees, feeHold, isDelivery, lagosDay } from "../shared/agreement";
+import { defaultFees, feeHold, isDelivery, lagosDay, starterDueOn } from "../shared/agreement";
 import { CURRENT_STATE } from "../shared/businessSupport";
 import { displayedPrices } from "./businessSupportPrices";
 import { workLines } from "../shared/engagementWork";
@@ -243,6 +243,50 @@ export async function createDirectEngagement(db: Database, actor: StaffActor & {
 
 type Starter = Pick<DatedEngagementType, "dataRequests" | "clientActions" | "teamActions" | "sessions">;
 
+/** The rows a plan's Data Request items and actions become, each dated in its week from the start day (R77). */
+function starterTaskRows(engagementId: number, starter: Starter, startsOn: string, actorUserId: number) {
+  return [
+    ...starter.dataRequests.map(item => ({ kind: "data_request" as const, side: "client" as const, ...item })),
+    ...starter.clientActions.map(item => ({ kind: "action" as const, side: "client" as const, ...item })),
+    ...starter.teamActions.map(item => ({ kind: "action" as const, side: "ipf" as const, ...item })),
+  ].map(item => ({
+    engagementId, kind: item.kind, side: item.side, title: item.title, detail: item.detail, dueOn: starterDueOn(startsOn, item.week, item.weekday), weekNumber: item.week, sortOrder: item.order,
+    section: item.section ?? null, ref: item.ref ?? null, informs: item.informs ?? null, format: item.format ?? null, priority: item.priority ?? null, createdByUserId: actorUserId,
+  }));
+}
+
+/**
+ * Brings an open engagement up to its type's current plan (R77, ET 11 November 2026): adds each Session, Data Request
+ * item and action of the plan it does not have yet, dated from its start (the kickoff), and changes nothing already
+ * there. A Session matches by its title and week, an item by its title, so one the lead removed on purpose comes back
+ * and is removed again. Only for a type with a dated plan, such as Digital Marketing.
+ */
+export async function addMissingPlan(db: Database, actor: StaffActor, input: { engagementId: number }) {
+  requireManage(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  const plan = DATED_TYPES[engagement.type];
+  if (!plan || !engagement.startedOn) {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Only an engagement with a dated plan and a start date, such as Digital Marketing, takes the plan's new items." });
+  }
+  const startsOn = engagement.startedOn;
+  return db.transaction(async tx => {
+    const [tasks, sessions] = await Promise.all([
+      tx.select({ title: engagementTasks.title }).from(engagementTasks).where(eq(engagementTasks.engagementId, engagement.id)),
+      tx.select({ title: engagementSessions.title, weekNumber: engagementSessions.weekNumber }).from(engagementSessions).where(eq(engagementSessions.engagementId, engagement.id)),
+    ]);
+    const key = (title: string) => title.trim().toLowerCase();
+    const haveTasks = new Set(tasks.map(row => key(row.title)));
+    const haveSessions = new Set(sessions.map(row => `${key(row.title)}|${row.weekNumber ?? ""}`));
+    const newTasks = starterTaskRows(engagement.id, plan, startsOn, actor.id).filter(row => !haveTasks.has(key(row.title)));
+    const newSessions = plan.sessions.filter(item => !haveSessions.has(`${key(item.title)}|${item.week}`))
+      .map(item => ({ engagementId: engagement.id, kind: item.kind, title: item.title, durationMinutes: item.durationMinutes, agenda: item.agenda, weekNumber: item.week, sortOrder: item.order, createdByUserId: actor.id }));
+    if (newTasks.length) await tx.insert(engagementTasks).values(newTasks);
+    if (newSessions.length) await tx.insert(engagementSessions).values(newSessions);
+    await recordAudit(tx, { action: "engagement_plan_updated", actorUserId: actor.id, details: { engagementId: engagement.id, sessions: newSessions.length, items: newTasks.length } });
+    return { success: true, sessions: newSessions.length, items: newTasks.length } as const;
+  });
+}
+
 /** The engagement row and where it begins: the type's (or the service's) Work Plan, Data Request and Sessions. */
 async function insertDirect(tx: Pick<Database, "insert">, actor: StaffActor, input: DirectEngagementInput, at: { businessId: number; service: string | null; starter: Starter | null; dueFor: (week: number) => string; contactName: string | null; contactEmail: string | null }) {
   // An engagement with fees opens to the client once its first fee is paid (R11), online or recorded by hand. Its fees
@@ -255,11 +299,7 @@ async function insertDirect(tx: Pick<Database, "insert">, actor: StaffActor, inp
   }).returning({ id: engagements.id });
   const starter = at.starter;
   const tasks = starter
-    ? [
-      ...starter.dataRequests.map(item => ({ kind: "data_request" as const, side: "client" as const, ...item })),
-      ...starter.clientActions.map(item => ({ kind: "action" as const, side: "client" as const, ...item })),
-      ...starter.teamActions.map(item => ({ kind: "action" as const, side: "ipf" as const, ...item })),
-    ].map(({ week, order, ...item }) => ({ engagementId: created.id, kind: item.kind, side: item.side, title: item.title, detail: item.detail, dueOn: at.dueFor(week), weekNumber: week, sortOrder: order, section: item.section ?? null, ref: item.ref ?? null, informs: item.informs ?? null, format: item.format ?? null, priority: item.priority ?? null, createdByUserId: actor.id }))
+    ? starterTaskRows(created.id, starter, input.startedOn, actor.id)
     : [
       ...ASSESSMENT_TEMPLATE.dataRequests.map(item => ({ engagementId: created.id, kind: "data_request" as const, side: "client" as const, title: item.title, detail: item.detail, dueOn: at.dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: actor.id })),
       ...ASSESSMENT_TEMPLATE.teamActions.map(item => ({ engagementId: created.id, kind: "action" as const, side: "ipf" as const, title: item.title, detail: item.detail, dueOn: at.dueFor(item.week), weekNumber: item.week, sortOrder: item.order, factor: item.factor, createdByUserId: actor.id })),

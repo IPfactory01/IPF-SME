@@ -78,6 +78,7 @@ import {
   shareTeamFile,
   staffRequestUpload,
   startAwaitingEngagement,
+  addMissingPlan,
 } from "../engagements";
 import { checkFileStorage } from "../fileStorage";
 import { loadAuthority } from "../platformAccess";
@@ -223,6 +224,8 @@ const staffRouter = router({
   })).mutation(async ({ ctx, input }) => guarded(async () => saveFees(await engagementDb(), ctx.actor, input))),
   sendFeeLink: staff.input(z.object({ feeLineId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffSendFeeLink(await engagementDb(), ctx.actor, input))),
   openRoomNow: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => openRoomNow(await engagementDb(), ctx.actor, input))),
+  /** Adds what the type's current plan has and this engagement lacks, dated from its kickoff (R77). Nothing already there changes. */
+  addMissingPlan: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => addMissingPlan(await engagementDb(), ctx.actor, input))),
   /** Paid in arrears or in advance from the kickoff (R74): a Partner or the Super Admin, on an engagement paid by the month. */
   setFeeTiming: staff.input(z.object({ engagementId: id, inArrears: z.boolean(), kickoffOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the kickoff date.") }))
     .mutation(async ({ ctx, input }) => guarded(async () => setFeeTiming(await engagementDb(), ctx.actor, input))),

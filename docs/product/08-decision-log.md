@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| The Digital Marketing plan follows the Crown Studio agreement: kick-off questions first; footage every Thursday, edited within 48 hours; Weekly Check-ins in month 1, then every two weeks; a review each month; a content plan each month for approval; the Google Business Profile plan; a piece counts once published (R77) | ET, 11 November 2026 |
 | The Super Admin can preview Admin as any team member sees it, as staff preview a client's room: read only, every change refused, 30 minutes at most, recorded (R76) | ET, 10 November 2026 |
 | Everyone on an engagement hears of each Session by email with a calendar invitation: the team, and the client unless they booked it on Calendly, which has already emailed them; a cancellation takes it out of their calendars (R75) | ET, 10 November 2026 |
 | Digital Marketing may be paid in arrears, a Partner's or the Super Admin's choice for a client: each month's fee falls due 30, 60 and 90 days after the kickoff, which officially starts the engagement; the room opens at once; a new kickoff date moves every fee not yet paid. Every other engagement still pays its first fee at the start (D4, R74) | ET, 10 November 2026 |

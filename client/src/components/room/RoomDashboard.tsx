@@ -47,7 +47,7 @@ export default function RoomDashboard({ room, steps, now, contentMonth = null }:
   const outstanding = yours.filter(task => OPEN_TASK_STATUSES.includes(task.status)).length;
   const overdue = dueBuckets(yours, now).buckets[0]!.you;
   // A content programme leads with the month's reels, posts and stories against what it promises.
-  const content = contentMonth ? contentCounts(room.content, room.contentTargets, contentMonth).map(count => ({ label: `${count.label}, month ${contentMonth}`, value: `${count.done} of ${count.target}`, note: "approved or published", href: "#content" })) : [];
+  const content = contentMonth ? contentCounts(room.content, room.contentTargets, contentMonth).map(count => ({ label: `${count.label}, month ${contentMonth}`, value: `${count.done} of ${count.target}`, note: "published", href: "#content" })) : [];
   const figures = content.length ? [...content, { label: `Next ${METHOD.session}`, value: room.nextSession?.scheduledFor ? sessionDay(room.nextSession.scheduledFor) : "Not booked", note: room.nextSession?.title ?? "", href: "#meetings" }] : [
     { label: "Stages complete", value: `${done} of ${steps.length}`, note: current ? `Now: ${current.title}` : "", href: "#overview" },
     { label: "Outstanding with you", value: String(outstanding), note: outstanding === 1 ? "item" : "items", href: "#plan" },

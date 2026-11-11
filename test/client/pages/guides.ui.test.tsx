@@ -22,7 +22,7 @@ describe("Guides", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("How much does a business plan cost in Nigeria?");
     const fix = within(screen.getByRole("region", { name: "The fix, here" }));
     expect(fix.getByRole("link", { name: /Business Plan/ }).getAttribute("href")).toBe("/services/business-plan");
-    expect(fix.getByText("₦750,000")).toBeTruthy();
+    expect(fix.getByText("₦1,250,000")).toBeTruthy();
     expect(screen.getByRole("region", { name: "Questions owners ask" }).textContent).toContain("Can I write my own business plan?");
     expect(document.title).toContain("How much does it cost to write a business plan in Nigeria?");
     expect(container.textContent).not.toMatch(AVOIDED_WORDS);

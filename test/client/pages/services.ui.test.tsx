@@ -52,14 +52,15 @@ describe("the services page (/services), laid out as a store", () => {
     at("/services");
     const shelf = within(screen.getByRole("region", { name: "Products" }));
     expect(shelf.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent)).toEqual([
-      "Funding Readiness Assessment", "Business Model", "Pitch Deck", "Bookkeeping Catch-Up", "13-Week Cash Flow Forecast", "Hiring Toolkit", "Financial Model", "Pricing and Unit Cost Review",
-      "Strategy and 90-Day Plan", "Monthly Adviser Review", "Digital Marketing", "Business Review", "Monthly Accounts and Cash Report", "Business Plan", "Funding Application Pack", "Six-Week Fix",
+      // Cheapest first: since the one-off services rose ₦500,000 (11 November 2026), the monthly services lead.
+      "Bookkeeping Catch-Up", "Monthly Adviser Review", "Digital Marketing", "Business Review", "Monthly Accounts and Cash Report", "Funding Readiness Assessment", "Business Model", "Pitch Deck",
+      "13-Week Cash Flow Forecast", "Hiring Toolkit", "Financial Model", "Pricing and Unit Cost Review", "Strategy and 90-Day Plan", "Business Plan", "Funding Application Pack", "Six-Week Fix",
     ]);
     for (const product of MENU_PRODUCTS) {
       expect(shelf.getByRole("link", { name: `Learn more about ${product.name}` }).getAttribute("href")).toBe(`/services/${product.slug}`);
       expect(shelf.getByText(storyOf(product.id)!.promise)).toBeTruthy();
     }
-    expect(shelf.getByText("₦750,000")).toBeTruthy(); // the Business Plan
+    expect(shelf.getByText("₦1,250,000")).toBeTruthy(); // the Business Plan
     // A Monthly Service shows the quarter it is paid in, with its month beside it.
     expect(shelf.getByText("₦600,000 a quarter")).toBeTruthy();
     expect(shelf.getByText("₦200,000 a month")).toBeTruthy();
@@ -102,7 +103,7 @@ describe("a service page (/services/:slug), told as a story", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe(storyOf("cash_flow_forecast")!.headline.join(""));
     expect(screen.getByRole("region", { name: "What you get" })).toBeTruthy();
     expect(screen.getByText("Business bank statements for the last three months")).toBeTruthy();
-    expect(screen.getAllByText("₦300,000").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("₦800,000").length).toBeGreaterThan(0);
     const promise = screen.getByText((_, element) => element?.tagName === "P" && element.textContent === DELIVERY_PROMISE);
     // The button on the coloured promise band is light with dark text, never white on white.
     const band = within(promise.parentElement!.parentElement!).getByRole("link", { name: /book a free call/i });
@@ -125,12 +126,12 @@ describe("a service page (/services/:slug), told as a story", () => {
   it("shows the Six-Week Fix's four problems and its two payments, half at the start and half at the result (R36)", () => {
     at("/services/six-week-fix");
     for (const name of ["Margin", "Sales", "Cash and Pricing", "Delegation and Structure"]) expect(screen.getByText(`Six-Week Fix: ${name}`)).toBeTruthy();
-    expect(screen.getAllByText(/₦750,000 at the start, ₦750,000 at the result\. Or ₦1,425,000 in full/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/₦1,000,000 at the start, ₦1,000,000 at the result\. Or ₦1,900,000 in full/).length).toBeGreaterThan(0);
   });
 
   it("says a service agreed on a call is paid half to start and half on delivery, and a product bought online before we start (R36)", () => {
     at("/services/business-plan");
-    expect(screen.getByText("₦375,000 to start and ₦375,000 on delivery, by transfer or card.")).toBeTruthy();
+    expect(screen.getByText("₦625,000 to start and ₦625,000 on delivery, by transfer or card.")).toBeTruthy();
     expect(screen.getByText("Twenty minutes, by phone or video. We send the link for the first half after the call.")).toBeTruthy();
     expect(screen.getByText("A free 20-minute call. If it fits, we send the link for the first half after it.")).toBeTruthy();
     cleanup();

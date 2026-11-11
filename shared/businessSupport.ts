@@ -46,16 +46,16 @@ export const PROBLEM_AREAS: readonly ProblemArea[] = [
 export const PROMISE = ["Find it.", "Fix it.", "See the shift."] as const;
 
 /**
- * Prices in naira, as ET set them on 21 October 2026 (Operational Business Plan, page 11): the Business Review at
- * ₦600,000 and the Six-Week Fix at ₦1,500,000, each at the top of its range. The whole menu, with every other price,
+ * Prices in naira: set by ET on 21 October 2026 (Operational Business Plan, page 11), then raised by ₦500,000 on every
+ * one-off service on 11 November 2026: the Business Review at ₦1,100,000 and the Six-Week Fix at ₦2,000,000. The whole menu, with every other price,
  * is shared/products.ts; these are the three the existing payment and report code reads. The Full Report and Business
  * Review figures are the DEFAULTS: what is charged and shown comes from the server (server/businessSupportPrices.ts,
  * which the FULL_REPORT_PRICE_NGN and CURRENT_STATE_PRICE_NGN settings override).
  */
 export const PRICES = {
   fullReport: 100_000,
-  currentState: 600_000,
-  fix: 1_500_000,
+  currentState: 1_100_000,
+  fix: 2_000_000,
 } as const;
 
 /** The paid full report offered on the business check result. Independent of the discovery call. */

@@ -125,7 +125,7 @@ The spine of the product. Every requirement in section 6 belongs to one stage.
 
 Every product, its price, delivery, payment terms, intake and next product live in `shared/products.ts`; the site and
 the order flow read from it. The prices the payment code charges are in `shared/businessSupport.ts` (`PRICES`):
-the Full Report ₦100,000, the Business Review ₦600,000, the Six-Week Fix ₦1,500,000. A test keeps this table, the
+the Full Report ₦100,000, the Business Review ₦1,100,000, the Six-Week Fix ₦2,000,000 (each one-off service raised by ₦500,000 on 11 November 2026; the Full Report and the monthly services unchanged). A test keeps this table, the
 catalogue and the code in step.
 
 **Ways to buy (R36):** Assessment (free, or paid before work; the Business Review half to start and half on its
@@ -159,19 +159,19 @@ payment issues).
 |---|---|---|---|---|
 | Free Business Health Check | Assessment | Free | At once | Free check |
 | Full Report | Assessment | ₦100,000 | When the Report Intake is finished | Buy now (from the check) |
-| Funding Readiness Assessment | Assessment | ₦150,000 | Three working days from complete records | Buy now |
-| Business Review | Assessment | ₦600,000 | Two weeks, two Sessions | Talk to an expert |
-| Strategy and 90-Day Plan | Done for You | ₦450,000 | Seven working days | Buy now |
-| Business Model | Done for You | ₦300,000 | Seven working days | Buy now |
-| Financial Model | Done for You | ₦350,000 | Seven working days | Buy now |
-| Business Plan | Done for You | ₦750,000 | Fifteen working days | Talk to an expert |
-| Pitch Deck | Done for You | ₦300,000 | Seven working days | Buy now |
-| Pricing and Unit Cost Review | Done for You | ₦400,000 | Seven working days | Talk to an expert |
+| Funding Readiness Assessment | Assessment | ₦650,000 | Three working days from complete records | Buy now |
+| Business Review | Assessment | ₦1,100,000 | Two weeks, two Sessions | Talk to an expert |
+| Strategy and 90-Day Plan | Done for You | ₦950,000 | Seven working days | Buy now |
+| Business Model | Done for You | ₦800,000 | Seven working days | Buy now |
+| Financial Model | Done for You | ₦850,000 | Seven working days | Buy now |
+| Business Plan | Done for You | ₦1,250,000 | Fifteen working days | Talk to an expert |
+| Pitch Deck | Done for You | ₦800,000 | Seven working days | Buy now |
+| Pricing and Unit Cost Review | Done for You | ₦900,000 | Seven working days | Talk to an expert |
 | Bookkeeping Catch-Up | Done for You | ₦100,000 a month of records | Five working days for three months | Buy now |
-| 13-Week Cash Flow Forecast | Done for You | ₦300,000 | Five working days | Buy now |
-| Funding Application Pack | Done for You | ₦900,000 | Ten working days | Talk to an expert |
-| Hiring Toolkit | Done for You | ₦300,000 | Five working days | Buy now |
-| Six-Week Fix (Margin, Sales, Cash and Pricing, Delegation and Structure) | Six-Week Fix | ₦1,500,000 | Six weeks | Talk to an expert |
+| 13-Week Cash Flow Forecast | Done for You | ₦800,000 | Five working days | Buy now |
+| Funding Application Pack | Done for You | ₦1,400,000 | Ten working days | Talk to an expert |
+| Hiring Toolkit | Done for You | ₦800,000 | Five working days | Buy now |
+| Six-Week Fix (Margin, Sales, Cash and Pricing, Delegation and Structure) | Six-Week Fix | ₦2,000,000 | Six weeks | Talk to an expert |
 | Monthly Accounts and Cash Report | Monthly Service | ₦600,000 a quarter | By the 10th of each month | Talk to an expert |
 | Monthly Adviser Review | Monthly Service | ₦450,000 a quarter | One Session a month | Talk to an expert |
 | Digital Marketing (ET, 6 November 2026; the programme of the first client's engagement) | Monthly Service | ₦470,000 a month | 15 reels, 5 posts and 20 stories a month for three months, across Instagram, TikTok, Facebook and the Google Business Profile, sold on what it brings: seen, engaged, enquired, bought, each counted monthly; nothing published without the owner's approval | Talk to an expert |

@@ -33,7 +33,7 @@ describe("How we work (/how-we-work)", () => {
       const link = ways.getByRole("link", { name: new RegExp(`^${product.name.replace(/[()]/g, "\\$&")}`) });
       expect(link.getAttribute("href")).toBe(product.buy === "check" ? "/check" : `/services/${product.slug}`);
     }
-    expect(ways.getByRole("link", { name: /^Six-Week Fix₦1,500,000/ })).toBeTruthy();
+    expect(ways.getByRole("link", { name: /^Six-Week Fix₦2,000,000/ })).toBeTruthy();
     for (const way of WAYS_TO_BUY) expect(ways.getByText(WAY_DETAILS[way].charge)).toBeTruthy();
     expect(screen.getByRole("link", { name: "See every service" }).getAttribute("href")).toBe("/services");
   });

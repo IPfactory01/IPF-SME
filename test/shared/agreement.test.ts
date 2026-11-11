@@ -13,20 +13,20 @@ describe("the fees a new engagement starts with", () => {
 
   it("fills in a service agreed on a call as half to start and half on delivery, and a product as one fee before we start (R36)", () => {
     expect(defaultFees("business_review", null, "2026-11-16")).toEqual([
-      { label: "Business Review: half to start", amount: 300_000, dueOn: "2026-11-16" },
-      { label: "Business Review: half on delivery", amount: 300_000, dueOn: null },
+      { label: "Business Review: half to start", amount: 550_000, dueOn: "2026-11-16" },
+      { label: "Business Review: half on delivery", amount: 550_000, dueOn: null },
     ]);
     // The Six-Week Fix too, since 10 November 2026: its two stages are the two halves.
     expect(defaultFees("six_week_fix", null, "2026-11-16")).toEqual([
-      { label: "Six-Week Fix: at the start (50%)", amount: 750_000, dueOn: "2026-11-16" },
-      { label: "Six-Week Fix: at the result (50%)", amount: 750_000, dueOn: null },
+      { label: "Six-Week Fix: at the start (50%)", amount: 1_000_000, dueOn: "2026-11-16" },
+      { label: "Six-Week Fix: at the result (50%)", amount: 1_000_000, dueOn: null },
     ]);
     expect(defaultFees("done_for_you", "business_plan", null)).toEqual([
-      { label: "Business Plan: half to start", amount: 375_000, dueOn: null },
-      { label: "Business Plan: half on delivery", amount: 375_000, dueOn: null },
+      { label: "Business Plan: half to start", amount: 625_000, dueOn: null },
+      { label: "Business Plan: half on delivery", amount: 625_000, dueOn: null },
     ]);
     // Bought online: paid in full before we start, dated the start day.
-    expect(defaultFees("done_for_you", "cash_flow_forecast", "2026-11-16")).toEqual([{ label: "13-Week Cash Flow Forecast, payable before work begins", amount: 300_000, dueOn: "2026-11-16" }]);
+    expect(defaultFees("done_for_you", "cash_flow_forecast", "2026-11-16")).toEqual([{ label: "13-Week Cash Flow Forecast, payable before work begins", amount: 800_000, dueOn: "2026-11-16" }]);
     // A Monthly Service: its first quarter, before it starts.
     expect(defaultFees("monthly_service", "monthly_accounts", "2026-11-16")).toEqual([{ label: "Monthly Accounts and Cash Report: first quarter, payable before it starts", amount: 600_000, dueOn: "2026-11-16" }]);
   });

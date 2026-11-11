@@ -10,25 +10,25 @@ import {
 const PLAN_PRICES: Record<string, string> = {
   business_health_check: "Free",
   full_report: "₦100,000",
-  funding_readiness_assessment: "₦150,000",
-  business_review: "₦600,000",
-  strategy_90_day_plan: "₦450,000",
-  // Lowered from ₦750,000 by ET on 28 October 2026.
-  pricing_unit_cost_review: "₦400,000",
+  funding_readiness_assessment: "₦650,000",
+  business_review: "₦1,100,000",
+  strategy_90_day_plan: "₦950,000",
+  // Lowered from ₦750,000 by ET on 28 October 2026; every one-off service raised ₦500,000 on 11 November 2026.
+  pricing_unit_cost_review: "₦900,000",
   bookkeeping_catch_up: "₦100,000 a month of records",
-  cash_flow_forecast: "₦300,000",
+  cash_flow_forecast: "₦800,000",
   // Raised from ₦600,000 by ET on 28 October 2026, above the Business Plan it builds on.
-  funding_application_pack: "₦900,000",
-  hiring_toolkit: "₦300,000",
-  six_week_fix: "₦1,500,000",
+  funding_application_pack: "₦1,400,000",
+  hiring_toolkit: "₦800,000",
+  six_week_fix: "₦2,000,000",
   // Shown by the quarter they are paid in (ET, 28 October 2026); the month is shown beside it.
   monthly_accounts: "₦600,000 a quarter",
   monthly_adviser_review: "₦450,000 a quarter",
   // Added by ET on 28 October 2026, after the plan.
-  business_model: "₦300,000",
-  financial_model: "₦350,000",
-  business_plan: "₦750,000",
-  pitch_deck: "₦300,000",
+  business_model: "₦800,000",
+  financial_model: "₦850,000",
+  business_plan: "₦1,250,000",
+  pitch_deck: "₦800,000",
   // On the menu from 10 November 2026 (R35): the first client's programme, paid month by month (R36).
   digital_marketing: "₦470,000 a month",
 };
@@ -75,9 +75,9 @@ describe("the launch menu (Operational Business Plan, 22 October 2026)", () => {
   it("charges the Six-Week Fix half at the start and half at the result (ET, 10 November 2026), or in full at 5% off", () => {
     const fix = productById("six_week_fix")!.price as Extract<PriceModel, { kind: "milestones" }>;
     expect(fix.stages.map((stage) => stage.percent)).toEqual([50, 50]);
-    expect(fix.stages.reduce((sum, stage) => sum + stageAmount(fix, stage.percent), 0)).toBe(1_500_000);
-    expect(payInFullAmount(fix)).toBe(1_425_000);
-    expect(priceTerms(fix)).toContain("₦750,000 at the start, ₦750,000 at the result");
+    expect(fix.stages.reduce((sum, stage) => sum + stageAmount(fix, stage.percent), 0)).toBe(2_000_000);
+    expect(payInFullAmount(fix)).toBe(1_900_000);
+    expect(priceTerms(fix)).toContain("₦1,000,000 at the start, ₦1,000,000 at the result");
     expect(productById("six_week_fix")!.variants!.map((variant) => variant.name)).toEqual(["Margin", "Sales", "Cash and Pricing", "Delegation and Structure"]);
   });
 
@@ -85,7 +85,7 @@ describe("the launch menu (Operational Business Plan, 22 October 2026)", () => {
     // The services: one-off work sold after the free call. Monthly Services are billed by the quarter instead.
     expect(PRODUCTS.filter(isService).map((product) => product.id)).toEqual(["business_review", "business_plan", "pricing_unit_cost_review", "funding_application_pack", "six_week_fix"]);
     for (const product of PRODUCTS.filter((item) => item.buy === "self")) expect(isService(product), product.id).toBe(false);
-    expect(paymentTerms(productById("business_review")!)).toBe("₦300,000 to start and ₦300,000 on delivery, by transfer or card.");
+    expect(paymentTerms(productById("business_review")!)).toBe("₦550,000 to start and ₦550,000 on delivery, by transfer or card.");
     expect(paymentTerms(productById("pitch_deck")!)).toBe("Paid before we start, by transfer or card.");
     // Two halves always add up to the price, in whole naira.
     expect([firstHalf(750_001), 750_001 - firstHalf(750_001)]).toEqual([375_001, 375_000]);

@@ -112,7 +112,7 @@ export async function sendBusinessReviewLink(db: Database, input: { businessChec
   const online = mode !== "off" && Boolean(ENV.cookieSecret);
   const message = paymentDetailsEmail({
     fullName: check.fullName, item: "current_state", reference: feeReference(fee.id), payByDay: fee.dueOn, invoice: invoiceNumberLabel(invoiceNumber),
-    // "the first half of ₦600,000" only while the first half is whole; a part paid by hand asks for what is left.
+    // "the first half of ₦1,100,000" only while the first half is whole; a part paid by hand asks for what is left.
     amountNaira: left, totalNaira: left === fee.amount ? total : undefined,
     online: online ? { url: feePayUrl(fee.id), mode: mode === "live" ? "live" : "test" } : null,
   });

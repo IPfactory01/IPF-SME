@@ -391,7 +391,7 @@ describe("business check page", { timeout: 20_000 }, () => {
     // The first step from the launch menu (shared/businessCheck/routing.ts): tight cash goes to the cash forecast.
     const first = screen.getByRole("region", { name: "Your first step" });
     expect(within(first).getByText("13-Week Cash Flow Forecast")).toBeTruthy();
-    expect(within(first).getByText("₦300,000")).toBeTruthy();
+    expect(within(first).getByText("₦800,000")).toBeTruthy();
     // Until online ordering opens (ONLINE_ORDERS_OPEN), finished work also starts with the free call.
     expect(within(first).getByRole("button", { name: /book the free call/i })).toBeTruthy();
     expect(within(first).getByRole("link", { name: "What it includes" }).getAttribute("href")).toBe("/services/13-week-cash-flow-forecast");

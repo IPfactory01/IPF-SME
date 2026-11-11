@@ -74,7 +74,6 @@ import { initialFeeRows } from "./agreements";
 import { clientFees, dateBalancesOnDelivery } from "./feePayments";
 import { defaultFees, feeHold, isDelivery, lagosDay, starterDueOn } from "../shared/agreement";
 import { CURRENT_STATE } from "../shared/businessSupport";
-import { displayedPrices } from "./businessSupportPrices";
 import { workLines } from "../shared/engagementWork";
 import { agreedWhatsapp, followUpOwnerOf, recipientOf } from "./teamContact";
 import { arrivalFields, dayInWords, earliestRequestDue, hasArrived, REQUEST_MAX_DAYS, REQUESTS_PER_WEEK, weekStartOf } from "../shared/requests";
@@ -144,8 +143,13 @@ async function businessReviewBalance(db: Pick<Database, "select">, paymentReques
   if (paymentRequestId === null) return 0;
   const request = (await db.select({ item: paymentRequests.item, amountNaira: paymentRequests.amountNaira }).from(paymentRequests).where(eq(paymentRequests.id, paymentRequestId)).limit(1))[0];
   if (!request || request.item !== "current_state") return 0;
-  return secondHalf(request.amountNaira, displayedPrices().currentState);
+  // Business Review payment requests ended with F3 (10 November 2026), before the price rose to ₦1,100,000 (11 November):
+  // each was priced at the Business Review's price then, so one paid in full at ₦600,000 still leaves nothing.
+  return secondHalf(request.amountNaira, PAYMENT_REQUEST_BUSINESS_REVIEW_PRICE);
 }
+
+/** The Business Review's price while it was paid on payment requests, before F3 (to 10 November 2026). */
+export const PAYMENT_REQUEST_BUSINESS_REVIEW_PRICE = 600_000;
 
 /**
  * The Business Review's starting plan: its Data Request and the team's actions from the template, week 1 due in three

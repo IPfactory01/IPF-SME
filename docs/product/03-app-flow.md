@@ -147,8 +147,8 @@ one Paystack reference.
 1. **Sending the link** (Pipeline, the check's record, Payments, Business Review: **Send the payment link**;
    `manage_payments`, as before). The platform opens the client's Business Review engagement, waiting for its first
    payment, with the owner's name and email from the check, and its two fees at the server's price: **Business Review:
-   half to start** (₦300,000), due two days later, the "pay by" day the email gives; and **Business Review: half on
-   delivery** (₦300,000), with no date until the Findings are shared (section 3). Sending it bills the first half, so it
+   half to start** (₦550,000), due two days later, the "pay by" day the email gives; and **Business Review: half on
+   delivery** (₦550,000), with no date until the Findings are shared (section 3). Sending it bills the first half, so it
    gets its invoice number. The owner is emailed *Payment details for your Business Review* with the fee's pay link. A
    check before Opportunity moves to Opportunity, as before. Sending it again emails the same fee's link: it never opens
    a second engagement, and a paid first half cannot be sent again.
@@ -199,7 +199,7 @@ flowchart TD
 | 4b | Answers the 17-question Report Intake | Builds the Full Report by fixed rule and emails the PDF at once | — | Owner: *Your Full Report: {business}* (PDF). Office: *Full Report sent* | Report **delivered** | Built |
 | 5 | Books the Discovery Call in the embedded calendar | Records the booking only when Calendly confirms; picks up bookings made from the email | — | Office: *… asked for a free discovery call*. Calendly confirms to the owner | **Call booked** | Built |
 | 6 | Joins the 20-minute call | — | Holds it; writes up the Discovery Call summary; records Opportunity, Refer, Lost or Nurture; shares the summary with the owner as a separate step | A Nurture outcome: one follow-up at day 30 (R48, to build) | **Opportunity**, **Referred**, **Lost** or **Nurture** | Built (the day-30 follow-up to build) |
-| 7 | Pays the first half from the email's link, on the fee's pay page | Opens the Business Review engagement when the link is sent, waiting for its first payment, with both halves as fees; the first payment opens the room, moves the check to Won, loads the plan and invites the owner (section 3.2) | Opens the engagement (4.3), or for the Business Review sends the link for its first half (₦300,000 of ₦600,000); the second half falls due seven days after the Findings are shared (R36) | Owner: *Payment details for your Business Review*; then *Payment received: Business Review: half to start* and the invitation | Engagement **awaiting first payment**, then fee **paid** and check **Won** | Built (on fees, F3) |
+| 7 | Pays the first half from the email's link, on the fee's pay page | Opens the Business Review engagement when the link is sent, waiting for its first payment, with both halves as fees; the first payment opens the room, moves the check to Won, loads the plan and invites the owner (section 3.2) | Opens the engagement (4.3), or for the Business Review sends the link for its first half (₦550,000 of ₦1,100,000); the second half falls due seven days after the Findings are shared (R36) | Owner: *Payment details for your Business Review*; then *Payment received: Business Review: half to start* and the invitation | Engagement **awaiting first payment**, then fee **paid** and check **Won** | Built (on fees, F3) |
 
 ### 4.2 Prospect to client, by Buy now (To build, R13 and R38)
 
@@ -429,7 +429,7 @@ info@ipfactory.co.
 | `/terms` | `LegalPage.tsx` | Footer, forms, pay pages | The Terms and Conditions |
 | `/privacy` | `LegalPage.tsx` | Footer, forms, pay pages | The Privacy Policy |
 | `/report/:token` | `FullReportPage.tsx` | *Payment received: your Full Report* | The Report Intake, then the download |
-| `/pay/:token/:item` | `PayPage.tsx` | The Full Report or Business Review payment email | Pay for the Full Report, or the first half of the Business Review (₦300,000 of ₦600,000), on Paystack, after "Before you pay" (R72) |
+| `/pay/:token/:item` | `PayPage.tsx` | The Full Report or Business Review payment email | Pay for the Full Report, or the first half of the Business Review (₦550,000 of ₦1,100,000), on Paystack, after "Before you pay" (R72) |
 | `/pay/fee/:feeLineId/:token` | `FeePayPage.tsx` | A fee's email, the room's Payments tab | Pay one engagement fee on Paystack, after "Before you pay" (R72); the token is an HMAC of the fee's id |
 | `/pay/return` | `PayReturnPage.tsx` | Paystack | Paid, still confirming, or not completed |
 | `/onboarding/:token` | `OnboardingPage.tsx` | The Business Review account invitation | Create the client account |

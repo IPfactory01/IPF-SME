@@ -23,7 +23,7 @@ describe("what search engines and link previews read", () => {
     const html = pageHtml(template, publicPages().find((page) => page.path === servicePath(product))!);
     const url = `${SITE_ORIGIN}${servicePath(product)}`;
     expect(html).toContain("<title>13-Week Cash Flow Forecast: fix cash flow problems before they land | The Shift, by IP Factory</title>");
-    expect(html).toMatch(/<meta name="description" content="[^"]*₦300,000[^"]*" \/>/);
+    expect(html).toMatch(/<meta name="description" content="[^"]*₦800,000[^"]*" \/>/);
     expect(html).toContain(`<link rel="canonical" href="${url}" />`);
     expect(html).toContain(`<meta property="og:url" content="${url}" />`);
     expect(html).toContain('<meta property="og:title" content="13-Week Cash Flow Forecast: fix cash flow problems before they land | The Shift, by IP Factory" />');
@@ -57,7 +57,7 @@ describe("what search engines and link previews read", () => {
       expect(service.offers.priceCurrency).toBe("NGN");
       expect(service.offers.price, product.id).toBeGreaterThan(0);
     }
-    expect(serviceJsonLd(productById("six_week_fix")!).offers.price).toBe(1_500_000);
+    expect(serviceJsonLd(productById("six_week_fix")!).offers.price).toBe(2_000_000);
     const questions = scripts(pageHtml(template, publicPages().find((page) => page.path === "/questions")!)).find((data) => data["@type"] === "FAQPage")!;
     const names = (questions.mainEntity as { name: string }[]).map((item) => item.name);
     expect(names).toContain("How do I pay?");

@@ -700,12 +700,12 @@ for (const target of targets) {
         // The email's Pay online link is the first half's own pay page.
         const link = linkParts(new URL(detailsEmail.body.match(/Pay online: (\S+)/)![1]).pathname);
         expect(link.feeLineId).toBe(sent.feeLineId);
-        expect(await (await browser().call()).onlinePayment.feePage(link)).toMatchObject({ label: "Business Review: half to start", amountNaira: 300_000, businessName: expect.stringContaining("review-online"), state: "open" });
+        expect(await (await browser().call()).onlinePayment.feePage(link)).toMatchObject({ label: "Business Review: half to start", amountNaira: 550_000, businessName: expect.stringContaining("review-online"), state: "open" });
         expect((await planOf(sent.engagementId!)).tasks).toEqual([]);
 
         await (await browser().call()).onlinePayment.feeStart(link);
         const attempt = paystack.initialized.at(-1)!;
-        expect(attempt.amount).toBe(30_000_000);
+        expect(attempt.amount).toBe(55_000_000);
         pay(attempt.reference as string);
         mocked.deliverEmail.mockClear();
         expect(await webhook(charged(attempt.reference as string))).toBe(200);
@@ -747,7 +747,7 @@ for (const target of targets) {
         expect(JSON.parse(invited[0].details)).toMatchObject({ paid: false, override: "The room was opened before payment (Open the room now)." });
 
         const finance = await staffMember(["finance"], "Fola Early");
-        await (await finance.call()).engagement.finance.recordPayment(byHand(sent.feeLineId!, 300_000, { note: "Transfer 6610" }));
+        await (await finance.call()).engagement.finance.recordPayment(byHand(sent.feeLineId!, 550_000, { note: "Transfer 6610" }));
         expect((await rowFor(check.token)).pipelineStage).toBe("won");
         expect((await planOf(sent.engagementId!)).tasks).toHaveLength(plan.tasks.length);
         expect(await invitationsOf(check.id)).toHaveLength(1);

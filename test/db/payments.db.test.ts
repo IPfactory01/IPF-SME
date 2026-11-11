@@ -247,7 +247,7 @@ for (const target of targets) {
       const parse = (rows: Array<{ details: string }>) => rows.map(row => JSON.parse(row.details));
       /** Finance records the first half by hand, as for money that came another way (App flow 3.1). */
       const payFirstHalf = async (feeLineId: number, payer: Browser = superAdmin) =>
-        (await payer.call()).engagement.finance.recordPayment({ feeLineId, amount: 300_000, receivedOn: lagosDay(), method: "bank_transfer", note: "Transfer 5521" });
+        (await payer.call()).engagement.finance.recordPayment({ feeLineId, amount: 550_000, receivedOn: lagosDay(), method: "bank_transfer", note: "Transfer 5521" });
 
       it("is sent by the team after the call as its fee: the engagement opens waiting for its first payment, the business moves to Opportunity, and sending again keeps one fee (F3)", async () => {
         const { token, email, visitor, id } = await finishedCheck("current-state");
@@ -260,7 +260,7 @@ for (const target of targets) {
         // There is no payment request since F3: its two halves are fees on the engagement, the first billed and due in two days.
         expect(await paymentsOf(id)).toEqual([]);
         const fees = await db.select().from(schema.engagementFeeLines).where(eq(schema.engagementFeeLines.engagementId, sent.engagementId!)).orderBy(schema.engagementFeeLines.sortOrder);
-        expect(fees.map((fee: { label: string; amount: number; dueOn: string | null }) => [fee.label, fee.amount, fee.dueOn])).toEqual([["Business Review: half to start", 300_000, addDays(lagosDay(), 2)], ["Business Review: half on delivery", 300_000, null]]);
+        expect(fees.map((fee: { label: string; amount: number; dueOn: string | null }) => [fee.label, fee.amount, fee.dueOn])).toEqual([["Business Review: half to start", 550_000, addDays(lagosDay(), 2)], ["Business Review: half on delivery", 550_000, null]]);
         expect(fees[0].invoiceNumber).not.toBeNull();
         const engagement = (await db.select().from(schema.engagements).where(eq(schema.engagements.businessCheckId, id)))[0];
         expect(engagement).toMatchObject({ id: sent.engagementId, opensOnPayment: true, paymentRequestId: null, contactEmail: email });
@@ -268,12 +268,12 @@ for (const target of targets) {
         const details = emails().find(message => message.to === email)!;
         expect(details.subject).toBe("Payment details for your Business Review");
         // A service agreed on a call is paid in halves (R36): the details ask for the first, on its fee.
-        expect(details.body).toContain("Amount: ₦300,000, the first half of ₦600,000");
+        expect(details.body).toContain("Amount: ₦550,000, the first half of ₦1,100,000");
         expect(details.body).toContain(`Reference: ${sent.reference}`);
         expect(details.body).toMatch(/Invoice: TS-IN-\d{6}/);
         expect(details.body).toMatch(/Pay by: \w{3} \d{1,2} \w{3} \d{4}\n/);
         expect(details.body).not.toContain("48 hours");
-        expect(details.body).toContain("The second half, ₦300,000, is due seven days after we share your Findings.");
+        expect(details.body).toContain("The second half, ₦550,000, is due seven days after we share your Findings.");
 
         await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
         expect(await db.select().from(schema.engagements).where(eq(schema.engagements.businessCheckId, id))).toHaveLength(1);
@@ -283,7 +283,7 @@ for (const target of targets) {
           expect.objectContaining({ item: "current_state", again: true }),
         ]));
         // The record shows the fee, awaiting payment; the list's chip says the same.
-        expect((await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id })).businessReview).toMatchObject({ feeLineId: sent.feeLineId, paid: false, late: false, awaitingPayment: true, amount: 300_000, total: 600_000 });
+        expect((await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id })).businessReview).toMatchObject({ feeLineId: sent.feeLineId, paid: false, late: false, awaitingPayment: true, amount: 550_000, total: 1_100_000 });
         expect((await (await superAdmin.call()).businessSupport.checks()).find((row: { id: number }) => row.id === id)!.payments).toEqual({ current_state: "requested" });
       });
 
@@ -299,10 +299,10 @@ for (const target of targets) {
         expect(invitations[0].status).toBe("pending");
         expect(emails().filter(message => message.to === email).map(message => message.subject)).toEqual(["Payment received: Business Review: half to start", "Set up your client account on The Shift"]);
         const receipt = emails().find(message => message.subject === "Payment received: Business Review: half to start")!;
-        expect(receipt.body).toContain("We have received ₦300,000 for the Business Review: half to start. Thank you.");
+        expect(receipt.body).toContain("We have received ₦550,000 for the Business Review: half to start. Thank you.");
         expect(receipt.body).toContain("Your Business Review is booked. We take three working days to get set up; the review starts at your first Session.");
         expect(receipt.body).toContain("WHAT HAPPENS NEXT");
-        expect(parse(await auditsFor("payment_confirmed", id))).toEqual([expect.objectContaining({ item: "current_state", amountNaira: 300_000, from: "opportunity", to: "won", feeLineId })]);
+        expect(parse(await auditsFor("payment_confirmed", id))).toEqual([expect.objectContaining({ item: "current_state", amountNaira: 550_000, from: "opportunity", to: "won", feeLineId })]);
         expect((await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id })).businessReview).toMatchObject({ paid: true, receipt: expect.stringMatching(/^TS-RC-\d{6}$/), awaitingPayment: false });
         expect((await (await superAdmin.call()).businessSupport.checks()).find((row: { id: number }) => row.id === id)!.payments).toEqual({ current_state: "confirmed" });
         // A paid first half is never sent again.
@@ -411,7 +411,7 @@ for (const target of targets) {
         const { feeLineId } = await (await superAdmin.call()).businessSupport.requestPayment({ businessCheckId: id, item: "current_state" });
         expect((await rowFor(token)).pipelineStage).toBe("opportunity");
         mocked.deliverEmail.mockClear();
-        await (await superAdmin.call()).engagement.finance.recordPayment({ feeLineId: feeLineId!, amount: 300_000, receivedOn: lagosDay(), method: "bank_transfer", note: "Transfer 7719" });
+        await (await superAdmin.call()).engagement.finance.recordPayment({ feeLineId: feeLineId!, amount: 550_000, receivedOn: lagosDay(), method: "bank_transfer", note: "Transfer 7719" });
         expect((await rowFor(token)).pipelineStage).toBe("won");
 
         // 4. The owner follows the link in the invitation email and creates their client account.

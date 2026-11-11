@@ -505,7 +505,7 @@ for (const target of targets) {
         // Nothing is due from the client before they pay, so the plan waits for the payment.
         expect(await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.engagementId, waiting.id))).toEqual([]);
         expect(await db.select().from(schema.engagementSessions).where(eq(schema.engagementSessions.engagementId, waiting.id))).toEqual([]);
-        expect(await (await superAdmin.call()).engagement.finance.recordPayment({ feeLineId: feeLineId!, amount: 300_000, receivedOn: lagosDay(), method: "bank_transfer", note: "Transfer for the Business Review" })).toMatchObject({ opened: true });
+        expect(await (await superAdmin.call()).engagement.finance.recordPayment({ feeLineId: feeLineId!, amount: 550_000, receivedOn: lagosDay(), method: "bank_transfer", note: "Transfer for the Business Review" })).toMatchObject({ opened: true });
 
         const engagement = await engagementOf(id);
         expect(engagement).toMatchObject({ id: waiting.id, stage: "setting_up", businessId: null, opensOnPayment: false });
@@ -594,7 +594,7 @@ for (const target of targets) {
         // Since F3 there is no payment request: both halves are fees from the day the link went, the first now paid.
         expect(await db.select().from(schema.paymentRequests).where(and(eq(schema.paymentRequests.businessCheckId, businessCheckId), eq(schema.paymentRequests.item, "current_state")))).toEqual([]);
         const desk = await superAdmin.call();
-        expect((await desk.engagement.staff.fees({ engagementId })).feeLines).toMatchObject([{ label: "Business Review: half to start", amount: 300_000, paidAt: expect.any(Date) }, { label: "Business Review: half on delivery", amount: 300_000, dueOn: null }]);
+        expect((await desk.engagement.staff.fees({ engagementId })).feeLines).toMatchObject([{ label: "Business Review: half to start", amount: 550_000, paidAt: expect.any(Date) }, { label: "Business Review: half on delivery", amount: 550_000, dueOn: null }]);
         // The team is told before a share that bills.
         expect((await desk.engagement.staff.detail({ engagementId })).balanceOnDelivery).toBe(true);
 
@@ -609,9 +609,9 @@ for (const target of targets) {
         const dueOn = lagosDayPlus(7);
         expect((await desk.engagement.staff.fees({ engagementId })).feeLines).toMatchObject([{ label: "Business Review: half to start" }, { label: "Business Review: half on delivery", dueOn }]);
         expect((await desk.engagement.staff.detail({ engagementId })).balanceOnDelivery).toBe(false);
-        const notice = emails().find(sent => sent.to === email && sent.subject.includes("Business Review: half on delivery: ₦300,000 due by"))!;
+        const notice = emails().find(sent => sent.to === email && sent.subject.includes("Business Review: half on delivery: ₦550,000 due by"))!;
         expect(notice.body).toContain("We have shared your Findings for your Business Review in your room.");
-        expect(notice.body).toContain("The second half, ₦300,000, is due by");
+        expect(notice.body).toContain("The second half, ₦550,000, is due by");
         const dated = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_fees_dated_on_delivery"));
         expect(dated.map((row: { details: string }) => JSON.parse(row.details).engagementId)).toContain(engagementId);
 
@@ -643,8 +643,8 @@ for (const target of targets) {
         const desk = await superAdmin.call();
         const opened = await desk.engagement.staff.createDirect({ type: "done_for_you", service: "business_plan", businessName: "Plan Studio", contactName: "Pat Plan", contactEmail: uniqueEmail("plan-studio"), startedOn: "2026-11-16" });
         expect((await desk.engagement.staff.fees({ engagementId: opened.engagementId })).feeLines.map(line => [line.label, line.amount, line.dueOn])).toEqual([
-          ["Business Plan: half to start", 375_000, "2026-11-16"],
-          ["Business Plan: half on delivery", 375_000, null],
+          ["Business Plan: half to start", 625_000, "2026-11-16"],
+          ["Business Plan: half on delivery", 625_000, null],
         ]);
         const { deliverableId } = await desk.engagement.staff.saveDeliverable({ engagementId: opened.engagementId, kind: "other", title: "Your Business Plan", summary: "The plan." });
         expect(await desk.engagement.staff.shareDeliverable({ deliverableId, audience: "owner" })).toMatchObject({ balancesDated: 1 });

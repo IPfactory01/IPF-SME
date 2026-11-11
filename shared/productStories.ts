@@ -52,7 +52,7 @@ export const PRODUCT_STORIES: Record<string, ProductStory> = {
     statement: ["Most owners can feel the problem.", "Few can name it."],
     features: [
       { eyebrow: "In your words", title: "A summary of what your answers show.", body: "What we found, what we think it is, and why, written for your business and your sector.", visual: { kind: "checklist", title: "What the check reads", items: [{ label: "You as a founder", state: "ready" }, { label: "Your offer and your customers", state: "nearly" }, { label: "Your numbers", state: "missing" }, { label: "How the business runs", state: "nearly" }] } },
-      { eyebrow: "Your first step", title: "The product that fits first, and the one after it.", body: "No pitch for everything at once. One place to start, with its price and its delivery time.", visual: { kind: "moves", title: "Sample result", rows: [{ tag: "First", text: "13-Week Cash Flow Forecast", value: "₦300,000" }, { tag: "Then", text: "Six-Week Fix: Cash and Pricing", value: "₦1,500,000" }] } },
+      { eyebrow: "Your first step", title: "The product that fits first, and the one after it.", body: "No pitch for everything at once. One place to start, with its price and its delivery time.", visual: { kind: "moves", title: "Sample result", rows: [{ tag: "First", text: "13-Week Cash Flow Forecast", value: "₦800,000" }, { tag: "Then", text: "Six-Week Fix: Cash and Pricing", value: "₦2,000,000" }] } },
     ],
     forYou: ["You can feel something is wrong but cannot name it", "You want to know where to start before you spend", "You have ten minutes and a phone"],
     notForYou: [],

@@ -3,8 +3,8 @@ import { buildJourney, CURRENT_STATE, DELIVERY_REMEDY, formatNaira, JOURNEY, PRI
 import { PAYMENT_ITEM_DETAILS } from "@shared/payments";
 
 describe("prices (ET, 21 October 2026)", () => {
-  it("are the top of each range: Full Report ₦100,000, Business Review ₦600,000, Six-Week Fix ₦1,500,000", () => {
-    expect(PRICES).toEqual({ fullReport: 100_000, currentState: 600_000, fix: 1_500_000 });
+  it("are the top of each range: Full Report ₦100,000, Business Review ₦1,100,000, Six-Week Fix ₦2,000,000 (raised ₦500,000 on 11 November 2026)", () => {
+    expect(PRICES).toEqual({ fullReport: 100_000, currentState: 1_100_000, fix: 2_000_000 });
   });
 
   it("shows the server's Full Report and Business Review prices in the journey, never a starting price", () => {

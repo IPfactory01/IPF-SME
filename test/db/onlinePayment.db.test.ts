@@ -635,7 +635,7 @@ for (const target of targets) {
 
       it("charges, shows, emails and confirms the configured Full Report price, end to end", async () => {
         vi.stubEnv("FULL_REPORT_PRICE_NGN", "100");
-        expect(await (await browser().call()).businessCheck.prices()).toEqual({ fullReport: 100, currentState: 600_000 });
+        expect(await (await browser().call()).businessCheck.prices()).toEqual({ fullReport: 100, currentState: 1_100_000 });
         const { token, email, id } = await reportAskedFor("env-price");
         expect(emails().find(sent => sent.to === email && sent.subject === "Payment details for your Full Report")!.body).toContain("Amount: ₦100\n");
         expect(await showing(token)).toBe(100);
@@ -702,7 +702,7 @@ for (const target of targets) {
         await expect((await browser().call()).onlinePayment.start({ token, item: "full_report" })).rejects.toMatchObject({ code: "INTERNAL_SERVER_ERROR" });
         expect(paystack.initialized).toHaveLength(0);
         // The site still shows the real price, which is all that can be charged.
-        expect(await (await browser().call()).businessCheck.prices()).toEqual({ fullReport: 100_000, currentState: 600_000 });
+        expect(await (await browser().call()).businessCheck.prices()).toEqual({ fullReport: 100_000, currentState: 1_100_000 });
 
         vi.stubEnv("ALLOW_LOW_PRICE_TESTING", "true");
         const reference = await start(token, "full_report");

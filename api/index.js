@@ -39,8 +39,8 @@ import pg from "pg";
 // shared/businessSupport.ts
 var PRICES = {
   fullReport: 1e5,
-  currentState: 6e5,
-  fix: 15e5
+  currentState: 11e5,
+  fix: 2e6
 };
 var FULL_REPORT = {
   name: "Your Full Report",
@@ -119,7 +119,7 @@ var PRODUCTS = [
     short: "Before you apply: are you ready for the loan you want, and what is missing?",
     forWhom: "Owners with a lender window open, or about to apply for a loan or grant.",
     youGet: ["A readiness score against what lenders such as LSETF and BOI ask for", "The gaps in your records, plan and documents, in order", "What to fix before you apply, and how long it will take"],
-    price: { kind: "fixed", amount: 15e4 },
+    price: { kind: "fixed", amount: 65e4 },
     fallbackPrice: 1e5,
     delivery: "Three working days from complete records.",
     workingDays: 3,
@@ -139,7 +139,7 @@ var PRODUCTS = [
     short: "Two weeks and two Sessions that test your whole business, to find the one problem to fix first and what to do about it.",
     forWhom: "Owners with several connected problems who are not sure which to fix first.",
     youGet: ["Your numbers, how the business runs and your market, tested together", "The one problem to fix first, in your words", "The Prescription: the first steps, the tools and who owns each"],
-    price: { kind: "fixed", amount: 6e5 },
+    price: { kind: "fixed", amount: 11e5 },
     fallbackPrice: 5e5,
     delivery: "Two weeks, with two Sessions.",
     buy: "after_call",
@@ -155,7 +155,7 @@ var PRODUCTS = [
     short: "Three priorities for your business and a 90-day plan to deliver them.",
     forWhom: "Owners with no clear direction, or too many priorities at once.",
     youGet: ["Where the business is going and what to stop", "Three priorities, each with a number to watch", "A 90-day plan: who does what, by when", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 45e4 },
+    price: { kind: "fixed", amount: 95e4 },
     fallbackPrice: 35e4,
     delivery: "Seven working days from complete records.",
     workingDays: 7,
@@ -175,7 +175,7 @@ var PRODUCTS = [
     short: "How your business makes money, on one page, and what to change so each sale earns more.",
     forWhom: "Owners whose business works but does not earn enough, or who are starting out or changing direction.",
     youGet: ["How your business makes money, on one page", "Who you sell to, what they pay for, and how they find you", "What each sale really earns, and what to change first", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 3e5 },
+    price: { kind: "fixed", amount: 8e5 },
     delivery: "Seven working days from complete records.",
     workingDays: 7,
     buy: "self",
@@ -194,7 +194,7 @@ var PRODUCTS = [
     short: "Three years of numbers: sales, costs, profit, cash and how much funding you need, in three cases.",
     forWhom: "Owners raising money, planning growth, or who want to know when the business breaks even.",
     youGet: ["Three years of sales, costs, profit and cash, month by month for the first year", "Worst, medium and best cases, and what each depends on", "When you break even, and how much funding you need and when", "The Excel model, yours to keep, with a 30-minute handover call"],
-    price: { kind: "fixed", amount: 35e4 },
+    price: { kind: "fixed", amount: 85e4 },
     delivery: "Seven working days from complete records.",
     workingDays: 7,
     buy: "self",
@@ -213,7 +213,7 @@ var PRODUCTS = [
     short: "The whole plan: your Business Model, the market, how you will run and grow, and the Financial Model.",
     forWhom: "Owners bringing in a partner or investor, or who need one plan the whole team works from.",
     youGet: ["The Business Model and the Financial Model, both included", "The market, your competitors and where you win", "How you will sell, run and staff the business, and the risks to watch", "Written for your reader: partners, investors or your own team", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 75e4 },
+    price: { kind: "fixed", amount: 125e4 },
     delivery: "Fifteen working days from complete records.",
     workingDays: 15,
     buy: "after_call",
@@ -232,7 +232,7 @@ var PRODUCTS = [
     short: "Twelve slides that tell an investor or partner why your business, why now, and what you are asking for.",
     forWhom: "Owners meeting investors, partners or big customers who need the business told in ten minutes.",
     youGet: ["A deck of about twelve slides, in your brand, ready to present", "The story: the problem, your answer, the market, the traction and the team", "The numbers and the ask, consistent with your records", "The editable file, with a 30-minute rehearsal call"],
-    price: { kind: "fixed", amount: 3e5 },
+    price: { kind: "fixed", amount: 8e5 },
     delivery: "Seven working days from complete records.",
     workingDays: 7,
     buy: "self",
@@ -251,7 +251,7 @@ var PRODUCTS = [
     short: "What each product really costs you, what it earns, and what to charge.",
     forWhom: "Owners whose prices are guesses, or whose margins are unclear.",
     youGet: ["The true cost of each product or service", "Margin by line: what makes money and what loses it", "New prices to test, with what each change is worth", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 4e5 },
+    price: { kind: "fixed", amount: 9e5 },
     fallbackPrice: 45e4,
     delivery: "Seven working days from complete records.",
     workingDays: 7,
@@ -293,7 +293,7 @@ var PRODUCTS = [
     short: "Week by week for the next 13 weeks: what comes in, what goes out, and when cash runs short.",
     forWhom: "Owners whose cash is always tight.",
     youGet: ["A 13-week forecast built from your own records", "The weeks when cash runs short, and by how much", "What to do about each: collect, delay, cut or fund", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 3e5 },
+    price: { kind: "fixed", amount: 8e5 },
     fallbackPrice: 2e5,
     delivery: "Five working days from complete records.",
     workingDays: 5,
@@ -314,7 +314,7 @@ var PRODUCTS = [
     short: "The plan, forecasts and documents your lender asks for, checked against their list.",
     forWhom: "Owners applying for a loan or grant, ideally after a Funding Readiness Assessment.",
     youGet: ["The business plan in the format the lender asks for", "Financial forecasts built from your records", "The lender's checklist ticked item by item", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 9e5 },
+    price: { kind: "fixed", amount: 14e5 },
     fallbackPrice: 4e5,
     delivery: "Ten working days from complete records.",
     workingDays: 10,
@@ -334,7 +334,7 @@ var PRODUCTS = [
     short: "Everything you need to hire right the first time: the role, the interview, the offer and the first 90 days.",
     forWhom: "Owners about to hire.",
     youGet: ["A job description and what good looks like in the role", "An interview guide and scorecard", "Offer terms and a first-90-days plan for the new hire", "A 30-minute handover call"],
-    price: { kind: "fixed", amount: 3e5 },
+    price: { kind: "fixed", amount: 8e5 },
     fallbackPrice: 2e5,
     delivery: "Five working days from complete answers.",
     workingDays: 5,
@@ -355,7 +355,7 @@ var PRODUCTS = [
     short: "Six weeks on one problem: we prescribe and equip, your team does the work, and we review it with you every week.",
     forWhom: "Owners who know the problem and want it fixed, with someone checking every week.",
     youGet: ["The Prescription: what to do, the tools and who owns each step", "A Weekly Check-in for six weeks", "One Measure of Success, tracked every week", "A Day-30 Review after the six weeks"],
-    price: { kind: "milestones", total: 15e5, stages: [{ name: "At the start", percent: 50 }, { name: "At the result", percent: 50 }], payInFullDiscountPercent: 5 },
+    price: { kind: "milestones", total: 2e6, stages: [{ name: "At the start", percent: 50 }, { name: "At the result", percent: 50 }], payInFullDiscountPercent: 5 },
     fallbackPrice: 12e5,
     delivery: "Six weeks from your first Session.",
     buy: "after_call",
@@ -8656,7 +8656,7 @@ async function sendBusinessReviewLink(db, input) {
     reference: feeReference(fee.id),
     payByDay: fee.dueOn,
     invoice: invoiceNumberLabel(invoiceNumber),
-    // "the first half of ₦600,000" only while the first half is whole; a part paid by hand asks for what is left.
+    // "the first half of ₦1,100,000" only while the first half is whole; a part paid by hand asks for what is left.
     amountNaira: left,
     totalNaira: left === fee.amount ? total : void 0,
     online: online ? { url: feePayUrl(fee.id), mode: mode === "live" ? "live" : "test" } : null
@@ -12107,8 +12107,9 @@ async function businessReviewBalance(db, paymentRequestId) {
   if (paymentRequestId === null) return 0;
   const request = (await db.select({ item: paymentRequests.item, amountNaira: paymentRequests.amountNaira }).from(paymentRequests).where(eq24(paymentRequests.id, paymentRequestId)).limit(1))[0];
   if (!request || request.item !== "current_state") return 0;
-  return secondHalf(request.amountNaira, displayedPrices().currentState);
+  return secondHalf(request.amountNaira, PAYMENT_REQUEST_BUSINESS_REVIEW_PRICE);
 }
+var PAYMENT_REQUEST_BUSINESS_REVIEW_PRICE = 6e5;
 async function loadAssessmentPlan(tx, engagementId, input) {
   const dueFor = (week) => addWorkingDays(input.now, week === 1 ? 3 : 8);
   await tx.insert(engagementTasks).values([

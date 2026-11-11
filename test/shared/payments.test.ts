@@ -6,7 +6,7 @@ describe("what an owner can pay for before Business Review", () => {
   it("describes a payment with the amount it is given (the payment's own), and holds no price of its own", () => {
     expect(PAYMENT_ITEM_DETAILS.full_report).not.toHaveProperty("amount");
     expect(describePayment("full_report", PRICES.fullReport)).toBe("₦100,000 for your Full Report");
-    expect(describePayment("current_state", PRICES.currentState)).toBe("₦600,000 for your Business Review");
+    expect(describePayment("current_state", PRICES.currentState)).toBe("₦1,100,000 for your Business Review");
     expect(describePayment("full_report", 100)).toBe("₦100 for your Full Report");
   });
 

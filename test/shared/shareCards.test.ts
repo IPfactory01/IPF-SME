@@ -44,7 +44,7 @@ describe("each public page's share card", () => {
       expect(page.card.line, page.path).toMatch(/[.?!]$/);
     }
     // A service's card shows its price; the check's does not repeat its own name.
-    expect(publicPages().find((page) => page.path === "/services/13-week-cash-flow-forecast")!.card.badge).toBe("₦300,000");
+    expect(publicPages().find((page) => page.path === "/services/13-week-cash-flow-forecast")!.card.badge).toBe("₦800,000");
     const check = publicPages().find((page) => page.path === "/check")!.card;
     expect([check.eyebrow, check.badge]).not.toContain("Free Business Health Check");
   });

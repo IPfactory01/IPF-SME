@@ -12,6 +12,7 @@ import { legacyBusinessReviewRequest } from "./legacyBusinessReview";
 import { businessCheckProfiles } from "../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../fixtures/reportIntake";
 import { addDays, lagosDay } from "@shared/agreement";
+import { dayInWords, requestDueOn } from "@shared/requests";
 
 const holder = vi.hoisted(() => {
   process.env.DATABASE_URL = "postgresql://contract:contract@localhost:5432/contract";
@@ -201,6 +202,139 @@ for (const target of targets) {
         // Only an engagement with a dated plan.
         const plan = await desk.engagement.staff.createDirect({ type: "done_for_you", service: "business_plan", businessName: "Plain Plan", contactName: "Pia Plain", contactEmail: uniqueEmail("plain-plan"), startedOn: "2026-11-16" });
         await expect(desk.engagement.staff.addMissingPlan({ engagementId: plan.engagementId })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      });
+    });
+
+    describe("asking the client, with a conversation on each item (R78, ET 11 November 2026)", () => {
+      /** A Digital Marketing client with an account and an open room; an Engagement Manager, and two Specialists in its two roles. */
+      async function studio(label: string) {
+        const desk = await superAdmin.call();
+        const email = uniqueEmail(label);
+        const today = lagosDay();
+        const { engagementId, invitationUrl } = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: `Studio ${label}`, contactName: "Ada Studio", contactEmail: email, startedOn: addDays(today, -3) });
+        const owner = browser();
+        await (await owner.call()).invitations.accept({ token: decodeURIComponent(invitationUrl!.split("/join/")[1]), email, fullName: "Ada Studio", password: PASSWORD, confirmPassword: PASSWORD });
+        await desk.engagement.staff.openRoomNow({ engagementId });
+        const lead = await person(["analyst"], "Lewis Lead");
+        const producer = await person(["subject_matter_expert"], "Kemi Producer");
+        const marketer = await person(["subject_matter_expert"], "Mira Marketer");
+        await desk.engagement.staff.assign({ engagementId, userId: lead.id, role: "manager" });
+        await desk.engagement.staff.assign({ engagementId, userId: producer.id, role: "content_producer" });
+        await desk.engagement.staff.assign({ engagementId, userId: marketer.id, role: "digital_marketer" });
+        return { engagementId, email, owner, today, lead: { ...lead, browser: await signIn(lead, true) }, producer: { ...producer, browser: await signIn(producer, true) }, marketer: { ...marketer, browser: await signIn(marketer, true) } };
+      }
+
+      it("lets anyone on the team ask, by the agreed rhythm and once a week each unless they lead it, and emails the owner", async () => {
+        const s = await studio("ask");
+        const producer = await s.producer.browser.call();
+        const due = requestDueOn(s.today);
+        mocked.deliverEmail.mockClear();
+        // Never sooner than two days away.
+        await expect(producer.engagement.staff.askClient({ engagementId: s.engagementId, title: "A video of the new menu", brief: null, dueOn: addDays(s.today, 1), turnaround: "first_edit" })).rejects.toMatchObject({ code: "BAD_REQUEST", message: expect.stringContaining("at least two days") });
+        const asked = await producer.engagement.staff.askClient({ engagementId: s.engagementId, title: "A video of the new menu", brief: "Thirty seconds, filmed upright.", dueOn: due, turnaround: "first_edit" });
+        expect(asked.emailed).toBe(1);
+        const request = emails().find(sent => sent.to === s.email)!;
+        expect(request.subject).toBe(`New request: A video of the new menu, due ${dayInWords(due)}`);
+        expect(request.body).toContain("Kemi at IP Factory has asked for this");
+        expect(request.body).toContain("we send you the first edit within 48 hours");
+        // A second request the same week is refused, with where to put it; the lead is not limited.
+        await expect(producer.engagement.staff.askClient({ engagementId: s.engagementId, title: "Photos of the team", brief: null, dueOn: due, turnaround: null })).rejects.toMatchObject({ code: "CONFLICT", message: expect.stringContaining("once this week already") });
+        const lead = await s.lead.browser.call();
+        await lead.engagement.staff.askClient({ engagementId: s.engagementId, title: "Your opening hours", brief: null, dueOn: due, turnaround: null });
+        await lead.engagement.staff.askClient({ engagementId: s.engagementId, title: "Your booking link", brief: null, dueOn: due, turnaround: null });
+
+        const detail = await lead.engagement.staff.detail({ engagementId: s.engagementId });
+        expect(detail.tasks.find(task => task.id === asked.taskId)).toMatchObject({ kind: "action", side: "client", status: "open", dueOn: due, turnaround: "first_edit", requestedByUserId: s.producer.id, askedByName: "Kemi Producer", goesTo: { userId: s.producer.id }, canAnswer: true, comments: [] });
+        expect(detail.ask).toMatchObject({ allowed: true, unlimited: true, thisWeek: null });
+        expect((await producer.engagement.staff.detail({ engagementId: s.engagementId })).ask).toEqual({ allowed: true, unlimited: false, thisWeek: { id: asked.taskId, title: "A video of the new menu" } });
+        const recorded = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_request_sent"));
+        expect(recorded.map((row: { details: string }) => JSON.parse(row.details)).filter((entry: { engagementId: number }) => entry.engagementId === s.engagementId)).toHaveLength(3);
+        // The owner sees it with who asked and whom a message reaches.
+        const room = (await (await s.owner.call()).engagement.client.room())!;
+        expect(room.tasks.find(task => task.id === asked.taskId)).toMatchObject({ askedBy: "Kemi Producer", writeTo: "Kemi Producer", turnaround: "first_edit", receivedAt: null, comments: [] });
+        // Nobody off the engagement asks.
+        const outsider = await signIn(await person(["analyst"]), true);
+        await expect((await outsider.call()).engagement.staff.askClient({ engagementId: s.engagementId, title: "Nope", brief: null, dueOn: due, turnaround: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+      });
+
+      it("carries a conversation both ways on every client item, each message emailed to the other side, and keeps a Specialist to what comes to them", async () => {
+        const s = await studio("talk");
+        const { taskId } = await (await s.producer.browser.call()).engagement.staff.askClient({ engagementId: s.engagementId, title: "A video of the new menu", brief: null, dueOn: requestDueOn(s.today), turnaround: "first_edit" });
+        mocked.deliverEmail.mockClear();
+        await (await s.owner.call()).engagement.client.taskComment({ taskId, body: "Is landscape fine?" });
+        expect(emails().map(sent => [sent.to, sent.subject])).toEqual([[s.producer.email, "Studio talk wrote on A video of the new menu"]]);
+        mocked.deliverEmail.mockClear();
+        await (await s.producer.browser.call()).engagement.staff.taskComment({ taskId, body: "Upright, please." });
+        expect(emails().map(sent => [sent.to, sent.subject])).toEqual([[s.email, "Kemi wrote on A video of the new menu"]]);
+        const room = (await (await s.owner.call()).engagement.client.room())!;
+        expect(room.tasks.find(task => task.id === taskId)!.comments.map(comment => [comment.body, comment.fromTeam, comment.mine])).toEqual([["Is landscape fine?", false, true], ["Upright, please.", true, false]]);
+        const detail = await (await s.lead.browser.call()).engagement.staff.detail({ engagementId: s.engagementId });
+        expect(detail.tasks.find(task => task.id === taskId)!.comments.map(comment => [comment.body, comment.fromClient])).toEqual([["Is landscape fine?", true], ["Upright, please.", false]]);
+
+        // Another Specialist cannot answer on it; the Content Producer answers on the plan's footage, which has its clock.
+        await expect((await s.marketer.browser.call()).engagement.staff.taskComment({ taskId, body: "Hello" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        const footage = detail.tasks.find(task => task.title === "Send week 1 footage")!;
+        expect(footage).toMatchObject({ turnaround: "first_edit", goesTo: { userId: s.producer.id } });
+        await (await s.producer.browser.call()).engagement.staff.taskComment({ taskId: footage.id, body: "Film the kitchen this week." });
+        // A plan item without a clock goes to the main contact, the Digital Marketer.
+        const logo = detail.tasks.find(task => task.title === "Logo, colours and fonts")!;
+        mocked.deliverEmail.mockClear();
+        await (await s.owner.call()).engagement.client.taskComment({ taskId: logo.id, body: "We only have a PNG." });
+        expect(emails().map(sent => sent.to)).toEqual([s.marketer.email]);
+        // Another business never reaches the item; the team's own items have no conversation.
+        const other = await client("talk-other");
+        await expect((await other.owner.call()).engagement.client.taskComment({ taskId, body: "Hi" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        const teamItem = detail.tasks.find(task => task.side === "ipf")!;
+        await expect((await s.lead.browser.call()).engagement.staff.taskComment({ taskId: teamItem.id, body: "Internal" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      });
+
+      it("starts the First edit's clock when the footage arrives, tells the person it goes to, stops it when the team asks for more, and shares it once", async () => {
+        const s = await studio("clock");
+        const producer = await s.producer.browser.call();
+        const { taskId } = await producer.engagement.staff.askClient({ engagementId: s.engagementId, title: "A video of the new menu", brief: null, dueOn: requestDueOn(s.today), turnaround: "first_edit" });
+        await expect(producer.engagement.staff.followUpShared({ taskId })).rejects.toMatchObject({ code: "CONFLICT", message: expect.stringContaining("not arrived yet") });
+        mocked.deliverEmail.mockClear();
+        const before = Date.now();
+        await (await s.owner.call()).engagement.client.answerWithLink({ taskId, url: "https://drive.google.com/drive/folders/example" });
+        const [arrived] = await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.id, taskId));
+        expect(arrived.status).toBe("done");
+        expect(arrived.receivedAt.getTime()).toBeGreaterThanOrEqual(before - 1000);
+        expect(arrived.followUpDueAt.getTime() - arrived.receivedAt.getTime()).toBe(48 * 3_600_000);
+        const told = emails().find(sent => sent.to === s.producer.email)!;
+        expect(told.subject).toMatch(/^Received from Studio clock: A video of the new menu\. First edit due /);
+        expect(told.body).toContain("(a link to a shared folder)");
+
+        // Not usable: the lead asks for more, which stops the clock; sent again, it starts again and the note goes with it.
+        const lead = await s.lead.browser.call();
+        const item = (await lead.engagement.staff.detail({ engagementId: s.engagementId })).tasks.find(task => task.id === taskId)!;
+        await lead.engagement.staff.saveTask({ engagementId: s.engagementId, taskId, kind: item.kind, title: item.title, detail: item.detail, side: item.side, assigneeUserId: null, dueOn: item.dueOn, status: "needs_more", statusNote: "Too dark: film by the window", sessionId: null, weekNumber: item.weekNumber, sortOrder: item.sortOrder, factor: null });
+        expect((await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.id, taskId)))[0]).toMatchObject({ status: "needs_more", receivedAt: null, followUpDueAt: null });
+        mocked.deliverEmail.mockClear();
+        await (await s.owner.call()).engagement.client.respondToTask({ taskId, note: "Sent on WhatsApp" });
+        expect(emails().find(sent => sent.to === s.producer.email)!.body).toContain("Their note: Sent on WhatsApp");
+        expect((await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.id, taskId)))[0].followUpDueAt).toEqual(expect.any(Date));
+
+        // Shared once, on time; the owner is told it waits for their approval.
+        mocked.deliverEmail.mockClear();
+        expect(await producer.engagement.staff.followUpShared({ taskId })).toMatchObject({ success: true, late: false, emailed: 1 });
+        expect(emails().map(sent => [sent.to, sent.subject])).toEqual([[s.email, "Ready for your approval: the first edit of A video of the new menu"]]);
+        await expect(producer.engagement.staff.followUpShared({ taskId })).rejects.toMatchObject({ code: "CONFLICT" });
+        expect((await (await s.owner.call()).engagement.client.room())!.tasks.find(task => task.id === taskId)).toMatchObject({ followUpDoneAt: expect.any(Date) });
+        const recorded = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_follow_up_shared"));
+        expect(recorded.map((row: { details: string }) => JSON.parse(row.details)).filter((entry: { taskId: number }) => entry.taskId === taskId)).toEqual([{ engagementId: s.engagementId, taskId, turnaround: "first_edit", late: false }]);
+
+        // Recorded by the team (sent on WhatsApp): the person it goes to hears, unless they recorded it themselves.
+        const markDone = (task: { id: number; kind: "data_request" | "action"; title: string; detail: string | null; side: "client" | "ipf"; dueOn: string | null; weekNumber: number | null; sortOrder: number }) =>
+          lead.engagement.staff.saveTask({ engagementId: s.engagementId, taskId: task.id, kind: task.kind, title: task.title, detail: task.detail, side: task.side, assigneeUserId: null, dueOn: task.dueOn, status: "done", statusNote: "On WhatsApp", sessionId: null, weekNumber: task.weekNumber, sortOrder: task.sortOrder, factor: null });
+        const received = () => emails().filter(sent => sent.subject.startsWith("Received from")).map(sent => sent.to);
+        const { taskId: own } = await lead.engagement.staff.askClient({ engagementId: s.engagementId, title: "Your opening hours", brief: null, dueOn: requestDueOn(s.today), turnaround: null });
+        const tasks = (await lead.engagement.staff.detail({ engagementId: s.engagementId })).tasks;
+        mocked.deliverEmail.mockClear();
+        await markDone(tasks.find(task => task.title === "Send week 2 footage")!);
+        expect(received()).toEqual([s.producer.email]);
+        mocked.deliverEmail.mockClear();
+        await markDone(tasks.find(task => task.id === own)!);
+        expect(received()).toEqual([]);
       });
     });
 
@@ -1205,6 +1339,34 @@ for (const target of targets) {
       const configure = () => { ENV.supabaseUrl = "https://example-project.supabase.co"; ENV.supabaseServiceRoleKey = "service-key-for-tests"; ENV.supabaseStorageBucket = "engagement-files"; };
       afterEach(() => { ENV.supabaseUrl = saved.url; ENV.supabaseServiceRoleKey = saved.key; ENV.supabaseStorageBucket = saved.bucket; vi.unstubAllGlobals(); });
       const pdf = (fileName: string) => ({ fileName, contentType: "application/pdf", sizeBytes: 120_000 });
+
+      it("never counts a brief from the team as the client's answer, and lets a Specialist attach one only to their own request (R78)", async () => {
+        configure();
+        storage();
+        const a = await client("brief");
+        const desk = await superAdmin.call();
+        const task = (await (await a.owner.call()).engagement.client.room())!.tasks[1];
+        // The team attaches a brief for the owner; the owner sends a file, then takes it back: the item is To do again.
+        const brief = await desk.engagement.staff.requestUpload({ engagementId: a.engagementId, target: { kind: "task", id: task.id }, ...pdf("brief.pdf") });
+        await desk.engagement.staff.confirmUpload({ engagementId: a.engagementId, target: { kind: "task", id: task.id }, storageKey: brief.storageKey, audience: "owner", ...pdf("brief.pdf") });
+        const ticket = await (await a.owner.call()).engagement.client.requestUpload({ taskId: task.id, ...pdf("sales.pdf") });
+        const { fileId } = await (await a.owner.call()).engagement.client.confirmUpload({ taskId: task.id, storageKey: ticket.storageKey, note: null, ...pdf("sales.pdf") });
+        expect((await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.id, task.id)))[0]).toMatchObject({ status: "received", receivedAt: expect.any(Date) });
+        await (await a.owner.call()).engagement.client.removeFile({ fileId });
+        expect((await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.id, task.id)))[0]).toMatchObject({ status: "open", receivedAt: null });
+
+        // A Specialist on the engagement attaches a brief to the request they sent, for the client; never to anything else.
+        const specialist = await person(["subject_matter_expert"], "Sade Specialist");
+        await desk.engagement.staff.assign({ engagementId: a.engagementId, userId: specialist.id, role: "expert" });
+        const theirs = await (await signIn(specialist, true)).call();
+        const { taskId } = await theirs.engagement.staff.askClient({ engagementId: a.engagementId, title: "Your supplier invoices", brief: "The last three months.", dueOn: requestDueOn(lagosDay()), turnaround: null });
+        const own = await theirs.engagement.staff.requestUpload({ engagementId: a.engagementId, target: { kind: "task", id: taskId }, ...pdf("what-we-need.pdf") });
+        await expect(theirs.engagement.staff.confirmUpload({ engagementId: a.engagementId, target: { kind: "task", id: taskId }, storageKey: own.storageKey, audience: "team", ...pdf("what-we-need.pdf") })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await theirs.engagement.staff.confirmUpload({ engagementId: a.engagementId, target: { kind: "task", id: taskId }, storageKey: own.storageKey, audience: "business", ...pdf("what-we-need.pdf") });
+        await expect(theirs.engagement.staff.requestUpload({ engagementId: a.engagementId, target: { kind: "task", id: task.id }, ...pdf("other.pdf") })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        const room = (await (await a.owner.call()).engagement.client.room())!;
+        expect(room.tasks.find(item => item.id === taskId)!.files.map(file => [file.fileName, file.fromTeam])).toEqual([["what-we-need.pdf", true]]);
+      });
 
       it("says uploads are off, and what to do instead, until the bucket is set up", async () => {
         const { owner } = await client("no-storage");

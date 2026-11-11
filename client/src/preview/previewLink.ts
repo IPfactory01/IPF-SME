@@ -154,6 +154,18 @@ const SAMPLE_ROOM = {
 };
 const SAMPLE_SEATS = { included: 1, used: 0, members: [], invitations: [] };
 
+/** Each item's conversation and who it goes to (R78): one exchange on the price list, so the preview shows how it reads. */
+const SAMPLE_MESSAGES: Record<number, { id: number; body: string; createdAt: Date; authorName: string; fromTeam: boolean; mine: boolean }[]> = {
+  4: [
+    { id: 1, body: "Is a photo of the price board fine?", createdAt: day(-1, 11), authorName: "Ada Okafor", fromTeam: false, mine: true },
+    { id: 2, body: "Yes, a clear photo is fine. Add the delivery prices too, please.", createdAt: day(-1, 15), authorName: "Femi Adebayo", fromTeam: true, mine: false },
+  ],
+};
+const withConversation = (task: (typeof SAMPLE_ROOM.tasks)[number]) => ({
+  askedBy: null, turnaround: null, receivedAt: null, followUpDueAt: null, followUpDoneAt: null, ...task,
+  writeTo: task.side === "client" ? "Femi Adebayo" : null, comments: task.side === "client" ? SAMPLE_MESSAGES[task.id] ?? [] : [],
+});
+
 const responders: Record<string, Responder> = {
   "auth.me": () => null,
   "account.me": () => (previewSession.signedIn ? SAMPLE_OWNER : null),
@@ -162,7 +174,7 @@ const responders: Record<string, Responder> = {
     return { success: true };
   },
   "account.business": () => ({ ...SAMPLE_BUSINESS }),
-  "engagement.client.room": () => (previewSession.signedIn ? { ...SAMPLE_ROOM, insight: previewInsight() } : null),
+  "engagement.client.room": () => (previewSession.signedIn ? { ...SAMPLE_ROOM, tasks: SAMPLE_ROOM.tasks.map(withConversation), insight: previewInsight() } : null),
   "invitations.seats.list": () => SAMPLE_SEATS,
   "businessCheck.prices": () => PRICES,
   "businessCheck.start": () => ({ token: "preview-token-0000000000" }),
@@ -189,6 +201,7 @@ const refusals: Record<string, string> = {
   "engagement.client.requestDrop": `On the live site your files go to your team, who match each one to what they asked for. ${PREVIEW_NOTICE}`,
   "engagement.client.setNotAvailable": `On the live site this tells your team you do not have it. ${PREVIEW_NOTICE}`,
   "engagement.client.comment": `On the live site your comment reaches your team. ${PREVIEW_NOTICE}`,
+  "engagement.client.taskComment": `On the live site your message reaches your team by email. ${PREVIEW_NOTICE}`,
   "engagement.client.accept": `On the live site this signs it off. ${PREVIEW_NOTICE}`,
   "engagement.client.setAudience": `On the live site this decides whether your staff see it. ${PREVIEW_NOTICE}`,
   "engagement.client.requestService": `On the live site this asks your team for the service; they confirm it and send the payment link. ${PREVIEW_NOTICE}`,

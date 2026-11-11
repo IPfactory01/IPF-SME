@@ -25,6 +25,7 @@ import RoomDashboard from "./room/RoomDashboard";
 import RoomTabs from "./room/RoomTabs";
 import { useRoomPreview } from "./room/RoomPreview";
 import TaskDetail from "./TaskDetail";
+import { ItemUpload, RequestFacts, TaskConversation } from "./room/TaskConversation";
 import type { AppRouter } from "../../../server/routers";
 
 type Room = NonNullable<inferRouterOutputs<AppRouter>["engagement"]["client"]["room"]>;
@@ -148,7 +149,9 @@ function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps)
           <p className="mt-2 text-lg font-semibold tracking-tight">{action.task.title}</p>
           {action.task.detail && <TaskDetail text={action.task.detail} className="mt-1 text-sm text-ink-600" />}
           {action.task.status === "needs_more" && action.task.statusNote && <p className="mt-1 text-sm text-danger">We need a bit more: {action.task.statusNote}</p>}
+          <RequestFacts task={action.task} now={now} />
           <TaskControls task={action.task} uploadsEnabled={room.uploadsEnabled} due />
+          <TaskConversation task={action.task} />
         </>
       )}
       {action.kind === "signoff" && (
@@ -564,7 +567,7 @@ function WaitingOnYou({ room, isOwner, onOpen }: { room: Room; isOwner: boolean;
             <li key={task.id} className="py-2.5">
               <a href="#step-4" onClick={() => onOpen(4)} className="font-medium text-ink hover:text-brand">{task.title}</a>
               <p className={`text-xs ${task.status === "needs_more" ? "text-danger" : "text-ink-muted"}`}>
-                {task.kind === "data_request" ? METHOD.dataRequest : "Action"}{task.dueOn ? ` · ${dueText(task.dueOn)}` : ""}{task.status === "needs_more" ? ` · ${task.statusLabel}` : ""}
+                {task.askedBy ? `Asked by ${firstNameOf(task.askedBy) || "your team"}` : task.kind === "data_request" ? METHOD.dataRequest : "Action"}{task.dueOn ? ` · ${dueText(task.dueOn)}` : ""}{task.status === "needs_more" ? ` · ${task.statusLabel}` : ""}{task.comments.length ? ` · ${task.comments.length} ${task.comments.length === 1 ? "message" : "messages"}` : ""}
               </p>
             </li>
           ))}
@@ -971,7 +974,7 @@ function RequestControls({ task }: { task: Task }) {
 }
 
 /** "Mark as done" for an action, with an optional note. */
-function ActionControls({ task, due }: { task: Task; uploadsEnabled: boolean; due?: boolean }) {
+function ActionControls({ task, uploadsEnabled, due }: { task: Task; uploadsEnabled: boolean; due?: boolean }) {
   const refresh = useRoomRefresh();
   const [note, setNote] = useState("");
   const [asking, setAsking] = useState(false);
@@ -990,6 +993,7 @@ function ActionControls({ task, due }: { task: Task; uploadsEnabled: boolean; du
     <div className="mt-3 flex flex-wrap items-center gap-2">
       <Button type="button" size="sm" className="rounded-lg bg-brand text-xs text-white" onClick={() => setAsking(true)}>Mark as done</Button>
       <button type="button" className="text-xs font-medium text-brand underline underline-offset-2" onClick={() => setLinking(true)}>Send a link</button>
+      {task.askedBy !== null && uploadsEnabled && <ItemUpload task={task} />}
       {due && task.dueOn && <span className="text-xs text-ink-muted">{dueText(task.dueOn)}</span>}
     </div>
   );
@@ -1226,10 +1230,12 @@ function PlanView({ room, now }: { room: Room; now: number }) {
             <dt className="text-ink-muted">Type</dt><dd>{task.kind === "data_request" ? METHOD.dataRequest : "Action"}</dd>
           </dl>
           {task.detail && <TaskDetail text={task.detail} className="mt-3 text-sm text-ink-600" />}
+          <RequestFacts task={task} now={now} />
           {task.status === "needs_more" && task.statusNote && <p className="mt-2 text-sm text-danger">We need a bit more: {task.statusNote}</p>}
           <FileList files={task.files} canRemove={file => file.mine && !file.fromTeam && ["open", "received", "needs_more"].includes(task.status)} />
           <SentLink link={task.responseLink} />
           {isClientOpen(task) && <TaskControls task={task} uploadsEnabled={room.uploadsEnabled} />}
+          <TaskConversation task={task} />
         </aside>
       )}
     </div>
@@ -1377,6 +1383,7 @@ function RequestRow({ task, now }: { task: Task; now: number }) {
           <FileList files={task.files} canRemove={file => file.mine && !file.fromTeam && ["open", "received", "needs_more"].includes(task.status)} />
           <SentLink link={task.responseLink} />
           <RequestControls task={task} />
+          <TaskConversation task={task} />
         </div>
       )}
     </li>

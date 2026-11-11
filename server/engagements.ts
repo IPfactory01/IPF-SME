@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import {
   businessChecks,
   fullReports,
@@ -15,6 +15,7 @@ import {
   engagements,
   engagementSessions,
   engagementTasks,
+  engagementTaskComments,
   engagementTeam,
   paymentRequests,
   userPlatformRoles,
@@ -75,7 +76,10 @@ import { defaultFees, feeHold, isDelivery, lagosDay, starterDueOn } from "../sha
 import { CURRENT_STATE } from "../shared/businessSupport";
 import { displayedPrices } from "./businessSupportPrices";
 import { workLines } from "../shared/engagementWork";
-import { agreedWhatsapp, recipientOf } from "./teamContact";
+import { agreedWhatsapp, followUpOwnerOf, recipientOf } from "./teamContact";
+import { arrivalFields, dayInWords, earliestRequestDue, hasArrived, REQUEST_MAX_DAYS, REQUESTS_PER_WEEK, weekStartOf } from "../shared/requests";
+import { TURNAROUND_LABELS, type EngagementTaskTurnaround } from "../shared/engagement";
+import { businessNameOf, namesOf, sendMessageEmails, sendReadyEmail, sendReceivedEmail, sendRequestEmail } from "./requestEmails";
 import { sharedDebriefFor } from "./debriefs";
 import { getDb } from "./db";
 import { deliverEmail } from "./email";
@@ -251,7 +255,7 @@ function starterTaskRows(engagementId: number, starter: Starter, startsOn: strin
     ...starter.teamActions.map(item => ({ kind: "action" as const, side: "ipf" as const, ...item })),
   ].map(item => ({
     engagementId, kind: item.kind, side: item.side, title: item.title, detail: item.detail, dueOn: starterDueOn(startsOn, item.week, item.weekday), weekNumber: item.week, sortOrder: item.order,
-    section: item.section ?? null, ref: item.ref ?? null, informs: item.informs ?? null, format: item.format ?? null, priority: item.priority ?? null, createdByUserId: actorUserId,
+    section: item.section ?? null, ref: item.ref ?? null, informs: item.informs ?? null, format: item.format ?? null, priority: item.priority ?? null, turnaround: item.turnaround ?? null, createdByUserId: actorUserId,
   }));
 }
 
@@ -524,6 +528,11 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     // or Paused (D6).
     db.select({ dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and(eq(engagementFeeLines.engagementId, engagementId), isNull(engagementFeeLines.paidAt), isNull(engagementFeeLines.writtenOffAt))),
   ]);
+  // Asking the client (R78): who asked for each item, whom it goes to, its conversation, and this person's request this week.
+  const [itemComments, askers, review] = await Promise.all([taskCommentsOf(db, engagementId), namesOf(db, tasks.map(task => task.requestedByUserId)), canReviewEngagement(db, actor, engagementId)]);
+  const weekStart = new Date(`${weekStartOf(lagosDay())}T00:00:00+01:00`).getTime();
+  const askedThisWeek = review ? undefined : tasks.filter(task => task.requestedByUserId === actor.id && task.status !== "cancelled" && task.createdAt.getTime() >= weekStart).sort((a, b) => b.id - a.id)[0];
+  const manages = authorityAllows(actor.authority, "manage_engagements");
   const held = engagement.opensOnPayment ? null : feeHold(waiting.map(fee => ({ dueOn: fee.dueOn, paid: false })), lagosDay());
   const staffFile = (file: EngagementFile) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt });
   const filesFor = (where: "taskId" | "deliverableId", id: number) => files.filter(file => file[where] === id || (where === "taskId" && matches.some(match => match.fileId === file.id && match.taskId === id))).map(staffFile);
@@ -537,7 +546,17 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     clientPeople,
     // Internal notes stay with those who work on or approve engagements.
     sessions: canSeeInternal(actor) ? sessions : sessions.map(item => ({ ...item, internalNotes: null })),
-    tasks: tasks.map(task => ({ ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id) })),
+    tasks: tasks.map(task => {
+      const goesTo = task.side === "client" ? followUpOwnerOf(team, task) : null;
+      return {
+        ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id),
+        askedByName: task.requestedByUserId === null ? null : askers.get(task.requestedByUserId) ?? "",
+        goesTo: goesTo ? { userId: goesTo.userId, name: goesTo.name ?? "" } : null,
+        // Whether this person may write on it and share its First edit: the server checks again (requireStaffClientItem).
+        canAnswer: task.side === "client" && task.status !== "cancelled" && (manages || (canContribute(actor) && goesTo?.userId === actor.id)),
+        comments: itemComments.filter(comment => comment.taskId === task.id).map(({ taskId: _taskId, ...comment }) => comment),
+      };
+    }),
     // The drop box: every file the client sent without saying what it answers, with the requests it has been matched to.
     // Unsorted files come first.
     content: (await contentOf(db, engagementId)).map(item => ({ ...item, kindLabel: CONTENT_KIND_LABELS[item.kind], statusLabel: CONTENT_STATUS_LABELS[item.status] })),
@@ -558,6 +577,13 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
       seeInternal: canSeeInternal(actor),
       seeFees: canSeeFees(actor),
     },
+    /** Ask {business} (R78): whether this person may, whether the weekly limit applies to them, and their request this week. */
+    ask: {
+      allowed: canContribute(actor) && !engagement.opensOnPayment,
+      unlimited: review,
+      thisWeek: askedThisWeek ? { id: askedThisWeek.id, title: askedThisWeek.title } : null,
+    },
+    viewerUserId: actor.id,
   };
 }
 
@@ -791,11 +817,16 @@ export async function saveTask(db: Database, actor: StaffActor, input: TaskInput
   const finished = input.status === "accepted" || input.status === "done";
   const values = { kind: input.kind, title: input.title, detail: input.detail, side: input.side, assigneeUserId: input.assigneeUserId, dueOn: input.dueOn, status: input.status, statusNote: input.statusNote, sessionId: input.sessionId, weekNumber: input.weekNumber, sortOrder: input.sortOrder, factor: input.factor, section: input.section ?? null, ref: input.ref ?? null, informs: input.informs ?? null, format: input.format ?? null, priority: input.priority ?? null, completedAt: finished ? new Date() : null };
   if (input.taskId) {
-    const updated = await db.update(engagementTasks).set(values).where(and(eq(engagementTasks.id, input.taskId), eq(engagementTasks.engagementId, engagement.id))).returning({ id: engagementTasks.id });
-    if (!updated.length) throw notFound();
+    const before = (await db.select().from(engagementTasks).where(and(eq(engagementTasks.id, input.taskId), eq(engagementTasks.engagementId, engagement.id))).limit(1))[0];
+    if (!before) throw notFound();
+    // The team marking it received (sent on WhatsApp) starts its clock; asking for more stops it (R78).
+    const arrival = arrivalFields({ ...before, side: input.side }, input.status);
+    await db.update(engagementTasks).set({ ...values, ...arrival }).where(eq(engagementTasks.id, before.id));
+    if (hasArrived(arrival)) await sendReceivedEmail(db, { taskId: before.id, actorUserId: actor.id, how: "recorded by the team" });
     return { taskId: input.taskId } as const;
   }
-  const [created] = await db.insert(engagementTasks).values({ engagementId: engagement.id, ...values, createdByUserId: actor.id }).returning({ id: engagementTasks.id });
+  const arrival = arrivalFields({ side: input.side, receivedAt: null, turnaround: null }, input.status);
+  const [created] = await db.insert(engagementTasks).values({ engagementId: engagement.id, ...values, ...arrival, createdByUserId: actor.id }).returning({ id: engagementTasks.id });
   return { taskId: created.id } as const;
 }
 
@@ -833,6 +864,120 @@ export async function loadDataRequest(db: Database, actor: StaffActor, input: { 
     });
   }
   return { added: rows.length, skipped: input.items.length - rows.length } as const;
+}
+
+// ---- Asking the client, with a conversation on each item (R78) ------------------------------------------------------
+
+export type AskInput = { engagementId: number; title: string; brief: string | null; dueOn: string; turnaround: EngagementTaskTurnaround | null; today?: string };
+
+/**
+ * A team member asks the client for what their work needs (R78, ET 11 November 2026): a client-side action with who
+ * asked, a brief and the day it is due, and the owner is emailed. The day is never sooner than two days away. Each
+ * person sends at most one request a week on an engagement, Monday to Sunday in Lagos, unless they approve on it, and
+ * adds anything more to its conversation, so the client is not asked by everyone at once.
+ */
+export async function askClient(db: Database, actor: StaffActor, input: AskInput) {
+  if (!canContribute(actor)) requireManage(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  const businessName = await businessNameOf(db, engagement);
+  if (engagement.opensOnPayment) throw new TRPCError({ code: "BAD_REQUEST", message: `${businessName}'s room opens once the first payment is made. Ask once it is open.` });
+  const today = input.today ?? lagosDay();
+  const earliest = earliestRequestDue(today);
+  if (input.dueOn < earliest) throw new TRPCError({ code: "BAD_REQUEST", message: `Give ${businessName} at least two days: the earliest is ${dayInWords(earliest)}.` });
+  if (input.dueOn > addDays(today, REQUEST_MAX_DAYS)) throw new TRPCError({ code: "BAD_REQUEST", message: "Choose a day in the next six months." });
+  if (!(await canReviewEngagement(db, actor, engagement.id))) {
+    const since = new Date(`${weekStartOf(today)}T00:00:00+01:00`);
+    const asked = await db.select({ title: engagementTasks.title }).from(engagementTasks)
+      .where(and(eq(engagementTasks.engagementId, engagement.id), eq(engagementTasks.requestedByUserId, actor.id), gte(engagementTasks.createdAt, since), ne(engagementTasks.status, "cancelled")))
+      .orderBy(desc(engagementTasks.id));
+    if (asked.length >= REQUESTS_PER_WEEK) {
+      throw new TRPCError({ code: "CONFLICT", message: `You have asked ${businessName} once this week already ("${asked[0]!.title}"). Add this to its conversation, or ask the engagement's lead to send it.` });
+    }
+  }
+  const orders = await db.select({ sortOrder: engagementTasks.sortOrder }).from(engagementTasks).where(eq(engagementTasks.engagementId, engagement.id));
+  const sortOrder = Math.min(999, orders.reduce((max, row) => Math.max(max, row.sortOrder ?? 0), 0) + 1);
+  // Its week in the Work Plan, counted from the start; the Work Plan runs to week 12.
+  const weekNumber = engagement.startedOn
+    ? Math.min(12, Math.max(1, Math.floor((Date.parse(`${input.dueOn}T12:00:00Z`) - Date.parse(`${engagement.startedOn}T12:00:00Z`)) / (7 * 86_400_000)) + 1))
+    : null;
+  const taskId = await db.transaction(async tx => {
+    const [created] = await tx.insert(engagementTasks).values({
+      engagementId: engagement.id, kind: "action", side: "client", title: input.title.trim(), detail: input.brief, dueOn: input.dueOn, status: "open",
+      weekNumber, sortOrder, turnaround: input.turnaround, requestedByUserId: actor.id, createdByUserId: actor.id,
+    }).returning({ id: engagementTasks.id });
+    await recordAudit(tx, { action: "engagement_request_sent", actorUserId: actor.id, details: { engagementId: engagement.id, taskId: created.id, dueOn: input.dueOn, ...(input.turnaround ? { turnaround: input.turnaround } : {}) } });
+    return created.id;
+  });
+  return { taskId, emailed: await sendRequestEmail(db, { taskId }) } as const;
+}
+
+/**
+ * Who on the team may answer on a client's item: anyone who works on engagements, or the Specialist it goes to (the
+ * person who asked for it; the Content Producer for footage). The lead answers the rest, so the client hears one voice.
+ */
+async function requireStaffClientItem(db: Pick<Database, "select">, actor: StaffActor, taskId: number) {
+  const task = (await db.select().from(engagementTasks).where(eq(engagementTasks.id, taskId)).limit(1))[0];
+  if (!task) throw notFound();
+  await requireStaffEngagement(db, actor, task.engagementId);
+  if (task.side !== "client" || task.status === "cancelled") throw new TRPCError({ code: "BAD_REQUEST", message: "The conversation is on the client's items that are still needed." });
+  if (authorityAllows(actor.authority, "manage_engagements")) return task;
+  if (!canContribute(actor)) requireManage(actor);
+  const team = await db.select({ userId: engagementTeam.userId, role: engagementTeam.role }).from(engagementTeam).where(eq(engagementTeam.engagementId, task.engagementId));
+  if (followUpOwnerOf(team, task)?.userId === actor.id) return task;
+  throw new TRPCError({ code: "FORBIDDEN", message: "You can answer on the items that come to you: the requests you sent, and footage if you are its Content Producer. The lead answers the rest." });
+}
+
+/** The team writes in an item's conversation; the owner, and the person in the business it is for, are emailed. */
+export async function staffTaskComment(db: Database, actor: StaffActor, input: { taskId: number; body: string }) {
+  const task = await requireStaffClientItem(db, actor, input.taskId);
+  const body = input.body.trim();
+  await db.insert(engagementTaskComments).values({ engagementId: task.engagementId, taskId: task.id, authorUserId: actor.id, body });
+  return { success: true, emailed: await sendMessageEmails(db, { taskId: task.id, fromTeam: true, authorUserId: actor.id, body }) } as const;
+}
+
+/** The client writes in an item's conversation; the person on the team it goes to is emailed. */
+export async function clientTaskComment(db: Database, session: AccountSession, input: { taskId: number; body: string }) {
+  const task = (await db.select().from(engagementTasks).where(eq(engagementTasks.id, input.taskId)).limit(1))[0];
+  if (!task) throw notFound();
+  const { viewer } = await requireClientEngagement(db, session, task.engagementId);
+  if (task.side !== "client" || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound();
+  const body = input.body.trim();
+  await db.insert(engagementTaskComments).values({ engagementId: task.engagementId, taskId: task.id, authorUserId: session.user.id, body });
+  await sendMessageEmails(db, { taskId: task.id, fromTeam: false, authorUserId: session.user.id, body });
+  return { success: true } as const;
+}
+
+/**
+ * The First edit or draft is shared (R78): its clock stops, the time against the clock is recorded, and the owner is told
+ * it waits for their approval. Only once what it needs has arrived, and only once.
+ */
+export async function followUpShared(db: Database, actor: StaffActor, input: { taskId: number }) {
+  const task = await requireStaffClientItem(db, actor, input.taskId);
+  if (!task.turnaround) throw new TRPCError({ code: "BAD_REQUEST", message: "This item has no First edit or draft to share." });
+  if (!task.receivedAt) throw new TRPCError({ code: "CONFLICT", message: "It has not arrived yet: the clock starts when it does." });
+  const label = TURNAROUND_LABELS[task.turnaround];
+  const now = new Date();
+  const late = task.followUpDueAt !== null && now.getTime() > task.followUpDueAt.getTime();
+  const shared = await db.transaction(async tx => {
+    const updated = await tx.update(engagementTasks).set({ followUpDoneAt: now }).where(and(eq(engagementTasks.id, task.id), isNull(engagementTasks.followUpDoneAt))).returning({ id: engagementTasks.id });
+    if (updated.length) await recordAudit(tx, { action: "engagement_follow_up_shared", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, turnaround: task.turnaround, late } });
+    return updated.length > 0;
+  });
+  if (!shared) throw new TRPCError({ code: "CONFLICT", message: `The ${label.toLowerCase()} is already shared.` });
+  return { success: true, late, emailed: await sendReadyEmail(db, { taskId: task.id }) } as const;
+}
+
+/** The conversation on each of an engagement's items, oldest first, with who wrote and whether they are the client. */
+async function taskCommentsOf(db: Pick<Database, "select">, engagementId: number) {
+  const rows = await db.select({
+    id: engagementTaskComments.id, taskId: engagementTaskComments.taskId, body: engagementTaskComments.body, createdAt: engagementTaskComments.createdAt,
+    authorUserId: engagementTaskComments.authorUserId, authorName: users.name, membershipId: businessMemberships.id,
+  }).from(engagementTaskComments)
+    .innerJoin(users, eq(engagementTaskComments.authorUserId, users.id))
+    .innerJoin(engagements, eq(engagementTaskComments.engagementId, engagements.id))
+    .leftJoin(businessMemberships, and(eq(businessMemberships.userId, engagementTaskComments.authorUserId), eq(businessMemberships.businessId, engagements.businessId)))
+    .where(eq(engagementTaskComments.engagementId, engagementId)).orderBy(asc(engagementTaskComments.id));
+  return rows.map(({ membershipId, ...row }) => ({ ...row, authorName: row.authorName ?? "", fromClient: membershipId !== null }));
 }
 
 export type DeliverableInput = { engagementId: number; deliverableId?: number; kind: EngagementDeliverableKind; title: string; summary: string | null };
@@ -1047,6 +1192,7 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
     checkinsOf(db, engagement.id),
     matchesOf(db, engagement.id),
   ]);
+  const [itemComments, askers] = await Promise.all([taskCommentsOf(db, engagement.id), namesOf(db, tasks.map(task => task.requestedByUserId))]);
   const assigneeIds = Array.from(new Set(tasks.map(task => task.assigneeUserId).filter((value): value is number => value !== null)));
   const assigneeNames = new Map((assigneeIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, assigneeIds)) : []).map(row => [row.id, row.name ?? ""]));
   const fullView = viewer.kind === "owner" || viewer.access === "full";
@@ -1153,8 +1299,14 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
       section: task.section, ref: task.ref, informs: task.informs, format: task.format, priority: task.priority,
       responseLink: task.responseLink,
       // Who on the team receives it on WhatsApp: the person who asked, or the engagement's main contact (R44).
-      sendTo: task.side === "client" ? recipientOf(team, task.createdByUserId) : null,
+      sendTo: task.side === "client" ? recipientOf(team, task.requestedByUserId ?? task.createdByUserId) : null,
       files: clientFiles("taskId", task.id),
+      // Asking the client (R78): who asked, whom a message reaches, the conversation, and when the First edit follows.
+      askedBy: task.requestedByUserId === null ? null : askers.get(task.requestedByUserId) ?? "",
+      writeTo: task.side === "client" ? followUpOwnerOf(team, task)?.name ?? null : null,
+      turnaround: task.turnaround, receivedAt: task.receivedAt, followUpDueAt: task.followUpDueAt, followUpDoneAt: task.followUpDoneAt,
+      comments: task.side === "client" ? itemComments.filter(comment => comment.taskId === task.id)
+        .map(comment => ({ id: comment.id, body: comment.body, createdAt: comment.createdAt, authorName: comment.authorName, fromTeam: !comment.fromClient, mine: comment.authorUserId === viewerUserId })) : [],
     })),
     // What the client's side dropped into the room, newest first, and which visible requests each file was matched to.
     sentFiles: files.filter(file => file.taskId === null && file.deliverableId === null && !file.fromTeam && clientFileVisible(file, viewer, viewerUserId))
@@ -1186,10 +1338,12 @@ export async function respondToTask(db: Database, session: AccountSession, input
   if (task.side !== "client" || !clientCanSeeTask(task, viewer)) throw notFound();
   if (task.status !== "open" && task.status !== "needs_more") throw new TRPCError({ code: "CONFLICT", message: "This is already with us." });
   const status: EngagementTaskStatus = task.kind === "data_request" ? "received" : "done";
+  const arrival = arrivalFields(task, status);
   await db.transaction(async tx => {
-    await tx.update(engagementTasks).set({ status, statusNote: input.note, completedAt: status === "done" ? new Date() : null }).where(eq(engagementTasks.id, task.id));
+    await tx.update(engagementTasks).set({ status, statusNote: input.note, completedAt: status === "done" ? new Date() : null, ...arrival }).where(eq(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status } });
   });
+  if (hasArrived(arrival)) await sendReceivedEmail(db, { taskId: task.id, actorUserId: session.user.id, how: status === "done" ? "marked done in the room" : "marked sent in the room" });
   return { success: true, status } as const;
 }
 
@@ -1206,10 +1360,12 @@ export async function answerWithLink(db: Database, session: AccountSession, inpu
   if (task.side !== "client" || !clientCanSeeTask(task, viewer)) throw notFound();
   if (task.status !== "open" && task.status !== "needs_more") throw new TRPCError({ code: "CONFLICT", message: "This is already with us." });
   const status: EngagementTaskStatus = task.kind === "data_request" ? "received" : "done";
+  const arrival = arrivalFields(task, status);
   await db.transaction(async tx => {
-    await tx.update(engagementTasks).set({ status, responseLink: link, statusNote: "Sent a link to a folder", completedAt: status === "done" ? new Date() : null }).where(eq(engagementTasks.id, task.id));
+    await tx.update(engagementTasks).set({ status, responseLink: link, statusNote: "Sent a link to a folder", completedAt: status === "done" ? new Date() : null, ...arrival }).where(eq(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status, via: "link" } });
   });
+  if (hasArrived(arrival)) await sendReceivedEmail(db, { taskId: task.id, actorUserId: session.user.id, how: "a link to a shared folder" });
   return { success: true, status } as const;
 }
 
@@ -1339,15 +1495,18 @@ export async function clientConfirmUpload(db: Database, session: AccountSession,
   if (!isTargetStorageKey(input.storageKey, keyPrefix(task.engagementId, { kind: "task", id: task.id }))) throw notFound();
   if (!(await objectExists(input.storageKey))) throw new TRPCError({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
   const open = task.status === "open" || task.status === "needs_more";
-  return db.transaction(async tx => {
+  const arrival = open ? arrivalFields(task, "received") : {};
+  const result = await db.transaction(async tx => {
     const [file] = await tx.insert(engagementFiles).values({
       engagementId: task.engagementId, taskId: task.id, storageKey: input.storageKey, fileName: input.fileName.trim().slice(0, 255), contentType: input.contentType || "application/octet-stream",
       sizeBytes: input.sizeBytes, audience: "owner", uploadedByUserId: session.user.id,
     }).returning({ id: engagementFiles.id });
-    if (open) await tx.update(engagementTasks).set({ status: "received", statusNote: input.note || "Uploaded to the room" }).where(eq(engagementTasks.id, task.id));
+    if (open) await tx.update(engagementTasks).set({ status: "received", statusNote: input.note || "Uploaded to the room", ...arrival }).where(eq(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_file_uploaded", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, fileId: file.id, ...(open ? { status: "received" } : {}) } });
     return { success: true, fileId: file.id, status: open ? "received" as const : task.status } as const;
   });
+  if (hasArrived(arrival)) await sendReceivedEmail(db, { taskId: task.id, actorUserId: session.user.id, how: "a file in the room" });
+  return result;
 }
 
 /** A short-lived link to a file the client may see: their own upload, or one shared with them on a visible item. */
@@ -1512,10 +1671,13 @@ export async function matchFile(db: Database, actor: StaffActor, input: { fileId
   return db.transaction(async tx => {
     await tx.delete(engagementFileMatches).where(eq(engagementFileMatches.fileId, file.id));
     if (wanted.length) await tx.insert(engagementFileMatches).values(wanted.map(taskId => ({ fileId: file.id, taskId, matchedByUserId: actor.id })));
-    const waiting = requests.filter(task => task.status === "open" || task.status === "needs_more" || task.status === "not_available").map(task => task.id);
-    if (waiting.length) await tx.update(engagementTasks).set({ status: "received", statusNote: "From the files you sent" }).where(inArray(engagementTasks.id, waiting));
+    const waiting = requests.filter(task => task.status === "open" || task.status === "needs_more" || task.status === "not_available");
+    for (const task of waiting) await tx.update(engagementTasks).set({ status: "received", statusNote: "From the files you sent", ...arrivalFields(task, "received") }).where(eq(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_file_matched", actorUserId: actor.id, details: { engagementId: file.engagementId, fileId: file.id, taskIds: wanted } });
-    return { success: true, moved: waiting.length } as const;
+    return { success: true, moved: waiting.length, arrived: waiting.filter(task => !task.receivedAt).map(task => task.id) } as const;
+  }).then(async ({ arrived, ...result }) => {
+    for (const taskId of arrived) await sendReceivedEmail(db, { taskId, actorUserId: actor.id, how: "a file in the drop box" });
+    return result;
   });
 }
 
@@ -1528,16 +1690,24 @@ async function requireStaffTarget(db: Pick<Database, "select">, actor: StaffActo
 }
 
 /** The team attaches a file to a request (what we owe the client) or a deliverable. Audience as for notes: owner by default. */
-/** A contributor (a Specialist) uploads only to a Deliverable, and only for IP Factory: the lead shares it with the client. */
-function requireUploader(actor: StaffActor, target: UploadTarget, audience: EngagementAudience | null) {
+/**
+ * A contributor (a Specialist) uploads a draft to a Deliverable, for IP Factory only, for the lead to share; or the brief
+ * on a request they sent the client (R78), which the client sees.
+ */
+async function requireUploader(db: Pick<Database, "select">, actor: StaffActor, engagementId: number, target: UploadTarget, audience: EngagementAudience | null) {
   if (authorityAllows(actor.authority, "manage_engagements")) return;
   if (!canContribute(actor)) return requireManage(actor);
-  if (target.kind !== "deliverable" || (audience !== null && audience !== "team")) throw new TRPCError({ code: "FORBIDDEN", message: "You can add draft files to a Deliverable, for IP Factory only. The lead shares them with the client." });
+  if (target.kind === "deliverable" && (audience === null || audience === "team")) return;
+  if (target.kind === "task" && audience !== "team") {
+    const task = (await db.select({ engagementId: engagementTasks.engagementId, requestedByUserId: engagementTasks.requestedByUserId }).from(engagementTasks).where(eq(engagementTasks.id, target.id)).limit(1))[0];
+    if (task && task.engagementId === engagementId && task.requestedByUserId === actor.id) return;
+  }
+  throw new TRPCError({ code: "FORBIDDEN", message: "You can add draft files to a Deliverable, for IP Factory only, and a brief to a request you sent. The lead shares the rest." });
 }
 
 export async function staffRequestUpload(db: Database, actor: StaffActor, input: UploadInput & { engagementId: number; target: UploadTarget }) {
   requireUploads();
-  requireUploader(actor, input.target, null);
+  await requireUploader(db, actor, input.engagementId, input.target, null);
   validateUpload(input);
   await requireStaffTarget(db, actor, input.engagementId, input.target);
   const storageKey = newStorageKey(input.engagementId, input.target, input.fileName);
@@ -1547,7 +1717,7 @@ export async function staffRequestUpload(db: Database, actor: StaffActor, input:
 
 export async function staffConfirmUpload(db: Database, actor: StaffActor, input: UploadInput & { engagementId: number; target: UploadTarget; storageKey: string; audience: EngagementAudience }) {
   requireUploads();
-  requireUploader(actor, input.target, input.audience);
+  await requireUploader(db, actor, input.engagementId, input.target, input.audience);
   validateUpload(input);
   await requireStaffTarget(db, actor, input.engagementId, input.target);
   if (!isTargetStorageKey(input.storageKey, keyPrefix(input.engagementId, input.target))) throw notFound();
@@ -1590,9 +1760,13 @@ async function removeFile(db: Database, file: typeof engagementFiles.$inferSelec
     await tx.delete(engagementFiles).where(eq(engagementFiles.id, file.id));
     if (file.taskId !== null) {
       const task = (await tx.select().from(engagementTasks).where(eq(engagementTasks.id, file.taskId)).limit(1))[0];
-      const left = await tx.select({ id: engagementFiles.id }).from(engagementFiles).where(eq(engagementFiles.taskId, file.taskId)).limit(1);
+      // Only the client's own files answer an item: a brief the team attached to it does not (R78).
+      const owner = (await tx.select({ businessId: engagements.businessId }).from(engagements).where(eq(engagements.id, file.engagementId)).limit(1))[0];
+      const left = owner?.businessId == null ? [] : await tx.select({ id: engagementFiles.id }).from(engagementFiles)
+        .innerJoin(businessMemberships, and(eq(businessMemberships.userId, engagementFiles.uploadedByUserId), eq(businessMemberships.businessId, owner.businessId)))
+        .where(eq(engagementFiles.taskId, file.taskId)).limit(1);
       if (task && task.status === "received" && left.length === 0 && !task.responseLink) {
-        await tx.update(engagementTasks).set({ status: "open", statusNote: null }).where(eq(engagementTasks.id, task.id));
+        await tx.update(engagementTasks).set({ status: "open", statusNote: null, ...arrivalFields(task, "open") }).where(eq(engagementTasks.id, task.id));
       }
     }
     await recordAudit(tx, { action: "engagement_file_removed", actorUserId: by.userId, details: { engagementId: file.engagementId, fileId: file.id, by: by.side, ...(by.reason ? { reason: by.reason } : {}) } });

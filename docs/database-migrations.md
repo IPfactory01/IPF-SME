@@ -171,3 +171,12 @@ Marketing client. Additive. **Apply it just before deploying the arrears code**,
 engagement's fees. Paste `drizzle/supabase/apply-0023-engagement-paid-in-arrears.sql` into the Supabase SQL Editor of
 the project the site uses and press Run; it stops, changing nothing, unless exactly `0000` to `0022` are recorded and the
 column is not there yet. Health then counts 24 of 24.
+
+**`0024` and deployment order** (written 11 November 2026). Asking the client, with a conversation on each item
+(R78): one table, `engagement_task_comments`, one type, `engagement_tasks_turnaround`, and five columns on
+`engagement_tasks` (`requestedByUserId`, `turnaround`, `receivedAt`, `followUpDueAt`, `followUpDoneAt`). Additive. Its
+own SQL then gives the Digital Marketing plan's footage items already open (`Send week N footage`) the 48-hour First
+edit; nothing else changes. **Apply it just before deploying the requests code**, which reads the new columns on every
+Work Plan. Paste `drizzle/supabase/apply-0024-engagement-requests.sql` into the Supabase SQL Editor of the project the
+site uses and press Run; it stops, changing nothing, unless exactly `0000` to `0023` are recorded and the table is not
+there yet. Health then counts 25 of 25.

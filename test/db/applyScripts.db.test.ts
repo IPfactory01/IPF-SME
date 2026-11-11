@@ -54,6 +54,22 @@ describe("the Supabase apply scripts", () => {
     await pg.close();
   }, 60_000);
 
+  it("0024: the conversation table exists, and only the Digital Marketing footage items take the First edit", async () => {
+    const pg = await databaseAt(24);
+    await pg.exec(`
+      insert into engagements ("contactName", "type") values ('Ada Example', 'digital_marketing'), ('Ben Example', 'business_review');
+      insert into engagement_tasks ("engagementId", "kind", "side", "title") values
+        (1, 'action', 'client', 'Send week 1 footage'), (1, 'action', 'client', 'Send week 12 footage'), (1, 'action', 'client', 'Approve the first reels'),
+        (1, 'action', 'ipf', 'Send week 1 footage'), (2, 'action', 'client', 'Send week 1 footage');
+    `);
+    await pg.exec(readFileSync(join(SCRIPTS, scriptFor(24)!), "utf8"));
+    const tasks = await pg.query<{ id: number; turnaround: string | null }>('select id, turnaround::text as turnaround from engagement_tasks order by id');
+    expect(tasks.rows).toEqual([{ id: 1, turnaround: "first_edit" }, { id: 2, turnaround: "first_edit" }, { id: 3, turnaround: null }, { id: 4, turnaround: null }, { id: 5, turnaround: null }]);
+    const table = await pg.query<{ count: number }>("select count(*)::int as count from information_schema.columns where table_schema = 'public' and table_name = 'engagement_task_comments'");
+    expect(table.rows[0]!.count).toBe(6);
+    await pg.close();
+  }, 60_000);
+
   it("0023: every engagement starts paid in advance (paidInArrears false, never empty)", async () => {
     const pg = await databaseAt(23);
     await pg.exec(readFileSync(join(SCRIPTS, scriptFor(23)!), "utf8"));

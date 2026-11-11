@@ -25,6 +25,19 @@ export function recipientOf(team: readonly Member[], askedBy: number | null) {
   return chosen ? { name: chosen.name ?? "", whatsapp: agreedWhatsapp(chosen)! } : null;
 }
 
+/**
+ * Who on the team an item the client is asked for goes to (R78): the person who asked for it while they are on the
+ * engagement, else for an item with a clock (footage) its Content Producer, else the main contact. The client's messages
+ * and what they send reach this person, who may also answer them.
+ */
+export function followUpOwnerOf<T extends { userId: number; role: EngagementTeamRole }>(team: readonly T[], task: { requestedByUserId: number | null; turnaround: string | null }): T | null {
+  const asker = task.requestedByUserId === null ? undefined : team.find(member => member.userId === task.requestedByUserId);
+  if (asker) return asker;
+  const producer = task.turnaround ? team.find(member => member.role === "content_producer") : undefined;
+  if (producer) return producer;
+  return [...team].sort((a, b) => MAIN_CONTACT_ORDER.indexOf(a.role) - MAIN_CONTACT_ORDER.indexOf(b.role))[0] ?? null;
+}
+
 /** The engagement's main contact on WhatsApp, or null when nobody on its team has agreed to show a number. */
 export async function mainContactOf(db: Pick<Database, "select">, engagementId: number) {
   const team = await db.select({ userId: engagementTeam.userId, name: users.name, role: engagementTeam.role, whatsapp: users.whatsapp, whatsappConsentAt: users.whatsappConsentAt })

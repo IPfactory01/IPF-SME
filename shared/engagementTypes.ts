@@ -9,7 +9,7 @@
  * client directly (the first is Crown Studio, from the JUMP programme), with the scope of the approved prototype:
  * 15 reels, 5 posts and 20 stories a month over 90 days, a weekly check-in and a review each month.
  */
-import type { EngagementSessionKind, EngagementTaskPriority } from "./engagement";
+import type { EngagementSessionKind, EngagementTaskPriority, EngagementTaskTurnaround } from "./engagement";
 import { PRODUCTS, type Product, type WayToBuy } from "./products";
 
 /**
@@ -42,8 +42,11 @@ export const STAGED_TYPES: readonly EngagementType[] = ["business_review", "six_
 /** A stage on a dated engagement: from and to are days from the start (day 0 is the start date). */
 export type TypeStage = { title: string; summary: string; from: number; to: number };
 
-/** `weekday` (0 Sunday to 6 Saturday): the item falls due on that day of its week, not on day 3 (R77). */
-type StarterItem = { title: string; detail: string; week: number; order: number; section?: string; ref?: string; priority?: EngagementTaskPriority; informs?: string; format?: string; weekday?: number };
+/**
+ * `weekday` (0 Sunday to 6 Saturday): the item falls due on that day of its week, not on day 3 (R77). `turnaround`: what
+ * the team sends back once it arrives, against a clock (R78): footage becomes the First edit within 48 hours.
+ */
+type StarterItem = { title: string; detail: string; week: number; order: number; section?: string; ref?: string; priority?: EngagementTaskPriority; informs?: string; format?: string; weekday?: number; turnaround?: EngagementTaskTurnaround };
 type StarterSession = { kind: EngagementSessionKind; title: string; week: number; order: number; durationMinutes: number; agenda: string };
 
 export type DatedEngagementType = {
@@ -80,7 +83,7 @@ export const DIGITAL_MARKETING: DatedEngagementType = {
   ],
   // The weekly cycle (R77): footage every Thursday, edited within 48 hours, shared for approval on Saturday.
   clientActions: [
-    ...Array.from({ length: 12 }, (_, index) => ({ week: index + 1, order: 6, weekday: 4, priority: "high" as const, title: `Send week ${index + 1} footage`, detail: "Six or more vertical clips by Thursday, filmed with your Content Producer's guidance for the week: they make next week's reels. We edit within 48 hours of them arriving." })),
+    ...Array.from({ length: 12 }, (_, index) => ({ week: index + 1, order: 6, weekday: 4, priority: "high" as const, turnaround: "first_edit" as const, title: `Send week ${index + 1} footage`, detail: "Six or more vertical clips by Thursday, filmed with your Content Producer's guidance for the week: they make next week's reels. We edit within 48 hours of them arriving." })),
     { week: 2, order: 1, priority: "high", title: "Approve the first reels", detail: "Nothing is published without your yes. Two rounds of changes are included." },
   ],
   teamActions: [

@@ -16,6 +16,7 @@ import {
   ENGAGEMENT_TASK_KINDS,
   ENGAGEMENT_TASK_SIDES,
   ENGAGEMENT_TASK_STATUSES,
+  ENGAGEMENT_TASK_TURNAROUNDS,
   ENGAGEMENT_TEAM_ROLES,
   MAX_CHECKIN_WEEKS,
   UPLOAD_MAX_BYTES,
@@ -79,7 +80,12 @@ import {
   staffRequestUpload,
   startAwaitingEngagement,
   addMissingPlan,
+  askClient,
+  staffTaskComment,
+  clientTaskComment,
+  followUpShared,
 } from "../engagements";
+import { REQUEST_BRIEF_MAX, REQUEST_TITLE_MAX, TASK_COMMENT_MAX } from "../../shared/requests";
 import { checkFileStorage } from "../fileStorage";
 import { loadAuthority } from "../platformAccess";
 import { accountProcedure, adminProcedure, router } from "../_core/trpc";
@@ -224,6 +230,21 @@ const staffRouter = router({
   })).mutation(async ({ ctx, input }) => guarded(async () => saveFees(await engagementDb(), ctx.actor, input))),
   sendFeeLink: staff.input(z.object({ feeLineId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffSendFeeLink(await engagementDb(), ctx.actor, input))),
   openRoomNow: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => openRoomNow(await engagementDb(), ctx.actor, input))),
+  /**
+   * Ask the client for something (R78): manage_engagements or contribute_engagements, on an engagement the person is on;
+   * one request a week each unless they approve on it; never due sooner than two days away.
+   */
+  askClient: staff.input(z.object({
+    engagementId: id,
+    title: text(REQUEST_TITLE_MAX).min(1, "Say what you need."),
+    brief: optionalText(REQUEST_BRIEF_MAX),
+    dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose the day it is due."),
+    turnaround: z.enum(ENGAGEMENT_TASK_TURNAROUNDS).nullable(),
+  })).mutation(async ({ ctx, input }) => guarded(async () => askClient(await engagementDb(), ctx.actor, input))),
+  /** Write in a client item's conversation (R78): manage_engagements, or the Specialist the item goes to. */
+  taskComment: staff.input(z.object({ taskId: id, body: text(TASK_COMMENT_MAX).min(1, "Write your message first.") })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.engagementComment, `staff:${ctx.actor.id}`); return guarded(async () => staffTaskComment(await engagementDb(), ctx.actor, input)); }),
+  /** The First edit or draft is shared (R78): as for the conversation, once it has arrived, once. */
+  followUpShared: staff.input(z.object({ taskId: id })).mutation(async ({ ctx, input }) => guarded(async () => followUpShared(await engagementDb(), ctx.actor, input))),
   /** Adds what the type's current plan has and this engagement lacks, dated from its kickoff (R77). Nothing already there changes. */
   addMissingPlan: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => addMissingPlan(await engagementDb(), ctx.actor, input))),
   /** Paid in arrears or in advance from the kickoff (R74): a Partner or the Super Admin, on an engagement paid by the month. */
@@ -295,6 +316,8 @@ const clientRouter = router({
   setNotAvailable: accountProcedure.input(z.object({ taskId: id, unavailable: z.boolean(), note: optionalText(500) })).mutation(async ({ ctx, input }) => guarded(async () => setNotAvailable(await engagementDb(), ctx.account, input))),
   /** Answer an item with a link to a shared folder (footage, large records); only the link is kept (R43). */
   answerWithLink: accountProcedure.input(z.object({ taskId: id, url: z.string().trim().min(1).max(2048) })).mutation(async ({ ctx, input }) => guarded(async () => answerWithLink(await engagementDb(), ctx.account, input))),
+  /** Write in the conversation on an item the client is asked for (R78): anyone in the business who can see it. */
+  taskComment: accountProcedure.input(z.object({ taskId: id, body: text(TASK_COMMENT_MAX).min(1, "Write your message first.") })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.engagementComment, `account:${ctx.account.user.id}`); return guarded(async () => clientTaskComment(await engagementDb(), ctx.account, input)); }),
   /** Take back a file the person sent, until the team has taken it in (R61). */
   removeFile: accountProcedure.input(z.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => clientRemoveFile(await engagementDb(), ctx.account, input))),
 });

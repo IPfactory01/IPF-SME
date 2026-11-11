@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Anyone on an engagement's team asks the client for what their work needs from the Work Plan, with a brief, a document and a due day that follows the agreed rhythm (the next Thursday at least two days away, never sooner than two days); one request a week each, unless they approve on the engagement. Every item the client is asked for has a conversation in the room, both ways and emailed; what arrives tells the person who asked and starts the 48-hour First edit. This replaces O2 (9 October) for asks: the conversation about each item moves from the client's WhatsApp group into the room, so stakeholders do not need WhatsApp to work; a quick word on WhatsApp stays fine (R78) | ET, 11 November 2026 ("Think like this, do the stakeholders still need to use whatsapp even with the platform live?") |
 | The Digital Marketing plan follows the Crown Studio agreement: kick-off questions first; footage every Thursday, edited within 48 hours; Weekly Check-ins in month 1, then every two weeks; a review each month; a content plan each month for approval; the Google Business Profile plan; a piece counts once published (R77) | ET, 11 November 2026 |
 | The Super Admin can preview Admin as any team member sees it, as staff preview a client's room: read only, every change refused, 30 minutes at most, recorded (R76) | ET, 10 November 2026 |
 | Everyone on an engagement hears of each Session by email with a calendar invitation: the team, and the client unless they booked it on Calendly, which has already emailed them; a cancellation takes it out of their calendars (R75) | ET, 10 November 2026 |
@@ -115,7 +116,8 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 O4 (one Current State Assessment price or two grades) was decided on 9 October: ₦500,000, fixed.
 O2 and O9 were decided on 9 October as recommended: conversation stays in the client's WhatsApp group, decisions and
-actions are recorded in the room, and the team's internal tasks stay in ClickUp.
+actions are recorded in the room, and the team's internal tasks stay in ClickUp. On 11 November ET moved the
+conversation about each item the client is asked for into the room (R78, section 1); O9 stands.
 
 ## 4. Where we depart from the concept note
 

@@ -118,15 +118,18 @@ async function clientOf(db: Pick<Database, "select">, engagement: typeof engagem
   return null;
 }
 
-/** The team on an engagement who still have access: active, with a role that has not ended (or the Super Admin). */
-async function teamOf(db: Pick<Database, "select">, engagementId: number, now: number) {
-  const members = await db.select({ userId: users.id, email: users.email, name: users.name }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id))
+/**
+ * The team on an engagement who still have access: active, with a role that has not ended (or the Super Admin), with
+ * their role on it. Session emails and the request emails (R78) reach only these people.
+ */
+export async function teamOf(db: Pick<Database, "select">, engagementId: number, now: number) {
+  const members = await db.select({ userId: users.id, email: users.email, name: users.name, role: engagementTeam.role }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id))
     .where(and(eq(engagementTeam.engagementId, engagementId), eq(users.status, "active")));
   if (!members.length) return [];
   const live = new Set((await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles)
     .where(and(inArray(userPlatformRoles.userId, members.map(member => member.userId)), or(isNull(userPlatformRoles.expiresAt), gt(userPlatformRoles.expiresAt, new Date(now)))))).map(row => row.userId));
   return members.filter(member => member.email && (live.has(member.userId) || member.email.toLowerCase() === OWNER_ADMIN_EMAIL.toLowerCase()))
-    .map(member => ({ email: member.email!, name: member.name ?? "" }));
+    .map(member => ({ userId: member.userId, role: member.role, email: member.email!, name: member.name ?? "" }));
 }
 
 /**
@@ -148,7 +151,7 @@ export async function sendSessionEmails(db: Pick<Database, "select">, input: { s
     const client = input.includeClient ? await clientOf(db, engagement) : null;
     const team = await teamOf(db, engagement.id, now);
     const people = new Map<string, { email: string; name: string; forClient: boolean }>();
-    for (const member of team) people.set(member.email.toLowerCase(), { ...member, forClient: false });
+    for (const member of team) people.set(member.email.toLowerCase(), { email: member.email, name: member.name, forClient: false });
     if (client) people.set(client.email.toLowerCase(), { ...client, forClient: true });
     const minutes = session.durationMinutes ?? DEFAULT_MINUTES;
     const origin = getTrustedApplicationOrigin();

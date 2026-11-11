@@ -133,6 +133,15 @@ export const TASK_FORMAT_MAX = 80;
 /** Statuses that still ask something of whoever owns the task. */
 export const OPEN_TASK_STATUSES: readonly EngagementTaskStatus[] = ["open", "needs_more"];
 
+/**
+ * What the team sends back once the client's side of an item arrives (R78, 0024), and within how many hours: footage
+ * becomes the First edit within 48 hours (the agreement); a carousel or text, the First draft.
+ */
+export const ENGAGEMENT_TASK_TURNAROUNDS = ["first_edit", "first_draft"] as const;
+export type EngagementTaskTurnaround = (typeof ENGAGEMENT_TASK_TURNAROUNDS)[number];
+export const TURNAROUND_LABELS: Record<EngagementTaskTurnaround, string> = { first_edit: "First edit", first_draft: "First draft" };
+export const TURNAROUND_HOURS: Record<EngagementTaskTurnaround, number> = { first_edit: 48, first_draft: 48 };
+
 export const ENGAGEMENT_DELIVERABLE_KINDS = ["findings", "problem_statement", "prescription", "tools", "plan", "other"] as const;
 export type EngagementDeliverableKind = (typeof ENGAGEMENT_DELIVERABLE_KINDS)[number];
 export const ENGAGEMENT_DELIVERABLE_KIND_LABELS: Record<EngagementDeliverableKind, string> = { findings: "Findings", problem_statement: "Problem Statement", prescription: "Prescription", tools: "Tools", plan: "Plan", other: "Document" };

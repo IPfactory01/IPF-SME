@@ -41,7 +41,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         fees: { useQuery: () => ({ data: api.failed.fees ? undefined : api.fees, error: api.failed.fees ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("fees"); } }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -51,7 +51,7 @@ const { default: SystemStatus } = await import("@/components/admin/SystemStatus"
 const { default: EngagementsView } = await import("@/components/admin/EngagementsView");
 
 const row = { id: 4, stage: "setting_up", stageLabel: "Getting set up", businessName: "Ada Foods", ownerName: "Ada Okafor", ownerEmail: "ada@example.test", hasAccount: true, createdAt: new Date(), team: [], openClientRequests: 5, overdueClientRequests: 2, unscheduledSessions: 2, nextSession: null, myRole: null as string | null, unsortedFiles: 0 };
-const task = (over: Record<string, unknown>) => ({ id: 51, engagementId: 4, kind: "data_request", side: "client", title: "Your price list", detail: null, assigneeUserId: null, dueOn: "2026-10-21", status: "open", statusLabel: "To do", statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 4, factor: "internal", createdByUserId: 1, completedAt: null, createdAt: new Date(), updatedAt: new Date(), files: [], ...over });
+const task = (over: Record<string, unknown>) => ({ id: 51, engagementId: 4, kind: "data_request", side: "client", title: "Your price list", detail: null, assigneeUserId: null, dueOn: "2026-10-21", status: "open", statusLabel: "To do", statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 4, factor: "internal", createdByUserId: 1, completedAt: null, createdAt: new Date(), updatedAt: new Date(), files: [], requestedByUserId: null, turnaround: null, receivedAt: null, followUpDueAt: null, followUpDoneAt: null, askedByName: null, goesTo: null, canAnswer: false, comments: [], ...over });
 const session = { id: 31, engagementId: 4, kind: "assessment_call", title: "Business Review call 1", scheduledFor: null, durationMinutes: 90, meetingLink: null, agenda: null, status: "planned", weekNumber: 1, sortOrder: 7, clientNotes: "Pricing first.", internalNotes: "Watch cash sales.", notesAudience: "owner", notesSharedAt: null, notesSharedByUserId: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() };
 const deliverable = (over: Record<string, unknown>) => ({ id: 41, engagementId: 4, kind: "prescription", kindLabel: "Prescription", title: "Daily cash count", summary: "Count every evening.", status: "draft", audience: "owner", approvedByUserId: null, approvedAt: null, sharedByUserId: null, sharedAt: null, clientAcceptedByUserId: null, clientAcceptedAt: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date(), needsApproval: true, comments: [], files: [], ...over });
 const detail = (given: { manage: boolean; assign: boolean; review: boolean; sendSignIn?: boolean; contribute?: boolean; seeInternal?: boolean; seeFees?: boolean }, deliverables = [deliverable({})], tasks: unknown[] = []) => ({
@@ -63,13 +63,16 @@ const detail = (given: { manage: boolean; assign: boolean; review: boolean; send
   team: [],
   clientPeople: [{ userId: 3, name: "Ada Okafor", role: "owner", access: "full" }],
   sessions: [session],
-  tasks,
+  // Asking the client (R78): every item carries who asked, whom it goes to, its clock and its conversation.
+  tasks: tasks.map(item => ({ requestedByUserId: null, turnaround: null, receivedAt: null, followUpDueAt: null, followUpDoneAt: null, askedByName: null, goesTo: null, canAnswer: false, comments: [], ...(item as object) })),
   deliverables,
   measure: null as unknown,
   checkins: [] as unknown[],
   inbox: [] as unknown[],
   content: [] as unknown[],
   can: { contribute: given.manage, seeInternal: given.manage || given.review, seeFees: given.manage || given.review, ...given },
+  ask: { allowed: Boolean(given.manage || given.contribute), unlimited: given.review, thisWeek: null as null | { id: number; title: string } },
+  viewerUserId: 1,
 });
 
 beforeEach(() => {

@@ -18,6 +18,7 @@ import {
   ENGAGEMENT_TASK_FACTORS,
   ENGAGEMENT_TASK_PRIORITIES,
   ENGAGEMENT_TASK_STATUSES,
+  ENGAGEMENT_TASK_TURNAROUNDS,
   ENGAGEMENT_TEAM_ROLES,
 } from "../shared/engagement";
 
@@ -911,6 +912,7 @@ export const engagementTasksSideEnum = pgEnum("engagement_tasks_side", ENGAGEMEN
 export const engagementTasksStatusEnum = pgEnum("engagement_tasks_status", ENGAGEMENT_TASK_STATUSES);
 export const engagementTasksFactorEnum = pgEnum("engagement_tasks_factor", ENGAGEMENT_TASK_FACTORS);
 export const engagementTasksPriorityEnum = pgEnum("engagement_tasks_priority", ENGAGEMENT_TASK_PRIORITIES);
+export const engagementTasksTurnaroundEnum = pgEnum("engagement_tasks_turnaround", ENGAGEMENT_TASK_TURNAROUNDS);
 export const engagementDeliverablesKindEnum = pgEnum("engagement_deliverables_kind", ENGAGEMENT_DELIVERABLE_KINDS);
 export const engagementDeliverablesStatusEnum = pgEnum("engagement_deliverables_status", ENGAGEMENT_DELIVERABLE_STATUSES);
 export const clientAccessLevelEnum = pgEnum("client_access_level", CLIENT_ACCESS_LEVELS);
@@ -1022,6 +1024,18 @@ export const engagementTasks = pgTable("engagement_tasks", {
   /** The session the action came out of. */
   sessionId: integer("sessionId").references(() => engagementSessions.id, { onDelete: "set null" }),
   createdByUserId: integer("createdByUserId").references(() => users.id),
+  /** A request (R78, 0024): the team member who asked the client for it with Ask {business}; null for the plan's items
+   *  and those the lead adds. The client's messages and what arrives go to them. */
+  requestedByUserId: integer("requestedByUserId").references(() => users.id),
+  /** What the team sends back once it arrives (the First edit of footage, the First draft of a carousel), within
+   *  TURNAROUND_HOURS. */
+  turnaround: engagementTasksTurnaroundEnum("turnaround"),
+  /** When the client's side arrived, and when the First edit or draft is due from then; both cleared when the team asks
+   *  for more or reopens it, so the clock starts again from what is usable. */
+  receivedAt: timestamp("receivedAt", { withTimezone: true }),
+  followUpDueAt: timestamp("followUpDueAt", { withTimezone: true }),
+  /** When the team shared the First edit or draft. */
+  followUpDoneAt: timestamp("followUpDoneAt", { withTimezone: true }),
   completedAt: timestamp("completedAt", { withTimezone: true }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
@@ -1280,6 +1294,19 @@ export const engagementComments = pgTable("engagement_comments", {
   body: text("body").notNull(),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
 }, table => [index("engagement_comments_deliverable_idx").on(table.deliverableId), index("engagement_comments_engagement_idx").on(table.engagementId)]);
+
+/**
+ * The conversation on an item the client is asked for (R78, 0024): both sides write, and each message is emailed to the
+ * other side. It goes with the item.
+ */
+export const engagementTaskComments = pgTable("engagement_task_comments", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  taskId: integer("taskId").notNull().references(() => engagementTasks.id, { onDelete: "cascade" }),
+  authorUserId: integer("authorUserId").notNull().references(() => users.id),
+  body: text("body").notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+}, table => [index("engagement_task_comments_task_idx").on(table.taskId), index("engagement_task_comments_engagement_idx").on(table.engagementId)]);
 
 /** The fix's one number (D3): recorded in fix week 1. */
 export const engagementMeasures = pgTable("engagement_measures", {

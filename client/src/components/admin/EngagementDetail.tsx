@@ -57,6 +57,7 @@ import DeliveryShareNote from "./DeliveryShareNote";
 import { combineDateAndTime, formatDate, formatDateTime, toDateInput, toTimeInput, whatsappLink } from "./format";
 import { FeeHoldNote } from "./FeeHoldBadge";
 import { FeePaymentList, RecordPaymentForm, WriteOffControls } from "./FeePayments";
+import { AskClient, ItemConversation } from "./AskClient";
 
 type Detail = inferRouterOutputs<AppRouter>["engagement"]["staff"]["detail"];
 type Session = Detail["sessions"][number];
@@ -170,13 +171,14 @@ function RemoveStaffFile({ fileId, fileName, engagementId }: { fileId: number; f
   );
 }
 
-function StaffFiles({ files, engagementId, target, canUpload, canManage }: { files: StaffFile[]; engagementId: number; target: UploadTarget; canUpload: boolean; canManage: boolean }) {
+/** `briefFor`: a Specialist attaching the brief to a request they sent (R78): the client sees it. */
+function StaffFiles({ files, engagementId, target, canUpload, canManage, briefFor = false }: { files: StaffFile[]; engagementId: number; target: UploadTarget; canUpload: boolean; canManage: boolean; briefFor?: boolean }) {
   const refresh = useRefresh(engagementId);
   const link = trpc.engagement.staff.fileLink.useMutation({ onError: error => toast.error(error.message) });
   const request = trpc.engagement.staff.requestUpload.useMutation();
   const confirm = trpc.engagement.staff.confirmUpload.useMutation();
   const [chosen, setAudience] = useState<EngagementAudience>("owner");
-  const audience: EngagementAudience = canManage ? chosen : "team";
+  const audience: EngagementAudience = canManage ? chosen : briefFor ? "business" : "team";
   const shareFile = trpc.engagement.staff.shareFile.useMutation({ onSuccess: () => { refresh.onSuccess(); toast.success("Shared with the client."); }, onError: error => toast.error(error.message) });
   const [busy, setBusy] = useState(false);
   const send = async (file: File) => {
@@ -222,7 +224,7 @@ function StaffFiles({ files, engagementId, target, canUpload, canManage }: { fil
               <option value="business">{ENGAGEMENT_AUDIENCE_LABELS.business}</option>
               <option value="team">{ENGAGEMENT_AUDIENCE_LABELS.team}</option>
             </select>
-          ) : <span className="text-xs text-ink-muted">{ENGAGEMENT_AUDIENCE_LABELS.team}: the lead shares it with the client</span>}
+          ) : briefFor ? <span className="text-xs text-ink-muted">The client sees it with your request</span> : <span className="text-xs text-ink-muted">{ENGAGEMENT_AUDIENCE_LABELS.team}: the lead shares it with the client</span>}
         </div>
       )}
     </div>
@@ -521,6 +523,7 @@ function InboxRow({ file, data, engagementId }: { file: InboxFile; data: Detail;
 function Tasks({ data, engagementId }: { data: Detail; engagementId: number }) {
   const [adding, setAdding] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [asking, setAsking] = useState(false);
   const weekOf = (task: Task) => task.weekNumber ?? null;
   const weeks = Array.from(new Set(data.tasks.map(weekOf))).sort((a, b) => (a ?? 99) - (b ?? 99));
   const inWeek = (week: number | null) => data.tasks.filter(task => weekOf(task) === week).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
@@ -528,6 +531,9 @@ function Tasks({ data, engagementId }: { data: Detail; engagementId: number }) {
     <DetailSection title="Work Plan">
       <p className="text-xs text-ink-muted">Data Requests from the client and actions on both sides, by week and in order: the plan the Discovery Call shaped. The client sees their side and ours; contributors see only what is given to them.</p>
       {DATED_TYPES[data.engagement.type] && data.can.manage && <PlanUpdate engagementId={engagementId} />}
+      {data.ask.allowed && (asking
+        ? <AskClient data={data} engagementId={engagementId} onDone={() => setAsking(false)} />
+        : <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} onClick={() => setAsking(true)}>Ask {data.businessName || "the client"}</Button>)}
       {weeks.map(week => (
         <div key={week ?? "none"} className="space-y-2">
           <p className={`${LABEL} mt-3`}>{week === null ? "No week" : `Week ${week}`}</p>
@@ -586,7 +592,7 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
         <div><label className={LABEL} htmlFor={`task-status-${id}`}>Status</label><select id={`task-status-${id}`} className={FIELD} disabled={!canManage} value={status} onChange={event => setStatus(event.target.value as EngagementTaskStatus)}>{ENGAGEMENT_TASK_STATUSES.map(item => <option key={item} value={item}>{ENGAGEMENT_TASK_STATUS_LABELS[item]}</option>)}</select></div>
       </div>
       <div className="grid gap-2 sm:grid-cols-3">
-        <div><label className={LABEL} htmlFor={`task-week-${id}`}>Week</label><select id={`task-week-${id}`} className={FIELD} disabled={!canManage} value={week} onChange={event => setWeek(event.target.value)}><option value="">No week</option>{[1, 2, 3, 4, 5, 6].map(item => <option key={item} value={item}>Week {item}</option>)}</select></div>
+        <div><label className={LABEL} htmlFor={`task-week-${id}`}>Week</label><select id={`task-week-${id}`} className={FIELD} disabled={!canManage} value={week} onChange={event => setWeek(event.target.value)}><option value="">No week</option>{Array.from({ length: DATED_TYPES[data.engagement.type] ? 12 : 6 }, (_, index) => index + 1).map(item => <option key={item} value={item}>Week {item}</option>)}</select></div>
         <div><label className={LABEL} htmlFor={`task-order-${id}`}>Order in the week</label><input id={`task-order-${id}`} type="number" min={0} max={999} className={FIELD} disabled={!canManage} value={order} onChange={event => setOrder(event.target.value)} /></div>
         <div><label className={LABEL} htmlFor={`task-factor-${id}`}>Factor</label><select id={`task-factor-${id}`} className={FIELD} disabled={!canManage} value={factor} onChange={event => setFactor(event.target.value as EngagementTaskFactor | "")}><option value="">Not tagged</option>{ENGAGEMENT_TASK_FACTORS.map(item => <option key={item} value={item}>{ENGAGEMENT_TASK_FACTOR_LABELS[item]}</option>)}</select></div>
       </div>
@@ -602,7 +608,8 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
       <label className={LABEL} htmlFor={`task-note-${id}`}>Note (the client sees it)</label>
       <input id={`task-note-${id}`} className={FIELD} disabled={!canManage} placeholder={status === "needs_more" ? "Say what else you need" : ""} value={note} onChange={event => setNote(event.target.value)} />
       {task?.responseLink && <p className="text-xs text-ink-600">The client sent a link: <a href={task.responseLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand underline underline-offset-2">Open the link</a> <span className="text-ink-muted">({(() => { try { return new URL(task.responseLink).hostname.replace(/^www\./, ""); } catch { return "link"; } })()})</span></p>}
-      {task && <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && canManage} canManage={canManage} />}
+      {task && <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && (canManage || task.requestedByUserId === data.viewerUserId)} canManage={canManage} briefFor={!canManage && task.requestedByUserId === data.viewerUserId} />}
+      {task && <ItemConversation task={task} engagementId={engagementId} />}
       {canManage && (
         <div className="flex gap-2">
           <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !title.trim()} onClick={() => save.mutate({

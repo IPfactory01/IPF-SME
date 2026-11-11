@@ -617,12 +617,6 @@ function starterDueOn(startsOn, week, weekday) {
   if (weekday === void 0) return addDays(first, 3);
   return addDays(first, (weekday - (/* @__PURE__ */ new Date(`${first}T12:00:00Z`)).getUTCDay() + 7) % 7);
 }
-var WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-var seriesStart = (startsOn, week, weekday, time) => /* @__PURE__ */ new Date(`${starterDueOn(startsOn, week, weekday)}T${time}:00+01:00`);
-function slotInWords(weekday, time) {
-  const [hour, minute] = time.split(":").map(Number);
-  return `${WEEKDAY_NAMES[weekday]} at ${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${hour < 12 ? "am" : "pm"}`;
-}
 var BALANCE_DUE_DAYS = 7;
 var lagosDay = (now = Date.now()) => new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(new Date(now));
 var PAUSE_AFTER_DAYS = 7;
@@ -2449,8 +2443,6 @@ var ENV = {
    * Session 2). Whoever hosts is set in Calendly (one person or round robin). Empty: the room shows no Book button.
    */
   calendlySessionUrl: process.env.CALENDLY_SESSION_URL?.trim() ?? "",
-  /** The booking page for the monthly reviews (R80). */
-  calendlyReviewUrl: process.env.CALENDLY_REVIEW_URL?.trim() ?? "",
   emailFrom: process.env.EMAIL_FROM ?? `${BRAND.organisationName} <notifications@contact.ipfactory.co>`,
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
@@ -7066,12 +7058,13 @@ function sessionSeriesIcs(input) {
 function seriesEmail(input) {
   const name = firstNameOf(input.name);
   const withWhom = input.forClient ? "with your team at IP Factory" : `with ${input.businessName}`;
+  const first = lagosTime(input.sessions[0].start);
   return {
-    subject: `Check-ins booked: every ${input.slot}`,
+    subject: `Booked: ${input.title}, ${input.sessions.length} dates from ${first}`,
     body: [
       `Hello${name ? ` ${name}` : ""},`,
       "",
-      `Your Check-ins ${withWhom} are booked for every ${input.slot} (Lagos time):`,
+      `Your ${input.title} ${withWhom} is booked for these dates (Lagos time):`,
       "",
       ...input.sessions.map((session) => `\u2022 ${session.title}: ${lagosTime(session.start)}`),
       "",
@@ -7181,7 +7174,7 @@ async function sendSeriesEmails(db, input) {
     const meetingLink = sessions.find((session) => session.meetingLink)?.meetingLink ?? null;
     const origin = getTrustedApplicationOrigin();
     const results = await Promise.allSettled(Array.from(people.values()).map((person) => {
-      const message = seriesEmail({ name: person.name, forClient: person.forClient, businessName, slot: input.slot, sessions: sessions.map((session) => ({ title: session.title, start: session.scheduledFor })), meetingLink, origin });
+      const message = seriesEmail({ name: person.name, forClient: person.forClient, businessName, title: input.title, sessions: sessions.map((session) => ({ title: session.title, start: session.scheduledFor })), meetingLink, origin });
       return deliverEmail({
         to: person.email,
         subject: message.subject,
@@ -7198,6 +7191,24 @@ async function sendSeriesEmails(db, input) {
     return { sent: 0 };
   }
 }
+
+// shared/zoomInvitation.ts
+var MEETING_TYPES = [
+  { id: "kickoff", label: "Kick-off", kind: "other", minutes: 45, fills: "Kick-off" },
+  { id: "weekly_checkin", label: "Weekly Check-in", kind: "check_in", minutes: 30, fills: "Weekly Check-in" },
+  { id: "checkin", label: "Check-in", kind: "check_in", minutes: 30, fills: "Check-in" },
+  { id: "review", label: "Monthly review", kind: "review", minutes: 45, fills: "review" },
+  { id: "session", label: "Session", kind: "assessment_call", minutes: 90, fills: "Session" },
+  { id: "debrief", label: "Debrief", kind: "other", minutes: 30, fills: null },
+  { id: "catch_up", label: "Catch-up", kind: "other", minutes: 30, fills: null },
+  { id: "stand_up", label: "Stand-up", kind: "other", minutes: 15, fills: null },
+  { id: "working_session", label: "Working session", kind: "other", minutes: 60, fills: null },
+  { id: "other", label: "Other", kind: "other", minutes: 30, fills: null }
+];
+var MEETING_TYPE_IDS = MEETING_TYPES.map((type) => type.id);
+var meetingType = (id3) => MEETING_TYPES.find((type) => type.id === id3);
+var MAX_OCCURRENCES = 26;
+var zoomMeetingIdOf = (link) => link?.match(/zoom\.us\/(?:j|w)\/(\d{9,12})/i)?.[1] ?? null;
 
 // shared/dataRequestTemplates.ts
 var DUE_DAYS = { high: 4, medium: 6, low: 7 };
@@ -12139,57 +12150,6 @@ async function bookedCallTime(eventUri, inviteeEmail) {
     return null;
   }
 }
-var BOOKING_PAGE = /^https:\/\/calendly\.com\/[^\s?#]+$/i;
-var reviewTag = (sessionId) => `session-${sessionId}`;
-function isReviewBookingConfigured() {
-  return isCalendlyConfigured() && BOOKING_PAGE.test(ENV.calendlyReviewUrl);
-}
-function reviewBookingUrl(input) {
-  if (!isReviewBookingConfigured()) return null;
-  const url = new URL(ENV.calendlyReviewUrl);
-  if (input.name.trim()) url.searchParams.set("name", input.name.trim());
-  url.searchParams.set("email", input.email.trim().toLowerCase());
-  url.searchParams.set("utm_content", reviewTag(input.sessionId));
-  return url.toString();
-}
-var reviewEventType = null;
-function reviewEventTypeUri() {
-  reviewEventType ??= (async () => {
-    const org = await organisationUri();
-    if (!org) return null;
-    const types = await calendly(`/event_types?${new URLSearchParams({ organization: org, count: "100" })}`);
-    return types?.collection?.find((type) => type.uri && type.scheduling_url && sameUrl(type.scheduling_url, ENV.calendlyReviewUrl))?.uri ?? null;
-  })().then((uri) => {
-    if (!uri) reviewEventType = null;
-    return uri;
-  });
-  return reviewEventType;
-}
-async function findReviewBookings(inviteeEmail, since) {
-  if (!isReviewBookingConfigured()) return [];
-  try {
-    const [org, eventType] = [await organisationUri(), await reviewEventTypeUri()];
-    if (!org || !eventType) return [];
-    const email = inviteeEmail.trim().toLowerCase();
-    const query = new URLSearchParams({ organization: org, invitee_email: email, status: "active", sort: "start_time:asc", min_start_time: since.toISOString(), count: "20" });
-    const events = await calendly(`/scheduled_events?${query}`);
-    const found = [];
-    for (const event of events?.collection ?? []) {
-      if (event.status !== "active" || event.event_type !== eventType || !event.start_time || !event.uri) continue;
-      const start = new Date(event.start_time);
-      if (Number.isNaN(start.getTime())) continue;
-      const uuid = event.uri.split("/scheduled_events/")[1] ?? "";
-      const invitees = /^[A-Za-z0-9-]{8,64}$/.test(uuid) ? await calendly(`/scheduled_events/${uuid}/invitees?${new URLSearchParams({ email })}`) : null;
-      const tag = invitees?.collection?.find((invitee) => invitee.email?.toLowerCase() === email)?.tracking?.utm_content ?? "";
-      const match = /^session-(\d+)$/.exec(tag);
-      found.push({ start, end: event.end_time ? new Date(event.end_time) : null, joinUrl: event.location?.join_url && /^https:\/\//.test(event.location.join_url) ? event.location.join_url : null, sessionId: match ? Number(match[1]) : null });
-    }
-    return found.sort((a, b) => a.start.getTime() - b.start.getTime());
-  } catch (error) {
-    console.warn("[Calendly] Could not look up review bookings:", error instanceof Error ? error.message : error);
-    return [];
-  }
-}
 
 // server/engagements.ts
 var NOT_FOUND = "This engagement is not available.";
@@ -12535,7 +12495,6 @@ async function getStaffEngagement(db, actor, engagementId) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
   const check2 = engagement.businessCheckId !== null ? (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq24(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { id: null, fullName: engagement.contactName ?? "", email: engagement.contactEmail, whatsapp: null, businessName: null } : void 0;
   if (check2) await syncSessionBookings(db, engagement, check2.email);
-  await syncReviewBookings(db, engagement);
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq24(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
   const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins, matches, waiting] = await Promise.all([
     db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq24(engagementTeam.userId, users.id)).where(eq24(engagementTeam.engagementId, engagementId)).orderBy(asc7(engagementTeam.id)),
@@ -12748,20 +12707,50 @@ async function saveSession(db, actor, input) {
   if (change) await sendSessionEmails(db, { sessionId: created.id, change, includeClient: true });
   return { sessionId: created.id };
 }
-async function bookSeries(db, actor, input) {
+async function bookMeeting(db, actor, input) {
   requireManage2(actor);
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
-  if (!engagement.startedOn) throw new TRPCError18({ code: "BAD_REQUEST", message: "Set the engagement's start date first: the series is dated from it." });
   const now = (input.now ?? /* @__PURE__ */ new Date()).getTime();
-  const open = await db.select().from(engagementSessions).where(and16(eq24(engagementSessions.engagementId, engagement.id), eq24(engagementSessions.kind, "check_in"), eq24(engagementSessions.status, "planned"), isNull12(engagementSessions.scheduledFor)));
-  const dated = open.filter((session) => session.weekNumber !== null).map((session) => ({ session, start: seriesStart(engagement.startedOn, session.weekNumber, input.weekday, input.time) })).filter((item2) => item2.start.getTime() > now);
-  if (!dated.length) throw new TRPCError18({ code: "BAD_REQUEST", message: "Every Check-in already has a time, or its week has passed. Change one on its own below." });
+  const starts = Array.from(new Set(input.starts.map((start) => start.getTime()))).sort((a, b) => a - b).slice(0, MAX_OCCURRENCES).map((time) => new Date(time));
+  if (!starts.length) throw new TRPCError18({ code: "BAD_REQUEST", message: "Give the meeting a date and time." });
+  if (starts[0].getTime() < now - 5 * 6e4) throw new TRPCError18({ code: "BAD_REQUEST", message: "That time has passed. Check the date in the invitation." });
+  const type = meetingType(input.type);
+  const zoomId = zoomMeetingIdOf(input.meetingLink);
+  const sessions = await db.select().from(engagementSessions).where(eq24(engagementSessions.engagementId, engagement.id)).orderBy(asc7(engagementSessions.weekNumber), asc7(engagementSessions.sortOrder), asc7(engagementSessions.id));
+  const weekOf = (start) => engagement.startedOn ? Math.min(13, Math.max(1, Math.floor((start.getTime() - Date.parse(`${engagement.startedOn}T00:00:00+01:00`)) / (7 * 864e5)) + 1)) : null;
+  const same = zoomId ? sessions.filter((item2) => item2.status === "planned" && zoomMeetingIdOf(item2.meetingLink) === zoomId).sort((a, b) => (a.scheduledFor?.getTime() ?? 0) - (b.scheduledFor?.getTime() ?? 0)) : [];
+  const fills = same.length ? same : sessions.filter((item2) => item2.status === "planned" && !item2.scheduledFor && (type.fills === "review" ? item2.kind === "review" : type.fills === "Session" ? item2.kind === "assessment_call" : type.fills !== null && item2.title.trim().toLowerCase() === type.fills.toLowerCase()));
+  const changes = [];
+  const dropped = [];
   await db.transaction(async (tx) => {
-    for (const item2 of dated) await tx.update(engagementSessions).set({ scheduledFor: item2.start, meetingLink: input.meetingLink ?? item2.session.meetingLink }).where(eq24(engagementSessions.id, item2.session.id));
-    await recordAudit(tx, { action: "engagement_series_booked", actorUserId: actor.id, details: { engagementId: engagement.id, weekday: input.weekday, time: input.time, sessions: dated.length } });
+    for (let index2 = 0; index2 < starts.length; index2++) {
+      const start = starts[index2];
+      const existing = fills[index2];
+      const values2 = { scheduledFor: start, meetingLink: input.meetingLink, durationMinutes: input.durationMinutes, ...input.agenda ? { agenda: input.agenda } : {} };
+      if (existing) {
+        await tx.update(engagementSessions).set(values2).where(eq24(engagementSessions.id, existing.id));
+        changes.push({ sessionId: existing.id, before: existing });
+      } else {
+        const [created] = await tx.insert(engagementSessions).values({ engagementId: engagement.id, kind: type.kind, title: input.title.trim(), status: "planned", weekNumber: weekOf(start), sortOrder: 50, createdByUserId: actor.id, ...values2 }).returning({ id: engagementSessions.id });
+        changes.push({ sessionId: created.id, before: null });
+      }
+    }
+    for (const left of same.slice(starts.length)) {
+      await tx.update(engagementSessions).set({ status: "cancelled" }).where(eq24(engagementSessions.id, left.id));
+      dropped.push(left.id);
+    }
+    await recordAudit(tx, { action: "engagement_meeting_booked", actorUserId: actor.id, details: { engagementId: engagement.id, type: input.type, sessions: starts.length, filled: changes.filter((item2) => item2.before).length, moved: same.length > 0, cancelled: dropped.length } });
   });
-  const { sent } = await sendSeriesEmails(db, { engagementId: engagement.id, sessionIds: dated.map((item2) => item2.session.id), slot: slotInWords(input.weekday, input.time) });
-  return { booked: dated.length, emailed: sent };
+  for (const sessionId of dropped) await sendSessionEmails(db, { sessionId, change: "cancelled", includeClient: true });
+  if (changes.length === 1) {
+    const { sessionId, before } = changes[0];
+    const after = (await db.select().from(engagementSessions).where(eq24(engagementSessions.id, sessionId)).limit(1))[0];
+    const change = sessionChange(before, after, now);
+    if (change) await sendSessionEmails(db, { sessionId, change, includeClient: true, now });
+  } else {
+    await sendSeriesEmails(db, { engagementId: engagement.id, sessionIds: changes.map((item2) => item2.sessionId), title: type.id === "other" ? input.title.trim() : type.label, now });
+  }
+  return { booked: changes.length, filled: changes.filter((item2) => item2.before).length, cancelled: dropped.length };
 }
 async function requireStaffSession(db, actor, sessionId) {
   const session = (await db.select().from(engagementSessions).where(eq24(engagementSessions.id, sessionId)).limit(1))[0];
@@ -13010,78 +12999,6 @@ async function clientViewerFor(db, session, businessId) {
 }
 var lastSessionSync = /* @__PURE__ */ new Map();
 var SESSION_SYNC_INTERVAL_MS = 15e3;
-var lastReviewSync = /* @__PURE__ */ new Map();
-async function syncReviewBookings(db, engagement, now = Date.now()) {
-  if (!isReviewBookingConfigured()) return 0;
-  if (now - (lastReviewSync.get(engagement.id) ?? 0) < SESSION_SYNC_INTERVAL_MS) return 0;
-  lastReviewSync.set(engagement.id, now);
-  const sessions = await db.select().from(engagementSessions).where(and16(eq24(engagementSessions.engagementId, engagement.id), eq24(engagementSessions.kind, "review"))).orderBy(asc7(engagementSessions.weekNumber), asc7(engagementSessions.sortOrder), asc7(engagementSessions.id));
-  const waiting = sessions.filter((item2) => item2.status === "planned" && !item2.scheduledFor);
-  if (!waiting.length) return 0;
-  const client = await clientOf(db, engagement);
-  if (!client) return 0;
-  const timed = new Set(sessions.filter((item2) => item2.scheduledFor).map((item2) => item2.scheduledFor.getTime()));
-  const bookings = (await findReviewBookings(client.email, new Date(engagement.createdAt.getTime() - 864e5))).filter((booking) => !timed.has(booking.start.getTime()));
-  let recorded = 0;
-  const open = [...waiting];
-  for (const booking of [...bookings.filter((item2) => item2.sessionId !== null), ...bookings.filter((item2) => item2.sessionId === null)]) {
-    const index2 = booking.sessionId !== null ? open.findIndex((item2) => item2.id === booking.sessionId) : 0;
-    const session = open[index2];
-    if (!session) continue;
-    open.splice(index2, 1);
-    const minutes = booking.end ? Math.round((booking.end.getTime() - booking.start.getTime()) / 6e4) : null;
-    const booked = await db.update(engagementSessions).set({
-      scheduledFor: booking.start,
-      ...minutes && minutes > 0 ? { durationMinutes: minutes } : {},
-      ...booking.joinUrl && !session.meetingLink ? { meetingLink: booking.joinUrl } : {}
-    }).where(and16(eq24(engagementSessions.id, session.id), isNull12(engagementSessions.scheduledFor))).returning({ id: engagementSessions.id });
-    if (!booked.length) continue;
-    await recordAudit(db, { action: "engagement_session_booked", actorUserId: null, details: { engagementId: engagement.id, sessionId: session.id, via: "calendly", scheduledFor: booking.start.toISOString() } });
-    if (booking.start.getTime() > now) await sendSessionEmails(db, { sessionId: session.id, change: "booked", includeClient: false, now });
-    recorded += 1;
-  }
-  return recorded;
-}
-function bookingLinkEmail(input) {
-  const name = input.name.split(" ")[0] || "there";
-  return {
-    subject: `Choose a time: ${input.title}`,
-    body: [
-      `Hello ${name},`,
-      "",
-      `It is time to book your ${input.title} with your team at IP Factory: ${input.minutes} minutes, at a time that suits you.`,
-      "",
-      `Choose a time: ${input.url}`,
-      "",
-      "Calendly sends you the confirmation with the Zoom link, and the time appears in your room. To move it later, use the link in Calendly's email.",
-      "",
-      BRAND.organisationName
-    ].join("\n")
-  };
-}
-async function sendBookingLink(db, actor, input) {
-  requireManage2(actor);
-  const session = (await db.select().from(engagementSessions).where(eq24(engagementSessions.id, input.sessionId)).limit(1))[0];
-  if (!session) throw notFound4();
-  const engagement = await requireStaffEngagement(db, actor, session.engagementId);
-  if (session.kind !== "review" || session.status !== "planned") throw new TRPCError18({ code: "BAD_REQUEST", message: "Booking links are for the monthly reviews." });
-  if (session.scheduledFor) throw new TRPCError18({ code: "CONFLICT", message: "This review already has a time. Change it below, or the client moves it in Calendly." });
-  if (!isReviewBookingConfigured()) throw new TRPCError18({ code: "PRECONDITION_FAILED", message: "Review booking is not set up yet: add the review's Calendly page as CALENDLY_REVIEW_URL in Vercel." });
-  const client = await clientOf(db, engagement);
-  if (!client) throw new TRPCError18({ code: "BAD_REQUEST", message: "There is no email for the client yet." });
-  const url = reviewBookingUrl({ name: client.name, email: client.email, sessionId: session.id });
-  const message = bookingLinkEmail({ name: client.name, title: session.title, businessName: await businessNameOf(db, engagement), minutes: session.durationMinutes ?? 45, url });
-  await recordAudit(db, { action: "engagement_booking_link_sent", actorUserId: actor.id, details: { engagementId: engagement.id, sessionId: session.id } });
-  const delivery = await deliverEmail({ to: client.email, subject: message.subject, body: message.body, sender: "business_support", businessCheckId: engagement.businessCheckId ?? void 0 }).catch(() => null);
-  return { url, emailed: delivery !== null && delivery.status !== "Failed" };
-}
-function reviewToBook(engagement, sessions, client, today) {
-  if (!client || !engagement.startedOn) return null;
-  const next = sessions.filter((item2) => item2.kind === "review" && item2.status === "planned" && !item2.scheduledFor && item2.weekNumber !== null).sort((a, b) => a.weekNumber - b.weekNumber || a.sortOrder - b.sortOrder)[0];
-  if (!next || addDays2(engagement.startedOn, (next.weekNumber - 1) * 7 - 14) > today) return null;
-  const url = reviewBookingUrl({ name: client.name, email: client.email, sessionId: next.id });
-  return url ? { sessionId: next.id, title: next.title, url } : null;
-}
 async function syncSessionBookings(db, engagement, inviteeEmail, now = Date.now()) {
   if (!isSessionBookingConfigured() || !inviteeEmail) return 0;
   if (now - (lastSessionSync.get(engagement.id) ?? 0) < SESSION_SYNC_INTERVAL_MS) return 0;
@@ -13155,7 +13072,6 @@ async function previewClientRoom(db, actor, input) {
 async function buildClientRoom(db, engagement, viewer, viewerUserId, businessName) {
   const owner = engagement.businessCheckId !== null ? (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq24(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { email: engagement.contactEmail, fullName: engagement.contactName ?? "" } : void 0;
   if (owner) await syncSessionBookings(db, engagement, owner.email);
-  await syncReviewBookings(db, engagement);
   const [team, sessions, tasks, deliverables, comments, files, measure, checkins, matches] = await Promise.all([
     db.select({ userId: engagementTeam.userId, name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle, whatsapp: users.whatsapp, whatsappConsentAt: users.whatsappConsentAt }).from(engagementTeam).innerJoin(users, eq24(engagementTeam.userId, users.id)).where(eq24(engagementTeam.engagementId, engagement.id)).orderBy(asc7(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq24(engagementSessions.engagementId, engagement.id)).orderBy(asc7(engagementSessions.id)),
@@ -13181,7 +13097,8 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
   const matchedTo = (fileId) => matches.filter((match) => match.fileId === fileId).map((match) => match.taskId);
   const clientFiles = (where, id3) => files.filter((file) => (file[where] === id3 || where === "taskId" && matchedTo(file.id).includes(id3)) && clientFileVisible(file, viewer, viewerUserId)).map((file) => ({ id: file.id, fileName: file.fileName, sizeBytes: file.sizeBytes, createdAt: file.createdAt, mine: file.uploadedByUserId === viewerUserId, fromTeam: file.fromTeam }));
   const now = Date.now();
-  const scheduled = sessions.filter((item2) => item2.status !== "cancelled");
+  const booking = bookingFor(sessions, viewer, owner ?? null);
+  const scheduled = sessions.filter((item2) => item2.status !== "cancelled" && (item2.scheduledFor !== null || item2.id === booking?.sessionId));
   const next = scheduled.filter((item2) => item2.status === "planned" && item2.scheduledFor && item2.scheduledFor.getTime() >= now).sort((a, b) => a.scheduledFor.getTime() - b.scheduledFor.getTime())[0];
   const notesVisible = (item2) => Boolean(item2.notesSharedAt && item2.clientNotes && clientCanSee(item2.notesAudience, viewer));
   const roomFees = await clientFees(db, engagement.id);
@@ -13242,9 +13159,7 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
     })),
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
     // The owner books the Business Review Sessions on Calendly, in order, with their details filled in.
-    booking: bookingFor(sessions, viewer, owner ?? null),
-    // The next monthly review to book on Calendly (R80): the owner only.
-    reviewBooking: viewer.kind === "owner" ? reviewToBook(engagement, sessions, await clientOf(db, engagement), lagosDay()) : null,
+    booking,
     sessions: scheduled.map((item2) => ({
       id: item2.id,
       title: item2.title,
@@ -14755,15 +14670,16 @@ var staffRouter = router({
     status: z15.enum(ENGAGEMENT_SESSION_STATUSES),
     weekNumber: z15.number().int().min(1).max(12).nullable().optional()
   })).mutation(async ({ ctx, input }) => guarded(async () => saveSession(await engagementDb(), ctx.actor, input))),
-  /** Book the series (R79): one weekday and time (Lagos) and a Join link date every Check-in without a time. manage_engagements. */
-  bookSeries: staff.input(z15.object({
+  /** Book a meeting from Zoom (R81): its kind, the dates read from the pasted invitation, and the Join link. manage_engagements. */
+  bookMeeting: staff.input(z15.object({
     engagementId: id,
-    weekday: z15.number().int().min(0).max(6),
-    time: z15.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Choose the time."),
-    meetingLink: z15.string().trim().url("Paste the full meeting link, starting https://").max(512).nullable().or(z15.literal("").transform(() => null))
-  })).mutation(async ({ ctx, input }) => guarded(async () => bookSeries(await engagementDb(), ctx.actor, input))),
-  /** Send booking link (R80): email the owner the Calendly page for a review without a time. manage_engagements. */
-  sendBookingLink: staff.input(z15.object({ sessionId: id })).mutation(async ({ ctx, input }) => guarded(async () => sendBookingLink(await engagementDb(), ctx.actor, input))),
+    type: z15.enum(MEETING_TYPE_IDS),
+    title: text3(160).min(1, "Give the meeting a name."),
+    starts: z15.array(z15.coerce.date()).min(1, "Give the meeting a date and time.").max(MAX_OCCURRENCES),
+    durationMinutes: z15.number().int().min(5).max(480),
+    meetingLink: z15.string().trim().url("Paste the Zoom invitation, or the Join link, starting https://").max(512),
+    agenda: optionalText2(4e3)
+  })).mutation(async ({ ctx, input }) => guarded(async () => bookMeeting(await engagementDb(), ctx.actor, input))),
   saveNotes: staff.input(z15.object({ sessionId: id, clientNotes: optionalText2(2e4), internalNotes: optionalText2(2e4) })).mutation(async ({ ctx, input }) => guarded(async () => saveSessionNotes(await engagementDb(), ctx.actor, input))),
   shareNotes: staff.input(z15.object({ sessionId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareSessionNotes(await engagementDb(), ctx.actor, input))),
   saveTask: staff.input(z15.object({

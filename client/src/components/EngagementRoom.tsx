@@ -1461,7 +1461,6 @@ function MeetingsView({ room, now, isOwner }: { room: Room; now: number; isOwner
               )}
               {session.status === "planned" && session.meetingLink && <a href={session.meetingLink} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-medium text-brand underline underline-offset-2">Join the {METHOD.session}</a>}
               {room.booking?.sessionId === session.id && <a href={room.booking.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-medium text-brand underline underline-offset-2">Book this {METHOD.session} on Calendly</a>}
-              {room.reviewBooking?.sessionId === session.id && <a href={room.reviewBooking.url} target="_blank" rel="noreferrer" className="mt-2 inline-flex min-h-11 items-center rounded-lg bg-brand px-3 text-sm font-medium text-white">Choose a time for the {session.title}</a>}
               {session.notes && (
                 <div className="mt-3 border-t border-line-soft pt-2">
                   <p className="text-xs text-ink-muted">{METHOD.session} notes, shared {lagos(session.notesSharedAt, false)}{isOwner && session.notesAudience === "owner" ? " · only you can see these" : ""}</p>

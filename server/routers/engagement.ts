@@ -81,13 +81,13 @@ import {
   startAwaitingEngagement,
   addMissingPlan,
   askClient,
-  bookSeries,
-  sendBookingLink,
+  bookMeeting,
   staffTaskComment,
   clientTaskComment,
   followUpShared,
 } from "../engagements";
 import { REQUEST_BRIEF_MAX, REQUEST_TITLE_MAX, TASK_COMMENT_MAX } from "../../shared/requests";
+import { MAX_OCCURRENCES, MEETING_TYPE_IDS } from "../../shared/zoomInvitation";
 import { checkFileStorage } from "../fileStorage";
 import { loadAuthority } from "../platformAccess";
 import { accountProcedure, adminProcedure, router } from "../_core/trpc";
@@ -180,15 +180,16 @@ const staffRouter = router({
     status: z.enum(ENGAGEMENT_SESSION_STATUSES),
     weekNumber: z.number().int().min(1).max(12).nullable().optional(),
   })).mutation(async ({ ctx, input }) => guarded(async () => saveSession(await engagementDb(), ctx.actor, input))),
-  /** Book the series (R79): one weekday and time (Lagos) and a Join link date every Check-in without a time. manage_engagements. */
-  bookSeries: staff.input(z.object({
+  /** Book a meeting from Zoom (R81): its kind, the dates read from the pasted invitation, and the Join link. manage_engagements. */
+  bookMeeting: staff.input(z.object({
     engagementId: id,
-    weekday: z.number().int().min(0).max(6),
-    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Choose the time."),
-    meetingLink: z.string().trim().url("Paste the full meeting link, starting https://").max(512).nullable().or(z.literal("").transform(() => null)),
-  })).mutation(async ({ ctx, input }) => guarded(async () => bookSeries(await engagementDb(), ctx.actor, input))),
-  /** Send booking link (R80): email the owner the Calendly page for a review without a time. manage_engagements. */
-  sendBookingLink: staff.input(z.object({ sessionId: id })).mutation(async ({ ctx, input }) => guarded(async () => sendBookingLink(await engagementDb(), ctx.actor, input))),
+    type: z.enum(MEETING_TYPE_IDS),
+    title: text(160).min(1, "Give the meeting a name."),
+    starts: z.array(z.coerce.date()).min(1, "Give the meeting a date and time.").max(MAX_OCCURRENCES),
+    durationMinutes: z.number().int().min(5).max(480),
+    meetingLink: z.string().trim().url("Paste the Zoom invitation, or the Join link, starting https://").max(512),
+    agenda: optionalText(4000),
+  })).mutation(async ({ ctx, input }) => guarded(async () => bookMeeting(await engagementDb(), ctx.actor, input))),
   saveNotes: staff.input(z.object({ sessionId: id, clientNotes: optionalText(20000), internalNotes: optionalText(20000) }))
     .mutation(async ({ ctx, input }) => guarded(async () => saveSessionNotes(await engagementDb(), ctx.actor, input))),
   shareNotes: staff.input(z.object({ sessionId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareSessionNotes(await engagementDb(), ctx.actor, input))),

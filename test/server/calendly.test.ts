@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const env = vi.hoisted(() => ({ calendlyApiToken: "test-calendly-token", calendlySessionUrl: "", calendlyReviewUrl: "" }));
+const env = vi.hoisted(() => ({ calendlyApiToken: "test-calendly-token", calendlySessionUrl: "" }));
 vi.mock("@server/_core/env", () => ({ ENV: env }));
 
-import { bookedCallTime, CALENDLY_EVENT_URI, findBookedCall, findReviewBookings, findSessionBookings, isReviewBookingConfigured, isSessionBookingConfigured, resetCalendlyForTests, resetReviewEventTypeForTests, reviewBookingUrl, sessionBookingUrl } from "@server/calendly";
+import { bookedCallTime, CALENDLY_EVENT_URI, findBookedCall, findSessionBookings, isSessionBookingConfigured, resetCalendlyForTests, sessionBookingUrl } from "@server/calendly";
 
 const EVENT = "https://api.calendly.com/scheduled_events/ABCDEF12-3456-7890";
 const START = "2026-10-14T09:00:00.000000Z";
@@ -177,44 +177,5 @@ describe("Business Review Session bookings", () => {
     env.calendlySessionUrl = "https://calendly.com/ipfactory-example/not-an-event";
     vi.stubGlobal("fetch", replies([{ start_time: "2026-10-23T09:00:00Z", status: "active", event_type: SESSION_TYPE }]));
     expect(await findSessionBookings("ada@example.com", new Date("2026-10-15T00:00:00Z"))).toEqual([]);
-  });
-});
-
-describe("the monthly reviews on Calendly (R80)", () => {
-  const ORG = "https://api.calendly.com/organizations/ORG12345";
-  const REVIEW_TYPE = "https://api.calendly.com/event_types/REVIEW123";
-  const REVIEW_URL = "https://calendly.com/ipfactory-example/monthly-review";
-  beforeEach(() => { env.calendlyApiToken = "test-calendly-token"; env.calendlyReviewUrl = REVIEW_URL; resetCalendlyForTests(); resetReviewEventTypeForTests(); });
-  afterEach(() => { env.calendlyReviewUrl = ""; vi.unstubAllGlobals(); });
-
-  it("fills in the owner and names the review in the link, and offers nothing without the page or the token", () => {
-    expect(isReviewBookingConfigured()).toBe(true);
-    const url = new URL(reviewBookingUrl({ name: "Ada Okafor", email: "Ada@Example.com", sessionId: 77 })!);
-    expect(`${url.origin}${url.pathname}`).toBe(REVIEW_URL);
-    expect(Object.fromEntries(url.searchParams)).toEqual({ name: "Ada Okafor", email: "ada@example.com", utm_content: "session-77" });
-    env.calendlyReviewUrl = "https://example.com/not-calendly";
-    expect(reviewBookingUrl({ name: "", email: "ada@example.com", sessionId: 77 })).toBeNull();
-  });
-
-  it("reads each review booking back with the review its link named, and only the review event type", async () => {
-    const fetchMock = vi.fn(async (url: string) => ({
-      ok: true,
-      json: async () => {
-        if (url.endsWith("/users/me")) return { resource: { current_organization: ORG } };
-        if (url.includes("/event_types?")) return { collection: [{ uri: REVIEW_TYPE, scheduling_url: REVIEW_URL }] };
-        if (url.includes("/scheduled_events/AAAAAAAA-1111/invitees")) return { collection: [{ email: "ada@example.com", tracking: { utm_content: "session-77" } }] };
-        if (url.includes("/scheduled_events/BBBBBBBB-2222/invitees")) return { collection: [{ email: "ada@example.com", tracking: { utm_content: null } }] };
-        return { collection: [
-          { uri: "https://api.calendly.com/scheduled_events/BBBBBBBB-2222", start_time: "2026-12-30T10:00:00Z", end_time: "2026-12-30T10:45:00Z", status: "active", event_type: REVIEW_TYPE },
-          { uri: "https://api.calendly.com/scheduled_events/AAAAAAAA-1111", start_time: "2026-12-02T10:00:00Z", end_time: "2026-12-02T10:45:00Z", status: "active", event_type: REVIEW_TYPE, location: { join_url: "https://zoom.example.test/j/9" } },
-          { uri: "https://api.calendly.com/scheduled_events/CCCCCCCC-3333", start_time: "2026-12-05T10:00:00Z", status: "active", event_type: "https://api.calendly.com/event_types/OTHER" },
-        ] };
-      },
-    }));
-    vi.stubGlobal("fetch", fetchMock);
-    expect(await findReviewBookings("ada@example.com", new Date("2026-11-01T00:00:00Z"))).toEqual([
-      { start: new Date("2026-12-02T10:00:00Z"), end: new Date("2026-12-02T10:45:00Z"), joinUrl: "https://zoom.example.test/j/9", sessionId: 77 },
-      { start: new Date("2026-12-30T10:00:00Z"), end: new Date("2026-12-30T10:45:00Z"), joinUrl: null, sessionId: null },
-    ]);
   });
 });

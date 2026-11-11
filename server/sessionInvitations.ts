@@ -77,7 +77,7 @@ export function sessionInvitationIcs(input: IcsEvent & { attendee: { name: strin
 }
 
 /**
- * A series of Sessions in one calendar file (R79): every Check-in booked at the standing slot. Published, since one
+ * A series of Sessions in one calendar file (R81): every date of a recurring Zoom meeting. Published, since one
  * invitation may hold one event only; each keeps its own UID, so a later change to one moves just that one (R75).
  */
 export function sessionSeriesIcs(input: { events: IcsEvent[]; attendee: { name: string; email: string }; now?: number }) {
@@ -85,15 +85,16 @@ export function sessionSeriesIcs(input: { events: IcsEvent[]; attendee: { name: 
   return calendar("PUBLISH", input.events.map(event => sessionEvent({ ...event, attendee: input.attendee, cancelled: false, now })));
 }
 
-/** The email for a booked series: the slot, each date, and the Join link. */
-export function seriesEmail(input: { name: string; forClient: boolean; businessName: string; slot: string; sessions: { title: string; start: Date }[]; meetingLink: string | null; origin: string }) {
+/** The email for a recurring meeting (R81): each date, and the Join link. */
+export function seriesEmail(input: { name: string; forClient: boolean; businessName: string; title: string; sessions: { title: string; start: Date }[]; meetingLink: string | null; origin: string }) {
   const name = firstNameOf(input.name);
   const withWhom = input.forClient ? "with your team at IP Factory" : `with ${input.businessName}`;
+  const first = lagosTime(input.sessions[0]!.start);
   return {
-    subject: `Check-ins booked: every ${input.slot}`,
+    subject: `Booked: ${input.title}, ${input.sessions.length} dates from ${first}`,
     body: [
       `Hello${name ? ` ${name}` : ""},`, "",
-      `Your Check-ins ${withWhom} are booked for every ${input.slot} (Lagos time):`, "",
+      `Your ${input.title} ${withWhom} is booked for these dates (Lagos time):`, "",
       ...input.sessions.map(session => `• ${session.title}: ${lagosTime(session.start)}`), "",
       input.meetingLink ? `Join: ${input.meetingLink}` : "Join: the link will be in the room before each Check-in.", "",
       "The calendar file attached adds them all to your calendar. If one moves, you will be sent its new time.", "",
@@ -134,7 +135,7 @@ export function sessionEmail(input: {
 }
 
 /** The client's contact for an engagement: the business owner, else the engagement's contact, else the check. */
-export async function clientOf(db: Pick<Database, "select">, engagement: typeof engagements.$inferSelect) {
+async function clientOf(db: Pick<Database, "select">, engagement: typeof engagements.$inferSelect) {
   if (engagement.businessId !== null) {
     const owner = (await db.select({ email: users.email, name: users.name }).from(businessMemberships).innerJoin(users, eq(businessMemberships.userId, users.id))
       .where(and(eq(businessMemberships.businessId, engagement.businessId), eq(businessMemberships.role, "owner"), eq(businessMemberships.status, "active"))).limit(1))[0];
@@ -203,8 +204,8 @@ export async function sendSessionEmails(db: Pick<Database, "select">, input: { s
   }
 }
 
-/** Emails everyone on the engagement the booked series, each with one calendar file of every Check-in in it (R79). Never throws. */
-export async function sendSeriesEmails(db: Pick<Database, "select">, input: { engagementId: number; sessionIds: number[]; slot: string; now?: number }) {
+/** Emails everyone on the engagement a recurring meeting's dates, each with one calendar file holding them all (R81). Never throws. */
+export async function sendSeriesEmails(db: Pick<Database, "select">, input: { engagementId: number; sessionIds: number[]; title: string; now?: number }) {
   const now = input.now ?? Date.now();
   try {
     const engagement = (await db.select().from(engagements).where(eq(engagements.id, input.engagementId)).limit(1))[0];
@@ -221,7 +222,7 @@ export async function sendSeriesEmails(db: Pick<Database, "select">, input: { en
     const meetingLink = sessions.find(session => session.meetingLink)?.meetingLink ?? null;
     const origin = getTrustedApplicationOrigin();
     const results = await Promise.allSettled(Array.from(people.values()).map(person => {
-      const message = seriesEmail({ name: person.name, forClient: person.forClient, businessName, slot: input.slot, sessions: sessions.map(session => ({ title: session.title, start: session.scheduledFor! })), meetingLink, origin });
+      const message = seriesEmail({ name: person.name, forClient: person.forClient, businessName, title: input.title, sessions: sessions.map(session => ({ title: session.title, start: session.scheduledFor! })), meetingLink, origin });
       return deliverEmail({
         to: person.email, subject: message.subject, body: message.body,
         icsContent: sessionSeriesIcs({ events, attendee: person, now }), icsFilename: "check-ins.ics",

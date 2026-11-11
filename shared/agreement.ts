@@ -90,19 +90,6 @@ export function starterDueOn(startsOn: string, week: number, weekday?: number) {
   return addDays(first, (weekday - new Date(`${first}T12:00:00Z`).getUTCDay() + 7) % 7);
 }
 
-export const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
-
-/**
- * A Session in week `week` at the standing slot (R79): the first `weekday` in that week, at `time` ("10:00") in Lagos.
- */
-export const seriesStart = (startsOn: string, week: number, weekday: number, time: string) => new Date(`${starterDueOn(startsOn, week, weekday)}T${time}:00+01:00`);
-
-/** "Tuesday at 10:00 am": the slot in words. */
-export function slotInWords(weekday: number, time: string) {
-  const [hour, minute] = time.split(":").map(Number) as [number, number];
-  return `${WEEKDAY_NAMES[weekday]} at ${hour % 12 || 12}:${String(minute).padStart(2, "0")} ${hour < 12 ? "am" : "pm"}`;
-}
-
 /** How many days after delivery a service's second half falls due (ET, 10 November 2026). */
 export const BALANCE_DUE_DAYS = 7;
 

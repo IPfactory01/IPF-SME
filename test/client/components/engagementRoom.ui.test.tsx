@@ -95,7 +95,6 @@ const room = (over: Record<string, unknown> = {}) => ({
   problemStatement: null,
   insight: null as RoomInsight | null,
   booking: null as null | { sessionId: number; title: string; url: string },
-  reviewBooking: null as null | { sessionId: number; title: string; url: string },
   measure: null,
   team: [{ name: "Lewis Lead", roleLabel: "Engagement Manager", jobTitle: null as string | null, whatsapp: null as string | null }, { name: "Ola Analyst", roleLabel: "Analyst", jobTitle: null as string | null, whatsapp: null as string | null }],
   nextSession: { id: 1, title: "Business Review Session 1", scheduledFor: new Date("2026-10-23T09:00:00Z"), durationMinutes: 90, meetingLink: "https://zoom.example.test/j/1" },
@@ -251,17 +250,6 @@ describe("the client's room", () => {
     render(<EngagementRoom room={room({ stage: "fix", stageLabel: "Six-Week Fix", journey: journeyOf("fix"), fixStartedAt: new Date("2026-11-09T08:00:00Z") })} aside={<p>Seat card</p>} now={new Date("2026-11-25T10:00:00Z").getTime()} />);
     expect(screen.getByRole("heading", { name: "Six-Week Fix · Week 3 of 6" })).toBeTruthy();
     expect(screen.getByText("Seat card")).toBeTruthy();
-  });
-});
-
-describe("choosing a review's time (R80)", () => {
-  it("offers the owner the review to book on Calendly in the Sessions view", () => {
-    const base = room();
-    const review = { ...base.sessions[0], id: 9, title: "Month 1 review", scheduledFor: null, meetingLink: null, status: "planned" as const };
-    render(<EngagementRoom room={room({ sessions: [review], nextSession: null, booking: null, reviewBooking: { sessionId: 9, title: "Month 1 review", url: "https://calendly.com/ipfactory-example/monthly-review?utm_content=session-9" } })} />);
-    fireEvent.click(screen.getByRole("tab", { name: /^Sessions/ }));
-    const link = within(screen.getByRole("listitem", { name: "Month 1 review" })).getByRole("link", { name: "Choose a time for the Month 1 review" });
-    expect(link.getAttribute("href")).toContain("utm_content=session-9");
   });
 });
 

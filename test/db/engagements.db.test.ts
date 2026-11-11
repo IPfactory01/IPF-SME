@@ -11,11 +11,9 @@ import { createPgliteHarness, createRemoteHarness, type DbHarness } from "./harn
 import { legacyBusinessReviewRequest } from "./legacyBusinessReview";
 import { businessCheckProfiles } from "../fixtures/businessCheckProfiles";
 import { sampleIntake } from "../fixtures/reportIntake";
-import { addDays, lagosDay, seriesStart } from "@shared/agreement";
+import { addDays, lagosDay } from "@shared/agreement";
 import { dayInWords, requestDueOn } from "@shared/requests";
 import { runReminders } from "@server/reminders";
-import { resetCalendlyForTests, resetReviewEventTypeForTests } from "@server/calendly";
-import { resetReviewSyncForTests } from "@server/engagements";
 
 const holder = vi.hoisted(() => {
   process.env.DATABASE_URL = "postgresql://contract:contract@localhost:5432/contract";
@@ -382,103 +380,58 @@ for (const target of targets) {
       });
     });
 
-    describe("Book the series (R79, ET 11 November 2026)", () => {
-      it("dates every Check-in without a time at the standing slot, keeps one already booked, emails everyone once, and is the lead's to do", async () => {
+    describe("Book a meeting from Zoom (R81, ET 11 November 2026)", () => {
+      it("fills the plan's Session of that kind, moves it when pasted again, books a recurring one in one email, and shows the client booked Sessions only", async () => {
         const desk = await superAdmin.call();
         const today = lagosDay();
-        const email = uniqueEmail("series");
-        const startedOn = addDays(today, 3);
-        const { engagementId, invitationUrl } = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Series Studio", contactName: "Sola Series", contactEmail: email, startedOn });
+        const email = uniqueEmail("zoom");
+        const startedOn = addDays(today, 2);
+        const { engagementId, invitationUrl } = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Zoom Studio", contactName: "Zara Zoom", contactEmail: email, startedOn });
         const owner = browser();
-        await (await owner.call()).invitations.accept({ token: decodeURIComponent(invitationUrl!.split("/join/")[1]), email, fullName: "Sola Series", password: PASSWORD, confirmPassword: PASSWORD });
-        const checkins = (await desk.engagement.staff.detail({ engagementId })).sessions.filter(session => session.kind === "check_in");
-        expect(checkins.map(session => session.weekNumber)).toEqual([2, 3, 4, 7, 11]);
-        // Week 3's is already booked by hand: it keeps its time.
-        const kept = new Date(Date.parse(`${addDays(startedOn, 15)}T14:00:00+01:00`));
-        await desk.engagement.staff.saveSession({ engagementId, sessionId: checkins[1].id, kind: "check_in", title: checkins[1].title, scheduledFor: kept, durationMinutes: 30, meetingLink: null, agenda: null, status: "planned" });
+        await (await owner.call()).invitations.accept({ token: decodeURIComponent(invitationUrl!.split("/join/")[1]), email, fullName: "Zara Zoom", password: PASSWORD, confirmPassword: PASSWORD });
+        await desk.engagement.staff.openRoomNow({ engagementId });
+        // Before anything is booked, the client sees no Sessions: the plan's are the team's guide.
+        expect((await (await owner.call()).engagement.client.room())!.sessions).toEqual([]);
+        const at = (days: number, hour: number) => new Date(`${addDays(today, days)}T${String(hour).padStart(2, "0")}:00:00+01:00`);
+        type Sent = EmailCall & { icsContent?: string };
+        const sent = () => mocked.deliverEmail.mock.calls.map(call => call[0] as Sent).filter(item => item.to === email);
+
+        mocked.deliverEmail.mockClear();
+        const kickoff = "https://us06web.zoom.us/j/81234567890?pwd=a";
+        expect(await desk.engagement.staff.bookMeeting({ engagementId, type: "kickoff", title: "Kick-off", starts: [at(3, 10)], durationMinutes: 45, meetingLink: kickoff, agenda: null })).toMatchObject({ booked: 1, filled: 1 });
+        let sessions = (await desk.engagement.staff.detail({ engagementId })).sessions;
+        expect(sessions.filter(item => item.title === "Kick-off")).toHaveLength(1);
+        expect(sessions.find(item => item.title === "Kick-off")).toMatchObject({ meetingLink: kickoff, durationMinutes: 45 });
+        expect(sent().map(item => item.subject)).toEqual([expect.stringMatching(/^Session booked: Kick-off, /)]);
+
+        // Moved in Zoom and pasted again: the same Session moves, and everyone hears.
+        mocked.deliverEmail.mockClear();
+        await desk.engagement.staff.bookMeeting({ engagementId, type: "kickoff", title: "Kick-off", starts: [at(4, 11)], durationMinutes: 45, meetingLink: kickoff, agenda: null });
+        sessions = (await desk.engagement.staff.detail({ engagementId })).sessions;
+        expect(sessions.filter(item => item.title === "Kick-off").map(item => new Date(item.scheduledFor!).getTime())).toEqual([at(4, 11).getTime()]);
+        expect(sent().map(item => item.subject)).toEqual([expect.stringMatching(/^Session moved: Kick-off, now /)]);
+
+        // A recurring Weekly Check-in: three dates fill the plan's three, in one email with all of them.
+        mocked.deliverEmail.mockClear();
+        const weekly = "https://us06web.zoom.us/j/89998887776?pwd=b";
+        expect(await desk.engagement.staff.bookMeeting({ engagementId, type: "weekly_checkin", title: "Weekly Check-in", starts: [at(9, 16), at(16, 16), at(23, 16)], durationMinutes: 30, meetingLink: weekly, agenda: null })).toMatchObject({ booked: 3, filled: 3 });
+        expect(sent()).toHaveLength(1);
+        expect(sent()[0].subject).toMatch(/^Booked: Weekly Check-in, 3 dates from /);
+        expect(sent()[0].icsContent!.match(/BEGIN:VEVENT/g)).toHaveLength(3);
+        // Pasted again with two dates: the third is cancelled.
+        expect(await desk.engagement.staff.bookMeeting({ engagementId, type: "weekly_checkin", title: "Weekly Check-in", starts: [at(9, 16), at(16, 16)], durationMinutes: 30, meetingLink: weekly, agenda: null })).toMatchObject({ booked: 2, cancelled: 1 });
+
+        // An impromptu debrief is a new Session.
+        await desk.engagement.staff.bookMeeting({ engagementId, type: "debrief", title: "Debrief", starts: [at(5, 15)], durationMinutes: 30, meetingLink: "https://zoom.us/j/12312312312", agenda: null });
+        const room = (await (await owner.call()).engagement.client.room())!;
+        expect(room.sessions.map(item => item.title).sort()).toEqual(["Debrief", "Kick-off", "Weekly Check-in", "Weekly Check-in"]);
+        expect(room.sessions.every(item => item.scheduledFor !== null)).toBe(true);
+
+        // A time that has passed is refused; so is anyone who does not work on engagements.
+        await expect(desk.engagement.staff.bookMeeting({ engagementId, type: "catch_up", title: "Catch-up", starts: [at(-1, 10)], durationMinutes: 30, meetingLink: "https://zoom.us/j/12312312399", agenda: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });
         const specialist = await person(["subject_matter_expert"], "Sam Specialist");
         await desk.engagement.staff.assign({ engagementId, userId: specialist.id, role: "expert" });
-        await expect((await (await signIn(specialist, true)).call()).engagement.staff.bookSeries({ engagementId, weekday: 2, time: "10:00", meetingLink: null })).rejects.toMatchObject({ code: "FORBIDDEN" });
-
-        mocked.deliverEmail.mockClear();
-        expect(await desk.engagement.staff.bookSeries({ engagementId, weekday: 2, time: "10:00", meetingLink: "https://zoom.example.test/j/series" })).toMatchObject({ booked: 4 });
-        const after = (await desk.engagement.staff.detail({ engagementId })).sessions.filter(session => session.kind === "check_in");
-        for (const session of after.filter(item => item.id !== checkins[1].id)) {
-          expect(new Date(session.scheduledFor!).toISOString()).toBe(seriesStart(startedOn, session.weekNumber!, 2, "10:00").toISOString());
-          expect(session.meetingLink).toBe("https://zoom.example.test/j/series");
-        }
-        expect(new Date(after.find(item => item.id === checkins[1].id)!.scheduledFor!).getTime()).toBe(kept.getTime());
-        // One email each, with every new Check-in in its calendar file.
-        type Sent = EmailCall & { icsContent?: string };
-        const sent = (mocked.deliverEmail.mock.calls.map(call => call[0] as Sent)).filter(item => item.subject === "Check-ins booked: every Tuesday at 10:00 am");
-        expect(sent.map(item => item.to)).toEqual(expect.arrayContaining([email]));
-        expect(sent.filter(item => item.to === email)).toHaveLength(1);
-        expect(sent[0].icsContent!.match(/BEGIN:VEVENT/g)).toHaveLength(4);
-        // Nothing left to book.
-        await expect(desk.engagement.staff.bookSeries({ engagementId, weekday: 2, time: "10:00", meetingLink: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-      });
-    });
-
-    describe("Send booking link for the reviews (R80, ET 11 November 2026)", () => {
-      const REVIEW_URL = "https://calendly.com/ipfactory-example/monthly-review";
-      const saved = { token: ENV.calendlyApiToken, url: ENV.calendlyReviewUrl };
-      afterEach(() => { ENV.calendlyApiToken = saved.token; ENV.calendlyReviewUrl = saved.url; vi.unstubAllGlobals(); });
-      /** Calendly with one review event type, answering with the bookings given, each tagged with a review or not. */
-      const calendlyWith = (bookings: { uuid: string; start: string; tag: string | null }[]) => vi.stubGlobal("fetch", vi.fn(async (url: string) => ({
-        ok: true,
-        json: async () => {
-          if (url.endsWith("/users/me")) return { resource: { current_organization: "https://api.calendly.com/organizations/ORG1" } };
-          if (url.includes("/event_types?")) return { collection: [{ uri: "https://api.calendly.com/event_types/REVIEW1", scheduling_url: REVIEW_URL }] };
-          const invitees = /scheduled_events\/([A-Z0-9-]+)\/invitees/.exec(url);
-          if (invitees) return { collection: [{ email: url.split("email=")[1] ? decodeURIComponent(url.split("email=")[1]!) : "", tracking: { utm_content: bookings.find(item => item.uuid === invitees[1])?.tag ?? null } }] };
-          return { collection: bookings.map(item => ({ uri: `https://api.calendly.com/scheduled_events/${item.uuid}`, start_time: item.start, end_time: new Date(Date.parse(item.start) + 45 * 60_000).toISOString(), status: "active", event_type: "https://api.calendly.com/event_types/REVIEW1", location: { join_url: "https://zoom.example.test/j/review" } })) };
-        },
-      })));
-
-      it("emails the owner a link that names the review, puts the booking on that review, and offers the next review in the room", async () => {
-        const desk = await superAdmin.call();
-        const today = lagosDay();
-        const email = uniqueEmail("reviews");
-        const startedOn = addDays(today, -20);
-        const { engagementId, invitationUrl } = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Review Studio", contactName: "Remi Review", contactEmail: email, startedOn });
-        const owner = browser();
-        await (await owner.call()).invitations.accept({ token: decodeURIComponent(invitationUrl!.split("/join/")[1]), email, fullName: "Remi Review", password: PASSWORD, confirmPassword: PASSWORD });
-        await desk.engagement.staff.openRoomNow({ engagementId });
-        const sessions = (await desk.engagement.staff.detail({ engagementId })).sessions;
-        const month1 = sessions.find(item => item.title === "Month 1 review")!;
-        const month2 = sessions.find(item => item.title === "Month 2 review")!;
-        // Not set up: nothing to send.
-        await expect(desk.engagement.staff.sendBookingLink({ sessionId: month1.id })).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
-
-        ENV.calendlyApiToken = "test-calendly-token";
-        ENV.calendlyReviewUrl = REVIEW_URL;
-        resetCalendlyForTests();
-        resetReviewEventTypeForTests();
-        resetReviewSyncForTests();
-        calendlyWith([]);
-        mocked.deliverEmail.mockClear();
-        const { url } = await desk.engagement.staff.sendBookingLink({ sessionId: month1.id });
-        expect(new URL(url).searchParams.get("utm_content")).toBe(`session-${month1.id}`);
-        expect(emails().filter(sent => sent.to === email).map(sent => sent.subject)).toEqual(["Choose a time: Month 1 review"]);
-        expect(emails().find(sent => sent.to === email)!.body).toContain(url);
-        // Only for a review without a time.
-        await expect(desk.engagement.staff.sendBookingLink({ sessionId: sessions.find(item => item.kind === "check_in")!.id })).rejects.toMatchObject({ code: "BAD_REQUEST" });
-        // The room offers the Month 1 review to book: its week starts within two weeks.
-        expect((await (await owner.call()).engagement.client.room())!.reviewBooking).toMatchObject({ sessionId: month1.id, title: "Month 1 review" });
-
-        // The owner books the Month 2 review from its link: it lands there, not on the earlier review.
-        resetReviewSyncForTests();
-        const start = new Date(Date.now() + 40 * 86_400_000);
-        start.setUTCMinutes(0, 0, 0);
-        calendlyWith([{ uuid: "EVENT0001-AAAA", start: start.toISOString(), tag: `session-${month2.id}` }]);
-        mocked.deliverEmail.mockClear();
-        const after = (await desk.engagement.staff.detail({ engagementId })).sessions;
-        expect(after.find(item => item.id === month2.id)).toMatchObject({ meetingLink: "https://zoom.example.test/j/review", durationMinutes: 45 });
-        expect(new Date(after.find(item => item.id === month2.id)!.scheduledFor!).getTime()).toBe(start.getTime());
-        expect(after.find(item => item.id === month1.id)!.scheduledFor).toBeNull();
-        // The team hears with a calendar invitation; Calendly has emailed the client.
-        expect(emails().filter(sent => sent.subject.startsWith("Session booked: Month 2 review")).map(sent => sent.to)).not.toContain(email);
-        await expect(desk.engagement.staff.sendBookingLink({ sessionId: month2.id })).rejects.toMatchObject({ code: "CONFLICT" });
+        await expect((await (await signIn(specialist, true)).call()).engagement.staff.bookMeeting({ engagementId, type: "catch_up", title: "Catch-up", starts: [at(6, 10)], durationMinutes: 30, meetingLink: "https://zoom.us/j/12312312399", agenda: null })).rejects.toMatchObject({ code: "FORBIDDEN" });
       });
     });
 
@@ -954,7 +907,9 @@ for (const target of targets) {
         expect(room).toMatchObject({ engagementId: deck.engagementId, type: "done_for_you", service: "pitch_deck", title: "Pitch Deck", serviceStep: 1 });
         expect(room.projects.map(item => [item.title, item.current])).toEqual([["Pitch Deck", true], ["Business Review", false]]);
         expect(room.tasks.filter(task => task.kind === "data_request").map(task => task.title)).toEqual(["Sales records", "Your main costs", "Any plan, deck or notes", "What do you want this work to help you decide or do?", "Who will you present to, and what do you want them to do?", "What are you asking for, and what will you do with it?"]);
-        expect(room.sessions.map(item => item.title)).toEqual(["Kick-off", "Handover"]);
+        // The client sees booked Sessions only (R81): the plan's are in the team's view until they have a time.
+        expect(room.sessions).toEqual([]);
+        expect((await (await superAdmin.call()).engagement.staff.detail({ engagementId: deck.engagementId })).sessions.map(item => item.title)).toEqual(["Kick-off", "Handover"]);
         // A later project still shows what the Business Health Check found.
         expect(room.check).not.toBeNull();
         const back = (await (await owner.call()).engagement.client.room({ engagementId: review }))!;
@@ -1174,7 +1129,9 @@ for (const target of targets) {
         expect(footage).toHaveLength(12);
         expect(footage.slice(0, 2).map(task => task.dueOn)).toEqual(["2026-11-05", "2026-11-12"]);
         expect(footage.every(task => new Date(`${task.dueOn}T12:00:00Z`).getUTCDay() === 4)).toBe(true);
-        expect(room.sessions.map(item => item.title)).toEqual(["Kick-off", "Weekly Check-in", "Weekly Check-in", "Weekly Check-in", "Month 1 review", "Check-in", "Month 2 review", "Check-in", "Month 3 review"]);
+        // The plan's Sessions are the team's guide; the client sees them once booked (R81).
+        expect(room.sessions).toEqual([]);
+        expect((await (await superAdmin.call()).engagement.staff.detail({ engagementId: opened.engagementId })).sessions.map(item => item.title)).toEqual(["Kick-off", "Weekly Check-in", "Weekly Check-in", "Weekly Check-in", "Month 1 review", "Check-in", "Month 2 review", "Check-in", "Month 3 review"]);
         expect(room.people).toEqual([expect.objectContaining({ name: "Marie Tiogo", label: "Owner", you: true })]);
 
         // The team's record has no Business Health Check behind it, and names the contact.
@@ -1329,7 +1286,8 @@ for (const target of targets) {
         expect(before.tasks.filter(task => task.weekNumber === 1).map(task => task.sortOrder)).toEqual([1, 2, 3, 4, 5, 6]);
         expect(before.tasks.filter(task => task.weekNumber === 2)).toHaveLength(5);
         expect(before.tasks.filter(task => task.factor === "external").map(task => task.side).sort()).toEqual(["client", "ipf"]);
-        expect(before.sessions.map(session => session.weekNumber)).toEqual([1, 2]);
+        // Not booked yet, so not in the room (R81).
+        expect(before.sessions).toEqual([]);
 
         expect((await admin.businessSupport.debrief({ businessCheckId })).debrief).toBeNull();
         await expect(admin.businessSupport.shareDebrief({ businessCheckId, shared: true })).rejects.toMatchObject({ code: "NOT_FOUND" });
@@ -1382,6 +1340,8 @@ for (const target of targets) {
         const { owner, engagementId } = await client("notes");
         const detail = await (await superAdmin.call()).engagement.staff.detail({ engagementId });
         const sessionId = detail.sessions[0].id;
+        // Booked, so it is in the room (R81).
+        await db.update(schema.engagementSessions).set({ scheduledFor: new Date(Date.now() + 86_400_000) }).where(eq(schema.engagementSessions.id, sessionId));
         await (await superAdmin.call()).engagement.staff.saveNotes({ sessionId, clientNotes: "We agreed to look at pricing first.", internalNotes: "Owner may be under-reporting cash sales." });
         const before = (await (await owner.call()).engagement.client.room())!;
         expect(before.sessions[0].notes).toBeNull();
@@ -1432,6 +1392,8 @@ for (const target of targets) {
         const contributor = await member(businessId, "contributor");
         const detail = await (await superAdmin.call()).engagement.staff.detail({ engagementId });
         const sessionId = detail.sessions[0].id;
+        // Booked, so it is in the room (R81).
+        await db.update(schema.engagementSessions).set({ scheduledFor: new Date(Date.now() + 86_400_000) }).where(eq(schema.engagementSessions.id, sessionId));
         await (await superAdmin.call()).engagement.staff.saveNotes({ sessionId, clientNotes: "Frank notes for the owner.", internalNotes: null });
         mocked.deliverEmail.mockClear();
         await (await superAdmin.call()).engagement.staff.shareNotes({ sessionId, audience: "owner" });

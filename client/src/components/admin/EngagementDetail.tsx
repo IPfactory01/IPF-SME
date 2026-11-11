@@ -4,7 +4,7 @@ import { Failed, Loading } from "@/components/states";
 import { isRefusal } from "@/lib/readPolicy";
 import { DATED_TYPES, STAGED_TYPES } from "@shared/engagementTypes";
 import { DATA_REQUEST_TEMPLATES, parsePastedDataRequest, templateById } from "@shared/dataRequestTemplates";
-import { feeTotal, WEEKDAY_NAMES, type FeeLineDraft } from "@shared/agreement";
+import { feeTotal, type FeeLineDraft } from "@shared/agreement";
 import { formatNaira } from "@shared/businessSupport";
 import { Button } from "@/components/ui/button";
 import { trpc } from "@/lib/trpc";
@@ -58,6 +58,7 @@ import { combineDateAndTime, formatDate, formatDateTime, toDateInput, toTimeInpu
 import { FeeHoldNote } from "./FeeHoldBadge";
 import { FeePaymentList, RecordPaymentForm, WriteOffControls } from "./FeePayments";
 import { AskClient, ItemConversation } from "./AskClient";
+import BookMeeting from "./BookMeeting";
 
 type Detail = inferRouterOutputs<AppRouter>["engagement"]["staff"]["detail"];
 type Session = Detail["sessions"][number];
@@ -339,55 +340,12 @@ function Sessions({ data, engagementId }: { data: Detail; engagementId: number }
   const [adding, setAdding] = useState(false);
   return (
     <DetailSection title="Sessions">
-      <p className="text-xs text-ink-muted">Book on Calendly or by hand, then record the time here so the client sees it. Notes reach the client only when you share them.</p>
-      {data.can.manage && <BookSeries data={data} engagementId={engagementId} />}
-      {data.sessions.map(session => <SessionCard key={session.id} session={session} engagementId={engagementId} canManage={data.can.manage} seeInternal={data.can.seeInternal} />)}
+      <p className="text-xs text-ink-muted">Book in Zoom and paste the invitation: everyone on the engagement is emailed the time and the Join link. The client sees booked Sessions only; the plan's Sessions without a time are your guide to what is due. Notes reach the client only when you share them.</p>
+      {data.can.manage && <BookMeeting engagementId={engagementId} businessName={data.businessName || "the client"} />}
+      {[...data.sessions].sort((a, b) => Number(!a.scheduledFor) - Number(!b.scheduledFor) || (a.scheduledFor ? new Date(a.scheduledFor).getTime() : 0) - (b.scheduledFor ? new Date(b.scheduledFor).getTime() : 0) || (a.weekNumber ?? 99) - (b.weekNumber ?? 99))
+        .map(session => <SessionCard key={session.id} session={session} engagementId={engagementId} canManage={data.can.manage} seeInternal={data.can.seeInternal} />)}
       {adding ? <SessionCard engagementId={engagementId} canManage={data.can.manage} seeInternal={data.can.seeInternal} onDone={() => setAdding(false)} /> : data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add a Session</Button>}
     </DetailSection>
-  );
-}
-
-/**
- * Book the series (R79): the standing slot agreed at the kick-off dates every Check-in still without a time, each in its
- * own week, with one Join link, and everyone is emailed once. The server checks and dates it all.
- */
-function BookSeries({ data, engagementId }: { data: Detail; engagementId: number }) {
-  const refresh = useRefresh(engagementId);
-  const waiting = data.sessions.filter(session => session.kind === "check_in" && session.status === "planned" && !session.scheduledFor && session.weekNumber !== null);
-  const [open, setOpen] = useState(false);
-  const [weekday, setWeekday] = useState("2");
-  const [time, setTime] = useState("10:00");
-  const [link, setLink] = useState("");
-  const book = trpc.engagement.staff.bookSeries.useMutation({ ...refresh, onSuccess: result => { refresh.onSuccess(); setOpen(false); toast.success(`${result.booked} Check-ins booked; everyone is emailed.`); } });
-  if (!waiting.length || !data.engagement.startedOn) return null;
-  if (!open) return <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} onClick={() => setOpen(true)}>Book the series ({waiting.length} Check-ins)</Button>;
-  return (
-    <div className="space-y-2 border border-brand-line bg-paper-raised p-3" role="group" aria-label="Book the series">
-      <p className="text-sm font-semibold text-ink">Book the series</p>
-      <p className="text-xs text-ink-muted">The slot agreed at the kick-off. Each of the {waiting.length} Check-ins without a time goes on this day in its own week; one already booked keeps its time. Everyone on the engagement gets one email with them all in their calendar.</p>
-      <div className="grid gap-2 sm:grid-cols-3">
-        <div><label className={LABEL} htmlFor="series-day">Day</label><select id="series-day" className={FIELD} value={weekday} onChange={event => setWeekday(event.target.value)}>{WEEKDAY_NAMES.map((name, index) => <option key={name} value={index}>{name}</option>)}</select></div>
-        <div><label className={LABEL} htmlFor="series-time">Time (Lagos)</label><input id="series-time" type="time" className={FIELD} value={time} onChange={event => setTime(event.target.value)} /></div>
-        <div><label className={LABEL} htmlFor="series-link">Join link</label><input id="series-link" type="url" className={FIELD} placeholder="https://zoom.us/j/…" value={link} onChange={event => setLink(event.target.value)} /></div>
-      </div>
-      <div className="flex gap-2">
-        <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={book.isPending || !time} onClick={() => book.mutate({ engagementId, weekday: Number(weekday), time, meetingLink: link.trim() || null })}>{book.isPending ? "Booking…" : `Book every ${WEEKDAY_NAMES[Number(weekday)]}`}</Button>
-        <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setOpen(false)}>Cancel</Button>
-      </div>
-    </div>
-  );
-}
-
-/** Send booking link (R80): the owner chooses this review's time on Calendly; the booking lands on it by itself. */
-function SendBookingLink({ sessionId, engagementId }: { sessionId: number; engagementId: number }) {
-  const refresh = useRefresh(engagementId);
-  const [sent, setSent] = useState<string | null>(null);
-  const send = trpc.engagement.staff.sendBookingLink.useMutation({ ...refresh, onSuccess: result => { setSent(result.url); toast.success(result.emailed ? "Sent. The client chooses the time on Calendly." : "The link is ready, but the email did not go: send it on WhatsApp."); } });
-  return (
-    <div className="flex flex-wrap items-center gap-2 border-t border-line-soft pt-2">
-      <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={send.isPending} onClick={() => send.mutate({ sessionId })}>{send.isPending ? "Sending…" : sent ? "Send it again" : "Send booking link"}</Button>
-      {sent ? <span className="min-w-0 break-all text-xs text-ink-muted">Sent: {sent}</span> : <span className="text-xs text-ink-muted">The client picks the time; Calendly adds the Zoom link and the time lands here.</span>}
-    </div>
   );
 }
 
@@ -418,7 +376,6 @@ function SessionCard({ session, engagementId, canManage, seeInternal, onDone }: 
         <div><label className={LABEL} htmlFor={`duration-${id}`}>Minutes</label><input id={`duration-${id}`} type="number" min={5} max={480} className={FIELD} disabled={!canManage} value={duration} onChange={event => setDuration(event.target.value)} /></div>
         <div><label className={LABEL} htmlFor={`status-${id}`}>Status</label><select id={`status-${id}`} className={FIELD} disabled={!canManage} value={status} onChange={event => setStatus(event.target.value as EngagementSessionStatus)}>{ENGAGEMENT_SESSION_STATUSES.map(item => <option key={item} value={item}>{SESSION_STATUS_LABELS[item]}</option>)}</select></div>
       </div>
-      {session && canManage && session.kind === "review" && session.status === "planned" && !session.scheduledFor && <SendBookingLink sessionId={session.id} engagementId={engagementId} />}
       <label className={LABEL} htmlFor={`link-${id}`}>Meeting link</label>
       <input id={`link-${id}`} className={FIELD} disabled={!canManage} placeholder="https://" value={link} onChange={event => setLink(event.target.value)} />
       <label className={LABEL} htmlFor={`agenda-${id}`}>Agenda (the client sees it)</label>

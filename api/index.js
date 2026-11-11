@@ -2449,6 +2449,8 @@ var ENV = {
    * Session 2). Whoever hosts is set in Calendly (one person or round robin). Empty: the room shows no Book button.
    */
   calendlySessionUrl: process.env.CALENDLY_SESSION_URL?.trim() ?? "",
+  /** The booking page for the monthly reviews (R80). */
+  calendlyReviewUrl: process.env.CALENDLY_REVIEW_URL?.trim() ?? "",
   emailFrom: process.env.EMAIL_FROM ?? `${BRAND.organisationName} <notifications@contact.ipfactory.co>`,
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
@@ -12137,6 +12139,57 @@ async function bookedCallTime(eventUri, inviteeEmail) {
     return null;
   }
 }
+var BOOKING_PAGE = /^https:\/\/calendly\.com\/[^\s?#]+$/i;
+var reviewTag = (sessionId) => `session-${sessionId}`;
+function isReviewBookingConfigured() {
+  return isCalendlyConfigured() && BOOKING_PAGE.test(ENV.calendlyReviewUrl);
+}
+function reviewBookingUrl(input) {
+  if (!isReviewBookingConfigured()) return null;
+  const url = new URL(ENV.calendlyReviewUrl);
+  if (input.name.trim()) url.searchParams.set("name", input.name.trim());
+  url.searchParams.set("email", input.email.trim().toLowerCase());
+  url.searchParams.set("utm_content", reviewTag(input.sessionId));
+  return url.toString();
+}
+var reviewEventType = null;
+function reviewEventTypeUri() {
+  reviewEventType ??= (async () => {
+    const org = await organisationUri();
+    if (!org) return null;
+    const types = await calendly(`/event_types?${new URLSearchParams({ organization: org, count: "100" })}`);
+    return types?.collection?.find((type) => type.uri && type.scheduling_url && sameUrl(type.scheduling_url, ENV.calendlyReviewUrl))?.uri ?? null;
+  })().then((uri) => {
+    if (!uri) reviewEventType = null;
+    return uri;
+  });
+  return reviewEventType;
+}
+async function findReviewBookings(inviteeEmail, since) {
+  if (!isReviewBookingConfigured()) return [];
+  try {
+    const [org, eventType] = [await organisationUri(), await reviewEventTypeUri()];
+    if (!org || !eventType) return [];
+    const email = inviteeEmail.trim().toLowerCase();
+    const query = new URLSearchParams({ organization: org, invitee_email: email, status: "active", sort: "start_time:asc", min_start_time: since.toISOString(), count: "20" });
+    const events = await calendly(`/scheduled_events?${query}`);
+    const found = [];
+    for (const event of events?.collection ?? []) {
+      if (event.status !== "active" || event.event_type !== eventType || !event.start_time || !event.uri) continue;
+      const start = new Date(event.start_time);
+      if (Number.isNaN(start.getTime())) continue;
+      const uuid = event.uri.split("/scheduled_events/")[1] ?? "";
+      const invitees = /^[A-Za-z0-9-]{8,64}$/.test(uuid) ? await calendly(`/scheduled_events/${uuid}/invitees?${new URLSearchParams({ email })}`) : null;
+      const tag = invitees?.collection?.find((invitee) => invitee.email?.toLowerCase() === email)?.tracking?.utm_content ?? "";
+      const match = /^session-(\d+)$/.exec(tag);
+      found.push({ start, end: event.end_time ? new Date(event.end_time) : null, joinUrl: event.location?.join_url && /^https:\/\//.test(event.location.join_url) ? event.location.join_url : null, sessionId: match ? Number(match[1]) : null });
+    }
+    return found.sort((a, b) => a.start.getTime() - b.start.getTime());
+  } catch (error) {
+    console.warn("[Calendly] Could not look up review bookings:", error instanceof Error ? error.message : error);
+    return [];
+  }
+}
 
 // server/engagements.ts
 var NOT_FOUND = "This engagement is not available.";
@@ -12482,6 +12535,7 @@ async function getStaffEngagement(db, actor, engagementId) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
   const check2 = engagement.businessCheckId !== null ? (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq24(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { id: null, fullName: engagement.contactName ?? "", email: engagement.contactEmail, whatsapp: null, businessName: null } : void 0;
   if (check2) await syncSessionBookings(db, engagement, check2.email);
+  await syncReviewBookings(db, engagement);
   const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq24(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
   const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins, matches, waiting] = await Promise.all([
     db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq24(engagementTeam.userId, users.id)).where(eq24(engagementTeam.engagementId, engagementId)).orderBy(asc7(engagementTeam.id)),
@@ -12956,6 +13010,78 @@ async function clientViewerFor(db, session, businessId) {
 }
 var lastSessionSync = /* @__PURE__ */ new Map();
 var SESSION_SYNC_INTERVAL_MS = 15e3;
+var lastReviewSync = /* @__PURE__ */ new Map();
+async function syncReviewBookings(db, engagement, now = Date.now()) {
+  if (!isReviewBookingConfigured()) return 0;
+  if (now - (lastReviewSync.get(engagement.id) ?? 0) < SESSION_SYNC_INTERVAL_MS) return 0;
+  lastReviewSync.set(engagement.id, now);
+  const sessions = await db.select().from(engagementSessions).where(and16(eq24(engagementSessions.engagementId, engagement.id), eq24(engagementSessions.kind, "review"))).orderBy(asc7(engagementSessions.weekNumber), asc7(engagementSessions.sortOrder), asc7(engagementSessions.id));
+  const waiting = sessions.filter((item2) => item2.status === "planned" && !item2.scheduledFor);
+  if (!waiting.length) return 0;
+  const client = await clientOf(db, engagement);
+  if (!client) return 0;
+  const timed = new Set(sessions.filter((item2) => item2.scheduledFor).map((item2) => item2.scheduledFor.getTime()));
+  const bookings = (await findReviewBookings(client.email, new Date(engagement.createdAt.getTime() - 864e5))).filter((booking) => !timed.has(booking.start.getTime()));
+  let recorded = 0;
+  const open = [...waiting];
+  for (const booking of [...bookings.filter((item2) => item2.sessionId !== null), ...bookings.filter((item2) => item2.sessionId === null)]) {
+    const index2 = booking.sessionId !== null ? open.findIndex((item2) => item2.id === booking.sessionId) : 0;
+    const session = open[index2];
+    if (!session) continue;
+    open.splice(index2, 1);
+    const minutes = booking.end ? Math.round((booking.end.getTime() - booking.start.getTime()) / 6e4) : null;
+    const booked = await db.update(engagementSessions).set({
+      scheduledFor: booking.start,
+      ...minutes && minutes > 0 ? { durationMinutes: minutes } : {},
+      ...booking.joinUrl && !session.meetingLink ? { meetingLink: booking.joinUrl } : {}
+    }).where(and16(eq24(engagementSessions.id, session.id), isNull12(engagementSessions.scheduledFor))).returning({ id: engagementSessions.id });
+    if (!booked.length) continue;
+    await recordAudit(db, { action: "engagement_session_booked", actorUserId: null, details: { engagementId: engagement.id, sessionId: session.id, via: "calendly", scheduledFor: booking.start.toISOString() } });
+    if (booking.start.getTime() > now) await sendSessionEmails(db, { sessionId: session.id, change: "booked", includeClient: false, now });
+    recorded += 1;
+  }
+  return recorded;
+}
+function bookingLinkEmail(input) {
+  const name = input.name.split(" ")[0] || "there";
+  return {
+    subject: `Choose a time: ${input.title}`,
+    body: [
+      `Hello ${name},`,
+      "",
+      `It is time to book your ${input.title} with your team at IP Factory: ${input.minutes} minutes, at a time that suits you.`,
+      "",
+      `Choose a time: ${input.url}`,
+      "",
+      "Calendly sends you the confirmation with the Zoom link, and the time appears in your room. To move it later, use the link in Calendly's email.",
+      "",
+      BRAND.organisationName
+    ].join("\n")
+  };
+}
+async function sendBookingLink(db, actor, input) {
+  requireManage2(actor);
+  const session = (await db.select().from(engagementSessions).where(eq24(engagementSessions.id, input.sessionId)).limit(1))[0];
+  if (!session) throw notFound4();
+  const engagement = await requireStaffEngagement(db, actor, session.engagementId);
+  if (session.kind !== "review" || session.status !== "planned") throw new TRPCError18({ code: "BAD_REQUEST", message: "Booking links are for the monthly reviews." });
+  if (session.scheduledFor) throw new TRPCError18({ code: "CONFLICT", message: "This review already has a time. Change it below, or the client moves it in Calendly." });
+  if (!isReviewBookingConfigured()) throw new TRPCError18({ code: "PRECONDITION_FAILED", message: "Review booking is not set up yet: add the review's Calendly page as CALENDLY_REVIEW_URL in Vercel." });
+  const client = await clientOf(db, engagement);
+  if (!client) throw new TRPCError18({ code: "BAD_REQUEST", message: "There is no email for the client yet." });
+  const url = reviewBookingUrl({ name: client.name, email: client.email, sessionId: session.id });
+  const message = bookingLinkEmail({ name: client.name, title: session.title, businessName: await businessNameOf(db, engagement), minutes: session.durationMinutes ?? 45, url });
+  await recordAudit(db, { action: "engagement_booking_link_sent", actorUserId: actor.id, details: { engagementId: engagement.id, sessionId: session.id } });
+  const delivery = await deliverEmail({ to: client.email, subject: message.subject, body: message.body, sender: "business_support", businessCheckId: engagement.businessCheckId ?? void 0 }).catch(() => null);
+  return { url, emailed: delivery !== null && delivery.status !== "Failed" };
+}
+function reviewToBook(engagement, sessions, client, today) {
+  if (!client || !engagement.startedOn) return null;
+  const next = sessions.filter((item2) => item2.kind === "review" && item2.status === "planned" && !item2.scheduledFor && item2.weekNumber !== null).sort((a, b) => a.weekNumber - b.weekNumber || a.sortOrder - b.sortOrder)[0];
+  if (!next || addDays2(engagement.startedOn, (next.weekNumber - 1) * 7 - 14) > today) return null;
+  const url = reviewBookingUrl({ name: client.name, email: client.email, sessionId: next.id });
+  return url ? { sessionId: next.id, title: next.title, url } : null;
+}
 async function syncSessionBookings(db, engagement, inviteeEmail, now = Date.now()) {
   if (!isSessionBookingConfigured() || !inviteeEmail) return 0;
   if (now - (lastSessionSync.get(engagement.id) ?? 0) < SESSION_SYNC_INTERVAL_MS) return 0;
@@ -13029,6 +13155,7 @@ async function previewClientRoom(db, actor, input) {
 async function buildClientRoom(db, engagement, viewer, viewerUserId, businessName) {
   const owner = engagement.businessCheckId !== null ? (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq24(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { email: engagement.contactEmail, fullName: engagement.contactName ?? "" } : void 0;
   if (owner) await syncSessionBookings(db, engagement, owner.email);
+  await syncReviewBookings(db, engagement);
   const [team, sessions, tasks, deliverables, comments, files, measure, checkins, matches] = await Promise.all([
     db.select({ userId: engagementTeam.userId, name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle, whatsapp: users.whatsapp, whatsappConsentAt: users.whatsappConsentAt }).from(engagementTeam).innerJoin(users, eq24(engagementTeam.userId, users.id)).where(eq24(engagementTeam.engagementId, engagement.id)).orderBy(asc7(engagementTeam.id)),
     db.select().from(engagementSessions).where(eq24(engagementSessions.engagementId, engagement.id)).orderBy(asc7(engagementSessions.id)),
@@ -13116,6 +13243,8 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
     nextSession: next ? { id: next.id, title: next.title, scheduledFor: next.scheduledFor, durationMinutes: next.durationMinutes, meetingLink: next.meetingLink } : null,
     // The owner books the Business Review Sessions on Calendly, in order, with their details filled in.
     booking: bookingFor(sessions, viewer, owner ?? null),
+    // The next monthly review to book on Calendly (R80): the owner only.
+    reviewBooking: viewer.kind === "owner" ? reviewToBook(engagement, sessions, await clientOf(db, engagement), lagosDay()) : null,
     sessions: scheduled.map((item2) => ({
       id: item2.id,
       title: item2.title,
@@ -14633,6 +14762,8 @@ var staffRouter = router({
     time: z15.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Choose the time."),
     meetingLink: z15.string().trim().url("Paste the full meeting link, starting https://").max(512).nullable().or(z15.literal("").transform(() => null))
   })).mutation(async ({ ctx, input }) => guarded(async () => bookSeries(await engagementDb(), ctx.actor, input))),
+  /** Send booking link (R80): email the owner the Calendly page for a review without a time. manage_engagements. */
+  sendBookingLink: staff.input(z15.object({ sessionId: id })).mutation(async ({ ctx, input }) => guarded(async () => sendBookingLink(await engagementDb(), ctx.actor, input))),
   saveNotes: staff.input(z15.object({ sessionId: id, clientNotes: optionalText2(2e4), internalNotes: optionalText2(2e4) })).mutation(async ({ ctx, input }) => guarded(async () => saveSessionNotes(await engagementDb(), ctx.actor, input))),
   shareNotes: staff.input(z15.object({ sessionId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareSessionNotes(await engagementDb(), ctx.actor, input))),
   saveTask: staff.input(z15.object({

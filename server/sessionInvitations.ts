@@ -134,7 +134,7 @@ export function sessionEmail(input: {
 }
 
 /** The client's contact for an engagement: the business owner, else the engagement's contact, else the check. */
-async function clientOf(db: Pick<Database, "select">, engagement: typeof engagements.$inferSelect) {
+export async function clientOf(db: Pick<Database, "select">, engagement: typeof engagements.$inferSelect) {
   if (engagement.businessId !== null) {
     const owner = (await db.select({ email: users.email, name: users.name }).from(businessMemberships).innerJoin(users, eq(businessMemberships.userId, users.id))
       .where(and(eq(businessMemberships.businessId, engagement.businessId), eq(businessMemberships.role, "owner"), eq(businessMemberships.status, "active"))).limit(1))[0];

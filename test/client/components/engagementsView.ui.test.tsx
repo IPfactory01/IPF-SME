@@ -41,7 +41,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         fees: { useQuery: () => ({ data: api.failed.fees ? undefined : api.fees, error: api.failed.fees ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("fees"); } }) },
-        ...Object.fromEntries(["start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "bookSeries", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "bookSeries", "sendBookingLink", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -348,6 +348,19 @@ describe("the team's engagements", () => {
     render(<EngagementsView />);
     fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
     expect(within(screen.getByRole("dialog")).queryByRole("button", { name: /Book the series/ })).toBeNull();
+  });
+
+  it("sends the owner a review's booking link, only on a review without a time (R80)", () => {
+    replies.sendBookingLink = { url: "https://calendly.com/ipfactory-example/monthly-review?utm_content=session-71", emailed: true };
+    const review = (id: number, scheduledFor: Date | null) => ({ ...session, id, kind: "review", title: `Review ${id}`, weekNumber: 5, scheduledFor });
+    api.detail = { ...detail({ manage: true, assign: false, review: false }), sessions: [review(71, null), review(72, new Date("2026-12-02T09:00:00Z"))] };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const dialog = within(screen.getByRole("dialog"));
+    fireEvent.click(within(dialog.getByLabelText("Review 71")).getByRole("button", { name: "Send booking link" }));
+    expect(api.calls.sendBookingLink).toEqual([{ sessionId: 71 }]);
+    expect(within(dialog.getByLabelText("Review 71")).getByText(/Sent: https:\/\/calendly\.com/)).toBeTruthy();
+    expect(within(dialog.getByLabelText("Review 72")).queryByRole("button", { name: "Send booking link" })).toBeNull();
   });
 
   it("saves notes without sharing, and shares only notes that are saved", () => {

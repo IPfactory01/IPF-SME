@@ -378,6 +378,19 @@ function BookSeries({ data, engagementId }: { data: Detail; engagementId: number
   );
 }
 
+/** Send booking link (R80): the owner chooses this review's time on Calendly; the booking lands on it by itself. */
+function SendBookingLink({ sessionId, engagementId }: { sessionId: number; engagementId: number }) {
+  const refresh = useRefresh(engagementId);
+  const [sent, setSent] = useState<string | null>(null);
+  const send = trpc.engagement.staff.sendBookingLink.useMutation({ ...refresh, onSuccess: result => { setSent(result.url); toast.success(result.emailed ? "Sent. The client chooses the time on Calendly." : "The link is ready, but the email did not go: send it on WhatsApp."); } });
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-t border-line-soft pt-2">
+      <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={send.isPending} onClick={() => send.mutate({ sessionId })}>{send.isPending ? "Sending…" : sent ? "Send it again" : "Send booking link"}</Button>
+      {sent ? <span className="min-w-0 break-all text-xs text-ink-muted">Sent: {sent}</span> : <span className="text-xs text-ink-muted">The client picks the time; Calendly adds the Zoom link and the time lands here.</span>}
+    </div>
+  );
+}
+
 function SessionCard({ session, engagementId, canManage, seeInternal, onDone }: { session?: Session; engagementId: number; canManage: boolean; seeInternal: boolean; onDone?: () => void }) {
   const refresh = useRefresh(engagementId);
   const [kind, setKind] = useState<EngagementSessionKind>(session?.kind ?? "check_in");
@@ -405,6 +418,7 @@ function SessionCard({ session, engagementId, canManage, seeInternal, onDone }: 
         <div><label className={LABEL} htmlFor={`duration-${id}`}>Minutes</label><input id={`duration-${id}`} type="number" min={5} max={480} className={FIELD} disabled={!canManage} value={duration} onChange={event => setDuration(event.target.value)} /></div>
         <div><label className={LABEL} htmlFor={`status-${id}`}>Status</label><select id={`status-${id}`} className={FIELD} disabled={!canManage} value={status} onChange={event => setStatus(event.target.value as EngagementSessionStatus)}>{ENGAGEMENT_SESSION_STATUSES.map(item => <option key={item} value={item}>{SESSION_STATUS_LABELS[item]}</option>)}</select></div>
       </div>
+      {session && canManage && session.kind === "review" && session.status === "planned" && !session.scheduledFor && <SendBookingLink sessionId={session.id} engagementId={engagementId} />}
       <label className={LABEL} htmlFor={`link-${id}`}>Meeting link</label>
       <input id={`link-${id}`} className={FIELD} disabled={!canManage} placeholder="https://" value={link} onChange={event => setLink(event.target.value)} />
       <label className={LABEL} htmlFor={`agenda-${id}`}>Agenda (the client sees it)</label>

@@ -82,6 +82,7 @@ import {
   addMissingPlan,
   askClient,
   bookSeries,
+  sendBookingLink,
   staffTaskComment,
   clientTaskComment,
   followUpShared,
@@ -186,6 +187,8 @@ const staffRouter = router({
     time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Choose the time."),
     meetingLink: z.string().trim().url("Paste the full meeting link, starting https://").max(512).nullable().or(z.literal("").transform(() => null)),
   })).mutation(async ({ ctx, input }) => guarded(async () => bookSeries(await engagementDb(), ctx.actor, input))),
+  /** Send booking link (R80): email the owner the Calendly page for a review without a time. manage_engagements. */
+  sendBookingLink: staff.input(z.object({ sessionId: id })).mutation(async ({ ctx, input }) => guarded(async () => sendBookingLink(await engagementDb(), ctx.actor, input))),
   saveNotes: staff.input(z.object({ sessionId: id, clientNotes: optionalText(20000), internalNotes: optionalText(20000) }))
     .mutation(async ({ ctx, input }) => guarded(async () => saveSessionNotes(await engagementDb(), ctx.actor, input))),
   shareNotes: staff.input(z.object({ sessionId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareSessionNotes(await engagementDb(), ctx.actor, input))),

@@ -144,3 +144,71 @@ export async function bookedCallTime(eventUri: string, inviteeEmail: string): Pr
     return null;
   }
 }
+
+// ---- The monthly reviews (R80) ----------------------------------------------------------------------------------
+
+const BOOKING_PAGE = /^https:\/\/calendly\.com\/[^\s?#]+$/i;
+/** The tag a review's booking link carries, so the booking lands on that review. */
+export const reviewTag = (sessionId: number) => `session-${sessionId}`;
+
+/** Whether reviews can be booked by the client: the token reads bookings back, and the review page is set. */
+export function isReviewBookingConfigured() {
+  return isCalendlyConfigured() && BOOKING_PAGE.test(ENV.calendlyReviewUrl);
+}
+
+/** The review booking page with the owner's name and email filled in, and the review it is for. */
+export function reviewBookingUrl(input: { name: string; email: string; sessionId: number }) {
+  if (!isReviewBookingConfigured()) return null;
+  const url = new URL(ENV.calendlyReviewUrl);
+  if (input.name.trim()) url.searchParams.set("name", input.name.trim());
+  url.searchParams.set("email", input.email.trim().toLowerCase());
+  url.searchParams.set("utm_content", reviewTag(input.sessionId));
+  return url.toString();
+}
+
+let reviewEventType: Promise<string | null> | null = null;
+function reviewEventTypeUri() {
+  reviewEventType ??= (async () => {
+    const org = await organisationUri();
+    if (!org) return null;
+    const types = await calendly<{ collection?: { uri?: string; scheduling_url?: string }[] }>(`/event_types?${new URLSearchParams({ organization: org, count: "100" })}`);
+    return types?.collection?.find((type) => type.uri && type.scheduling_url && sameUrl(type.scheduling_url, ENV.calendlyReviewUrl))?.uri ?? null;
+  })().then((uri) => {
+    if (!uri) reviewEventType = null;
+    return uri;
+  });
+  return reviewEventType;
+}
+export function resetReviewEventTypeForTests() { reviewEventType = null; }
+
+export type ReviewBooking = SessionBooking & { sessionId: number | null };
+
+/**
+ * The owner's active review bookings since `since`, earliest first, each with the review its link named (from the
+ * invitee's tracking), or null for one booked from the plain page. Empty when anything is missing or fails.
+ */
+export async function findReviewBookings(inviteeEmail: string, since: Date): Promise<ReviewBooking[]> {
+  if (!isReviewBookingConfigured()) return [];
+  try {
+    const [org, eventType] = [await organisationUri(), await reviewEventTypeUri()];
+    if (!org || !eventType) return [];
+    const email = inviteeEmail.trim().toLowerCase();
+    const query = new URLSearchParams({ organization: org, invitee_email: email, status: "active", sort: "start_time:asc", min_start_time: since.toISOString(), count: "20" });
+    const events = await calendly<{ collection?: { uri?: string; start_time?: string; end_time?: string; status?: string; event_type?: string; location?: { join_url?: string } }[] }>(`/scheduled_events?${query}`);
+    const found: ReviewBooking[] = [];
+    for (const event of events?.collection ?? []) {
+      if (event.status !== "active" || event.event_type !== eventType || !event.start_time || !event.uri) continue;
+      const start = new Date(event.start_time);
+      if (Number.isNaN(start.getTime())) continue;
+      const uuid = event.uri.split("/scheduled_events/")[1] ?? "";
+      const invitees = /^[A-Za-z0-9-]{8,64}$/.test(uuid) ? await calendly<{ collection?: { email?: string; tracking?: { utm_content?: string | null } }[] }>(`/scheduled_events/${uuid}/invitees?${new URLSearchParams({ email })}`) : null;
+      const tag = invitees?.collection?.find((invitee) => invitee.email?.toLowerCase() === email)?.tracking?.utm_content ?? "";
+      const match = /^session-(\d+)$/.exec(tag);
+      found.push({ start, end: event.end_time ? new Date(event.end_time) : null, joinUrl: event.location?.join_url && /^https:\/\//.test(event.location.join_url) ? event.location.join_url : null, sessionId: match ? Number(match[1]) : null });
+    }
+    return found.sort((a, b) => a.start.getTime() - b.start.getTime());
+  } catch (error) {
+    console.warn("[Calendly] Could not look up review bookings:", error instanceof Error ? error.message : error);
+    return [];
+  }
+}

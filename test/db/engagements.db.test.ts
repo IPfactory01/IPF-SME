@@ -14,6 +14,8 @@ import { sampleIntake } from "../fixtures/reportIntake";
 import { addDays, lagosDay, seriesStart } from "@shared/agreement";
 import { dayInWords, requestDueOn } from "@shared/requests";
 import { runReminders } from "@server/reminders";
+import { resetCalendlyForTests, resetReviewEventTypeForTests } from "@server/calendly";
+import { resetReviewSyncForTests } from "@server/engagements";
 
 const holder = vi.hoisted(() => {
   process.env.DATABASE_URL = "postgresql://contract:contract@localhost:5432/contract";
@@ -414,6 +416,69 @@ for (const target of targets) {
         expect(sent[0].icsContent!.match(/BEGIN:VEVENT/g)).toHaveLength(4);
         // Nothing left to book.
         await expect(desk.engagement.staff.bookSeries({ engagementId, weekday: 2, time: "10:00", meetingLink: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+      });
+    });
+
+    describe("Send booking link for the reviews (R80, ET 11 November 2026)", () => {
+      const REVIEW_URL = "https://calendly.com/ipfactory-example/monthly-review";
+      const saved = { token: ENV.calendlyApiToken, url: ENV.calendlyReviewUrl };
+      afterEach(() => { ENV.calendlyApiToken = saved.token; ENV.calendlyReviewUrl = saved.url; vi.unstubAllGlobals(); });
+      /** Calendly with one review event type, answering with the bookings given, each tagged with a review or not. */
+      const calendlyWith = (bookings: { uuid: string; start: string; tag: string | null }[]) => vi.stubGlobal("fetch", vi.fn(async (url: string) => ({
+        ok: true,
+        json: async () => {
+          if (url.endsWith("/users/me")) return { resource: { current_organization: "https://api.calendly.com/organizations/ORG1" } };
+          if (url.includes("/event_types?")) return { collection: [{ uri: "https://api.calendly.com/event_types/REVIEW1", scheduling_url: REVIEW_URL }] };
+          const invitees = /scheduled_events\/([A-Z0-9-]+)\/invitees/.exec(url);
+          if (invitees) return { collection: [{ email: url.split("email=")[1] ? decodeURIComponent(url.split("email=")[1]!) : "", tracking: { utm_content: bookings.find(item => item.uuid === invitees[1])?.tag ?? null } }] };
+          return { collection: bookings.map(item => ({ uri: `https://api.calendly.com/scheduled_events/${item.uuid}`, start_time: item.start, end_time: new Date(Date.parse(item.start) + 45 * 60_000).toISOString(), status: "active", event_type: "https://api.calendly.com/event_types/REVIEW1", location: { join_url: "https://zoom.example.test/j/review" } })) };
+        },
+      })));
+
+      it("emails the owner a link that names the review, puts the booking on that review, and offers the next review in the room", async () => {
+        const desk = await superAdmin.call();
+        const today = lagosDay();
+        const email = uniqueEmail("reviews");
+        const startedOn = addDays(today, -20);
+        const { engagementId, invitationUrl } = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Review Studio", contactName: "Remi Review", contactEmail: email, startedOn });
+        const owner = browser();
+        await (await owner.call()).invitations.accept({ token: decodeURIComponent(invitationUrl!.split("/join/")[1]), email, fullName: "Remi Review", password: PASSWORD, confirmPassword: PASSWORD });
+        await desk.engagement.staff.openRoomNow({ engagementId });
+        const sessions = (await desk.engagement.staff.detail({ engagementId })).sessions;
+        const month1 = sessions.find(item => item.title === "Month 1 review")!;
+        const month2 = sessions.find(item => item.title === "Month 2 review")!;
+        // Not set up: nothing to send.
+        await expect(desk.engagement.staff.sendBookingLink({ sessionId: month1.id })).rejects.toMatchObject({ code: "PRECONDITION_FAILED" });
+
+        ENV.calendlyApiToken = "test-calendly-token";
+        ENV.calendlyReviewUrl = REVIEW_URL;
+        resetCalendlyForTests();
+        resetReviewEventTypeForTests();
+        resetReviewSyncForTests();
+        calendlyWith([]);
+        mocked.deliverEmail.mockClear();
+        const { url } = await desk.engagement.staff.sendBookingLink({ sessionId: month1.id });
+        expect(new URL(url).searchParams.get("utm_content")).toBe(`session-${month1.id}`);
+        expect(emails().filter(sent => sent.to === email).map(sent => sent.subject)).toEqual(["Choose a time: Month 1 review"]);
+        expect(emails().find(sent => sent.to === email)!.body).toContain(url);
+        // Only for a review without a time.
+        await expect(desk.engagement.staff.sendBookingLink({ sessionId: sessions.find(item => item.kind === "check_in")!.id })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        // The room offers the Month 1 review to book: its week starts within two weeks.
+        expect((await (await owner.call()).engagement.client.room())!.reviewBooking).toMatchObject({ sessionId: month1.id, title: "Month 1 review" });
+
+        // The owner books the Month 2 review from its link: it lands there, not on the earlier review.
+        resetReviewSyncForTests();
+        const start = new Date(Date.now() + 40 * 86_400_000);
+        start.setUTCMinutes(0, 0, 0);
+        calendlyWith([{ uuid: "EVENT0001-AAAA", start: start.toISOString(), tag: `session-${month2.id}` }]);
+        mocked.deliverEmail.mockClear();
+        const after = (await desk.engagement.staff.detail({ engagementId })).sessions;
+        expect(after.find(item => item.id === month2.id)).toMatchObject({ meetingLink: "https://zoom.example.test/j/review", durationMinutes: 45 });
+        expect(new Date(after.find(item => item.id === month2.id)!.scheduledFor!).getTime()).toBe(start.getTime());
+        expect(after.find(item => item.id === month1.id)!.scheduledFor).toBeNull();
+        // The team hears with a calendar invitation; Calendly has emailed the client.
+        expect(emails().filter(sent => sent.subject.startsWith("Session booked: Month 2 review")).map(sent => sent.to)).not.toContain(email);
+        await expect(desk.engagement.staff.sendBookingLink({ sessionId: month2.id })).rejects.toMatchObject({ code: "CONFLICT" });
       });
     });
 

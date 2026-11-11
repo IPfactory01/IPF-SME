@@ -46,6 +46,8 @@ export const ENV = {
    * Session 2). Whoever hosts is set in Calendly (one person or round robin). Empty: the room shows no Book button.
    */
   calendlySessionUrl: process.env.CALENDLY_SESSION_URL?.trim() ?? "",
+  /** The booking page for the monthly reviews (R80). */
+  calendlyReviewUrl: process.env.CALENDLY_REVIEW_URL?.trim() ?? "",
   emailFrom: process.env.EMAIL_FROM ?? `${BRAND.organisationName} <notifications@contact.ipfactory.co>`,
   googleClientId: process.env.GOOGLE_CLIENT_ID ?? "",
   googleClientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",

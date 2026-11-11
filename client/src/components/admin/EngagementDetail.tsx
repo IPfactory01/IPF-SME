@@ -337,14 +337,34 @@ function PlanUpdate({ engagementId }: { engagementId: number }) {
 }
 
 function Sessions({ data, engagementId }: { data: Detail; engagementId: number }) {
-  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<number | null>(null);
+  // One list of what is booked (R81): each meeting once, with Edit for a new time or the notes. The plan's Sessions
+  // without a time are not forms: one line says what is still to book.
+  const booked = data.sessions.filter(session => session.scheduledFor && session.status !== "cancelled")
+    .sort((a, b) => new Date(a.scheduledFor!).getTime() - new Date(b.scheduledFor!).getTime());
+  const toBook = data.sessions.filter(session => !session.scheduledFor && session.status === "planned");
+  const counts = Array.from(toBook.reduce((map, session) => map.set(session.title, (map.get(session.title) ?? 0) + 1), new Map<string, number>()));
   return (
     <DetailSection title="Sessions">
-      <p className="text-xs text-ink-muted">Book in Zoom and paste the invitation: everyone on the engagement is emailed the time and the Join link. The client sees booked Sessions only; the plan's Sessions without a time are your guide to what is due. Notes reach the client only when you share them.</p>
+      <p className="text-xs text-ink-muted">Book in Zoom and paste the invitation: everyone on the engagement is emailed the time and the Join link, and the client sees it in their room. If the time changes, paste the new invitation, or Edit it below. Notes reach the client only when you share them.</p>
       {data.can.manage && <BookMeeting engagementId={engagementId} businessName={data.businessName || "the client"} />}
-      {[...data.sessions].sort((a, b) => Number(!a.scheduledFor) - Number(!b.scheduledFor) || (a.scheduledFor ? new Date(a.scheduledFor).getTime() : 0) - (b.scheduledFor ? new Date(b.scheduledFor).getTime() : 0) || (a.weekNumber ?? 99) - (b.weekNumber ?? 99))
-        .map(session => <SessionCard key={session.id} session={session} engagementId={engagementId} canManage={data.can.manage} seeInternal={data.can.seeInternal} />)}
-      {adding ? <SessionCard engagementId={engagementId} canManage={data.can.manage} seeInternal={data.can.seeInternal} onDone={() => setAdding(false)} /> : data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add a Session</Button>}
+      {counts.length > 0 && <p className="text-xs text-ink-muted">Still to book from the plan: {counts.map(([title, count]) => (count > 1 ? `${title} (${count})` : title)).join(", ")}.</p>}
+      {booked.length === 0 ? <p className="text-sm text-ink-muted">Nothing booked yet.</p> : (
+        <ul className="divide-y divide-line-soft border border-line bg-white" aria-label="Booked Sessions">
+          {booked.map(session => (
+            <li key={session.id} className="p-3" aria-label={session.title}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-ink">{session.title} <span className="text-xs font-normal text-ink-muted">· {SESSION_STATUS_LABELS[session.status]}</span></p>
+                  <p className="text-xs text-ink-muted">{formatDateTime(session.scheduledFor)}{session.durationMinutes ? `, ${session.durationMinutes} minutes` : ""}{session.meetingLink ? <> · <a className="text-brand underline" href={session.meetingLink} target="_blank" rel="noreferrer">Join link</a></> : ""}</p>
+                </div>
+                <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} aria-expanded={editing === session.id} onClick={() => setEditing(editing === session.id ? null : session.id)}>{editing === session.id ? "Close" : "Edit"}</Button>
+              </div>
+              {editing === session.id && <div className="mt-2"><SessionCard session={session} engagementId={engagementId} canManage={data.can.manage} seeInternal={data.can.seeInternal} onDone={() => setEditing(null)} /></div>}
+            </li>
+          ))}
+        </ul>
+      )}
     </DetailSection>
   );
 }

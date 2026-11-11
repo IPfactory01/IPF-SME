@@ -328,11 +328,29 @@ describe("the team's engagements", () => {
     expect(drawer.getByText("A Partner, Vice President or Senior Associate, or this engagement's lead, approves this before it can be shared.")).toBeTruthy();
   });
 
-  it("saves notes without sharing, and shares only notes that are saved", () => {
-    api.detail = detail({ manage: true, assign: false, review: false });
+  it("lists each booked Session once with Edit, and the plan's Sessions without a time as one line (R81)", () => {
+    const base = detail({ manage: true, assign: false, review: false });
+    const plan = (id: number, title: string, scheduledFor: Date | null) => ({ ...session, id, kind: "check_in", title, scheduledFor });
+    api.detail = { ...base, sessions: [plan(61, "Kick-off", new Date("2026-11-18T09:00:00Z")), plan(62, "Weekly Check-in", null), plan(63, "Weekly Check-in", null), plan(64, "Month 1 review", null)] };
     render(<EngagementsView />);
     fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
-    const card = within(within(screen.getByRole("dialog")).getByLabelText("Business Review call 1"));
+    const dialog = within(screen.getByRole("dialog"));
+    const list = within(dialog.getByRole("list", { name: "Booked Sessions" }));
+    expect(list.getAllByRole("listitem").map(item => item.getAttribute("aria-label"))).toEqual(["Kick-off"]);
+    expect(dialog.getByText("Still to book from the plan: Weekly Check-in (2), Month 1 review.")).toBeTruthy();
+    // No form until Edit.
+    expect(dialog.queryByLabelText("Meeting link")).toBeNull();
+    fireEvent.click(list.getByRole("button", { name: "Edit" }));
+    expect(dialog.getByLabelText("Meeting link")).toBeTruthy();
+  });
+
+  it("saves notes without sharing, and shares only notes that are saved", () => {
+    const base = detail({ manage: true, assign: false, review: false });
+    api.detail = { ...base, sessions: [{ ...session, scheduledFor: new Date("2026-11-18T09:00:00Z") }] };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    fireEvent.click(within(within(screen.getByRole("dialog")).getByRole("list", { name: "Booked Sessions" })).getByRole("button", { name: "Edit" }));
+    const card = within(within(screen.getByRole("dialog")).getAllByLabelText("Business Review call 1").at(-1)!);
     expect(card.getByText("Not shared yet.")).toBeTruthy();
     fireEvent.click(card.getByRole("button", { name: "Share with the owner" }));
     expect(api.calls.shareNotes).toEqual([{ sessionId: 31, audience: "owner" }]);

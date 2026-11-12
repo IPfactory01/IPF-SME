@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import type { AppRouter } from "../../../../server/routers";
 import { ClickableRow, CopyButton, RecordDrawer, TD, TH } from "./AdminPrimitives";
 import { ENGAGEMENT_TYPE_LABELS, ENGAGEMENT_TYPES, servicesFor, type EngagementType } from "@shared/engagementTypes";
-import EngagementDetail from "./EngagementDetail";
+import EngagementDetail, { EngagementWorkspace } from "./EngagementDetail";
 import { formatDate, formatDateTime } from "./format";
 import FeeHoldBadge from "./FeeHoldBadge";
 import Today from "./Today";
@@ -50,6 +50,9 @@ export default function EngagementsView() {
       ? `The engagements cannot load: the database is missing migration ${missing}. Run its script from drizzle/supabase in the Supabase SQL Editor of the project the site uses, then reload.`
       : "The engagements cannot load: the database is missing a table or column this version of the site needs. Apply the latest migration, then reload."}</p>;
   }
+  // The team's workspace (R82): someone who does not see every engagement works one as a full page in the room's
+  // layout; the desk and admins keep the record in the drawer. What each may do is still checked on the server.
+  if (open && !seesAll) return <EngagementWorkspace engagementId={open.id} myRole={open.myRole} onBack={() => { setOpenId(null); if (window.location.hash) window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search); }} />;
   return (
     <div className="space-y-4 p-6">
       <StaleLine read={list} />
@@ -97,7 +100,7 @@ export default function EngagementsView() {
           </table>
         </div>
       )}
-      <RecordDrawer open={open !== null} onOpenChange={value => !value && setOpenId(null)} title={open?.businessName ?? ""} description={open ? `${open.stageLabel} · ${open.ownerName}` : ""}>
+      <RecordDrawer open={open !== null && seesAll} onOpenChange={value => !value && setOpenId(null)} title={open?.businessName ?? ""} description={open ? `${open.stageLabel} · ${open.ownerName}` : ""}>
         {open && <EngagementDetail engagementId={open.id} />}
       </RecordDrawer>
     </div>

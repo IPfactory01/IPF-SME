@@ -11,6 +11,7 @@ import { trpc } from "@/lib/trpc";
 import PreviewAsClient from "./PreviewAsClient";
 import { PROBLEM_AREAS } from "@shared/businessSupport";
 import {
+  OPEN_TASK_STATUSES,
   ENGAGEMENT_TASK_FACTORS,
   ENGAGEMENT_TASK_FACTOR_LABELS,
   type EngagementTaskFactor,
@@ -56,6 +57,11 @@ import { DetailField, DetailSection } from "./AdminPrimitives";
 import DeliveryShareNote from "./DeliveryShareNote";
 import { combineDateAndTime, formatDate, formatDateTime, toDateInput, toTimeInput, whatsappLink } from "./format";
 import { FeeHoldNote } from "./FeeHoldBadge";
+import { ArrowLeft } from "lucide-react";
+import RoomTabs, { type RoomTab } from "@/components/room/RoomTabs";
+import { avatarColour, initials } from "@/components/EngagementRoom";
+import { METHOD } from "@shared/method";
+import { TodayCard } from "./Today";
 import { FeePaymentList, RecordPaymentForm, WriteOffControls } from "./FeePayments";
 import { AskClient, ItemConversation } from "./AskClient";
 import BookMeeting from "./BookMeeting";
@@ -97,14 +103,7 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
   return (
     <>
       <FeeHoldNote hold={data.hold} />
-      <DetailSection title="The client">
-        <DetailField label="Owner">{data.owner?.name ?? "-"}</DetailField>
-        <DetailField label="Email">{data.owner?.email ?? "-"}</DetailField>
-        <DetailField label="WhatsApp">{data.owner?.whatsapp ? <a className="text-brand underline" href={whatsappLink(data.owner.whatsapp) ?? undefined} target="_blank" rel="noreferrer">{data.owner.whatsapp}</a> : "-"}</DetailField>
-        <DetailField label="Client account">{data.hasAccount ? `Yes${data.clientPeople.length > 1 ? `, ${data.clientPeople.length} people` : ""}` : "Not yet: the invitation is out"}</DetailField>
-        {data.can.sendSignIn && data.engagement.businessCheckId !== null && <SendSignInLink businessCheckId={data.engagement.businessCheckId} hasAccount={data.hasAccount} owner={data.owner} />}
-        <div className="border-t border-line-soft pt-2"><PreviewAsClient engagementId={engagementId} /></div>
-      </DetailSection>
+      <TheClient data={data} engagementId={engagementId} />
       <StageAndTeam data={data} engagementId={engagementId} />
       {data.can.seeFees && <FeesAdmin engagementId={engagementId} owner={data.owner} />}
       <Problem data={data} engagementId={engagementId} />
@@ -115,6 +114,97 @@ export default function EngagementDetail({ engagementId }: { engagementId: numbe
       <Deliverables data={data} engagementId={engagementId} />
       <TheFix data={data} engagementId={engagementId} />
     </>
+  );
+}
+
+function TheClient({ data, engagementId }: { data: Detail; engagementId: number }) {
+  return (
+    <DetailSection title="The client">
+      <DetailField label="Owner">{data.owner?.name ?? "-"}</DetailField>
+      <DetailField label="Email">{data.owner?.email ?? "-"}</DetailField>
+      <DetailField label="WhatsApp">{data.owner?.whatsapp ? <a className="text-brand underline" href={whatsappLink(data.owner.whatsapp) ?? undefined} target="_blank" rel="noreferrer">{data.owner.whatsapp}</a> : "-"}</DetailField>
+      <DetailField label="Client account">{data.hasAccount ? `Yes${data.clientPeople.length > 1 ? `, ${data.clientPeople.length} people` : ""}` : "Not yet: the invitation is out"}</DetailField>
+      {data.can.sendSignIn && data.engagement.businessCheckId !== null && <SendSignInLink businessCheckId={data.engagement.businessCheckId} hasAccount={data.hasAccount} owner={data.owner} />}
+      <div className="border-t border-line-soft pt-2"><PreviewAsClient engagementId={engagementId} /></div>
+    </DetailSection>
+  );
+}
+
+/** A section of the record as a card in the workspace (R82). */
+const Card = ({ children }: { children: React.ReactNode }) => <div className="rounded-xl border border-line-soft bg-white p-4">{children}</div>;
+
+/**
+ * The team's workspace (R82): one engagement as a full page in the room's layout, for someone who does not see every
+ * engagement. The tabs hold the record's own sections, so what each person may do is unchanged; the server checks
+ * every action as before.
+ */
+export function EngagementWorkspace({ engagementId, myRole, onBack, now = Date.now() }: { engagementId: number; myRole: string | null; onBack: () => void; now?: number }) {
+  const detail = trpc.engagement.staff.detail.useQuery({ engagementId });
+  const today = trpc.engagement.staff.today.useQuery(undefined);
+  const back = <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm font-medium text-brand"><ArrowLeft className="h-4 w-4" aria-hidden />All my projects</button>;
+  if (detail.error && detail.data === undefined) return <div className="space-y-3 p-4">{back}<Failed error={detail.error} onRetry={() => void detail.refetch()} retrying={detail.isFetching} /></div>;
+  if (!detail.data) return <div className="space-y-3 p-4">{back}<Loading label="Loading the engagement" rows={4} /></div>;
+  const data = detail.data;
+  const mine = (today.data ?? []).filter(item => item.engagementId === engagementId);
+  const next = data.sessions.filter(session => session.status === "planned" && session.scheduledFor && new Date(session.scheduledFor).getTime() >= now).sort((a, b) => new Date(a.scheduledFor!).getTime() - new Date(b.scheduledFor!).getTime())[0] ?? null;
+  const withClient = data.tasks.filter(task => task.side === "client" && OPEN_TASK_STATUSES.includes(task.status)).length;
+  const unsorted = data.inbox.filter(file => !file.taskIds.length).length;
+  const toApprove = data.can.review ? data.deliverables.filter(item => item.status === "awaiting_approval").length : 0;
+  const count = (value: number, label: string) => (value ? { value, label } : undefined);
+  const overview = (
+    <div className="grid gap-4 p-4 sm:p-7 lg:grid-cols-[minmax(0,1fr)_20rem]">
+      <div className="min-w-0 space-y-4">
+        <section aria-labelledby="needs-you-here" className="space-y-2">
+          <h2 id="needs-you-here" className="text-sm font-semibold text-ink">What needs you here <span className="font-normal text-ink-muted">({mine.length})</span></h2>
+          {mine.length ? <ul className="grid gap-2 sm:grid-cols-2">{mine.map(item => <li key={item.key}><TodayCard item={item} now={now} /></li>)}</ul>
+            : <p className="rounded-xl border border-line-soft bg-white p-4 text-sm text-ink-muted">Nothing needs you on {data.businessName || "this engagement"} right now.</p>}
+        </section>
+        <section aria-labelledby="next-meeting" className="rounded-xl border border-line-soft bg-white p-4">
+          <h2 id="next-meeting" className="text-xs font-semibold text-ink-muted">Next meeting</h2>
+          {next ? <>
+            <p className="mt-1 font-medium text-ink">{next.title}</p>
+            <p className="text-sm text-ink-600">{formatDateTime(next.scheduledFor!)}</p>
+            {next.meetingLink && <a href={next.meetingLink} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-semibold text-brand underline underline-offset-2">Join</a>}
+          </> : <p className="mt-1 text-sm text-ink-muted">None booked.</p>}
+        </section>
+        <Card><StageAndTeam data={data} engagementId={engagementId} /></Card>
+        {STAGED_TYPES.includes(data.engagement.type) && <Card><Problem data={data} engagementId={engagementId} /></Card>}
+      </div>
+      <aside aria-label="At a glance" className="space-y-4">
+        <Card><TheClient data={data} engagementId={engagementId} /></Card>
+      </aside>
+    </div>
+  );
+  const pane = (children: React.ReactNode) => <div className="space-y-4 p-4 sm:p-7"><Card>{children}</Card></div>;
+  const tabs: RoomTab[] = [
+    { id: "overview", label: "Overview", count: count(mine.length, `${mine.length} for you`), content: overview },
+    ...(data.engagement.type === "digital_marketing" ? [{ id: "content", label: "Content", content: pane(<ContentAdmin data={data} engagementId={engagementId} />) }] : []),
+    { id: "plan", label: METHOD.workPlan, count: count(withClient, `${withClient} with the client`), content: pane(<Tasks data={data} engagementId={engagementId} />) },
+    ...(data.inbox.length ? [{ id: "files", label: "Files", count: count(unsorted, `${unsorted} to match`), content: pane(<FileInbox data={data} engagementId={engagementId} />) }] : []),
+    { id: "meetings", label: `${METHOD.session}s`, content: pane(<Sessions data={data} engagementId={engagementId} />) },
+    { id: "deliverables", label: METHOD.deliverables, count: count(toApprove, `${toApprove} to approve`), content: <div className="space-y-4 p-4 sm:p-7"><Card><Deliverables data={data} engagementId={engagementId} /></Card><Card><TheFix data={data} engagementId={engagementId} /></Card></div> },
+    ...(data.can.seeFees ? [{ id: "fees", label: "Fees", content: pane(<FeesAdmin engagementId={engagementId} owner={data.owner} />) }] : []),
+  ];
+  return (
+    <div className="bg-paper text-ink" aria-label={`${data.businessName} workspace`} role="region">
+      <section aria-labelledby="workspace-title" className="border-b border-line-soft bg-white px-4 pt-4 pb-4 sm:px-7">
+        {back}
+        <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs text-ink-muted">{data.engagement.typeLabel && <><span>{data.engagement.typeLabel}</span><span aria-hidden className="px-1.5">/</span></>}<span>{data.engagement.stageLabel}</span></p>
+            <h1 id="workspace-title" className="mt-1 font-sans text-2xl font-semibold tracking-tight">{data.businessName || "The client"}</h1>
+            {myRole && <p className="mt-1 text-sm text-brand">You are the {myRole}</p>}
+          </div>
+          {data.team.length > 0 && (
+            <div role="img" className="flex" aria-label={`Team: ${data.team.map(member => member.name).join(", ")}`}>
+              {data.team.map(member => <span key={`${member.userId}-${member.role}`} title={`${member.name}, ${member.roleLabel}`} aria-hidden className={`-ml-1.5 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white text-[11px] font-medium text-white first:ml-0 ${avatarColour(member.name ?? "")}`}>{initials(member.name ?? "")}</span>)}
+            </div>
+          )}
+        </div>
+      </section>
+      {data.hold && <div className="px-4 pt-4 sm:px-7"><FeeHoldNote hold={data.hold} /></div>}
+      <RoomTabs label={`${data.businessName} workspace`} initial="overview" tabs={tabs} />
+    </div>
   );
 }
 

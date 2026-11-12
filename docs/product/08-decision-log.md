@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| A team member who does not see every engagement opens one as a full page in the room's layout (tabs, cards, swipe on a phone); the desk and admins keep the drawer (R82) | ET, 12 November 2026 ("go ahead with step 1") |
 | Team members who are not admins get a home built like the client's room, phone-first, starting with Today (R52): one list of what needs them across their projects. The console stays for the Super Admin, the desk and admins; the engagement workspace in the room's layout follows | ET, 12 November 2026 ("yes") |
 | Every meeting with a client is booked one way: pick its kind, book it in Zoom, paste Zoom's invitation; the platform emails everyone and shows the client booked Sessions only. This replaces Book the series (a standing slot) and Send booking link (the client choosing reviews on Calendly), both built and retired on 11 November; the Calendly review event type and `CALENDLY_REVIEW_URL` are no longer used (R81) | ET, 11 November 2026 ("go, yes hide them, retire both") |
 | Every one-off service's price rises by ₦500,000 and the Six-Week Fix is ₦2,000,000 (the Business Review ₦1,100,000, paid ₦550,000 to start and ₦550,000 on delivery). The Full Report stays ₦100,000, the first step from the free check, and the monthly services keep their monthly prices. Engagements already open keep the fees they agreed | ET, 11 November 2026 |

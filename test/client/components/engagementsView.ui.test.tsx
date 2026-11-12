@@ -4,12 +4,15 @@ import React from "react";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FINDINGS_OUTLINE } from "@shared/engagement";
+import { MotionGlobalConfig } from "framer-motion";
 
 const api = vi.hoisted(() => ({
   list: { setUp: true, items: [] as unknown[] } as { setUp: boolean; items: unknown[] },
   detail: null as unknown,
   awaiting: [] as unknown[],
   today: [] as unknown[],
+  // The record's sections are the same in the drawer and the workspace (R82): most tests use the desk's drawer.
+  seesAll: true,
   storageError: null as { message: string } | null,
   storage: { configured: true, missing: [] as string[], bucket: "engagement-files", bucketFound: true as boolean | null, bucketPublic: false as boolean | null, problem: null as string | null },
   requests: [] as unknown[],
@@ -34,7 +37,7 @@ vi.mock("@/lib/trpc", () => ({
       // Recording money (batch F): Finance and the Super Admin, from the engagement's Fees or the Finance tab.
       finance: Object.fromEntries(["recordPayment", "cancelPayment", "acceptPayment", "recordRefund", "cancelRefund", "writeOff", "reverseWriteOff"].map(name => [name, { useMutation: mutation(name) }])),
       staff: {
-        list: { useQuery: () => ({ data: api.failed.list ? undefined : api.list, isLoading: false, error: api.failed.list ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("list"); } }) },
+        list: { useQuery: () => ({ data: api.failed.list ? undefined : { seesAll: api.seesAll, ...api.list }, isLoading: false, error: api.failed.list ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("list"); } }) },
         today: { useQuery: () => ({ data: api.today }) },
         awaitingStart: { useQuery: () => ({ data: api.failed.awaiting ? undefined : api.awaiting, error: api.failed.awaiting ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("awaiting"); } }) },
         storageStatus: { useQuery: () => ({ data: api.storageError ? undefined : api.storage, error: api.storageError, refetch: () => undefined }) },
@@ -81,6 +84,7 @@ beforeEach(() => {
   api.list = { setUp: true, items: [row] };
   api.awaiting = [];
   api.today = [];
+  api.seesAll = true;
   api.storage = { configured: true, missing: [], bucket: "engagement-files", bucketFound: true, bucketPublic: false, problem: null };
   api.storageError = null;
   api.calls = {};
@@ -489,6 +493,69 @@ describe("the drop box on the team's side", () => {
     fireEvent.change(card.getByLabelText("Format that is fine"), { target: { value: "Any" } });
     fireEvent.click(card.getByRole("button", { name: "Save" }));
     expect(api.calls.saveTask).toEqual([expect.objectContaining({ taskId: 51, section: "B Money", ref: "B3", priority: "high", informs: "Whether prices cover costs", format: "Any" })]);
+  });
+});
+
+describe("the team's workspace (R82)", () => {
+  beforeEach(() => { MotionGlobalConfig.skipAnimations = true; window.history.replaceState(null, "", "/admin"); });
+  const soon = new Date(Date.now() + 2 * 86_400_000);
+  const team = [
+    { userId: 1, role: "content_producer", roleLabel: "Content Producer", name: "Kemi Producer", email: "kemi@example.test", jobTitle: null },
+    { userId: 2, role: "manager", roleLabel: "Engagement Manager", name: "Lewis Lead", email: "lewis@example.test", jobTitle: null },
+  ];
+
+  it("opens a project as a full page in the room's layout for someone who does not see every engagement, and goes back", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Content Producer" }, { ...row, id: 5, businessName: "Bola Bakery", myRole: "Content Producer" }] };
+    api.detail = { ...detail({ manage: false, assign: false, review: false, contribute: true, seeFees: false }, [], [task({ id: 51, title: "Send week 3 footage" })]), team, sessions: [{ ...session, title: "Weekly Check-in", scheduledFor: soon, meetingLink: "https://us02web.zoom.us/j/81234567890" }] };
+    api.today = [
+      { key: "reply-51", kind: "reply", engagementId: 4, businessName: "Ada Foods", title: "Send week 3 footage", detail: "Ada Okafor: Is landscape fine?", at: new Date(), late: false },
+      { key: "files-5", kind: "files", engagementId: 5, businessName: "Bola Bakery", title: "2 files to match", detail: "Sent to the drop box", at: null, late: false },
+    ];
+    render(<EngagementsView />);
+    fireEvent.click(within(screen.getByRole("region", { name: /My projects/ })).getByRole("button", { name: "Open Ada Foods" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    const page = within(screen.getByRole("region", { name: "Ada Foods workspace" }));
+    expect(page.getByRole("heading", { level: 1 }).textContent).toBe("Ada Foods");
+    expect(page.getByText("You are the Content Producer")).toBeTruthy();
+    expect(page.getByRole("img", { name: "Team: Kemi Producer, Lewis Lead" })).toBeTruthy();
+    // The tabs, in order; no Fees for someone who does not see them.
+    expect(page.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Overview1", "Work Plan1", "Sessions", "Deliverables"]);
+    // What needs them here is this engagement's only; the next meeting has its Join link.
+    const needs = within(page.getByRole("region", { name: /What needs you here/ }));
+    expect(needs.getAllByRole("group").map(card => card.getAttribute("aria-label"))).toEqual(["Client wrote: Send week 3 footage"]);
+    const next = within(page.getByRole("region", { name: "Next meeting" }));
+    expect(next.getByText("Weekly Check-in")).toBeTruthy();
+    expect(next.getByRole("link", { name: "Join" }).getAttribute("href")).toBe("https://us02web.zoom.us/j/81234567890");
+    // The Work Plan tab holds the record's own Work Plan, with Ask.
+    fireEvent.click(page.getByRole("tab", { name: /^Work Plan/ }));
+    expect(page.getByRole("tab", { name: /^Work Plan/ }).getAttribute("aria-selected")).toBe("true");
+    expect(page.getByRole("button", { name: "Ask Ada Foods" })).toBeTruthy();
+    fireEvent.click(page.getByRole("button", { name: "All my projects" }));
+    expect(screen.queryByRole("region", { name: "Ada Foods workspace" })).toBeNull();
+    expect(screen.getByRole("region", { name: /My projects/ })).toBeTruthy();
+    expect(window.location.hash).toBe("");
+  });
+
+  it("gives a lead who sees fees the Fees tab and the count to approve", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };
+    api.detail = { ...detail({ manage: true, assign: false, review: true, seeFees: true }, [deliverable({ status: "awaiting_approval" })]), team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    const page = within(screen.getByRole("region", { name: "Ada Foods workspace" }));
+    expect(page.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Overview", "Work Plan", "Sessions", "Deliverables1", "Fees"]);
+    expect(page.getByRole("tab", { name: /^Deliverables/ }).textContent).toBe("Deliverables1");
+    expect(page.getByText("Nothing needs you on Ada Foods right now.")).toBeTruthy();
+  });
+
+  it("keeps the drawer for the desk, who see every engagement", () => {
+    api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };
+    api.detail = detail({ manage: true, assign: true, review: true });
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Ada Foods workspace" })).toBeNull();
   });
 });
 

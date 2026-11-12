@@ -476,7 +476,18 @@ checks every action again. Under the person's name is their level.
 | **Finance** | `view_financials` | Money | Paid (real money in, less refunds; test payments apart), owed, late, all from the ledger; payments that need a look at the top; two views: **Fees and requests** (every fee and payment request, each fee's payments, section 3.1) and **Money in** (every payment, each opening to its fee, to reconcile Paystack; section 4.7). Finance and the Super Admin record, cancel and accept payments and record and cancel refunds (`manage_payments`); a Partner or the Super Admin writes off and reverses (`write_off_fees`) |
 | **Team** | `manage_roles` | Our people | Everyone by level; invite by level; access ends; System status; **Preview as {name}** for the Super Admin only (R76): Admin as that person sees it, read only, with a banner and **Close preview**, for 30 minutes at most, recorded |
 
-**The engagement record** (the drawer in Engagements), top to bottom:
+**The team's workspace** (R82): someone without `view_all_businesses` opens an engagement from Today or My projects
+as a full page in the room's layout, not the drawer. At the top: **All my projects** (back), the business and stage,
+the business's name, the type and their role on it, and the team's initials. Then the tabs, in this order, each with a
+count where something waits: **Overview** (*What needs you here*: their Today cards for this engagement; the next
+meeting with its Join link; the client; stage and team), **Content** (Digital marketing), **Work Plan** (open client
+items), **Files** (files to match), **Sessions**, **Deliverables** (waiting for approval, for those who approve; The
+Fix below), **Fees** (only for those who see fees). On a phone the tabs swipe as in the room; the tab is kept in the
+address (#plan). Each tab holds the record's own sections below, so what a person may do is unchanged and the server
+checks every action as before. With `view_all_businesses` (the desk, admins, the Super Admin) the record opens in the
+drawer.
+
+**The engagement record** (the drawer in Engagements; the workspace's tabs hold the same sections), top to bottom:
 
 | Section | What the team does there | Who |
 |---|---|---|

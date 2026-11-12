@@ -1159,7 +1159,7 @@ function Avatar({ name }: { name: string }) {
   return <span title={name} className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-medium text-white ${avatarColour(name)}`}><span aria-hidden>{initials(name)}</span><span className="sr-only">{name}</span></span>;
 }
 /** Two initials for a person; the firm is always IPF. */
-const initials = (name: string) => (name.trim() === BRAND.organisationName ? BRAND.organisationShortName : name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]!.toUpperCase()).join("") || "?");
+export const initials = (name: string) => (name.trim() === BRAND.organisationName ? BRAND.organisationShortName : name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]!.toUpperCase()).join("") || "?");
 
 const PLAN_GROUPS: { id: string; name: string; dot: string; pill: string; test: (task: Task) => boolean }[] = [
   { id: "you", name: "Waiting on you", dot: "border-brand-plum bg-white", pill: "bg-brand-plum text-white", test: isClientOpen },

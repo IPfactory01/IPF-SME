@@ -59,6 +59,12 @@ describe("the calendar invitation", () => {
     expect(cancelled).toContain("METHOD:CANCEL");
     expect(cancelled).toContain("STATUS:CANCELLED");
     expect(cancelled).toContain("UID:session-41@ipfactory.co");
+    expect(cancelled).not.toContain("BEGIN:VALARM");
+  });
+
+  it("asks the calendar to alert an hour before (R59)", () => {
+    const unfolded = invite(false).replace(/\r\n /g, "");
+    expect(unfolded).toContain("BEGIN:VALARM\r\nACTION:DISPLAY\r\nDESCRIPTION:Weekly Check-in in an hour\r\nTRIGGER:-PT1H\r\nEND:VALARM\r\nEND:VEVENT");
   });
 });
 

@@ -11,14 +11,14 @@
  */
 import { createHash, timingSafeEqual } from "node:crypto";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
-import { adminAccessAuditEvents, engagementReminders, engagementTasks, engagementTeam, engagements, users } from "../drizzle/schema";
-import { lagosDay } from "../shared/agreement";
+import { adminAccessAuditEvents, engagementReminders, engagementSessions, engagementTasks, engagementTeam, engagements, users } from "../drizzle/schema";
+import { addDays, lagosDay } from "../shared/agreement";
 import { BRAND } from "../shared/brand";
 import { formatNaira } from "../shared/businessSupport";
 import { OPEN_TASK_STATUSES, TURNAROUND_LABELS } from "../shared/engagement";
 import { engagementTitle } from "../shared/engagementTypes";
 import { dayInWords } from "../shared/requests";
-import { firstNameOf } from "../shared/whatsapp";
+import { firstNameOf, whatsappLink } from "../shared/whatsapp";
 import type { Database } from "./accountAuth";
 import { recordAudit } from "./audit";
 import { BUSINESS_SUPPORT_MAILBOX, deliverEmail } from "./email";
@@ -27,6 +27,8 @@ import { clientFees, feeContext } from "./feePayments";
 import { lagosTime } from "./lagosTime";
 import { businessNameOf, clientPeopleFor, teamPersonFor } from "./requestEmails";
 import { getTrustedApplicationOrigin } from "./security";
+import { clientOf, teamOf } from "./sessionInvitations";
+import { mainContactOf } from "./teamContact";
 
 /** No reminder between 9pm and 7am Lagos time (R57). */
 export const QUIET_FROM_HOUR = 21;
@@ -171,7 +173,21 @@ async function send(to: string, message: { subject: string; body: string }, busi
   }
 }
 
-export type ReminderRun = { ran: true; fees: number; items: number; leads: number; clocks: number } | { ran: false; reason: "quiet_hours" };
+export type ReminderRun = { ran: true; fees: number; items: number; leads: number; clocks: number; sessions: number } | { ran: false; reason: "quiet_hours" };
+
+const lagosClock = (date: Date) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", hour: "numeric", minute: "2-digit", hour12: true }).format(date);
+
+/** A booked Session tomorrow, or later today (R59): the time in Lagos, the Join link and, for the client, whom to tell on WhatsApp. */
+export function sessionReminderEmail(input: { when: "tomorrow" | "today"; title: string; businessName: string; start: Date; minutes: number; meetingLink: string | null; name: string; forClient: boolean; contact: { name: string; whatsapp: string } | null; origin: string }) {
+  const time = lagosClock(input.start);
+  const withWhom = input.forClient ? "with your team at IP Factory" : `with ${input.businessName}`;
+  const first = firstNameOf(input.name);
+  const lines = [`Hello${first ? ` ${first}` : ""},`, "", `${input.when === "tomorrow" ? "Tomorrow" : "Today"}: ${input.title} ${withWhom}, ${lagosTime(input.start)} (Lagos time), for ${input.minutes} minutes.`, ""];
+  lines.push(input.meetingLink ? `Join: ${input.meetingLink}` : "Join: the link will be in the room before the Session.");
+  if (input.contact) lines.push("", `Running late or cannot make it? Tell ${firstNameOf(input.contact.name) || "your team"} on WhatsApp: ${whatsappLink(input.contact.whatsapp, `Hello ${firstNameOf(input.contact.name)}, about ${input.title} at ${time}:`)}`);
+  lines.push("", input.forClient ? `Your room: ${input.origin}/dashboard` : `The engagement: ${input.origin}/admin`, "", BRAND.organisationName);
+  return { subject: `${input.when === "tomorrow" ? "Tomorrow" : "Today"}: ${input.title} at ${time}`, body: lines.join("\n") };
+}
 
 /** One morning run: every reminder due today, each once. Never between 9pm and 7am Lagos time. */
 export async function runReminders(db: Database, now = new Date()): Promise<ReminderRun> {
@@ -181,7 +197,8 @@ export async function runReminders(db: Database, now = new Date()): Promise<Remi
   }
   const today = lagosDay(now);
   const roomUrl = `${getTrustedApplicationOrigin()}/dashboard`;
-  const counts = { fees: 0, items: 0, leads: 0, clocks: 0 };
+  const counts = { fees: 0, items: 0, leads: 0, clocks: 0, sessions: 0 };
+  const tomorrow = addDays(today, 1);
   const open = await db.select().from(engagements).where(ne(engagements.stage, "closed"));
   for (const engagement of open) {
     try {
@@ -243,6 +260,23 @@ export async function runReminders(db: Database, now = new Date()): Promise<Remi
         const person = await teamPersonFor(db, task);
         counts.clocks += await send(person.email, clockReminderEmail({ late, name: person.name, label, title: task.title, businessName, dueAt: task.followUpDueAt! }), null);
         if (late) for (const to of (await leadsOf(db, engagement.id)).filter(email => email !== person.email)) counts.leads += await send(to, clockReminderEmail({ late, name: "", label, title: task.title, businessName, dueAt: task.followUpDueAt! }), null);
+      }
+      // Sessions (R59): the morning before, and the morning of, each booked Session; a moved one is reminded again.
+      const booked = await db.select().from(engagementSessions).where(and(eq(engagementSessions.engagementId, engagement.id), eq(engagementSessions.status, "planned")));
+      for (const session of booked) {
+        if (!session.scheduledFor || session.scheduledFor.getTime() <= now.getTime()) continue;
+        const day = lagosDay(session.scheduledFor);
+        const when = day === tomorrow ? "tomorrow" : day === today ? "today" : null;
+        if (!when || !(await claim(db, `session:${session.id}:${session.scheduledFor.toISOString()}:${when}`, `session_${when}`, engagement.id))) continue;
+        const contact = await mainContactOf(db, engagement.id);
+        const client = engagement.opensOnPayment ? null : await clientOf(db, engagement);
+        const people = new Map<string, { email: string; name: string; forClient: boolean }>();
+        for (const member of await teamOf(db, engagement.id, now.getTime())) people.set(member.email.toLowerCase(), { email: member.email, name: member.name, forClient: false });
+        if (client) people.set(client.email.toLowerCase(), { ...client, forClient: true });
+        for (const person of Array.from(people.values())) {
+          const message = sessionReminderEmail({ when, title: session.title, businessName, start: session.scheduledFor, minutes: session.durationMinutes ?? 60, meetingLink: session.meetingLink, name: person.name, forClient: person.forClient, contact: person.forClient ? contact : null, origin: getTrustedApplicationOrigin() });
+          counts.sessions += await send(person.email, message, person.forClient ? engagement.businessCheckId : null);
+        }
       }
     } catch (error) {
       console.error(`[Reminders] Engagement ${engagement.id} was skipped:`, error instanceof Error ? error.message : error);

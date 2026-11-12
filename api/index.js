@@ -7013,6 +7013,11 @@ async function inviteBusinessOwner(db, input) {
 import { and as and6, eq as eq10, gt as gt6, inArray as inArray3, isNull as isNull6, or as or2 } from "drizzle-orm";
 
 // shared/whatsapp.ts
+function whatsappLink(number, message) {
+  const digits = (number ?? "").replace(/\D/g, "");
+  const text4 = `text=${encodeURIComponent(message)}`;
+  return digits.length >= 8 && digits.length <= 15 ? `https://wa.me/${digits}?${text4}` : `https://wa.me/?${text4}`;
+}
 var firstNameOf = (name) => name.trim().split(/\s+/)[0] ?? name;
 
 // server/lagosTime.ts
@@ -7049,6 +7054,8 @@ function sessionEvent(input) {
     `ORGANIZER;CN=IP Factory:mailto:${BUSINESS_SUPPORT_MAILBOX}`,
     `ATTENDEE;CN=${icsText(input.attendee.name || input.attendee.email)};ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=FALSE:mailto:${input.attendee.email}`,
     `STATUS:${input.cancelled ? "CANCELLED" : "CONFIRMED"}`,
+    // The hour-before reminder (R59): the person's own calendar alerts them; the morning run cannot run hourly.
+    ...input.cancelled ? [] : ["BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${icsText(`${input.title} in an hour`)}`, "TRIGGER:-PT1H", "END:VALARM"],
     "END:VEVENT"
   ];
 }
@@ -15351,6 +15358,17 @@ async function send(to, message, businessCheckId) {
     return 0;
   }
 }
+var lagosClock = (date2) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", hour: "numeric", minute: "2-digit", hour12: true }).format(date2);
+function sessionReminderEmail(input) {
+  const time = lagosClock(input.start);
+  const withWhom = input.forClient ? "with your team at IP Factory" : `with ${input.businessName}`;
+  const first = firstNameOf(input.name);
+  const lines = [`Hello${first ? ` ${first}` : ""},`, "", `${input.when === "tomorrow" ? "Tomorrow" : "Today"}: ${input.title} ${withWhom}, ${lagosTime(input.start)} (Lagos time), for ${input.minutes} minutes.`, ""];
+  lines.push(input.meetingLink ? `Join: ${input.meetingLink}` : "Join: the link will be in the room before the Session.");
+  if (input.contact) lines.push("", `Running late or cannot make it? Tell ${firstNameOf(input.contact.name) || "your team"} on WhatsApp: ${whatsappLink(input.contact.whatsapp, `Hello ${firstNameOf(input.contact.name)}, about ${input.title} at ${time}:`)}`);
+  lines.push("", input.forClient ? `Your room: ${input.origin}/dashboard` : `The engagement: ${input.origin}/admin`, "", BRAND.organisationName);
+  return { subject: `${input.when === "tomorrow" ? "Tomorrow" : "Today"}: ${input.title} at ${time}`, body: lines.join("\n") };
+}
 async function runReminders(db, now = /* @__PURE__ */ new Date()) {
   if (isQuietHour(now)) {
     await recordAudit(db, { action: "reminders_run", actorUserId: null, details: { ran: false, reason: "quiet_hours" } });
@@ -15358,7 +15376,8 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
   }
   const today = lagosDay(now);
   const roomUrl = `${getTrustedApplicationOrigin()}/dashboard`;
-  const counts = { fees: 0, items: 0, leads: 0, clocks: 0 };
+  const counts = { fees: 0, items: 0, leads: 0, clocks: 0, sessions: 0 };
+  const tomorrow = addDays(today, 1);
   const open = await db.select().from(engagements).where(ne5(engagements.stage, "closed"));
   for (const engagement of open) {
     try {
@@ -15416,6 +15435,22 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
         const person = await teamPersonFor(db, task);
         counts.clocks += await send(person.email, clockReminderEmail({ late, name: person.name, label, title: task.title, businessName, dueAt: task.followUpDueAt }), null);
         if (late) for (const to of (await leadsOf(db, engagement.id)).filter((email) => email !== person.email)) counts.leads += await send(to, clockReminderEmail({ late, name: "", label, title: task.title, businessName, dueAt: task.followUpDueAt }), null);
+      }
+      const booked = await db.select().from(engagementSessions).where(and22(eq32(engagementSessions.engagementId, engagement.id), eq32(engagementSessions.status, "planned")));
+      for (const session of booked) {
+        if (!session.scheduledFor || session.scheduledFor.getTime() <= now.getTime()) continue;
+        const day = lagosDay(session.scheduledFor);
+        const when = day === tomorrow ? "tomorrow" : day === today ? "today" : null;
+        if (!when || !await claim(db, `session:${session.id}:${session.scheduledFor.toISOString()}:${when}`, `session_${when}`, engagement.id)) continue;
+        const contact = await mainContactOf(db, engagement.id);
+        const client = engagement.opensOnPayment ? null : await clientOf(db, engagement);
+        const people = /* @__PURE__ */ new Map();
+        for (const member of await teamOf(db, engagement.id, now.getTime())) people.set(member.email.toLowerCase(), { email: member.email, name: member.name, forClient: false });
+        if (client) people.set(client.email.toLowerCase(), { ...client, forClient: true });
+        for (const person of Array.from(people.values())) {
+          const message = sessionReminderEmail({ when, title: session.title, businessName, start: session.scheduledFor, minutes: session.durationMinutes ?? 60, meetingLink: session.meetingLink, name: person.name, forClient: person.forClient, contact: person.forClient ? contact : null, origin: getTrustedApplicationOrigin() });
+          counts.sessions += await send(person.email, message, person.forClient ? engagement.businessCheckId : null);
+        }
       }
     } catch (error) {
       console.error(`[Reminders] Engagement ${engagement.id} was skipped:`, error instanceof Error ? error.message : error);

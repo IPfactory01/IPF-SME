@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clockReminderEmail, feePausedLeadEmail, feeReminderEmail, feeStageOn, isCronRequest, isQuietHour, itemsReminderEmail, itemStagesOn, outstandingLeadEmail } from "@server/reminders";
+import { sessionReminderEmail, clockReminderEmail, feePausedLeadEmail, feeReminderEmail, feeStageOn, isCronRequest, isQuietHour, itemsReminderEmail, itemStagesOn, outstandingLeadEmail } from "@server/reminders";
 
 /** The morning reminders (R12, R16, R57): their windows, quiet hours, the secret, and the words. Fictional businesses. */
 describe("when each reminder goes", () => {
@@ -70,5 +70,21 @@ describe("the reminder emails", () => {
     const late = clockReminderEmail({ late: true, name: "", label: "First edit", title: "Send week 3 footage", businessName: "Ada Foods", dueAt });
     expect(late.subject).toBe("First edit past its time: Send week 3 footage, Ada Foods");
     expect(late.body).toContain("was due by Sat, 14 Nov 2026, 3:05 pm (Lagos time)");
+  });
+
+  it("reminds of a Session tomorrow or today with the Lagos time, the Join link and, for the client, whom to tell on WhatsApp", () => {
+    const base = { title: "Weekly Check-in", businessName: "Ada Foods", start: new Date("2026-11-14T14:00:00Z"), minutes: 30, meetingLink: "https://us02web.zoom.us/j/81234567890", origin: "https://ipfactory.example.test" };
+    const client = sessionReminderEmail({ ...base, when: "tomorrow", name: "Ada Okafor", forClient: true, contact: { name: "Kemi Producer", whatsapp: "+2348000000002" } });
+    expect(client.subject).toBe("Tomorrow: Weekly Check-in at 3:00 pm");
+    expect(client.body).toContain("Hello Ada,");
+    expect(client.body).toContain("Tomorrow: Weekly Check-in with your team at IP Factory, Sat, 14 Nov 2026, 3:00 pm (Lagos time), for 30 minutes.");
+    expect(client.body).toContain("Join: https://us02web.zoom.us/j/81234567890");
+    expect(client.body).toMatch(/Tell Kemi on WhatsApp: https:\/\/wa\.me\/2348000000002/);
+    expect(client.body).toContain("Your room: https://ipfactory.example.test/dashboard");
+    const team = sessionReminderEmail({ ...base, when: "today", meetingLink: null, name: "Lola Lead", forClient: false, contact: null });
+    expect(team.subject).toBe("Today: Weekly Check-in at 3:00 pm");
+    expect(team.body).toContain("with Ada Foods");
+    expect(team.body).toContain("the link will be in the room before the Session");
+    expect(team.body).not.toContain("WhatsApp");
   });
 });

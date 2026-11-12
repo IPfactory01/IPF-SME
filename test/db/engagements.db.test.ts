@@ -409,6 +409,47 @@ for (const target of targets) {
         const recorded = await db.select().from(schema.engagementReminders).where(eq(schema.engagementReminders.engagementId, engagementId));
         expect(recorded.map((row: { kind: string }) => row.kind)).toEqual(expect.arrayContaining(["fee_late_7", "item_late", "item_lead", "clock_soon"]));
       });
+
+      it("reminds everyone of a booked Session the morning before and the morning of it, once each, and again when it moves (R59)", async () => {
+        const desk = await superAdmin.call();
+        const today = lagosDay();
+        const email = uniqueEmail("session-remind");
+        const { engagementId, invitationUrl } = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Session Studio", contactName: "Sade Session", contactEmail: email, startedOn: today });
+        const owner = browser();
+        await (await owner.call()).invitations.accept({ token: decodeURIComponent(invitationUrl!.split("/join/")[1]), email, fullName: "Sade Session", password: PASSWORD, confirmPassword: PASSWORD });
+        await desk.engagement.staff.openRoomNow({ engagementId });
+        const lead = await person(["analyst"], "Lola Lead");
+        await desk.engagement.staff.assign({ engagementId, userId: lead.id, role: "manager" });
+        const start = new Date(`${addDays(today, 1)}T15:00:00+01:00`);
+        await desk.engagement.staff.bookMeeting({ engagementId, type: "catch_up", title: "Catch-up", starts: [start], durationMinutes: 30, meetingLink: "https://us02web.zoom.us/j/81234567890", agenda: null });
+        // Only the Session reminders: the fee and items have their own (tested above).
+        const ours = () => emails().filter(sent => [email, lead.email].includes(sent.to) && sent.subject.includes("Catch-up"));
+
+        mocked.deliverEmail.mockClear();
+        const morning = new Date(`${today}T07:31:00+01:00`);
+        expect(await runReminders(db, morning)).toMatchObject({ ran: true, sessions: 2 });
+        expect(ours().map(sent => [sent.to, sent.subject]).sort()).toEqual([[email, "Tomorrow: Catch-up at 3:00 pm"], [lead.email, "Tomorrow: Catch-up at 3:00 pm"]].sort());
+        expect(ours().find(sent => sent.to === email)!.body).toContain("Join: https://us02web.zoom.us/j/81234567890");
+        mocked.deliverEmail.mockClear();
+        await runReminders(db, new Date(morning.getTime() + 3_600_000));
+        expect(ours()).toEqual([]);
+
+        // The morning of it: Today.
+        mocked.deliverEmail.mockClear();
+        await runReminders(db, new Date(`${addDays(today, 1)}T07:31:00+01:00`));
+        expect(ours().map(sent => sent.subject)).toEqual(["Today: Catch-up at 3:00 pm", "Today: Catch-up at 3:00 pm"]);
+
+        // Moved to the day after: reminded again for the new time; a past or cancelled Session never.
+        const [session] = await db.select().from(schema.engagementSessions).where(and(eq(schema.engagementSessions.engagementId, engagementId), eq(schema.engagementSessions.title, "Catch-up")));
+        await db.update(schema.engagementSessions).set({ scheduledFor: new Date(`${addDays(today, 2)}T10:00:00+01:00`) }).where(eq(schema.engagementSessions.id, session.id));
+        mocked.deliverEmail.mockClear();
+        await runReminders(db, new Date(`${addDays(today, 1)}T08:31:00+01:00`));
+        expect(ours().map(sent => sent.subject)).toEqual(["Tomorrow: Catch-up at 10:00 am", "Tomorrow: Catch-up at 10:00 am"]);
+        await db.update(schema.engagementSessions).set({ status: "cancelled", scheduledFor: new Date(`${addDays(today, 3)}T10:00:00+01:00`) }).where(eq(schema.engagementSessions.id, session.id));
+        mocked.deliverEmail.mockClear();
+        await runReminders(db, new Date(`${addDays(today, 2)}T07:31:00+01:00`));
+        expect(ours().filter(sent => sent.subject.includes("Catch-up"))).toEqual([]);
+      });
     });
 
     describe("Book a meeting from Zoom (R81, ET 11 November 2026)", () => {

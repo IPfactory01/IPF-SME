@@ -224,3 +224,16 @@
 [data-screen] :is(h1, h2)[tabindex="-1"]:focus {
   outline: none;
 }
+
+/*
+ * The team's workspace in the room's look (R82, ET 12 November 2026). The workspace holds the engagement record's own
+ * sections, so its forms keep one source; inside .room-skin they take the room's shapes: rounded boxes and fields,
+ * full-height touch targets on a phone (B10), and section titles that read as headings. Tokens only.
+ */
+.room-skin :is(input:not([type="checkbox"]):not([type="radio"]), select) { border-radius: 0.5rem; min-height: 2.75rem; padding-inline: 0.75rem; }
+.room-skin textarea { border-radius: 0.5rem; padding: 0.5rem 0.75rem; }
+.room-skin button.rounded-none, .room-skin a.rounded-none { border-radius: 0.5rem; min-height: 2.5rem; padding-inline: 0.875rem; font-weight: 600; }
+.room-skin :is(div, section, ul, ol, li, article, form).border:not([class*="rounded"]) { border-radius: 0.75rem; }
+.room-skin :is(div, section, ul, ol, li, article, form).border-l-2 { border-radius: 0; }
+.room-skin section > h3:first-child { font-size: 1rem; line-height: 1.5rem; font-weight: 600; color: var(--color-ink); }
+.room-skin section > h3:first-child + p.text-xs { font-size: 0.875rem; line-height: 1.375rem; color: var(--color-ink-600); }

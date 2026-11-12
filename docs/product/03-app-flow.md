@@ -492,7 +492,10 @@ items), **Files** (files to match), **Sessions**, **Deliverables** (waiting for 
 Fix below), **Fees** (only for those who see fees). On a phone the tabs swipe as in the room; the tab is kept in the
 address (#plan). Each tab holds the record's own sections below, so what a person may do is unchanged and the server
 checks every action as before. With `view_all_businesses` (the desk, admins, the Super Admin) the record opens in the
-drawer.
+drawer. In the workspace each Work Plan item and each Deliverable is a short row (title, who it is with or its
+kind, the due day, messages and files, and its status, *Late* when past its day) that opens into its form, with
+**Close {title}**; Sessions keep their row with **Edit**. Fields and boxes take the room's rounded shapes and 44 px
+touch targets.
 
 **The engagement record** (the drawer in Engagements; the workspace's tabs hold the same sections), top to bottom:
 

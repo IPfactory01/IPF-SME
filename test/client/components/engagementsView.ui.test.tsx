@@ -539,6 +539,29 @@ describe("the team's workspace (R82)", () => {
     expect(window.location.hash).toBe("");
   });
 
+  it("shows each Work Plan item and Deliverable as a short row that opens into its form, in the workspace only", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };
+    api.detail = { ...detail({ manage: true, assign: false, review: true }, [deliverable({ status: "awaiting_approval" })], [task({ id: 51, title: "Your price list", dueOn: "2026-10-21", comments: [{ id: 1, taskId: 51, body: "Here", fromClient: true, authorName: "Ada Okafor", authorUserId: 3, createdAt: new Date() }] })]), team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    const page = within(screen.getByRole("region", { name: "Ada Foods workspace" }));
+    fireEvent.click(page.getByRole("tab", { name: /^Work Plan/ }));
+    const item = page.getByRole("button", { name: "Open Your price list" });
+    expect(item.textContent).toContain("The client · due 21 Oct 2026 · 1 message");
+    expect(item.textContent).toContain("Late");
+    expect(page.queryByRole("textbox", { name: "What" })).toBeNull();
+    fireEvent.click(item);
+    expect((page.getByRole("textbox", { name: "What" }) as HTMLInputElement).value).toBe("Your price list");
+    fireEvent.click(page.getByRole("button", { name: "Close Your price list" }));
+    expect(page.queryByRole("textbox", { name: "What" })).toBeNull();
+    fireEvent.click(page.getByRole("tab", { name: /^Deliverables/ }));
+    const output = page.getByRole("button", { name: "Open Daily cash count" });
+    expect(output.textContent).toContain("Waiting for approval");
+    fireEvent.click(output);
+    expect(page.getByRole("button", { name: "Approve" })).toBeTruthy();
+  });
+
   it("gives a lead who sees fees the Fees tab and the count to approve", () => {
     api.seesAll = false;
     api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };

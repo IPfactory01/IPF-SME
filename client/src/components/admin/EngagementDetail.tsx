@@ -130,6 +130,44 @@ function TheClient({ data, engagementId }: { data: Detail; engagementId: number 
   );
 }
 
+/** In the workspace each item is a short row that opens into its form; in the drawer the forms show as before (R82). */
+const Compact = React.createContext(false);
+const ROW = "flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-line-soft bg-white px-3 py-2.5 text-left";
+const PILL = "rounded-full bg-paper-sunken px-2 py-0.5 text-xs text-ink-600";
+const DELIVERABLE_STATUS_WORDS: Record<Deliverable["status"], string> = { draft: "Draft", awaiting_approval: "Waiting for approval", approved: "Approved", shared: "Shared" };
+
+/** One Work Plan item: in the workspace, its title, status, due day and conversation, opening into its form. */
+function TaskRow({ task, data, engagementId }: { task: Task; data: Detail; engagementId: number }) {
+  const compact = React.useContext(Compact);
+  const [open, setOpen] = useState(false);
+  if (!compact) return <TaskCard task={task} data={data} engagementId={engagementId} />;
+  if (open) return <div className="space-y-2"><button type="button" className="text-sm font-medium text-brand" onClick={() => setOpen(false)}>Close {task.title}</button><TaskCard task={task} data={data} engagementId={engagementId} onDone={() => setOpen(false)} /></div>;
+  const late = OPEN_TASK_STATUSES.includes(task.status) && task.dueOn !== null && task.dueOn < new Date().toISOString().slice(0, 10);
+  return (
+    <button type="button" className={`${ROW} hover:border-brand`} onClick={() => setOpen(true)} aria-label={`Open ${task.title}`}>
+      <span className="min-w-0">
+        <span className="block font-medium text-ink">{task.title}</span>
+        <span className="block text-xs text-ink-muted">{SIDE_LABELS[task.side]}{task.dueOn ? ` · due ${formatDate(task.dueOn)}` : ""}{task.comments.length ? ` · ${task.comments.length} ${task.comments.length === 1 ? "message" : "messages"}` : ""}{task.files.length ? ` · ${task.files.length} ${task.files.length === 1 ? "file" : "files"}` : ""}</span>
+      </span>
+      <span className={late ? "rounded-full bg-danger-tint px-2 py-0.5 text-xs text-danger" : PILL}>{late ? "Late" : task.statusLabel}</span>
+    </button>
+  );
+}
+
+/** One Deliverable: in the workspace, its title, kind and status, opening into its form. */
+function DeliverableRow({ item, data, engagementId }: { item: Deliverable; data: Detail; engagementId: number }) {
+  const compact = React.useContext(Compact);
+  const [open, setOpen] = useState(false);
+  if (!compact) return <DeliverableCard item={item} data={data} engagementId={engagementId} />;
+  if (open) return <div className="space-y-2"><button type="button" className="text-sm font-medium text-brand" onClick={() => setOpen(false)}>Close {item.title}</button><DeliverableCard item={item} data={data} engagementId={engagementId} /></div>;
+  return (
+    <button type="button" className={`${ROW} hover:border-brand`} onClick={() => setOpen(true)} aria-label={`Open ${item.title}`}>
+      <span className="min-w-0"><span className="block font-medium text-ink">{item.title}</span><span className="block text-xs text-ink-muted">{item.kindLabel}{item.comments.length ? ` · ${item.comments.length} ${item.comments.length === 1 ? "comment" : "comments"}` : ""}</span></span>
+      <span className={item.status === "awaiting_approval" ? "rounded-full bg-brand px-2 py-0.5 text-xs text-white" : PILL}>{DELIVERABLE_STATUS_WORDS[item.status]}</span>
+    </button>
+  );
+}
+
 /** A section of the record as a card in the workspace (R82). */
 const Card = ({ children }: { children: React.ReactNode }) => <div className="rounded-xl border border-line-soft bg-white p-4">{children}</div>;
 
@@ -186,7 +224,7 @@ export function EngagementWorkspace({ engagementId, myRole, onBack, now = Date.n
     ...(data.can.seeFees ? [{ id: "fees", label: "Fees", content: pane(<FeesAdmin engagementId={engagementId} owner={data.owner} />) }] : []),
   ];
   return (
-    <div className="bg-paper text-ink" aria-label={`${data.businessName} workspace`} role="region">
+    <div className="room-skin bg-paper text-ink" aria-label={`${data.businessName} workspace`} role="region">
       <section aria-labelledby="workspace-title" className="border-b border-line-soft bg-white px-4 pt-4 pb-4 sm:px-7">
         {back}
         <div className="mt-3 flex flex-wrap items-end justify-between gap-4">
@@ -203,7 +241,7 @@ export function EngagementWorkspace({ engagementId, myRole, onBack, now = Date.n
         </div>
       </section>
       {data.hold && <div className="px-4 pt-4 sm:px-7"><FeeHoldNote hold={data.hold} /></div>}
-      <RoomTabs label={`${data.businessName} workspace`} initial="overview" tabs={tabs} />
+      <Compact.Provider value={true}><RoomTabs label={`${data.businessName} workspace`} initial="overview" tabs={tabs} /></Compact.Provider>
     </div>
   );
 }
@@ -651,7 +689,7 @@ function Tasks({ data, engagementId }: { data: Detail; engagementId: number }) {
       {weeks.map(week => (
         <div key={week ?? "none"} className="space-y-2">
           <p className={`${LABEL} mt-3`}>{week === null ? "No week" : `Week ${week}`}</p>
-          {inWeek(week).map(task => <TaskCard key={task.id} task={task} data={data} engagementId={engagementId} />)}
+          {inWeek(week).map(task => <TaskRow key={task.id} task={task} data={data} engagementId={engagementId} />)}
         </div>
       ))}
       {adding ? <TaskCard data={data} engagementId={engagementId} onDone={() => setAdding(false)} /> : (data.can.manage || data.can.contribute) && (
@@ -744,7 +782,7 @@ function Deliverables({ data, engagementId }: { data: Detail; engagementId: numb
   return (
     <DetailSection title="Deliverables">
       <p className="text-xs text-ink-muted">Findings, the problem statement, the prescription, tools and the plan. A Partner, Vice President or Senior Associate, or this engagement's lead, approves every prescription and plan before the client sees it. Editing a shared item takes it back to draft.</p>
-      {data.deliverables.map(item => <DeliverableCard key={item.id} item={item} data={data} engagementId={engagementId} />)}
+      {data.deliverables.map(item => <DeliverableRow key={item.id} item={item} data={data} engagementId={engagementId} />)}
       {adding ? <DeliverableCard data={data} engagementId={engagementId} onDone={() => setAdding(false)} /> : data.can.manage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Add a deliverable</Button>}
     </DetailSection>
   );

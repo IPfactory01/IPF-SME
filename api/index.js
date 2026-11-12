@@ -6010,6 +6010,12 @@ function isAnswered(question, answers) {
 function isComplete(answers) {
   return questionPath(answers).every(({ question }) => question.optional || isAnswered(question, answers));
 }
+function promptFor(question, answers) {
+  const stage = stageOf(answers);
+  if (stage === "idea" && question.ideaPrompt) return question.ideaPrompt;
+  if (stage === "side" && question.sidePrompt) return question.sidePrompt;
+  return question.prompt;
+}
 function businessDetails(answers) {
   const text4 = (id3) => typeof answers[id3] === "string" ? answers[id3].trim() : "";
   return { businessName: text4("p_name"), description: text4("p_description") };
@@ -14311,6 +14317,27 @@ var platformRolesRouter = router({
 // server/routers/businessSupport.ts
 import { z as z13 } from "zod";
 
+// shared/businessCheck/answerSheet.ts
+function answerInWords(question, answers) {
+  const value = answers[question.id];
+  if (value === void 0 || value === "" || Array.isArray(value) && value.length === 0) return null;
+  if (question.kind === "text") return typeof value === "string" && value.trim() ? value.trim() : null;
+  const options = optionsFor(question, answers);
+  const label = (chosen) => options.find((option) => option.value === chosen)?.label ?? question.options.find((option) => option.value === chosen)?.label ?? chosen;
+  return (Array.isArray(value) ? value : [value]).map(label).join(", ");
+}
+function answerSheet(answers) {
+  return sectionPath(answers).map((id3) => {
+    const section = SECTIONS[id3];
+    return {
+      id: id3,
+      title: section.title,
+      area: section.area ?? null,
+      questions: visibleQuestions(section, answers).map((question) => ({ id: question.id, prompt: promptFor(question, answers), answer: answerInWords(question, answers) }))
+    };
+  }).filter((section) => section.questions.length > 0);
+}
+
 // server/businessSupportAdmin.ts
 import { and as and19, desc as desc9, eq as eq28, inArray as inArray13, isNotNull as isNotNull3, isNull as isNull14, sql as sql9 } from "drizzle-orm";
 import { TRPCError as TRPCError25 } from "@trpc/server";
@@ -14407,11 +14434,12 @@ async function getBusinessCheckDetail(db, businessCheckId) {
   const row = (await db.select({
     ...CHECK_COLUMNS,
     heardFrom: businessChecks.heardFrom,
+    answersJson: businessChecks.answersJson,
     resultJson: businessChecks.resultJson,
     summaryJson: businessChecks.summaryJson
   }).from(businessChecks).where(eq28(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!row) throw new TRPCError25({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
-  const { resultJson, summaryJson, ...fields } = row;
+  const { resultJson, summaryJson, answersJson, ...fields } = row;
   const result = parseJson2(resultJson);
   const summary = parseJson2(summaryJson);
   const [invitations, stageHistory, payments3, report, businessReview] = await Promise.all([latestInvitationStatuses(db), stageHistoryFor(db, row.id), paymentsOf(db, row.id), reportOf(db, row.id), businessReviewStates(db, [row.id])]);
@@ -14425,7 +14453,9 @@ async function getBusinessCheckDetail(db, businessCheckId) {
     businessReview: businessReview.get(row.id) ?? null,
     summary: summary ? { found: summary.found, think: summary.think, next: summary.next, offerings: summary.offerings ?? [] } : null,
     outline: result?.outline ?? null,
-    primaryAreaNumber: result?.primaryArea?.area ?? row.primaryArea ?? null
+    primaryAreaNumber: result?.primaryArea?.area ?? row.primaryArea ?? null,
+    /** The owner's own answers in words (R84), for the person taking the Discovery Call. */
+    answers: answerSheet(parseJson2(answersJson) ?? {})
   };
 }
 var HISTORY_ACTIONS = ["business_check_stage_changed", "business_check_call_outcome", "business_check_call_scheduled", "business_check_call_booked", "payment_details_sent", "payment_proof_received", "payment_confirmed", "payment_confirmation_sent", "full_report_link_sent", "full_report_delivered"];

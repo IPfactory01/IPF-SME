@@ -501,6 +501,11 @@ fee as a row (name, amount, due day, reference, status) with **Send link** and *
 payments and write-off below; **Change the fees** opens the editor, and **Done** closes it. Fields and boxes take the room's rounded shapes and 44 px
 touch targets.
 
+**The Business Health Check record** (Pipeline, R84) also has **Answers**, below the Business outline and closed
+until **Show the owner's answers ({n})** is pressed: each section on the owner's path, with its problem area, then each
+question as the owner saw it and their answer (the option's words; several joined with commas; what they typed), or
+*Not answered*. **Hide the answers** closes it. Read only; nothing is recalculated.
+
 **The engagement record** (the drawer in Engagements; the workspace's tabs hold the same sections), top to bottom:
 
 | Section | What the team does there | Who |

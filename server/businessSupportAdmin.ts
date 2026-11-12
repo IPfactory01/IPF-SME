@@ -1,3 +1,5 @@
+import { answerSheet } from "../shared/businessCheck/answerSheet";
+import type { Answers } from "../shared/businessCheck/questions";
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { businessReviewStates } from "./businessReview";
@@ -143,11 +145,12 @@ export async function getBusinessCheckDetail(db: Pick<Database, "select">, busin
   const row = (await db.select({
     ...CHECK_COLUMNS,
     heardFrom: businessChecks.heardFrom,
+    answersJson: businessChecks.answersJson,
     resultJson: businessChecks.resultJson,
     summaryJson: businessChecks.summaryJson,
   }).from(businessChecks).where(eq(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!row) throw new TRPCError({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
-  const { resultJson, summaryJson, ...fields } = row;
+  const { resultJson, summaryJson, answersJson, ...fields } = row;
   const result = parseJson<Pick<CheckResult, "outline" | "primaryArea" | "founder">>(resultJson);
   const summary = parseJson<CheckSummary>(summaryJson);
   const [invitations, stageHistory, payments, report, businessReview] = await Promise.all([latestInvitationStatuses(db), stageHistoryFor(db, row.id), paymentsOf(db, row.id), reportOf(db, row.id), businessReviewStates(db, [row.id])]);
@@ -162,6 +165,8 @@ export async function getBusinessCheckDetail(db: Pick<Database, "select">, busin
     summary: summary ? { found: summary.found, think: summary.think, next: summary.next, offerings: summary.offerings ?? [] } : null,
     outline: result?.outline ?? null,
     primaryAreaNumber: result?.primaryArea?.area ?? row.primaryArea ?? null,
+    /** The owner's own answers in words (R84), for the person taking the Discovery Call. */
+    answers: answerSheet(parseJson<Answers>(answersJson) ?? {}),
   };
 }
 

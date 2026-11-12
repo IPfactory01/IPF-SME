@@ -461,7 +461,7 @@ for (const target of targets) {
     });
 
     describe("the record drawer's data (read-only)", () => {
-      it("returns the saved result for one check exactly as stored, without the answers or the public token", async () => {
+      it("returns the saved result for one check exactly as stored, and the owner's answers in words (R84), without the raw stored answers or the public token", async () => {
         const { token, email } = await finishedCheck("detail");
         const id = (await rowFor(token)).id;
         const detail = await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: id });
@@ -470,6 +470,12 @@ for (const target of targets) {
         expect(detail.outline!.length).toBeGreaterThan(0);
         expect(detail.outline![0]).toMatchObject({ area: expect.any(Number), name: expect.any(String), health: expect.stringMatching(/clear|watch|stuck/) });
         expect(detail.primaryAreaNumber).toEqual(expect.any(Number));
+        // The owner's answers, in the order asked and in words: what they typed, and each choice's label.
+        expect(detail.answers[0]).toMatchObject({ id: "profile", title: expect.any(String) });
+        const asked = detail.answers.flatMap(section => section.questions);
+        expect(asked.find(question => question.id === "p_name")!.answer).toBe(`${profileContact("Prospect").businessName} detail`);
+        expect(asked.find(question => question.id === "p_stage")!.answer).not.toBe("operating");
+        expect(asked.filter(question => question.answer !== null).length).toBeGreaterThan(10);
         expect(JSON.stringify(detail)).not.toMatch(/answersJson|publicToken|resultJson|summaryJson/);
         expect(detail).not.toHaveProperty("publicToken");
       });
@@ -494,6 +500,10 @@ for (const target of targets) {
         await db.update(schema.businessChecks).set({ resultJson: "{not json", summaryJson: "also not json" }).where(eq(schema.businessChecks.id, row.id));
         const damaged = await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: row.id });
         expect(damaged).toMatchObject({ summary: null, outline: null });
+        // Damaged stored answers read as not answered, never as a failure.
+        await db.update(schema.businessChecks).set({ answersJson: "{not json" }).where(eq(schema.businessChecks.id, row.id));
+        const noAnswers = await (await superAdmin.call()).businessSupport.checkDetail({ businessCheckId: row.id });
+        expect(noAnswers.answers.flatMap(section => section.questions).every(question => question.answer === null)).toBe(true);
       });
 
       it("rejects an unknown check and refuses everyone without the funnel permission", async () => {

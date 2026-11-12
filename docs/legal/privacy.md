@@ -2,7 +2,7 @@
 
 # IP Factory Privacy Policy
 
-Effective date: 14 October 2026 | Privacy contact: info@ipfactory.co
+Effective date: 12 November 2026 | Privacy contact: info@ipfactory.co
 
 > This Privacy Policy explains how IP Factory collects, uses, shares, stores and protects personal and business information when you use the IP Factory SME Platform.
 
@@ -80,6 +80,7 @@ We may also receive limited information from service providers that support paym
 - Provide the Free Business Check and related results.
 - Generate reports, summaries and recommendations.
 - Schedule and administer consultations.
+- Prepare for your Discovery Call: the IP Factory team reads your Business Check answers, as well as the results, before you speak.
 - Process, verify and reconcile payments.
 - Create, activate and manage accounts and business workspaces.
 - Onboard clients and administer engagements.

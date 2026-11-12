@@ -1,3 +1,4 @@
+import { answeredCount, type AnswerSheetSection } from "@shared/businessCheck/answerSheet";
 import { Failed, Loading } from "@/components/states";
 import { isRefusal } from "@/lib/readPolicy";
 import { Button } from "@/components/ui/button";
@@ -50,7 +51,7 @@ export function ContactLines({ email, whatsapp }: { email: string; whatsapp: str
 
 /**
  * The whole business check for one prospect, as it was saved when they finished it. Nothing is recalculated, no
- * recommendation is created here, and the owner's raw answers are not shown.
+ * recommendation is created here. The owner's own answers are shown in words, closed until opened (R84).
  */
 const stageName = (stage: string | null) => (stage && stage in PIPELINE_LABELS ? stageDisplayName(stage as PipelineStage) : stage ?? "-");
 const PAYMENT_HISTORY = { payment_details_sent: "Payment details sent", payment_proof_received: "Proof of payment received", payment_confirmed: "Payment confirmed", payment_confirmation_sent: "Payment confirmation emailed" } as const;
@@ -199,6 +200,8 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
         </DetailSection>
       )}
 
+      {check.answers.length > 0 && <OwnerAnswers sheet={check.answers} />}
+
       {check.summary && check.summary.offerings.length > 0 && (
         <DetailSection title="Recommended support">
           <ul className="space-y-2.5">
@@ -271,5 +274,38 @@ export default function BusinessCheckDetail({ businessCheckId, onOpenSection, on
         </DetailSection>
       )}
     </>
+  );
+}
+
+/**
+ * The owner's own answers (R84), closed until opened: each section on their path with its problem area, each question
+ * as they saw it, and what they answered. The person taking the Discovery Call starts from the owner's words.
+ */
+function OwnerAnswers({ sheet }: { sheet: AnswerSheetSection[] }) {
+  const [open, setOpen] = useState(false);
+  const answered = answeredCount(sheet);
+  return (
+    <DetailSection title="Answers">
+      <button type="button" className="text-sm font-semibold text-brand underline underline-offset-2" aria-expanded={open} onClick={() => setOpen(value => !value)}>
+        {open ? "Hide the answers" : `Show the owner's answers (${answered})`}
+      </button>
+      {open && (
+        <div className="space-y-4">
+          {sheet.map(section => (
+            <section key={section.id} aria-label={section.title} className="space-y-2">
+              <h4 className="text-sm font-semibold text-ink">{section.title}{section.area !== null && section.area > 0 && AREA_NAMES[section.area] && AREA_NAMES[section.area] !== section.title ? <span className="font-normal text-ink-muted"> · {AREA_NAMES[section.area]}</span> : null}</h4>
+              <dl className="space-y-2">
+                {section.questions.map(question => (
+                  <div key={question.id} className="border-l-2 border-line-soft pl-3">
+                    <dt className="text-xs text-ink-muted">{question.prompt}</dt>
+                    <dd className={`text-sm ${question.answer === null ? "text-ink-muted italic" : "text-ink"}`}>{question.answer ?? "Not answered"}</dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          ))}
+        </div>
+      )}
+    </DetailSection>
   );
 }

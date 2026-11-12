@@ -101,6 +101,12 @@ const detailFor = (over: Record<string, unknown> = {}) => ({
     { area: 7, name: "Financials", health: "stuck" },
   ],
   primaryAreaNumber: 7,
+  // The owner's own answers in words (R84), as the server builds them from what was stored.
+  answers: [
+    { id: "profile", title: "Your business", area: null, questions: [{ id: "p_stage", prompt: "Where is your business today?", answer: "Running it full-time" }] },
+    { id: "finance", title: "Your money", area: 7, questions: [{ id: "f_status", prompt: "How clear are your numbers?", answer: "We guess most months" }, { id: "f_detail", prompt: "What do you track each week?", answer: null }] },
+    { id: "finance2", title: "Financials", area: 7, questions: [{ id: "f_more", prompt: "Do you keep receipts?", answer: "Sometimes" }] },
+  ],
   stageHistory: [],
   payments: [],
   ...over,
@@ -358,6 +364,33 @@ describe("Business Health Check record drawer", () => {
     expect(within(support).getByText("Financial Performance & Decision Support")).toBeTruthy();
     expect(within(support).getByText("Business Model & Commercial Strategy")).toBeTruthy();
     expect(within(support).getByText("Margins are unclear.")).toBeTruthy();
+  });
+
+  it("shows the owner's own answers in words, closed until opened, grouped by section with its problem area (R84)", () => {
+    renderConsole();
+    openRow("Ada Okafor");
+    const detail = drawer();
+    const answers = detail.getByRole("heading", { name: "Answers" }).closest("section")!;
+    const toggle = within(answers).getByRole("button", { name: "Show the owner's answers (3)" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(within(answers).queryByText("We guess most months")).toBeNull();
+    fireEvent.click(toggle);
+    const money = within(within(answers).getByRole("region", { name: "Your money" }));
+    expect(money.getByRole("heading").textContent).toBe("Your money · Financials");
+    expect(money.getByText("How clear are your numbers?").nextElementSibling?.textContent).toBe("We guess most months");
+    expect(money.getByText("What do you track each week?").nextElementSibling?.textContent).toBe("Not answered");
+    expect(within(answers).getByRole("region", { name: "Your business" }).textContent).not.toContain("·");
+    // A section named after its area does not say it twice.
+    expect(within(answers).getByRole("region", { name: "Financials" }).querySelector("h4")!.textContent).toBe("Financials");
+    fireEvent.click(within(answers).getByRole("button", { name: "Hide the answers" }));
+    expect(within(answers).queryByText("We guess most months")).toBeNull();
+  });
+
+  it("has no Answers section for a check with no answers yet", () => {
+    api.details[1] = detailFor({ answers: [] });
+    renderConsole();
+    openRow("Ada Okafor");
+    expect(drawer().queryByRole("heading", { name: "Answers" })).toBeNull();
   });
 
   it("shows the funnel with dates and the current stage in plain words", () => {

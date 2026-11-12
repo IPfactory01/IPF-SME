@@ -41,7 +41,7 @@ describe("the legal pages", () => {
   it("shows the approved Privacy Policy publicly, with its sections and subsections", () => {
     renderAt("/privacy");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("IP Factory Privacy Policy");
-    expect(document.querySelector("article p")?.textContent).toBe("Effective date: 14 October 2026 | Privacy contact: info@ipfactory.co");
+    expect(document.querySelector("article p")?.textContent).toBe("Effective date: 12 November 2026 | Privacy contact: info@ipfactory.co");
     const headings = screen.getAllByRole("heading", { level: 2 }).map((heading) => heading.textContent);
     expect(headings).toHaveLength(24);
     expect(headings).toContain("16. Your Rights");

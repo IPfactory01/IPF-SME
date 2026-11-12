@@ -459,6 +459,11 @@ Paystack's signed notifications arrive at `POST /api/paystack/webhook`.
 - Clients at `/login`, staff at `/admin/login`. Everyone with an internal role uses a six-digit code from an
   authenticator app after the password; recovery codes work in the code box.
 - A person with no business and at least one internal role lands on `/admin`; everyone else on `/dashboard`.
+- At `/admin`, someone who works only on their own projects (no `view_all_businesses`; no Pipeline, Clients or Team)
+  sees **the team's home** (R83), not the console: the room's top bar with their name and **Sign out**; *Good
+  morning, {first name}* (afternoon, evening by Lagos time) and their level; then **Today** and **My projects**, each
+  project opening as their workspace (R82). A Partner also sees **Finance**, as a second tab beside **My work**.
+  Anyone else sees the console (8.3).
 - An invitation opened while signed in as someone else names both addresses and offers "Sign out and continue".
 - Forgotten password: a single-use link for 20 minutes; the page never says whether the account exists.
 - **To build (R41):** clients sign in with a link sent to their email (WhatsApp later); no password.

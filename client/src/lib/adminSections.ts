@@ -54,3 +54,16 @@ export function visibleAdminSections(access: AdminAccessView | undefined) {
   if (!access) return [];
   return ADMIN_SECTIONS.filter(section => REQUIRED[section.id](access));
 }
+
+/** The sections the team's home holds: their own projects, and Finance for a Partner. */
+const HOME_SECTIONS: readonly AdminSectionId[] = ["engagements", "finance"];
+
+/**
+ * Whether /admin opens as the team's home (R83) rather than the console: someone who works only on their own projects,
+ * with no view of every business and nothing in Pipeline, Clients or Team. Presentation only; the server decides access.
+ */
+export function isTeamHome(access: AdminAccessView | undefined) {
+  if (!access || adminCan(access, "view_all_businesses")) return false;
+  const sections = visibleAdminSections(access).map(section => section.id);
+  return sections.includes("engagements") && sections.every(id => HOME_SECTIONS.includes(id));
+}

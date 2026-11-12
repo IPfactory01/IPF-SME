@@ -559,6 +559,26 @@ describe("the team's workspace (R82)", () => {
   });
 });
 
+describe("the team's home (R83)", () => {
+  it("shows only Today and the person's projects, without the console's table", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Content Producer" }] };
+    render(<EngagementsView home header={<h1>Good morning, Kemi</h1>} />);
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Good morning, Kemi");
+    expect(screen.getByRole("region", { name: /Today/ })).toBeTruthy();
+    expect(screen.getByRole("region", { name: /My projects/ })).toBeTruthy();
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.queryByText(/The projects you are on, of every type/)).toBeNull();
+  });
+
+  it("says when the person is on no project yet", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [] };
+    render(<EngagementsView home />);
+    expect(screen.getByText("You are not on any project yet. When a lead adds you to one, it appears here and you get an email.")).toBeTruthy();
+  });
+});
+
 describe("my projects", () => {
   it("puts the engagements the person is on first, with their role and what needs them, and opens one", () => {
     api.list = { setUp: true, items: [{ ...row, myRole: "Lead Consultant", unsortedFiles: 3 }, { ...row, id: 5, businessName: "Bola Bakery", myRole: null }] };

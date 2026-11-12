@@ -22,7 +22,7 @@ export type StorageStatus = inferRouterOutputs<AppRouter>["engagement"]["staff"]
  * Every engagement this person may see: a Partner, Vice President or Senior Associate and the Super Admin see all; analysts, partners and specialists
  * see the ones they are on. The server decides the list; this only shows it.
  */
-export default function EngagementsView() {
+export default function EngagementsView({ home = false, header = null }: { home?: boolean; header?: React.ReactNode } = {}) {
   const list = trpc.engagement.staff.list.useQuery(undefined);
   const awaiting = trpc.engagement.staff.awaitingStart.useQuery(undefined);
   const utils = trpc.useUtils();
@@ -54,13 +54,14 @@ export default function EngagementsView() {
   // layout; the desk and admins keep the record in the drawer. What each may do is still checked on the server.
   if (open && !seesAll) return <EngagementWorkspace engagementId={open.id} myRole={open.myRole} onBack={() => { setOpenId(null); if (window.location.hash) window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search); }} />;
   return (
-    <div className="space-y-4 p-6">
+    <div className={home ? "space-y-5" : "space-y-4 p-6"}>
+      {header}
       <StaleLine read={list} />
       {/* The safety net must never fail silently: a paid client with no engagement would be missed (R69). */}
       {awaiting.error && !isRefusal(awaiting.error) && awaiting.data === undefined && <Failed error={awaiting.error} onRetry={() => void awaiting.refetch()} retrying={awaiting.isFetching} />}
-      <p className="text-sm text-ink-muted">{seesAll
+      {!home && <p className="text-sm text-ink-muted">{seesAll
         ? `Every engagement, of every type. A Business Review starts when it is paid${canOpen ? "; open any other, such as Digital Marketing, with New engagement" : ""}. Open one to name the team, book the Sessions, send the Data Requests and share the Deliverables.`
-        : "The projects you are on, of every type. Open one to see its Work Plan, Sessions, Data Requests and Deliverables."}</p>
+        : "The projects you are on, of every type. Open one to see its Work Plan, Sessions, Data Requests and Deliverables."}</p>}
       {awaiting.data && awaiting.data.length > 0 && (
         <section aria-labelledby="awaiting-start" className="space-y-2 border border-danger-line bg-danger-tint p-4">
           <h2 id="awaiting-start" className="text-sm font-semibold text-danger">Paid, but no engagement yet</h2>
@@ -79,7 +80,7 @@ export default function EngagementsView() {
       {canOpen && <NewEngagement key={prefill?.requestId ?? "new"} onCreated={setOpenId} prefill={prefill} onDone={() => setPrefill(null)} />}
       <Today onOpen={setOpenId} />
       <MyProjects items={list.data?.items ?? []} onOpen={setOpenId} />
-      {list.isLoading ? <Loading label="Loading the engagements" /> : (
+      {home ? (list.isLoading ? <Loading label="Loading your projects" /> : list.data?.items.length === 0 && <p className="rounded-xl border border-line-soft bg-white p-4 text-sm text-ink-muted">You are not on any project yet. When a lead adds you to one, it appears here and you get an email.</p>) : list.isLoading ? <Loading label="Loading the engagements" /> : (
         <div className="overflow-x-auto border border-line bg-white">
           <table className="w-full">
             <thead><tr className="border-b border-line"><th className={TH}>Business</th><th className={TH}>Stage</th><th className={TH}>Team</th><th className={TH}>Data Requests</th><th className={TH}>Next Session</th></tr></thead>

@@ -75,6 +75,7 @@ refunded; day 0, the weekly rhythm, day 30 and after the end.
 | Engagement | Created | Platform (Business Review paid), lead | `startEngagement`; `staff.start`; `staff.createDirect` | 4.1 #7, 4.3 | Lead: Opens the engagement | Built |
 | | Payment terms set | Lead | — | 3, 4.3 #2 | Lead: Sets payment terms | To build (R36) |
 | | Seen by the team, previewed as client | Team | `staff.list`, `detail`, `previewRoom` | 8.3 | Lead, Analyst: Starts from My projects | Built |
+| | What needs each person today | Team | `staff.today` | 8.3 | Lead, Analyst, Specialist: Starts the day from Today | Built (R52) |
 | | Seen by the client | Client | `client.room` | 4.4 #0–#1 | Client: First visit | Built (first visit R46) |
 | | Stage changed, problem set | Lead | `staff.setStage`, `saveProblem` | 5 Engagement | — | Built |
 | | Opened before payment | Partner or Super Admin | `staff.openRoomNow` | 4.3 #3 | Partner: opens a room before payment | Built |
@@ -246,6 +247,7 @@ person is not on is not found unless they see every engagement.
 | Actions | What they do | Who may call | Object |
 |---|---|---|---|
 | `engagement.staff.list`, `engagement.staff.detail`, `engagement.staff.previewRoom`, `engagement.staff.storageStatus` | My projects and every engagement in scope; one engagement; Preview as client (logged); whether file storage is on | Entry only | Engagement |
+| `engagement.staff.today` | Today (R52): what needs this person across the engagements they are on | Entry only; their own team rows | Engagement |
 | `engagement.staff.awaitingStart`, `engagement.staff.start`, `engagement.staff.clientBusinesses`, `engagement.staff.createDirect` | Paid with no engagement yet, and starting it; the businesses a new engagement can be for; New engagement | `view_all_businesses` and `manage_engagements` | Engagement |
 | `engagement.staff.setStage`, `engagement.staff.saveProblem` | The stage; the one problem and its statement | `manage_engagements` | Engagement |
 | `engagement.staff.assignableStaff`, `engagement.staff.assign`, `engagement.staff.removeMember` | Who can be added; add with a project role (emailed); take off | `assign_engagements` | Team assignment |

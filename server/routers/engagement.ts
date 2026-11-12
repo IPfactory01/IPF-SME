@@ -81,6 +81,7 @@ import {
   startAwaitingEngagement,
   addMissingPlan,
   askClient,
+  todayFor,
   bookMeeting,
   staffTaskComment,
   clientTaskComment,
@@ -143,6 +144,8 @@ const staffRouter = router({
       return { setUp: false, items: [], missing: (await migrationState(db))?.missing ?? null };
     }
   }),
+  /** Today (R52): what needs this person across the engagements they are on. Their own scope only; read only. */
+  today: staff.query(async ({ ctx }) => guarded(async () => todayFor(await engagementDb(), ctx.actor))),
   /** Paid assessments with no engagement yet (the safety net); empty before migration 0008. */
   awaitingStart: staff.query(async ({ ctx }) => {
     try {

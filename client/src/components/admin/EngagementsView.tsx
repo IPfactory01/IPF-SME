@@ -13,6 +13,7 @@ import { ENGAGEMENT_TYPE_LABELS, ENGAGEMENT_TYPES, servicesFor, type EngagementT
 import EngagementDetail from "./EngagementDetail";
 import { formatDate, formatDateTime } from "./format";
 import FeeHoldBadge from "./FeeHoldBadge";
+import Today from "./Today";
 
 type Row = inferRouterOutputs<AppRouter>["engagement"]["staff"]["list"]["items"][number];
 export type StorageStatus = inferRouterOutputs<AppRouter>["engagement"]["staff"]["storageStatus"];
@@ -73,6 +74,7 @@ export default function EngagementsView() {
       )}
       {canOpen && <ServiceRequests onOpen={setPrefill} />}
       {canOpen && <NewEngagement key={prefill?.requestId ?? "new"} onCreated={setOpenId} prefill={prefill} onDone={() => setPrefill(null)} />}
+      <Today onOpen={setOpenId} />
       <MyProjects items={list.data?.items ?? []} onOpen={setOpenId} />
       {list.isLoading ? <Loading label="Loading the engagements" /> : (
         <div className="overflow-x-auto border border-line bg-white">

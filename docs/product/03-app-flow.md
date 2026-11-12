@@ -256,8 +256,13 @@ flowchart TD
 Every team member has a WhatsApp number on their profile (R44); the room shows it beside them, and an item meant for
 one of them offers **Send on WhatsApp to {name}**. Each person agrees to their number being shown (PRD K11).
 
-**Today** (R52, to build): one list across a person's projects (approvals waiting, files to match, check-ins due, records
-overdue, fees late), so nobody opens every project to find their work.
+**Today** (R52, built): at the top of the Engagements tab, one list across a person's projects, late first, so nobody
+opens every project to find their work. Each card names the kind, the item and the business, and opens the engagement:
+*Client wrote* (the last message on an item is the client's), *Clock* (a First edit, with the hours left or how late),
+*To check* (the client sent it; mark it received or ask for more), *Your request* (past its day), *Meeting* (the next
+seven days), *Files* (to match), *To approve* (a Deliverable, for leads and Partners), *Fee* (late or paused, for those
+who see fees). An item that goes to someone else is left out; the lead of an engagement sees all of its items. With
+nothing waiting it says *Nothing needs you right now across your projects.*
 
 What the team never does by hand now that R12, R16 and R36 are built: chase a Data Request, chase a fee, work out a
 fee date, or send a payment link on a schedule.

@@ -225,6 +225,37 @@ for (const target of targets) {
         return { engagementId, email, owner, today, lead: { ...lead, browser: await signIn(lead, true) }, producer: { ...producer, browser: await signIn(producer, true) }, marketer: { ...marketer, browser: await signIn(marketer, true) } };
       }
 
+      it("puts what needs each person on their Today, late first: the lead sees it all, a Specialist only what goes to them (R52)", async () => {
+        const s = await studio("today");
+        const { taskId } = await (await s.producer.browser.call()).engagement.staff.askClient({ engagementId: s.engagementId, title: "A video of the new menu", brief: null, dueOn: requestDueOn(s.today), turnaround: "first_edit" });
+        await (await s.owner.call()).engagement.client.taskComment({ taskId, body: "Is landscape fine?" });
+        const { taskId: hours } = await (await s.lead.browser.call()).engagement.staff.askClient({ engagementId: s.engagementId, title: "Your opening hours", brief: null, dueOn: requestDueOn(s.today), turnaround: null });
+        await db.update(schema.engagementTasks).set({ dueOn: addDays(s.today, -1) }).where(eq(schema.engagementTasks.id, hours));
+        const start = new Date(Date.now() + 2 * 86_400_000);
+        await (await superAdmin.call()).engagement.staff.bookMeeting({ engagementId: s.engagementId, type: "catch_up", title: "Catch-up", starts: [start], durationMinutes: 30, meetingLink: "https://us02web.zoom.us/j/81234567890", agenda: null });
+
+        const of = async (who: { call: () => Promise<{ engagement: { staff: { today: () => Promise<{ kind: string; title: string; late: boolean; engagementId: number }[]> } } }> }) => (await (await who.call()).engagement.staff.today()).filter(item => item.engagementId === s.engagementId);
+        const producer = await of(s.producer.browser);
+        expect(producer.map(item => [item.kind, item.title])).toEqual(expect.arrayContaining([["reply", "A video of the new menu"], ["meeting", "Catch-up"]]));
+        expect(producer.some(item => item.title === "Your opening hours")).toBe(false);
+        // The client's message on the Content Producer's request is not the Digital Marketer's.
+        expect((await of(s.marketer.browser)).some(item => item.kind === "reply")).toBe(false);
+        // The lead sees the message too, and their own request past its day comes first.
+        const lead = await of(s.lead.browser);
+        expect(lead[0]).toMatchObject({ kind: "request", title: "Your opening hours", late: true, detail: `Your request, due ${dayInWords(addDays(s.today, -1))}, is not answered yet` });
+        expect(lead.map(item => item.kind)).toEqual(expect.arrayContaining(["reply", "meeting"]));
+
+        // The footage arrives: the clock is on the Content Producer's Today, and the reply is no longer waiting once they answer.
+        await (await s.owner.call()).engagement.client.answerWithLink({ taskId, url: "https://drive.google.com/drive/folders/example" });
+        await (await s.producer.browser.call()).engagement.staff.taskComment({ taskId, body: "Got it, editing now." });
+        const after = await of(s.producer.browser);
+        expect(after.find(item => item.kind === "clock")).toMatchObject({ title: "A video of the new menu", late: false });
+        expect(after.some(item => item.kind === "reply")).toBe(false);
+        // Someone off the engagement has nothing from it.
+        const outsider = await signIn(await person(["analyst"]), true);
+        expect(await of(outsider)).toEqual([]);
+      });
+
       it("lets anyone on the team ask, by the agreed rhythm and once a week each unless they lead it, and emails the owner", async () => {
         const s = await studio("ask");
         const producer = await s.producer.browser.call();

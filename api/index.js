@@ -12410,6 +12410,56 @@ var requireManage2 = (actor) => requirePermission(actor, "manage_engagements", "
 var canContribute = (actor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "contribute_engagements");
 var canSeeInternal = (actor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "review_engagements");
 var canSeeFees = (actor) => canSeeInternal(actor) || authorityAllows(actor.authority, "view_financials");
+async function todayFor(db, actor, now = Date.now()) {
+  const mine = await db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role }).from(engagementTeam).where(eq24(engagementTeam.userId, actor.id));
+  if (!mine.length) return [];
+  const ids = mine.map((row) => row.engagementId);
+  const leads = new Set(mine.filter((row) => ENGAGEMENT_REVIEW_ROLES.includes(row.role)).map((row) => row.engagementId));
+  const [rows, team, tasks, sessions, deliverables, drops, matched, fees] = await Promise.all([
+    db.select().from(engagements).where(and16(inArray11(engagements.id, ids), ne3(engagements.stage, "closed"))),
+    db.select({ engagementId: engagementTeam.engagementId, userId: engagementTeam.userId, role: engagementTeam.role }).from(engagementTeam).where(inArray11(engagementTeam.engagementId, ids)),
+    db.select().from(engagementTasks).where(and16(inArray11(engagementTasks.engagementId, ids), eq24(engagementTasks.side, "client"), ne3(engagementTasks.status, "cancelled"))),
+    db.select().from(engagementSessions).where(and16(inArray11(engagementSessions.engagementId, ids), eq24(engagementSessions.status, "planned"))),
+    db.select({ id: engagementDeliverables.id, engagementId: engagementDeliverables.engagementId, title: engagementDeliverables.title, status: engagementDeliverables.status, kind: engagementDeliverables.kind, updatedAt: engagementDeliverables.updatedAt }).from(engagementDeliverables).where(and16(inArray11(engagementDeliverables.engagementId, ids), eq24(engagementDeliverables.status, "awaiting_approval"))),
+    db.select({ id: engagementFiles.id, engagementId: engagementFiles.engagementId }).from(engagementFiles).where(and16(inArray11(engagementFiles.engagementId, ids), isNull12(engagementFiles.taskId), isNull12(engagementFiles.deliverableId))),
+    db.select({ fileId: engagementFileMatches.fileId }).from(engagementFileMatches).innerJoin(engagementFiles, eq24(engagementFileMatches.fileId, engagementFiles.id)).where(inArray11(engagementFiles.engagementId, ids)),
+    db.select({ engagementId: engagementFeeLines.engagementId, dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and16(inArray11(engagementFeeLines.engagementId, ids), isNull12(engagementFeeLines.paidAt), isNull12(engagementFeeLines.writtenOffAt)))
+  ]);
+  const today = lagosDay(now);
+  const manages = authorityAllows(actor.authority, "manage_engagements");
+  const reviews = authorityAllows(actor.authority, "review_engagements");
+  const matchedIds = new Set(matched.map((row) => row.fileId));
+  const items = [];
+  for (const engagement of rows) {
+    const businessName = await businessNameOf(db, engagement);
+    const lead = leads.has(engagement.id);
+    const crew = team.filter((member) => member.engagementId === engagement.id);
+    const goesToMe = (task) => lead || followUpOwnerOf(crew, task)?.userId === actor.id;
+    const own = tasks.filter((task) => task.engagementId === engagement.id);
+    const comments = own.length ? await taskCommentsOf(db, engagement.id) : [];
+    for (const task of own) {
+      const last = comments.filter((comment) => comment.taskId === task.id).at(-1);
+      if (last?.fromClient && goesToMe(task)) items.push({ key: `reply-${task.id}`, kind: "reply", engagementId: engagement.id, businessName, title: task.title, detail: `${last.authorName || "The client"}: ${last.body.length > 90 ? `${last.body.slice(0, 90)}\u2026` : last.body}`, at: last.createdAt, late: false });
+      if (task.turnaround && task.followUpDueAt && !task.followUpDoneAt && goesToMe(task)) {
+        const left = task.followUpDueAt.getTime() - now;
+        items.push({ key: `clock-${task.id}`, kind: "clock", engagementId: engagement.id, businessName, title: task.title, detail: `${TURNAROUND_LABELS[task.turnaround]} ${left < 0 ? "is late" : "due"}`, at: task.followUpDueAt, late: left < 0 });
+      }
+      if (task.status === "received" && manages && goesToMe(task)) items.push({ key: `check-${task.id}`, kind: "check", engagementId: engagement.id, businessName, title: task.title, detail: "Sent by the client: check it, then mark it received or ask for more", at: task.receivedAt, late: false });
+      if (task.requestedByUserId === actor.id && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn < today) items.push({ key: `request-${task.id}`, kind: "request", engagementId: engagement.id, businessName, title: task.title, detail: `Your request, due ${dayInWords(task.dueOn)}, is not answered yet`, at: /* @__PURE__ */ new Date(`${task.dueOn}T12:00:00Z`), late: true });
+    }
+    for (const session of sessions.filter((item2) => item2.engagementId === engagement.id && item2.scheduledFor && item2.scheduledFor.getTime() >= now && item2.scheduledFor.getTime() < now + 7 * 864e5)) {
+      items.push({ key: `meeting-${session.id}`, kind: "meeting", engagementId: engagement.id, businessName, title: session.title, detail: session.meetingLink ? "With the Join link" : "No Join link yet", at: session.scheduledFor, late: false });
+    }
+    const unsorted = drops.filter((file) => file.engagementId === engagement.id && !matchedIds.has(file.id)).length;
+    if (unsorted && manages) items.push({ key: `files-${engagement.id}`, kind: "files", engagementId: engagement.id, businessName, title: `${unsorted} ${unsorted === 1 ? "file" : "files"} to match`, detail: "Sent to the drop box: say which Data Request each answers", at: null, late: false });
+    if (reviews || lead) for (const item2 of deliverables.filter((row) => row.engagementId === engagement.id)) items.push({ key: `approval-${item2.id}`, kind: "approval", engagementId: engagement.id, businessName, title: item2.title, detail: "Waiting for your approval before it is shared", at: item2.updatedAt, late: false });
+    if (canSeeFees(actor) && !engagement.opensOnPayment) {
+      const held = feeHold(fees.filter((fee) => fee.engagementId === engagement.id).map((fee) => ({ dueOn: fee.dueOn, paid: false })), today);
+      if (held) items.push({ key: `fee-${engagement.id}`, kind: "fee", engagementId: engagement.id, businessName, title: held.state === "paused" ? "Work paused: a fee is unpaid" : "A fee is late", detail: held.state === "paused" ? "Paying lifts the pause; a new date gives more time" : `Work pauses on ${held.pausesOn} if it is not paid`, at: null, late: true });
+    }
+  }
+  return items.sort((a, b) => Number(b.late) - Number(a.late) || (a.at ? a.at.getTime() : Infinity) - (b.at ? b.at.getTime() : Infinity));
+}
 function engagementStageLabel(row, now) {
   if (!STAGED_TYPES.includes(row.type) && !DATED_TYPES[row.type]) return row.stage === "closed" ? "Closed" : "Open";
   const dated = DATED_TYPES[row.type];
@@ -14635,6 +14685,8 @@ var staffRouter = router({
       return { setUp: false, items: [], missing: (await migrationState(db))?.missing ?? null };
     }
   }),
+  /** Today (R52): what needs this person across the engagements they are on. Their own scope only; read only. */
+  today: staff.query(async ({ ctx }) => guarded(async () => todayFor(await engagementDb(), ctx.actor))),
   /** Paid assessments with no engagement yet (the safety net); empty before migration 0008. */
   awaitingStart: staff.query(async ({ ctx }) => {
     try {

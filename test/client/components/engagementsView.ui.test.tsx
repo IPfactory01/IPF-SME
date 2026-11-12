@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   list: { setUp: true, items: [] as unknown[] } as { setUp: boolean; items: unknown[] },
   detail: null as unknown,
   awaiting: [] as unknown[],
+  today: [] as unknown[],
   storageError: null as { message: string } | null,
   storage: { configured: true, missing: [] as string[], bucket: "engagement-files", bucketFound: true as boolean | null, bucketPublic: false as boolean | null, problem: null as string | null },
   requests: [] as unknown[],
@@ -34,6 +35,7 @@ vi.mock("@/lib/trpc", () => ({
       finance: Object.fromEntries(["recordPayment", "cancelPayment", "acceptPayment", "recordRefund", "cancelRefund", "writeOff", "reverseWriteOff"].map(name => [name, { useMutation: mutation(name) }])),
       staff: {
         list: { useQuery: () => ({ data: api.failed.list ? undefined : api.list, isLoading: false, error: api.failed.list ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("list"); } }) },
+        today: { useQuery: () => ({ data: api.today }) },
         awaitingStart: { useQuery: () => ({ data: api.failed.awaiting ? undefined : api.awaiting, error: api.failed.awaiting ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("awaiting"); } }) },
         storageStatus: { useQuery: () => ({ data: api.storageError ? undefined : api.storage, error: api.storageError, refetch: () => undefined }) },
         detail: { useQuery: () => ({ data: api.detail, isLoading: false, error: null }) },
@@ -78,6 +80,7 @@ const detail = (given: { manage: boolean; assign: boolean; review: boolean; send
 beforeEach(() => {
   api.list = { setUp: true, items: [row] };
   api.awaiting = [];
+  api.today = [];
   api.storage = { configured: true, missing: [], bucket: "engagement-files", bucketFound: true, bucketPublic: false, problem: null };
   api.storageError = null;
   api.calls = {};
@@ -502,6 +505,31 @@ describe("my projects", () => {
     expect(card.textContent).toContain("2overdue");
     fireEvent.click(card);
     expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("starts the day from Today: what needs this person, late first, each card opening the engagement (R52)", () => {
+    const now = Date.now();
+    api.list = { setUp: true, items: [{ ...row, myRole: "Content Producer" }] };
+    api.detail = detail({ manage: false, assign: false, review: false, contribute: true });
+    api.today = [
+      { key: "clock-51", kind: "clock", engagementId: 4, businessName: "Ada Foods", title: "Send week 3 footage", detail: "First edit is late", at: new Date(now - 3 * 3_600_000), late: true },
+      { key: "reply-52", kind: "reply", engagementId: 4, businessName: "Ada Foods", title: "A video of the new menu", detail: "Ada Okafor: Is landscape fine?", at: new Date(now - 3_600_000), late: false },
+    ];
+    render(<EngagementsView />);
+    const today = within(screen.getByRole("region", { name: /Today/ }));
+    expect(today.getByRole("heading").textContent).toBe("Today (2)");
+    const cards = today.getAllByRole("button");
+    expect(cards.map(card => card.getAttribute("aria-label"))).toEqual(["Clock: Send week 3 footage, Ada Foods", "Client wrote: A video of the new menu, Ada Foods"]);
+    expect(cards[0]!.textContent).toContain("3 hours late");
+    expect(cards[1]!.textContent).toContain("Is landscape fine?");
+    fireEvent.click(cards[1]!);
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("says so when nothing needs the person", () => {
+    api.list = { setUp: true, items: [{ ...row, myRole: "Lead Consultant" }] };
+    render(<EngagementsView />);
+    expect(within(screen.getByRole("region", { name: /Today/ })).getByText("Nothing needs you right now across your projects.")).toBeTruthy();
   });
 
   it("is not shown to someone on no engagement", () => {

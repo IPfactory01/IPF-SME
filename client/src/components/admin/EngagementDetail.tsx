@@ -220,7 +220,7 @@ export function EngagementWorkspace({ engagementId, myRole, onBack, now = Date.n
     { id: "plan", label: METHOD.workPlan, count: count(withClient, `${withClient} with the client`), content: pane(<Tasks data={data} engagementId={engagementId} />) },
     ...(data.inbox.length ? [{ id: "files", label: "Files", count: count(unsorted, `${unsorted} to match`), content: pane(<FileInbox data={data} engagementId={engagementId} />) }] : []),
     { id: "meetings", label: `${METHOD.session}s`, content: pane(<Sessions data={data} engagementId={engagementId} />) },
-    { id: "deliverables", label: METHOD.deliverables, count: count(toApprove, `${toApprove} to approve`), content: <div className="space-y-4 p-4 sm:p-7"><Card><Deliverables data={data} engagementId={engagementId} /></Card><Card><TheFix data={data} engagementId={engagementId} /></Card></div> },
+    { id: "deliverables", label: METHOD.deliverables, count: count(toApprove, `${toApprove} to approve`), content: <div className="space-y-4 p-4 sm:p-7"><Card><Deliverables data={data} engagementId={engagementId} /></Card>{STAGED_TYPES.includes(data.engagement.type) && <Card><TheFix data={data} engagementId={engagementId} /></Card>}</div> },
     ...(data.can.seeFees ? [{ id: "fees", label: "Fees", content: pane(<FeesAdmin engagementId={engagementId} owner={data.owner} />) }] : []),
   ];
   return (
@@ -858,29 +858,66 @@ function TheFix({ data, engagementId }: { data: Detail; engagementId: number }) 
   const [baseline, setBaseline] = useState(measure?.baselineValue === null || measure?.baselineValue === undefined ? "" : String(measure.baselineValue));
   const [target, setTarget] = useState(measure?.targetValue === null || measure?.targetValue === undefined ? "" : String(measure.targetValue));
   const [adding, setAdding] = useState(false);
-  const save = trpc.engagement.staff.saveMeasure.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("The Measure of Success is saved. The client can see it."); } });
+  const compact = React.useContext(Compact);
+  const [editing, setEditing] = useState(false);
+  const save = trpc.engagement.staff.saveMeasure.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); setEditing(false); toast.success("The Measure of Success is saved. The client can see it."); } });
   const nextWeek = (data.checkins.at(-1)?.weekNumber ?? 0) + 1;
   const canManage = data.can.manage;
   return (
     <DetailSection title="Six-Week Fix: the Measure of Success and the Weekly Check-in">
       <p className="text-xs text-ink-muted">One problem, one Measure of Success. Set it in week 1 of the Six-Week Fix with where it starts and where it should get to; the client sees it. Then one Weekly Check-in, recorded in order: week {FIX_WEEKS} is the last unless The Fix is extended.</p>
-      <div className="grid gap-2 sm:grid-cols-2">
-        <div className="sm:col-span-2"><label className={LABEL} htmlFor="measure-name">Measure of Success</label><input id="measure-name" className={FIELD} disabled={!canManage} value={name} maxLength={160} placeholder="e.g. Cash in the bank at the end of the week" onChange={event => setName(event.target.value)} /></div>
-        <div className="sm:col-span-2"><label className={LABEL} htmlFor="measure-definition">How it is measured (the client sees this)</label><textarea id="measure-definition" className={FIELD} rows={2} disabled={!canManage} value={definition} onChange={event => setDefinition(event.target.value)} /></div>
-        <div><label className={LABEL} htmlFor="measure-unit">Unit</label><input id="measure-unit" className={FIELD} disabled={!canManage} value={unit} maxLength={32} placeholder="₦, %, days, orders…" onChange={event => setUnit(event.target.value)} /></div>
-        <div className="grid grid-cols-2 gap-2">
-          <div><label className={LABEL} htmlFor="measure-baseline">Where it starts</label><input id="measure-baseline" type="number" step="any" className={FIELD} disabled={!canManage} value={baseline} onChange={event => setBaseline(event.target.value)} /></div>
-          <div><label className={LABEL} htmlFor="measure-target">Where it should get to</label><input id="measure-target" type="number" step="any" className={FIELD} disabled={!canManage} value={target} onChange={event => setTarget(event.target.value)} /></div>
+      {compact && !editing ? (
+        measure ? (
+          <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-line-soft bg-white px-3 py-2.5" aria-label="The Measure of Success">
+            <div className="min-w-0">
+              <p className="font-medium text-ink">{measure.name}</p>
+              {measure.definition && <p className="text-sm text-ink-600">{measure.definition}</p>}
+              <p className="text-xs text-ink-muted">From {formatMeasure(measure.baselineValue, measure.unit)} to {formatMeasure(measure.targetValue, measure.unit)}</p>
+            </div>
+            {canManage && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setEditing(true)}>Edit</Button>}
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line-soft bg-white px-3 py-2.5 text-sm text-ink-muted">
+            <span>Not set yet.</span>
+            {canManage && <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} onClick={() => setEditing(true)}>Set the Measure of Success</Button>}
+          </div>
+        )
+      ) : (
+        <>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <div className="sm:col-span-2"><label className={LABEL} htmlFor="measure-name">Measure of Success</label><input id="measure-name" className={FIELD} disabled={!canManage} value={name} maxLength={160} placeholder="e.g. Cash in the bank at the end of the week" onChange={event => setName(event.target.value)} /></div>
+          <div className="sm:col-span-2"><label className={LABEL} htmlFor="measure-definition">How it is measured (the client sees this)</label><textarea id="measure-definition" className={FIELD} rows={2} disabled={!canManage} value={definition} onChange={event => setDefinition(event.target.value)} /></div>
+          <div><label className={LABEL} htmlFor="measure-unit">Unit</label><input id="measure-unit" className={FIELD} disabled={!canManage} value={unit} maxLength={32} placeholder="₦, %, days, orders…" onChange={event => setUnit(event.target.value)} /></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div><label className={LABEL} htmlFor="measure-baseline">Where it starts</label><input id="measure-baseline" type="number" step="any" className={FIELD} disabled={!canManage} value={baseline} onChange={event => setBaseline(event.target.value)} /></div>
+            <div><label className={LABEL} htmlFor="measure-target">Where it should get to</label><input id="measure-target" type="number" step="any" className={FIELD} disabled={!canManage} value={target} onChange={event => setTarget(event.target.value)} /></div>
+          </div>
         </div>
-      </div>
-      {canManage && <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !name.trim()} onClick={() => save.mutate({ engagementId, name, definition, unit, baselineValue: numberOrNull(baseline), targetValue: numberOrNull(target) })}>{measure ? "Save the Measure of Success" : "Set the Measure of Success"}</Button>}
-      {data.checkins.map(checkin => <CheckinCard key={checkin.weekNumber} checkin={checkin} engagementId={engagementId} canManage={canManage} unit={measure?.unit ?? null} />)}
+        {canManage && <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !name.trim()} onClick={() => save.mutate({ engagementId, name, definition, unit, baselineValue: numberOrNull(baseline), targetValue: numberOrNull(target) })}>{measure ? "Save the Measure of Success" : "Set the Measure of Success"}</Button>}
+          {compact && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setEditing(false)}>Cancel</Button>}
+        </>
+      )}
+      {data.checkins.map(checkin => <CheckinRow key={checkin.weekNumber} checkin={checkin} engagementId={engagementId} canManage={canManage} unit={measure?.unit ?? null} />)}
       {adding ? (
         <CheckinCard weekNumber={nextWeek} engagementId={engagementId} canManage={canManage} unit={measure?.unit ?? null} onDone={() => setAdding(false)} />
       ) : canManage && nextWeek <= MAX_CHECKIN_WEEKS && (
         <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAdding(true)}>Record week {nextWeek}</Button>
       )}
     </DetailSection>
+  );
+}
+
+/** One Weekly Check-in: in the workspace, the week, its reading and its day, opening into its form. */
+function CheckinRow({ checkin, engagementId, canManage, unit }: { checkin: Checkin; engagementId: number; canManage: boolean; unit: string | null }) {
+  const compact = React.useContext(Compact);
+  const [open, setOpen] = useState(false);
+  if (!compact) return <CheckinCard checkin={checkin} engagementId={engagementId} canManage={canManage} unit={unit} />;
+  if (open) return <div className="space-y-2"><button type="button" className="text-sm font-medium text-brand" onClick={() => setOpen(false)}>Close week {checkin.weekNumber}</button><CheckinCard checkin={checkin} engagementId={engagementId} canManage={canManage} unit={unit} onDone={() => setOpen(false)} /></div>;
+  return (
+    <button type="button" className={`${ROW} hover:border-brand`} onClick={() => setOpen(true)} aria-label={`Open week ${checkin.weekNumber}`}>
+      <span className="min-w-0"><span className="block font-medium text-ink">Week {checkin.weekNumber}</span><span className="block text-xs text-ink-muted">{checkin.heldOn ? `Held ${formatDate(checkin.heldOn)}` : "No date"}{checkin.nextStep ? ` · next: ${checkin.nextStep.length > 60 ? `${checkin.nextStep.slice(0, 60)}…` : checkin.nextStep}` : ""}</span></span>
+      {checkin.measureReading !== null && <span className={PILL}>{formatMeasure(checkin.measureReading, unit)}</span>}
+    </button>
   );
 }
 
@@ -989,6 +1026,8 @@ function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { na
   const [sentLink, setSentLink] = useState<{ feeLineId: number; url: string } | null>(null);
   const sendLink = trpc.engagement.staff.sendFeeLink.useMutation({ onSuccess: (result, input) => { setSentLink({ feeLineId: input.feeLineId, url: result.url }); refresh(); toast.success(result.deliveryStatus === "Failed" ? "The email did not go. Copy the link below and send it yourself." : "Payment link emailed to the client."); }, onError: error => toast.error(error.message) });
   const openNow = trpc.engagement.staff.openRoomNow.useMutation(done("The client's room is open."));
+  const compact = React.useContext(Compact);
+  const [editing, setEditing] = useState(false);
   if (query.error && query.data === undefined) return <DetailSection title="Fees"><Failed error={query.error} onRetry={() => void query.refetch()} retrying={query.isFetching} /></DetailSection>;
   const data = query.data;
   if (!data) return <DetailSection title="Fees"><Loading label="Loading the fees" rows={2} /></DetailSection>;
@@ -999,6 +1038,8 @@ function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { na
   const setLine = (index: number, patch: Partial<DraftFee>) => setDraft(current.map((line, at) => (at === index ? { ...line, ...patch } : line)));
   const storedOf = (line: DraftFee) => (line.id === undefined ? undefined : data.feeLines.find(stored => stored.id === line.id));
   const fees = current.filter(line => line.label.trim() && line.amount > 0);
+  // In the workspace the saved fees read as rows with their actions; Change the fees opens the editor (R82).
+  const reading = compact && !unsaved && !editing;
   const help = data.suggested ? "Filled in from the service's price. Check the amounts and dates, then save."
     : data.online ? `Send each fee's payment link; Paystack records the payment when the client pays. ${data.can.recordPayments ? "Record money that came another way with Record a payment." : "Money that came another way is recorded by Finance."}`
       : `Online payment is off. ${data.can.recordPayments ? "Record each payment when the money arrives." : "Finance records each payment when the money arrives."} Finance counts each fee as owed, and as late once its date passes.`;
@@ -1020,6 +1061,24 @@ function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { na
             : stored.left === 0 && stored.writtenOff ? `Written off ${formatNaira(stored.writtenOff.amount)}`
             : stored.left === 0 ? (stored.paidOnline ? "Paid online" : "Paid")
               : stored.paidAmount > 0 ? `${formatNaira(stored.paidAmount)} paid, ${formatNaira(stored.left)} left` : "Owed";
+          const actions = stored && stored.left > 0 && !unsaved && (
+            <>
+              {data.online && data.can.sendLink && <button type="button" className="font-semibold text-brand underline" disabled={sendLink.isPending} onClick={() => sendLink.mutate({ feeLineId: stored.id })}>Send link</button>}
+              {data.can.recordPayments && recording !== stored.id && <button type="button" className="font-semibold text-brand underline" onClick={() => setRecording(stored.id)}>Record a payment</button>}
+            </>
+          );
+          if (reading && stored) return (
+            <li key={stored.id} className="space-y-2 rounded-xl border border-line-soft bg-white px-3 py-2.5" aria-label={stored.label}>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <span className="min-w-0"><span className="block font-medium text-ink">{stored.label}</span><span className="block text-xs text-ink-muted">{formatNaira(stored.amount)}{stored.dueOn ? ` · due ${formatDate(stored.dueOn)}` : " · no date yet"}{stored.reference ? ` · ${stored.reference}` : ""}</span></span>
+                {status && <span className={stored.left === 0 && !stored.writtenOff ? "rounded-full bg-health-clear-tint px-2 py-0.5 text-xs text-health-clear-strong" : PILL}>{status}</span>}
+              </div>
+              {actions && <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">{actions}</div>}
+              <FeePaymentList payments={stored.payments} canRecord={data.can.recordPayments} onChanged={refresh} />
+              <WriteOffControls fee={stored} canWriteOff={data.can.writeOff} onChanged={refresh} />
+              {recording === stored.id && <RecordPaymentForm feeLineId={stored.id} label={stored.label} left={stored.left} onDone={recorded => { setRecording(null); if (recorded) refresh(); }} />}
+            </li>
+          );
           return (
             <li key={line.id ?? `new-${index}`} className="space-y-1">
               <div className="grid grid-cols-[minmax(0,1fr)_7rem_8.5rem_10rem] items-center gap-1">
@@ -1051,12 +1110,14 @@ function FeesAdmin({ engagementId, owner }: { engagementId: number; owner?: { na
           })()}
         </div>
       )}
-      {data.can.edit && <button type="button" className="text-xs font-semibold text-brand underline" onClick={() => setDraft([...current, { label: "", amount: 0, dueOn: null }])}>Add a fee</button>}
+      {data.can.edit && reading && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setEditing(true)}>Change the fees</Button>}
+      {data.can.edit && !reading && <button type="button" className="text-xs font-semibold text-brand underline" onClick={() => setDraft([...current, { label: "", amount: 0, dueOn: null }])}>Add a fee</button>}
+      {compact && editing && !unsaved && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setEditing(false)}>Done</Button>}
       <p className="text-sm font-semibold">Total {formatNaira(feeTotal(unsaved ? fees : data.feeLines))}</p>
       {data.can.edit && unsaved && (
         <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending} onClick={() => save.mutate({ engagementId, feeLines: fees }, { onSuccess: () => setDraft(null) })}>Save the fees</Button>
-          {draft !== null && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setDraft(null)}>Cancel</Button>}
+          <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending} onClick={() => save.mutate({ engagementId, feeLines: fees }, { onSuccess: () => { setDraft(null); setEditing(false); } })}>Save the fees</Button>
+          {draft !== null && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => { setDraft(null); setEditing(false); }}>Cancel</Button>}
         </div>
       )}
     </DetailSection>

@@ -494,7 +494,11 @@ address (#plan). Each tab holds the record's own sections below, so what a perso
 checks every action as before. With `view_all_businesses` (the desk, admins, the Super Admin) the record opens in the
 drawer. In the workspace each Work Plan item and each Deliverable is a short row (title, who it is with or its
 kind, the due day, messages and files, and its status, *Late* when past its day) that opens into its form, with
-**Close {title}**; Sessions keep their row with **Edit**. Fields and boxes take the room's rounded shapes and 44 px
+**Close {title}**; Sessions keep their row with **Edit**. The Fix (Business Review and Six-Week Fix only) shows the
+Measure of Success as a summary (name, how it is measured, from and to) with **Edit**, or *Not set yet.* with **Set the
+Measure of Success**, and each Weekly Check-in as a row (the week, the day, the next step, the reading). Fees show each
+fee as a row (name, amount, due day, reference, status) with **Send link** and **Record a payment** where allowed, its
+payments and write-off below; **Change the fees** opens the editor, and **Done** closes it. Fields and boxes take the room's rounded shapes and 44 px
 touch targets.
 
 **The engagement record** (the drawer in Engagements; the workspace's tabs hold the same sections), top to bottom:

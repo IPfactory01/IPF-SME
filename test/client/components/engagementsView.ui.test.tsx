@@ -53,6 +53,8 @@ vi.mock("@/lib/trpc", () => ({
   },
 }));
 
+/** The fees every test starts from; a test that changes them does not leak into the next. */
+const DEFAULT_FEES = api.fees;
 const { default: SystemStatus } = await import("@/components/admin/SystemStatus");
 const { default: EngagementsView } = await import("@/components/admin/EngagementsView");
 
@@ -86,6 +88,7 @@ beforeEach(() => {
   api.awaiting = [];
   api.today = [];
   api.seesAll = true;
+  api.fees = DEFAULT_FEES;
   api.matchesFiles = true;
   api.storage = { configured: true, missing: [], bucket: "engagement-files", bucketFound: true, bucketPublic: false, problem: null };
   api.storageError = null;
@@ -560,6 +563,40 @@ describe("the team's workspace (R82)", () => {
     expect(output.textContent).toContain("Waiting for approval");
     fireEvent.click(output);
     expect(page.getByRole("button", { name: "Approve" })).toBeTruthy();
+  });
+
+  it("reads The Fix and the fees as rows in the workspace, each opening its form", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };
+    const checkin = { id: 1, engagementId: 4, weekNumber: 1, heldOn: "2026-11-13", progress: "Started.", blockers: null, nextStep: "Keep going.", measureReading: 160000, questionsAsked: null, hoursLead: 1, hoursAnalyst: 2, hoursPartner: null, aiUsed: true, recordedByUserId: 1, createdAt: new Date(), updatedAt: new Date() };
+    const base = detail({ manage: true, assign: false, review: true, seeFees: true }, []);
+    api.detail = { ...base, engagement: { ...base.engagement, type: "six_week_fix" }, team, measure: { id: 1, engagementId: 4, name: "Cash in the bank", definition: "Counted each Friday.", unit: "₦", baselineValue: 150000, targetValue: 400000, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() }, checkins: [checkin] };
+    api.fees = { feeLines: [{ id: 81, label: "Month 1 service fee", amount: 470000, dueOn: "2026-11-09", paidAt: null, paidOnline: false, reference: "TS-F-000081", paidAmount: 0, left: 470000, billed: true, invoice: null, payments: [], writtenOff: null }], total: 470000, suggested: null, opensOnPayment: false, online: true, can: { edit: true, sendLink: true, approveUnpaidWork: false, recordPayments: false, writeOff: false } } as unknown;
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    const page = within(screen.getByRole("region", { name: "Ada Foods workspace" }));
+    fireEvent.click(page.getByRole("tab", { name: /^Deliverables/ }));
+    const measure = within(page.getByLabelText("The Measure of Success"));
+    expect(measure.getByText("Cash in the bank")).toBeTruthy();
+    expect(page.queryByLabelText("Measure of Success")).toBeNull();
+    fireEvent.click(measure.getByRole("button", { name: "Edit" }));
+    expect((page.getByLabelText("Measure of Success") as HTMLInputElement).value).toBe("Cash in the bank");
+    const week = page.getByRole("button", { name: "Open week 1" });
+    expect(week.textContent).toContain("Held 13 Nov 2026 · next: Keep going.");
+    fireEvent.click(week);
+    expect(page.getByRole("button", { name: "Save week 1" })).toBeTruthy();
+
+    fireEvent.click(page.getByRole("tab", { name: /^Fees/ }));
+    const fee = within(page.getByRole("listitem", { name: "Month 1 service fee" }));
+    expect(fee.getByText(/₦470,000 · due 9 Nov 2026 · TS-F-000081/)).toBeTruthy();
+    expect(fee.getByText("Owed")).toBeTruthy();
+    expect(page.queryByRole("textbox", { name: "Fee 1" })).toBeNull();
+    fireEvent.click(fee.getByRole("button", { name: "Send link" }));
+    expect(api.calls.sendFeeLink).toEqual([{ feeLineId: 81 }]);
+    fireEvent.click(page.getByRole("button", { name: "Change the fees" }));
+    expect((page.getByRole("textbox", { name: "Fee 1" }) as HTMLInputElement).value).toBe("Month 1 service fee");
+    fireEvent.click(page.getByRole("button", { name: "Done" }));
+    expect(page.queryByRole("textbox", { name: "Fee 1" })).toBeNull();
   });
 
   it("gives a lead who sees fees the Fees tab and the count to approve", () => {

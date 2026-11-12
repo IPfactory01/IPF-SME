@@ -13,6 +13,7 @@ const api = vi.hoisted(() => ({
   today: [] as unknown[],
   // The record's sections are the same in the drawer and the workspace (R82): most tests use the desk's drawer.
   seesAll: true,
+  matchesFiles: true,
   storageError: null as { message: string } | null,
   storage: { configured: true, missing: [] as string[], bucket: "engagement-files", bucketFound: true as boolean | null, bucketPublic: false as boolean | null, problem: null as string | null },
   requests: [] as unknown[],
@@ -37,7 +38,7 @@ vi.mock("@/lib/trpc", () => ({
       // Recording money (batch F): Finance and the Super Admin, from the engagement's Fees or the Finance tab.
       finance: Object.fromEntries(["recordPayment", "cancelPayment", "acceptPayment", "recordRefund", "cancelRefund", "writeOff", "reverseWriteOff"].map(name => [name, { useMutation: mutation(name) }])),
       staff: {
-        list: { useQuery: () => ({ data: api.failed.list ? undefined : { seesAll: api.seesAll, ...api.list }, isLoading: false, error: api.failed.list ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("list"); } }) },
+        list: { useQuery: () => ({ data: api.failed.list ? undefined : { seesAll: api.seesAll, matchesFiles: api.matchesFiles, ...api.list }, isLoading: false, error: api.failed.list ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("list"); } }) },
         today: { useQuery: () => ({ data: api.today }) },
         awaitingStart: { useQuery: () => ({ data: api.failed.awaiting ? undefined : api.awaiting, error: api.failed.awaiting ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("awaiting"); } }) },
         storageStatus: { useQuery: () => ({ data: api.storageError ? undefined : api.storage, error: api.storageError, refetch: () => undefined }) },
@@ -85,6 +86,7 @@ beforeEach(() => {
   api.awaiting = [];
   api.today = [];
   api.seesAll = true;
+  api.matchesFiles = true;
   api.storage = { configured: true, missing: [], bucket: "engagement-files", bucketFound: true, bucketPublic: false, problem: null };
   api.storageError = null;
   api.calls = {};
@@ -569,6 +571,19 @@ describe("the team's home (R83)", () => {
     expect(screen.getByRole("region", { name: /My projects/ })).toBeTruthy();
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByText(/The projects you are on, of every type/)).toBeNull();
+  });
+
+  it("shows files to sort and a Stage to change only to those who can act on them", () => {
+    api.seesAll = false;
+    api.matchesFiles = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Content Producer", unsortedFiles: 3 }] };
+    api.detail = { ...detail({ manage: false, assign: false, review: false, contribute: true }) };
+    render(<EngagementsView home />);
+    const card = within(screen.getByRole("region", { name: /My projects/ })).getByRole("button", { name: "Open Ada Foods" });
+    expect(card.textContent).not.toContain("files to sort");
+    fireEvent.click(card);
+    expect(screen.queryByRole("combobox", { name: "Stage" })).toBeNull();
+    expect(screen.getByText("Stage").nextElementSibling?.textContent).toBe("Getting set up");
   });
 
   it("says when the person is on no project yet", () => {

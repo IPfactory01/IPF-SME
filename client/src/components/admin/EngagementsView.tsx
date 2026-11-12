@@ -79,7 +79,7 @@ export default function EngagementsView({ home = false, header = null }: { home?
       {canOpen && <ServiceRequests onOpen={setPrefill} />}
       {canOpen && <NewEngagement key={prefill?.requestId ?? "new"} onCreated={setOpenId} prefill={prefill} onDone={() => setPrefill(null)} />}
       <Today onOpen={setOpenId} />
-      <MyProjects items={list.data?.items ?? []} onOpen={setOpenId} />
+      <MyProjects items={list.data?.items ?? []} onOpen={setOpenId} matchesFiles={Boolean(list.data && "matchesFiles" in list.data && list.data.matchesFiles)} />
       {home ? (list.isLoading ? <Loading label="Loading your projects" /> : list.data?.items.length === 0 && <p className="rounded-xl border border-line-soft bg-white p-4 text-sm text-ink-muted">You are not on any project yet. When a lead adds you to one, it appears here and you get an email.</p>) : list.isLoading ? <Loading label="Loading the engagements" /> : (
         <div className="overflow-x-auto border border-line bg-white">
           <table className="w-full">
@@ -154,7 +154,8 @@ export function StorageLine({ status, onCheck }: { status: StorageStatus; onChec
  * My projects: the engagements the signed-in person is on, with their role there and what needs them, ahead of the
  * full list. Opening one opens the same record as the table.
  */
-function MyProjects({ items, onOpen }: { items: Row[]; onOpen: (id: number) => void }) {
+/** `matchesFiles`: only those who manage engagements match the client's files, so only they see the count (R83). */
+function MyProjects({ items, onOpen, matchesFiles }: { items: Row[]; onOpen: (id: number) => void; matchesFiles: boolean }) {
   const mine = items.filter(item => item.myRole);
   if (!mine.length) return null;
   return (
@@ -166,10 +167,10 @@ function MyProjects({ items, onOpen }: { items: Row[]; onOpen: (id: number) => v
             <button type="button" onClick={() => onOpen(item.id)} aria-label={`Open ${item.businessName}`} className="block w-full rounded-xl border border-line bg-white p-4 text-left transition-colors hover:border-brand">
               <span className="flex items-baseline justify-between gap-2"><span className="truncate font-medium text-ink">{item.businessName}</span><span className="shrink-0 text-xs text-ink-muted">{item.stageLabel}<FeeHoldBadge hold={item.hold} /></span></span>
               <span className="mt-0.5 block text-xs text-brand">{item.myRole}</span>
-              <span className="mt-3 grid grid-cols-3 gap-2 text-xs text-ink-muted">
+              <span className={`mt-3 grid gap-2 text-xs text-ink-muted ${matchesFiles ? "grid-cols-3" : "grid-cols-2"}`}>
                 <span><span className="block text-lg font-semibold tabular-nums text-ink">{item.openClientRequests}</span>with the client</span>
                 <span><span className={`block text-lg font-semibold tabular-nums ${item.overdueClientRequests ? "text-danger" : "text-ink"}`}>{item.overdueClientRequests}</span>overdue</span>
-                <span><span className={`block text-lg font-semibold tabular-nums ${item.unsortedFiles ? "text-brand" : "text-ink"}`}>{item.unsortedFiles}</span>files to sort</span>
+                {matchesFiles && <span><span className={`block text-lg font-semibold tabular-nums ${item.unsortedFiles ? "text-brand" : "text-ink"}`}>{item.unsortedFiles}</span>files to sort</span>}
               </span>
               <span className="mt-3 block border-t border-line-soft pt-2 text-xs text-ink-muted">{item.nextSession ? `Next: ${item.nextSession.title}, ${formatDateTime(item.nextSession.scheduledFor)}` : item.unscheduledSessions ? `${item.unscheduledSessions} ${item.unscheduledSessions === 1 ? "Session" : "Sessions"} not booked` : "No Session planned"}</span>
             </button>

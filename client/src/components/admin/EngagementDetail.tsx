@@ -337,11 +337,12 @@ function StageAndTeam({ data, engagementId }: { data: Detail; engagementId: numb
       {staff.error && !isRefusal(staff.error) && staff.data === undefined && <Failed error={staff.error} onRetry={() => void staff.refetch()} retrying={staff.isFetching} />}
       <div className="space-y-1">
         <label className={LABEL} htmlFor="engagement-stage">Stage</label>
-        <select id="engagement-stage" className={FIELD} disabled={!data.can.manage || setStage.isPending} value={STAGED_TYPES.includes(data.engagement.type) || data.engagement.stage === "closed" ? data.engagement.stage : "setting_up"} onChange={event => setStage.mutate({ engagementId, stage: event.target.value as EngagementStage })}>
+        {/* Someone who cannot change the stage reads it; a control that looks editable but is not only confuses. */}
+        {!data.can.manage ? <p id="engagement-stage" className="text-sm text-ink">{data.engagement.stageLabel}</p> : <select id="engagement-stage" className={FIELD} disabled={setStage.isPending} value={STAGED_TYPES.includes(data.engagement.type) || data.engagement.stage === "closed" ? data.engagement.stage : "setting_up"} onChange={event => setStage.mutate({ engagementId, stage: event.target.value as EngagementStage })}>
           {/* The stage follows the type: a Business Review or Six-Week Fix moves through the method; any other type is open or closed (its steps are read from its dates or its work). */}
           {(STAGED_TYPES.includes(data.engagement.type) ? ENGAGEMENT_STAGES.map(stage => [stage, ENGAGEMENT_STAGE_LABELS[stage]] as const) : ([["setting_up", "Open"], ["closed", "Closed"]] as const))
             .map(([stage, name]) => <option key={stage} value={stage}>{name}</option>)}
-        </select>
+        </select>}
       </div>
       <ul aria-label="Team" className="space-y-1 text-sm">
         {data.team.map(member => (

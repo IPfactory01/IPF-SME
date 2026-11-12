@@ -136,7 +136,7 @@ const staffRouter = router({
   list: staff.query(async ({ ctx }) => {
     const db = await engagementDb();
     try {
-      return { setUp: true, items: await listStaffEngagements(db, ctx.actor), canStart: canStart(ctx.actor), seesAll: canSeeAll(ctx.actor) };
+      return { setUp: true, items: await listStaffEngagements(db, ctx.actor), canStart: canStart(ctx.actor), seesAll: canSeeAll(ctx.actor), matchesFiles: authorityAllows(ctx.actor.authority, "manage_engagements") };
     } catch (error) {
       if (!isMissingEngagementTable(error)) throw error;
       // A missing table or column: the database is behind this build. Say which migration it lacks, never a guess.

@@ -463,6 +463,8 @@ Paystack's signed notifications arrive at `POST /api/paystack/webhook`.
   sees **the team's home** (R83), not the console: the room's top bar with their name and **Sign out**; *Good
   morning, {first name}* (afternoon, evening by Lagos time) and their level; then **Today** and **My projects**, each
   project opening as their workspace (R82). A Partner also sees **Finance**, as a second tab beside **My work**.
+  A project card counts files to sort only for those who match files (`manage_engagements`); the Stage is a control
+  only for those who can change it, and plain text for everyone else.
   Anyone else sees the console (8.3).
 - An invitation opened while signed in as someone else names both addresses and offers "Sign out and continue".
 - Forgotten password: a single-use link for 20 minutes; the page never says whether the account exists.

@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| A Session is marked held from its row in the week, by the team on the engagement, once it has started; Did not happen takes it off the plan with no email; Today asks the lead and whoever booked it until it is marked (R90) | ET, 13 November 2026 |
 | Each item has a reviewer (default: the client item's person, or the lead for a team item; the lead can change it) who gets the review, its Today, its reminders and Mark received / Ask for more; tagging stays optional (R89, 0026) | ET, 13 November 2026 |
 | Items take several owners (one leads and hands it in), all reminded; the client's Data Request tab and drop box go, each item answered in its task with its files shown under it; every new file emails the item's owners and the lead, once a quarter hour per item, with a link to the item (R89) | ET, 13 November 2026 ("several, go ahead"; "we don't need that data request part"; "members of the team should get notifications") |
 | Everyone on an engagement sees every task again; every team item names an individual, never "IP Factory", so reminders reach the right person; acting stays with the owner and the lead (R88, replaces R86's own-tasks-only view) | ET, 13 November 2026 ("they should see… tasks should always be assigned to individuals") |

@@ -12649,6 +12649,10 @@ async function todayFor(db, actor, now = Date.now()) {
     for (const session of sessions.filter((item2) => item2.engagementId === engagement.id && item2.scheduledFor && item2.scheduledFor.getTime() >= now && item2.scheduledFor.getTime() < now + 7 * 864e5)) {
       items.push({ key: `meeting-${session.id}`, kind: "meeting", engagementId: engagement.id, businessName, title: session.title, detail: session.meetingLink ? "With the Join link" : "No Join link yet", at: session.scheduledFor, late: false });
     }
+    if (canContribute(actor)) for (const session of sessions.filter((item2) => item2.engagementId === engagement.id && (lead || item2.createdByUserId === actor.id))) {
+      const ended = sessionEndsAt(session);
+      if (ended !== null && ended <= now) items.push({ key: `held-${session.id}`, kind: "held", engagementId: engagement.id, businessName, title: session.title, detail: "Did it happen? Mark it held, then write the notes.", at: session.scheduledFor, late: now - ended >= 864e5 });
+    }
     const unsorted = drops.filter((file) => file.engagementId === engagement.id && !matchedIds.has(file.id)).length;
     if (unsorted && manages) items.push({ key: `files-${engagement.id}`, kind: "files", engagementId: engagement.id, businessName, title: `${unsorted} ${unsorted === 1 ? "file" : "files"} to match`, detail: "Sent to the drop box: say which Data Request each answers", at: null, late: false });
     if (reviews || lead) for (const item2 of deliverables.filter((row) => row.engagementId === engagement.id)) items.push({ key: `approval-${item2.id}`, kind: "approval", engagementId: engagement.id, businessName, title: item2.title, detail: "Waiting for your approval before it is shared", at: item2.updatedAt, late: false });
@@ -12829,7 +12833,8 @@ async function getStaffEngagement(db, actor, engagementId) {
       seeInternal: canSeeInternal(actor),
       seeFees: canSeeFees(actor),
       previewAsClient: canPreviewAsClient(actor),
-      seeAllTasks: seesAllTasks
+      seeAllTasks: seesAllTasks,
+      markHeld: canContribute(actor)
     },
     /** Team items with no one named (R88): the lead's prompt to Assign by role. */
     unassignedTeamItems: tasks.filter((task) => task.side === "ipf" && task.assigneeUserId === null && task.status !== "cancelled").length,
@@ -13087,6 +13092,19 @@ async function requireStaffSession(db, actor, sessionId) {
   if (!session) throw notFound4();
   await requireStaffEngagement(db, actor, session.engagementId);
   return session;
+}
+var sessionEndsAt = (session) => session.scheduledFor === null ? null : session.scheduledFor.getTime() + (session.durationMinutes ?? 60) * 6e4;
+async function markSessionHeld(db, actor, input) {
+  if (!canContribute(actor)) throw new TRPCError18({ code: "FORBIDDEN", message: "Only the team working on this engagement marks its Sessions." });
+  const session = await requireStaffSession(db, actor, input.sessionId);
+  if (session.status !== "planned") throw new TRPCError18({ code: "CONFLICT", message: session.status === "held" ? "This Session is already marked held." : "This Session was cancelled." });
+  if (session.scheduledFor === null || session.scheduledFor.getTime() > (input.now ?? Date.now())) throw new TRPCError18({ code: "BAD_REQUEST", message: "This Session has not started yet." });
+  const status = input.held ? "held" : "cancelled";
+  await db.transaction(async (tx) => {
+    await tx.update(engagementSessions).set({ status }).where(eq24(engagementSessions.id, session.id));
+    await recordAudit(tx, { action: "engagement_session_held", actorUserId: actor.id, details: { engagementId: session.engagementId, sessionId: session.id, held: input.held } });
+  });
+  return { success: true, status };
 }
 async function saveSessionNotes(db, actor, input) {
   requireManage2(actor);
@@ -15062,6 +15080,8 @@ var staffRouter = router({
     meetingLink: z15.string().trim().url("Paste the Zoom invitation, or the Join link, starting https://").max(512),
     agenda: optionalText2(4e3)
   })).mutation(async ({ ctx, input }) => guarded(async () => bookMeeting(await engagementDb(), ctx.actor, input))),
+  /** Mark as held (R90): the Session happened, or it did not. The engagement's team, once it has started. */
+  markHeld: staff.input(z15.object({ sessionId: id, held: z15.boolean() })).mutation(async ({ ctx, input }) => guarded(async () => markSessionHeld(await engagementDb(), ctx.actor, input))),
   saveNotes: staff.input(z15.object({ sessionId: id, clientNotes: optionalText2(2e4), internalNotes: optionalText2(2e4) })).mutation(async ({ ctx, input }) => guarded(async () => saveSessionNotes(await engagementDb(), ctx.actor, input))),
   shareNotes: staff.input(z15.object({ sessionId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareSessionNotes(await engagementDb(), ctx.actor, input))),
   saveTask: staff.input(z15.object({

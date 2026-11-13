@@ -513,7 +513,7 @@ export async function todayFor(db: Database, actor: StaffActor, now = Date.now()
   const manages = authorityAllows(actor.authority, "manage_engagements");
   const reviews = authorityAllows(actor.authority, "review_engagements");
   const matchedIds = new Set(matched.map(row => row.fileId));
-  type Item = { key: string; kind: "reply" | "clock" | "check" | "request" | "meeting" | "files" | "approval" | "fee" | "mention" | "review" | "due"; engagementId: number; businessName: string; title: string; detail: string; at: Date | null; late: boolean };
+  type Item = { key: string; kind: "reply" | "clock" | "check" | "request" | "meeting" | "held" | "files" | "approval" | "fee" | "mention" | "review" | "due"; engagementId: number; businessName: string; title: string; detail: string; at: Date | null; late: boolean };
   const items: Item[] = [];
   for (const engagement of rows) {
     const businessName = await businessNameOf(db, engagement);
@@ -549,6 +549,11 @@ export async function todayFor(db: Database, actor: StaffActor, now = Date.now()
     }
     for (const session of sessions.filter(item => item.engagementId === engagement.id && item.scheduledFor && item.scheduledFor.getTime() >= now && item.scheduledFor.getTime() < now + 7 * 86_400_000)) {
       items.push({ key: `meeting-${session.id}`, kind: "meeting", engagementId: engagement.id, businessName, title: session.title, detail: session.meetingLink ? "With the Join link" : "No Join link yet", at: session.scheduledFor, late: false });
+    }
+    // A Session that has ended and nobody has marked (R90): its lead, or whoever booked it; late after a day.
+    if (canContribute(actor)) for (const session of sessions.filter(item => item.engagementId === engagement.id && (lead || item.createdByUserId === actor.id))) {
+      const ended = sessionEndsAt(session);
+      if (ended !== null && ended <= now) items.push({ key: `held-${session.id}`, kind: "held", engagementId: engagement.id, businessName, title: session.title, detail: "Did it happen? Mark it held, then write the notes.", at: session.scheduledFor, late: now - ended >= 86_400_000 });
     }
     const unsorted = drops.filter(file => file.engagementId === engagement.id && !matchedIds.has(file.id)).length;
     if (unsorted && manages) items.push({ key: `files-${engagement.id}`, kind: "files", engagementId: engagement.id, businessName, title: `${unsorted} ${unsorted === 1 ? "file" : "files"} to match`, detail: "Sent to the drop box: say which Data Request each answers", at: null, late: false });
@@ -741,6 +746,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
       seeFees: canSeeFees(actor),
       previewAsClient: canPreviewAsClient(actor),
       seeAllTasks: seesAllTasks,
+      markHeld: canContribute(actor),
     },
     /** Team items with no one named (R88): the lead's prompt to Assign by role. */
     unassignedTeamItems: tasks.filter(task => task.side === "ipf" && task.assigneeUserId === null && task.status !== "cancelled").length,
@@ -1072,6 +1078,27 @@ async function requireStaffSession(db: Pick<Database, "select">, actor: StaffAct
   if (!session) throw notFound();
   await requireStaffEngagement(db, actor, session.engagementId);
   return session;
+}
+
+/** When a Session has ended, for Mark as held (R90): its time plus its length, an hour if none is set. */
+export const sessionEndsAt = (session: { scheduledFor: Date | null; durationMinutes: number | null }) => session.scheduledFor === null ? null : session.scheduledFor.getTime() + (session.durationMinutes ?? 60) * 60_000;
+
+/**
+ * Mark as held (R90, ET 13 November 2026): once a booked Session has started, anyone on the engagement's team who works on
+ * it says it happened, or that it did not. Held shows in the Work Plan's week for everyone, the client included; did not
+ * happen takes it off the plan (no email: it is in the past) for the team to book again. Recorded.
+ */
+export async function markSessionHeld(db: Database, actor: StaffActor, input: { sessionId: number; held: boolean; now?: number }) {
+  if (!canContribute(actor)) throw new TRPCError({ code: "FORBIDDEN", message: "Only the team working on this engagement marks its Sessions." });
+  const session = await requireStaffSession(db, actor, input.sessionId);
+  if (session.status !== "planned") throw new TRPCError({ code: "CONFLICT", message: session.status === "held" ? "This Session is already marked held." : "This Session was cancelled." });
+  if (session.scheduledFor === null || session.scheduledFor.getTime() > (input.now ?? Date.now())) throw new TRPCError({ code: "BAD_REQUEST", message: "This Session has not started yet." });
+  const status: EngagementSessionStatus = input.held ? "held" : "cancelled";
+  await db.transaction(async tx => {
+    await tx.update(engagementSessions).set({ status }).where(eq(engagementSessions.id, session.id));
+    await recordAudit(tx, { action: "engagement_session_held", actorUserId: actor.id, details: { engagementId: session.engagementId, sessionId: session.id, held: input.held } });
+  });
+  return { success: true, status } as const;
 }
 
 /** Saves the notes. Saving never shares: the client sees nothing until someone shares the client version. */

@@ -461,6 +461,37 @@ for (const target of targets) {
         expect((await lead.engagement.staff.detail({ engagementId: s.engagementId })).tasks.find(task => task.id === plan.id)).toMatchObject({ reviewer: { userId: s.lead.id } });
       });
 
+      it("marks a Session held once it has started, by the team on the engagement, with a Today prompt for the lead until then (R90)", async () => {
+        const s = await studio("held");
+        const lead = await s.lead.browser.call();
+        const mira = await s.marketer.browser.call();
+        const [kickOff] = await db.select().from(schema.engagementSessions).where(and(eq(schema.engagementSessions.engagementId, s.engagementId), eq(schema.engagementSessions.title, "Kick-off")));
+        // Booked for tomorrow: not yet.
+        await db.update(schema.engagementSessions).set({ scheduledFor: new Date(Date.now() + 86_400_000), durationMinutes: 45 }).where(eq(schema.engagementSessions.id, kickOff.id));
+        await expect(mira.engagement.staff.markHeld({ sessionId: kickOff.id, held: true })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        expect((await lead.engagement.staff.today()).some(item => item.kind === "held" && item.engagementId === s.engagementId)).toBe(false);
+        // It ended two hours ago: the lead is asked on Today; someone off the engagement cannot mark it.
+        await db.update(schema.engagementSessions).set({ scheduledFor: new Date(Date.now() - 3 * 3_600_000) }).where(eq(schema.engagementSessions.id, kickOff.id));
+        expect((await lead.engagement.staff.today()).find(item => item.kind === "held" && item.engagementId === s.engagementId)).toMatchObject({ title: "Kick-off", late: false });
+        const outsider = await person(["analyst"]);
+        await expect((await (await signIn(outsider, true)).call()).engagement.staff.markHeld({ sessionId: kickOff.id, held: true })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        // Mira, on the team, marks it held: the client sees Held, Today clears, and it cannot be marked twice.
+        await mira.engagement.staff.markHeld({ sessionId: kickOff.id, held: true });
+        expect((await (await s.owner.call()).engagement.client.room())!.sessions.find(item => item.id === kickOff.id)).toMatchObject({ status: "held" });
+        expect((await lead.engagement.staff.today()).some(item => item.kind === "held" && item.engagementId === s.engagementId)).toBe(false);
+        await expect(mira.engagement.staff.markHeld({ sessionId: kickOff.id, held: false })).rejects.toMatchObject({ code: "CONFLICT" });
+        const recorded = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_session_held"));
+        expect(recorded.map((row: { details: string }) => JSON.parse(row.details))).toContainEqual({ engagementId: s.engagementId, sessionId: kickOff.id, held: true });
+        // Did not happen: off the plan, with no email to anyone.
+        const [review] = await db.select().from(schema.engagementSessions).where(and(eq(schema.engagementSessions.engagementId, s.engagementId), eq(schema.engagementSessions.title, "Month 2 review")));
+        await db.update(schema.engagementSessions).set({ scheduledFor: new Date(Date.now() - 26 * 3_600_000) }).where(eq(schema.engagementSessions.id, review.id));
+        expect((await lead.engagement.staff.today()).find(item => item.kind === "held" && item.title === "Month 2 review")).toMatchObject({ late: true });
+        mocked.deliverEmail.mockClear();
+        await lead.engagement.staff.markHeld({ sessionId: review.id, held: false });
+        expect(emails()).toEqual([]);
+        expect((await db.select().from(schema.engagementSessions).where(eq(schema.engagementSessions.id, review.id)))[0]).toMatchObject({ status: "cancelled" });
+      });
+
       it("names a person on every team item: the plan's by role, Assign by role for the rest, with Due on Today and late emails (R88)", async () => {
         const s = await studio("owner");
         const lead = await s.lead.browser.call();
@@ -1481,7 +1512,7 @@ for (const target of targets) {
         expect((await (await analyst.call()).engagement.staff.list()).items.map(item => item.id)).toEqual([engagementId]);
         const detail = await (await analyst.call()).engagement.staff.detail({ engagementId });
         expect(detail.team).toEqual([expect.objectContaining({ name: "Ola Analyst", role: "analyst", roleLabel: "Analyst" })]);
-        expect(detail.can).toEqual({ manage: true, assign: false, review: false, sendSignIn: false, contribute: true, seeInternal: true, seeFees: true, previewAsClient: true, seeAllTasks: false });
+        expect(detail.can).toEqual({ manage: true, assign: false, review: false, sendSignIn: false, contribute: true, seeInternal: true, seeFees: true, previewAsClient: true, seeAllTasks: false, markHeld: true });
       });
 
       it("lets only people with assign_engagements change the team, and only to IP Factory staff", async () => {

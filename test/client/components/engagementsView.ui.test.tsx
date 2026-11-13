@@ -47,7 +47,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         fees: { useQuery: () => ({ data: api.failed.fees ? undefined : api.fees, error: api.failed.fees ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("fees"); } }) },
-        ...Object.fromEntries(["handIn", "setOwners", "reviewTask", "setReviewer", "assignByRole", "start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "bookMeeting", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["handIn", "setOwners", "reviewTask", "setReviewer", "markHeld", "assignByRole", "start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "bookMeeting", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -78,7 +78,7 @@ const detail = (given: { manage: boolean; assign: boolean; review: boolean; send
   checkins: [] as unknown[],
   inbox: [] as unknown[],
   content: [] as unknown[],
-  can: { contribute: given.manage, seeInternal: given.manage || given.review, seeFees: given.manage || given.review, previewAsClient: given.manage || given.review, seeAllTasks: given.manage || given.review, ...given },
+  can: { contribute: given.manage, seeInternal: given.manage || given.review, seeFees: given.manage || given.review, previewAsClient: given.manage || given.review, seeAllTasks: given.manage || given.review, markHeld: given.manage || Boolean(given.contribute), ...given },
   ask: { allowed: Boolean(given.manage || given.contribute), unlimited: given.review, thisWeek: null as null | { id: number; title: string } },
   viewerUserId: 1,
 });
@@ -676,6 +676,30 @@ describe("the team's workspace (R82)", () => {
     // The lead names who reviews it.
     fireEvent.change(details.getByRole("combobox", { name: "Reviewer" }), { target: { value: "3" } });
     expect(api.calls.setReviewer).toEqual([{ taskId: 61, userId: 3 }]);
+  });
+
+  it("marks a Session that has started as held, or as not happened after a confirmation, from its week (R90)", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Digital Marketer" }] };
+    const past = { ...session, id: 91, title: "Kick-off", scheduledFor: new Date(Date.now() - 3 * 3_600_000), weekNumber: 1 };
+    const later = { ...session, id: 92, title: "Weekly Check-in", scheduledFor: new Date(Date.now() + 2 * 86_400_000), weekNumber: 1, meetingLink: "https://zoom.example.test/j/9" };
+    api.detail = { ...detail({ manage: false, assign: false, review: false, contribute: true }, [], [task({ id: 61, title: "Content plan for month 1", side: "ipf", kind: "action" })]), sessions: [past, later], team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    const rows = within(screen.getByRole("list", { name: "Week 1 Sessions" })).getAllByRole("listitem");
+    const kickOff = within(rows.find(item => item.textContent?.includes("Kick-off"))!);
+    const checkIn = within(rows.find(item => item.textContent?.includes("Weekly Check-in"))!);
+    // Not started: Join, nothing to mark.
+    expect(checkIn.queryByRole("button", { name: "Mark as held" })).toBeNull();
+    expect(checkIn.getByRole("link", { name: "Join" })).toBeTruthy();
+    fireEvent.click(kickOff.getByRole("button", { name: "Mark as held" }));
+    expect(api.calls.markHeld).toEqual([{ sessionId: 91, held: true }]);
+    fireEvent.click(kickOff.getByRole("button", { name: "Did not happen" }));
+    expect(api.calls.markHeld).toHaveLength(1);
+    fireEvent.click(kickOff.getByRole("button", { name: "Yes, it did not happen" }));
+    expect(api.calls.markHeld.at(-1)).toEqual({ sessionId: 91, held: false });
   });
 
   it("gives a team member who reviews an item Mark received there, and names the reviewer to everyone else (R89)", () => {

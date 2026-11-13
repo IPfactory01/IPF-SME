@@ -50,6 +50,7 @@ export const AUDIT_ACTIONS = [
   "engagement_team_removed",
   "engagement_stage_changed",
   "engagement_notes_shared",
+  "engagement_session_held",
   "engagement_session_booked",
   "engagement_deliverable_approved",
   "engagement_deliverable_shared",

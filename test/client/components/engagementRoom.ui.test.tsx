@@ -868,6 +868,19 @@ describe("the Plan, Meetings and Data requests views", () => {
     expect(screen.getByRole("region", { name: "Week 2" }).textContent).toContain("This week");
   });
 
+  it("shows the client Held only once the team marks it, and never the team's buttons (R90)", () => {
+    const base = room();
+    const s0 = base.sessions[0]!;
+    const sessions = [{ ...s0, id: 1, title: "Kick-off", scheduledFor: new Date("2026-10-07T14:00:00Z"), status: "planned" as const, weekNumber: 1, meetingLink: "https://zoom.example.test/j/1" }];
+    render(<EngagementRoom room={room({ startedOn: "2026-10-06", sessions })} now={NOW} />);
+    open(/^Work Plan/);
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    const first = within(screen.getByRole("list", { name: "Week 1 Sessions" }));
+    expect(first.queryByText("Held")).toBeNull();
+    expect(first.queryByRole("link", { name: "Join" })).toBeNull();
+    expect(first.queryByRole("button", { name: "Mark as held" })).toBeNull();
+  });
+
   it("ticks what the client has sent as pending review, and shows it Completed once reviewed (R87)", () => {
     const base = room();
     const tasks = base.tasks.map(task => (task.id === 11 ? { ...task, status: "received" as const, statusLabel: "Sent, we are checking" } : task.id === 12 ? { ...task, status: "accepted" as const, statusLabel: "Received" } : task));

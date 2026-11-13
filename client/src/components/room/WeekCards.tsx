@@ -13,7 +13,7 @@ const sessionTime = (date: Date) => new Intl.DateTimeFormat("en-GB", { timeZone:
  * holding that week's items and its booked Sessions. This week first and open, next week open, later weeks folded to
  * one line, past weeks folded to what is done unless something is still outstanding. The caller draws each item.
  */
-export default function WeekCards<T extends Dated>({ startedOn, items, sessions, isDone, isWaiting, waitingLabel, renderItem, note, noteWeeks = [], now = Date.now() }: {
+export default function WeekCards<T extends Dated>({ startedOn, items, sessions, isDone, isWaiting, waitingLabel, renderItem, note, noteWeeks = [], onMarkHeld, now = Date.now() }: {
   startedOn: string | null;
   items: T[];
   sessions: WeekSession[];
@@ -26,11 +26,14 @@ export default function WeekCards<T extends Dated>({ startedOn, items, sessions,
   note?: (week: number | null) => string | null;
   /** Weeks that have a card for their note alone (IP Factory working while nothing waits on the client). */
   noteWeeks?: (number | null)[];
+  /** For the team (R90): once a Session has started, say it happened or did not. Without it, the row only shows Held. */
+  onMarkHeld?: (sessionId: number, held: boolean) => void;
   now?: number;
 }) {
   const today = lagosDay(new Date(now));
   const [onlyWaiting, setOnlyWaiting] = useState(false);
   const [toggled, setToggled] = useState<Record<string, boolean>>({});
+  const [missed, setMissed] = useState<number | null>(null);
   const weekOfItem = (item: T) => item.weekNumber ?? weekOfDay(startedOn, item.dueOn);
   const booked = sessions.filter(session => session.scheduledFor && session.status !== "cancelled");
   const weekOfSession = (session: WeekSession) => session.weekNumber ?? weekOfDay(startedOn, lagosDay(new Date(session.scheduledFor!)));
@@ -79,10 +82,20 @@ export default function WeekCards<T extends Dated>({ startedOn, items, sessions,
                     {meetings.map(session => (
                       <li key={`s-${session.id}`} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">
                         <span className="flex min-w-0 items-center gap-2"><Video className="h-4 w-4 shrink-0 text-brand" aria-hidden /><span className="font-medium text-ink">{session.title}</span><span className="text-ink-muted">{sessionTime(new Date(session.scheduledFor!))}</span></span>
-                        {/* A Session that has happened shows as held; Join only before it ends. */}
-                        {session.status === "held" || new Date(session.scheduledFor!).getTime() + 2 * 3_600_000 < now
-                          ? <span className="text-xs text-ink-muted">Held</span>
-                          : session.meetingLink && <a href={session.meetingLink} target="_blank" rel="noreferrer" className="text-sm font-semibold text-brand underline underline-offset-2">Join</a>}
+                        {/* Held once the team marks it (R90); Join until it ends; the team marks it once it has started. */}
+                        <span className="flex flex-wrap items-center gap-3">
+                          {session.status === "held" ? <span className="text-xs font-medium text-health-clear-strong">Held</span> : <>
+                            {session.meetingLink && new Date(session.scheduledFor!).getTime() + 2 * 3_600_000 >= now && <a href={session.meetingLink} target="_blank" rel="noreferrer" className="text-sm font-semibold text-brand underline underline-offset-2">Join</a>}
+                            {onMarkHeld && new Date(session.scheduledFor!).getTime() <= now && (missed === session.id ? <>
+                              <span className="text-xs text-ink-600">Take it off the plan?</span>
+                              <button type="button" onClick={() => { setMissed(null); onMarkHeld(session.id, false); }} className="min-h-8 rounded-md border border-line px-3 text-xs font-semibold text-ink">Yes, it did not happen</button>
+                              <button type="button" onClick={() => setMissed(null)} className="text-xs text-ink-600 underline underline-offset-2">Cancel</button>
+                            </> : <>
+                              <button type="button" onClick={() => onMarkHeld(session.id, true)} className="min-h-8 rounded-md bg-brand px-3 text-xs font-semibold text-white">Mark as held</button>
+                              <button type="button" onClick={() => setMissed(session.id)} className="text-xs text-ink-600 underline underline-offset-2">Did not happen</button>
+                            </>)}
+                          </>}
+                        </span>
                       </li>
                     ))}
                   </ul>

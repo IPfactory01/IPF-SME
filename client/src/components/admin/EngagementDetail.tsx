@@ -206,12 +206,15 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
   const nameOf = (item: Task) => (item.assigneeUserId !== null ? [...data.clientPeople.map(person => ({ id: person.userId, name: person.name })), ...data.team.map(member => ({ id: member.userId, name: member.name ?? "" }))].find(person => person.id === item.assigneeUserId)?.name : undefined)
     || (item.side === "client" ? data.businessName || "The client" : item.ownerName || "No one yet");
   const groupOf = (item: Task) => TEAM_PLAN_GROUPS.find(group => group.test(item)) ?? TEAM_PLAN_GROUPS[1]!;
+  const refresh = useRefresh(engagementId);
+  const markHeld = trpc.engagement.staff.markHeld.useMutation({ ...refresh, onSuccess: (result) => { refresh.onSuccess(); toast.success(result.status === "held" ? "Marked held. Write the notes in Sessions." : "Taken off the plan. Book it again when you have a date."); } });
   if (!data.tasks.length) return <p className="text-sm text-ink-muted">Nothing on the {METHOD.workPlan} yet.</p>;
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
       <div className={`min-w-0 ${task ? "" : "xl:col-span-2"}`}>
         {/* Weekly cards (R85), as the client sees them, with each week's Sessions. */}
         <WeekCards startedOn={data.engagement.startedOn ?? null} items={data.tasks} sessions={data.sessions} now={now}
+          onMarkHeld={data.can.markHeld ? (sessionId, held) => { if (!markHeld.isPending) markHeld.mutate({ sessionId, held }); } : undefined}
           // Handed in or sent is done from the sender's side (R87); for the lead it waits on their review.
           isDone={item => groupOf(item).id === "done" || (!data.can.seeAllTasks && groupOf(item).id === "checking")}
           isWaiting={item => groupOf(item).id === "us" || (data.can.seeAllTasks && groupOf(item).id === "checking")} waitingLabel={data.can.seeAllTasks ? "Waiting on IP Factory" : "Waiting on you"}

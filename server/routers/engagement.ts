@@ -58,6 +58,7 @@ import {
   saveProblem,
   saveSession,
   saveSessionNotes,
+  markSessionHeld,
   saveTask,
   createDirectEngagement,
   saveContentItem,
@@ -198,6 +199,8 @@ const staffRouter = router({
     meetingLink: z.string().trim().url("Paste the Zoom invitation, or the Join link, starting https://").max(512),
     agenda: optionalText(4000),
   })).mutation(async ({ ctx, input }) => guarded(async () => bookMeeting(await engagementDb(), ctx.actor, input))),
+  /** Mark as held (R90): the Session happened, or it did not. The engagement's team, once it has started. */
+  markHeld: staff.input(z.object({ sessionId: id, held: z.boolean() })).mutation(async ({ ctx, input }) => guarded(async () => markSessionHeld(await engagementDb(), ctx.actor, input))),
   saveNotes: staff.input(z.object({ sessionId: id, clientNotes: optionalText(20000), internalNotes: optionalText(20000) }))
     .mutation(async ({ ctx, input }) => guarded(async () => saveSessionNotes(await engagementDb(), ctx.actor, input))),
   shareNotes: staff.input(z.object({ sessionId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareSessionNotes(await engagementDb(), ctx.actor, input))),

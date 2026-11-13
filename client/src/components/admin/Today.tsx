@@ -12,6 +12,7 @@ const KIND_LABELS: Record<Item["kind"], string> = {
   check: "To check",
   request: "Your request",
   meeting: "Meeting",
+  held: "Did it happen?",
   files: "Files",
   approval: "To approve",
   fee: "Fee",
@@ -52,7 +53,7 @@ export default function Today({ onOpen, now = Date.now() }: { onOpen: (engagemen
 /** One thing that needs the person: its kind, the item, the business, and the time where it has one. Opens the engagement when given onOpen. */
 export function TodayCard({ item, now, onOpen }: { item: Item; now: number; onOpen?: (engagementId: number) => void }) {
   const at = item.at ? new Date(item.at) : null;
-  const when = item.kind === "clock" && at ? hoursText(at, now) : item.kind === "meeting" && at ? formatDateTime(at) : null;
+  const when = item.kind === "clock" && at ? hoursText(at, now) : (item.kind === "meeting" || item.kind === "held") && at ? formatDateTime(at) : null;
   const body = (
     <>
       <span className="flex items-baseline justify-between gap-2 text-xs">

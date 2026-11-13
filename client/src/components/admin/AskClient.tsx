@@ -195,7 +195,7 @@ function TeamItemConversation({ task, engagementId, people }: { task: Task; enga
           </div>
         </>
       )}
-      {task.side === "ipf" && task.status === "received" && <p className="text-xs text-brand">Handed in: waiting for the lead to review it.</p>}
+      {task.side === "ipf" && task.status === "received" && <p className="rounded bg-brand-tint p-2 text-xs text-ink">Ticked: handed in, pending review. The lead reviews it, then it shows as Completed, or they ask for more.</p>}
     </div>
   );
 }

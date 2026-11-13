@@ -12497,8 +12497,12 @@ var requireManage2 = (actor) => requirePermission(actor, "manage_engagements", "
 var canContribute = (actor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "contribute_engagements");
 var canSeeInternal = (actor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "review_engagements");
 var canSeeFees = (actor) => canSeeInternal(actor) || authorityAllows(actor.authority, "view_financials");
-function isOwnTask(task, actorId, goesToUserId) {
-  return task.assigneeUserId === actorId || task.requestedByUserId === actorId || task.side === "ipf" && task.createdByUserId === actorId || task.side === "client" && goesToUserId === actorId;
+function isOwnTask(task, actorId, ownerUserId) {
+  return task.assigneeUserId === actorId || task.requestedByUserId === actorId || task.side === "ipf" && task.createdByUserId === actorId || ownerUserId === actorId;
+}
+function ownerOfTask(team, task) {
+  if (task.side === "client") return followUpOwnerOf(team, task)?.userId ?? null;
+  return task.assigneeUserId ?? followUpOwnerOf(team, { requestedByUserId: null, turnaround: null })?.userId ?? null;
 }
 async function requireStaffTask(db, actor, taskId) {
   const task = (await db.select().from(engagementTasks).where(eq24(engagementTasks.id, taskId)).limit(1))[0];
@@ -12506,8 +12510,7 @@ async function requireStaffTask(db, actor, taskId) {
   await requireStaffEngagement(db, actor, task.engagementId);
   const team = await db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name }).from(engagementTeam).innerJoin(users, eq24(engagementTeam.userId, users.id)).where(eq24(engagementTeam.engagementId, task.engagementId));
   const leads = await canReviewEngagement(db, actor, task.engagementId);
-  const goesTo = task.side === "client" ? followUpOwnerOf(team, task) : null;
-  if (!leads && !isOwnTask(task, actor.id, goesTo?.userId ?? null)) {
+  if (!leads && !isOwnTask(task, actor.id, ownerOfTask(team, task))) {
     const people = team.map((member) => ({ userId: member.userId, name: member.name ?? "" }));
     const said = await db.select({ body: engagementTaskComments.body }).from(engagementTaskComments).where(eq24(engagementTaskComments.taskId, task.id));
     if (!said.some((comment) => mentionedIn(comment.body, people).some((person) => person.userId === actor.id))) throw notFound4();
@@ -12695,9 +12698,10 @@ async function getStaffEngagement(db, actor, engagementId) {
     // Internal notes stay with those who work on or approve engagements.
     sessions: canSeeInternal(actor) ? sessions : sessions.map((item2) => ({ ...item2, internalNotes: null })),
     // Below the lead, a person's own tasks only (R86); the lead upwards sees every task.
-    tasks: tasks.filter((task) => seesAllTasks || taggedIn.has(task.id) || isOwnTask(task, actor.id, task.side === "client" ? followUpOwnerOf(team, task)?.userId ?? null : null)).map((task) => {
+    tasks: tasks.filter((task) => seesAllTasks || taggedIn.has(task.id) || isOwnTask(task, actor.id, ownerOfTask(team, task))).map((task) => {
       const goesTo = task.side === "client" ? followUpOwnerOf(team, task) : null;
-      const own = isOwnTask(task, actor.id, goesTo?.userId ?? null);
+      const owner = ownerOfTask(team, task);
+      const own = isOwnTask(task, actor.id, owner);
       return {
         ...task,
         statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status],
@@ -12707,7 +12711,7 @@ async function getStaffEngagement(db, actor, engagementId) {
         // Whether this person may write on it and share its First edit: the server checks again (requireStaffClientItem).
         canAnswer: task.status !== "cancelled" && (seesAllTasks || own),
         // A team item its owner hands in for review (R86): uploads, a link, messages, then Ready for review.
-        canHandIn: task.side === "ipf" && (task.assigneeUserId === actor.id || task.createdByUserId === actor.id) && OPEN_TASK_STATUSES.includes(task.status),
+        canHandIn: task.side === "ipf" && (owner === actor.id || task.createdByUserId === actor.id) && OPEN_TASK_STATUSES.includes(task.status),
         comments: itemComments.filter((comment) => comment.taskId === task.id).map(({ taskId: _taskId, ...comment }) => comment)
       };
     }),
@@ -13062,14 +13066,14 @@ async function staffTaskComment(db, actor, input) {
   const { task, team } = await requireStaffTask(db, actor, input.taskId);
   const body = input.body.trim();
   await db.insert(engagementTaskComments).values({ engagementId: task.engagementId, taskId: task.id, authorUserId: actor.id, body });
-  const emailed = task.side === "client" ? await sendMessageEmails(db, { taskId: task.id, fromTeam: true, authorUserId: actor.id, body }) : await sendTeamItemEmails(db, { taskId: task.id, authorUserId: actor.id, body, to: [task.assigneeUserId ?? task.createdByUserId].filter((id3) => id3 !== null) });
+  const emailed = task.side === "client" ? await sendMessageEmails(db, { taskId: task.id, fromTeam: true, authorUserId: actor.id, body }) : await sendTeamItemEmails(db, { taskId: task.id, authorUserId: actor.id, body, to: [ownerOfTask(team, task) ?? task.createdByUserId].filter((id3) => id3 !== null) });
   const tagged = mentionedIn(body, team.map((member) => ({ userId: member.userId, name: member.name ?? "" }))).map((member) => member.userId).filter((id3) => id3 !== actor.id);
   const mentioned = tagged.length ? await sendMentionEmails(db, { taskId: task.id, authorUserId: actor.id, body, userIds: tagged }) : 0;
   return { success: true, emailed: emailed + mentioned, mentioned: tagged.length };
 }
 async function handInTask(db, actor, input) {
-  const { task } = await requireStaffTask(db, actor, input.taskId);
-  if (task.side !== "ipf" || task.assigneeUserId !== actor.id && task.createdByUserId !== actor.id) throw new TRPCError18({ code: "FORBIDDEN", message: "Only the person the item is for hands it in." });
+  const { task, team } = await requireStaffTask(db, actor, input.taskId);
+  if (task.side !== "ipf" || ownerOfTask(team, task) !== actor.id && task.createdByUserId !== actor.id) throw new TRPCError18({ code: "FORBIDDEN", message: "Only the person the item is for hands it in." });
   if (!OPEN_TASK_STATUSES.includes(task.status)) throw new TRPCError18({ code: "CONFLICT", message: "This item is already handed in or done." });
   await db.update(engagementTasks).set({ status: "received" }).where(eq24(engagementTasks.id, task.id));
   await recordAudit(db, { action: "engagement_task_handed_in", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id } });
@@ -13725,8 +13729,9 @@ async function requireUploader(db, actor, engagementId, target, audience) {
   if (!canContribute(actor)) return requireManage2(actor);
   if (target.kind === "deliverable" && (audience === null || audience === "team")) return;
   if (target.kind === "task" && (audience === null || audience === "team")) {
-    const own = (await db.select({ engagementId: engagementTasks.engagementId, side: engagementTasks.side, assigneeUserId: engagementTasks.assigneeUserId, createdByUserId: engagementTasks.createdByUserId }).from(engagementTasks).where(eq24(engagementTasks.id, target.id)).limit(1))[0];
-    if (own && own.engagementId === engagementId && own.side === "ipf" && (own.assigneeUserId === actor.id || own.createdByUserId === actor.id)) return;
+    const own = (await db.select().from(engagementTasks).where(eq24(engagementTasks.id, target.id)).limit(1))[0];
+    const team = own ? await db.select({ userId: engagementTeam.userId, role: engagementTeam.role }).from(engagementTeam).where(eq24(engagementTeam.engagementId, own.engagementId)) : [];
+    if (own && own.engagementId === engagementId && own.side === "ipf" && (ownerOfTask(team, own) === actor.id || own.createdByUserId === actor.id)) return;
   }
   if (target.kind === "task" && audience !== "team") {
     const task = (await db.select({ engagementId: engagementTasks.engagementId, requestedByUserId: engagementTasks.requestedByUserId }).from(engagementTasks).where(eq24(engagementTasks.id, target.id)).limit(1))[0];

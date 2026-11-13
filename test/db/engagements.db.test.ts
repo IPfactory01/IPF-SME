@@ -367,6 +367,18 @@ for (const target of targets) {
         expect(JSON.stringify(room)).not.toContain("Draft ready");
       });
 
+      it("gives the plan's unassigned team items to the main contact, the Digital Marketer, who sees and hands them in (R86)", async () => {
+        const s = await studio("owner");
+        const mira = await (await s.marketer.browser.call()).engagement.staff.detail({ engagementId: s.engagementId });
+        const plan = mira.tasks.find(task => task.title === "Content plan for month 1")!;
+        expect(plan).toMatchObject({ side: "ipf", assigneeUserId: null, canHandIn: true });
+        // The Content Producer does not see it; the Digital Marketer hands it in, and the lead sees it to review.
+        const kemi = await (await s.producer.browser.call()).engagement.staff.detail({ engagementId: s.engagementId });
+        expect(kemi.tasks.some(task => task.title === "Content plan for month 1")).toBe(false);
+        await (await s.marketer.browser.call()).engagement.staff.handIn({ taskId: plan.id });
+        expect((await (await s.lead.browser.call()).engagement.staff.today()).some(item => item.kind === "review" && item.title === "Content plan for month 1")).toBe(true);
+      });
+
       it("starts the First edit's clock when the footage arrives, tells the person it goes to, stops it when the team asks for more, and shares it once", async () => {
         const s = await studio("clock");
         const producer = await s.producer.browser.call();

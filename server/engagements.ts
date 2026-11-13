@@ -425,8 +425,18 @@ export const canSeeFees = (actor: StaffActor) => canSeeInternal(actor) || author
  * item, or a client item that comes to them. Below the lead (Analysts, Specialists) a person sees and works on these
  * only; the lead upwards (canReviewEngagement) sees every task, to coordinate.
  */
-export function isOwnTask(task: Pick<typeof engagementTasks.$inferSelect, "side" | "assigneeUserId" | "requestedByUserId" | "createdByUserId">, actorId: number, goesToUserId: number | null) {
-  return task.assigneeUserId === actorId || task.requestedByUserId === actorId || (task.side === "ipf" && task.createdByUserId === actorId) || (task.side === "client" && goesToUserId === actorId);
+export function isOwnTask(task: Pick<typeof engagementTasks.$inferSelect, "side" | "assigneeUserId" | "requestedByUserId" | "createdByUserId">, actorId: number, ownerUserId: number | null) {
+  return task.assigneeUserId === actorId || task.requestedByUserId === actorId || (task.side === "ipf" && task.createdByUserId === actorId) || ownerUserId === actorId;
+}
+
+/**
+ * Whom an item belongs to on the team: a client item, the person it goes to (R78); a team item, the person named on it,
+ * else the engagement's main contact (the Digital Marketer first), so the plan's own items ("Content plan for month 1")
+ * have an owner who sees them and hands them in (R86). The lead reassigns with the item's Person.
+ */
+export function ownerOfTask<T extends { userId: number; role: EngagementTeamRole }>(team: readonly T[], task: Pick<typeof engagementTasks.$inferSelect, "side" | "assigneeUserId" | "requestedByUserId" | "turnaround">) {
+  if (task.side === "client") return followUpOwnerOf(team, task)?.userId ?? null;
+  return task.assigneeUserId ?? followUpOwnerOf(team, { requestedByUserId: null, turnaround: null })?.userId ?? null;
 }
 
 /** One task this person may see and work on: theirs, or any when they lead the engagement. Not found otherwise. */
@@ -436,8 +446,7 @@ async function requireStaffTask(db: Pick<Database, "select">, actor: StaffActor,
   await requireStaffEngagement(db, actor, task.engagementId);
   const team = await db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, task.engagementId));
   const leads = await canReviewEngagement(db, actor, task.engagementId);
-  const goesTo = task.side === "client" ? followUpOwnerOf(team, task) : null;
-  if (!leads && !isOwnTask(task, actor.id, goesTo?.userId ?? null)) {
+  if (!leads && !isOwnTask(task, actor.id, ownerOfTask(team, task))) {
     const people = team.map(member => ({ userId: member.userId, name: member.name ?? "" }));
     const said = await db.select({ body: engagementTaskComments.body }).from(engagementTaskComments).where(eq(engagementTaskComments.taskId, task.id));
     if (!said.some(comment => mentionedIn(comment.body, people).some(person => person.userId === actor.id))) throw notFound();
@@ -654,9 +663,10 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     // Internal notes stay with those who work on or approve engagements.
     sessions: canSeeInternal(actor) ? sessions : sessions.map(item => ({ ...item, internalNotes: null })),
     // Below the lead, a person's own tasks only (R86); the lead upwards sees every task.
-    tasks: tasks.filter(task => seesAllTasks || taggedIn.has(task.id) || isOwnTask(task, actor.id, task.side === "client" ? followUpOwnerOf(team, task)?.userId ?? null : null)).map(task => {
+    tasks: tasks.filter(task => seesAllTasks || taggedIn.has(task.id) || isOwnTask(task, actor.id, ownerOfTask(team, task))).map(task => {
       const goesTo = task.side === "client" ? followUpOwnerOf(team, task) : null;
-      const own = isOwnTask(task, actor.id, goesTo?.userId ?? null);
+      const owner = ownerOfTask(team, task);
+      const own = isOwnTask(task, actor.id, owner);
       return {
         ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id),
         askedByName: task.requestedByUserId === null ? null : askers.get(task.requestedByUserId) ?? "",
@@ -664,7 +674,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
         // Whether this person may write on it and share its First edit: the server checks again (requireStaffClientItem).
         canAnswer: task.status !== "cancelled" && (seesAllTasks || own),
         // A team item its owner hands in for review (R86): uploads, a link, messages, then Ready for review.
-        canHandIn: task.side === "ipf" && (task.assigneeUserId === actor.id || task.createdByUserId === actor.id) && OPEN_TASK_STATUSES.includes(task.status),
+        canHandIn: task.side === "ipf" && (owner === actor.id || task.createdByUserId === actor.id) && OPEN_TASK_STATUSES.includes(task.status),
         comments: itemComments.filter(comment => comment.taskId === task.id).map(({ taskId: _taskId, ...comment }) => comment),
       };
     }),
@@ -1103,7 +1113,7 @@ export async function staffTaskComment(db: Database, actor: StaffActor, input: {
   // On the client's item the client hears; on a team item the conversation stays inside IP Factory, and its owner hears.
   const emailed = task.side === "client"
     ? await sendMessageEmails(db, { taskId: task.id, fromTeam: true, authorUserId: actor.id, body })
-    : await sendTeamItemEmails(db, { taskId: task.id, authorUserId: actor.id, body, to: [task.assigneeUserId ?? task.createdByUserId].filter((id): id is number => id !== null) });
+    : await sendTeamItemEmails(db, { taskId: task.id, authorUserId: actor.id, body, to: [ownerOfTask(team, task) ?? task.createdByUserId].filter((id): id is number => id !== null) });
   // Whoever is tagged (@name) is emailed too, once (R86).
   const tagged = mentionedIn(body, team.map(member => ({ userId: member.userId, name: member.name ?? "" }))).map(member => member.userId).filter(id => id !== actor.id);
   const mentioned = tagged.length ? await sendMentionEmails(db, { taskId: task.id, authorUserId: actor.id, body, userIds: tagged }) : 0;
@@ -1115,8 +1125,8 @@ export async function staffTaskComment(db: Database, actor: StaffActor, input: {
  * Manager or Lead Consultant, else the office) is emailed. The lead then marks it done or asks for more.
  */
 export async function handInTask(db: Database, actor: StaffActor, input: { taskId: number }) {
-  const { task } = await requireStaffTask(db, actor, input.taskId);
-  if (task.side !== "ipf" || (task.assigneeUserId !== actor.id && task.createdByUserId !== actor.id)) throw new TRPCError({ code: "FORBIDDEN", message: "Only the person the item is for hands it in." });
+  const { task, team } = await requireStaffTask(db, actor, input.taskId);
+  if (task.side !== "ipf" || (ownerOfTask(team, task) !== actor.id && task.createdByUserId !== actor.id)) throw new TRPCError({ code: "FORBIDDEN", message: "Only the person the item is for hands it in." });
   if (!OPEN_TASK_STATUSES.includes(task.status)) throw new TRPCError({ code: "CONFLICT", message: "This item is already handed in or done." });
   await db.update(engagementTasks).set({ status: "received" }).where(eq(engagementTasks.id, task.id));
   await recordAudit(db, { action: "engagement_task_handed_in", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id } });
@@ -1898,8 +1908,9 @@ async function requireUploader(db: Pick<Database, "select">, actor: StaffActor, 
   if (target.kind === "deliverable" && (audience === null || audience === "team")) return;
   // Their own team item (R86): what they hand in, for IP Factory only until the lead shares it.
   if (target.kind === "task" && (audience === null || audience === "team")) {
-    const own = (await db.select({ engagementId: engagementTasks.engagementId, side: engagementTasks.side, assigneeUserId: engagementTasks.assigneeUserId, createdByUserId: engagementTasks.createdByUserId }).from(engagementTasks).where(eq(engagementTasks.id, target.id)).limit(1))[0];
-    if (own && own.engagementId === engagementId && own.side === "ipf" && (own.assigneeUserId === actor.id || own.createdByUserId === actor.id)) return;
+    const own = (await db.select().from(engagementTasks).where(eq(engagementTasks.id, target.id)).limit(1))[0];
+    const team = own ? await db.select({ userId: engagementTeam.userId, role: engagementTeam.role }).from(engagementTeam).where(eq(engagementTeam.engagementId, own.engagementId)) : [];
+    if (own && own.engagementId === engagementId && own.side === "ipf" && (ownerOfTask(team, own) === actor.id || own.createdByUserId === actor.id)) return;
   }
   if (target.kind === "task" && audience !== "team") {
     const task = (await db.select({ engagementId: engagementTasks.engagementId, requestedByUserId: engagementTasks.requestedByUserId }).from(engagementTasks).where(eq(engagementTasks.id, target.id)).limit(1))[0];

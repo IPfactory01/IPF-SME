@@ -480,7 +480,10 @@ Paystack's signed notifications arrive at `POST /api/paystack/webhook`.
 the left rail holds Home, My tasks, Your projects and, for whoever's role has them, **The desk**: Pipeline, Clients,
 Finance and Team. Each place below keeps its screens and its permission; it opens inside the frame. Every engagement
 opens as its workspace (R82); its Work Plan is the room's weekly cards (R85), as the client sees them, with each week's Sessions; each item
-opens beside them with its form, its files and its conversation. Below the lead, the cards hold the person's own tasks only (R86); the lead upwards sees every task. A
+opens beside them with its form, its files and its conversation. Below the lead, the cards hold the person's own tasks only (R86); the lead upwards sees every task. For the lead, an item's panel reads it first: who it is with, due, priority and status, then **What was sent**
+(the link, their note, the files), **Mark received** and **Ask for more** (a note they see) when something was sent, the
+detail, the messages, and **Edit the item** for the full form. Whoever sent or handed something in sees it ticked,
+*pending review*, and *Completed* once reviewed (R87); an unassigned team item belongs to the main contact (R86). A
 team item's panel: its form (the lead changes it), **Attach a file**, messages inside IP Factory (**Send**, **Send a
 link**, **@** to tag a colleague), and **Ready for review** for the person it is for. **Files** shows every file as cards, one per item it
 belongs to (its reference, title and status, then each file with who sent it and when), Deliverables' files in theirs,

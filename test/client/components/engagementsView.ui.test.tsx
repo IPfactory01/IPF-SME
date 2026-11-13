@@ -561,7 +561,12 @@ describe("the team's workspace (R82)", () => {
     expect(page.queryByRole("textbox", { name: "What" })).toBeNull();
     fireEvent.click(line);
     const details = within(page.getByRole("complementary", { name: "Task details" }));
+    // The lead reads the item first; the full form is behind Edit the item.
+    expect(details.getByRole("heading", { name: "Your price list" })).toBeTruthy();
+    expect(details.queryByRole("textbox", { name: "What" })).toBeNull();
+    fireEvent.click(details.getByRole("button", { name: "Edit the item" }));
     expect((details.getByRole("textbox", { name: "What" }) as HTMLInputElement).value).toBe("Your price list");
+    fireEvent.click(details.getByRole("button", { name: "Back to the item" }));
     fireEvent.click(details.getByRole("button", { name: "Close" }));
     expect(page.queryByRole("complementary", { name: "Task details" })).toBeNull();
     fireEvent.click(page.getByRole("tab", { name: /^Deliverables/ }));
@@ -622,6 +627,49 @@ describe("the team's workspace (R82)", () => {
     expect(within(page.getByRole("region", { name: "Daily cash count" })).getByText("cash-count.xlsx")).toBeTruthy();
     // An item with no files has no card.
     expect(page.queryByRole("region", { name: "Logo, colours and fonts" })).toBeNull();
+  });
+
+  it("puts what the client sent first for the lead, with Mark received and Ask for more", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };
+    const file = { id: 81, fileName: "logo.png", contentType: "image/png", sizeBytes: 2048, audience: "owner", uploadedByName: "Ada Okafor", createdAt: new Date() };
+    api.detail = { ...detail({ manage: true, assign: false, review: true }, [], [task({ id: 51, title: "Logo, colours and fonts", status: "received", statusLabel: "Sent, we are checking", responseLink: "https://drive.google.com/drive/folders/x", files: [file] })]), team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    fireEvent.click(screen.getByRole("button", { name: "Open Logo, colours and fonts" }));
+    const details = within(screen.getByRole("complementary", { name: "Task details" }));
+    const sent = within(details.getByRole("region", { name: "What was sent" }));
+    expect(sent.getByText("logo.png")).toBeTruthy();
+    expect(sent.getByRole("link", { name: "Open the link" }).getAttribute("href")).toBe("https://drive.google.com/drive/folders/x");
+    fireEvent.click(details.getByRole("button", { name: "Mark received" }));
+    expect(api.calls.saveTask.at(-1)).toMatchObject({ taskId: 51, status: "accepted" });
+    fireEvent.click(details.getByRole("button", { name: "Ask for more" }));
+    fireEvent.change(details.getByLabelText(/What is still needed/), { target: { value: "The logo as a PNG with no background" } });
+    fireEvent.click(details.getByRole("button", { name: "Send" }));
+    expect(api.calls.saveTask.at(-1)).toMatchObject({ taskId: 51, status: "needs_more", statusNote: "The logo as a PNG with no background" });
+  });
+
+  it("ticks what a team member has handed in as pending review for them, and as to review for the lead (R87)", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Digital Marketer" }] };
+    const handedIn = task({ id: 61, title: "Content plan for month 1", side: "ipf", kind: "action", status: "received", statusLabel: "Sent, we are checking", canAnswer: true });
+    api.detail = { ...detail({ manage: false, assign: false, review: false, contribute: true }, [], [handedIn]), team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    expect(screen.getByRole("button", { name: "Open Content plan for month 1" }).textContent).toContain("Handed in, pending review");
+    fireEvent.click(screen.getByRole("button", { name: "Open Content plan for month 1" }));
+    expect(screen.getByText(/Ticked: handed in, pending review/)).toBeTruthy();
+    cleanup();
+    api.detail = { ...detail({ manage: true, assign: false, review: true }, [], [handedIn]), team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    expect(screen.getByRole("button", { name: "Open Content plan for month 1" }).textContent).toContain("Handed in: review it");
   });
 
   it("gives a lead who sees fees the Fees tab and the count to approve", () => {

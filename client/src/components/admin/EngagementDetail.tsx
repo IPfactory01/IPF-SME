@@ -4,6 +4,7 @@ import { Failed, Loading } from "@/components/states";
 import { isRefusal } from "@/lib/readPolicy";
 import { DATED_TYPES, STAGED_TYPES } from "@shared/engagementTypes";
 import { lagosDay } from "@shared/agreement";
+import { dayInWords } from "@shared/requests";
 import { DATA_REQUEST_TEMPLATES, parsePastedDataRequest, templateById } from "@shared/dataRequestTemplates";
 import { feeTotal, type FeeLineDraft } from "@shared/agreement";
 import { formatNaira } from "@shared/businessSupport";
@@ -58,7 +59,7 @@ import { DetailField, DetailSection } from "./AdminPrimitives";
 import DeliveryShareNote from "./DeliveryShareNote";
 import { combineDateAndTime, formatDate, formatDateTime, toDateInput, toTimeInput, whatsappLink } from "./format";
 import { FeeHoldNote } from "./FeeHoldBadge";
-import { ArrowLeft, Flag } from "lucide-react";
+import { ArrowLeft, Check, Flag } from "lucide-react";
 import RoomTabs, { type RoomTab } from "@/components/room/RoomTabs";
 import { avatarColour, dueFlag, FLAG_TONE, initials } from "@/components/EngagementRoom";
 import { METHOD } from "@shared/method";
@@ -195,7 +196,9 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
       <div className={`min-w-0 ${task ? "" : "xl:col-span-2"}`}>
         {/* Weekly cards (R85), as the client sees them, with each week's Sessions. */}
         <WeekCards startedOn={data.engagement.startedOn ?? null} items={data.tasks} sessions={data.sessions} now={now}
-          isDone={item => groupOf(item).id === "done"} isWaiting={item => groupOf(item).id === "us" || groupOf(item).id === "checking"} waitingLabel="Waiting on IP Factory"
+          // Handed in or sent is done from the sender's side (R87); for the lead it waits on their review.
+          isDone={item => groupOf(item).id === "done" || (!data.can.seeAllTasks && groupOf(item).id === "checking")}
+          isWaiting={item => groupOf(item).id === "us" || (data.can.seeAllTasks && groupOf(item).id === "checking")} waitingLabel={data.can.seeAllTasks ? "Waiting on IP Factory" : "Waiting on you"}
           renderItem={item => {
             const group = groupOf(item);
             // Something the client has sent is not late: it waits on us to check it.
@@ -204,10 +207,13 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
             return (
               <button type="button" onClick={() => setSelected(selected === item.id ? null : item.id)} aria-expanded={selected === item.id} aria-label={`Open ${item.title}`}
                 className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm ${selected === item.id ? "bg-brand-tint" : "hover:bg-paper-sunken"}`}>
-                <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />
+                {/* Sent or handed in is ticked, pending review; completed once the lead has reviewed it (R87). */}
+                {group.id === "checking" || group.id === "done"
+                  ? <span aria-hidden className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${group.id === "done" ? "bg-health-clear" : "bg-brand"} text-white`}><Check className="h-3 w-3" /></span>
+                  : <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />}
                 <span className="min-w-0 flex-1">
                   <span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}</span>
-                  <span className="block text-xs text-ink-muted">{[item.side === "ipf" && group.id === "checking" ? "Ready for review" : group.name, item.kind === "data_request" ? METHOD.dataRequest : "Action", item.comments.length ? `${item.comments.length} ${item.comments.length === 1 ? "message" : "messages"}` : "", item.files.length ? `${item.files.length} ${item.files.length === 1 ? "file" : "files"}` : ""].filter(Boolean).join(" · ")}</span>
+                  <span className="block text-xs text-ink-muted">{[group.id === "checking" ? (item.side === "ipf" ? (data.can.seeAllTasks ? "Handed in: review it" : "Handed in, pending review") : (data.can.seeAllTasks ? "Sent by the client: review it" : "Sent, pending review")) : group.id === "done" ? "Completed" : group.name, item.kind === "data_request" ? METHOD.dataRequest : "Action", item.comments.length ? `${item.comments.length} ${item.comments.length === 1 ? "message" : "messages"}` : "", item.files.length ? `${item.files.length} ${item.files.length === 1 ? "file" : "files"}` : ""].filter(Boolean).join(" · ")}</span>
                 </span>
                 <span title={who} className={`hidden h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium text-white sm:inline-flex ${avatarColour(who)}`}><span aria-hidden>{initials(who)}</span><span className="sr-only">{who}</span></span>
                 <span className={`hidden w-32 shrink-0 whitespace-nowrap text-right sm:block ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? ""}</span>
@@ -218,12 +224,11 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
       </div>
       {task && (
         <aside aria-label="Task details" className="space-y-3 rounded-xl border border-line-soft bg-white p-4 xl:sticky xl:top-16">
-          <div className="flex items-start justify-between gap-3">
-            <p className="text-xs text-ink-muted">{task.statusLabel}</p>
+          <div className="flex justify-end">
             <button type="button" onClick={() => setSelected(null)} className="text-xs text-brand underline underline-offset-2">Close</button>
           </div>
           {/* The lead changes an item; below the lead, a person reads it and works on it: files, messages, Ready for review (R86). */}
-          {data.can.manage && data.can.seeAllTasks ? <TaskCard key={task.id} task={task} data={data} engagementId={engagementId} /> : <OwnItem key={task.id} task={task} data={data} engagementId={engagementId} now={now} />}
+          {data.can.manage && data.can.seeAllTasks ? <ReviewItem key={task.id} task={task} data={data} engagementId={engagementId} now={now} /> : <OwnItem key={task.id} task={task} data={data} engagementId={engagementId} now={now} />}
         </aside>
       )}
     </div>
@@ -266,6 +271,63 @@ function FilesByItem({ data, engagementId }: { data: Detail; engagementId: numbe
   );
 }
 
+/**
+ * An item as the lead reviews it (ET, 13 November 2026): what it is, then what was sent (files, link, note) first, the
+ * two decisions (Mark received, Ask for more), its messages, and the full form only behind Edit the item.
+ */
+function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detail; engagementId: number; now: number }) {
+  const refresh = useRefresh(engagementId);
+  const [editing, setEditing] = useState(false);
+  const [asking, setAsking] = useState<string | null>(null);
+  const save = trpc.engagement.staff.saveTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); setAsking(null); toast.success("Saved. The person it is with sees it."); } });
+  const decide = (status: EngagementTaskStatus, note: string | null) => save.mutate({
+    engagementId, taskId: task.id, kind: task.kind, side: task.side, title: task.title, detail: task.detail, assigneeUserId: task.assigneeUserId, dueOn: task.dueOn, status, statusNote: note,
+    sessionId: task.sessionId ?? null, weekNumber: task.weekNumber ?? null, sortOrder: task.sortOrder ?? 0, factor: task.factor ?? null, priority: task.priority ?? null,
+    section: task.section ?? null, ref: task.ref ?? null, informs: task.informs ?? null, format: task.format ?? null,
+  });
+  const sent = task.status === "received";
+  const flag = dueFlag(task.dueOn, !OPEN_TASK_STATUSES.includes(task.status) && !sent, now);
+  if (editing) return <div className="space-y-2"><button type="button" className="text-sm font-medium text-brand" onClick={() => setEditing(false)}>Back to the item</button><TaskCard task={task} data={data} engagementId={engagementId} onDone={() => setEditing(false)} /></div>;
+  return (
+    <div className="space-y-3">
+      <h3 className="font-sans text-lg font-semibold tracking-tight text-ink">{task.title}</h3>
+      <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+        <dt className="text-ink-muted">With</dt><dd>{task.side === "client" ? data.businessName || "The client" : task.goesTo?.name || "IP Factory"}</dd>
+        <dt className="text-ink-muted">Due</dt><dd className={flag && !sent ? FLAG_TONE[flag.tone] : ""}>{task.dueOn ? dayInWords(task.dueOn) : "No date"}{flag && !sent && flag.tone === "late" ? ` · ${flag.text}` : ""}</dd>
+        {task.priority && <><dt className="text-ink-muted">Priority</dt><dd>{PRIORITY_WORDS[task.priority]}</dd></>}
+        <dt className="text-ink-muted">Status</dt><dd>{sent ? (task.side === "client" ? "Sent by the client: review it" : "Handed in: review it") : task.status === "done" || task.status === "accepted" ? "Completed" : task.statusLabel}</dd>
+      </dl>
+      {/* What was sent, first. */}
+      {(task.files.length > 0 || task.responseLink || (sent && task.statusNote)) && (
+        <section aria-label="What was sent" className="space-y-2 rounded-lg border border-brand-line bg-brand-tint-soft p-3">
+          <p className="text-xs font-semibold text-ink">What was sent</p>
+          {task.responseLink && <p className="text-sm"><a href={task.responseLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand underline underline-offset-2">Open the link</a> <span className="text-xs text-ink-muted">({(() => { try { return new URL(task.responseLink).hostname.replace(/^www\./, ""); } catch { return "link"; } })()})</span></p>}
+          {sent && task.statusNote && <p className="text-sm text-ink-600">Their note: {task.statusNote}</p>}
+          <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={false} canManage={data.can.manage} />
+        </section>
+      )}
+      {sent && (asking === null ? (
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending} onClick={() => decide(task.side === "client" ? "accepted" : "done", task.statusNote)}>Mark received</Button>
+          <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAsking("")}>Ask for more</Button>
+        </div>
+      ) : (
+        <div className="space-y-1">
+          <label className={LABEL} htmlFor={`more-${task.id}`}>What is still needed (they see this)</label>
+          <input id={`more-${task.id}`} className={FIELD} value={asking} maxLength={500} onChange={event => setAsking(event.target.value)} />
+          <div className="flex gap-2">
+            <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !asking.trim()} onClick={() => decide("needs_more", asking.trim())}>Send</Button>
+            <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAsking(null)}>Cancel</Button>
+          </div>
+        </div>
+      ))}
+      {task.detail && <p className="whitespace-pre-line text-sm text-ink-600">{task.detail}</p>}
+      <ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} />
+      <button type="button" className="text-xs font-medium text-ink-600 underline underline-offset-2" onClick={() => setEditing(true)}>Edit the item</button>
+    </div>
+  );
+}
+
 /** One of a person's own items, for someone below the lead (R86): what it is and when, its files, and its messages. */
 function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; engagementId: number; now: number }) {
   const flag = dueFlag(task.dueOn, !OPEN_TASK_STATUSES.includes(task.status) && task.status !== "received", now);
@@ -276,7 +338,7 @@ function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; 
         <dt className="text-ink-muted">For</dt><dd>{task.side === "client" ? data.businessName || "The client" : "IP Factory"}</dd>
         <dt className="text-ink-muted">Due</dt><dd className={flag ? FLAG_TONE[flag.tone] : ""}>{flag?.text ?? "No date"}</dd>
         {task.priority && <><dt className="text-ink-muted">Priority</dt><dd>{PRIORITY_WORDS[task.priority]}</dd></>}
-        <dt className="text-ink-muted">Status</dt><dd>{task.side === "ipf" && task.status === "received" ? "Ready for review" : task.statusLabel}</dd>
+        <dt className="text-ink-muted">Status</dt><dd>{task.status === "received" ? "Ticked: sent, pending review" : task.status === "done" || task.status === "accepted" ? "Completed" : task.statusLabel}</dd>
       </dl>
       {task.detail && <p className="whitespace-pre-line text-sm text-ink-600">{task.detail}</p>}
       <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && (task.canHandIn || task.requestedByUserId === data.viewerUserId)} canManage={false} briefFor={task.requestedByUserId === data.viewerUserId} />

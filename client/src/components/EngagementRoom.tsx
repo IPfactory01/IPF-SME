@@ -1,3 +1,4 @@
+import { matchesSearch } from "@/lib/planFilter";
 import { Button } from "@/components/ui/button";
 import { MotionConfig } from "framer-motion";
 import { trpc } from "@/lib/trpc";
@@ -1158,6 +1159,8 @@ const PLAN_GROUPS: { id: string; name: string; dot: string; pill: string; test: 
 /** Every task in the engagement, grouped by where it stands, with who owns it and when it is due. Open one to act on it. */
 function PlanView({ room, now }: { room: Room; now: number }) {
   const [selected, setSelected] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
+  const searching = query.trim().length > 0;
   // The client sees their own items; IP Factory's work shows as one line a week (R86), not item by item.
   const ours = room.tasks.filter(item => item.side !== "client");
   const ourWeek = (week: number | null) => {
@@ -1181,7 +1184,11 @@ function PlanView({ room, now }: { room: Room; now: number }) {
         {/* Where the Data Requests stand, above the weeks: the Data Request tab is gone (R89); each item is answered here. */}
         {room.tasks.some(item => item.kind === "data_request") && <RequestSummary items={room.tasks.filter(item => item.kind === "data_request")} now={now} />}
         {/* Weekly cards (R85): each week's items and its Sessions, this week first. */}
-        <WeekCards startedOn={room.startedOn ?? null} items={room.tasks.filter(item => item.side === "client")} sessions={room.sessions} now={now} note={ourWeek} noteWeeks={ours.map(item => item.weekNumber ?? weekOfDay(room.startedOn ?? null, item.dueOn))}
+        {/* Search by title or code (ET, 13 November 2026); while searching, only the matching items show. */}
+        <input type="search" aria-label={`Search the ${METHOD.workPlan}`} placeholder="Search by title or code" value={query} onChange={event => setQuery(event.target.value)}
+          className="mb-3 min-h-9 w-full rounded-md border border-line-soft bg-white px-3 text-sm text-ink placeholder:text-ink-muted sm:max-w-xs" />
+        <WeekCards startedOn={room.startedOn ?? null} items={room.tasks.filter(item => item.side === "client" && (item.id === selected || matchesSearch(item, query)))} sessions={searching ? [] : room.sessions} now={now}
+          note={searching ? undefined : ourWeek} noteWeeks={searching ? [] : ours.map(item => item.weekNumber ?? weekOfDay(room.startedOn ?? null, item.dueOn))} emptyText={searching ? "Nothing matches. Try another word." : undefined}
           isDone={item => ["done", "checking"].includes(PLAN_GROUPS.find(group => group.test(item))?.id ?? "")} isWaiting={isClientOpen} waitingLabel="Waiting on you"
           renderItem={item => {
             const group = PLAN_GROUPS.find(entry => entry.test(item)) ?? PLAN_GROUPS[1]!;

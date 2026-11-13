@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| The Work Plan filters by whose items (everyone's, Mine, the client's, a colleague's: owned or reviewed) and searches by title or code; the lead starts on everyone's, everyone else on Mine; the client has the search (R91) | ET, 13 November 2026 |
 | Several files per upload on an item (the client and the team); links in messages open; everyone's initials are two letters so owners can be told apart | ET, 13 November 2026 |
 | A Session is marked held from its row in the week, by the team on the engagement, once it has started; Did not happen takes it off the plan with no email; Today asks the lead and whoever booked it until it is marked (R90) | ET, 13 November 2026 |
 | Each item has a reviewer (default: the client item's person, or the lead for a team item; the lead can change it) who gets the review, its Today, its reminders and Mark received / Ask for more; tagging stays optional (R89, 0026) | ET, 13 November 2026 |

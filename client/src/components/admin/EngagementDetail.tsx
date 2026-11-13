@@ -1,3 +1,4 @@
+import { matchesSearch, matchesWhose, whoseFrom, whoseValue, type Whose } from "@/lib/planFilter";
 import { firstNameOf } from "@shared/whatsapp";
 import WhatsAppShare from "./WhatsAppShare";
 import { Failed, Loading } from "@/components/states";
@@ -207,14 +208,32 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
   const nameOf = (item: Task) => (item.assigneeUserId !== null ? [...data.clientPeople.map(person => ({ id: person.userId, name: person.name })), ...data.team.map(member => ({ id: member.userId, name: member.name ?? "" }))].find(person => person.id === item.assigneeUserId)?.name : undefined)
     || (item.side === "client" ? data.businessName || "The client" : item.ownerName || "No one yet");
   const groupOf = (item: Task) => TEAM_PLAN_GROUPS.find(group => group.test(item)) ?? TEAM_PLAN_GROUPS[1]!;
+  // Whose items, and a search (ET, 13 November 2026): the lead starts on everyone's, everyone else on their own.
+  const [whose, setWhose] = useState<Whose>(() => (data.can.seeAllTasks ? "everyone" : "mine"));
+  const [query, setQuery] = useState("");
+  const shown = data.tasks.filter(item => item.id === selected || (matchesWhose(item, whose, data.viewerUserId) && matchesSearch(item, query)));
+  const people = data.team.filter(member => member.name);
   const refresh = useRefresh(engagementId);
   const markHeld = trpc.engagement.staff.markHeld.useMutation({ ...refresh, onSuccess: (result) => { refresh.onSuccess(); toast.success(result.status === "held" ? "Marked held. Write the notes in Sessions." : "Taken off the plan. Book it again when you have a date."); } });
   if (!data.tasks.length) return <p className="text-sm text-ink-muted">Nothing on the {METHOD.workPlan} yet.</p>;
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
       <div className={`min-w-0 ${task ? "" : "xl:col-span-2"}`}>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-sm text-ink-600">Show
+            <select aria-label="Whose items" className="min-h-9 rounded-md border border-line-soft bg-white px-2 text-sm text-ink" value={whoseValue(whose)} onChange={event => setWhose(whoseFrom(event.target.value))}>
+              <option value="everyone">Everyone's</option>
+              <option value="mine">Mine</option>
+              <option value="client">{data.businessName || "The client"}</option>
+              {people.filter(member => member.userId !== data.viewerUserId).map(member => <option key={member.userId} value={member.userId}>{member.name}</option>)}
+            </select>
+          </label>
+          <input type="search" aria-label={`Search the ${METHOD.workPlan}`} placeholder="Search by title or code" value={query} onChange={event => setQuery(event.target.value)}
+            className="min-h-9 min-w-0 flex-1 rounded-md border border-line-soft bg-white px-3 text-sm text-ink placeholder:text-ink-muted sm:max-w-xs" />
+        </div>
         {/* Weekly cards (R85), as the client sees them, with each week's Sessions. */}
-        <WeekCards startedOn={data.engagement.startedOn ?? null} items={data.tasks} sessions={data.sessions} now={now}
+        <WeekCards startedOn={data.engagement.startedOn ?? null} items={shown} sessions={query.trim() || (whose !== "everyone" && whose !== "mine") ? [] : data.sessions} now={now}
+          emptyText={whose === "mine" && !query.trim() ? "Nothing on the plan is yours. Show everyone's to see the rest." : "Nothing matches. Try everyone's, or another word."}
           onMarkHeld={data.can.markHeld ? (sessionId, held) => { if (!markHeld.isPending) markHeld.mutate({ sessionId, held }); } : undefined}
           // Handed in or sent is done from the sender's side (R87); for the lead it waits on their review.
           isDone={item => groupOf(item).id === "done" || (!data.can.seeAllTasks && groupOf(item).id === "checking")}

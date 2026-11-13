@@ -870,6 +870,18 @@ describe("the Plan, Meetings and Data requests views", () => {
     expect(screen.getByRole("region", { name: "Week 2" }).textContent).toContain("This week");
   });
 
+  it("lets the client search their Work Plan by title or code (ET, 13 November 2026)", () => {
+    render(<EngagementRoom room={room()} now={NOW} />);
+    open(/^Work Plan/);
+    const all = () => { for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); } return screen.getAllByRole("region", { name: /^(Week \d+|No week)$/ }).map(week => week.textContent ?? "").join(" "); };
+    expect(all()).toContain("Your price list");
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search the Work Plan" }), { target: { value: "price" } });
+    expect(all()).toContain("Your price list");
+    expect(all()).not.toContain("Your last 12 months of sales");
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search the Work Plan" }), { target: { value: "nothing like this" } });
+    expect(screen.getByText("Nothing matches. Try another word.")).toBeTruthy();
+  });
+
   it("shows the client Held only once the team marks it, and never the team's buttons (R90)", () => {
     const base = room();
     const s0 = base.sessions[0]!;

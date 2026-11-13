@@ -704,10 +704,51 @@ describe("the team's workspace (R82)", () => {
     expect(api.calls.markHeld.at(-1)).toEqual({ sessionId: 91, held: false });
   });
 
+  it("starts someone below the lead on their own items, with everyone's, the client's, a colleague's and a search a choice away (ET, 13 November 2026)", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Content Producer" }] };
+    const items = [
+      task({ id: 61, title: "Prepare shot lists and editing templates", side: "ipf", kind: "action", ref: "2.02", owners: [{ userId: 1, name: "Kemi Producer", lead: true }] }),
+      task({ id: 62, title: "Review the Google Business Profile", side: "ipf", kind: "action", ref: "1.12", owners: [{ userId: 2, name: "Lewis Lead", lead: true }] }),
+      task({ id: 63, title: "Logo, colours and fonts", side: "client", ref: "A1", detail: "Workplan 1.04, DL02.", owners: [] }),
+    ];
+    api.detail = { ...detail({ manage: false, assign: false, review: false, contribute: true }, [], items), team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
+    const open = () => { for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); } };
+    const titles = () => { open(); return screen.queryAllByRole("button", { name: /^Open (?!Ada Foods)/ }).map(button => button.getAttribute("aria-label")!.replace(/^Open /, "")); };
+    const whose = screen.getByRole("combobox", { name: "Whose items" }) as HTMLSelectElement;
+    expect(whose.value).toBe("mine");
+    expect(titles()).toEqual(["Prepare shot lists and editing templates"]);
+    fireEvent.change(whose, { target: { value: "everyone" } });
+    expect(titles()).toHaveLength(3);
+    fireEvent.change(whose, { target: { value: "2" } });
+    expect(titles()).toEqual(["Review the Google Business Profile"]);
+    fireEvent.change(whose, { target: { value: "client" } });
+    expect(titles()).toEqual(["Logo, colours and fonts"]);
+    // The search, by code: the workplan's 1.04 is the Logo item.
+    fireEvent.change(whose, { target: { value: "everyone" } });
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search the Work Plan" }), { target: { value: "1.04" } });
+    expect(titles()).toEqual(["Logo, colours and fonts"]);
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search the Work Plan" }), { target: { value: "nothing like this" } });
+    expect(screen.getByText("Nothing matches. Try everyone's, or another word.")).toBeTruthy();
+  });
+
+  it("starts the lead on everyone's items", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };
+    api.detail = { ...detail({ manage: true, assign: false, review: true }, [], [task({ id: 61, title: "Someone else's", side: "ipf", kind: "action", owners: [{ userId: 2, name: "Lewis Lead", lead: true }] })]), team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
+    expect((screen.getByRole("combobox", { name: "Whose items" }) as HTMLSelectElement).value).toBe("everyone");
+  });
+
   it("gives a team member who reviews an item Mark received there, and names the reviewer to everyone else (R89)", () => {
     api.seesAll = false;
     api.list = { setUp: true, items: [{ ...row, myRole: "Content Producer" }] };
-    const sent = (canReview: boolean) => task({ id: 71, title: "A video of the new menu", status: "received", statusLabel: "Sent, we are checking", reviewer: { userId: 3, name: "Kemi Producer" }, canReview });
+    const sent = (canReview: boolean) => task({ id: 71, title: "A video of the new menu", status: "received", statusLabel: "Sent, we are checking", reviewer: canReview ? { userId: 1, name: "Kemi Producer" } : { userId: 2, name: "Lewis Lead" }, canReview });
     api.detail = { ...detail({ manage: false, assign: false, review: false, contribute: true }, [], [sent(true)]), team };
     render(<EngagementsView />);
     fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
@@ -724,14 +765,18 @@ describe("the team's workspace (R82)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
     fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
     for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    // Not theirs to own or review: under Mine it is not listed; under everyone's it is, named to Lewis, with no decision.
+    expect(screen.queryByRole("button", { name: "Open A video of the new menu" })).toBeNull();
+    fireEvent.change(screen.getByRole("combobox", { name: "Whose items" }), { target: { value: "everyone" } });
     fireEvent.click(screen.getByRole("button", { name: "Open A video of the new menu" }));
+    expect(within(screen.getByRole("complementary", { name: "Task details" })).getByText("Lewis Lead")).toBeTruthy();
     expect(within(screen.getByRole("complementary", { name: "Task details" })).queryByRole("button", { name: "Mark received" })).toBeNull();
   });
 
   it("ticks what a team member has handed in as pending review for them, and as to review for the lead (R87)", () => {
     api.seesAll = false;
     api.list = { setUp: true, items: [{ ...row, myRole: "Digital Marketer" }] };
-    const handedIn = task({ id: 61, title: "Content plan for month 1", side: "ipf", kind: "action", status: "received", statusLabel: "Sent, we are checking", canAnswer: true });
+    const handedIn = task({ id: 61, title: "Content plan for month 1", side: "ipf", kind: "action", status: "received", statusLabel: "Sent, we are checking", canAnswer: true, owners: [{ userId: 1, name: "Kemi Producer", lead: true }] });
     api.detail = { ...detail({ manage: false, assign: false, review: false, contribute: true }, [], [handedIn]), team };
     render(<EngagementsView />);
     fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));

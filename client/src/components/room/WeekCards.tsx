@@ -13,7 +13,7 @@ const sessionTime = (date: Date) => new Intl.DateTimeFormat("en-GB", { timeZone:
  * holding that week's items and its booked Sessions. This week first and open, next week open, later weeks folded to
  * one line, past weeks folded to what is done unless something is still outstanding. The caller draws each item.
  */
-export default function WeekCards<T extends Dated>({ startedOn, items, sessions, isDone, isWaiting, waitingLabel, renderItem, note, noteWeeks = [], onMarkHeld, now = Date.now() }: {
+export default function WeekCards<T extends Dated>({ startedOn, items, sessions, isDone, isWaiting, waitingLabel, renderItem, note, noteWeeks = [], onMarkHeld, emptyText, now = Date.now() }: {
   startedOn: string | null;
   items: T[];
   sessions: WeekSession[];
@@ -28,6 +28,8 @@ export default function WeekCards<T extends Dated>({ startedOn, items, sessions,
   noteWeeks?: (number | null)[];
   /** For the team (R90): once a Session has started, say it happened or did not. Without it, the row only shows Held. */
   onMarkHeld?: (sessionId: number, held: boolean) => void;
+  /** What to say when nothing is shown, such as a filter or search that matches nothing. */
+  emptyText?: string;
   now?: number;
 }) {
   const today = lagosDay(new Date(now));
@@ -106,7 +108,7 @@ export default function WeekCards<T extends Dated>({ startedOn, items, sessions,
           </section>
         );
       })}
-      {!ordered.length && <p className="rounded-xl border border-line-soft bg-white p-4 text-sm text-ink-muted">{onlyWaiting ? "Nothing is waiting." : "Nothing on the plan yet."}</p>}
+      {!ordered.length && <p className="rounded-xl border border-line-soft bg-white p-4 text-sm text-ink-muted">{onlyWaiting ? "Nothing is waiting." : emptyText ?? "Nothing on the plan yet."}</p>}
     </div>
   );
 }

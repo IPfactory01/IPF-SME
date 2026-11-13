@@ -457,6 +457,33 @@ for (const target of targets) {
         expect(recorded.map((row: { kind: string }) => row.kind)).toEqual(expect.arrayContaining(["fee_late_7", "item_late", "item_lead", "clock_soon"]));
       });
 
+      it("reminds the lead of what the client sent and nobody reviewed, a day on and three days on, once each (R87)", async () => {
+        const desk = await superAdmin.call();
+        const today = lagosDay();
+        const { engagementId } = await desk.engagement.staff.createDirect({ type: "digital_marketing", businessName: "Review Studio", contactName: "Rae Review", contactEmail: uniqueEmail("review"), startedOn: today });
+        await desk.engagement.staff.openRoomNow({ engagementId });
+        const lead = await person(["analyst"], "Lola Lead");
+        await desk.engagement.staff.assign({ engagementId, userId: lead.id, role: "manager" });
+        const [item] = await db.select().from(schema.engagementTasks).where(and(eq(schema.engagementTasks.engagementId, engagementId), eq(schema.engagementTasks.title, "Your services and prices")));
+        const sentAt = new Date(`${today}T09:00:00+01:00`);
+        await db.update(schema.engagementTasks).set({ status: "received", receivedAt: sentAt }).where(eq(schema.engagementTasks.id, item.id));
+        const ours = () => emails().filter(mail => mail.to === lead.email && mail.subject.includes("review")).map(mail => mail.subject);
+        mocked.deliverEmail.mockClear();
+        await runReminders(db, new Date(`${today}T20:00:00+01:00`));
+        expect(ours()).toEqual([]);
+        await runReminders(db, new Date(`${addDays(today, 1)}T09:31:00+01:00`));
+        expect(ours()).toEqual(["Waiting for your review: Your services and prices, Review Studio"]);
+        await runReminders(db, new Date(`${addDays(today, 1)}T10:31:00+01:00`));
+        expect(ours()).toHaveLength(1);
+        await runReminders(db, new Date(`${addDays(today, 3)}T09:31:00+01:00`));
+        expect(ours()).toEqual(["Waiting for your review: Your services and prices, Review Studio", "Still waiting for your review: Your services and prices, Review Studio"]);
+        // Reviewed: nothing more.
+        await db.update(schema.engagementTasks).set({ status: "accepted" }).where(eq(schema.engagementTasks.id, item.id));
+        mocked.deliverEmail.mockClear();
+        await runReminders(db, new Date(`${addDays(today, 6)}T09:31:00+01:00`));
+        expect(ours()).toEqual([]);
+      });
+
       it("reminds everyone of a booked Session the morning before and the morning of it, once each, and again when it moves (R59)", async () => {
         const desk = await superAdmin.call();
         const today = lagosDay();

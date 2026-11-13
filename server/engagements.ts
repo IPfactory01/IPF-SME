@@ -498,7 +498,8 @@ export async function todayFor(db: Database, actor: StaffActor, now = Date.now()
         const left = task.followUpDueAt.getTime() - now;
         items.push({ key: `clock-${task.id}`, kind: "clock", engagementId: engagement.id, businessName, title: task.title, detail: `${TURNAROUND_LABELS[task.turnaround]} ${left < 0 ? "is late" : "due"}`, at: task.followUpDueAt, late: left < 0 });
       }
-      if (task.status === "received" && manages && goesToMe(task)) items.push({ key: `check-${task.id}`, kind: "check", engagementId: engagement.id, businessName, title: task.title, detail: "Sent by the client: check it, then mark it received or ask for more", at: task.receivedAt, late: false });
+      // What the client sent waits for review (R87): late once it has waited a day.
+      if (task.status === "received" && (manages || lead) && goesToMe(task)) items.push({ key: `check-${task.id}`, kind: "check", engagementId: engagement.id, businessName, title: task.title, detail: "Sent by the client: review it, then mark it Received or ask for more. They see it as pending review.", at: task.receivedAt, late: Boolean(task.receivedAt && now - task.receivedAt.getTime() >= 86_400_000) });
       if (task.requestedByUserId === actor.id && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn < today) items.push({ key: `request-${task.id}`, kind: "request", engagementId: engagement.id, businessName, title: task.title, detail: `Your request, due ${dayInWords(task.dueOn)}, is not answered yet`, at: new Date(`${task.dueOn}T12:00:00Z`), late: true });
     }
     for (const session of sessions.filter(item => item.engagementId === engagement.id && item.scheduledFor && item.scheduledFor.getTime() >= now && item.scheduledFor.getTime() < now + 7 * 86_400_000)) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sessionReminderEmail, clockReminderEmail, feePausedLeadEmail, feeReminderEmail, feeStageOn, isCronRequest, isQuietHour, itemsReminderEmail, itemStagesOn, outstandingLeadEmail } from "@server/reminders";
+import { reviewReminderEmail, sessionReminderEmail, clockReminderEmail, feePausedLeadEmail, feeReminderEmail, feeStageOn, isCronRequest, isQuietHour, itemsReminderEmail, itemStagesOn, outstandingLeadEmail } from "@server/reminders";
 
 /** The morning reminders (R12, R16, R57): their windows, quiet hours, the secret, and the words. Fictional businesses. */
 describe("when each reminder goes", () => {
@@ -86,5 +86,13 @@ describe("the reminder emails", () => {
     expect(team.body).toContain("with Ada Foods");
     expect(team.body).toContain("the link will be in the room before the Session");
     expect(team.body).not.toContain("WhatsApp");
+  });
+
+  it("tells the lead what the client sent and nobody has reviewed, a day on and three days on (R87)", () => {
+    const base = { title: "Your price list", businessName: "Ada Foods", receivedAt: new Date("2026-11-12T09:00:00Z") };
+    expect(reviewReminderEmail({ ...base, late: false }).subject).toBe("Waiting for your review: Your price list, Ada Foods");
+    const late = reviewReminderEmail({ ...base, late: true });
+    expect(late.subject).toBe("Still waiting for your review: Your price list, Ada Foods");
+    expect(late.body).toContain("sent, pending review");
   });
 });

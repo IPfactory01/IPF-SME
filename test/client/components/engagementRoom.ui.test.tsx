@@ -904,6 +904,17 @@ describe("the Plan, Meetings and Data requests views", () => {
     expect(screen.getByRole("region", { name: "Week 2" }).textContent).toContain("This week");
   });
 
+  it("ticks what the client has sent as pending review, and shows it Completed once reviewed (R87)", () => {
+    const base = room();
+    const tasks = base.tasks.map(task => (task.id === 11 ? { ...task, status: "received" as const, statusLabel: "Sent, we are checking" } : task.id === 12 ? { ...task, status: "accepted" as const, statusLabel: "Received" } : task));
+    render(<EngagementRoom room={room({ tasks })} now={NOW} />);
+    const sent = openItem("Your last 12 months of sales");
+    expect(sent.getByText("Sent, pending review")).toBeTruthy();
+    expect(sent.getByText(/Ticked: you have sent it/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Your last 12 months of sales" }).textContent).toContain("Sent, pending review");
+    expect(screen.getByRole("button", { name: "Your price list" }).textContent).toContain("Completed");
+  });
+
   it("lets the client upload a file inside the item they are looking at (R85)", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true })));
     render(<EngagementRoom room={room({ uploadsEnabled: true })} now={NOW} />);

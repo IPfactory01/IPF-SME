@@ -12557,7 +12557,7 @@ async function todayFor(db, actor, now = Date.now()) {
         const left = task.followUpDueAt.getTime() - now;
         items.push({ key: `clock-${task.id}`, kind: "clock", engagementId: engagement.id, businessName, title: task.title, detail: `${TURNAROUND_LABELS[task.turnaround]} ${left < 0 ? "is late" : "due"}`, at: task.followUpDueAt, late: left < 0 });
       }
-      if (task.status === "received" && manages && goesToMe(task)) items.push({ key: `check-${task.id}`, kind: "check", engagementId: engagement.id, businessName, title: task.title, detail: "Sent by the client: check it, then mark it received or ask for more", at: task.receivedAt, late: false });
+      if (task.status === "received" && (manages || lead) && goesToMe(task)) items.push({ key: `check-${task.id}`, kind: "check", engagementId: engagement.id, businessName, title: task.title, detail: "Sent by the client: review it, then mark it Received or ask for more. They see it as pending review.", at: task.receivedAt, late: Boolean(task.receivedAt && now - task.receivedAt.getTime() >= 864e5) });
       if (task.requestedByUserId === actor.id && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn < today) items.push({ key: `request-${task.id}`, kind: "request", engagementId: engagement.id, businessName, title: task.title, detail: `Your request, due ${dayInWords(task.dueOn)}, is not answered yet`, at: /* @__PURE__ */ new Date(`${task.dueOn}T12:00:00Z`), late: true });
     }
     for (const session of sessions.filter((item2) => item2.engagementId === engagement.id && item2.scheduledFor && item2.scheduledFor.getTime() >= now && item2.scheduledFor.getTime() < now + 7 * 864e5)) {
@@ -15481,6 +15481,21 @@ async function send(to, message, businessCheckId) {
     return 0;
   }
 }
+function reviewReminderEmail(input) {
+  const origin = getTrustedApplicationOrigin();
+  return {
+    subject: input.late ? `Still waiting for your review: ${input.title}, ${input.businessName}` : `Waiting for your review: ${input.title}, ${input.businessName}`,
+    body: [
+      "Hello,",
+      "",
+      `${input.businessName} sent "${input.title}" on ${lagosTime(input.receivedAt)} (Lagos time). It shows to them as sent, pending review, until someone marks it Received or asks for more.`,
+      "",
+      `Review it: ${origin}/admin`,
+      "",
+      BRAND.organisationName
+    ].join("\n")
+  };
+}
 var lagosClock = (date2) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", hour: "numeric", minute: "2-digit", hour12: true }).format(date2);
 function sessionReminderEmail(input) {
   const time = lagosClock(input.start);
@@ -15499,7 +15514,7 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
   }
   const today = lagosDay(now);
   const roomUrl = `${getTrustedApplicationOrigin()}/dashboard`;
-  const counts = { fees: 0, items: 0, leads: 0, clocks: 0, sessions: 0 };
+  const counts = { fees: 0, items: 0, leads: 0, clocks: 0, sessions: 0, reviews: 0 };
   const tomorrow = addDays(today, 1);
   const open = await db.select().from(engagements).where(ne5(engagements.stage, "closed"));
   for (const engagement of open) {
@@ -15558,6 +15573,12 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
         const person = await teamPersonFor(db, task);
         counts.clocks += await send(person.email, clockReminderEmail({ late, name: person.name, label, title: task.title, businessName, dueAt: task.followUpDueAt }), null);
         if (late) for (const to of (await leadsOf(db, engagement.id)).filter((email) => email !== person.email)) counts.leads += await send(to, clockReminderEmail({ late, name: "", label, title: task.title, businessName, dueAt: task.followUpDueAt }), null);
+      }
+      for (const task of tasks.filter((item2) => item2.status === "received" && item2.receivedAt)) {
+        const waited = now.getTime() - task.receivedAt.getTime();
+        const stage = waited >= 3 * 24 * HOUR3 ? "review_late" : waited >= 24 * HOUR3 ? "review_due" : null;
+        if (!stage || !await claim(db, `review:${task.id}:${task.receivedAt.toISOString()}:${stage}`, stage, engagement.id)) continue;
+        for (const to of await leadsOf(db, engagement.id)) counts.reviews += await send(to, reviewReminderEmail({ late: stage === "review_late", title: task.title, businessName, receivedAt: task.receivedAt }), null);
       }
       const booked = await db.select().from(engagementSessions).where(and22(eq32(engagementSessions.engagementId, engagement.id), eq32(engagementSessions.status, "planned")));
       for (const session of booked) {

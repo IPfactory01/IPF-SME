@@ -1165,6 +1165,12 @@ function Avatar({ name }: { name: string }) {
 /** Two initials for a person; the firm is always IPF. */
 export const initials = (name: string) => (name.trim() === BRAND.organisationName ? BRAND.organisationShortName : name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]!.toUpperCase()).join("") || "?");
 
+/**
+ * An item's status as the client reads it (R87): once they send it, it is ticked and pending review; once the team
+ * has reviewed it, completed.
+ */
+const clientStatus = (task: Task) => (task.status === "received" ? "Sent, pending review" : task.status === "accepted" || task.status === "done" ? "Completed" : task.statusLabel);
+
 const PLAN_GROUPS: { id: string; name: string; dot: string; pill: string; test: (task: Task) => boolean }[] = [
   { id: "you", name: "Waiting on you", dot: "border-brand-plum bg-white", pill: "bg-brand-plum text-white", test: isClientOpen },
   { id: "us", name: "With IP Factory", dot: "border-brand bg-white", pill: "bg-brand text-white", test: task => task.side !== "client" && OPEN_TASK_STATUSES.includes(task.status) },
@@ -1197,17 +1203,20 @@ function PlanView({ room, now }: { room: Room; now: number }) {
       <div className={`min-w-0 ${task ? "" : "lg:col-span-2"}`}>
         {/* Weekly cards (R85): each week's items and its Sessions, this week first. */}
         <WeekCards startedOn={room.startedOn ?? null} items={room.tasks.filter(item => item.side === "client")} sessions={room.sessions} now={now} note={ourWeek} noteWeeks={ours.map(item => item.weekNumber ?? weekOfDay(room.startedOn ?? null, item.dueOn))}
-          isDone={item => PLAN_GROUPS.find(group => group.test(item))?.id === "done"} isWaiting={isClientOpen} waitingLabel="Waiting on you"
+          isDone={item => ["done", "checking"].includes(PLAN_GROUPS.find(group => group.test(item))?.id ?? "")} isWaiting={isClientOpen} waitingLabel="Waiting on you"
           renderItem={item => {
             const group = PLAN_GROUPS.find(entry => entry.test(item)) ?? PLAN_GROUPS[1]!;
             const flag = group.id === "checking" ? { text: "Sent", tone: "calm" as const } : dueFlag(item.dueOn, group.id === "done", now);
             return (
               <button type="button" id={`task-${item.id}`} onClick={() => setSelected(selected === item.id ? null : item.id)} aria-expanded={selected === item.id} aria-label={item.title}
                 className={`flex w-full scroll-mt-24 items-center gap-3 px-4 py-2.5 text-left text-sm ${selected === item.id ? "bg-brand-tint" : "hover:bg-paper-sunken"}`}>
-                <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />
+                {/* Sent is ticked for the client (R87); completed once the team has reviewed it. */}
+                {group.id === "checking" || group.id === "done"
+                  ? <span aria-hidden className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${group.id === "done" ? "bg-health-clear" : "bg-brand"} text-white`}><Check className="h-3 w-3" /></span>
+                  : <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />}
                 <span className="min-w-0 flex-1">
                   <span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}{item.mine && <span className="ml-2 text-xs text-brand">for you</span>}</span>
-                  <span className="block text-xs text-ink-muted">{item.kind === "data_request" ? METHOD.dataRequest : "Action"}{group.id === "checking" ? " · Sent, we are checking" : ""}</span>
+                  <span className="block text-xs text-ink-muted">{item.kind === "data_request" ? METHOD.dataRequest : "Action"}{group.id === "checking" || group.id === "done" ? ` · ${clientStatus(item)}` : ""}</span>
                 </span>
                 <span className="hidden sm:block"><Avatar name={whoName(item, room)} /></span>
                 <span className={`hidden w-32 shrink-0 whitespace-nowrap text-right sm:block ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? ""}</span>
@@ -1219,7 +1228,7 @@ function PlanView({ room, now }: { room: Room; now: number }) {
       {task && (
         <aside aria-label="Task details" className="rounded-xl border border-line-soft bg-white p-5 lg:sticky lg:top-16">
           <div className="flex items-start justify-between gap-3">
-            <p className="text-xs text-ink-muted">{task.statusLabel}</p>
+            <p className="text-xs text-ink-muted">{clientStatus(task)}</p>
             <button type="button" onClick={() => setSelected(null)} className="text-xs text-brand underline underline-offset-2">Close</button>
           </div>
           <h3 className="mt-1 font-sans text-lg font-semibold tracking-tight">{task.title}</h3>
@@ -1233,6 +1242,7 @@ function PlanView({ room, now }: { room: Room; now: number }) {
           {task.format && <p className="mt-1 text-sm text-ink-600"><span className="text-ink-muted">Format: </span>{task.format}</p>}
           <RequestFacts task={task} now={now} />
           {task.status === "needs_more" && task.statusNote && <p className="mt-2 text-sm text-danger">We need a bit more: {task.statusNote}</p>}
+          {task.status === "received" && <p className="mt-2 rounded-lg bg-brand-tint p-2 text-sm text-ink">Ticked: you have sent it. Your team reviews it within a working day; then it shows as Completed, or they ask for a bit more.</p>}
           <FileList files={task.files} canRemove={file => file.mine && !file.fromTeam && ["open", "received", "needs_more"].includes(task.status)} />
           <SentLink link={task.responseLink} />
           {isClientOpen(task) && <TaskControls task={task} uploadsEnabled={room.uploadsEnabled} />}

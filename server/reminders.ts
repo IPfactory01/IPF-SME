@@ -173,7 +173,20 @@ async function send(to: string, message: { subject: string; body: string }, busi
   }
 }
 
-export type ReminderRun = { ran: true; fees: number; items: number; leads: number; clocks: number; sessions: number } | { ran: false; reason: "quiet_hours" };
+export type ReminderRun = { ran: true; fees: number; items: number; leads: number; clocks: number; sessions: number; reviews: number } | { ran: false; reason: "quiet_hours" };
+
+/** Something the client sent waits for the team's review (R87): a day on, and three days on. */
+export function reviewReminderEmail(input: { late: boolean; title: string; businessName: string; receivedAt: Date }) {
+  const origin = getTrustedApplicationOrigin();
+  return {
+    subject: input.late ? `Still waiting for your review: ${input.title}, ${input.businessName}` : `Waiting for your review: ${input.title}, ${input.businessName}`,
+    body: [
+      "Hello,", "",
+      `${input.businessName} sent "${input.title}" on ${lagosTime(input.receivedAt)} (Lagos time). It shows to them as sent, pending review, until someone marks it Received or asks for more.`,
+      "", `Review it: ${origin}/admin`, "", BRAND.organisationName,
+    ].join("\n"),
+  };
+}
 
 const lagosClock = (date: Date) => new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", hour: "numeric", minute: "2-digit", hour12: true }).format(date);
 
@@ -197,7 +210,7 @@ export async function runReminders(db: Database, now = new Date()): Promise<Remi
   }
   const today = lagosDay(now);
   const roomUrl = `${getTrustedApplicationOrigin()}/dashboard`;
-  const counts = { fees: 0, items: 0, leads: 0, clocks: 0, sessions: 0 };
+  const counts = { fees: 0, items: 0, leads: 0, clocks: 0, sessions: 0, reviews: 0 };
   const tomorrow = addDays(today, 1);
   const open = await db.select().from(engagements).where(ne(engagements.stage, "closed"));
   for (const engagement of open) {
@@ -260,6 +273,13 @@ export async function runReminders(db: Database, now = new Date()): Promise<Remi
         const person = await teamPersonFor(db, task);
         counts.clocks += await send(person.email, clockReminderEmail({ late, name: person.name, label, title: task.title, businessName, dueAt: task.followUpDueAt! }), null);
         if (late) for (const to of (await leadsOf(db, engagement.id)).filter(email => email !== person.email)) counts.leads += await send(to, clockReminderEmail({ late, name: "", label, title: task.title, businessName, dueAt: task.followUpDueAt! }), null);
+      }
+      // What the client sent and nobody has reviewed (R87): the lead hears after a day, and again after three.
+      for (const task of tasks.filter(item => item.status === "received" && item.receivedAt)) {
+        const waited = now.getTime() - task.receivedAt!.getTime();
+        const stage = waited >= 3 * 24 * HOUR ? "review_late" : waited >= 24 * HOUR ? "review_due" : null;
+        if (!stage || !(await claim(db, `review:${task.id}:${task.receivedAt!.toISOString()}:${stage}`, stage, engagement.id))) continue;
+        for (const to of await leadsOf(db, engagement.id)) counts.reviews += await send(to, reviewReminderEmail({ late: stage === "review_late", title: task.title, businessName, receivedAt: task.receivedAt! }), null);
       }
       // Sessions (R59): the morning before, and the morning of, each booked Session; a moved one is reminded again.
       const booked = await db.select().from(engagementSessions).where(and(eq(engagementSessions.engagementId, engagement.id), eq(engagementSessions.status, "planned")));

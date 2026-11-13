@@ -1208,7 +1208,7 @@ function PlanView({ room, now }: { room: Room; now: number }) {
           }} />
       </div>
       {task && (
-        <aside aria-label="Task details" className="rounded-xl border border-line-soft bg-white p-5 lg:sticky lg:top-16">
+        <aside aria-label="Task details" className="rounded-xl border border-line-soft bg-white p-5 lg:sticky lg:top-16 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:overscroll-contain">
           <div className="flex items-start justify-between gap-3">
             <p className="text-xs text-ink-muted">{clientStatus(task)}</p>
             <button type="button" onClick={() => setSelected(null)} className="text-xs text-brand underline underline-offset-2">Close</button>

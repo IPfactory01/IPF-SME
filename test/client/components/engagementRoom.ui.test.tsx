@@ -804,6 +804,8 @@ describe("the Plan, Meetings and Data requests views", () => {
     const panel = within(screen.getByRole("complementary", { name: "Task details" }));
     expect(panel.getByRole("heading", { name: "Your price list" })).toBeTruthy();
     expect(panel.getByText("We need a bit more: the delivery prices too")).toBeTruthy();
+    // A long item scrolls inside its panel (ET, 13 November 2026).
+    expect(screen.getByRole("complementary", { name: "Task details" }).className).toMatch(/max-h-\[calc\(100vh-5rem\)\].*overflow-y-auto/);
     expect(panel.getByRole("button", { name: "Submitted another way" })).toBeTruthy();
   });
 

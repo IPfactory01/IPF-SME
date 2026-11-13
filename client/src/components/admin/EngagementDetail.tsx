@@ -248,7 +248,7 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
           }} />
       </div>
       {task && (
-        <aside aria-label="Task details" className="space-y-3 rounded-xl border border-line-soft bg-white p-4 xl:sticky xl:top-16">
+        <aside aria-label="Task details" className="space-y-3 rounded-xl border border-line-soft bg-white p-4 xl:sticky xl:top-16 xl:max-h-[calc(100vh-5rem)] xl:overflow-y-auto xl:overscroll-contain">
           <div className="flex justify-end">
             <button type="button" onClick={() => setSelected(null)} className="text-xs text-brand underline underline-offset-2">Close</button>
           </div>

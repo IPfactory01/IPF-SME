@@ -669,6 +669,8 @@ describe("the team's workspace (R82)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open Content plan for month 1" }));
     const details = within(screen.getByRole("complementary", { name: "Task details" }));
     expect(details.getByText("Kemi Producer, lead owner")).toBeTruthy();
+    // A long item scrolls inside its panel, not with the list (ET, 13 November 2026).
+    expect(screen.getByRole("complementary", { name: "Task details" }).className).toMatch(/max-h-\[calc\(100vh-5rem\)\].*overflow-y-auto/);
     fireEvent.click(details.getByRole("button", { name: "Change owners" }));
     fireEvent.click(details.getByRole("checkbox", { name: /Lewis Lead/ }));
     fireEvent.click(details.getByRole("button", { name: "Save owners" }));

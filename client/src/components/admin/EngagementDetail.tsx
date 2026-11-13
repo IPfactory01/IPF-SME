@@ -65,6 +65,7 @@ import { avatarColour, dueFlag, FLAG_TONE, initials } from "@/components/Engagem
 import { METHOD } from "@shared/method";
 import { TodayCard } from "./Today";
 import WeekCards from "@/components/room/WeekCards";
+import { StaffFileStrip } from "@/components/room/FileStrip";
 import { FeePaymentList, RecordPaymentForm, WriteOffControls } from "./FeePayments";
 import { AskClient, ItemConversation } from "./AskClient";
 import BookMeeting from "./BookMeeting";
@@ -135,6 +136,8 @@ function TheClient({ data, engagementId }: { data: Detail; engagementId: number 
 
 /** In the workspace each item is a short row that opens into its form; in the drawer the forms show as before (R82). */
 const Compact = React.createContext(false);
+/** The item a link from an email opens (R89): the workspace starts on the Work Plan with its panel open. */
+const FocusTask = React.createContext<number | null>(null);
 const ROW = "flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-line-soft bg-white px-3 py-2.5 text-left";
 const PILL = "rounded-full bg-paper-sunken px-2 py-0.5 text-xs text-ink-600";
 const DELIVERABLE_STATUS_WORDS: Record<Deliverable["status"], string> = { draft: "Draft", awaiting_approval: "Waiting for approval", approved: "Approved", shared: "Shared" };
@@ -197,7 +200,8 @@ const PRIORITY_WORDS = { high: "High", medium: "Medium", low: "Low" } as const;
  * priority and type; selecting a row opens it beside the table with its form and its conversation.
  */
 function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; engagementId: number; now?: number }) {
-  const [selected, setSelected] = useState<number | null>(null);
+  const focus = React.useContext(FocusTask);
+  const [selected, setSelected] = useState<number | null>(() => (focus !== null && data.tasks.some(item => item.id === focus) ? focus : null));
   const task = data.tasks.find(item => item.id === selected) ?? null;
   const nameOf = (item: Task) => (item.assigneeUserId !== null ? [...data.clientPeople.map(person => ({ id: person.userId, name: person.name })), ...data.team.map(member => ({ id: member.userId, name: member.name ?? "" }))].find(person => person.id === item.assigneeUserId)?.name : undefined)
     || (item.side === "client" ? data.businessName || "The client" : item.ownerName || "No one yet");
@@ -217,6 +221,7 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
             const flag = group.id === "checking" ? { text: "Sent", tone: "calm" as const } : dueFlag(item.dueOn, group.id === "done", now);
             const who = nameOf(item);
             return (
+              <>
               <button type="button" onClick={() => setSelected(selected === item.id ? null : item.id)} aria-expanded={selected === item.id} aria-label={`Open ${item.title}`}
                 className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm ${selected === item.id ? "bg-brand-tint" : "hover:bg-paper-sunken"}`}>
                 {/* Sent or handed in is ticked, pending review; completed once the lead has reviewed it (R87). */}
@@ -227,10 +232,14 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
                   <span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}</span>
                   <span className="block text-xs text-ink-muted">{[group.id === "checking" ? (item.side === "ipf" ? (data.can.seeAllTasks ? "Handed in: review it" : "Handed in, pending review") : (data.can.seeAllTasks ? "Sent by the client: review it" : "Sent, pending review")) : group.id === "done" ? "Completed" : group.name, item.kind === "data_request" ? METHOD.dataRequest : "Action", item.comments.length ? `${item.comments.length} ${item.comments.length === 1 ? "message" : "messages"}` : "", item.files.length ? `${item.files.length} ${item.files.length === 1 ? "file" : "files"}` : ""].filter(Boolean).join(" · ")}</span>
                 </span>
-                <span title={who} className={`hidden h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium text-white sm:inline-flex ${avatarColour(who)}`}><span aria-hidden>{initials(who)}</span><span className="sr-only">{who}</span></span>
+                {item.owners.length > 0
+                  ? <span className="hidden shrink-0 sm:flex">{item.owners.slice(0, 3).map(owner => <span key={owner.userId} title={owner.name} className={`-ml-1.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-[11px] font-medium text-white first:ml-0 ${avatarColour(owner.name)}`}><span aria-hidden>{initials(owner.name)}</span><span className="sr-only">{owner.name}</span></span>)}</span>
+                  : <span title={who} className={`hidden h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium text-white sm:inline-flex ${avatarColour(who)}`}><span aria-hidden>{initials(who)}</span><span className="sr-only">{who}</span></span>}
                 <span className={`hidden w-32 shrink-0 whitespace-nowrap text-right sm:block ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? ""}</span>
                 <span className="hidden w-20 shrink-0 whitespace-nowrap md:block">{item.priority ? <span className={`inline-flex items-center gap-1.5 ${item.priority === "high" ? "font-medium text-health-stuck" : "text-ink-muted"}`}><Flag className={`h-3.5 w-3.5 ${item.priority === "high" ? "fill-current" : ""}`} aria-hidden />{PRIORITY_WORDS[item.priority]}</span> : null}</span>
               </button>
+              {(item.files.length > 0 || item.responseLink) && <div className="pb-2.5 pl-11 pr-4"><StaffFileStrip files={item.files} link={item.responseLink ?? null} /></div>}
+              </>
             );
           }} />
       </div>
@@ -303,6 +312,7 @@ function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detai
   return (
     <div className="space-y-3">
       <h3 className="font-sans text-lg font-semibold tracking-tight text-ink">{task.title}</h3>
+      <Owners task={task} data={data} engagementId={engagementId} />
       <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
         <dt className="text-ink-muted">With</dt><dd>{task.side === "client" ? data.businessName || "The client" : task.goesTo?.name || "IP Factory"}</dd>
         <dt className="text-ink-muted">Due</dt><dd className={flag && !sent ? FLAG_TONE[flag.tone] : ""}>{task.dueOn ? dayInWords(task.dueOn) : "No date"}{flag && !sent && flag.tone === "late" ? ` · ${flag.text}` : ""}</dd>
@@ -340,12 +350,60 @@ function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detai
   );
 }
 
+/**
+ * An item's owners (R89): their initials, the lead owner first and ringed, and + to change them for the lead or the
+ * item's lead owner. Every owner gets its reminders, its Today and its emails; the lead owner hands it in.
+ */
+function Owners({ task, data, engagementId }: { task: Task; data: Detail; engagementId: number }) {
+  const refresh = useRefresh(engagementId);
+  const canChange = data.can.seeAllTasks || task.owners[0]?.userId === data.viewerUserId;
+  const [open, setOpen] = useState(false);
+  const [lead, setLead] = useState<number | null>(task.owners[0]?.userId ?? null);
+  const [others, setOthers] = useState<number[]>(task.owners.slice(1).map(owner => owner.userId));
+  const save = trpc.engagement.staff.setOwners.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); setOpen(false); toast.success("Owners saved. Each of them gets its reminders."); } });
+  const people = data.team.filter(member => member.name);
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-ink-muted">Owners</span>
+        <span className="flex">
+          {task.owners.map(owner => <span key={owner.userId} title={`${owner.name}${owner.lead ? " (lead owner)" : ""}`} className={`-ml-1 flex h-7 w-7 items-center justify-center rounded-full border-2 text-[11px] font-medium text-white first:ml-0 ${owner.lead ? "border-brand" : "border-white"} ${avatarColour(owner.name)}`}><span aria-hidden>{initials(owner.name)}</span><span className="sr-only">{owner.name}{owner.lead ? ", lead owner" : ""}</span></span>)}
+          {!task.owners.length && <span className="text-xs text-danger">No one yet</span>}
+        </span>
+        {canChange && <button type="button" aria-label="Change owners" aria-expanded={open} onClick={() => setOpen(value => !value)} className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-line text-sm text-ink-600 hover:border-brand">+</button>}
+      </div>
+      {open && (
+        <fieldset className="space-y-1 rounded-lg border border-line-soft bg-white p-2 text-sm">
+          <legend className="px-1 text-xs text-ink-muted">Who owns it; one leads and hands it in</legend>
+          {people.map(member => {
+            const chosen = member.userId === lead || others.includes(member.userId);
+            return (
+              <div key={member.userId} className="flex items-center justify-between gap-2">
+                <label className="flex items-center gap-2"><input type="checkbox" checked={chosen} onChange={() => {
+                  if (chosen) { setOthers(list => list.filter(id => id !== member.userId)); if (lead === member.userId) setLead(others.find(id => id !== member.userId) ?? null); }
+                  else if (lead === null) setLead(member.userId); else setOthers(list => [...list, member.userId]);
+                }} />{member.name} <span className="text-xs text-ink-muted">{member.roleLabel}</span></label>
+                {chosen && <label className="flex items-center gap-1 text-xs text-ink-600"><input type="radio" name={`lead-${task.id}`} checked={lead === member.userId} onChange={() => { if (lead !== null) setOthers(list => [...list.filter(id => id !== member.userId), lead]); setLead(member.userId); }} />Lead</label>}
+              </div>
+            );
+          })}
+          <div className="flex gap-2 pt-1">
+            <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || lead === null} onClick={() => save.mutate({ taskId: task.id, leadUserId: lead!, otherUserIds: others })}>Save owners</Button>
+            <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setOpen(false)}>Cancel</Button>
+          </div>
+        </fieldset>
+      )}
+    </div>
+  );
+}
+
 /** One of a person's own items, for someone below the lead (R86): what it is and when, its files, and its messages. */
 function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; engagementId: number; now: number }) {
   const flag = dueFlag(task.dueOn, !OPEN_TASK_STATUSES.includes(task.status) && task.status !== "received", now);
   return (
     <div className="space-y-3">
       <h3 className="font-sans text-lg font-semibold tracking-tight text-ink">{task.title}</h3>
+      <Owners task={task} data={data} engagementId={engagementId} />
       <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
         <dt className="text-ink-muted">For</dt><dd>{task.side === "client" ? data.businessName || "The client" : "IP Factory"}</dd>
         <dt className="text-ink-muted">Due</dt><dd className={flag ? FLAG_TONE[flag.tone] : ""}>{flag?.text ?? "No date"}</dd>
@@ -367,7 +425,7 @@ const Card = ({ children }: { children: React.ReactNode }) => <div className="ro
  * engagement. The tabs hold the record's own sections, so what each person may do is unchanged; the server checks
  * every action as before.
  */
-export function EngagementWorkspace({ engagementId, myRole, onBack, now = Date.now() }: { engagementId: number; myRole: string | null; onBack: () => void; now?: number }) {
+export function EngagementWorkspace({ engagementId, myRole, onBack, openTaskId = null, now = Date.now() }: { engagementId: number; myRole: string | null; onBack: () => void; openTaskId?: number | null; now?: number }) {
   const detail = trpc.engagement.staff.detail.useQuery({ engagementId });
   const today = trpc.engagement.staff.today.useQuery(undefined);
   const back = <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm font-medium text-brand"><ArrowLeft className="h-4 w-4" aria-hidden />All my projects</button>;
@@ -447,7 +505,7 @@ export function EngagementWorkspace({ engagementId, myRole, onBack, now = Date.n
         </div>
       </section>
       {data.hold && <div className="px-4 pt-4 sm:px-7"><FeeHoldNote hold={data.hold} /></div>}
-      <Compact.Provider value={true}><RoomTabs label={`${data.businessName} workspace`} initial="overview" tabs={tabs} /></Compact.Provider>
+      <Compact.Provider value={true}><FocusTask.Provider value={openTaskId}><RoomTabs label={`${data.businessName} workspace`} initial={openTaskId !== null ? "plan" : "overview"} tabs={tabs} /></FocusTask.Provider></Compact.Provider>
     </div>
   );
 }
@@ -919,7 +977,7 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
   const [title, setTitle] = useState(task?.title ?? "");
   const [detail, setDetail] = useState(task?.detail ?? "");
   // A team item always names its person (R88): a new one starts with whoever adds it.
-  const [assignee, setAssignee] = useState(task?.assigneeUserId ? String(task.assigneeUserId) : !task && !data.can.manage ? String(data.viewerUserId) : "");
+  const [assignee, setAssignee] = useState(task?.assigneeUserId ? String(task.assigneeUserId) : !task ? String(data.viewerUserId) : "");
   const [dueOn, setDueOn] = useState(task?.dueOn ?? "");
   const [status, setStatus] = useState<EngagementTaskStatus>(task?.status ?? "open");
   const [note, setNote] = useState(task?.statusNote ?? "");
@@ -948,7 +1006,7 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
       <label className={LABEL} htmlFor={`task-detail-${id}`}>Detail</label>
       <textarea id={`task-detail-${id}`} className={FIELD} rows={2} disabled={!canManage} value={detail} onChange={event => setDetail(event.target.value)} />
       <div className="grid gap-2 sm:grid-cols-3">
-        <div><label className={LABEL} htmlFor={`task-person-${id}`}>Person</label><select id={`task-person-${id}`} className={FIELD} disabled={!lead} value={assignee} onChange={event => setAssignee(event.target.value)}><option value="">{side === "client" ? "The business" : "Choose who"}</option>{people.map(person => <option key={person.userId} value={person.userId}>{person.name}</option>)}</select></div>
+        <div><label className={LABEL} htmlFor={`task-person-${id}`}>{side === "ipf" ? "Lead owner" : "Person"}</label><select id={`task-person-${id}`} className={FIELD} disabled={!lead} value={assignee} onChange={event => setAssignee(event.target.value)}><option value="">{side === "client" ? "The business" : "Choose who"}</option>{people.map(person => <option key={person.userId} value={person.userId}>{person.name}</option>)}</select></div>
         <div><label className={LABEL} htmlFor={`task-due-${id}`}>Due</label><input id={`task-due-${id}`} type="date" className={FIELD} disabled={!canManage} value={dueOn} onChange={event => setDueOn(event.target.value)} /></div>
         <div><label className={LABEL} htmlFor={`task-status-${id}`}>Status</label><select id={`task-status-${id}`} className={FIELD} disabled={!canManage} value={status} onChange={event => setStatus(event.target.value as EngagementTaskStatus)}>{ENGAGEMENT_TASK_STATUSES.map(item => <option key={item} value={item}>{ENGAGEMENT_TASK_STATUS_LABELS[item]}</option>)}</select></div>
       </div>

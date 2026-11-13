@@ -139,7 +139,8 @@ describe("the client's room", () => {
     const action = within(screen.getByRole("region", { name: "Next action · Data Request" }));
     expect(action.getByText("2 items outstanding")).toBeTruthy();
     expect(action.getByText("1 of 3")).toBeTruthy();
-    expect(action.getByRole("link", { name: "Open the Data Request" }).getAttribute("href")).toBe("#data");
+    // The Data Request tab is gone (R89): each item is answered in the Work Plan.
+    expect(action.getByRole("link", { name: "Open the Work Plan" }).getAttribute("href")).toBe("#plan");
     const meeting = within(screen.getByRole("region", { name: "Next meeting" }));
     expect(meeting.getByText("Business Review Session 1")).toBeTruthy();
     expect(meeting.getByText(/Fri 23 Oct, 10:00 am \(Lagos time\), 90 minutes/)).toBeTruthy();
@@ -354,42 +355,19 @@ function openItem(title: string) {
 }
 
 describe("files in the room", () => {
-  const openData = () => fireEvent.click(screen.getByRole("tab", { name: /^Data Request/ }));
 
-  it("offers no upload until storage is set up: the client sends by WhatsApp or email, or says it went another way", () => {
+  it("offers no upload until storage is set up: the client sends a link or on WhatsApp, or says it went another way", () => {
     render(<EngagementRoom room={room()} />);
-    openData();
-    expect(screen.queryByLabelText("Choose files to send")).toBeNull();
-    expect(screen.getByText("info@ipfactory.co")).toBeTruthy();
-    expect(screen.queryByLabelText(/^Upload a file for/)).toBeNull();
+    const sales = openItem("Your last 12 months of sales");
+    expect(sales.queryByLabelText(/^Upload a file for/)).toBeNull();
+    expect(sales.getByRole("button", { name: "Send a link" })).toBeTruthy();
+    expect(sales.getByRole("button", { name: "Submitted another way" })).toBeTruthy();
   });
 
-  it("takes many files at once into the drop box: each goes straight to the bucket, then the server records it unsorted", async () => {
-    const put = vi.fn(async () => ({ ok: true }));
-    vi.stubGlobal("fetch", put);
-    render(<EngagementRoom room={room({ uploadsEnabled: true })} />);
-    openData();
-    const sales = new File(["%PDF-1.4"], "sales.pdf", { type: "application/pdf" });
-    const prices = new File(["%PDF-1.4"], "prices.pdf", { type: "application/pdf" });
-    fireEvent.change(screen.getByLabelText("Choose files to send"), { target: { files: [sales, prices] } });
-    await waitFor(() => expect(api.calls.confirmDrop).toHaveLength(2));
-    // Each file goes to the project open in the room (a client may have several).
-    expect(api.calls.requestDrop).toEqual([{ fileName: "sales.pdf", contentType: "application/pdf", sizeBytes: 8, engagementId: 4 }, { fileName: "prices.pdf", contentType: "application/pdf", sizeBytes: 8, engagementId: 4 }]);
-    expect(put).toHaveBeenCalledWith("https://example-project.supabase.co/storage/v1/object/upload/sign/engagement-files/engagements/4/inbox/abc-sales.pdf?token=up", expect.objectContaining({ method: "PUT", body: sales }));
-    expect(api.calls.confirmDrop[0]).toEqual({ storageKey: "engagements/4/inbox/abc-sales.pdf", note: null, fileName: "sales.pdf", contentType: "application/pdf", sizeBytes: 8, engagementId: 4 });
-    expect(api.calls.requestUpload).toEqual([]);
-    await waitFor(() => expect(within(screen.getByRole("list", { name: "Uploads" })).getAllByText("Received")).toHaveLength(2));
-  });
 
-  it("tells the server nothing when the upload to the bucket fails", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false })));
-    render(<EngagementRoom room={room({ uploadsEnabled: true })} />);
-    openData();
-    fireEvent.change(screen.getByLabelText("Choose files to send"), { target: { files: [new File(["x"], "sales.pdf", { type: "application/pdf" })] } });
-    await waitFor(() => expect(api.calls.requestDrop).toHaveLength(1));
-    await waitFor(() => expect(screen.getByText(/The upload did not finish/)).toBeTruthy());
-    expect(api.calls.confirmDrop).toEqual([]);
-  });
+
+
+
 
   it("answers an item with a link to a shared folder, and shows the link once sent (R43)", () => {
     render(<EngagementRoom room={room()} />);
@@ -422,10 +400,6 @@ describe("files in the room", () => {
     // Accepted by the team: no Remove; asked on WhatsApp instead.
     const staffList = openItem("Who works in the business");
     expect(staffList.queryByRole("button", { name: "Remove" })).toBeNull();
-    // In Documents received: the unmatched file can be taken back, the matched one cannot.
-    openData();
-    const received = within(screen.getByRole("region", { name: /Documents received/ }));
-    expect(received.getAllByRole("button", { name: "Remove" })).toHaveLength(1);
   });
 
   it("lets the client mark an item not available, with a note", () => {
@@ -437,18 +411,7 @@ describe("files in the room", () => {
     expect(api.calls.setNotAvailable).toEqual([{ taskId: 11, unavailable: true, note: "We kept no records before March" }]);
   });
 
-  it("shows the documents received with the item each was matched to, or that it is under review", () => {
-    const sentFiles = [
-      { id: 7, fileName: "Sales 2025.xlsx", sizeBytes: 9_000, createdAt: new Date("2026-10-20T10:00:00Z"), mine: true, note: null, matchedTo: [{ taskId: 11, ref: "B1", title: "Your last 12 months of sales" }] },
-      { id: 8, fileName: "IMG_2041.jpg", sizeBytes: 90_000, createdAt: new Date("2026-10-21T10:00:00Z"), mine: true, note: null, matchedTo: [] },
-    ];
-    render(<EngagementRoom room={room({ sentFiles })} />);
-    openData();
-    const received = within(screen.getByRole("region", { name: /Documents received/ }));
-    expect(received.getByText("B1")).toBeTruthy();
-    expect(received.getByText("Your last 12 months of sales")).toBeTruthy();
-    expect(received.getByText("Under review")).toBeTruthy();
-  });
+
 
   it("lists files with who sent them, and opens one through a link the server issues", async () => {
     const open = vi.fn();
@@ -517,7 +480,7 @@ describe("the room's views", () => {
 
   it("shows the same views for every client, opening on the Overview, without Founder and Business when nothing is behind the room", () => {
     render(<EngagementRoom room={room()} />);
-    expect(names()).toEqual(["Overview", "Work Plan", "Data Request", "Sessions", "Deliverables"]);
+    expect(names()).toEqual(["Overview", "Work Plan", "Sessions", "Deliverables"]);
     expect(screen.getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("list", { name: "Engagement timeline" })).toBeTruthy();
   });
@@ -525,13 +488,13 @@ describe("the room's views", () => {
   it("puts Business and Founder under what we found, before Deliverables, counts the stuck areas, and moves between tabs by tap and by arrow key", () => {
     render(<EngagementRoom room={room({ insight: fromReport })} />);
     const tabs = within(screen.getByRole("tablist", { name: "Your engagement" })).getAllByRole("tab");
-    expect(names()).toEqual(["Overview", "Work Plan", "Data Request", "Sessions", "Business", "Founder", "Deliverables"]);
-    expect(tabs[4]!.textContent).toBe(`Business${fromReport.areas.filter(area => area.health === "stuck").length || ""}`);
+    expect(names()).toEqual(["Overview", "Work Plan", "Sessions", "Business", "Founder", "Deliverables"]);
+    expect(tabs[3]!.textContent).toBe(`Business${fromReport.areas.filter(area => area.health === "stuck").length || ""}`);
     expect(tabs[0].getAttribute("aria-selected")).toBe("true");
     // Hidden panels are out of reach: not in the accessibility tree.
     expect(screen.queryByRole("heading", { name: "You, as the founder" })).toBeNull();
 
-    const founder = tabs[5]!;
+    const founder = tabs[4]!;
     fireEvent.click(founder);
     expect(founder.getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("heading", { name: "You, as the founder" })).toBeTruthy();
@@ -557,10 +520,11 @@ describe("the room's views", () => {
     render(<EngagementRoom room={room()} />);
     fireEvent.click(screen.getByRole("tab", { name: "Deliverables" }));
     const track = screen.getByRole("tabpanel", { name: "Deliverables" }).parentElement!;
-    await waitFor(() => expect(track.style.transform).toContain("-3200px"));
+    // Deliverables is the fourth panel now the Data Request tab is gone (R89).
+    await waitFor(() => expect(track.style.transform).toContain("-2400px"));
     width = 1000;
     act(() => { for (const callback of observers) callback(); });
-    await waitFor(() => expect(track.style.transform).toContain("-4000px"));
+    await waitFor(() => expect(track.style.transform).toContain("-3000px"));
     // A panel never lets wide content (a long table in Founder) spill into the next one.
     for (const panel of screen.getAllByRole("tabpanel", { hidden: true })) expect(panel.className).toContain("overflow-x-clip");
     clientWidth.mockRestore();
@@ -758,7 +722,7 @@ describe("the room on a laptop or desktop", () => {
     onWideScreen();
     render(<EngagementRoom room={room()} />);
     const rail = within(screen.getByRole("navigation", { name: "Your room" }));
-    expect(within(rail.getByRole("list", { name: "The work" })).getAllByRole("link").map(link => link.textContent)).toEqual(["Work Plan2", "Data Request", "Sessions"]);
+    expect(within(rail.getByRole("list", { name: "The work" })).getAllByRole("link").map(link => link.textContent)).toEqual(["Work Plan2", "Sessions"]);
     expect(rail.queryByText("The work")).toBeNull();
     expect(rail.queryByText("What you receive")).toBeNull();
   });
@@ -878,15 +842,15 @@ describe("the Plan, Meetings and Data requests views", () => {
     expect(within(meetings[1]).getByRole("link", { name: "Join the Session" }).getAttribute("href")).toBe("https://zoom.example.test/j/1");
   });
 
-  it("shows where the Data Requests stand and the drop box, with no second list: each item is answered in the Work Plan (R85)", () => {
+  it("shows where the Data Requests stand at the top of the Work Plan, with no Data Request tab: each item is answered in its task (R89)", () => {
     render(<EngagementRoom room={room()} now={NOW} />);
-    open("Data Request");
+    expect(screen.queryByRole("tab", { name: /^Data Request/ })).toBeNull();
+    open(/^Work Plan/);
     const summary = screen.getByRole("group", { name: "Where your Data Requests stand" });
     expect(summary.textContent).toContain("Requested3");
     expect(summary.textContent).toContain("Outstanding2");
-    expect(screen.queryByRole("listitem", { name: "Your price list" })).toBeNull();
-    expect(screen.getByRole("link", { name: "Work Plan" }).getAttribute("href")).toBe("#plan");
   });
+
 
   it("puts each week's Sessions in its card, with Join before and Held after (R85)", () => {
     const base = room();
@@ -1043,9 +1007,10 @@ describe("Preview as client", () => {
     expect(found.queryByLabelText("Your comment on What we found")).toBeNull();
     expect(found.queryByRole("button", { name: "Share with my team" })).toBeNull();
     expect(found.queryByRole("button", { name: /Download/ })).toBeNull();
-    fireEvent.click(screen.getByRole("tab", { name: /^Data Request/ }));
-    expect(screen.queryByLabelText("Choose files to send")).toBeNull();
-    expect(screen.getByText(/Switched off in the preview/)).toBeTruthy();
+    // No upload in the preview, inside an item either.
+    expect(screen.queryByLabelText(/^Upload a file for/)).toBeNull();
+    const panel = openItem("Your last 12 months of sales");
+    expect(panel.getByText(/The client uploads, sends a link and answers here. Switched off in the preview/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Not available" })).toBeNull();
     expect(Object.values(api.calls).every(calls => calls.length === 0)).toBe(true);
   });

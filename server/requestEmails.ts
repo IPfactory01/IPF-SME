@@ -5,7 +5,8 @@
  * delivery log and the server log, and never undoes what was saved.
  */
 import { and, eq, inArray } from "drizzle-orm";
-import { businessChecks, businessMemberships, businesses, engagementTasks, engagements, users } from "../drizzle/schema";
+import { businessChecks, businessMemberships, businesses, engagementReminders, engagementTaskOwners, engagementTasks, engagements, users } from "../drizzle/schema";
+import { taskLink } from "../shared/links";
 import { BRAND } from "../shared/brand";
 import { TURNAROUND_HOURS, TURNAROUND_LABELS, type EngagementTaskTurnaround } from "../shared/engagement";
 import { engagementTitle } from "../shared/engagementTypes";
@@ -44,12 +45,12 @@ export function messageEmail(input: { name: string; author: string; fromTeam: bo
 }
 
 /** What the client sent, to the person it goes to, with the clock where it has one. */
-export function receivedEmail(input: { name: string; businessName: string; title: string; how: string | null; note: string | null; clock: { label: string; dueAt: Date; hours: number } | null; origin: string }) {
+export function receivedEmail(input: { name: string; businessName: string; title: string; how: string | null; note: string | null; clock: { label: string; dueAt: Date; hours: number } | null; origin: string ; link?: string}) {
   const due = input.clock ? `. ${input.clock.label} due ${lagosTime(input.clock.dueAt)}` : "";
   const lines = [hello(input.name), "", `${input.businessName} has sent "${input.title}"${input.how ? ` (${input.how})` : ""}.`];
   if (input.note) lines.push(`Their note: ${input.note}`);
   if (input.clock) lines.push("", `The ${input.clock.label.toLowerCase()} is due by ${lagosTime(input.clock.dueAt)} (Lagos time): ${input.clock.hours} hours from when it arrived.`);
-  lines.push("", `Open the engagement: ${input.origin}/admin`, "", BRAND.organisationName);
+  lines.push("", `Open the item: ${input.link ?? `${input.origin}/admin`}`, "", BRAND.organisationName);
   return { subject: `Received from ${input.businessName}: ${input.title}${due}`, body: lines.join("\n") };
 }
 
@@ -94,6 +95,12 @@ export async function teamPersonFor(db: Db, task: typeof engagementTasks.$inferS
   return person ? { userId: person.userId, name: person.name, email: person.email } : { userId: null, name: "", email: BUSINESS_SUPPORT_MAILBOX };
 }
 
+/** The item's other owners on the team (R89), with their emails, among those who still have access. */
+async function sharedOwnersOf(db: Db, task: typeof engagementTasks.$inferSelect) {
+  const ids = (await db.select({ userId: engagementTaskOwners.userId }).from(engagementTaskOwners).where(eq(engagementTaskOwners.taskId, task.id))).map(row => row.userId);
+  return ids.length ? (await teamOf(db, task.engagementId, Date.now())).filter(person => ids.includes(person.userId)).map(person => ({ userId: person.userId, name: person.name, email: person.email })) : [];
+}
+
 async function sendAll(messages: { to: string; subject: string; body: string; businessCheckId: number | null }[]) {
   const results = await Promise.allSettled(messages.map(message => deliverEmail({ to: message.to, subject: message.subject, body: message.body, sender: "business_support", businessCheckId: message.businessCheckId ?? undefined })));
   return results.filter(result => result.status === "fulfilled").length;
@@ -132,7 +139,8 @@ export async function sendMessageEmails(db: Db, input: { taskId: number; fromTea
     if (!item) return 0;
     const { task, engagement, businessName } = item;
     const author = (await db.select({ name: users.name }).from(users).where(eq(users.id, input.authorUserId)).limit(1))[0];
-    const people = input.fromTeam ? await clientPeopleFor(db, engagement.businessId, task.assigneeUserId) : [await teamPersonFor(db, task)];
+    // From the client: the person it goes to and everyone who shares it (R89).
+    const people = input.fromTeam ? await clientPeopleFor(db, engagement.businessId, task.assigneeUserId) : [await teamPersonFor(db, task), ...(await sharedOwnersOf(db, task))].filter((person, index, all) => all.findIndex(other => other.email === person.email) === index);
     const origin = getTrustedApplicationOrigin();
     return await sendAll(people.filter(person => person.userId !== input.authorUserId).map(person => ({
       to: person.email, businessCheckId: input.fromTeam ? engagement.businessCheckId : null,
@@ -154,11 +162,11 @@ export async function sendReceivedEmail(db: Db, input: { taskId: number; actorUs
     if (!item) return 0;
     const { task, businessName } = item;
     if (task.requestedByUserId === null && task.turnaround === null) return 0;
-    const person = await teamPersonFor(db, task);
-    if (person.userId === input.actorUserId) return 0;
+    // The person it goes to and everyone who shares it (R89), never whoever marked it.
+    const people = [await teamPersonFor(db, task), ...(await sharedOwnersOf(db, task))].filter((person, index, all) => person.userId !== input.actorUserId && all.findIndex(other => other.email === person.email) === index);
+    if (!people.length) return 0;
     const clock = task.turnaround && task.followUpDueAt ? { label: TURNAROUND_LABELS[task.turnaround], dueAt: task.followUpDueAt, hours: TURNAROUND_HOURS[task.turnaround] } : null;
-    const message = receivedEmail({ name: person.name, businessName, title: task.title, how: input.how, note: task.statusNote, clock, origin: getTrustedApplicationOrigin() });
-    return await sendAll([{ to: person.email, businessCheckId: null, ...message }]);
+    return await sendAll(people.map(person => ({ to: person.email, businessCheckId: null, ...receivedEmail({ name: person.name, businessName, title: task.title, how: input.how, note: task.statusNote, clock, origin: getTrustedApplicationOrigin(), link: taskLink(getTrustedApplicationOrigin(), task.engagementId, task.id) }) })));
   } catch (error) {
     return failed("What arrived")(error);
   }
@@ -179,26 +187,26 @@ export async function sendReadyEmail(db: Db, input: { taskId: number }) {
 }
 
 /** A message on a team item (R86): inside IP Factory only, to the person the item is for. */
-export function teamMessageEmail(input: { name: string; author: string; businessName: string; title: string; body: string; origin: string }) {
+export function teamMessageEmail(input: { name: string; author: string; businessName: string; title: string; body: string; origin: string ; link?: string}) {
   return {
     subject: `${firstNameOf(input.author) || "A colleague"} wrote on your item: ${input.title}`,
-    body: [hello(input.name), "", `${input.author || "A colleague"} wrote on "${input.title}" (${input.businessName}):`, "", input.body, "", `Reply in the engagement: ${input.origin}/admin`, "", BRAND.organisationName].join("\n"),
+    body: [hello(input.name), "", `${input.author || "A colleague"} wrote on "${input.title}" (${input.businessName}):`, "", input.body, "", `Reply in the engagement: ${input.link ?? `${input.origin}/admin`}`, "", BRAND.organisationName].join("\n"),
   };
 }
 
 /** Tagged in an item's messages (R86): who, where, what they wrote. */
-export function mentionEmail(input: { name: string; author: string; businessName: string; title: string; body: string; origin: string }) {
+export function mentionEmail(input: { name: string; author: string; businessName: string; title: string; body: string; origin: string ; link?: string}) {
   return {
     subject: `${firstNameOf(input.author) || "A colleague"} mentioned you on ${input.title}`,
-    body: [hello(input.name), "", `${input.author || "A colleague"} mentioned you on "${input.title}" (${input.businessName}):`, "", input.body, "", `Open it: ${input.origin}/admin`, "", BRAND.organisationName].join("\n"),
+    body: [hello(input.name), "", `${input.author || "A colleague"} mentioned you on "${input.title}" (${input.businessName}):`, "", input.body, "", `Open it: ${input.link ?? `${input.origin}/admin`}`, "", BRAND.organisationName].join("\n"),
   };
 }
 
 /** A team item handed in for review (R86), to the engagement's lead. */
-export function readyForReviewEmail(input: { name: string; author: string; businessName: string; title: string; origin: string }) {
+export function readyForReviewEmail(input: { name: string; author: string; businessName: string; title: string; origin: string ; link?: string}) {
   return {
     subject: `Ready for review: ${input.title}, ${input.businessName}`,
-    body: [hello(input.name), "", `${input.author || "A colleague"} has handed in "${input.title}" for ${input.businessName}. Its files, link and messages are on the item.`, "", `Review it, then mark it done or ask for more: ${input.origin}/admin`, "", BRAND.organisationName].join("\n"),
+    body: [hello(input.name), "", `${input.author || "A colleague"} has handed in "${input.title}" for ${input.businessName}. Its files, link and messages are on the item.`, "", `Review it, then mark it done or ask for more: ${input.link ?? `${input.origin}/admin`}`, "", BRAND.organisationName].join("\n"),
   };
 }
 
@@ -215,7 +223,7 @@ export async function sendTeamItemEmails(db: Db, input: { taskId: number; author
     const author = (await db.select({ name: users.name }).from(users).where(eq(users.id, input.authorUserId)).limit(1))[0];
     const people = await teamPeople(db, item.task.engagementId, input.to.filter(id => id !== input.authorUserId));
     const origin = getTrustedApplicationOrigin();
-    return await sendAll(people.map(person => ({ to: person.email, businessCheckId: null, ...teamMessageEmail({ name: person.name, author: author?.name ?? "", businessName: item.businessName, title: item.task.title, body: input.body, origin }) })));
+    return await sendAll(people.map(person => ({ to: person.email, businessCheckId: null, ...teamMessageEmail({ name: person.name, author: author?.name ?? "", businessName: item.businessName, title: item.task.title, body: input.body, origin, link: taskLink(origin, item.task.engagementId, item.task.id) }) })));
   } catch (error) {
     return failed("A team message")(error);
   }
@@ -229,7 +237,7 @@ export async function sendMentionEmails(db: Db, input: { taskId: number; authorU
     const author = (await db.select({ name: users.name }).from(users).where(eq(users.id, input.authorUserId)).limit(1))[0];
     const people = await teamPeople(db, item.task.engagementId, input.userIds);
     const origin = getTrustedApplicationOrigin();
-    return await sendAll(people.map(person => ({ to: person.email, businessCheckId: null, ...mentionEmail({ name: person.name, author: author?.name ?? "", businessName: item.businessName, title: item.task.title, body: input.body, origin }) })));
+    return await sendAll(people.map(person => ({ to: person.email, businessCheckId: null, ...mentionEmail({ name: person.name, author: author?.name ?? "", businessName: item.businessName, title: item.task.title, body: input.body, origin, link: taskLink(origin, item.task.engagementId, item.task.id) }) })));
   } catch (error) {
     return failed("A mention")(error);
   }
@@ -245,9 +253,46 @@ export async function sendReadyForReviewEmails(db: Db, input: { taskId: number; 
     const leads = team.filter(person => (person.role === "manager" || person.role === "lead") && person.userId !== input.authorUserId);
     const to = leads.length ? leads.map(person => ({ email: person.email, name: person.name })) : [{ email: BUSINESS_SUPPORT_MAILBOX, name: "" }];
     const origin = getTrustedApplicationOrigin();
-    return await sendAll(to.map(person => ({ to: person.email, businessCheckId: null, ...readyForReviewEmail({ name: person.name, author: author?.name ?? "", businessName: item.businessName, title: item.task.title, origin }) })));
+    return await sendAll(to.map(person => ({ to: person.email, businessCheckId: null, ...readyForReviewEmail({ name: person.name, author: author?.name ?? "", businessName: item.businessName, title: item.task.title, origin, link: taskLink(origin, item.task.engagementId, item.task.id) }) })));
   } catch (error) {
     return failed("Ready for review")(error);
+  }
+}
+
+/** A new file on an item (R89), to its owners and the engagement's lead, with a link straight to the item. */
+export function newFileEmail(input: { name: string; uploader: string; fromClient: boolean; businessName: string; title: string; fileName: string; link: string }) {
+  const who = input.fromClient ? input.businessName : firstNameOf(input.uploader) || "A colleague";
+  return {
+    subject: `New file on ${input.title}: ${input.fileName}`,
+    body: [hello(input.name), "", `${who} added "${input.fileName}" to "${input.title}"${input.fromClient ? "" : ` for ${input.businessName}`}. More may follow in the next few minutes.`, "", `Open the item: ${input.link}`, "", BRAND.organisationName].join("\n"),
+  };
+}
+
+/** The window in which uploads on one item share one email (R89). */
+export const FILE_EMAIL_WINDOW_MS = 15 * 60_000;
+
+/**
+ * Every new file on an item (R89, ET 13 November 2026): its owners and the engagement's Engagement Manager and Lead
+ * Consultant hear, never whoever uploaded it; a burst of uploads on one item sends one email per quarter hour. Best
+ * effort, as every email here. Returns how many were emailed.
+ */
+export async function sendNewFileEmails(db: Database, input: { taskId: number; uploaderUserId: number; fileName: string; fromClient: boolean; now?: number }) {
+  try {
+    const item = await itemOf(db, input.taskId);
+    if (!item) return 0;
+    const { task, businessName } = item;
+    const window = Math.floor((input.now ?? Date.now()) / FILE_EMAIL_WINDOW_MS);
+    const claimed = await db.insert(engagementReminders).values({ key: `upload:${task.id}:${window}`, kind: "new_file", engagementId: task.engagementId }).onConflictDoNothing().returning({ id: engagementReminders.id });
+    if (!claimed.length) return 0;
+    const team = await teamOf(db, task.engagementId, Date.now());
+    const lead = task.side === "ipf" && task.assigneeUserId !== null ? team.find(person => person.userId === task.assigneeUserId) ?? null : await teamPersonFor(db, task);
+    const people = [...(lead && lead.userId !== null ? [lead] : []), ...(await sharedOwnersOf(db, task)), ...team.filter(person => person.role === "manager" || person.role === "lead")]
+      .filter((person, index, all) => person.userId !== input.uploaderUserId && all.findIndex(other => other.email === person.email) === index);
+    const uploader = (await db.select({ name: users.name }).from(users).where(eq(users.id, input.uploaderUserId)).limit(1))[0];
+    const link = taskLink(getTrustedApplicationOrigin(), task.engagementId, task.id);
+    return await sendAll(people.map(person => ({ to: person.email, businessCheckId: null, ...newFileEmail({ name: person.name, uploader: uploader?.name ?? "", fromClient: input.fromClient, businessName, title: task.title, fileName: input.fileName, link }) })));
+  } catch (error) {
+    return failed("A new file")(error);
   }
 }
 

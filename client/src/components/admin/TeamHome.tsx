@@ -2,6 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import { BRAND } from "@shared/brand";
 import { METHOD } from "@shared/method";
 import { firstNameOf } from "@shared/whatsapp";
+import { taskFromLink } from "@shared/links";
 import { ADMIN_SECTIONS, PIPELINE_STAGES, visibleAdminSections, type AdminAccessView, type AdminSectionId, type ConsoleTarget, type PipelineStage } from "@/lib/adminSections";
 import { trpc } from "@/lib/trpc";
 import { avatarColour, initials } from "@/components/EngagementRoom";
@@ -41,7 +42,9 @@ export default function TeamHome({ access, now = new Date() }: { access: Access;
   const { logout } = useAuth();
   const list = trpc.engagement.staff.list.useQuery(undefined);
   const today = trpc.engagement.staff.today.useQuery(undefined);
-  const [view, setView] = useState<View>({ kind: "home" });
+  // A link from an email (R89) opens its engagement on the item: /admin?engagement=…&task=….
+  const [arrival] = useState(() => (typeof window === "undefined" ? null : taskFromLink(window.location.search)));
+  const [view, setView] = useState<View>(() => (arrival ? { kind: "engagement", id: arrival.engagementId } : { kind: "home" }));
   const [stage, setStage] = useState<PipelineStage>("checks");
   // The desk's sections other than delivery, for those whose role has them (Pipeline, Clients, Finance).
   // The desk's sections other than delivery, for those whose role has them: Pipeline, Clients, Finance, and Team for a
@@ -54,7 +57,8 @@ export default function TeamHome({ access, now = new Date() }: { access: Access;
   const who = access.name?.trim() || access.email || "";
   const go = (next: View) => {
     setView(next);
-    if (typeof window !== "undefined" && window.location.hash) window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+    // Moving on clears a tab in the address and an email's link, so a reload starts where the person is.
+    if (typeof window !== "undefined" && (window.location.hash || window.location.search)) window.history.replaceState(window.history.state, "", window.location.pathname);
   };
   const openTarget = (target: ConsoleTarget) => {
     if (PIPELINE_STAGES.some(item => item.id === target)) { setStage(target as PipelineStage); go({ kind: "section", id: "pipeline" }); return; }
@@ -137,7 +141,7 @@ export default function TeamHome({ access, now = new Date() }: { access: Access;
           )}
         </div>
         {view.kind === "engagement" ? (
-          <EngagementWorkspace engagementId={view.id} myRole={open?.myRole ?? null} onBack={() => go({ kind: "home" })} />
+          <EngagementWorkspace engagementId={view.id} myRole={open?.myRole ?? null} onBack={() => go({ kind: "home" })} openTaskId={arrival && arrival.engagementId === view.id ? arrival.taskId : null} />
         ) : (
           <main className="mx-auto max-w-6xl space-y-4 px-4 py-5 sm:px-7">
             <DatabaseBehind />

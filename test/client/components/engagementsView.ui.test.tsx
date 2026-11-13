@@ -47,7 +47,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         fees: { useQuery: () => ({ data: api.failed.fees ? undefined : api.fees, error: api.failed.fees ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("fees"); } }) },
-        ...Object.fromEntries(["handIn", "start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "bookMeeting", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["handIn", "setOwners", "assignByRole", "start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "bookMeeting", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -72,7 +72,7 @@ const detail = (given: { manage: boolean; assign: boolean; review: boolean; send
   clientPeople: [{ userId: 3, name: "Ada Okafor", role: "owner", access: "full" }],
   sessions: [session],
   // Asking the client (R78): every item carries who asked, whom it goes to, its clock and its conversation.
-  tasks: tasks.map(item => ({ requestedByUserId: null, turnaround: null, receivedAt: null, followUpDueAt: null, followUpDoneAt: null, askedByName: null, goesTo: null, canAnswer: false, canHandIn: false, comments: [], ...(item as object) })),
+  tasks: tasks.map(item => ({ requestedByUserId: null, turnaround: null, receivedAt: null, followUpDueAt: null, followUpDoneAt: null, askedByName: null, goesTo: null, canAnswer: false, canHandIn: false, owners: [], ownerName: null, comments: [], ...(item as object) })),
   deliverables,
   measure: null as unknown,
   checkins: [] as unknown[],
@@ -649,6 +649,30 @@ describe("the team's workspace (R82)", () => {
     fireEvent.change(details.getByLabelText(/What is still needed/), { target: { value: "The logo as a PNG with no background" } });
     fireEvent.click(details.getByRole("button", { name: "Send" }));
     expect(api.calls.saveTask.at(-1)).toMatchObject({ taskId: 51, status: "needs_more", statusNote: "The logo as a PNG with no background" });
+  });
+
+  it("shows each item's owners and lets the lead change them, and the files shared so far under it (R89)", async () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };
+    const files = [{ id: 81, fileName: "IMG_1264.jpeg", contentType: "image/jpeg", sizeBytes: 2048, audience: "owner", uploadedByName: "Ada Okafor", createdAt: new Date() }, { id: 82, fileName: "brand-guide.pdf", contentType: "application/pdf", sizeBytes: 9000, audience: "owner", uploadedByName: "Ada Okafor", createdAt: new Date() }];
+    const team2 = [...team, { userId: 3, role: "content_producer", roleLabel: "Content Producer", name: "Kemi Producer", email: "kemi@example.test", jobTitle: null }];
+    api.detail = { ...detail({ manage: true, assign: false, review: true }, [], [task({ id: 61, title: "Content plan for month 1", side: "ipf", kind: "action", files, owners: [{ userId: 1, name: "Kemi Producer", lead: true }] })]), team: team2 };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    // Under the item: a picture for the image, a chip for the document.
+    const strip = within(screen.getByRole("list", { name: "Files shared so far" }));
+    expect(strip.getByRole("button", { name: "Open IMG_1264.jpeg" })).toBeTruthy();
+    expect(strip.getByText("brand-guide.pdf")).toBeTruthy();
+    await waitFor(() => expect(api.calls.fileLink).toEqual(expect.arrayContaining([{ fileId: 81 }])));
+    fireEvent.click(screen.getByRole("button", { name: "Open Content plan for month 1" }));
+    const details = within(screen.getByRole("complementary", { name: "Task details" }));
+    expect(details.getByText("Kemi Producer, lead owner")).toBeTruthy();
+    fireEvent.click(details.getByRole("button", { name: "Change owners" }));
+    fireEvent.click(details.getByRole("checkbox", { name: /Lewis Lead/ }));
+    fireEvent.click(details.getByRole("button", { name: "Save owners" }));
+    expect(api.calls.setOwners).toEqual([{ taskId: 61, leadUserId: 1, otherUserIds: [2] }]);
   });
 
   it("ticks what a team member has handed in as pending review for them, and as to review for the lead (R87)", () => {

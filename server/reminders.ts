@@ -28,7 +28,7 @@ import { lagosTime } from "./lagosTime";
 import { businessNameOf, clientPeopleFor, teamPersonFor } from "./requestEmails";
 import { getTrustedApplicationOrigin } from "./security";
 import { clientOf, teamOf } from "./sessionInvitations";
-import { ownerOfTask } from "./engagements";
+import { otherOwnersOf, ownersOfTask } from "./engagements";
 import { mainContactOf } from "./teamContact";
 
 /** No reminder between 9pm and 7am Lagos time (R57). */
@@ -300,12 +300,15 @@ export async function runReminders(db: Database, now = new Date()): Promise<Remi
       // The team's own items, late (R88): their person a day after, the lead three days after; once each.
       const ours = await db.select().from(engagementTasks).where(and(eq(engagementTasks.engagementId, engagement.id), eq(engagementTasks.side, "ipf"), inArray(engagementTasks.status, [...OPEN_TASK_STATUSES])));
       const crew = ours.length ? await teamOf(db, engagement.id, now.getTime()) : [];
+      const extra = ours.length ? await otherOwnersOf(db, { engagementId: engagement.id }) : new Map<number, number[]>();
       for (const task of ours.filter(item => item.dueOn && item.dueOn < today)) {
         const late = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${task.dueOn}T00:00:00Z`)) / (24 * HOUR));
         const stage = late >= 3 ? "team_lead" : "team_late";
         if (!(await claim(db, `team:${task.id}:${task.dueOn}:${stage}`, stage, engagement.id))) continue;
-        const owner = crew.find(member => member.userId === ownerOfTask(crew, task));
-        if (stage === "team_late" && owner) counts.team += await send(owner.email, teamItemLateEmail({ toLead: false, name: owner.name, ownerName: owner.name, title: task.title, businessName, dueOn: task.dueOn! }), null);
+        // Every owner hears (R89); the lead owner is named to the lead.
+        const owners = ownersOfTask(crew, task, extra.get(task.id)).map(id => crew.find(member => member.userId === id)).filter((member): member is NonNullable<typeof member> => Boolean(member));
+        const owner = owners[0];
+        if (stage === "team_late") for (const person of owners) counts.team += await send(person.email, teamItemLateEmail({ toLead: false, name: person.name, ownerName: person.name, title: task.title, businessName, dueOn: task.dueOn! }), null);
         if (stage === "team_lead") for (const to of await leadsOf(db, engagement.id)) counts.team += await send(to, teamItemLateEmail({ toLead: true, name: "", ownerName: owner?.name ?? "", title: task.title, businessName, dueOn: task.dueOn! }), null);
       }
       // Sessions (R59): the morning before, and the morning of, each booked Session; a moved one is reminded again.

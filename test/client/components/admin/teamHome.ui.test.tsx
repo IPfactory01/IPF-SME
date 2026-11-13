@@ -10,7 +10,7 @@ vi.mock("@/_core/hooks/useAuth", () => ({ useAuth: () => ({ logout: async () => 
 vi.mock("@/lib/trpc", () => ({ trpc: { engagement: { staff: { list: { useQuery: () => ({ data: { setUp: true, items: data.items } }) }, today: { useQuery: () => ({ data: data.today }) } } } } }));
 vi.mock("@/components/admin/DatabaseBehind", () => ({ default: () => null }));
 vi.mock("@/components/admin/EngagementsView", () => ({ default: ({ home, header, onOpenProject }: { home?: boolean; header?: React.ReactNode; onOpenProject?: (id: number) => void }) => <div>{header}<p>{home ? "Projects at home" : "Console engagements"}</p><button type="button" onClick={() => onOpenProject?.(4)}>Open project 4</button></div> }));
-vi.mock("@/components/admin/EngagementDetail", () => ({ EngagementWorkspace: ({ engagementId, myRole }: { engagementId: number; myRole: string | null }) => <p>Workspace {engagementId} as {myRole}</p> }));
+vi.mock("@/components/admin/EngagementDetail", () => ({ EngagementWorkspace: ({ engagementId, myRole, openTaskId }: { engagementId: number; myRole: string | null; openTaskId?: number | null }) => <p>Workspace {engagementId} as {myRole}{openTaskId ? ` on item ${openTaskId}` : ""}</p> }));
 vi.mock("@/components/admin/BusinessSupportConsole", () => ({ ConsoleSection: ({ id }: { id: string }) => <p>Section {id}</p> }));
 
 const { default: TeamHome, greetingAt } = await import("@/components/admin/TeamHome");
@@ -69,5 +69,14 @@ describe("the team's home (R83): everyone, in the client's room's frame", () => 
     expect(screen.getByText("Section finance")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "My work" }));
     expect(screen.getByText("Projects at home")).toBeTruthy();
+  });
+
+  it("opens the engagement on the item an email's link names (R89)", () => {
+    data.items = [project];
+    window.history.replaceState(null, "", "/admin?engagement=4&task=51");
+    render(<TeamHome access={{ permissions: [], platformPermissions: PLATFORM_ROLE_PERMISSIONS.analyst, name: "Lola Lead", level: "Business Analyst" }} now={morning} />);
+    expect(screen.getByText("Workspace 4 as Content Producer on item 51")).toBeTruthy();
+    fireEvent.click(within(screen.getByRole("navigation", { name: "Your work" })).getByRole("button", { name: "Home" }));
+    expect(window.location.search).toBe("");
   });
 });

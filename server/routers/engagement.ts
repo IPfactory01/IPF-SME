@@ -83,6 +83,7 @@ import {
   askClient,
   handInTask,
   assignByRole,
+  setTaskOwners,
   todayFor,
   bookMeeting,
   staffTaskComment,
@@ -261,6 +262,8 @@ const staffRouter = router({
   /** Write in a client item's conversation (R78): manage_engagements, or the Specialist the item goes to. */
   taskComment: staff.input(z.object({ taskId: id, body: text(TASK_COMMENT_MAX).min(1, "Write your message first.") })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.engagementComment, `staff:${ctx.actor.id}`); return guarded(async () => staffTaskComment(await engagementDb(), ctx.actor, input)); }),
   /** The First edit or draft is shared (R78): as for the conversation, once it has arrived, once. */
+  /** An item's owners (R89): a lead owner and anyone who shares it, all reminded. */
+  setOwners: staff.input(z.object({ taskId: id, leadUserId: id, otherUserIds: z.array(id).max(12) })).mutation(async ({ ctx, input }) => guarded(async () => setTaskOwners(await engagementDb(), ctx.actor, input))),
   /** Assign by role (R88): team items with no one go to the person in their plan role, else the main contact. */
   assignByRole: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => assignByRole(await engagementDb(), ctx.actor, input))),
   /** Ready for review (R86): the owner of a team item hands it in; the lead is emailed. */

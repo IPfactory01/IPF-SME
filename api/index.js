@@ -2344,6 +2344,16 @@ var engagementReminders = pgTable("engagement_reminders", {
   engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
   sentAt: timestamp("sentAt", { withTimezone: true }).defaultNow().notNull()
 }, (table2) => [index("engagement_reminders_engagement_idx").on(table2.engagementId)]);
+var engagementTaskOwners = pgTable("engagement_task_owners", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  taskId: integer("taskId").notNull().references(() => engagementTasks.id, { onDelete: "cascade" }),
+  userId: integer("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
+}, (table2) => [
+  uniqueIndex("engagement_task_owners_task_user_unique").on(table2.taskId, table2.userId),
+  index("engagement_task_owners_engagement_idx").on(table2.engagementId)
+]);
 var engagementMeasures = pgTable("engagement_measures", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
   engagementId: integer("engagementId").notNull().unique().references(() => engagements.id, { onDelete: "cascade" }),
@@ -4719,6 +4729,13 @@ var journal_default = {
       version: "7",
       when: 1794383509384,
       tag: "0025_engagement_reminders",
+      breakpoints: true
+    },
+    {
+      idx: 26,
+      version: "7",
+      when: 1794600387887,
+      tag: "0026_engagement_task_owners",
       breakpoints: true
     }
   ]
@@ -9510,6 +9527,11 @@ var hasArrived = (fields) => fields.receivedAt instanceof Date;
 
 // server/requestEmails.ts
 import { and as and14, eq as eq21, inArray as inArray10 } from "drizzle-orm";
+
+// shared/links.ts
+var taskLink = (origin, engagementId, taskId) => `${origin}/admin?engagement=${engagementId}&task=${taskId}`;
+
+// server/requestEmails.ts
 var hello = (name) => `Hello${firstNameOf(name) ? ` ${firstNameOf(name)}` : ""},`;
 function requestEmail(input) {
   const due = dayInWords(input.dueOn);
@@ -9534,7 +9556,7 @@ function receivedEmail(input) {
   const lines = [hello(input.name), "", `${input.businessName} has sent "${input.title}"${input.how ? ` (${input.how})` : ""}.`];
   if (input.note) lines.push(`Their note: ${input.note}`);
   if (input.clock) lines.push("", `The ${input.clock.label.toLowerCase()} is due by ${lagosTime(input.clock.dueAt)} (Lagos time): ${input.clock.hours} hours from when it arrived.`);
-  lines.push("", `Open the engagement: ${input.origin}/admin`, "", BRAND.organisationName);
+  lines.push("", `Open the item: ${input.link ?? `${input.origin}/admin`}`, "", BRAND.organisationName);
   return { subject: `Received from ${input.businessName}: ${input.title}${due}`, body: lines.join("\n") };
 }
 function readyEmail(input) {
@@ -9565,6 +9587,10 @@ async function clientPeopleFor(db, businessId, assigneeUserId) {
 async function teamPersonFor(db, task) {
   const person = followUpOwnerOf(await teamOf(db, task.engagementId, Date.now()), task);
   return person ? { userId: person.userId, name: person.name, email: person.email } : { userId: null, name: "", email: BUSINESS_SUPPORT_MAILBOX };
+}
+async function sharedOwnersOf(db, task) {
+  const ids = (await db.select({ userId: engagementTaskOwners.userId }).from(engagementTaskOwners).where(eq21(engagementTaskOwners.taskId, task.id))).map((row) => row.userId);
+  return ids.length ? (await teamOf(db, task.engagementId, Date.now())).filter((person) => ids.includes(person.userId)).map((person) => ({ userId: person.userId, name: person.name, email: person.email })) : [];
 }
 async function sendAll(messages) {
   const results = await Promise.allSettled(messages.map((message) => deliverEmail({ to: message.to, subject: message.subject, body: message.body, sender: "business_support", businessCheckId: message.businessCheckId ?? void 0 })));
@@ -9597,7 +9623,7 @@ async function sendMessageEmails(db, input) {
     if (!item2) return 0;
     const { task, engagement, businessName } = item2;
     const author = (await db.select({ name: users.name }).from(users).where(eq21(users.id, input.authorUserId)).limit(1))[0];
-    const people = input.fromTeam ? await clientPeopleFor(db, engagement.businessId, task.assigneeUserId) : [await teamPersonFor(db, task)];
+    const people = input.fromTeam ? await clientPeopleFor(db, engagement.businessId, task.assigneeUserId) : [await teamPersonFor(db, task), ...await sharedOwnersOf(db, task)].filter((person, index2, all) => all.findIndex((other) => other.email === person.email) === index2);
     const origin = getTrustedApplicationOrigin();
     return await sendAll(people.filter((person) => person.userId !== input.authorUserId).map((person) => ({
       to: person.email,
@@ -9614,11 +9640,10 @@ async function sendReceivedEmail(db, input) {
     if (!item2) return 0;
     const { task, businessName } = item2;
     if (task.requestedByUserId === null && task.turnaround === null) return 0;
-    const person = await teamPersonFor(db, task);
-    if (person.userId === input.actorUserId) return 0;
+    const people = [await teamPersonFor(db, task), ...await sharedOwnersOf(db, task)].filter((person, index2, all) => person.userId !== input.actorUserId && all.findIndex((other) => other.email === person.email) === index2);
+    if (!people.length) return 0;
     const clock = task.turnaround && task.followUpDueAt ? { label: TURNAROUND_LABELS[task.turnaround], dueAt: task.followUpDueAt, hours: TURNAROUND_HOURS[task.turnaround] } : null;
-    const message = receivedEmail({ name: person.name, businessName, title: task.title, how: input.how, note: task.statusNote, clock, origin: getTrustedApplicationOrigin() });
-    return await sendAll([{ to: person.email, businessCheckId: null, ...message }]);
+    return await sendAll(people.map((person) => ({ to: person.email, businessCheckId: null, ...receivedEmail({ name: person.name, businessName, title: task.title, how: input.how, note: task.statusNote, clock, origin: getTrustedApplicationOrigin(), link: taskLink(getTrustedApplicationOrigin(), task.engagementId, task.id) }) })));
   } catch (error) {
     return failed("What arrived")(error);
   }
@@ -9638,19 +9663,19 @@ async function sendReadyEmail(db, input) {
 function teamMessageEmail(input) {
   return {
     subject: `${firstNameOf(input.author) || "A colleague"} wrote on your item: ${input.title}`,
-    body: [hello(input.name), "", `${input.author || "A colleague"} wrote on "${input.title}" (${input.businessName}):`, "", input.body, "", `Reply in the engagement: ${input.origin}/admin`, "", BRAND.organisationName].join("\n")
+    body: [hello(input.name), "", `${input.author || "A colleague"} wrote on "${input.title}" (${input.businessName}):`, "", input.body, "", `Reply in the engagement: ${input.link ?? `${input.origin}/admin`}`, "", BRAND.organisationName].join("\n")
   };
 }
 function mentionEmail(input) {
   return {
     subject: `${firstNameOf(input.author) || "A colleague"} mentioned you on ${input.title}`,
-    body: [hello(input.name), "", `${input.author || "A colleague"} mentioned you on "${input.title}" (${input.businessName}):`, "", input.body, "", `Open it: ${input.origin}/admin`, "", BRAND.organisationName].join("\n")
+    body: [hello(input.name), "", `${input.author || "A colleague"} mentioned you on "${input.title}" (${input.businessName}):`, "", input.body, "", `Open it: ${input.link ?? `${input.origin}/admin`}`, "", BRAND.organisationName].join("\n")
   };
 }
 function readyForReviewEmail(input) {
   return {
     subject: `Ready for review: ${input.title}, ${input.businessName}`,
-    body: [hello(input.name), "", `${input.author || "A colleague"} has handed in "${input.title}" for ${input.businessName}. Its files, link and messages are on the item.`, "", `Review it, then mark it done or ask for more: ${input.origin}/admin`, "", BRAND.organisationName].join("\n")
+    body: [hello(input.name), "", `${input.author || "A colleague"} has handed in "${input.title}" for ${input.businessName}. Its files, link and messages are on the item.`, "", `Review it, then mark it done or ask for more: ${input.link ?? `${input.origin}/admin`}`, "", BRAND.organisationName].join("\n")
   };
 }
 async function teamPeople(db, engagementId, userIds) {
@@ -9663,7 +9688,7 @@ async function sendTeamItemEmails(db, input) {
     const author = (await db.select({ name: users.name }).from(users).where(eq21(users.id, input.authorUserId)).limit(1))[0];
     const people = await teamPeople(db, item2.task.engagementId, input.to.filter((id3) => id3 !== input.authorUserId));
     const origin = getTrustedApplicationOrigin();
-    return await sendAll(people.map((person) => ({ to: person.email, businessCheckId: null, ...teamMessageEmail({ name: person.name, author: author?.name ?? "", businessName: item2.businessName, title: item2.task.title, body: input.body, origin }) })));
+    return await sendAll(people.map((person) => ({ to: person.email, businessCheckId: null, ...teamMessageEmail({ name: person.name, author: author?.name ?? "", businessName: item2.businessName, title: item2.task.title, body: input.body, origin, link: taskLink(origin, item2.task.engagementId, item2.task.id) }) })));
   } catch (error) {
     return failed("A team message")(error);
   }
@@ -9675,7 +9700,7 @@ async function sendMentionEmails(db, input) {
     const author = (await db.select({ name: users.name }).from(users).where(eq21(users.id, input.authorUserId)).limit(1))[0];
     const people = await teamPeople(db, item2.task.engagementId, input.userIds);
     const origin = getTrustedApplicationOrigin();
-    return await sendAll(people.map((person) => ({ to: person.email, businessCheckId: null, ...mentionEmail({ name: person.name, author: author?.name ?? "", businessName: item2.businessName, title: item2.task.title, body: input.body, origin }) })));
+    return await sendAll(people.map((person) => ({ to: person.email, businessCheckId: null, ...mentionEmail({ name: person.name, author: author?.name ?? "", businessName: item2.businessName, title: item2.task.title, body: input.body, origin, link: taskLink(origin, item2.task.engagementId, item2.task.id) }) })));
   } catch (error) {
     return failed("A mention")(error);
   }
@@ -9689,9 +9714,35 @@ async function sendReadyForReviewEmails(db, input) {
     const leads = team.filter((person) => (person.role === "manager" || person.role === "lead") && person.userId !== input.authorUserId);
     const to = leads.length ? leads.map((person) => ({ email: person.email, name: person.name })) : [{ email: BUSINESS_SUPPORT_MAILBOX, name: "" }];
     const origin = getTrustedApplicationOrigin();
-    return await sendAll(to.map((person) => ({ to: person.email, businessCheckId: null, ...readyForReviewEmail({ name: person.name, author: author?.name ?? "", businessName: item2.businessName, title: item2.task.title, origin }) })));
+    return await sendAll(to.map((person) => ({ to: person.email, businessCheckId: null, ...readyForReviewEmail({ name: person.name, author: author?.name ?? "", businessName: item2.businessName, title: item2.task.title, origin, link: taskLink(origin, item2.task.engagementId, item2.task.id) }) })));
   } catch (error) {
     return failed("Ready for review")(error);
+  }
+}
+function newFileEmail(input) {
+  const who = input.fromClient ? input.businessName : firstNameOf(input.uploader) || "A colleague";
+  return {
+    subject: `New file on ${input.title}: ${input.fileName}`,
+    body: [hello(input.name), "", `${who} added "${input.fileName}" to "${input.title}"${input.fromClient ? "" : ` for ${input.businessName}`}. More may follow in the next few minutes.`, "", `Open the item: ${input.link}`, "", BRAND.organisationName].join("\n")
+  };
+}
+var FILE_EMAIL_WINDOW_MS = 15 * 6e4;
+async function sendNewFileEmails(db, input) {
+  try {
+    const item2 = await itemOf(db, input.taskId);
+    if (!item2) return 0;
+    const { task, businessName } = item2;
+    const window = Math.floor((input.now ?? Date.now()) / FILE_EMAIL_WINDOW_MS);
+    const claimed = await db.insert(engagementReminders).values({ key: `upload:${task.id}:${window}`, kind: "new_file", engagementId: task.engagementId }).onConflictDoNothing().returning({ id: engagementReminders.id });
+    if (!claimed.length) return 0;
+    const team = await teamOf(db, task.engagementId, Date.now());
+    const lead = task.side === "ipf" && task.assigneeUserId !== null ? team.find((person) => person.userId === task.assigneeUserId) ?? null : await teamPersonFor(db, task);
+    const people = [...lead && lead.userId !== null ? [lead] : [], ...await sharedOwnersOf(db, task), ...team.filter((person) => person.role === "manager" || person.role === "lead")].filter((person, index2, all) => person.userId !== input.uploaderUserId && all.findIndex((other) => other.email === person.email) === index2);
+    const uploader = (await db.select({ name: users.name }).from(users).where(eq21(users.id, input.uploaderUserId)).limit(1))[0];
+    const link = taskLink(getTrustedApplicationOrigin(), task.engagementId, task.id);
+    return await sendAll(people.map((person) => ({ to: person.email, businessCheckId: null, ...newFileEmail({ name: person.name, uploader: uploader?.name ?? "", fromClient: input.fromClient, businessName, title: task.title, fileName: input.fileName, link }) })));
+  } catch (error) {
+    return failed("A new file")(error);
   }
 }
 async function namesOf2(db, ids) {
@@ -12503,8 +12554,19 @@ var requireManage2 = (actor) => requirePermission(actor, "manage_engagements", "
 var canContribute = (actor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "contribute_engagements");
 var canSeeInternal = (actor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "review_engagements");
 var canSeeFees = (actor) => canSeeInternal(actor) || authorityAllows(actor.authority, "view_financials");
-function isOwnTask(task, actorId, ownerUserId) {
-  return task.assigneeUserId === actorId || task.requestedByUserId === actorId || task.side === "ipf" && task.createdByUserId === actorId || ownerUserId === actorId;
+function isOwnTask(task, actorId, ownerUserId, otherOwners = []) {
+  return task.assigneeUserId === actorId || task.requestedByUserId === actorId || task.side === "ipf" && task.createdByUserId === actorId || ownerUserId === actorId || otherOwners.includes(actorId);
+}
+async function otherOwnersOf(db, where) {
+  const condition = where.taskId !== void 0 ? eq24(engagementTaskOwners.taskId, where.taskId) : where.engagementIds ? where.engagementIds.length ? inArray11(engagementTaskOwners.engagementId, where.engagementIds) : sql8`false` : eq24(engagementTaskOwners.engagementId, where.engagementId);
+  const rows = await db.select({ taskId: engagementTaskOwners.taskId, userId: engagementTaskOwners.userId }).from(engagementTaskOwners).where(condition);
+  const map = /* @__PURE__ */ new Map();
+  for (const row of rows) map.set(row.taskId, [...map.get(row.taskId) ?? [], row.userId]);
+  return map;
+}
+function ownersOfTask(team, task, others = []) {
+  const lead = ownerOfTask(team, task);
+  return Array.from(/* @__PURE__ */ new Set([...lead === null ? [] : [lead], ...others.filter((id3) => team.some((member) => member.userId === id3))]));
 }
 function ownerOfTask(team, task) {
   if (task.side === "client") return followUpOwnerOf(team, task)?.userId ?? null;
@@ -12516,7 +12578,8 @@ async function requireStaffTask(db, actor, taskId) {
   await requireStaffEngagement(db, actor, task.engagementId);
   const team = await db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name }).from(engagementTeam).innerJoin(users, eq24(engagementTeam.userId, users.id)).where(eq24(engagementTeam.engagementId, task.engagementId));
   const leads = await canReviewEngagement(db, actor, task.engagementId);
-  return { task, team, leads, own: isOwnTask(task, actor.id, ownerOfTask(team, task)) };
+  const others = (await otherOwnersOf(db, { taskId: task.id })).get(task.id) ?? [];
+  return { task, team, leads, others, own: isOwnTask(task, actor.id, ownerOfTask(team, task), others) };
 }
 async function todayFor(db, actor, now = Date.now()) {
   const mine = await db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role }).from(engagementTeam).where(eq24(engagementTeam.userId, actor.id));
@@ -12547,12 +12610,13 @@ async function todayFor(db, actor, now = Date.now()) {
     const own = all.filter((task) => task.side === "client");
     const comments = all.length ? await taskCommentsOf(db, engagement.id) : [];
     const people = crew.map((member) => ({ userId: member.userId, name: member.name ?? "" }));
+    const extra = await otherOwnersOf(db, { engagementId: engagement.id });
     for (const task of all) {
       const said = comments.filter((comment) => comment.taskId === task.id);
       const tagged = [...said].reverse().find((comment) => comment.authorUserId !== actor.id && mentionedIn(comment.body, people).some((person) => person.userId === actor.id));
       const replied = tagged && said.some((comment) => comment.authorUserId === actor.id && comment.id > tagged.id);
       if (tagged && !replied) items.push({ key: `mention-${task.id}`, kind: "mention", engagementId: engagement.id, businessName, title: task.title, detail: `${tagged.authorName || "A colleague"}: ${tagged.body.length > 90 ? `${tagged.body.slice(0, 90)}\u2026` : tagged.body}`, at: tagged.createdAt, late: false });
-      if (task.side === "ipf" && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn <= addDays2(today, 1) && ownerOfTask(crew, task) === actor.id) items.push({ key: `due-${task.id}`, kind: "due", engagementId: engagement.id, businessName, title: task.title, detail: task.dueOn < today ? `Was due ${dayInWords(task.dueOn)}: hand it in, or tell the lead` : task.dueOn === today ? "Due today" : "Due tomorrow", at: /* @__PURE__ */ new Date(`${task.dueOn}T12:00:00Z`), late: task.dueOn < today });
+      if (task.side === "ipf" && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn <= addDays2(today, 1) && ownersOfTask(crew, task, extra.get(task.id)).includes(actor.id)) items.push({ key: `due-${task.id}`, kind: "due", engagementId: engagement.id, businessName, title: task.title, detail: task.dueOn < today ? `Was due ${dayInWords(task.dueOn)}: hand it in, or tell the lead` : task.dueOn === today ? "Due today" : "Due tomorrow", at: /* @__PURE__ */ new Date(`${task.dueOn}T12:00:00Z`), late: task.dueOn < today });
       if (lead && task.side === "ipf" && task.status === "received") items.push({ key: `review-${task.id}`, kind: "review", engagementId: engagement.id, businessName, title: task.title, detail: `Handed in by ${crew.find((member) => member.userId === (task.assigneeUserId ?? task.createdByUserId))?.name ?? "a colleague"}: mark it done or ask for more`, at: task.updatedAt, late: false });
     }
     for (const task of own) {
@@ -12684,6 +12748,7 @@ async function getStaffEngagement(db, actor, engagementId) {
   const askedThisWeek = review ? void 0 : tasks.filter((task) => task.requestedByUserId === actor.id && task.status !== "cancelled" && task.createdAt.getTime() >= weekStart).sort((a, b) => b.id - a.id)[0];
   const manages = authorityAllows(actor.authority, "manage_engagements");
   const seesAllTasks = await canReviewEngagement(db, actor, engagementId);
+  const extraOwners = await otherOwnersOf(db, { engagementId });
   const held = engagement.opensOnPayment ? null : feeHold(waiting.map((fee) => ({ dueOn: fee.dueOn, paid: false })), lagosDay());
   const staffFile = (file) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt });
   const filesFor = (where, id3) => files.filter((file) => file[where] === id3 || where === "taskId" && matches.some((match) => match.fileId === file.id && match.taskId === id3)).map(staffFile);
@@ -12702,7 +12767,8 @@ async function getStaffEngagement(db, actor, engagementId) {
     tasks: tasks.map((task) => {
       const goesTo = task.side === "client" ? followUpOwnerOf(team, task) : null;
       const owner = ownerOfTask(team, task);
-      const own = isOwnTask(task, actor.id, owner);
+      const others = extraOwners.get(task.id) ?? [];
+      const own = isOwnTask(task, actor.id, owner, others);
       return {
         ...task,
         statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status],
@@ -12715,6 +12781,8 @@ async function getStaffEngagement(db, actor, engagementId) {
           const id3 = ownerOfTask(team, task);
           return id3 === null ? null : team.find((member) => member.userId === id3)?.name ?? null;
         })(),
+        // Everyone it belongs to (R89): the lead owner first, then the others.
+        owners: ownersOfTask(team, task, others).map((userId, index2) => ({ userId, name: team.find((member) => member.userId === userId)?.name ?? "", lead: index2 === 0 && owner === userId })),
         // A team item its owner hands in for review (R86): uploads, a link, messages, then Ready for review.
         canHandIn: task.side === "ipf" && (owner === actor.id || task.createdByUserId === actor.id) && OPEN_TASK_STATUSES.includes(task.status),
         comments: itemComments.filter((comment) => comment.taskId === task.id).map(({ taskId: _taskId, ...comment }) => comment)
@@ -12817,6 +12885,20 @@ async function assignTeamMember(db, actor, input) {
   ));
   const notified = existing?.role === input.role || input.userId === actor.id ? false : await notifyAssigned(db, input.engagementId, input.userId, input.role, Boolean(existing));
   return { success: true, added: !existing, notified };
+}
+async function setTaskOwners(db, actor, input) {
+  const { task, team, leads } = await requireStaffTask(db, actor, input.taskId);
+  if (!leads && ownerOfTask(team, task) !== actor.id) throw new TRPCError18({ code: "FORBIDDEN", message: "The lead, or the item's lead owner, sets who owns it." });
+  const others = Array.from(new Set(input.otherUserIds.filter((id3) => id3 !== input.leadUserId)));
+  if (![input.leadUserId, ...others].every((id3) => team.some((member) => member.userId === id3))) throw new TRPCError18({ code: "BAD_REQUEST", message: "Everyone who owns an item must be on the engagement team." });
+  await db.transaction(async (tx) => {
+    if (task.side === "ipf") await tx.update(engagementTasks).set({ assigneeUserId: input.leadUserId }).where(eq24(engagementTasks.id, task.id));
+    await tx.delete(engagementTaskOwners).where(eq24(engagementTaskOwners.taskId, task.id));
+    const shared = task.side === "ipf" ? others : Array.from(/* @__PURE__ */ new Set([input.leadUserId, ...others])).filter((id3) => id3 !== ownerOfTask(team, task));
+    if (shared.length) await tx.insert(engagementTaskOwners).values(shared.map((userId) => ({ engagementId: task.engagementId, taskId: task.id, userId })));
+    await recordAudit(tx, { action: "engagement_task_owners_set", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, leadUserId: input.leadUserId, otherUserIds: others } });
+  });
+  return { success: true };
 }
 async function assignByRole(db, actor, input) {
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
@@ -13101,11 +13183,11 @@ async function requireStaffClientItem(db, actor, taskId) {
 }
 var clientVoiceRefusal = () => new TRPCError18({ code: "FORBIDDEN", message: "The person this item goes to, or the lead, writes to the client on it. Tag them with @ on a team item instead." });
 async function staffTaskComment(db, actor, input) {
-  const { task, team, leads, own } = await requireStaffTask(db, actor, input.taskId);
+  const { task, team, leads, own, others } = await requireStaffTask(db, actor, input.taskId);
   if (task.side === "client" && !leads && !own) throw clientVoiceRefusal();
   const body = input.body.trim();
   await db.insert(engagementTaskComments).values({ engagementId: task.engagementId, taskId: task.id, authorUserId: actor.id, body });
-  const emailed = task.side === "client" ? await sendMessageEmails(db, { taskId: task.id, fromTeam: true, authorUserId: actor.id, body }) : await sendTeamItemEmails(db, { taskId: task.id, authorUserId: actor.id, body, to: [ownerOfTask(team, task) ?? task.createdByUserId].filter((id3) => id3 !== null) });
+  const emailed = task.side === "client" ? await sendMessageEmails(db, { taskId: task.id, fromTeam: true, authorUserId: actor.id, body }) : await sendTeamItemEmails(db, { taskId: task.id, authorUserId: actor.id, body, to: ownersOfTask(team, task, others).length ? ownersOfTask(team, task, others) : [task.createdByUserId].filter((id3) => id3 !== null) });
   const tagged = mentionedIn(body, team.map((member) => ({ userId: member.userId, name: member.name ?? "" }))).map((member) => member.userId).filter((id3) => id3 !== actor.id);
   const mentioned = tagged.length ? await sendMentionEmails(db, { taskId: task.id, authorUserId: actor.id, body, userIds: tagged }) : 0;
   return { success: true, emailed: emailed + mentioned, mentioned: tagged.length };
@@ -13611,6 +13693,7 @@ async function clientConfirmUpload(db, session, input) {
     return { success: true, fileId: file.id, status: open ? "received" : task.status };
   });
   if (hasArrived(arrival)) await sendReceivedEmail(db, { taskId: task.id, actorUserId: session.user.id, how: "a file in the room" });
+  await sendNewFileEmails(db, { taskId: task.id, uploaderUserId: session.user.id, fileName: input.fileName, fromClient: true });
   return result;
 }
 async function clientFileLink(db, session, input) {
@@ -13770,7 +13853,8 @@ async function requireUploader(db, actor, engagementId, target, audience) {
   if (target.kind === "task" && (audience === null || audience === "team")) {
     const own = (await db.select().from(engagementTasks).where(eq24(engagementTasks.id, target.id)).limit(1))[0];
     const team = own ? await db.select({ userId: engagementTeam.userId, role: engagementTeam.role }).from(engagementTeam).where(eq24(engagementTeam.engagementId, own.engagementId)) : [];
-    if (own && own.engagementId === engagementId && own.side === "ipf" && (ownerOfTask(team, own) === actor.id || own.createdByUserId === actor.id)) return;
+    const others = own ? (await otherOwnersOf(db, { taskId: own.id })).get(own.id) ?? [] : [];
+    if (own && own.engagementId === engagementId && own.side === "ipf" && (ownersOfTask(team, own, others).includes(actor.id) || own.createdByUserId === actor.id)) return;
   }
   if (target.kind === "task" && audience !== "team") {
     const task = (await db.select({ engagementId: engagementTasks.engagementId, requestedByUserId: engagementTasks.requestedByUserId }).from(engagementTasks).where(eq24(engagementTasks.id, target.id)).limit(1))[0];
@@ -13794,7 +13878,7 @@ async function staffConfirmUpload(db, actor, input) {
   await requireStaffTarget(db, actor, input.engagementId, input.target);
   if (!isTargetStorageKey(input.storageKey, keyPrefix(input.engagementId, input.target))) throw notFound4();
   if (!await objectExists(input.storageKey)) throw new TRPCError18({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
-  return db.transaction(async (tx) => {
+  const saved = await db.transaction(async (tx) => {
     const [file] = await tx.insert(engagementFiles).values({
       engagementId: input.engagementId,
       taskId: input.target.kind === "task" ? input.target.id : null,
@@ -13809,6 +13893,8 @@ async function staffConfirmUpload(db, actor, input) {
     await recordAudit(tx, { action: "engagement_file_uploaded", actorUserId: actor.id, details: { engagementId: input.engagementId, [input.target.kind === "task" ? "taskId" : "deliverableId"]: input.target.id, fileId: file.id, audience: input.audience } });
     return { success: true, fileId: file.id };
   });
+  if (input.target.kind === "task") await sendNewFileEmails(db, { taskId: input.target.id, uploaderUserId: actor.id, fileName: input.fileName, fromClient: false });
+  return saved;
 }
 async function shareTeamFile(db, actor, input) {
   requireManage2(actor);
@@ -15013,6 +15099,8 @@ var staffRouter = router({
     return guarded(async () => staffTaskComment(await engagementDb(), ctx.actor, input));
   }),
   /** The First edit or draft is shared (R78): as for the conversation, once it has arrived, once. */
+  /** An item's owners (R89): a lead owner and anyone who shares it, all reminded. */
+  setOwners: staff.input(z15.object({ taskId: id, leadUserId: id, otherUserIds: z15.array(id).max(12) })).mutation(async ({ ctx, input }) => guarded(async () => setTaskOwners(await engagementDb(), ctx.actor, input))),
   /** Assign by role (R88): team items with no one go to the person in their plan role, else the main contact. */
   assignByRole: staff.input(z15.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => assignByRole(await engagementDb(), ctx.actor, input))),
   /** Ready for review (R86): the owner of a team item hands it in; the lead is emailed. */
@@ -15639,12 +15727,14 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
       }
       const ours = await db.select().from(engagementTasks).where(and22(eq32(engagementTasks.engagementId, engagement.id), eq32(engagementTasks.side, "ipf"), inArray15(engagementTasks.status, [...OPEN_TASK_STATUSES])));
       const crew = ours.length ? await teamOf(db, engagement.id, now.getTime()) : [];
+      const extra = ours.length ? await otherOwnersOf(db, { engagementId: engagement.id }) : /* @__PURE__ */ new Map();
       for (const task of ours.filter((item2) => item2.dueOn && item2.dueOn < today)) {
         const late = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${task.dueOn}T00:00:00Z`)) / (24 * HOUR3));
         const stage = late >= 3 ? "team_lead" : "team_late";
         if (!await claim(db, `team:${task.id}:${task.dueOn}:${stage}`, stage, engagement.id)) continue;
-        const owner = crew.find((member) => member.userId === ownerOfTask(crew, task));
-        if (stage === "team_late" && owner) counts.team += await send(owner.email, teamItemLateEmail({ toLead: false, name: owner.name, ownerName: owner.name, title: task.title, businessName, dueOn: task.dueOn }), null);
+        const owners = ownersOfTask(crew, task, extra.get(task.id)).map((id3) => crew.find((member) => member.userId === id3)).filter((member) => Boolean(member));
+        const owner = owners[0];
+        if (stage === "team_late") for (const person of owners) counts.team += await send(person.email, teamItemLateEmail({ toLead: false, name: person.name, ownerName: person.name, title: task.title, businessName, dueOn: task.dueOn }), null);
         if (stage === "team_lead") for (const to of await leadsOf(db, engagement.id)) counts.team += await send(to, teamItemLateEmail({ toLead: true, name: "", ownerName: owner?.name ?? "", title: task.title, businessName, dueOn: task.dueOn }), null);
       }
       const booked = await db.select().from(engagementSessions).where(and22(eq32(engagementSessions.engagementId, engagement.id), eq32(engagementSessions.status, "planned")));

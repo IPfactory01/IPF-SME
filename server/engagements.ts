@@ -16,6 +16,7 @@ import {
   engagementSessions,
   engagementTasks,
   engagementTaskComments,
+  engagementTaskOwners,
   engagementTeam,
   paymentRequests,
   userPlatformRoles,
@@ -80,7 +81,7 @@ import { workLines } from "../shared/engagementWork";
 import { agreedWhatsapp, followUpOwnerOf, recipientOf } from "./teamContact";
 import { arrivalFields, dayInWords, earliestRequestDue, hasArrived, REQUEST_MAX_DAYS, REQUESTS_PER_WEEK, weekStartOf } from "../shared/requests";
 import { TURNAROUND_LABELS, type EngagementTaskTurnaround } from "../shared/engagement";
-import { businessNameOf, namesOf, sendMentionEmails, sendMessageEmails, sendReadyEmail, sendReadyForReviewEmails, sendReceivedEmail, sendRequestEmail, sendTeamItemEmails } from "./requestEmails";
+import { businessNameOf, namesOf, sendMentionEmails, sendMessageEmails, sendNewFileEmails, sendReadyEmail, sendReadyForReviewEmails, sendReceivedEmail, sendRequestEmail, sendTeamItemEmails } from "./requestEmails";
 import { mentionedIn } from "../shared/mentions";
 import { sharedDebriefFor } from "./debriefs";
 import { getDb } from "./db";
@@ -426,8 +427,25 @@ export const canSeeFees = (actor: StaffActor) => canSeeInternal(actor) || author
  * item, or a client item that comes to them. Below the lead (Analysts, Specialists) a person sees and works on these
  * only; the lead upwards (canReviewEngagement) sees every task, to coordinate.
  */
-export function isOwnTask(task: Pick<typeof engagementTasks.$inferSelect, "side" | "assigneeUserId" | "requestedByUserId" | "createdByUserId">, actorId: number, ownerUserId: number | null) {
-  return task.assigneeUserId === actorId || task.requestedByUserId === actorId || (task.side === "ipf" && task.createdByUserId === actorId) || ownerUserId === actorId;
+export function isOwnTask(task: Pick<typeof engagementTasks.$inferSelect, "side" | "assigneeUserId" | "requestedByUserId" | "createdByUserId">, actorId: number, ownerUserId: number | null, otherOwners: readonly number[] = []) {
+  return task.assigneeUserId === actorId || task.requestedByUserId === actorId || (task.side === "ipf" && task.createdByUserId === actorId) || ownerUserId === actorId || otherOwners.includes(actorId);
+}
+
+/** The owners of each item beyond its lead owner (0026, R89), by item. */
+export async function otherOwnersOf(db: Pick<Database, "select">, where: { engagementId?: number; engagementIds?: number[]; taskId?: number }) {
+  const condition = where.taskId !== undefined ? eq(engagementTaskOwners.taskId, where.taskId)
+    : where.engagementIds ? (where.engagementIds.length ? inArray(engagementTaskOwners.engagementId, where.engagementIds) : sql`false`)
+    : eq(engagementTaskOwners.engagementId, where.engagementId!);
+  const rows = await db.select({ taskId: engagementTaskOwners.taskId, userId: engagementTaskOwners.userId }).from(engagementTaskOwners).where(condition);
+  const map = new Map<number, number[]>();
+  for (const row of rows) map.set(row.taskId, [...(map.get(row.taskId) ?? []), row.userId]);
+  return map;
+}
+
+/** Everyone an item belongs to on the team (R89): its lead owner, then the others. */
+export function ownersOfTask<T extends { userId: number; role: EngagementTeamRole }>(team: readonly T[], task: Pick<typeof engagementTasks.$inferSelect, "side" | "assigneeUserId" | "requestedByUserId" | "turnaround">, others: readonly number[] = []) {
+  const lead = ownerOfTask(team, task);
+  return Array.from(new Set([...(lead === null ? [] : [lead]), ...others.filter(id => team.some(member => member.userId === id))]));
 }
 
 /**
@@ -450,7 +468,8 @@ async function requireStaffTask(db: Pick<Database, "select">, actor: StaffActor,
   await requireStaffEngagement(db, actor, task.engagementId);
   const team = await db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name }).from(engagementTeam).innerJoin(users, eq(engagementTeam.userId, users.id)).where(eq(engagementTeam.engagementId, task.engagementId));
   const leads = await canReviewEngagement(db, actor, task.engagementId);
-  return { task, team, leads, own: isOwnTask(task, actor.id, ownerOfTask(team, task)) };
+  const others = (await otherOwnersOf(db, { taskId: task.id })).get(task.id) ?? [];
+  return { task, team, leads, others, own: isOwnTask(task, actor.id, ownerOfTask(team, task), others) };
 }
 
 /**
@@ -490,6 +509,7 @@ export async function todayFor(db: Database, actor: StaffActor, now = Date.now()
     const own = all.filter(task => task.side === "client");
     const comments = all.length ? await taskCommentsOf(db, engagement.id) : [];
     const people = crew.map(member => ({ userId: member.userId, name: member.name ?? "" }));
+    const extra = await otherOwnersOf(db, { engagementId: engagement.id });
     // Tagged in an item's messages (R86): until this person writes on that item after it.
     for (const task of all) {
       const said = comments.filter(comment => comment.taskId === task.id);
@@ -497,7 +517,7 @@ export async function todayFor(db: Database, actor: StaffActor, now = Date.now()
       const replied = tagged && said.some(comment => comment.authorUserId === actor.id && comment.id > tagged.id);
       if (tagged && !replied) items.push({ key: `mention-${task.id}`, kind: "mention", engagementId: engagement.id, businessName, title: task.title, detail: `${tagged.authorName || "A colleague"}: ${tagged.body.length > 90 ? `${tagged.body.slice(0, 90)}…` : tagged.body}`, at: tagged.createdAt, late: false });
       // A team item that is this person's, due by tomorrow or late (R88).
-      if (task.side === "ipf" && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn <= addDays(today, 1) && ownerOfTask(crew, task) === actor.id) items.push({ key: `due-${task.id}`, kind: "due", engagementId: engagement.id, businessName, title: task.title, detail: task.dueOn < today ? `Was due ${dayInWords(task.dueOn)}: hand it in, or tell the lead` : task.dueOn === today ? "Due today" : "Due tomorrow", at: new Date(`${task.dueOn}T12:00:00Z`), late: task.dueOn < today });
+      if (task.side === "ipf" && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn <= addDays(today, 1) && ownersOfTask(crew, task, extra.get(task.id)).includes(actor.id)) items.push({ key: `due-${task.id}`, kind: "due", engagementId: engagement.id, businessName, title: task.title, detail: task.dueOn < today ? `Was due ${dayInWords(task.dueOn)}: hand it in, or tell the lead` : task.dueOn === today ? "Due today" : "Due tomorrow", at: new Date(`${task.dueOn}T12:00:00Z`), late: task.dueOn < today });
       // A team item handed in waits on the lead (R86).
       if (lead && task.side === "ipf" && task.status === "received") items.push({ key: `review-${task.id}`, kind: "review", engagementId: engagement.id, businessName, title: task.title, detail: `Handed in by ${crew.find(member => member.userId === (task.assigneeUserId ?? task.createdByUserId))?.name ?? "a colleague"}: mark it done or ask for more`, at: task.updatedAt, late: false });
     }
@@ -647,6 +667,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
   const askedThisWeek = review ? undefined : tasks.filter(task => task.requestedByUserId === actor.id && task.status !== "cancelled" && task.createdAt.getTime() >= weekStart).sort((a, b) => b.id - a.id)[0];
   const manages = authorityAllows(actor.authority, "manage_engagements");
   const seesAllTasks = await canReviewEngagement(db, actor, engagementId);
+  const extraOwners = await otherOwnersOf(db, { engagementId });
   const held = engagement.opensOnPayment ? null : feeHold(waiting.map(fee => ({ dueOn: fee.dueOn, paid: false })), lagosDay());
   const staffFile = (file: EngagementFile) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt });
   const filesFor = (where: "taskId" | "deliverableId", id: number) => files.filter(file => file[where] === id || (where === "taskId" && matches.some(match => match.fileId === file.id && match.taskId === id))).map(staffFile);
@@ -665,7 +686,8 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
     tasks: tasks.map(task => {
       const goesTo = task.side === "client" ? followUpOwnerOf(team, task) : null;
       const owner = ownerOfTask(team, task);
-      const own = isOwnTask(task, actor.id, owner);
+      const others = extraOwners.get(task.id) ?? [];
+      const own = isOwnTask(task, actor.id, owner, others);
       return {
         ...task, statusLabel: ENGAGEMENT_TASK_STATUS_LABELS[task.status], files: filesFor("taskId", task.id),
         askedByName: task.requestedByUserId === null ? null : askers.get(task.requestedByUserId) ?? "",
@@ -673,6 +695,8 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
         // Whether this person may write on it and share its First edit: the server checks again (requireStaffClientItem).
         canAnswer: task.status !== "cancelled" && (task.side === "ipf" || seesAllTasks || own),
         ownerName: (() => { const id = ownerOfTask(team, task); return id === null ? null : team.find(member => member.userId === id)?.name ?? null; })(),
+        // Everyone it belongs to (R89): the lead owner first, then the others.
+        owners: ownersOfTask(team, task, others).map((userId, index) => ({ userId, name: team.find(member => member.userId === userId)?.name ?? "", lead: index === 0 && owner === userId })),
         // A team item its owner hands in for review (R86): uploads, a link, messages, then Ready for review.
         canHandIn: task.side === "ipf" && (owner === actor.id || task.createdByUserId === actor.id) && OPEN_TASK_STATUSES.includes(task.status),
         comments: itemComments.filter(comment => comment.taskId === task.id).map(({ taskId: _taskId, ...comment }) => comment),
@@ -805,6 +829,26 @@ export async function assignTeamMember(db: Database, actor: StaffActor, input: {
   // The person is told by email when they join or their role changes, unless they did it themselves.
   const notified = existing?.role === input.role || input.userId === actor.id ? false : await notifyAssigned(db, input.engagementId, input.userId, input.role, Boolean(existing));
   return { success: true, added: !existing, notified } as const;
+}
+
+/**
+ * Set an item's owners (R89): a lead owner (who hands it in) and anyone who shares it; all of them get its reminders,
+ * its Today and its emails. The lead, or the item's lead owner. Everyone named must be on the engagement team.
+ */
+export async function setTaskOwners(db: Database, actor: StaffActor, input: { taskId: number; leadUserId: number; otherUserIds: number[] }) {
+  const { task, team, leads } = await requireStaffTask(db, actor, input.taskId);
+  if (!leads && ownerOfTask(team, task) !== actor.id) throw new TRPCError({ code: "FORBIDDEN", message: "The lead, or the item's lead owner, sets who owns it." });
+  const others = Array.from(new Set(input.otherUserIds.filter(id => id !== input.leadUserId)));
+  if (![input.leadUserId, ...others].every(id => team.some(member => member.userId === id))) throw new TRPCError({ code: "BAD_REQUEST", message: "Everyone who owns an item must be on the engagement team." });
+  await db.transaction(async tx => {
+    if (task.side === "ipf") await tx.update(engagementTasks).set({ assigneeUserId: input.leadUserId }).where(eq(engagementTasks.id, task.id));
+    await tx.delete(engagementTaskOwners).where(eq(engagementTaskOwners.taskId, task.id));
+    // On a client item the lead owner is who it goes to; everyone named here shares it.
+    const shared = task.side === "ipf" ? others : Array.from(new Set([input.leadUserId, ...others])).filter(id => id !== ownerOfTask(team, task));
+    if (shared.length) await tx.insert(engagementTaskOwners).values(shared.map(userId => ({ engagementId: task.engagementId, taskId: task.id, userId })));
+    await recordAudit(tx, { action: "engagement_task_owners_set", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, leadUserId: input.leadUserId, otherUserIds: others } });
+  });
+  return { success: true } as const;
 }
 
 /**
@@ -1147,7 +1191,7 @@ const clientVoiceRefusal = () => new TRPCError({ code: "FORBIDDEN", message: "Th
 
 /** The team writes in an item's conversation; the owner, and the person in the business it is for, are emailed. */
 export async function staffTaskComment(db: Database, actor: StaffActor, input: { taskId: number; body: string }) {
-  const { task, team, leads, own } = await requireStaffTask(db, actor, input.taskId);
+  const { task, team, leads, own, others } = await requireStaffTask(db, actor, input.taskId);
   // Anyone on the team writes on a team item; on the client's item, its person or the lead (one voice to the client).
   if (task.side === "client" && !leads && !own) throw clientVoiceRefusal();
   const body = input.body.trim();
@@ -1155,7 +1199,7 @@ export async function staffTaskComment(db: Database, actor: StaffActor, input: {
   // On the client's item the client hears; on a team item the conversation stays inside IP Factory, and its owner hears.
   const emailed = task.side === "client"
     ? await sendMessageEmails(db, { taskId: task.id, fromTeam: true, authorUserId: actor.id, body })
-    : await sendTeamItemEmails(db, { taskId: task.id, authorUserId: actor.id, body, to: [ownerOfTask(team, task) ?? task.createdByUserId].filter((id): id is number => id !== null) });
+    : await sendTeamItemEmails(db, { taskId: task.id, authorUserId: actor.id, body, to: ownersOfTask(team, task, others).length ? ownersOfTask(team, task, others) : [task.createdByUserId].filter((id): id is number => id !== null) });
   // Whoever is tagged (@name) is emailed too, once (R86).
   const tagged = mentionedIn(body, team.map(member => ({ userId: member.userId, name: member.name ?? "" }))).map(member => member.userId).filter(id => id !== actor.id);
   const mentioned = tagged.length ? await sendMentionEmails(db, { taskId: task.id, authorUserId: actor.id, body, userIds: tagged }) : 0;
@@ -1756,6 +1800,8 @@ export async function clientConfirmUpload(db: Database, session: AccountSession,
     return { success: true, fileId: file.id, status: open ? "received" as const : task.status } as const;
   });
   if (hasArrived(arrival)) await sendReceivedEmail(db, { taskId: task.id, actorUserId: session.user.id, how: "a file in the room" });
+  // Every new file reaches the item's owners and the lead (R89), once a quarter hour per item.
+  await sendNewFileEmails(db, { taskId: task.id, uploaderUserId: session.user.id, fileName: input.fileName, fromClient: true });
   return result;
 }
 
@@ -1952,7 +1998,8 @@ async function requireUploader(db: Pick<Database, "select">, actor: StaffActor, 
   if (target.kind === "task" && (audience === null || audience === "team")) {
     const own = (await db.select().from(engagementTasks).where(eq(engagementTasks.id, target.id)).limit(1))[0];
     const team = own ? await db.select({ userId: engagementTeam.userId, role: engagementTeam.role }).from(engagementTeam).where(eq(engagementTeam.engagementId, own.engagementId)) : [];
-    if (own && own.engagementId === engagementId && own.side === "ipf" && (ownerOfTask(team, own) === actor.id || own.createdByUserId === actor.id)) return;
+    const others = own ? (await otherOwnersOf(db, { taskId: own.id })).get(own.id) ?? [] : [];
+    if (own && own.engagementId === engagementId && own.side === "ipf" && (ownersOfTask(team, own, others).includes(actor.id) || own.createdByUserId === actor.id)) return;
   }
   if (target.kind === "task" && audience !== "team") {
     const task = (await db.select({ engagementId: engagementTasks.engagementId, requestedByUserId: engagementTasks.requestedByUserId }).from(engagementTasks).where(eq(engagementTasks.id, target.id)).limit(1))[0];
@@ -1978,7 +2025,7 @@ export async function staffConfirmUpload(db: Database, actor: StaffActor, input:
   await requireStaffTarget(db, actor, input.engagementId, input.target);
   if (!isTargetStorageKey(input.storageKey, keyPrefix(input.engagementId, input.target))) throw notFound();
   if (!(await objectExists(input.storageKey))) throw new TRPCError({ code: "BAD_REQUEST", message: "The upload did not finish. Try again." });
-  return db.transaction(async tx => {
+  const saved = await db.transaction(async tx => {
     const [file] = await tx.insert(engagementFiles).values({
       engagementId: input.engagementId, taskId: input.target.kind === "task" ? input.target.id : null, deliverableId: input.target.kind === "deliverable" ? input.target.id : null,
       storageKey: input.storageKey, fileName: input.fileName.trim().slice(0, 255), contentType: input.contentType || "application/octet-stream", sizeBytes: input.sizeBytes, audience: input.audience, uploadedByUserId: actor.id,
@@ -1986,6 +2033,9 @@ export async function staffConfirmUpload(db: Database, actor: StaffActor, input:
     await recordAudit(tx, { action: "engagement_file_uploaded", actorUserId: actor.id, details: { engagementId: input.engagementId, [input.target.kind === "task" ? "taskId" : "deliverableId"]: input.target.id, fileId: file.id, audience: input.audience } });
     return { success: true, fileId: file.id } as const;
   });
+  // A file added to an item reaches its other owners and the lead too (R89).
+  if (input.target.kind === "task") await sendNewFileEmails(db, { taskId: input.target.id, uploaderUserId: actor.id, fileName: input.fileName, fromClient: false });
+  return saved;
 }
 
 /** The lead shares a draft a Specialist handed in (IP Factory only) with the owner, or the owner and their team. */

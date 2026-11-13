@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Items take several owners (one leads and hands it in), all reminded; the client's Data Request tab and drop box go, each item answered in its task with its files shown under it; every new file emails the item's owners and the lead, once a quarter hour per item, with a link to the item (R89) | ET, 13 November 2026 ("several, go ahead"; "we don't need that data request part"; "members of the team should get notifications") |
 | Everyone on an engagement sees every task again; every team item names an individual, never "IP Factory", so reminders reach the right person; acting stays with the owner and the lead (R88, replaces R86's own-tasks-only view) | ET, 13 November 2026 ("they should see… tasks should always be assigned to individuals") |
 | What the client sends is ticked at once as sent, pending review, and completed once reviewed; the lead is reminded a day and three days on (R87) | ET, 13 November 2026 ("if she has sent, it should be ticked as done, pending review… remind the lead") |
 | Below the lead each person sees their own tasks; the lead upwards sees all; team items take files, links, messages and Ready for review; @ tags a colleague; the client sees their own items and one line a week for IP Factory's work (R86) | ET, 13 November 2026 ("keep the weekly line, analysts see own only, go ahead") |

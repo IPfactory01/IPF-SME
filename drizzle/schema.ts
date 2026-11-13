@@ -1320,6 +1320,21 @@ export const engagementReminders = pgTable("engagement_reminders", {
   sentAt: timestamp("sentAt", { withTimezone: true }).defaultNow().notNull(),
 }, table => [index("engagement_reminders_engagement_idx").on(table.engagementId)]);
 
+/**
+ * The owners of an item beyond its lead owner (0026, R89): the lead owner stays engagement_tasks.assigneeUserId and
+ * hands the item in; everyone here shares its reminders, its Today and its emails. Removed with the item.
+ */
+export const engagementTaskOwners = pgTable("engagement_task_owners", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  taskId: integer("taskId").notNull().references(() => engagementTasks.id, { onDelete: "cascade" }),
+  userId: integer("userId").notNull().references(() => users.id, { onDelete: "cascade" }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+}, table => [
+  uniqueIndex("engagement_task_owners_task_user_unique").on(table.taskId, table.userId),
+  index("engagement_task_owners_engagement_idx").on(table.engagementId),
+]);
+
 /** The fix's one number (D3): recorded in fix week 1. */
 export const engagementMeasures = pgTable("engagement_measures", {
   id: integer("id").primaryKey().generatedByDefaultAsIdentity(),

@@ -85,15 +85,15 @@ for (const target of targets) {
     });
 
     describe("schema", () => {
-      it("creates exactly the 65 expected tables", async () => {
+      it("creates exactly the 66 expected tables", async () => {
         const rows = await harness.query(sql`select table_name from information_schema.tables where table_schema = current_schema() and table_type = 'BASE TABLE'`);
         const created = rows.map(row => String(row.table_name)).sort();
         // 30 from the MySQL migration + user_credentials, user_sessions, businesses, business_memberships, client_onboarding_invitations, user_platform_roles, payment_requests, full_reports,
         // and the engagement room (0008): engagements, engagement_team, engagement_sessions, engagement_tasks, engagement_deliverables, engagement_files, engagement_comments,
         // engagement_measures, engagement_checkins, business_member_access, account_invitations, debriefs (0009), and rate_limit_counters
         // and user_password_reset_tokens (0010), plus two email delivery metadata tables (0011), user_two_step (0012), engagement_file_matches (0014), engagement_content_items (0017), service_requests (0018), engagement_agreements and engagement_fee_lines (0019),
-        // and the payments ledger (0022): payments, payment_refunds, document_counters, and the conversation on each item (0024): engagement_task_comments, and the reminders sent (0025): engagement_reminders.
-        expect(expectedTableNames).toHaveLength(65);
+        // and the payments ledger (0022): payments, payment_refunds, document_counters, and the conversation on each item (0024): engagement_task_comments, and the reminders sent (0025): engagement_reminders, and an item's other owners (0026): engagement_task_owners.
+        expect(expectedTableNames).toHaveLength(66);
         expect(expectedTableNames.filter(name => !created.includes(name))).toEqual([]);
         expect(created.filter(name => !expectedTableNames.includes(name))).toEqual([]);
       });
@@ -166,7 +166,7 @@ for (const target of targets) {
           }
         }
         expect(declared).toBe(rows.length); // no foreign key exists that the schema does not declare
-        expect(declared).toBe(83); // 0014 and 0017 add three each: file matches (file, task, matcher); content items (engagement, approver, creator); 0018 four: service requests (business, engagement, requester, handler); 0019 four: agreement (engagement, sender, accepter), fee line (engagement); 0022 eight: payment (fee line, payment request, recorder, canceller), refund (payment, recorder, canceller), fee line (who wrote it off); 0024 four: task comment (engagement, task, author), task (who asked for it); 0025 one: reminder (engagement)
+        expect(declared).toBe(86); // 0026 adds three: an item's other owners (engagement, task, user); 0014 and 0017 add three each: file matches (file, task, matcher); content items (engagement, approver, creator); 0018 four: service requests (business, engagement, requester, handler); 0019 four: agreement (engagement, sender, accepter), fee line (engagement); 0022 eight: payment (fee line, payment request, recorder, canceller), refund (payment, recorder, canceller), fee line (who wrote it off); 0024 four: task comment (engagement, task, author), task (who asked for it); 0025 one: reminder (engagement)
       });
 
       it("stores a declared name longer than 63 bytes truncated, which is why lookups must use pgIdentifier", async () => {

@@ -14,6 +14,7 @@ import { sampleIntake } from "../fixtures/reportIntake";
 import { addDays, lagosDay } from "@shared/agreement";
 import { dayInWords, requestDueOn } from "@shared/requests";
 import { runReminders } from "@server/reminders";
+import { sendNewFileEmails } from "@server/requestEmails";
 
 const holder = vi.hoisted(() => {
   process.env.DATABASE_URL = "postgresql://contract:contract@localhost:5432/contract";
@@ -365,6 +366,43 @@ for (const target of targets) {
         // The client sees their own items, and nothing of the team's conversation.
         const room = (await (await s.owner.call()).engagement.client.room())!;
         expect(JSON.stringify(room)).not.toContain("Draft ready");
+      });
+
+      it("gives an item several owners, each reminded, and tells its owners and the lead of every new file once a quarter hour (R89)", async () => {
+        const s = await studio("owners");
+        const lead = await s.lead.browser.call();
+        const mira = await (await s.marketer.browser.call()).engagement.staff.detail({ engagementId: s.engagementId });
+        const plan = mira.tasks.find(task => task.title === "Content plan for month 1")!;
+        // The lead adds Kemi as a second owner; Mira stays lead owner.
+        await lead.engagement.staff.setOwners({ taskId: plan.id, leadUserId: s.marketer.id, otherUserIds: [s.producer.id] });
+        const seen = (await (await s.producer.browser.call()).engagement.staff.detail({ engagementId: s.engagementId })).tasks.find(task => task.id === plan.id)!;
+        expect(seen.owners.map(owner => [owner.name, owner.lead])).toEqual([["Mira Marketer", true], ["Kemi Producer", false]]);
+        // Someone off the team cannot own it; a co-owner who is not the lead owner cannot change the owners.
+        const outsider = await person(["analyst"]);
+        await expect(lead.engagement.staff.setOwners({ taskId: plan.id, leadUserId: s.marketer.id, otherUserIds: [outsider.id] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await expect((await s.producer.browser.call()).engagement.staff.setOwners({ taskId: plan.id, leadUserId: s.producer.id, otherUserIds: [] })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        // Both owners see it Due on Today, and both are emailed when it is a day late.
+        await db.update(schema.engagementTasks).set({ dueOn: addDays(s.today, 1) }).where(eq(schema.engagementTasks.id, plan.id));
+        expect((await (await s.producer.browser.call()).engagement.staff.today()).some(item => item.kind === "due" && item.title === "Content plan for month 1")).toBe(true);
+        await db.update(schema.engagementTasks).set({ dueOn: addDays(s.today, -1) }).where(eq(schema.engagementTasks.id, plan.id));
+        mocked.deliverEmail.mockClear();
+        await runReminders(db, new Date(`${s.today}T07:31:00+01:00`));
+        expect(emails().filter(mail => mail.subject === "Late: Content plan for month 1, Studio owners").map(mail => mail.to).sort()).toEqual([s.marketer.email, s.producer.email].sort());
+
+        // A new file on a client item: its owners and the lead hear, never the uploader; a burst sends one email.
+        const logo = mira.tasks.find(task => task.title === "Logo, colours and fonts")!;
+        mocked.deliverEmail.mockClear();
+        const now = Date.UTC(2026, 10, 13, 10, 0);
+        await sendNewFileEmails(db, { taskId: logo.id, uploaderUserId: s.marketer.id, fileName: "IMG_1264.jpeg", fromClient: false, now });
+        const first = emails().filter(mail => mail.subject === "New file on Logo, colours and fonts: IMG_1264.jpeg");
+        expect(first.map(mail => mail.to)).toContain(s.lead.email);
+        expect(first.map(mail => mail.to)).not.toContain(s.marketer.email);
+        expect(first[0]!.body).toContain(`/admin?engagement=${s.engagementId}&task=${logo.id}`);
+        mocked.deliverEmail.mockClear();
+        await sendNewFileEmails(db, { taskId: logo.id, uploaderUserId: s.marketer.id, fileName: "IMG_0291.jpeg", fromClient: false, now: now + 5 * 60_000 });
+        expect(emails().some(mail => mail.subject.startsWith("New file on Logo"))).toBe(false);
+        await sendNewFileEmails(db, { taskId: logo.id, uploaderUserId: s.marketer.id, fileName: "IMG_0292.jpeg", fromClient: false, now: now + 20 * 60_000 });
+        expect(emails().some(mail => mail.subject === "New file on Logo, colours and fonts: IMG_0292.jpeg")).toBe(true);
       });
 
       it("names a person on every team item: the plan's by role, Assign by role for the rest, with Due on Today and late emails (R88)", async () => {
@@ -739,7 +777,8 @@ for (const target of targets) {
 
         const engagement = await engagementOf(id);
         expect(engagement).toMatchObject({ id: waiting.id, stage: "setting_up", businessId: null, opensOnPayment: false });
-        const tasks = await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.engagementId, engagement.id));
+        // In the order they were created: an update (assigning by role, R88) may move rows on disk.
+        const tasks = await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.engagementId, engagement.id)).orderBy(schema.engagementTasks.id);
         expect(tasks.map((task: { title: string }) => task.title)).toEqual([...ASSESSMENT_TEMPLATE.dataRequests, ...ASSESSMENT_TEMPLATE.teamActions].map(item => item.title));
         // The Work Plan: week 1 due in three working days, week 2 in eight; the team's actions sit beside the client's requests.
         expect(new Set(tasks.map((task: { kind: string; side: string; status: string; dueOn: string }) => `${task.kind}/${task.side}/${task.status}/${task.dueOn}`))).toEqual(new Set([`data_request/client/open/${addWorkingDays(new Date(), 3)}`, `data_request/client/open/${addWorkingDays(new Date(), 8)}`, `action/ipf/open/${addWorkingDays(new Date(), 3)}`, `action/ipf/open/${addWorkingDays(new Date(), 8)}`]));

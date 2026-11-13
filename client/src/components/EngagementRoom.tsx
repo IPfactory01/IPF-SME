@@ -23,6 +23,7 @@ import { workOf, WORK_TITLE } from "@shared/engagementWork";
 import { BusinessPanel, FounderPanel } from "./room/RoomInsight";
 import RoomDashboard from "./room/RoomDashboard";
 import WeekCards from "./room/WeekCards";
+import { ClientFileStrip } from "./room/FileStrip";
 import { weekOfDay } from "@shared/weeks";
 import RoomTabs from "./room/RoomTabs";
 import { useRoomPreview } from "./room/RoomPreview";
@@ -142,7 +143,7 @@ function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps)
           <>
             <p className="mt-2 text-lg font-semibold tracking-tight">{requests.length - answered} {requests.length - answered === 1 ? "item" : "items"} outstanding</p>
             <p className="mt-1 text-sm text-ink-600"><span className="tabular-nums">{answered} of {requests.length}</span> received</p>
-            <a href="#data" className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-deep-hover">Open the {METHOD.dataRequest}<ArrowRight className="h-4 w-4" aria-hidden /></a>
+            <a href="#plan" className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-deep-hover">Open the {METHOD.workPlan}<ArrowRight className="h-4 w-4" aria-hidden /></a>
           </>
         );
       })()}
@@ -299,7 +300,6 @@ function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps)
     { id: "overview", label: "Overview", content: overview },
     ...(contentMonth ? [{ id: "content", label: "Content", group: "The work", count: awaitingApproval ? { value: awaitingApproval, label: `${awaitingApproval} for your approval` } : undefined, content: <ContentBoard room={room} currentMonth={contentMonth.month} months={contentMonth.months} /> }] : []),
     { id: "plan", label: METHOD.workPlan, group: "The work", count: counts.waiting ? { value: counts.waiting, label: `${counts.waiting} waiting on you` } : undefined, content: <PlanView room={room} now={now} /> },
-    ...(counts.dataRequests ? [{ id: "data", label: METHOD.dataRequest, group: "The work", content: <DataRequestsView room={room} now={now} /> }] : []),
     { id: "meetings", label: `${METHOD.session}s`, group: "The work", content: <MeetingsView room={room} now={now} isOwner={isOwner} /> },
     ...(room.insight ? [
       { id: "business", label: "Business", group: "What we found", count: stuckCount(room.insight), content: <BusinessPanel insight={room.insight} /> },
@@ -834,38 +834,6 @@ function useRoomRefresh() {
 /** Request a place for the file, send it there from the browser, then tell the server it arrived. */
 type DropItem = { key: string; name: string; state: "sending" | "sent" | "failed"; error?: string };
 
-/** The drop box: each file goes straight to private storage, then is recorded unsorted for the team to match. */
-function useDropUpload(engagementId: number) {
-  const refresh = useRoomRefresh();
-  const request = trpc.engagement.client.requestDrop.useMutation();
-  const confirm = trpc.engagement.client.confirmDrop.useMutation();
-  const [items, setItems] = useState<DropItem[]>([]);
-  const busy = items.some(item => item.state === "sending");
-  const update = (key: string, patch: Partial<DropItem>) => setItems(list => list.map(item => (item.key === key ? { ...item, ...patch } : item)));
-  const send = async (files: File[], note: string) => {
-    const batch = files.map((file, index) => ({ file, key: `${Date.now()}-${index}-${file.name}` }));
-    setItems(list => [...batch.map(({ file, key }) => ({ key, name: file.name, state: "sending" as const })), ...list]);
-    let sent = 0;
-    for (const { file, key } of batch) {
-      try {
-        const meta = { fileName: file.name, contentType: file.type, sizeBytes: file.size };
-        const ticket = await request.mutateAsync({ ...meta, engagementId });
-        const put = await fetch(ticket.uploadUrl, { method: "PUT", headers: ticket.headers, body: file });
-        if (!put.ok) throw new Error("The upload did not finish. Check your connection and try again.");
-        await confirm.mutateAsync({ storageKey: ticket.storageKey, note: note || null, ...meta, engagementId });
-        update(key, { state: "sent" });
-        sent += 1;
-      } catch (error) {
-        update(key, { state: "failed", error: error instanceof Error ? error.message : "The upload did not finish." });
-      }
-    }
-    if (sent) {
-      refresh.onSuccess();
-      toast.success(`${sent} ${sent === 1 ? "file" : "files"} received. We will match ${sent === 1 ? "it" : "them"} to the ${METHOD.dataRequest}.`);
-    }
-  };
-  return { send, busy, items };
-}
 
 /** A client takes back a file they sent, with a second tap to be sure (R61). */
 function RemoveFile({ fileId, fileName }: { fileId: number; fileName: string }) {
@@ -910,7 +878,8 @@ function FileList({ files, canRemove }: { files: RoomFile[]; canRemove?: (file: 
  * saying it went another way. An action is marked done.
  */
 function TaskControls({ task, uploadsEnabled, due }: { task: Task; uploadsEnabled: boolean; due?: boolean }) {
-  if (useRoomPreview()) return null;
+  // In the preview the team sees where the client acts, not a blank (R89).
+  if (useRoomPreview()) return <p className="mt-3 rounded-lg bg-paper-sunken p-2 text-xs text-ink-600">The client uploads, sends a link and answers here. Switched off in the preview.</p>;
   if (task.kind === "data_request") return <RequestControls task={task} uploadsEnabled={uploadsEnabled} />;
   return <ActionControls task={task} uploadsEnabled={uploadsEnabled} due={due} />;
 }
@@ -1099,7 +1068,7 @@ function RoomSidebar({ room, tabs, account }: { room: Room; tabs: RoomTab[]; acc
       <ul className="space-y-0.5">
         <li><a href="#overview" className={RAIL_LINK}>Home</a></li>
         <li><a href="#plan" className={RAIL_LINK}><span>My tasks</span>{plan?.count && plan.count.value > 0 && <span className="rounded-full bg-brand-plum px-2 text-xs font-medium text-white tabular-nums" aria-label={plan.count.label}>{plan.count.value}</span>}</a></li>
-        <li><a href="#data" className={RAIL_LINK}>Files</a></li>
+        <li><a href="#plan" className={RAIL_LINK}>Files</a></li>
       </ul>
       <div>
         <p className="px-3 text-xs text-ink-muted">Your space</p>
@@ -1200,7 +1169,9 @@ function PlanView({ room, now }: { room: Room; now: number }) {
   if (!room.tasks.length) return <p className="text-sm text-ink-muted">Your tasks appear here, grouped by where they stand, once your team sets the {METHOD.workPlan}.</p>;
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-      <div className={`min-w-0 ${task ? "" : "lg:col-span-2"}`}>
+      <div className={`min-w-0 space-y-4 ${task ? "" : "lg:col-span-2"}`}>
+        {/* Where the Data Requests stand, above the weeks: the Data Request tab is gone (R89); each item is answered here. */}
+        {room.tasks.some(item => item.kind === "data_request") && <RequestSummary items={room.tasks.filter(item => item.kind === "data_request")} now={now} />}
         {/* Weekly cards (R85): each week's items and its Sessions, this week first. */}
         <WeekCards startedOn={room.startedOn ?? null} items={room.tasks.filter(item => item.side === "client")} sessions={room.sessions} now={now} note={ourWeek} noteWeeks={ours.map(item => item.weekNumber ?? weekOfDay(room.startedOn ?? null, item.dueOn))}
           isDone={item => ["done", "checking"].includes(PLAN_GROUPS.find(group => group.test(item))?.id ?? "")} isWaiting={isClientOpen} waitingLabel="Waiting on you"
@@ -1208,6 +1179,7 @@ function PlanView({ room, now }: { room: Room; now: number }) {
             const group = PLAN_GROUPS.find(entry => entry.test(item)) ?? PLAN_GROUPS[1]!;
             const flag = group.id === "checking" ? { text: "Sent", tone: "calm" as const } : dueFlag(item.dueOn, group.id === "done", now);
             return (
+              <>
               <button type="button" id={`task-${item.id}`} onClick={() => setSelected(selected === item.id ? null : item.id)} aria-expanded={selected === item.id} aria-label={item.title}
                 className={`flex w-full scroll-mt-24 items-center gap-3 px-4 py-2.5 text-left text-sm ${selected === item.id ? "bg-brand-tint" : "hover:bg-paper-sunken"}`}>
                 {/* Sent is ticked for the client (R87); completed once the team has reviewed it. */}
@@ -1222,6 +1194,8 @@ function PlanView({ room, now }: { room: Room; now: number }) {
                 <span className={`hidden w-32 shrink-0 whitespace-nowrap text-right sm:block ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? ""}</span>
                 <span className="hidden w-20 shrink-0 whitespace-nowrap md:block">{item.priority ? <span className={`inline-flex items-center gap-1.5 ${PRIORITY_TONE[item.priority]}`}><Flag className={`h-3.5 w-3.5 ${item.priority === "high" ? "fill-current" : ""}`} aria-hidden />{item.priority === "high" ? "High" : item.priority === "medium" ? "Medium" : "Low"}</span> : null}</span>
               </button>
+              {(item.files.length > 0 || item.responseLink) && <div className="pb-2.5 pl-11 pr-4"><ClientFileStrip files={item.files} link={item.responseLink} /></div>}
+              </>
             );
           }} />
       </div>
@@ -1287,72 +1261,7 @@ function RequestSummary({ items, now }: { items: Task[]; now: number }) {
   );
 }
 
-/** Drag everything in, or choose many files at once. No need to say which file is which: the team sorts them. */
-function DropBox({ uploadsEnabled, engagementId }: { uploadsEnabled: boolean; engagementId: number }) {
-  const preview = useRoomPreview();
-  const drop = useDropUpload(engagementId);
-  const [over, setOver] = useState(false);
-  const take = (list: FileList | null) => { const files = list ? Array.from(list) : []; if (files.length) void drop.send(files, ""); };
-  return (
-    <section id="drop" aria-labelledby="drop-title" className="scroll-mt-24 rounded-xl border border-line-soft bg-white p-5">
-      <h3 id="drop-title" className="font-sans text-base font-semibold tracking-tight">Upload documents</h3>
-      <p className="mt-1 text-sm text-ink-600">Upload in any order. We match each file to the {METHOD.dataRequest}.</p>
-      {preview ? <p className="mt-3 rounded-lg bg-paper-sunken p-3 text-sm text-ink-600">The client uploads here. Switched off in the preview.</p> : uploadsEnabled ? (
-        <>
-          <label
-            onDragOver={event => { event.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
-            onDrop={event => { event.preventDefault(); setOver(false); take(event.dataTransfer.files); }}
-            className={`mt-4 flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed px-4 py-6 text-center transition-colors ${over ? "border-brand bg-brand-tint" : "border-brand-line-strong bg-brand-tint-softest hover:border-brand hover:bg-brand-tint"}`}>
-            <UploadCloud className="h-8 w-8 text-brand" aria-hidden />
-            <span className="text-sm font-semibold text-ink">{drop.busy ? "Uploading…" : "Drop files or browse"}</span>
-            <span className="text-xs text-ink-muted">PDF, Excel, Word, photos or voice notes, up to {UPLOAD_MAX_MB} MB each. Videos: send a link to the folder</span>
-            <input type="file" multiple className="sr-only" accept={UPLOAD_ACCEPT} aria-label="Choose files to send" onChange={event => { take(event.target.files); event.target.value = ""; }} />
-          </label>
-          {drop.items.length > 0 && (
-            <ul className="mt-3 space-y-1 text-sm" aria-label="Uploads">
-              {drop.items.map(item => (
-                <li key={item.key} className="flex items-center justify-between gap-3">
-                  <span className="flex min-w-0 items-center gap-2"><FileText className="h-3.5 w-3.5 shrink-0 text-ink-muted" aria-hidden /><span className="truncate">{item.name}</span></span>
-                  <span className={`shrink-0 text-xs ${item.state === "failed" ? "text-danger" : item.state === "sent" ? "text-health-clear" : "text-ink-muted"}`}>{item.state === "sending" ? "Uploading…" : item.state === "sent" ? "Received" : item.error}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      ) : <p className="mt-3 rounded-lg bg-brand-tint p-3 text-sm text-ink-600">Send files by WhatsApp to your team, or by email to <span className="font-medium text-ink">{BRAND.businessSupportMailbox}</span>.</p>}
-    </section>
-  );
-}
 
-/** Everything the client's side sent through the drop box, and what each file was matched to. */
-function SentFiles({ files }: { files: Room["sentFiles"] }) {
-  const preview = useRoomPreview();
-  const link = trpc.engagement.client.fileLink.useMutation({ onError: error => toast.error(error.message) });
-  if (!files.length) return null;
-  return (
-    <section aria-labelledby="sent-title" className="rounded-xl border border-line-soft bg-white p-5">
-      <h3 id="sent-title" className="font-sans text-sm font-medium text-ink-muted">Documents received <span className="tabular-nums">({files.length})</span></h3>
-      <ul className="mt-2 divide-y divide-line-soft text-sm">
-        {files.map(file => (
-          <li key={file.id} className="py-2.5">
-            <div className="flex items-start justify-between gap-3">
-              <button type="button" className="flex min-w-0 items-center gap-2 text-left text-ink hover:text-brand" disabled={preview || link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>
-                <FileText className="h-3.5 w-3.5 shrink-0 text-ink-muted" aria-hidden /><span className="truncate">{file.fileName}</span>
-              </button>
-              <span className="shrink-0 text-xs text-ink-muted">{lagos(file.createdAt, false)}</span>
-            </div>
-            <p className="mt-1 flex flex-wrap gap-1 pl-5.5 text-xs">
-              {file.matchedTo.length ? file.matchedTo.map(match => <span key={match.taskId} className="rounded-md bg-health-clear-tint px-1.5 py-0.5 text-health-clear-strong">{match.ref && <span className="mr-1 font-mono">{match.ref}</span>}{match.title}</span>)
-                : <span className="text-ink-muted">Under review</span>}
-            </p>
-            {/* Until the team has matched it, the person who sent it can take it back (R61). */}
-            {file.mine && file.matchedTo.length === 0 && <div className="mt-1 pl-5.5"><RemoveFile fileId={file.id} fileName={file.fileName} /></div>}
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
 
 const STATUS_MARK: Record<string, { icon: React.ReactNode; tone: string }> = {
   done: { icon: <Check className="h-3.5 w-3.5" aria-hidden />, tone: "bg-chart-done text-white border-chart-done" },
@@ -1362,20 +1271,6 @@ const STATUS_MARK: Record<string, { icon: React.ReactNode; tone: string }> = {
 };
 
 /** The Data Requests: where they stand, the drop box, and the checklist by section, with what still waits on you first. */
-function DataRequestsView({ room, now }: { room: Room; now: number }) {
-  const items = room.tasks.filter(task => task.kind === "data_request");
-  // Each item is answered in the Work Plan, in its own panel (R85): here, where they stand and the drop box for many files at once.
-  return (
-    <div className="space-y-5">
-      <RequestSummary items={items} now={now} />
-      <p className="text-sm text-ink-600">Answer each {METHOD.dataRequest} item in the <a href="#plan" className="font-medium text-brand underline underline-offset-2">{METHOD.workPlan}</a>: open it and upload there. Have many files at once? Drop them all here and we match each one.</p>
-      <div className="grid items-start gap-5 lg:grid-cols-2 [&>*]:min-w-0">
-        <DropBox uploadsEnabled={room.uploadsEnabled} engagementId={room.engagementId} />
-        <SentFiles files={room.sentFiles} />
-      </div>
-    </div>
-  );
-}
 
 /** Every meeting: when, how long, the Join link before it and the shared notes after it. */
 function MeetingsView({ room, now, isOwner }: { room: Room; now: number; isOwner: boolean }) {

@@ -58,6 +58,7 @@ export const AUDIT_ACTIONS = [
   "engagement_request_sent",
   "engagement_task_handed_in",
   "engagement_items_assigned",
+  "engagement_task_owners_set",
   "engagement_follow_up_shared",
   "reminders_run",
   "engagement_meeting_booked",

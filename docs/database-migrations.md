@@ -181,6 +181,11 @@ Work Plan. Paste `drizzle/supabase/apply-0024-engagement-requests.sql` into the 
 site uses and press Run; it stops, changing nothing, unless exactly `0000` to `0023` are recorded and the table is not
 there yet. Health then counts 25 of 25.
 
+**`0026` and deployment order** (written 13 November 2026). Several owners on an item (R89): one table,
+`engagement_task_owners`, the owners of an item beyond its lead owner. Nothing that exists changes. Apply it just
+before deploying the several-owners code. Paste `drizzle/supabase/apply-0026-engagement-task-owners.sql` into the
+Supabase SQL Editor and press Run; it stops, changing nothing, unless the database is exactly at 0025.
+
 **`0025` and deployment order** (written 11 November 2026). The reminders (R12, R16): one table, `engagement_reminders`,
 a row for each reminder sent, so the morning run never sends one twice. Additive; nothing that exists changes. Apply it
 before deploying the reminders code. Paste `drizzle/supabase/apply-0025-engagement-reminders.sql` into the Supabase SQL

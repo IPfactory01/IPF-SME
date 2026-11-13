@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { messageEmail, readyEmail, receivedEmail, requestEmail } from "@server/requestEmails";
+import { messageEmail, newFileEmail, readyEmail, receivedEmail, requestEmail } from "@server/requestEmails";
 
 /** Asking the client (R78): the four emails, in the words each side reads. Fictional people and businesses. */
 const origin = "https://ipfactory.example.test";
@@ -40,5 +40,13 @@ describe("the request emails", () => {
     const email = readyEmail({ name: "Ada Okafor", label: "First edit", title: "Send week 3 footage", origin });
     expect(email.subject).toBe("Ready for your approval: the first edit of Send week 3 footage");
     expect(email.body).toContain("is in your room for your approval");
+  });
+
+  it("tells the owners and the lead of a new file on an item, with a link to the item (R89)", () => {
+    const fromClient = newFileEmail({ name: "Lola Lead", uploader: "Ada Okafor", fromClient: true, businessName: "Ada Foods", title: "Logo, colours and fonts", fileName: "IMG_1264.jpeg", link: "https://ipfactory.example.test/admin?engagement=4&task=51" });
+    expect(fromClient.subject).toBe("New file on Logo, colours and fonts: IMG_1264.jpeg");
+    expect(fromClient.body).toContain("Ada Foods added \"IMG_1264.jpeg\" to \"Logo, colours and fonts\".");
+    expect(fromClient.body).toContain("Open the item: https://ipfactory.example.test/admin?engagement=4&task=51");
+    expect(newFileEmail({ name: "", uploader: "Mira Marketer", fromClient: false, businessName: "Ada Foods", title: "Content plan for month 1", fileName: "plan.pdf", link: "x" }).body).toContain("Mira added \"plan.pdf\" to \"Content plan for month 1\" for Ada Foods.");
   });
 });

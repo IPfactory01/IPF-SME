@@ -542,7 +542,7 @@ describe("the team's workspace (R82)", () => {
     expect(window.location.hash).toBe("");
   });
 
-  it("shows each Work Plan item and Deliverable as a short row that opens into its form, in the workspace only", () => {
+  it("shows the Work Plan as the client's room's table with a detail panel, and each Deliverable as a row that opens, in the workspace only", () => {
     api.seesAll = false;
     api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };
     api.detail = { ...detail({ manage: true, assign: false, review: true }, [deliverable({ status: "awaiting_approval" })], [task({ id: 51, title: "Your price list", dueOn: "2026-10-21", comments: [{ id: 1, taskId: 51, body: "Here", fromClient: true, authorName: "Ada Okafor", authorUserId: 3, createdAt: new Date() }] })]), team };
@@ -550,14 +550,19 @@ describe("the team's workspace (R82)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
     const page = within(screen.getByRole("region", { name: "Ada Foods workspace" }));
     fireEvent.click(page.getByRole("tab", { name: /^Work Plan/ }));
-    const item = page.getByRole("button", { name: "Open Your price list" });
-    expect(item.textContent).toContain("The client · due 21 Oct 2026 · 1 message");
-    expect(item.textContent).toContain("Late");
+    // The client's room's table: grouped by where each item stands, with who, when, priority and type.
+    const group = within(page.getByRole("region", { name: "With the client" }));
+    const line = group.getByRole("button", { name: "Open Your price list" }).closest("tr")!;
+    expect(line.textContent).toContain("Overdue by");
+    expect(line.textContent).toContain("1 message");
+    expect(within(line).getByText("Ada Foods", { selector: ".sr-only" })).toBeTruthy();
+    expect(line.textContent).toContain("Data Request");
     expect(page.queryByRole("textbox", { name: "What" })).toBeNull();
-    fireEvent.click(item);
-    expect((page.getByRole("textbox", { name: "What" }) as HTMLInputElement).value).toBe("Your price list");
-    fireEvent.click(page.getByRole("button", { name: "Close Your price list" }));
-    expect(page.queryByRole("textbox", { name: "What" })).toBeNull();
+    fireEvent.click(group.getByRole("button", { name: "Open Your price list" }));
+    const details = within(page.getByRole("complementary", { name: "Task details" }));
+    expect((details.getByRole("textbox", { name: "What" }) as HTMLInputElement).value).toBe("Your price list");
+    fireEvent.click(details.getByRole("button", { name: "Close" }));
+    expect(page.queryByRole("complementary", { name: "Task details" })).toBeNull();
     fireEvent.click(page.getByRole("tab", { name: /^Deliverables/ }));
     const output = page.getByRole("button", { name: "Open Daily cash count" });
     expect(output.textContent).toContain("Waiting for approval");

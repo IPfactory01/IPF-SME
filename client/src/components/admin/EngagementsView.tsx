@@ -22,7 +22,7 @@ export type StorageStatus = inferRouterOutputs<AppRouter>["engagement"]["staff"]
  * Every engagement this person may see: a Partner, Vice President or Senior Associate and the Super Admin see all; analysts, partners and specialists
  * see the ones they are on. The server decides the list; this only shows it.
  */
-export default function EngagementsView({ home = false, header = null }: { home?: boolean; header?: React.ReactNode } = {}) {
+export default function EngagementsView({ home = false, header = null, onOpenProject }: { home?: boolean; header?: React.ReactNode; onOpenProject?: (engagementId: number) => void } = {}) {
   const list = trpc.engagement.staff.list.useQuery(undefined);
   const awaiting = trpc.engagement.staff.awaitingStart.useQuery(undefined);
   const utils = trpc.useUtils();
@@ -35,7 +35,9 @@ export default function EngagementsView({ home = false, header = null }: { home?
     },
     onError: error => toast.error(error.message),
   });
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenIdState] = useState<number | null>(null);
+  // In the team's home (R83) the shell opens the project as its workspace; on its own this view opens it here.
+  const setOpenId = (id: number | null) => (id !== null && onOpenProject ? onOpenProject(id) : setOpenIdState(id));
   const [prefill, setPrefill] = useState<EngagementPrefill | null>(null);
   const open = list.data?.items.find(item => item.id === openId) ?? null;
 
@@ -80,6 +82,7 @@ export default function EngagementsView({ home = false, header = null }: { home?
       {canOpen && <NewEngagement key={prefill?.requestId ?? "new"} onCreated={setOpenId} prefill={prefill} onDone={() => setPrefill(null)} />}
       <Today onOpen={setOpenId} />
       <MyProjects items={list.data?.items ?? []} onOpen={setOpenId} matchesFiles={Boolean(list.data && "matchesFiles" in list.data && list.data.matchesFiles)} />
+      {home && seesAll && <MyProjects title="Every engagement" others items={list.data?.items ?? []} onOpen={setOpenId} matchesFiles={Boolean(list.data && "matchesFiles" in list.data && list.data.matchesFiles)} />}
       {home ? (list.isLoading ? <Loading label="Loading your projects" /> : list.data?.items.length === 0 && <p className="rounded-xl border border-line-soft bg-white p-4 text-sm text-ink-muted">You are not on any project yet. When a lead adds you to one, it appears here and you get an email.</p>) : list.isLoading ? <Loading label="Loading the engagements" /> : (
         <div className="overflow-x-auto border border-line bg-white">
           <table className="w-full">
@@ -155,18 +158,19 @@ export function StorageLine({ status, onCheck }: { status: StorageStatus; onChec
  * full list. Opening one opens the same record as the table.
  */
 /** `matchesFiles`: only those who manage engagements match the client's files, so only they see the count (R83). */
-function MyProjects({ items, onOpen, matchesFiles }: { items: Row[]; onOpen: (id: number) => void; matchesFiles: boolean }) {
-  const mine = items.filter(item => item.myRole);
+function MyProjects({ items, onOpen, matchesFiles, title = "My projects", others = false }: { items: Row[]; onOpen: (id: number) => void; matchesFiles: boolean; title?: string; others?: boolean }) {
+  // `others`: in the desk's home, the engagements they are not on, as the same cards.
+  const mine = items.filter(item => (others ? !item.myRole : item.myRole));
   if (!mine.length) return null;
   return (
-    <section aria-labelledby="my-projects" className="space-y-2">
-      <h2 id="my-projects" className="text-sm font-semibold text-ink">My projects <span className="font-normal text-ink-muted">({mine.length})</span></h2>
+    <section aria-label={title} className="space-y-2">
+      <h2 className="text-sm font-semibold text-ink">{title} <span className="font-normal text-ink-muted">({mine.length})</span></h2>
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {mine.map(item => (
           <li key={item.id}>
             <button type="button" onClick={() => onOpen(item.id)} aria-label={`Open ${item.businessName}`} className="block w-full rounded-xl border border-line bg-white p-4 text-left transition-colors hover:border-brand">
               <span className="flex items-baseline justify-between gap-2"><span className="truncate font-medium text-ink">{item.businessName}</span><span className="shrink-0 text-xs text-ink-muted">{item.stageLabel}<FeeHoldBadge hold={item.hold} /></span></span>
-              <span className="mt-0.5 block text-xs text-brand">{item.myRole}</span>
+              <span className="mt-0.5 block text-xs text-brand">{item.myRole ?? item.typeLabel}</span>
               <span className={`mt-3 grid gap-2 text-xs text-ink-muted ${matchesFiles ? "grid-cols-3" : "grid-cols-2"}`}>
                 <span><span className="block text-lg font-semibold tabular-nums text-ink">{item.openClientRequests}</span>with the client</span>
                 <span><span className={`block text-lg font-semibold tabular-nums ${item.overdueClientRequests ? "text-danger" : "text-ink"}`}>{item.overdueClientRequests}</span>overdue</span>

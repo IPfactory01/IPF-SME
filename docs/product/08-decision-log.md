@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| The console is retired: everyone, the Super Admins included, works in the client's room's frame; Pipeline, Clients, Finance and Team become places in its rail for whoever's role has them. Supersedes "the console stays for the desk and admins" (R83, 12 November) | ET, 13 November 2026 ("get rid of the console… everybody's interface like client") |
 | Specialists never use Preview as client: it is for those who manage or review engagements, refused on the server and hidden on screen (R25) | ET, 13 November 2026 ("specialists should not be able to preview as clients") |
 | Session reminders go in the morning run, the day before and on the day; the hour-before reminder is the calendar invitation's own alert, since the free plan runs the schedule once a day (R59) | ET, 12 November 2026 ("go ahead with the session reminders") |
 | The team sees the owner's own Business Health Check answers on the record, closed until opened, to prepare the Discovery Call; the Privacy notice says so (R84). Until now the console showed only our reading of them | ET, 12 November 2026 ("yes, go ahead with the answers section") |

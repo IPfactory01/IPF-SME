@@ -460,8 +460,7 @@ Paystack's signed notifications arrive at `POST /api/paystack/webhook`.
 - Clients at `/login`, staff at `/admin/login`. Everyone with an internal role uses a six-digit code from an
   authenticator app after the password; recovery codes work in the code box.
 - A person with no business and at least one internal role lands on `/admin`; everyone else on `/dashboard`.
-- At `/admin`, someone who works only on their own projects (no `view_all_businesses`; no Pipeline, Clients or Team)
-  sees **the team's home** (R83), not the console: the room's top bar with their name and **Sign out**; *Good
+- At `/admin`, everyone, the Super Admins included, sees **the team's home** (R83): the room's top bar with their name and **Sign out**; *Good
   morning, {first name}* (afternoon, evening by Lagos time) and their level; then **Today** and **My projects**, each
   project opening as their workspace (R82). A Partner also sees **Finance**, as a second tab beside **My work**.
   A project card counts files to sort only for those who match files (`manage_engagements`); the Stage is a control
@@ -471,7 +470,14 @@ Paystack's signed notifications arrive at `POST /api/paystack/webhook`.
 - Forgotten password: a single-use link for 20 minutes; the page never says whether the account exists.
 - **To build (R41):** clients sign in with a link sent to their email (WhatsApp later); no password.
 
-### 8.3 The admin console
+### 8.3 The admin console, now the team's home
+
+**Retired as its own screen (R83, 13 November 2026).** Everyone at `/admin` works in the client's room's frame (8.2):
+the left rail holds Home, My tasks, Your projects and, for whoever's role has them, **The desk**: Pipeline, Clients,
+Finance and Team. Each place below keeps its screens and its permission; it opens inside the frame. Every engagement
+opens as its workspace (R82); its Work Plan is the room's table (With the client, With IP Factory, Sent to check, Done;
+Task, Who, Due, Priority, Type), each row opening beside it with its form and its conversation.
+
 
 Five tabs, one job each, in the order work flows. A person sees only the tabs their permissions allow, and the server
 checks every action again. Under the person's name is their level.

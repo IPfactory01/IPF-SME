@@ -65,28 +65,38 @@ export default function BusinessSupportConsole({ access }: { access: Access }) {
               );
             })}
           </nav>
-          <div className="border border-line bg-paper shadow-sm">
-            {active?.id === "pipeline" && (
+          <div className="border border-line bg-paper shadow-sm"><ConsoleSection id={active?.id ?? null} access={access} stage={stage} onStage={setStage} onOpen={open} /></div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * One section's content, for the console and for the team's home (R83), so both show the same screens and the server
+ * still decides every read and action.
+ */
+export function ConsoleSection({ id, access, stage, onStage, onOpen }: { id: AdminSectionId | null; access: Access; stage: PipelineStage; onStage: (stage: PipelineStage) => void; onOpen: (target: ConsoleTarget) => void }) {
+  return (
+    <>
+            {id === "pipeline" && (
               <>
                 <FailedEmails />
                 <div role="group" aria-label="Pipeline stage" className="flex flex-wrap gap-1 border-b border-line bg-white px-4 py-2">
                   {PIPELINE_STAGES.map(item => (
-                    <button key={item.id} type="button" aria-pressed={stage === item.id} onClick={() => setStage(item.id)}
+                    <button key={item.id} type="button" aria-pressed={stage === item.id} onClick={() => onStage(item.id)}
                       className={`rounded-full px-3 py-1 text-xs ${stage === item.id ? "bg-brand text-white" : "text-ink-600 hover:bg-paper-sunken"}`}>{item.label}</button>
                   ))}
                 </div>
-                {stage === "checks" && <BusinessChecksView onOpenSection={open} />}
-                {stage === "calls" && <DiscoveryCallsView onOpenSection={open} />}
+                {stage === "checks" && <BusinessChecksView onOpenSection={onOpen} />}
+                {stage === "calls" && <DiscoveryCallsView onOpenSection={onOpen} />}
                 {stage === "onboarding" && <ClientOnboardingPanel />}
               </>
             )}
-            {active?.id === "engagements" && <EngagementsView />}
-            {active?.id === "clients" && <><ClientsView /><PeoplePanel scope="clients" /></>}
-            {active?.id === "finance" && <FinanceView />}
-            {active?.id === "team" && <><PeoplePanel scope="team" previewer={Boolean(access.isSuperAdmin && !access.preview)} /><StaffPanel /><SystemStatus /></>}
-          </div>
-        </>
-      )}
-    </div>
+            {id === "engagements" && <EngagementsView />}
+            {id === "clients" && <><ClientsView /><PeoplePanel scope="clients" /></>}
+            {id === "finance" && <FinanceView />}
+            {id === "team" && <><PeoplePanel scope="team" previewer={Boolean(access.isSuperAdmin && !access.preview)} /><StaffPanel /><SystemStatus /></>}
+    </>
   );
 }

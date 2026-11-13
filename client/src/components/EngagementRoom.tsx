@@ -1065,7 +1065,7 @@ export function dueFlag(dueOn: string | null, finished: boolean, now: number): {
   if (days <= 3) return { text: `Due in ${days} day${days === 1 ? "" : "s"}`, tone: "soon" };
   return { text: dueText(dueOn), tone: "calm" };
 }
-const FLAG_TONE = { late: "text-danger font-medium", soon: "text-ink font-medium", calm: "text-ink-muted", done: "text-ink-muted" } as const;
+export const FLAG_TONE = { late: "text-danger font-medium", soon: "text-ink font-medium", calm: "text-ink-muted", done: "text-ink-muted" } as const;
 
 /** Who is signed in, for the rail and the phone bar. Optional so the room can render on its own (tests, previews). */
 export type RoomAccount = { name: string; email: string; role: string; internal: boolean };

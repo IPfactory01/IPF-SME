@@ -125,7 +125,7 @@ function TheClient({ data, engagementId }: { data: Detail; engagementId: number 
       <DetailField label="WhatsApp">{data.owner?.whatsapp ? <a className="text-brand underline" href={whatsappLink(data.owner.whatsapp) ?? undefined} target="_blank" rel="noreferrer">{data.owner.whatsapp}</a> : "-"}</DetailField>
       <DetailField label="Client account">{data.hasAccount ? `Yes${data.clientPeople.length > 1 ? `, ${data.clientPeople.length} people` : ""}` : "Not yet: the invitation is out"}</DetailField>
       {data.can.sendSignIn && data.engagement.businessCheckId !== null && <SendSignInLink businessCheckId={data.engagement.businessCheckId} hasAccount={data.hasAccount} owner={data.owner} />}
-      <div className="border-t border-line-soft pt-2"><PreviewAsClient engagementId={engagementId} /></div>
+      {data.can.previewAsClient && <div className="border-t border-line-soft pt-2"><PreviewAsClient engagementId={engagementId} /></div>}
     </DetailSection>
   );
 }

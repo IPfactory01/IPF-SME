@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Specialists never use Preview as client: it is for those who manage or review engagements, refused on the server and hidden on screen (R25) | ET, 13 November 2026 ("specialists should not be able to preview as clients") |
 | Session reminders go in the morning run, the day before and on the day; the hour-before reminder is the calendar invitation's own alert, since the free plan runs the schedule once a day (R59) | ET, 12 November 2026 ("go ahead with the session reminders") |
 | The team sees the owner's own Business Health Check answers on the record, closed until opened, to prepare the Discovery Call; the Privacy notice says so (R84). Until now the console showed only our reading of them | ET, 12 November 2026 ("yes, go ahead with the answers section") |
 | Team members who work only on their own projects sign in to a home built like the client's room (Today, My projects; Finance for a Partner), not the console; the desk, admins and the Super Admin keep the console (R83) | ET, 12 November 2026 ("go ahead with step 2") |

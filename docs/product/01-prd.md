@@ -309,7 +309,7 @@ Fix it. See the shift." The other five are requirements.
 | R22 | Deliverables approved by a lead before the client sees them; the owner signs off | M | Server-enforced | Built |
 | R23 | The one number and the weekly check-in (five questions, the reading, hours by role, AI used) | M | Recorded one week at a time, in order | Built |
 | R24 | A new Digital marketing engagement's fees fill in at ₦470,000 for each of three months, dated day 0, 30 and 60 from the kickoff (R36) | M | The team only checks the dates | Built |
-| R25 | Preview as client: staff see the room exactly as the owner does, read only, logged | S | The preview equals the owner's view | Built |
+| R25 | Preview as client: the engagement's lead and the desk (those who manage or review engagements: Analysts, Partners, the desk, the Super Admin) see the room exactly as the owner does, read only, logged; never a Specialist (ET, 13 November 2026) | S | The preview equals the owner's view | Built |
 | R76 | **Preview as a team member (ET, 10 November 2026).** The Super Admin, and only the Super Admin, can open Admin exactly as any other team member sees it, from **Preview as {name}** in Team: their tabs, their projects and what each engagement shows them. Read only: the server refuses every change while the preview lasts, so the Super Admin never acts as someone else. A banner says whose view it is, with **Close preview**; it ends by itself after 30 minutes; each preview is recorded | S | The Super Admin checks what an analyst or a specialist can open without asking them for screenshots | Built (10 November 2026) |
 
 ### Stage 9: Close and next

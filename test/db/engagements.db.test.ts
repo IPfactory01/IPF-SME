@@ -1283,7 +1283,7 @@ for (const target of targets) {
         expect((await (await analyst.call()).engagement.staff.list()).items.map(item => item.id)).toEqual([engagementId]);
         const detail = await (await analyst.call()).engagement.staff.detail({ engagementId });
         expect(detail.team).toEqual([expect.objectContaining({ name: "Ola Analyst", role: "analyst", roleLabel: "Analyst" })]);
-        expect(detail.can).toEqual({ manage: true, assign: false, review: false, sendSignIn: false, contribute: true, seeInternal: true, seeFees: true });
+        expect(detail.can).toEqual({ manage: true, assign: false, review: false, sendSignIn: false, contribute: true, seeInternal: true, seeFees: true, previewAsClient: true });
       });
 
       it("lets only people with assign_engagements change the team, and only to IP Factory staff", async () => {
@@ -1338,6 +1338,16 @@ for (const target of targets) {
         const analyst = await signIn(await person(["analyst"]), true);
         await expect((await analyst.call()).engagement.staff.previewRoom({ engagementId })).rejects.toMatchObject({ code: "NOT_FOUND" });
         await expect((await owner.call()).engagement.staff.previewRoom({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        // On the engagement: an Analyst may preview it; a Specialist never (ET, 13 November 2026), and the record says so.
+        const desk = await superAdmin.call();
+        const onIt = await person(["analyst"]);
+        const specialist = await person(["subject_matter_expert"]);
+        await desk.engagement.staff.assign({ engagementId, userId: onIt.id, role: "analyst" });
+        await desk.engagement.staff.assign({ engagementId, userId: specialist.id, role: "expert" });
+        expect(await (await (await signIn(onIt, true)).call()).engagement.staff.previewRoom({ engagementId })).toEqual(await (await owner.call()).engagement.client.room());
+        const asSpecialist = await (await signIn(specialist, true)).call();
+        await expect(asSpecialist.engagement.staff.previewRoom({ engagementId })).rejects.toMatchObject({ code: "FORBIDDEN", message: "Preview as client is for the engagement's lead and the desk, not Specialists." });
+        expect((await asSpecialist.engagement.staff.detail({ engagementId })).can.previewAsClient).toBe(false);
       });
 
       it("keeps clients out of the team's side", async () => {

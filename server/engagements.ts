@@ -641,6 +641,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
       contribute: canContribute(actor),
       seeInternal: canSeeInternal(actor),
       seeFees: canSeeFees(actor),
+      previewAsClient: canPreviewAsClient(actor),
     },
     /** Ask {business} (R78): whether this person may, whether the weekly limit applies to them, and their request this week. */
     ask: {
@@ -1286,8 +1287,15 @@ export async function getClientRoom(db: Database, session: AccountSession, engag
  * Preview as client: the room of one engagement exactly as its owner sees it, for the team, read-only. The owner's own
  * account decides what is "theirs"; without one yet, the owner view is shown as it will be. Every preview is logged.
  */
+/**
+ * Preview as client is for those who lead, manage or review engagements (the desk, Analysts, Partners, the Super
+ * Admin), never a Specialist: the client's room holds the owner's whole account of their business (ET, 13 November 2026).
+ */
+export const canPreviewAsClient = (actor: StaffActor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "review_engagements");
+
 export async function previewClientRoom(db: Database, actor: StaffActor, input: { engagementId: number }) {
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (!canPreviewAsClient(actor)) throw new TRPCError({ code: "FORBIDDEN", message: "Preview as client is for the engagement's lead and the desk, not Specialists." });
   const owner = engagement.businessId === null ? undefined : (await db.select({ userId: businessMemberships.userId }).from(businessMemberships)
     .where(and(eq(businessMemberships.businessId, engagement.businessId), eq(businessMemberships.role, "owner"), eq(businessMemberships.status, "active"))).limit(1))[0];
   const business = engagement.businessId === null ? undefined : (await db.select({ name: businesses.name }).from(businesses).where(eq(businesses.id, engagement.businessId)).limit(1))[0];

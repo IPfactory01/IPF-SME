@@ -78,7 +78,7 @@ const detail = (given: { manage: boolean; assign: boolean; review: boolean; send
   checkins: [] as unknown[],
   inbox: [] as unknown[],
   content: [] as unknown[],
-  can: { contribute: given.manage, seeInternal: given.manage || given.review, seeFees: given.manage || given.review, ...given },
+  can: { contribute: given.manage, seeInternal: given.manage || given.review, seeFees: given.manage || given.review, previewAsClient: given.manage || given.review, ...given },
   ask: { allowed: Boolean(given.manage || given.contribute), unlimited: given.review, thisWeek: null as null | { id: number; title: string } },
   viewerUserId: 1,
 });
@@ -644,6 +644,20 @@ describe("the team's home (R83)", () => {
     fireEvent.click(card);
     expect(screen.queryByRole("combobox", { name: "Stage" })).toBeNull();
     expect(screen.getByText("Stage").nextElementSibling?.textContent).toBe("Getting set up");
+  });
+
+  it("offers Preview as client to the lead, never to a Specialist", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Specialist" }] };
+    api.detail = detail({ manage: false, assign: false, review: false, contribute: true });
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    expect(screen.queryByRole("button", { name: /Preview as client/ })).toBeNull();
+    cleanup();
+    api.detail = detail({ manage: true, assign: false, review: false });
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    expect(screen.getByRole("button", { name: /Preview as client/ })).toBeTruthy();
   });
 
   it("says when the person is on no project yet", () => {

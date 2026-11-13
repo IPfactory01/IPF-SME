@@ -12620,7 +12620,8 @@ async function getStaffEngagement(db, actor, engagementId) {
       sendSignIn: authorityAllows(actor.authority, "manage_client_onboarding"),
       contribute: canContribute(actor),
       seeInternal: canSeeInternal(actor),
-      seeFees: canSeeFees(actor)
+      seeFees: canSeeFees(actor),
+      previewAsClient: canPreviewAsClient(actor)
     },
     /** Ask {business} (R78): whether this person may, whether the weekly limit applies to them, and their request this week. */
     ask: {
@@ -13123,8 +13124,10 @@ async function getClientRoom(db, session, engagementId) {
   const viewer = await clientViewerFor(db, session, business.businessId);
   return buildClientRoom(db, engagement, viewer, session.user.id, business.businessName);
 }
+var canPreviewAsClient = (actor) => authorityAllows(actor.authority, "manage_engagements") || authorityAllows(actor.authority, "review_engagements");
 async function previewClientRoom(db, actor, input) {
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (!canPreviewAsClient(actor)) throw new TRPCError18({ code: "FORBIDDEN", message: "Preview as client is for the engagement's lead and the desk, not Specialists." });
   const owner = engagement.businessId === null ? void 0 : (await db.select({ userId: businessMemberships.userId }).from(businessMemberships).where(and16(eq24(businessMemberships.businessId, engagement.businessId), eq24(businessMemberships.role, "owner"), eq24(businessMemberships.status, "active"))).limit(1))[0];
   const business = engagement.businessId === null ? void 0 : (await db.select({ name: businesses.name }).from(businesses).where(eq24(businesses.id, engagement.businessId)).limit(1))[0];
   const check2 = engagement.businessCheckId === null ? void 0 : (await db.select({ businessName: businessChecks.businessName, fullName: businessChecks.fullName }).from(businessChecks).where(eq24(businessChecks.id, engagement.businessCheckId)).limit(1))[0];

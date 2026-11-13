@@ -171,6 +171,18 @@ function DeliverableRow({ item, data, engagementId }: { item: Deliverable; data:
   );
 }
 
+/** The lead's prompt (R88): team items with no one named go to the person in their plan role, in one step. */
+function AssignByRole({ engagementId, count }: { engagementId: number; count: number }) {
+  const refresh = useRefresh(engagementId);
+  const assign = trpc.engagement.staff.assignByRole.useMutation({ ...refresh, onSuccess: result => { refresh.onSuccess(); toast.success(`${result.assigned} ${result.assigned === 1 ? "item" : "items"} assigned. Each person sees them, with their reminders.`); } });
+  return (
+    <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-health-watch bg-health-watch-tint p-3 text-sm">
+      <span>{count} team {count === 1 ? "item has" : "items have"} no one named, so no one is reminded.</span>
+      <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={assign.isPending} onClick={() => assign.mutate({ engagementId })}>Assign by role</Button>
+    </div>
+  );
+}
+
 /** The Work Plan's groups in the workspace, as the client's room groups its tasks: by where each item stands. */
 const TEAM_PLAN_GROUPS: { id: string; name: string; dot: string; pill: string; test: (task: Task) => boolean }[] = [
   { id: "client", name: "With the client", dot: "border-brand-plum bg-white", pill: "bg-brand-plum text-white", test: task => task.side === "client" && OPEN_TASK_STATUSES.includes(task.status) },
@@ -188,7 +200,7 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
   const [selected, setSelected] = useState<number | null>(null);
   const task = data.tasks.find(item => item.id === selected) ?? null;
   const nameOf = (item: Task) => (item.assigneeUserId !== null ? [...data.clientPeople.map(person => ({ id: person.userId, name: person.name })), ...data.team.map(member => ({ id: member.userId, name: member.name ?? "" }))].find(person => person.id === item.assigneeUserId)?.name : undefined)
-    || (item.side === "client" ? data.businessName || "The client" : "IP Factory");
+    || (item.side === "client" ? data.businessName || "The client" : item.ownerName || "No one yet");
   const groupOf = (item: Task) => TEAM_PLAN_GROUPS.find(group => group.test(item)) ?? TEAM_PLAN_GROUPS[1]!;
   if (!data.tasks.length) return <p className="text-sm text-ink-muted">Nothing on the {METHOD.workPlan} yet.</p>;
   return (
@@ -878,6 +890,7 @@ function Tasks({ data, engagementId }: { data: Detail; engagementId: number }) {
     <DetailSection title="Work Plan">
       <p className="text-xs text-ink-muted">Data Requests from the client and actions on both sides, by week: the plan the Discovery Call shaped. The client sees their own items, and one line a week for ours. {data.can.seeAllTasks ? "You lead: you see every item." : "You see your own items."}</p>
       {DATED_TYPES[data.engagement.type] && data.can.manage && <PlanUpdate engagementId={engagementId} />}
+      {data.unassignedTeamItems > 0 && (data.can.seeAllTasks || data.can.assign) && <AssignByRole engagementId={engagementId} count={data.unassignedTeamItems} />}
       {data.ask.allowed && (asking
         ? <AskClient data={data} engagementId={engagementId} onDone={() => setAsking(false)} />
         : <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} onClick={() => setAsking(true)}>Ask {data.businessName || "the client"}</Button>)}
@@ -905,7 +918,8 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
   const [side, setSide] = useState<EngagementTaskSide>(task?.side ?? (data.can.manage ? "client" : "ipf"));
   const [title, setTitle] = useState(task?.title ?? "");
   const [detail, setDetail] = useState(task?.detail ?? "");
-  const [assignee, setAssignee] = useState(task?.assigneeUserId ? String(task.assigneeUserId) : "");
+  // A team item always names its person (R88): a new one starts with whoever adds it.
+  const [assignee, setAssignee] = useState(task?.assigneeUserId ? String(task.assigneeUserId) : !task && !data.can.manage ? String(data.viewerUserId) : "");
   const [dueOn, setDueOn] = useState(task?.dueOn ?? "");
   const [status, setStatus] = useState<EngagementTaskStatus>(task?.status ?? "open");
   const [note, setNote] = useState(task?.statusNote ?? "");
@@ -934,7 +948,7 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
       <label className={LABEL} htmlFor={`task-detail-${id}`}>Detail</label>
       <textarea id={`task-detail-${id}`} className={FIELD} rows={2} disabled={!canManage} value={detail} onChange={event => setDetail(event.target.value)} />
       <div className="grid gap-2 sm:grid-cols-3">
-        <div><label className={LABEL} htmlFor={`task-person-${id}`}>Person</label><select id={`task-person-${id}`} className={FIELD} disabled={!lead} value={assignee} onChange={event => setAssignee(event.target.value)}><option value="">{side === "client" ? "The business" : "The team"}</option>{people.map(person => <option key={person.userId} value={person.userId}>{person.name}</option>)}</select></div>
+        <div><label className={LABEL} htmlFor={`task-person-${id}`}>Person</label><select id={`task-person-${id}`} className={FIELD} disabled={!lead} value={assignee} onChange={event => setAssignee(event.target.value)}><option value="">{side === "client" ? "The business" : "Choose who"}</option>{people.map(person => <option key={person.userId} value={person.userId}>{person.name}</option>)}</select></div>
         <div><label className={LABEL} htmlFor={`task-due-${id}`}>Due</label><input id={`task-due-${id}`} type="date" className={FIELD} disabled={!canManage} value={dueOn} onChange={event => setDueOn(event.target.value)} /></div>
         <div><label className={LABEL} htmlFor={`task-status-${id}`}>Status</label><select id={`task-status-${id}`} className={FIELD} disabled={!canManage} value={status} onChange={event => setStatus(event.target.value as EngagementTaskStatus)}>{ENGAGEMENT_TASK_STATUSES.map(item => <option key={item} value={item}>{ENGAGEMENT_TASK_STATUS_LABELS[item]}</option>)}</select></div>
       </div>
@@ -960,7 +974,7 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
       {task && <ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} />}
       {canManage && (
         <div className="flex gap-2">
-          <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !title.trim()} onClick={() => save.mutate({
+          <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !title.trim() || (side === "ipf" && !assignee)} onClick={() => save.mutate({
             engagementId, taskId: task?.id, kind, side, title, detail, assigneeUserId: assignee ? Number(assignee) : null, dueOn: dueOn || null, status, statusNote: note, sessionId: task?.sessionId ?? null,
             weekNumber: week ? Number(week) : null, sortOrder: Number(order) || 0, factor: factor || null,
             priority: priority || null,

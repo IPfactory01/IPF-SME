@@ -248,6 +248,7 @@ person is not on is not found unless they see every engagement.
 |---|---|---|---|
 | `engagement.staff.list`, `engagement.staff.detail`, `engagement.staff.previewRoom`, `engagement.staff.storageStatus` | My projects and every engagement in scope; one engagement; Preview as client (logged); whether file storage is on | Entry only | Engagement |
 | `engagement.staff.today` | Today (R52): what needs this person across the engagements they are on | Entry only; their own team rows | Engagement |
+| `engagement.staff.assignByRole` | Assign by role (R88): team items with no one go to the person in their plan role, else the main contact | The lead, or `assign_engagements` | Engagement |
 | `engagement.staff.handIn` | Ready for review (R86): the person a team item is for hands it in; the lead is emailed | Their own team item | Engagement |
 | `engagement.staff.awaitingStart`, `engagement.staff.start`, `engagement.staff.clientBusinesses`, `engagement.staff.createDirect` | Paid with no engagement yet, and starting it; the businesses a new engagement can be for; New engagement | `view_all_businesses` and `manage_engagements` | Engagement |
 | `engagement.staff.setStage`, `engagement.staff.saveProblem` | The stage; the one problem and its statement | `manage_engagements` | Engagement |

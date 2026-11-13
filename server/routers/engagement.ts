@@ -82,6 +82,7 @@ import {
   addMissingPlan,
   askClient,
   handInTask,
+  assignByRole,
   todayFor,
   bookMeeting,
   staffTaskComment,
@@ -260,6 +261,8 @@ const staffRouter = router({
   /** Write in a client item's conversation (R78): manage_engagements, or the Specialist the item goes to. */
   taskComment: staff.input(z.object({ taskId: id, body: text(TASK_COMMENT_MAX).min(1, "Write your message first.") })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.engagementComment, `staff:${ctx.actor.id}`); return guarded(async () => staffTaskComment(await engagementDb(), ctx.actor, input)); }),
   /** The First edit or draft is shared (R78): as for the conversation, once it has arrived, once. */
+  /** Assign by role (R88): team items with no one go to the person in their plan role, else the main contact. */
+  assignByRole: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => assignByRole(await engagementDb(), ctx.actor, input))),
   /** Ready for review (R86): the owner of a team item hands it in; the lead is emailed. */
   handIn: staff.input(z.object({ taskId: id })).mutation(async ({ ctx, input }) => guarded(async () => handInTask(await engagementDb(), ctx.actor, input))),
   followUpShared: staff.input(z.object({ taskId: id })).mutation(async ({ ctx, input }) => guarded(async () => followUpShared(await engagementDb(), ctx.actor, input))),

@@ -28,6 +28,7 @@ import { lagosTime } from "./lagosTime";
 import { businessNameOf, clientPeopleFor, teamPersonFor } from "./requestEmails";
 import { getTrustedApplicationOrigin } from "./security";
 import { clientOf, teamOf } from "./sessionInvitations";
+import { ownerOfTask } from "./engagements";
 import { mainContactOf } from "./teamContact";
 
 /** No reminder between 9pm and 7am Lagos time (R57). */
@@ -173,7 +174,22 @@ async function send(to: string, message: { subject: string; body: string }, busi
   }
 }
 
-export type ReminderRun = { ran: true; fees: number; items: number; leads: number; clocks: number; sessions: number; reviews: number } | { ran: false; reason: "quiet_hours" };
+export type ReminderRun = { ran: true; fees: number; items: number; leads: number; clocks: number; sessions: number; reviews: number; team: number } | { ran: false; reason: "quiet_hours" };
+
+/** A team item past its day (R88): to its person, then to the lead. */
+export function teamItemLateEmail(input: { toLead: boolean; name: string; ownerName: string; title: string; businessName: string; dueOn: string }) {
+  const origin = getTrustedApplicationOrigin();
+  const first = firstNameOf(input.name);
+  return input.toLead
+    ? {
+      subject: `Three days late: ${input.title}, ${input.businessName}`,
+      body: ["Hello,", "", `"${input.title}" for ${input.businessName} was due ${dayInWords(input.dueOn)} and is not handed in.${input.ownerName ? ` It is ${firstNameOf(input.ownerName)}'s.` : ""}`, "", `Open it: ${origin}/admin`, "", BRAND.organisationName].join("\n"),
+    }
+    : {
+      subject: `Late: ${input.title}, ${input.businessName}`,
+      body: [`Hello${first ? ` ${first}` : ""},`, "", `"${input.title}" for ${input.businessName} was due ${dayInWords(input.dueOn)}. Hand it in with Ready for review, or write on it to say when it will be ready.`, "", `Open it: ${origin}/admin`, "", BRAND.organisationName].join("\n"),
+    };
+}
 
 /** Something the client sent waits for the team's review (R87): a day on, and three days on. */
 export function reviewReminderEmail(input: { late: boolean; title: string; businessName: string; receivedAt: Date }) {
@@ -210,7 +226,7 @@ export async function runReminders(db: Database, now = new Date()): Promise<Remi
   }
   const today = lagosDay(now);
   const roomUrl = `${getTrustedApplicationOrigin()}/dashboard`;
-  const counts = { fees: 0, items: 0, leads: 0, clocks: 0, sessions: 0, reviews: 0 };
+  const counts = { fees: 0, items: 0, leads: 0, clocks: 0, sessions: 0, reviews: 0, team: 0 };
   const tomorrow = addDays(today, 1);
   const open = await db.select().from(engagements).where(ne(engagements.stage, "closed"));
   for (const engagement of open) {
@@ -280,6 +296,17 @@ export async function runReminders(db: Database, now = new Date()): Promise<Remi
         const stage = waited >= 3 * 24 * HOUR ? "review_late" : waited >= 24 * HOUR ? "review_due" : null;
         if (!stage || !(await claim(db, `review:${task.id}:${task.receivedAt!.toISOString()}:${stage}`, stage, engagement.id))) continue;
         for (const to of await leadsOf(db, engagement.id)) counts.reviews += await send(to, reviewReminderEmail({ late: stage === "review_late", title: task.title, businessName, receivedAt: task.receivedAt! }), null);
+      }
+      // The team's own items, late (R88): their person a day after, the lead three days after; once each.
+      const ours = await db.select().from(engagementTasks).where(and(eq(engagementTasks.engagementId, engagement.id), eq(engagementTasks.side, "ipf"), inArray(engagementTasks.status, [...OPEN_TASK_STATUSES])));
+      const crew = ours.length ? await teamOf(db, engagement.id, now.getTime()) : [];
+      for (const task of ours.filter(item => item.dueOn && item.dueOn < today)) {
+        const late = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${task.dueOn}T00:00:00Z`)) / (24 * HOUR));
+        const stage = late >= 3 ? "team_lead" : "team_late";
+        if (!(await claim(db, `team:${task.id}:${task.dueOn}:${stage}`, stage, engagement.id))) continue;
+        const owner = crew.find(member => member.userId === ownerOfTask(crew, task));
+        if (stage === "team_late" && owner) counts.team += await send(owner.email, teamItemLateEmail({ toLead: false, name: owner.name, ownerName: owner.name, title: task.title, businessName, dueOn: task.dueOn! }), null);
+        if (stage === "team_lead") for (const to of await leadsOf(db, engagement.id)) counts.team += await send(to, teamItemLateEmail({ toLead: true, name: "", ownerName: owner?.name ?? "", title: task.title, businessName, dueOn: task.dueOn! }), null);
       }
       // Sessions (R59): the morning before, and the morning of, each booked Session; a moved one is reminded again.
       const booked = await db.select().from(engagementSessions).where(and(eq(engagementSessions.engagementId, engagement.id), eq(engagementSessions.status, "planned")));

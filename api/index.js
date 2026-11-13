@@ -1384,6 +1384,12 @@ function safeFileName(fileName2) {
   return `${cleaned.slice(0, 100 - extension.length - 1)}.${extension}`;
 }
 var MAX_CHECKIN_WEEKS = 12;
+function planRoleOf(type, title) {
+  if (type === "digital_marketing") return "digital_marketer";
+  if (/^consultant review$/i.test(title.trim())) return "lead";
+  if (type === "business_review" || type === "assessment" || type === "done_for_you" || type === "six_week_fix" || type === "monthly_service") return "analyst";
+  return null;
+}
 
 // drizzle/schema.ts
 var usersRoleEnum = pgEnum("users_role", ["user", "admin"]);
@@ -12510,12 +12516,7 @@ async function requireStaffTask(db, actor, taskId) {
   await requireStaffEngagement(db, actor, task.engagementId);
   const team = await db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name }).from(engagementTeam).innerJoin(users, eq24(engagementTeam.userId, users.id)).where(eq24(engagementTeam.engagementId, task.engagementId));
   const leads = await canReviewEngagement(db, actor, task.engagementId);
-  if (!leads && !isOwnTask(task, actor.id, ownerOfTask(team, task))) {
-    const people = team.map((member) => ({ userId: member.userId, name: member.name ?? "" }));
-    const said = await db.select({ body: engagementTaskComments.body }).from(engagementTaskComments).where(eq24(engagementTaskComments.taskId, task.id));
-    if (!said.some((comment) => mentionedIn(comment.body, people).some((person) => person.userId === actor.id))) throw notFound4();
-  }
-  return { task, team, leads };
+  return { task, team, leads, own: isOwnTask(task, actor.id, ownerOfTask(team, task)) };
 }
 async function todayFor(db, actor, now = Date.now()) {
   const mine = await db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role }).from(engagementTeam).where(eq24(engagementTeam.userId, actor.id));
@@ -12551,6 +12552,7 @@ async function todayFor(db, actor, now = Date.now()) {
       const tagged = [...said].reverse().find((comment) => comment.authorUserId !== actor.id && mentionedIn(comment.body, people).some((person) => person.userId === actor.id));
       const replied = tagged && said.some((comment) => comment.authorUserId === actor.id && comment.id > tagged.id);
       if (tagged && !replied) items.push({ key: `mention-${task.id}`, kind: "mention", engagementId: engagement.id, businessName, title: task.title, detail: `${tagged.authorName || "A colleague"}: ${tagged.body.length > 90 ? `${tagged.body.slice(0, 90)}\u2026` : tagged.body}`, at: tagged.createdAt, late: false });
+      if (task.side === "ipf" && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn <= addDays2(today, 1) && ownerOfTask(crew, task) === actor.id) items.push({ key: `due-${task.id}`, kind: "due", engagementId: engagement.id, businessName, title: task.title, detail: task.dueOn < today ? `Was due ${dayInWords(task.dueOn)}: hand it in, or tell the lead` : task.dueOn === today ? "Due today" : "Due tomorrow", at: /* @__PURE__ */ new Date(`${task.dueOn}T12:00:00Z`), late: task.dueOn < today });
       if (lead && task.side === "ipf" && task.status === "received") items.push({ key: `review-${task.id}`, kind: "review", engagementId: engagement.id, businessName, title: task.title, detail: `Handed in by ${crew.find((member) => member.userId === (task.assigneeUserId ?? task.createdByUserId))?.name ?? "a colleague"}: mark it done or ask for more`, at: task.updatedAt, late: false });
     }
     for (const task of own) {
@@ -12682,8 +12684,6 @@ async function getStaffEngagement(db, actor, engagementId) {
   const askedThisWeek = review ? void 0 : tasks.filter((task) => task.requestedByUserId === actor.id && task.status !== "cancelled" && task.createdAt.getTime() >= weekStart).sort((a, b) => b.id - a.id)[0];
   const manages = authorityAllows(actor.authority, "manage_engagements");
   const seesAllTasks = await canReviewEngagement(db, actor, engagementId);
-  const me = team.find((member) => member.userId === actor.id);
-  const taggedIn = new Set(me ? itemComments.filter((comment) => mentionedIn(comment.body, team.map((member) => ({ userId: member.userId, name: member.name ?? "" }))).some((person) => person.userId === actor.id)).map((comment) => comment.taskId) : []);
   const held = engagement.opensOnPayment ? null : feeHold(waiting.map((fee) => ({ dueOn: fee.dueOn, paid: false })), lagosDay());
   const staffFile = (file) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt });
   const filesFor = (where, id3) => files.filter((file) => file[where] === id3 || where === "taskId" && matches.some((match) => match.fileId === file.id && match.taskId === id3)).map(staffFile);
@@ -12698,7 +12698,8 @@ async function getStaffEngagement(db, actor, engagementId) {
     // Internal notes stay with those who work on or approve engagements.
     sessions: canSeeInternal(actor) ? sessions : sessions.map((item2) => ({ ...item2, internalNotes: null })),
     // Below the lead, a person's own tasks only (R86); the lead upwards sees every task.
-    tasks: tasks.filter((task) => seesAllTasks || taggedIn.has(task.id) || isOwnTask(task, actor.id, ownerOfTask(team, task))).map((task) => {
+    // Everyone on the engagement sees every task (R88); what each may do is in canAnswer and canHandIn.
+    tasks: tasks.map((task) => {
       const goesTo = task.side === "client" ? followUpOwnerOf(team, task) : null;
       const owner = ownerOfTask(team, task);
       const own = isOwnTask(task, actor.id, owner);
@@ -12709,7 +12710,11 @@ async function getStaffEngagement(db, actor, engagementId) {
         askedByName: task.requestedByUserId === null ? null : askers.get(task.requestedByUserId) ?? "",
         goesTo: goesTo ? { userId: goesTo.userId, name: goesTo.name ?? "" } : null,
         // Whether this person may write on it and share its First edit: the server checks again (requireStaffClientItem).
-        canAnswer: task.status !== "cancelled" && (seesAllTasks || own),
+        canAnswer: task.status !== "cancelled" && (task.side === "ipf" || seesAllTasks || own),
+        ownerName: (() => {
+          const id3 = ownerOfTask(team, task);
+          return id3 === null ? null : team.find((member) => member.userId === id3)?.name ?? null;
+        })(),
         // A team item its owner hands in for review (R86): uploads, a link, messages, then Ready for review.
         canHandIn: task.side === "ipf" && (owner === actor.id || task.createdByUserId === actor.id) && OPEN_TASK_STATUSES.includes(task.status),
         comments: itemComments.filter((comment) => comment.taskId === task.id).map(({ taskId: _taskId, ...comment }) => comment)
@@ -12735,6 +12740,8 @@ async function getStaffEngagement(db, actor, engagementId) {
       previewAsClient: canPreviewAsClient(actor),
       seeAllTasks: seesAllTasks
     },
+    /** Team items with no one named (R88): the lead's prompt to Assign by role. */
+    unassignedTeamItems: tasks.filter((task) => task.side === "ipf" && task.assigneeUserId === null && task.status !== "cancelled").length,
     /** Ask {business} (R78): whether this person may, whether the weekly limit applies to them, and their request this week. */
     ask: {
       allowed: canContribute(actor) && !engagement.opensOnPayment,
@@ -12802,8 +12809,32 @@ async function assignTeamMember(db, actor, input) {
     await tx.insert(engagementTeam).values({ engagementId: input.engagementId, userId: input.userId, role: input.role, assignedByUserId: actor.id }).onConflictDoUpdate({ target: [engagementTeam.engagementId, engagementTeam.userId], set: { role: input.role, assignedByUserId: actor.id } });
     await recordAudit(tx, { action: "engagement_team_assigned", actorUserId: actor.id, details: { engagementId: input.engagementId, userId: input.userId, role: input.role, ...existing ? { previousRole: existing.role } : {} } });
   });
+  await db.update(engagementTasks).set({ assigneeUserId: input.userId }).where(and16(
+    eq24(engagementTasks.engagementId, input.engagementId),
+    eq24(engagementTasks.side, "ipf"),
+    isNull12(engagementTasks.assigneeUserId),
+    inArray11(engagementTasks.id, (await db.select({ id: engagementTasks.id, title: engagementTasks.title }).from(engagementTasks).where(and16(eq24(engagementTasks.engagementId, input.engagementId), eq24(engagementTasks.side, "ipf"), isNull12(engagementTasks.assigneeUserId)))).filter((row) => planRoleOf(engagement.type, row.title) === input.role).map((row) => row.id).concat(0))
+  ));
   const notified = existing?.role === input.role || input.userId === actor.id ? false : await notifyAssigned(db, input.engagementId, input.userId, input.role, Boolean(existing));
   return { success: true, added: !existing, notified };
+}
+async function assignByRole(db, actor, input) {
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (!await canReviewEngagement(db, actor, engagement.id) && !authorityAllows(actor.authority, "assign_engagements")) throw new TRPCError18({ code: "FORBIDDEN", message: "The lead assigns the items." });
+  const team = await db.select({ userId: engagementTeam.userId, role: engagementTeam.role }).from(engagementTeam).where(eq24(engagementTeam.engagementId, engagement.id));
+  if (!team.length) throw new TRPCError18({ code: "BAD_REQUEST", message: "Add the team first: then each item goes to the person in its role." });
+  const open = await db.select({ id: engagementTasks.id, title: engagementTasks.title }).from(engagementTasks).where(and16(eq24(engagementTasks.engagementId, engagement.id), eq24(engagementTasks.side, "ipf"), isNull12(engagementTasks.assigneeUserId), ne3(engagementTasks.status, "cancelled")));
+  const main = followUpOwnerOf(team, { requestedByUserId: null, turnaround: null })?.userId ?? null;
+  let assigned = 0;
+  for (const item2 of open) {
+    const role = planRoleOf(engagement.type, item2.title);
+    const person = (role ? team.find((member) => member.role === role)?.userId : void 0) ?? main;
+    if (person === null) continue;
+    await db.update(engagementTasks).set({ assigneeUserId: person }).where(eq24(engagementTasks.id, item2.id));
+    assigned += 1;
+  }
+  await recordAudit(db, { action: "engagement_items_assigned", actorUserId: actor.id, details: { engagementId: engagement.id, assigned } });
+  return { success: true, assigned };
 }
 function assignedNoticeEmail(input) {
   const name = input.fullName.split(" ")[0] || "there";
@@ -12958,7 +12989,12 @@ async function saveTask(db, actor, input) {
     if (input.assigneeUserId !== null && input.assigneeUserId !== actor.id) throw new TRPCError18({ code: "FORBIDDEN", message: "Add the item for yourself; the lead assigns others." });
   }
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
-  if (input.taskId && !await canReviewEngagement(db, actor, engagement.id)) await requireStaffTask(db, actor, input.taskId);
+  if (input.taskId && !await canReviewEngagement(db, actor, engagement.id)) {
+    const { own } = await requireStaffTask(db, actor, input.taskId);
+    if (!own) throw new TRPCError18({ code: "FORBIDDEN", message: "You change your own items; the lead changes the rest." });
+  }
+  if (input.side === "ipf" && input.assigneeUserId === null && !authorityAllows(actor.authority, "manage_engagements")) input = { ...input, assigneeUserId: actor.id };
+  if (input.side === "ipf" && input.assigneeUserId === null) throw new TRPCError18({ code: "BAD_REQUEST", message: "Choose who on the team does this item." });
   if (input.assigneeUserId !== null) {
     const allowed = input.side === "client" ? engagement.businessId !== null && (await clientPeopleOf(db, engagement.businessId)).some((person) => person.userId === input.assigneeUserId) : (await db.select({ userId: engagementTeam.userId }).from(engagementTeam).where(and16(eq24(engagementTeam.engagementId, engagement.id), eq24(engagementTeam.userId, input.assigneeUserId))).limit(1)).length === 1;
     if (!allowed) throw new TRPCError18({ code: "BAD_REQUEST", message: input.side === "client" ? "That person is not part of the client's business." : "That person is not on the engagement team." });
@@ -13058,12 +13094,15 @@ async function askClient(db, actor, input) {
   return { taskId, emailed: await sendRequestEmail(db, { taskId }) };
 }
 async function requireStaffClientItem(db, actor, taskId) {
-  const { task } = await requireStaffTask(db, actor, taskId);
+  const { task, leads, own } = await requireStaffTask(db, actor, taskId);
   if (task.side !== "client") throw new TRPCError18({ code: "BAD_REQUEST", message: "This is the team's own item: there is nothing to share with the client." });
+  if (!leads && !own) throw clientVoiceRefusal();
   return task;
 }
+var clientVoiceRefusal = () => new TRPCError18({ code: "FORBIDDEN", message: "The person this item goes to, or the lead, writes to the client on it. Tag them with @ on a team item instead." });
 async function staffTaskComment(db, actor, input) {
-  const { task, team } = await requireStaffTask(db, actor, input.taskId);
+  const { task, team, leads, own } = await requireStaffTask(db, actor, input.taskId);
+  if (task.side === "client" && !leads && !own) throw clientVoiceRefusal();
   const body = input.body.trim();
   await db.insert(engagementTaskComments).values({ engagementId: task.engagementId, taskId: task.id, authorUserId: actor.id, body });
   const emailed = task.side === "client" ? await sendMessageEmails(db, { taskId: task.id, fromTeam: true, authorUserId: actor.id, body }) : await sendTeamItemEmails(db, { taskId: task.id, authorUserId: actor.id, body, to: [ownerOfTask(team, task) ?? task.createdByUserId].filter((id3) => id3 !== null) });
@@ -14974,6 +15013,8 @@ var staffRouter = router({
     return guarded(async () => staffTaskComment(await engagementDb(), ctx.actor, input));
   }),
   /** The First edit or draft is shared (R78): as for the conversation, once it has arrived, once. */
+  /** Assign by role (R88): team items with no one go to the person in their plan role, else the main contact. */
+  assignByRole: staff.input(z15.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => assignByRole(await engagementDb(), ctx.actor, input))),
   /** Ready for review (R86): the owner of a team item hands it in; the lead is emailed. */
   handIn: staff.input(z15.object({ taskId: id })).mutation(async ({ ctx, input }) => guarded(async () => handInTask(await engagementDb(), ctx.actor, input))),
   followUpShared: staff.input(z15.object({ taskId: id })).mutation(async ({ ctx, input }) => guarded(async () => followUpShared(await engagementDb(), ctx.actor, input))),
@@ -15486,6 +15527,17 @@ async function send(to, message, businessCheckId) {
     return 0;
   }
 }
+function teamItemLateEmail(input) {
+  const origin = getTrustedApplicationOrigin();
+  const first = firstNameOf(input.name);
+  return input.toLead ? {
+    subject: `Three days late: ${input.title}, ${input.businessName}`,
+    body: ["Hello,", "", `"${input.title}" for ${input.businessName} was due ${dayInWords(input.dueOn)} and is not handed in.${input.ownerName ? ` It is ${firstNameOf(input.ownerName)}'s.` : ""}`, "", `Open it: ${origin}/admin`, "", BRAND.organisationName].join("\n")
+  } : {
+    subject: `Late: ${input.title}, ${input.businessName}`,
+    body: [`Hello${first ? ` ${first}` : ""},`, "", `"${input.title}" for ${input.businessName} was due ${dayInWords(input.dueOn)}. Hand it in with Ready for review, or write on it to say when it will be ready.`, "", `Open it: ${origin}/admin`, "", BRAND.organisationName].join("\n")
+  };
+}
 function reviewReminderEmail(input) {
   const origin = getTrustedApplicationOrigin();
   return {
@@ -15519,7 +15571,7 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
   }
   const today = lagosDay(now);
   const roomUrl = `${getTrustedApplicationOrigin()}/dashboard`;
-  const counts = { fees: 0, items: 0, leads: 0, clocks: 0, sessions: 0, reviews: 0 };
+  const counts = { fees: 0, items: 0, leads: 0, clocks: 0, sessions: 0, reviews: 0, team: 0 };
   const tomorrow = addDays(today, 1);
   const open = await db.select().from(engagements).where(ne5(engagements.stage, "closed"));
   for (const engagement of open) {
@@ -15584,6 +15636,16 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
         const stage = waited >= 3 * 24 * HOUR3 ? "review_late" : waited >= 24 * HOUR3 ? "review_due" : null;
         if (!stage || !await claim(db, `review:${task.id}:${task.receivedAt.toISOString()}:${stage}`, stage, engagement.id)) continue;
         for (const to of await leadsOf(db, engagement.id)) counts.reviews += await send(to, reviewReminderEmail({ late: stage === "review_late", title: task.title, businessName, receivedAt: task.receivedAt }), null);
+      }
+      const ours = await db.select().from(engagementTasks).where(and22(eq32(engagementTasks.engagementId, engagement.id), eq32(engagementTasks.side, "ipf"), inArray15(engagementTasks.status, [...OPEN_TASK_STATUSES])));
+      const crew = ours.length ? await teamOf(db, engagement.id, now.getTime()) : [];
+      for (const task of ours.filter((item2) => item2.dueOn && item2.dueOn < today)) {
+        const late = Math.round((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${task.dueOn}T00:00:00Z`)) / (24 * HOUR3));
+        const stage = late >= 3 ? "team_lead" : "team_late";
+        if (!await claim(db, `team:${task.id}:${task.dueOn}:${stage}`, stage, engagement.id)) continue;
+        const owner = crew.find((member) => member.userId === ownerOfTask(crew, task));
+        if (stage === "team_late" && owner) counts.team += await send(owner.email, teamItemLateEmail({ toLead: false, name: owner.name, ownerName: owner.name, title: task.title, businessName, dueOn: task.dueOn }), null);
+        if (stage === "team_lead") for (const to of await leadsOf(db, engagement.id)) counts.team += await send(to, teamItemLateEmail({ toLead: true, name: "", ownerName: owner?.name ?? "", title: task.title, businessName, dueOn: task.dueOn }), null);
       }
       const booked = await db.select().from(engagementSessions).where(and22(eq32(engagementSessions.engagementId, engagement.id), eq32(engagementSessions.status, "planned")));
       for (const session of booked) {

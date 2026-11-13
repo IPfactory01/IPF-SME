@@ -381,6 +381,7 @@ info@ipfactory.co.
 | A message on a team item (R86) | The person the item is for, never the writer | *{first name} wrote on your item: {item}* | Built (13 November 2026) |
 | Tagged with @ in an item's messages (R86) | The person tagged | *{first name} mentioned you on {item}* | Built (13 November 2026) |
 | Something the client sent, not reviewed a day on, and three days on (R87) | The engagement's Engagement Manager and Lead Consultant, else the office | *Waiting for your review: {item}, {business}*; *Still waiting for your review: {item}, {business}* | Built (13 November 2026) |
+| The team's own item a day late, and three days late (R88) | Its person; at three days the engagement's Engagement Manager and Lead Consultant, else the office | *Late: {item}, {business}*; *Three days late: {item}, {business}* | Built (13 November 2026) |
 | A team item handed in (R86) | The engagement's Engagement Manager and Lead Consultant, else the office | *Ready for review: {item}, {business}* | Built (13 November 2026) |
 | A prospect's follow-up on day 2 and day 7; the desk's follow-up alerts | — | To write | To build (R48, R64) |
 | Buy-now order paid | Owner; office | Receipt and invitation; *New order: {product}, {business}* | To build (R13) |
@@ -480,7 +481,7 @@ Paystack's signed notifications arrive at `POST /api/paystack/webhook`.
 the left rail holds Home, My tasks, Your projects and, for whoever's role has them, **The desk**: Pipeline, Clients,
 Finance and Team. Each place below keeps its screens and its permission; it opens inside the frame. Every engagement
 opens as its workspace (R82); its Work Plan is the room's weekly cards (R85), as the client sees them, with each week's Sessions; each item
-opens beside them with its form, its files and its conversation. Below the lead, the cards hold the person's own tasks only (R86); the lead upwards sees every task. For the lead, an item's panel reads it first: who it is with, due, priority and status, then **What was sent**
+opens beside them with its form, its files and its conversation. Everyone on the engagement sees every task (R88); the **Who** column names each item's person. Only that person hands an item in or changes it (the lead changes anything); while any team item has no one, the lead sees **Assign by role**. For the lead, an item's panel reads it first: who it is with, due, priority and status, then **What was sent**
 (the link, their note, the files), **Mark received** and **Ask for more** (a note they see) when something was sent, the
 detail, the messages, and **Edit the item** for the full form. Whoever sent or handed something in sees it ticked,
 *pending review*, and *Completed* once reviewed (R87); an unassigned team item belongs to the main contact (R86). A

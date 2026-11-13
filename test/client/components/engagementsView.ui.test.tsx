@@ -1008,7 +1008,8 @@ describe("a Specialist on the engagement", () => {
     expect((card.getByLabelText("Whose job") as HTMLSelectElement).disabled).toBe(true);
     fireEvent.change(card.getByLabelText("What"), { target: { value: "Draft the competitor scan" } });
     fireEvent.click(card.getByRole("button", { name: "Save" }));
-    expect(api.calls.saveTask).toEqual([expect.objectContaining({ side: "ipf", title: "Draft the competitor scan", assigneeUserId: null })]);
+    // A team item names its person (R88): a Specialist's starts with them.
+    expect(api.calls.saveTask).toEqual([expect.objectContaining({ side: "ipf", title: "Draft the competitor scan", assigneeUserId: 1 })]);
   });
 
   it("lets the lead share a Specialist's draft with the owner", () => {

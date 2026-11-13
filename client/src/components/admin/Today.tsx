@@ -17,6 +17,7 @@ const KIND_LABELS: Record<Item["kind"], string> = {
   fee: "Fee",
   mention: "Mentioned",
   review: "To review",
+  due: "Due",
 };
 
 /** How long is left on a clock, or how late it is, in hours. */

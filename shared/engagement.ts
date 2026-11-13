@@ -341,3 +341,15 @@ export function splitNumberedList(text: string): { intro: string; items: string[
   }
   return { intro, items };
 }
+
+/**
+ * Who on the team does a plan's own item (R88, ET 13 November 2026): every team item has a named person, so its
+ * reminders reach them. A Digital Marketing plan's items are the Digital Marketer's; a Business Review's and a
+ * service's are the Analyst's, and a service's Consultant review the Lead Consultant's. Null: the main contact.
+ */
+export function planRoleOf(type: string, title: string): EngagementTeamRole | null {
+  if (type === "digital_marketing") return "digital_marketer";
+  if (/^consultant review$/i.test(title.trim())) return "lead";
+  if (type === "business_review" || type === "assessment" || type === "done_for_you" || type === "six_week_fix" || type === "monthly_service") return "analyst";
+  return null;
+}

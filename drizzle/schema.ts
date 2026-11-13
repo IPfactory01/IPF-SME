@@ -1036,6 +1036,8 @@ export const engagementTasks = pgTable("engagement_tasks", {
   followUpDueAt: timestamp("followUpDueAt", { withTimezone: true }),
   /** When the team shared the First edit or draft. */
   followUpDoneAt: timestamp("followUpDoneAt", { withTimezone: true }),
+  /** Who checks it (0026, R89): named by the lead; empty means the default (the client item's person, or the lead). */
+  reviewerUserId: integer("reviewerUserId").references(() => users.id, { onDelete: "set null" }),
   completedAt: timestamp("completedAt", { withTimezone: true }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),

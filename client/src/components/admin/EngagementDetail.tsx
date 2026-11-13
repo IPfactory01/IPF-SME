@@ -299,13 +299,6 @@ function FilesByItem({ data, engagementId }: { data: Detail; engagementId: numbe
 function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detail; engagementId: number; now: number }) {
   const refresh = useRefresh(engagementId);
   const [editing, setEditing] = useState(false);
-  const [asking, setAsking] = useState<string | null>(null);
-  const save = trpc.engagement.staff.saveTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); setAsking(null); toast.success("Saved. The person it is with sees it."); } });
-  const decide = (status: EngagementTaskStatus, note: string | null) => save.mutate({
-    engagementId, taskId: task.id, kind: task.kind, side: task.side, title: task.title, detail: task.detail, assigneeUserId: task.assigneeUserId, dueOn: task.dueOn, status, statusNote: note,
-    sessionId: task.sessionId ?? null, weekNumber: task.weekNumber ?? null, sortOrder: task.sortOrder ?? 0, factor: task.factor ?? null, priority: task.priority ?? null,
-    section: task.section ?? null, ref: task.ref ?? null, informs: task.informs ?? null, format: task.format ?? null,
-  });
   const sent = task.status === "received";
   const flag = dueFlag(task.dueOn, !OPEN_TASK_STATUSES.includes(task.status) && !sent, now);
   if (editing) return <div className="space-y-2"><button type="button" className="text-sm font-medium text-brand" onClick={() => setEditing(false)}>Back to the item</button><TaskCard task={task} data={data} engagementId={engagementId} onDone={() => setEditing(false)} /></div>;
@@ -313,6 +306,7 @@ function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detai
     <div className="space-y-3">
       <h3 className="font-sans text-lg font-semibold tracking-tight text-ink">{task.title}</h3>
       <Owners task={task} data={data} engagementId={engagementId} />
+      <Reviewer task={task} data={data} engagementId={engagementId} />
       <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
         <dt className="text-ink-muted">With</dt><dd>{task.side === "client" ? data.businessName || "The client" : task.goesTo?.name || "IP Factory"}</dd>
         <dt className="text-ink-muted">Due</dt><dd className={flag && !sent ? FLAG_TONE[flag.tone] : ""}>{task.dueOn ? dayInWords(task.dueOn) : "No date"}{flag && !sent && flag.tone === "late" ? ` · ${flag.text}` : ""}</dd>
@@ -328,25 +322,50 @@ function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detai
           <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={false} canManage={data.can.manage} />
         </section>
       )}
-      {sent && (asking === null ? (
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending} onClick={() => decide(task.side === "client" ? "accepted" : "done", task.statusNote)}>Mark received</Button>
-          <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAsking("")}>Ask for more</Button>
-        </div>
-      ) : (
-        <div className="space-y-1">
-          <label className={LABEL} htmlFor={`more-${task.id}`}>What is still needed (they see this)</label>
-          <input id={`more-${task.id}`} className={FIELD} value={asking} maxLength={500} onChange={event => setAsking(event.target.value)} />
-          <div className="flex gap-2">
-            <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !asking.trim()} onClick={() => decide("needs_more", asking.trim())}>Send</Button>
-            <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAsking(null)}>Cancel</Button>
-          </div>
-        </div>
-      ))}
+      {sent && task.canReview && <ReviewDecision task={task} engagementId={engagementId} />}
       {task.detail && <p className="whitespace-pre-line text-sm text-ink-600">{task.detail}</p>}
       <ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} />
       <button type="button" className="text-xs font-medium text-ink-600 underline underline-offset-2" onClick={() => setEditing(true)}>Edit the item</button>
     </div>
+  );
+}
+
+/** The reviewer's two decisions on what was sent or handed in (R89): Mark received, or Ask for more with a note. */
+function ReviewDecision({ task, engagementId }: { task: Task; engagementId: number }) {
+  const refresh = useRefresh(engagementId);
+  const [asking, setAsking] = useState<string | null>(null);
+  const review = trpc.engagement.staff.reviewTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); setAsking(null); toast.success("Saved. The owners see it."); } });
+  return asking === null ? (
+    <div className="flex flex-wrap gap-2">
+      <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={review.isPending} onClick={() => review.mutate({ taskId: task.id, decision: "received", note: null })}>Mark received</Button>
+      <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAsking("")}>Ask for more</Button>
+    </div>
+  ) : (
+    <div className="space-y-1">
+      <label className={LABEL} htmlFor={`more-${task.id}`}>What is still needed (they see this)</label>
+      <input id={`more-${task.id}`} className={FIELD} value={asking} maxLength={500} onChange={event => setAsking(event.target.value)} />
+      <div className="flex gap-2">
+        <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={review.isPending || !asking.trim()} onClick={() => review.mutate({ taskId: task.id, decision: "more", note: asking.trim() })}>Send</Button>
+        <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAsking(null)}>Cancel</Button>
+      </div>
+    </div>
+  );
+}
+
+/** Who checks the item (R89): its reviewer by name; the lead can name someone else, or go back to the default. */
+function Reviewer({ task, data, engagementId }: { task: Task; data: Detail; engagementId: number }) {
+  const refresh = useRefresh(engagementId);
+  const save = trpc.engagement.staff.setReviewer.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Reviewer saved. They get the review emails."); } });
+  if (!data.can.seeAllTasks) return <p className="text-xs text-ink-muted">Reviewer: <span className="text-ink">{task.reviewer?.name || "The lead"}</span></p>;
+  return (
+    <label className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">Reviewer
+      <select aria-label="Reviewer" className="min-h-8 rounded-md border border-line-soft bg-white px-2 text-sm text-ink" disabled={save.isPending}
+        value={task.reviewerUserId ? String(task.reviewerUserId) : ""}
+        onChange={event => save.mutate({ taskId: task.id, userId: event.target.value ? Number(event.target.value) : null })}>
+        <option value="">{`The default${!task.reviewerUserId && task.reviewer?.name ? ` (${task.reviewer.name})` : ""}`}</option>
+        {data.team.filter(member => member.name).map(member => <option key={member.userId} value={member.userId}>{member.name}</option>)}
+      </select>
+    </label>
   );
 }
 
@@ -404,12 +423,14 @@ function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; 
     <div className="space-y-3">
       <h3 className="font-sans text-lg font-semibold tracking-tight text-ink">{task.title}</h3>
       <Owners task={task} data={data} engagementId={engagementId} />
+      <Reviewer task={task} data={data} engagementId={engagementId} />
       <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
         <dt className="text-ink-muted">For</dt><dd>{task.side === "client" ? data.businessName || "The client" : "IP Factory"}</dd>
         <dt className="text-ink-muted">Due</dt><dd className={flag ? FLAG_TONE[flag.tone] : ""}>{flag?.text ?? "No date"}</dd>
         {task.priority && <><dt className="text-ink-muted">Priority</dt><dd>{PRIORITY_WORDS[task.priority]}</dd></>}
         <dt className="text-ink-muted">Status</dt><dd>{task.status === "received" ? "Ticked: sent, pending review" : task.status === "done" || task.status === "accepted" ? "Completed" : task.statusLabel}</dd>
       </dl>
+      {task.status === "received" && task.canReview && <ReviewDecision task={task} engagementId={engagementId} />}
       {task.detail && <p className="whitespace-pre-line text-sm text-ink-600">{task.detail}</p>}
       <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && (task.canHandIn || task.requestedByUserId === data.viewerUserId)} canManage={false} briefFor={task.requestedByUserId === data.viewerUserId} />
       <ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} />

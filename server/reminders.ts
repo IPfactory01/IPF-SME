@@ -28,7 +28,7 @@ import { lagosTime } from "./lagosTime";
 import { businessNameOf, clientPeopleFor, teamPersonFor } from "./requestEmails";
 import { getTrustedApplicationOrigin } from "./security";
 import { clientOf, teamOf } from "./sessionInvitations";
-import { otherOwnersOf, ownersOfTask } from "./engagements";
+import { otherOwnersOf, ownersOfTask, reviewerOfTask } from "./engagements";
 import { mainContactOf } from "./teamContact";
 
 /** No reminder between 9pm and 7am Lagos time (R57). */
@@ -290,12 +290,16 @@ export async function runReminders(db: Database, now = new Date()): Promise<Remi
         counts.clocks += await send(person.email, clockReminderEmail({ late, name: person.name, label, title: task.title, businessName, dueAt: task.followUpDueAt! }), null);
         if (late) for (const to of (await leadsOf(db, engagement.id)).filter(email => email !== person.email)) counts.leads += await send(to, clockReminderEmail({ late, name: "", label, title: task.title, businessName, dueAt: task.followUpDueAt! }), null);
       }
-      // What the client sent and nobody has reviewed (R87): the lead hears after a day, and again after three.
+      // What the client sent and nobody has reviewed (R87, R89): the item's reviewer hears after a day; after three, the lead too.
       for (const task of tasks.filter(item => item.status === "received" && item.receivedAt)) {
         const waited = now.getTime() - task.receivedAt!.getTime();
         const stage = waited >= 3 * 24 * HOUR ? "review_late" : waited >= 24 * HOUR ? "review_due" : null;
         if (!stage || !(await claim(db, `review:${task.id}:${task.receivedAt!.toISOString()}:${stage}`, stage, engagement.id))) continue;
-        for (const to of await leadsOf(db, engagement.id)) counts.reviews += await send(to, reviewReminderEmail({ late: stage === "review_late", title: task.title, businessName, receivedAt: task.receivedAt! }), null);
+        // The item's reviewer (R89); at three days the lead as well.
+        const crewNow = await teamOf(db, engagement.id, now.getTime());
+        const reviewer = crewNow.find(member => member.userId === reviewerOfTask(crewNow, task));
+        const to = Array.from(new Set([...(reviewer ? [reviewer.email] : []), ...(stage === "review_late" || !reviewer ? await leadsOf(db, engagement.id) : [])]));
+        for (const address of to) counts.reviews += await send(address, reviewReminderEmail({ late: stage === "review_late", title: task.title, businessName, receivedAt: task.receivedAt! }), null);
       }
       // The team's own items, late (R88): their person a day after, the lead three days after; once each.
       const ours = await db.select().from(engagementTasks).where(and(eq(engagementTasks.engagementId, engagement.id), eq(engagementTasks.side, "ipf"), inArray(engagementTasks.status, [...OPEN_TASK_STATUSES])));

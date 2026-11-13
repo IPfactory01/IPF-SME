@@ -6,8 +6,10 @@ CREATE TABLE "engagement_task_owners" (
 	"createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+ALTER TABLE "engagement_tasks" ADD COLUMN "reviewerUserId" integer;--> statement-breakpoint
 ALTER TABLE "engagement_task_owners" ADD CONSTRAINT "engagement_task_owners_engagementId_engagements_id_fk" FOREIGN KEY ("engagementId") REFERENCES "public"."engagements"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "engagement_task_owners" ADD CONSTRAINT "engagement_task_owners_taskId_engagement_tasks_id_fk" FOREIGN KEY ("taskId") REFERENCES "public"."engagement_tasks"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "engagement_task_owners" ADD CONSTRAINT "engagement_task_owners_userId_users_id_fk" FOREIGN KEY ("userId") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "engagement_task_owners_task_user_unique" ON "engagement_task_owners" USING btree ("taskId","userId");--> statement-breakpoint
-CREATE INDEX "engagement_task_owners_engagement_idx" ON "engagement_task_owners" USING btree ("engagementId");
+CREATE INDEX "engagement_task_owners_engagement_idx" ON "engagement_task_owners" USING btree ("engagementId");--> statement-breakpoint
+ALTER TABLE "engagement_tasks" ADD CONSTRAINT "engagement_tasks_reviewerUserId_users_id_fk" FOREIGN KEY ("reviewerUserId") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;

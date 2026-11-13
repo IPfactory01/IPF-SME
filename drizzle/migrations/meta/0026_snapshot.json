@@ -1,5 +1,5 @@
 {
-  "id": "98949d63-56ca-47be-8532-b1c474b11d21",
+  "id": "416b11ac-a694-455a-9e95-8ef31f30a85b",
   "prevId": "dde4c7aa-1e20-4ece-8a91-2b7bfef21eef",
   "version": "7",
   "dialect": "postgresql",
@@ -4406,6 +4406,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "reviewerUserId": {
+          "name": "reviewerUserId",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "completedAt": {
           "name": "completedAt",
           "type": "timestamp with time zone",
@@ -4538,6 +4544,19 @@
             "id"
           ],
           "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "engagement_tasks_reviewerUserId_users_id_fk": {
+          "name": "engagement_tasks_reviewerUserId_users_id_fk",
+          "tableFrom": "engagement_tasks",
+          "tableTo": "users",
+          "columnsFrom": [
+            "reviewerUserId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

@@ -1,7 +1,8 @@
--- The Shift: apply migration 0026 (several owners on an item, R89; Backend schema, engagement_task_owners).
--- Does exactly what `pnpm db:migrate` would. It adds one table, engagement_task_owners: the owners of an item beyond
--- its lead owner, who share its reminders and prompts. Nothing that exists is changed or removed. It records the
--- migration in drizzle.__drizzle_migrations.
+-- The Shift: apply migration 0026 (several owners and a reviewer on an item, R89; Backend schema).
+-- Does exactly what `pnpm db:migrate` would. It adds one table, engagement_task_owners (the owners of an item beyond
+-- its lead owner, who share its reminders and prompts), and one empty column, engagement_tasks.reviewerUserId (who
+-- checks the item; empty means the default). Nothing that exists is changed or removed. It records the migration in
+-- drizzle.__drizzle_migrations.
 -- Safe to run once: it stops, changing nothing, unless the database is exactly at migration 0025. Paste the whole
 -- script into the Supabase SQL Editor and press Run.
 -- Apply it just BEFORE deploying the several-owners code.
@@ -34,6 +35,8 @@ CREATE TABLE "engagement_task_owners" (
 	"createdAt" timestamp with time zone DEFAULT now() NOT NULL
 );
 
+ALTER TABLE "engagement_tasks" ADD COLUMN "reviewerUserId" integer;
+
 ALTER TABLE "engagement_task_owners" ADD CONSTRAINT "engagement_task_owners_engagementId_engagements_id_fk" FOREIGN KEY ("engagementId") REFERENCES "public"."engagements"("id") ON DELETE cascade ON UPDATE no action;
 
 ALTER TABLE "engagement_task_owners" ADD CONSTRAINT "engagement_task_owners_taskId_engagement_tasks_id_fk" FOREIGN KEY ("taskId") REFERENCES "public"."engagement_tasks"("id") ON DELETE cascade ON UPDATE no action;
@@ -44,6 +47,8 @@ CREATE UNIQUE INDEX "engagement_task_owners_task_user_unique" ON "engagement_tas
 
 CREATE INDEX "engagement_task_owners_engagement_idx" ON "engagement_task_owners" USING btree ("engagementId");
 
-insert into drizzle.__drizzle_migrations (hash, created_at) values ('713184cd51a0502e426e091b586bf4c7e043e74c3b6489aa364d70765bc3093e', 1794600387887);
+ALTER TABLE "engagement_tasks" ADD CONSTRAINT "engagement_tasks_reviewerUserId_users_id_fk" FOREIGN KEY ("reviewerUserId") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+
+insert into drizzle.__drizzle_migrations (hash, created_at) values ('78ea5e76f92e609d32b89ee4099790b0dd2b2d6c5a549aae80752efcd436f74e', 1794601559001);
 
 commit;

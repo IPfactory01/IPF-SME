@@ -442,6 +442,21 @@ export async function otherOwnersOf(db: Pick<Database, "select">, where: { engag
   return map;
 }
 
+/**
+ * Who checks an item (R89): the person the lead named, while they are on the team; else, on the client's item, the
+ * person it goes to (who asked, the Content Producer for footage, else the main contact); on a team item, the
+ * engagement's lead (Engagement Manager, Lead Consultant, Partner), else the main contact.
+ */
+export function reviewerOfTask<T extends { userId: number; role: EngagementTeamRole }>(team: readonly T[], task: Pick<typeof engagementTasks.$inferSelect, "side" | "reviewerUserId" | "requestedByUserId" | "turnaround">) {
+  if (task.reviewerUserId !== null && team.some(member => member.userId === task.reviewerUserId)) return task.reviewerUserId;
+  if (task.side === "client") return followUpOwnerOf(team, task)?.userId ?? null;
+  for (const role of ["manager", "lead", "partner"] as const) {
+    const lead = team.find(member => member.role === role);
+    if (lead) return lead.userId;
+  }
+  return followUpOwnerOf(team, { requestedByUserId: null, turnaround: null })?.userId ?? null;
+}
+
 /** Everyone an item belongs to on the team (R89): its lead owner, then the others. */
 export function ownersOfTask<T extends { userId: number; role: EngagementTeamRole }>(team: readonly T[], task: Pick<typeof engagementTasks.$inferSelect, "side" | "assigneeUserId" | "requestedByUserId" | "turnaround">, others: readonly number[] = []) {
   const lead = ownerOfTask(team, task);
@@ -519,7 +534,7 @@ export async function todayFor(db: Database, actor: StaffActor, now = Date.now()
       // A team item that is this person's, due by tomorrow or late (R88).
       if (task.side === "ipf" && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn <= addDays(today, 1) && ownersOfTask(crew, task, extra.get(task.id)).includes(actor.id)) items.push({ key: `due-${task.id}`, kind: "due", engagementId: engagement.id, businessName, title: task.title, detail: task.dueOn < today ? `Was due ${dayInWords(task.dueOn)}: hand it in, or tell the lead` : task.dueOn === today ? "Due today" : "Due tomorrow", at: new Date(`${task.dueOn}T12:00:00Z`), late: task.dueOn < today });
       // A team item handed in waits on the lead (R86).
-      if (lead && task.side === "ipf" && task.status === "received") items.push({ key: `review-${task.id}`, kind: "review", engagementId: engagement.id, businessName, title: task.title, detail: `Handed in by ${crew.find(member => member.userId === (task.assigneeUserId ?? task.createdByUserId))?.name ?? "a colleague"}: mark it done or ask for more`, at: task.updatedAt, late: false });
+      if (task.side === "ipf" && task.status === "received" && reviewerOfTask(crew, task) === actor.id) items.push({ key: `review-${task.id}`, kind: "review", engagementId: engagement.id, businessName, title: task.title, detail: `Handed in by ${crew.find(member => member.userId === (task.assigneeUserId ?? task.createdByUserId))?.name ?? "a colleague"}: mark it done or ask for more`, at: task.updatedAt, late: false });
     }
     for (const task of own) {
       const last = comments.filter(comment => comment.taskId === task.id).at(-1);
@@ -529,7 +544,7 @@ export async function todayFor(db: Database, actor: StaffActor, now = Date.now()
         items.push({ key: `clock-${task.id}`, kind: "clock", engagementId: engagement.id, businessName, title: task.title, detail: `${TURNAROUND_LABELS[task.turnaround]} ${left < 0 ? "is late" : "due"}`, at: task.followUpDueAt, late: left < 0 });
       }
       // What the client sent waits for review (R87): late once it has waited a day.
-      if (task.status === "received" && (manages || lead) && goesToMe(task)) items.push({ key: `check-${task.id}`, kind: "check", engagementId: engagement.id, businessName, title: task.title, detail: "Sent by the client: review it, then mark it Received or ask for more. They see it as pending review.", at: task.receivedAt, late: Boolean(task.receivedAt && now - task.receivedAt.getTime() >= 86_400_000) });
+      if (task.status === "received" && reviewerOfTask(crew, task) === actor.id) items.push({ key: `check-${task.id}`, kind: "check", engagementId: engagement.id, businessName, title: task.title, detail: "Sent by the client: review it, then mark it Received or ask for more. They see it as pending review.", at: task.receivedAt, late: Boolean(task.receivedAt && now - task.receivedAt.getTime() >= 86_400_000) });
       if (task.requestedByUserId === actor.id && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn < today) items.push({ key: `request-${task.id}`, kind: "request", engagementId: engagement.id, businessName, title: task.title, detail: `Your request, due ${dayInWords(task.dueOn)}, is not answered yet`, at: new Date(`${task.dueOn}T12:00:00Z`), late: true });
     }
     for (const session of sessions.filter(item => item.engagementId === engagement.id && item.scheduledFor && item.scheduledFor.getTime() >= now && item.scheduledFor.getTime() < now + 7 * 86_400_000)) {
@@ -695,6 +710,9 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
         // Whether this person may write on it and share its First edit: the server checks again (requireStaffClientItem).
         canAnswer: task.status !== "cancelled" && (task.side === "ipf" || seesAllTasks || own),
         ownerName: (() => { const id = ownerOfTask(team, task); return id === null ? null : team.find(member => member.userId === id)?.name ?? null; })(),
+        // Who checks it (R89), and whether this person may mark it received or ask for more.
+        reviewer: (() => { const id = reviewerOfTask(team, task); return id === null ? null : { userId: id, name: team.find(member => member.userId === id)?.name ?? "" }; })(),
+        canReview: seesAllTasks || reviewerOfTask(team, task) === actor.id,
         // Everyone it belongs to (R89): the lead owner first, then the others.
         owners: ownersOfTask(team, task, others).map((userId, index) => ({ userId, name: team.find(member => member.userId === userId)?.name ?? "", lead: index === 0 && owner === userId })),
         // A team item its owner hands in for review (R86): uploads, a link, messages, then Ready for review.
@@ -829,6 +847,31 @@ export async function assignTeamMember(db: Database, actor: StaffActor, input: {
   // The person is told by email when they join or their role changes, unless they did it themselves.
   const notified = existing?.role === input.role || input.userId === actor.id ? false : await notifyAssigned(db, input.engagementId, input.userId, input.role, Boolean(existing));
   return { success: true, added: !existing, notified } as const;
+}
+
+/**
+ * The reviewer's decision on what was sent or handed in (R89): Received (the client's item) or Done (a team item), shown
+ * as Completed to everyone; or Ask for more, with a note the owners see. The item's reviewer, or the lead.
+ */
+export async function reviewTask(db: Database, actor: StaffActor, input: { taskId: number; decision: "received" | "more"; note: string | null }) {
+  const { task, team, leads } = await requireStaffTask(db, actor, input.taskId);
+  if (!leads && reviewerOfTask(team, task) !== actor.id) throw new TRPCError({ code: "FORBIDDEN", message: "The item's reviewer, or the lead, reviews it." });
+  const note = input.note?.trim() || null;
+  if (input.decision === "more" && !note) throw new TRPCError({ code: "BAD_REQUEST", message: "Say what is still needed: they see it." });
+  const status: EngagementTaskStatus = input.decision === "more" ? "needs_more" : task.side === "client" ? "accepted" : "done";
+  await db.update(engagementTasks).set({ status, statusNote: input.decision === "more" ? note : task.statusNote, ...arrivalFields(task, status, new Date()), ...(status === "done" || status === "accepted" ? { completedAt: new Date() } : {}) }).where(eq(engagementTasks.id, task.id));
+  await recordAudit(db, { action: "engagement_task_reviewed", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, decision: input.decision } });
+  return { success: true, status } as const;
+}
+
+/** Name an item's reviewer (R89), or clear it back to the default. The lead, or whoever assigns engagements. */
+export async function setTaskReviewer(db: Database, actor: StaffActor, input: { taskId: number; userId: number | null }) {
+  const { task, team, leads } = await requireStaffTask(db, actor, input.taskId);
+  if (!leads && !authorityAllows(actor.authority, "assign_engagements")) throw new TRPCError({ code: "FORBIDDEN", message: "The lead names who reviews an item." });
+  if (input.userId !== null && !team.some(member => member.userId === input.userId)) throw new TRPCError({ code: "BAD_REQUEST", message: "The reviewer must be on the engagement team." });
+  await db.update(engagementTasks).set({ reviewerUserId: input.userId }).where(eq(engagementTasks.id, task.id));
+  await recordAudit(db, { action: "engagement_task_reviewer_set", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, reviewerUserId: input.userId } });
+  return { success: true } as const;
 }
 
 /**
@@ -1216,7 +1259,7 @@ export async function handInTask(db: Database, actor: StaffActor, input: { taskI
   if (!OPEN_TASK_STATUSES.includes(task.status)) throw new TRPCError({ code: "CONFLICT", message: "This item is already handed in or done." });
   await db.update(engagementTasks).set({ status: "received" }).where(eq(engagementTasks.id, task.id));
   await recordAudit(db, { action: "engagement_task_handed_in", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id } });
-  return { success: true, emailed: await sendReadyForReviewEmails(db, { taskId: task.id, authorUserId: actor.id }) } as const;
+  return { success: true, emailed: await sendReadyForReviewEmails(db, { taskId: task.id, authorUserId: actor.id, reviewerUserId: reviewerOfTask(team, task) }) } as const;
 }
 
 /** The client writes in an item's conversation; the person on the team it goes to is emailed. */
@@ -1597,7 +1640,8 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
       files: clientFiles("taskId", task.id),
       // Asking the client (R78): who asked, whom a message reaches, the conversation, and when the First edit follows.
       askedBy: task.requestedByUserId === null ? null : askers.get(task.requestedByUserId) ?? "",
-      writeTo: task.side === "client" ? followUpOwnerOf(team, task)?.name ?? null : null,
+      // Who checks what they send (R89): the item's reviewer, by default the person who asked.
+      writeTo: task.side === "client" ? team.find(member => member.userId === reviewerOfTask(team, task))?.name ?? null : null,
       turnaround: task.turnaround, receivedAt: task.receivedAt, followUpDueAt: task.followUpDueAt, followUpDoneAt: task.followUpDoneAt,
       comments: task.side === "client" ? itemComments.filter(comment => comment.taskId === task.id)
         .map(comment => ({ id: comment.id, body: comment.body, createdAt: comment.createdAt, authorName: comment.authorName, fromTeam: !comment.fromClient, mine: comment.authorUserId === viewerUserId })) : [],

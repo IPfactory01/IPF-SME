@@ -166,7 +166,7 @@ for (const target of targets) {
           }
         }
         expect(declared).toBe(rows.length); // no foreign key exists that the schema does not declare
-        expect(declared).toBe(86); // 0026 adds three: an item's other owners (engagement, task, user); 0014 and 0017 add three each: file matches (file, task, matcher); content items (engagement, approver, creator); 0018 four: service requests (business, engagement, requester, handler); 0019 four: agreement (engagement, sender, accepter), fee line (engagement); 0022 eight: payment (fee line, payment request, recorder, canceller), refund (payment, recorder, canceller), fee line (who wrote it off); 0024 four: task comment (engagement, task, author), task (who asked for it); 0025 one: reminder (engagement)
+        expect(declared).toBe(87); // 0026 adds four: an item's other owners (engagement, task, user), its reviewer; 0014 and 0017 add three each: file matches (file, task, matcher); content items (engagement, approver, creator); 0018 four: service requests (business, engagement, requester, handler); 0019 four: agreement (engagement, sender, accepter), fee line (engagement); 0022 eight: payment (fee line, payment request, recorder, canceller), refund (payment, recorder, canceller), fee line (who wrote it off); 0024 four: task comment (engagement, task, author), task (who asked for it); 0025 one: reminder (engagement)
       });
 
       it("stores a declared name longer than 63 bytes truncated, which is why lookups must use pgIdentifier", async () => {

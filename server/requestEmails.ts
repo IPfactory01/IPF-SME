@@ -101,6 +101,13 @@ async function sharedOwnersOf(db: Db, task: typeof engagementTasks.$inferSelect)
   return ids.length ? (await teamOf(db, task.engagementId, Date.now())).filter(person => ids.includes(person.userId)).map(person => ({ userId: person.userId, name: person.name, email: person.email })) : [];
 }
 
+/** The reviewer the lead named on the item (R89), while they are on the team; the default reviewer is already the item's person. */
+async function namedReviewerOf(db: Db, task: typeof engagementTasks.$inferSelect) {
+  if (task.reviewerUserId === null) return [];
+  const person = (await teamOf(db, task.engagementId, Date.now())).find(member => member.userId === task.reviewerUserId);
+  return person ? [{ userId: person.userId, name: person.name, email: person.email }] : [];
+}
+
 async function sendAll(messages: { to: string; subject: string; body: string; businessCheckId: number | null }[]) {
   const results = await Promise.allSettled(messages.map(message => deliverEmail({ to: message.to, subject: message.subject, body: message.body, sender: "business_support", businessCheckId: message.businessCheckId ?? undefined })));
   return results.filter(result => result.status === "fulfilled").length;
@@ -163,7 +170,7 @@ export async function sendReceivedEmail(db: Db, input: { taskId: number; actorUs
     const { task, businessName } = item;
     if (task.requestedByUserId === null && task.turnaround === null) return 0;
     // The person it goes to and everyone who shares it (R89), never whoever marked it.
-    const people = [await teamPersonFor(db, task), ...(await sharedOwnersOf(db, task))].filter((person, index, all) => person.userId !== input.actorUserId && all.findIndex(other => other.email === person.email) === index);
+    const people = [...(await namedReviewerOf(db, task)), await teamPersonFor(db, task), ...(await sharedOwnersOf(db, task))].filter((person, index, all) => person.userId !== input.actorUserId && all.findIndex(other => other.email === person.email) === index);
     if (!people.length) return 0;
     const clock = task.turnaround && task.followUpDueAt ? { label: TURNAROUND_LABELS[task.turnaround], dueAt: task.followUpDueAt, hours: TURNAROUND_HOURS[task.turnaround] } : null;
     return await sendAll(people.map(person => ({ to: person.email, businessCheckId: null, ...receivedEmail({ name: person.name, businessName, title: task.title, how: input.how, note: task.statusNote, clock, origin: getTrustedApplicationOrigin(), link: taskLink(getTrustedApplicationOrigin(), task.engagementId, task.id) }) })));
@@ -244,13 +251,15 @@ export async function sendMentionEmails(db: Db, input: { taskId: number; authorU
 }
 
 /** Emails the engagement's lead (its Engagement Manager or Lead Consultant, else the office) that an item is ready for review. */
-export async function sendReadyForReviewEmails(db: Db, input: { taskId: number; authorUserId: number }) {
+export async function sendReadyForReviewEmails(db: Db, input: { taskId: number; authorUserId: number; reviewerUserId?: number | null }) {
   try {
     const item = await itemOf(db, input.taskId);
     if (!item) return 0;
     const author = (await db.select({ name: users.name }).from(users).where(eq(users.id, input.authorUserId)).limit(1))[0];
     const team = await teamOf(db, item.task.engagementId, Date.now());
-    const leads = team.filter(person => (person.role === "manager" || person.role === "lead") && person.userId !== input.authorUserId);
+    // The item's reviewer (R89); without one, the engagement's lead; else the office.
+    const reviewer = team.find(person => person.userId === input.reviewerUserId && person.userId !== input.authorUserId);
+    const leads = reviewer ? [reviewer] : team.filter(person => (person.role === "manager" || person.role === "lead") && person.userId !== input.authorUserId);
     const to = leads.length ? leads.map(person => ({ email: person.email, name: person.name })) : [{ email: BUSINESS_SUPPORT_MAILBOX, name: "" }];
     const origin = getTrustedApplicationOrigin();
     return await sendAll(to.map(person => ({ to: person.email, businessCheckId: null, ...readyForReviewEmail({ name: person.name, author: author?.name ?? "", businessName: item.businessName, title: item.task.title, origin, link: taskLink(origin, item.task.engagementId, item.task.id) }) })));
@@ -286,7 +295,7 @@ export async function sendNewFileEmails(db: Database, input: { taskId: number; u
     if (!claimed.length) return 0;
     const team = await teamOf(db, task.engagementId, Date.now());
     const lead = task.side === "ipf" && task.assigneeUserId !== null ? team.find(person => person.userId === task.assigneeUserId) ?? null : await teamPersonFor(db, task);
-    const people = [...(lead && lead.userId !== null ? [lead] : []), ...(await sharedOwnersOf(db, task)), ...team.filter(person => person.role === "manager" || person.role === "lead")]
+    const people = [...(await namedReviewerOf(db, task)), ...(lead && lead.userId !== null ? [lead] : []), ...(await sharedOwnersOf(db, task)), ...team.filter(person => person.role === "manager" || person.role === "lead")]
       .filter((person, index, all) => person.userId !== input.uploaderUserId && all.findIndex(other => other.email === person.email) === index);
     const uploader = (await db.select({ name: users.name }).from(users).where(eq(users.id, input.uploaderUserId)).limit(1))[0];
     const link = taskLink(getTrustedApplicationOrigin(), task.engagementId, task.id);

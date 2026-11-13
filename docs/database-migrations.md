@@ -181,8 +181,9 @@ Work Plan. Paste `drizzle/supabase/apply-0024-engagement-requests.sql` into the 
 site uses and press Run; it stops, changing nothing, unless exactly `0000` to `0023` are recorded and the table is not
 there yet. Health then counts 25 of 25.
 
-**`0026` and deployment order** (written 13 November 2026). Several owners on an item (R89): one table,
-`engagement_task_owners`, the owners of an item beyond its lead owner. Nothing that exists changes. Apply it just
+**`0026` and deployment order** (written 13 November 2026). Several owners on an item and its reviewer (R89): one table,
+`engagement_task_owners`, the owners of an item beyond its lead owner, and one empty column,
+`engagement_tasks.reviewerUserId` (empty means the default reviewer). No existing value changes. Apply it just
 before deploying the several-owners code. Paste `drizzle/supabase/apply-0026-engagement-task-owners.sql` into the
 Supabase SQL Editor and press Run; it stops, changing nothing, unless the database is exactly at 0025.
 

@@ -80,10 +80,21 @@ describe("a request in the client's room", () => {
     vi.stubGlobal("fetch", put);
     render(<ItemUpload task={task()} />);
     const file = new File(["photo"], "photo.jpg", { type: "image/jpeg" });
-    fireEvent.change(screen.getByLabelText("Upload a file for A video of the new menu"), { target: { files: [file] } });
+    fireEvent.change(screen.getByLabelText("Upload files for A video of the new menu"), { target: { files: [file] } });
     await waitFor(() => expect(api.calls.confirmUpload).toHaveLength(1));
     expect(api.calls.requestUpload).toEqual([{ taskId: 70, fileName: "photo.jpg", contentType: "image/jpeg", sizeBytes: 5 }]);
     expect(put).toHaveBeenCalledWith("https://storage.example.test/up", expect.objectContaining({ method: "PUT" }));
     expect(api.calls.confirmUpload).toEqual([{ taskId: 70, storageKey: "engagements/4/tasks/70/photo.jpg", note: null, fileName: "photo.jpg", contentType: "image/jpeg", sizeBytes: 5 }]);
+  });
+
+  it("sends every file chosen at once, one after another, not only the first (ET, 13 November 2026)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true })));
+    render(<ItemUpload task={task()} />);
+    const picked = ["IMG_1264.jpeg", "IMG_1265.jpeg", "IMG_1266.jpeg"].map(name => new File(["photo"], name, { type: "image/jpeg" }));
+    const input = screen.getByLabelText("Upload files for A video of the new menu") as HTMLInputElement;
+    expect(input.multiple).toBe(true);
+    fireEvent.change(input, { target: { files: picked } });
+    await waitFor(() => expect(api.calls.confirmUpload).toHaveLength(3));
+    expect((api.calls.requestUpload as { fileName: string }[]).map(call => call.fileName)).toEqual(["IMG_1264.jpeg", "IMG_1265.jpeg", "IMG_1266.jpeg"]);
   });
 });

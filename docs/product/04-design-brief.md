@@ -157,7 +157,7 @@ the link is wrong, and only then does the page say so. A signed-in person whose 
 - **Icons** come from `lucide-react`: 16 px beside text (`h-4 w-4`), 20 px in a button or a call-out, as drawn. An icon
   beside a word is `aria-hidden`; a button that is only an icon has an `aria-label`. Status is always written in words,
   never shown by an icon or a colour alone ("Done · Fri 9 Oct", "Received", "Sign-off given").
-- **Team avatars:** initials on one neutral tone; the group is a labelled image ("Team: Femi Adebayo, Ngozi Eze").
+- **Team avatars:** two-letter initials (first and last name, or the first two letters of a single name, so Miracle is MI and Marcelle Tiogo MT); a web address in a message is a link that opens in a new tab; the group is a labelled image ("Team: Femi Adebayo, Ngozi Eze").
 - **Client logos** (home page and About, under the track record figures): identical square tiles with a hairline border;
   each logo sized by area, not height (`client/src/lib/logoSize.ts`); drawn as an ink silhouette (`bg-ink` through the
   logo's `mono` mask) so seven palettes never fight the brand, cross-fading to colour only where a mouse can hover. Not

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Linked from "@/components/room/Linked";
 import { toast } from "sonner";
 import type { inferRouterOutputs } from "@trpc/server";
 import { lagosDay } from "@shared/agreement";
@@ -174,7 +175,7 @@ function TeamItemConversation({ task, engagementId, people }: { task: Task; enga
         {task.comments.map(comment => (
           <li key={comment.id} className="border-l-2 border-line pl-2 text-sm">
             <p className="text-xs text-ink-muted">{comment.authorName || "IP Factory"} · {formatDateTime(comment.createdAt)}</p>
-            <p className="whitespace-pre-line break-words text-ink">{comment.body}</p>
+            <p className="whitespace-pre-line break-words text-ink"><Linked text={comment.body} /></p>
           </li>
         ))}
       </ul>
@@ -225,7 +226,7 @@ export function ItemConversation({ task, engagementId, people = [], now = Date.n
             {task.comments.map(comment => (
               <li key={comment.id} className={`border-l-2 pl-2 text-sm ${comment.fromClient ? "border-brand" : "border-line"}`}>
                 <p className="text-xs text-ink-muted">{comment.authorName || (comment.fromClient ? "The client" : "IP Factory")}{comment.fromClient ? " (client)" : ""} · {formatDateTime(comment.createdAt)}</p>
-                <p className="whitespace-pre-line text-ink">{comment.body}</p>
+                <p className="whitespace-pre-line break-words text-ink"><Linked text={comment.body} /></p>
               </li>
             ))}
           </ul>

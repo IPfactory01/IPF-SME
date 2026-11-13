@@ -53,6 +53,7 @@ import {
 import type { inferRouterOutputs } from "@trpc/server";
 import { CONTENT_KIND_LABELS, CONTENT_KINDS, CONTENT_STATUS_LABELS, CONTENT_STATUSES, type ContentKind, type ContentStatus } from "@shared/engagementTypes";
 import React, { useState } from "react";
+import Linked from "@/components/room/Linked";
 import { toast } from "sonner";
 import type { AppRouter } from "../../../../server/routers";
 import { DetailField, DetailSection } from "./AdminPrimitives";
@@ -632,8 +633,8 @@ function StaffFiles({ files, engagementId, target, canUpload, canManage, briefFo
       {canUpload && (
         <div className="flex flex-wrap items-center gap-2">
           <label className={`inline-flex cursor-pointer items-center border border-line bg-white px-2 py-1 text-xs font-medium ${busy ? "opacity-60" : ""}`}>
-            {busy ? "Uploading…" : "Attach a file"}
-            <input type="file" className="sr-only" accept={UPLOAD_ACCEPT} disabled={busy} aria-label={`Attach a file to ${target.kind} ${target.id}`} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void send(file); }} />
+            {busy ? "Uploading…" : "Attach files"}
+            <input type="file" className="sr-only" accept={UPLOAD_ACCEPT} disabled={busy} aria-label={`Attach a file to ${target.kind} ${target.id}`} multiple onChange={event => { const picked = Array.from(event.target.files ?? []); event.target.value = ""; void (async () => { for (const file of picked) await send(file); })(); }} />
           </label>
           {canManage ? (
             <select aria-label="Who sees the file" className={`${FIELD} w-auto`} value={chosen} onChange={event => setAudience(event.target.value as EngagementAudience)}>
@@ -1127,7 +1128,7 @@ function DeliverableCard({ item, data, engagementId, onDone }: { item?: Delivera
       {item && item.status !== "shared" && data.can.manage && <DeliveryShareNote type={data.engagement.type} kind={item.kind} balanceWaiting={data.balanceOnDelivery} />}
       {item && (
         <div className="space-y-1 border-t border-line-soft pt-2">
-          {item.comments.map(entry => <p key={entry.id} className="text-sm"><span className="font-medium">{entry.authorName}</span> <span className="text-xs text-ink-muted">{formatDateTime(entry.createdAt)}</span><br />{entry.body}</p>)}
+          {item.comments.map(entry => <p key={entry.id} className="text-sm"><span className="font-medium">{entry.authorName}</span> <span className="text-xs text-ink-muted">{formatDateTime(entry.createdAt)}</span><br /><Linked text={entry.body} /></p>)}
           <div className="flex gap-2">
             <input aria-label={`Comment on ${item.title}`} className={FIELD} value={comment} onChange={event => setComment(event.target.value)} placeholder="Add a comment" />
             <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={!comment.trim() || addComment.isPending} onClick={() => addComment.mutate({ deliverableId: item.id, body: comment })}>Post</Button>

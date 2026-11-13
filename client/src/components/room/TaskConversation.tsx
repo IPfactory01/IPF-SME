@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import Linked from "./Linked";
 import { toast } from "sonner";
 import type { inferRouterOutputs } from "@trpc/server";
 import { UploadCloud } from "lucide-react";
@@ -61,8 +62,8 @@ export function ItemUpload({ task }: { task: Task }) {
   };
   return (
     <label className={`inline-flex min-h-11 cursor-pointer items-center gap-1 text-xs font-medium text-brand underline underline-offset-2 ${busy ? "opacity-60" : ""}`}>
-      <UploadCloud className="h-3.5 w-3.5" aria-hidden />{busy ? "Uploading…" : "Upload a file"}
-      <input type="file" className="sr-only" accept={UPLOAD_ACCEPT} disabled={busy} aria-label={`Upload a file for ${task.title}`} onChange={event => { const file = event.target.files?.[0]; event.target.value = ""; if (file) void send(file); }} />
+      <UploadCloud className="h-3.5 w-3.5" aria-hidden />{busy ? "Uploading…" : "Upload files"}
+      <input type="file" className="sr-only" accept={UPLOAD_ACCEPT} disabled={busy} aria-label={`Upload files for ${task.title}`} multiple onChange={event => { const picked = Array.from(event.target.files ?? []); event.target.value = ""; void (async () => { for (const file of picked) await send(file); })(); }} />
     </label>
   );
 }
@@ -89,7 +90,7 @@ export function TaskConversation({ task }: { task: Task }) {
           {task.comments.map(comment => (
             <li key={comment.id} className={`rounded-lg px-3 py-2 ${comment.fromTeam ? "bg-paper-sunken" : "bg-brand-tint"}`}>
               <p className="text-xs text-ink-muted">{comment.mine ? "You" : comment.fromTeam ? `${firstNameOf(comment.authorName) || "Your team"} at IP Factory` : comment.authorName || "Your business"} · {lagos(comment.createdAt)}</p>
-              <p className="whitespace-pre-line text-sm text-ink">{comment.body}</p>
+              <p className="whitespace-pre-line break-words text-sm text-ink"><Linked text={comment.body} /></p>
             </li>
           ))}
         </ul>

@@ -8,6 +8,7 @@ import { METHOD, METHOD_MEANING } from "@shared/method";
 import type { inferRouterOutputs } from "@trpc/server";
 import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlash, Download, FileText, Flag, Paperclip, UploadCloud } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
+import Linked from "./room/Linked";
 import { useLocation } from "wouter";
 import { BRAND } from "@shared/brand";
 import { addDays, lagosDay } from "@shared/agreement";
@@ -985,7 +986,7 @@ function DeliverableItem({ item, isOwner }: { item: Deliverable; isOwner: boolea
       <p className="text-xs text-ink-muted">Shared {lagos(item.sharedAt, false)}{isOwner && item.audience === "owner" ? " · only you can see this" : ""}</p>
       {item.summary && <p className="mt-2 whitespace-pre-line text-sm">{item.summary}</p>}
       <FileList files={item.files} />
-      {item.comments.length > 0 && <ul className="mt-3 space-y-1 border-t border-line-soft pt-2">{item.comments.map((entry, index) => <li key={index} className="text-sm"><span className="font-medium">{entry.authorName}</span>: {entry.body}</li>)}</ul>}
+      {item.comments.length > 0 && <ul className="mt-3 space-y-1 border-t border-line-soft pt-2">{item.comments.map((entry, index) => <li key={index} className="text-sm"><span className="font-medium">{entry.authorName}</span>: <Linked text={entry.body} /></li>)}</ul>}
       {!preview && <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <input aria-label={`Your comment on ${item.title}`} className="w-full border border-line bg-white px-2 py-1.5 text-sm" placeholder="Ask a question or add a comment" value={comment} maxLength={4000} onChange={event => setComment(event.target.value)} />
         <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" disabled={!comment.trim() || addComment.isPending} onClick={() => addComment.mutate({ deliverableId: item.id, body: comment })}>Send</Button>
@@ -1132,7 +1133,14 @@ function Avatar({ name }: { name: string }) {
   return <span title={name} className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-medium text-white ${avatarColour(name)}`}><span aria-hidden>{initials(name)}</span><span className="sr-only">{name}</span></span>;
 }
 /** Two initials for a person; the firm is always IPF. */
-export const initials = (name: string) => (name.trim() === BRAND.organisationName ? BRAND.organisationShortName : name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]!.toUpperCase()).join("") || "?");
+/** Two letters for every person (ET, 13 November 2026): first and last name, or the first two letters of a single name. */
+function initialsOf(name: string) {
+  const parts = name.replace(/\(.*?\)/g, "").split(/\s+/).filter(part => /[A-Za-z\u00C0-\u024F]/.test(part));
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
+  return (parts[0]![0]! + parts.at(-1)![0]!).toUpperCase();
+}
+export const initials = (name: string) => (name.trim() === BRAND.organisationName ? BRAND.organisationShortName : initialsOf(name));
 
 /**
  * An item's status as the client reads it (R87): once they send it, it is ticked and pending review; once the team

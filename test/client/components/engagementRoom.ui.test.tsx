@@ -359,7 +359,7 @@ describe("files in the room", () => {
   it("offers no upload until storage is set up: the client sends a link or on WhatsApp, or says it went another way", () => {
     render(<EngagementRoom room={room()} />);
     const sales = openItem("Your last 12 months of sales");
-    expect(sales.queryByLabelText(/^Upload a file for/)).toBeNull();
+    expect(sales.queryByLabelText(/^Upload files for/)).toBeNull();
     expect(sales.getByRole("button", { name: "Send a link" })).toBeTruthy();
     expect(sales.getByRole("button", { name: "Submitted another way" })).toBeTruthy();
   });
@@ -896,7 +896,7 @@ describe("the Plan, Meetings and Data requests views", () => {
     vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true })));
     render(<EngagementRoom room={room({ uploadsEnabled: true })} now={NOW} />);
     const sales = openItem("Your last 12 months of sales");
-    fireEvent.change(sales.getByLabelText("Upload a file for Your last 12 months of sales"), { target: { files: [new File(["%PDF-1.4"], "sales.pdf", { type: "application/pdf" })] } });
+    fireEvent.change(sales.getByLabelText("Upload files for Your last 12 months of sales"), { target: { files: [new File(["%PDF-1.4"], "sales.pdf", { type: "application/pdf" })] } });
     await waitFor(() => expect(api.calls.confirmUpload).toHaveLength(1));
     expect(api.calls.requestUpload[0]).toMatchObject({ taskId: 11, fileName: "sales.pdf" });
     expect(api.calls.requestDrop).toEqual([]);
@@ -1021,7 +1021,7 @@ describe("Preview as client", () => {
     expect(found.queryByRole("button", { name: "Share with my team" })).toBeNull();
     expect(found.queryByRole("button", { name: /Download/ })).toBeNull();
     // No upload in the preview, inside an item either.
-    expect(screen.queryByLabelText(/^Upload a file for/)).toBeNull();
+    expect(screen.queryByLabelText(/^Upload files for/)).toBeNull();
     const panel = openItem("Your last 12 months of sales");
     expect(panel.getByText(/The client uploads, sends a link and answers here. Switched off in the preview/)).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Not available" })).toBeNull();

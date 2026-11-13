@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Below the lead each person sees their own tasks; the lead upwards sees all; team items take files, links, messages and Ready for review; @ tags a colleague; the client sees their own items and one line a week for IP Factory's work (R86) | ET, 13 November 2026 ("keep the weekly line, analysts see own only, go ahead") |
 | The Work Plan is weekly cards with each week's Sessions, for client and team; a client uploads inside the item they are looking at; the Data Request tab keeps only the drop box and the progress; the team's files are sorted into cards by item (R85) | ET, 13 November 2026 ("yes go ahead with all three, include sessions"; "categorize them into the different tasks") |
 | The console is retired: everyone, the Super Admins included, works in the client's room's frame; Pipeline, Clients, Finance and Team become places in its rail for whoever's role has them. Supersedes "the console stays for the desk and admins" (R83, 12 November) | ET, 13 November 2026 ("get rid of the console… everybody's interface like client") |
 | Specialists never use Preview as client: it is for those who manage or review engagements, refused on the server and hidden on screen (R25) | ET, 13 November 2026 ("specialists should not be able to preview as clients") |

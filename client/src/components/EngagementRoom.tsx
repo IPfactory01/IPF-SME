@@ -23,6 +23,7 @@ import { workOf, WORK_TITLE } from "@shared/engagementWork";
 import { BusinessPanel, FounderPanel } from "./room/RoomInsight";
 import RoomDashboard from "./room/RoomDashboard";
 import WeekCards from "./room/WeekCards";
+import { weekOfDay } from "@shared/weeks";
 import RoomTabs from "./room/RoomTabs";
 import { useRoomPreview } from "./room/RoomPreview";
 import TaskDetail from "./TaskDetail";
@@ -1174,6 +1175,14 @@ const PLAN_GROUPS: { id: string; name: string; dot: string; pill: string; test: 
 /** Every task in the engagement, grouped by where it stands, with who owns it and when it is due. Open one to act on it. */
 function PlanView({ room, now }: { room: Room; now: number }) {
   const [selected, setSelected] = useState<number | null>(null);
+  // The client sees their own items; IP Factory's work shows as one line a week (R86), not item by item.
+  const ours = room.tasks.filter(item => item.side !== "client");
+  const ourWeek = (week: number | null) => {
+    const that = ours.filter(item => (item.weekNumber ?? weekOfDay(room.startedOn ?? null, item.dueOn)) === week);
+    if (!that.length) return null;
+    const done = that.filter(item => item.status === "done" || item.status === "accepted").length;
+    return `IP Factory's work: ${that.length} ${that.length === 1 ? "piece" : "pieces"}${done ? `, ${done} done` : ""}`;
+  };
   const task = room.tasks.find(item => item.id === selected) ?? null;
   // A line in the timeline links here as #task-N: open that item's detail.
   useEffect(() => {
@@ -1187,7 +1196,7 @@ function PlanView({ room, now }: { room: Room; now: number }) {
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
       <div className={`min-w-0 ${task ? "" : "lg:col-span-2"}`}>
         {/* Weekly cards (R85): each week's items and its Sessions, this week first. */}
-        <WeekCards startedOn={room.startedOn ?? null} items={room.tasks} sessions={room.sessions} now={now}
+        <WeekCards startedOn={room.startedOn ?? null} items={room.tasks.filter(item => item.side === "client")} sessions={room.sessions} now={now} note={ourWeek} noteWeeks={ours.map(item => item.weekNumber ?? weekOfDay(room.startedOn ?? null, item.dueOn))}
           isDone={item => PLAN_GROUPS.find(group => group.test(item))?.id === "done"} isWaiting={isClientOpen} waitingLabel="Waiting on you"
           renderItem={item => {
             const group = PLAN_GROUPS.find(entry => entry.test(item)) ?? PLAN_GROUPS[1]!;

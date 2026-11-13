@@ -860,7 +860,9 @@ describe("the Plan, Meetings and Data requests views", () => {
     const row = (title: string) => screen.getByRole("button", { name: title });
     expect(within(row("Your last 12 months of sales")).getByTitle("Marcelle Tiogo").textContent).toContain("MT");
     expect(within(row("Your price list")).getByTitle("Ada Foods").textContent).toContain("AF");
-    expect(within(row("Send the cash template")).getByTitle("IP Factory").textContent).toBe("IPFIP Factory");
+    // IP Factory's own work is one line in its week, not an item (R86).
+    expect(screen.queryByRole("button", { name: "Send the cash template" })).toBeNull();
+    expect(document.body.textContent).toMatch(/IP Factory's work: 1 piece/);
     expect(within(row("Your last 12 months of sales")).getByText("High").className).toContain("text-health-stuck");
     expect(within(row("Your price list")).getByText("Medium").className).toContain("text-ink-muted");
   });

@@ -178,6 +178,79 @@ export async function sendReadyEmail(db: Db, input: { taskId: number }) {
   }
 }
 
+/** A message on a team item (R86): inside IP Factory only, to the person the item is for. */
+export function teamMessageEmail(input: { name: string; author: string; businessName: string; title: string; body: string; origin: string }) {
+  return {
+    subject: `${firstNameOf(input.author) || "A colleague"} wrote on your item: ${input.title}`,
+    body: [hello(input.name), "", `${input.author || "A colleague"} wrote on "${input.title}" (${input.businessName}):`, "", input.body, "", `Reply in the engagement: ${input.origin}/admin`, "", BRAND.organisationName].join("\n"),
+  };
+}
+
+/** Tagged in an item's messages (R86): who, where, what they wrote. */
+export function mentionEmail(input: { name: string; author: string; businessName: string; title: string; body: string; origin: string }) {
+  return {
+    subject: `${firstNameOf(input.author) || "A colleague"} mentioned you on ${input.title}`,
+    body: [hello(input.name), "", `${input.author || "A colleague"} mentioned you on "${input.title}" (${input.businessName}):`, "", input.body, "", `Open it: ${input.origin}/admin`, "", BRAND.organisationName].join("\n"),
+  };
+}
+
+/** A team item handed in for review (R86), to the engagement's lead. */
+export function readyForReviewEmail(input: { name: string; author: string; businessName: string; title: string; origin: string }) {
+  return {
+    subject: `Ready for review: ${input.title}, ${input.businessName}`,
+    body: [hello(input.name), "", `${input.author || "A colleague"} has handed in "${input.title}" for ${input.businessName}. Its files, link and messages are on the item.`, "", `Review it, then mark it done or ask for more: ${input.origin}/admin`, "", BRAND.organisationName].join("\n"),
+  };
+}
+
+/** The team members, by id, with their emails, among those who still have access. */
+async function teamPeople(db: Db, engagementId: number, userIds: readonly number[]) {
+  return (await teamOf(db, engagementId, Date.now())).filter(person => userIds.includes(person.userId));
+}
+
+/** Emails the person a team item is for about a message on it, never the writer. Returns how many were emailed. */
+export async function sendTeamItemEmails(db: Db, input: { taskId: number; authorUserId: number; body: string; to: number[] }) {
+  try {
+    const item = await itemOf(db, input.taskId);
+    if (!item) return 0;
+    const author = (await db.select({ name: users.name }).from(users).where(eq(users.id, input.authorUserId)).limit(1))[0];
+    const people = await teamPeople(db, item.task.engagementId, input.to.filter(id => id !== input.authorUserId));
+    const origin = getTrustedApplicationOrigin();
+    return await sendAll(people.map(person => ({ to: person.email, businessCheckId: null, ...teamMessageEmail({ name: person.name, author: author?.name ?? "", businessName: item.businessName, title: item.task.title, body: input.body, origin }) })));
+  } catch (error) {
+    return failed("A team message")(error);
+  }
+}
+
+/** Emails each colleague tagged in a message (R86). Returns how many were emailed. */
+export async function sendMentionEmails(db: Db, input: { taskId: number; authorUserId: number; body: string; userIds: number[] }) {
+  try {
+    const item = await itemOf(db, input.taskId);
+    if (!item) return 0;
+    const author = (await db.select({ name: users.name }).from(users).where(eq(users.id, input.authorUserId)).limit(1))[0];
+    const people = await teamPeople(db, item.task.engagementId, input.userIds);
+    const origin = getTrustedApplicationOrigin();
+    return await sendAll(people.map(person => ({ to: person.email, businessCheckId: null, ...mentionEmail({ name: person.name, author: author?.name ?? "", businessName: item.businessName, title: item.task.title, body: input.body, origin }) })));
+  } catch (error) {
+    return failed("A mention")(error);
+  }
+}
+
+/** Emails the engagement's lead (its Engagement Manager or Lead Consultant, else the office) that an item is ready for review. */
+export async function sendReadyForReviewEmails(db: Db, input: { taskId: number; authorUserId: number }) {
+  try {
+    const item = await itemOf(db, input.taskId);
+    if (!item) return 0;
+    const author = (await db.select({ name: users.name }).from(users).where(eq(users.id, input.authorUserId)).limit(1))[0];
+    const team = await teamOf(db, item.task.engagementId, Date.now());
+    const leads = team.filter(person => (person.role === "manager" || person.role === "lead") && person.userId !== input.authorUserId);
+    const to = leads.length ? leads.map(person => ({ email: person.email, name: person.name })) : [{ email: BUSINESS_SUPPORT_MAILBOX, name: "" }];
+    const origin = getTrustedApplicationOrigin();
+    return await sendAll(to.map(person => ({ to: person.email, businessCheckId: null, ...readyForReviewEmail({ name: person.name, author: author?.name ?? "", businessName: item.businessName, title: item.task.title, origin }) })));
+  } catch (error) {
+    return failed("Ready for review")(error);
+  }
+}
+
 /** The names of the people who asked for items, for the Work Plan and the room. */
 export async function namesOf(db: Db, ids: readonly (number | null)[]) {
   const wanted = Array.from(new Set(ids.filter((id): id is number => id !== null)));

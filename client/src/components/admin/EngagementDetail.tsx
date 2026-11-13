@@ -207,7 +207,7 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
                 <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />
                 <span className="min-w-0 flex-1">
                   <span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}</span>
-                  <span className="block text-xs text-ink-muted">{[group.name, item.kind === "data_request" ? METHOD.dataRequest : "Action", item.comments.length ? `${item.comments.length} ${item.comments.length === 1 ? "message" : "messages"}` : "", item.files.length ? `${item.files.length} ${item.files.length === 1 ? "file" : "files"}` : ""].filter(Boolean).join(" · ")}</span>
+                  <span className="block text-xs text-ink-muted">{[item.side === "ipf" && group.id === "checking" ? "Ready for review" : group.name, item.kind === "data_request" ? METHOD.dataRequest : "Action", item.comments.length ? `${item.comments.length} ${item.comments.length === 1 ? "message" : "messages"}` : "", item.files.length ? `${item.files.length} ${item.files.length === 1 ? "file" : "files"}` : ""].filter(Boolean).join(" · ")}</span>
                 </span>
                 <span title={who} className={`hidden h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium text-white sm:inline-flex ${avatarColour(who)}`}><span aria-hidden>{initials(who)}</span><span className="sr-only">{who}</span></span>
                 <span className={`hidden w-32 shrink-0 whitespace-nowrap text-right sm:block ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? ""}</span>
@@ -222,7 +222,8 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
             <p className="text-xs text-ink-muted">{task.statusLabel}</p>
             <button type="button" onClick={() => setSelected(null)} className="text-xs text-brand underline underline-offset-2">Close</button>
           </div>
-          <TaskCard key={task.id} task={task} data={data} engagementId={engagementId} />
+          {/* The lead changes an item; below the lead, a person reads it and works on it: files, messages, Ready for review (R86). */}
+          {data.can.manage && data.can.seeAllTasks ? <TaskCard key={task.id} task={task} data={data} engagementId={engagementId} /> : <OwnItem key={task.id} task={task} data={data} engagementId={engagementId} now={now} />}
         </aside>
       )}
     </div>
@@ -261,6 +262,25 @@ function FilesByItem({ data, engagementId }: { data: Detail; engagementId: numbe
           </section>
         ))}
       </div>
+    </div>
+  );
+}
+
+/** One of a person's own items, for someone below the lead (R86): what it is and when, its files, and its messages. */
+function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; engagementId: number; now: number }) {
+  const flag = dueFlag(task.dueOn, !OPEN_TASK_STATUSES.includes(task.status) && task.status !== "received", now);
+  return (
+    <div className="space-y-3">
+      <h3 className="font-sans text-lg font-semibold tracking-tight text-ink">{task.title}</h3>
+      <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
+        <dt className="text-ink-muted">For</dt><dd>{task.side === "client" ? data.businessName || "The client" : "IP Factory"}</dd>
+        <dt className="text-ink-muted">Due</dt><dd className={flag ? FLAG_TONE[flag.tone] : ""}>{flag?.text ?? "No date"}</dd>
+        {task.priority && <><dt className="text-ink-muted">Priority</dt><dd>{PRIORITY_WORDS[task.priority]}</dd></>}
+        <dt className="text-ink-muted">Status</dt><dd>{task.side === "ipf" && task.status === "received" ? "Ready for review" : task.statusLabel}</dd>
+      </dl>
+      {task.detail && <p className="whitespace-pre-line text-sm text-ink-600">{task.detail}</p>}
+      <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && (task.canHandIn || task.requestedByUserId === data.viewerUserId)} canManage={false} briefFor={task.requestedByUserId === data.viewerUserId} />
+      <ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} />
     </div>
   );
 }
@@ -794,7 +814,7 @@ function Tasks({ data, engagementId }: { data: Detail; engagementId: number }) {
   const inWeek = (week: number | null) => data.tasks.filter(task => weekOf(task) === week).sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
   return (
     <DetailSection title="Work Plan">
-      <p className="text-xs text-ink-muted">Data Requests from the client and actions on both sides, by week and in order: the plan the Discovery Call shaped. The client sees their side and ours; contributors see only what is given to them.</p>
+      <p className="text-xs text-ink-muted">Data Requests from the client and actions on both sides, by week: the plan the Discovery Call shaped. The client sees their own items, and one line a week for ours. {data.can.seeAllTasks ? "You lead: you see every item." : "You see your own items."}</p>
       {DATED_TYPES[data.engagement.type] && data.can.manage && <PlanUpdate engagementId={engagementId} />}
       {data.ask.allowed && (asking
         ? <AskClient data={data} engagementId={engagementId} onDone={() => setAsking(false)} />
@@ -873,8 +893,9 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
       <label className={LABEL} htmlFor={`task-note-${id}`}>Note (the client sees it)</label>
       <input id={`task-note-${id}`} className={FIELD} disabled={!canManage} placeholder={status === "needs_more" ? "Say what else you need" : ""} value={note} onChange={event => setNote(event.target.value)} />
       {task?.responseLink && <p className="text-xs text-ink-600">The client sent a link: <a href={task.responseLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand underline underline-offset-2">Open the link</a> <span className="text-ink-muted">({(() => { try { return new URL(task.responseLink).hostname.replace(/^www\./, ""); } catch { return "link"; } })()})</span></p>}
-      {task && <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && (canManage || task.requestedByUserId === data.viewerUserId)} canManage={canManage} briefFor={!canManage && task.requestedByUserId === data.viewerUserId} />}
-      {task && <ItemConversation task={task} engagementId={engagementId} />}
+      {/* The person a team item is for attaches what they hand in (R86), for IP Factory only until the lead shares it. */}
+      {task && <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && (canManage || task.requestedByUserId === data.viewerUserId || task.canHandIn)} canManage={canManage} briefFor={!canManage && task.requestedByUserId === data.viewerUserId} />}
+      {task && <ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} />}
       {canManage && (
         <div className="flex gap-2">
           <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !title.trim()} onClick={() => save.mutate({

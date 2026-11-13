@@ -303,8 +303,8 @@ for (const target of targets) {
         const detail = await (await s.lead.browser.call()).engagement.staff.detail({ engagementId: s.engagementId });
         expect(detail.tasks.find(task => task.id === taskId)!.comments.map(comment => [comment.body, comment.fromClient])).toEqual([["Is landscape fine?", true], ["Upright, please.", false]]);
 
-        // Another Specialist cannot answer on it; the Content Producer answers on the plan's footage, which has its clock.
-        await expect((await s.marketer.browser.call()).engagement.staff.taskComment({ taskId, body: "Hello" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        // Another Specialist does not even see it (R86); the Content Producer answers on the plan's footage, which has its clock.
+        await expect((await s.marketer.browser.call()).engagement.staff.taskComment({ taskId, body: "Hello" })).rejects.toMatchObject({ code: "NOT_FOUND" });
         const footage = detail.tasks.find(task => task.title === "Send week 1 footage")!;
         expect(footage).toMatchObject({ turnaround: "first_edit", goesTo: { userId: s.producer.id } });
         await (await s.producer.browser.call()).engagement.staff.taskComment({ taskId: footage.id, body: "Film the kitchen this week." });
@@ -316,8 +316,55 @@ for (const target of targets) {
         // Another business never reaches the item; the team's own items have no conversation.
         const other = await client("talk-other");
         await expect((await other.owner.call()).engagement.client.taskComment({ taskId, body: "Hi" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        // The team's own items have their conversation inside IP Factory (R86): the client never sees it.
         const teamItem = detail.tasks.find(task => task.side === "ipf")!;
-        await expect((await s.lead.browser.call()).engagement.staff.taskComment({ taskId: teamItem.id, body: "Internal" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await (await s.lead.browser.call()).engagement.staff.taskComment({ taskId: teamItem.id, body: "Internal" });
+        const clientView = (await (await s.owner.call()).engagement.client.room())!;
+        expect(JSON.stringify(clientView)).not.toContain("Internal");
+      });
+
+      it("shows each person below the lead their own tasks only, lets them hand theirs in with files and messages, and tags reach colleagues (R86)", async () => {
+        const s = await studio("own");
+        const lead = await s.lead.browser.call();
+        const desk = await superAdmin.call();
+        // The lead gives Mira a team item; Kemi asks the client for footage.
+        const { taskId: plan } = await desk.engagement.staff.saveTask({ engagementId: s.engagementId, kind: "action", title: "Content plan for week 3", detail: null, side: "ipf", assigneeUserId: s.marketer.id, dueOn: addDays(s.today, 3), status: "open", statusNote: null, sessionId: null, weekNumber: 3, sortOrder: 9, factor: null, section: null, ref: null, informs: null, format: null, priority: "high" });
+        const { taskId: footage } = await (await s.producer.browser.call()).engagement.staff.askClient({ engagementId: s.engagementId, title: "A video of the new menu", brief: null, dueOn: requestDueOn(s.today), turnaround: "first_edit" });
+        const titles = async (who: { call: () => Promise<{ engagement: { staff: { detail: (input: { engagementId: number }) => Promise<{ tasks: { title: string }[]; can: { seeAllTasks: boolean } }> } } }> }) => (await (await who.call()).engagement.staff.detail({ engagementId: s.engagementId }));
+        const mira = await titles(s.marketer.browser);
+        expect(mira.can.seeAllTasks).toBe(false);
+        expect(mira.tasks.map(task => task.title)).toContain("Content plan for week 3");
+        expect(mira.tasks.map(task => task.title)).not.toContain("A video of the new menu");
+        const kemi = await titles(s.producer.browser);
+        expect(kemi.tasks.map(task => task.title)).toContain("A video of the new menu");
+        expect(kemi.tasks.map(task => task.title)).not.toContain("Content plan for week 3");
+        // The lead sees every task.
+        const all = await titles(s.lead.browser);
+        expect(all.can.seeAllTasks).toBe(true);
+        expect(all.tasks.map(task => task.title)).toEqual(expect.arrayContaining(["Content plan for week 3", "A video of the new menu"]));
+        // Mira cannot open Kemi's item, nor change it.
+        await expect((await s.marketer.browser.call()).engagement.staff.taskComment({ taskId: footage, body: "Hi" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+        // Mira writes on her item and tags Kemi: Kemi is emailed, sees it on Today, and may open it.
+        mocked.deliverEmail.mockClear();
+        const sent = await (await s.marketer.browser.call()).engagement.staff.taskComment({ taskId: plan, body: "Draft ready, @Kemi please add the footage slots" });
+        expect(sent.mentioned).toBe(1);
+        expect(emails().find(mail => mail.to === s.producer.email)!.subject).toBe("Mira mentioned you on Content plan for week 3");
+        const today = (await (await s.producer.browser.call()).engagement.staff.today()).filter(item => item.engagementId === s.engagementId);
+        expect(today.find(item => item.kind === "mention")).toMatchObject({ title: "Content plan for week 3", detail: expect.stringContaining("@Kemi") });
+        await (await s.producer.browser.call()).engagement.staff.taskComment({ taskId: plan, body: "Done." });
+        expect((await (await s.producer.browser.call()).engagement.staff.today()).some(item => item.kind === "mention" && item.engagementId === s.engagementId)).toBe(false);
+
+        // She hands it in: the lead is emailed and sees it to review; she cannot hand in what is not hers.
+        await expect((await s.producer.browser.call()).engagement.staff.handIn({ taskId: plan })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        mocked.deliverEmail.mockClear();
+        await (await s.marketer.browser.call()).engagement.staff.handIn({ taskId: plan });
+        expect(emails().map(mail => [mail.to, mail.subject])).toContainEqual([s.lead.email, `Ready for review: Content plan for week 3, Studio own`]);
+        expect((await lead.engagement.staff.today()).find(item => item.kind === "review" && item.engagementId === s.engagementId)).toMatchObject({ title: "Content plan for week 3" });
+        await expect((await s.marketer.browser.call()).engagement.staff.handIn({ taskId: plan })).rejects.toMatchObject({ code: "CONFLICT" });
+        // The client sees their own items, and nothing of the team's conversation.
+        const room = (await (await s.owner.call()).engagement.client.room())!;
+        expect(JSON.stringify(room)).not.toContain("Draft ready");
       });
 
       it("starts the First edit's clock when the footage arrives, tells the person it goes to, stops it when the team asks for more, and shares it once", async () => {
@@ -1283,7 +1330,7 @@ for (const target of targets) {
         expect((await (await analyst.call()).engagement.staff.list()).items.map(item => item.id)).toEqual([engagementId]);
         const detail = await (await analyst.call()).engagement.staff.detail({ engagementId });
         expect(detail.team).toEqual([expect.objectContaining({ name: "Ola Analyst", role: "analyst", roleLabel: "Analyst" })]);
-        expect(detail.can).toEqual({ manage: true, assign: false, review: false, sendSignIn: false, contribute: true, seeInternal: true, seeFees: true, previewAsClient: true });
+        expect(detail.can).toEqual({ manage: true, assign: false, review: false, sendSignIn: false, contribute: true, seeInternal: true, seeFees: true, previewAsClient: true, seeAllTasks: false });
       });
 
       it("lets only people with assign_engagements change the team, and only to IP Factory staff", async () => {

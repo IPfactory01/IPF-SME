@@ -13,7 +13,7 @@ const sessionTime = (date: Date) => new Intl.DateTimeFormat("en-GB", { timeZone:
  * holding that week's items and its booked Sessions. This week first and open, next week open, later weeks folded to
  * one line, past weeks folded to what is done unless something is still outstanding. The caller draws each item.
  */
-export default function WeekCards<T extends Dated>({ startedOn, items, sessions, isDone, isWaiting, waitingLabel, renderItem, now = Date.now() }: {
+export default function WeekCards<T extends Dated>({ startedOn, items, sessions, isDone, isWaiting, waitingLabel, renderItem, note, noteWeeks = [], now = Date.now() }: {
   startedOn: string | null;
   items: T[];
   sessions: WeekSession[];
@@ -22,6 +22,10 @@ export default function WeekCards<T extends Dated>({ startedOn, items, sessions,
   isWaiting: (item: T) => boolean;
   waitingLabel: string;
   renderItem: (item: T) => React.ReactNode;
+  /** One line under a week's title, such as the client's view of IP Factory's work that week (R86). */
+  note?: (week: number | null) => string | null;
+  /** Weeks that have a card for their note alone (IP Factory working while nothing waits on the client). */
+  noteWeeks?: (number | null)[];
   now?: number;
 }) {
   const today = lagosDay(new Date(now));
@@ -31,7 +35,7 @@ export default function WeekCards<T extends Dated>({ startedOn, items, sessions,
   const booked = sessions.filter(session => session.scheduledFor && session.status !== "cancelled");
   const weekOfSession = (session: WeekSession) => session.weekNumber ?? weekOfDay(startedOn, lagosDay(new Date(session.scheduledFor!)));
   const shown = onlyWaiting ? items.filter(isWaiting) : items;
-  const weeks = Array.from(new Set([...shown.map(weekOfItem), ...(onlyWaiting ? [] : booked.map(weekOfSession))])).sort((a, b) => (a ?? 999) - (b ?? 999));
+  const weeks = Array.from(new Set([...shown.map(weekOfItem), ...(onlyWaiting ? [] : [...booked.map(weekOfSession), ...noteWeeks])])).sort((a, b) => (a ?? 999) - (b ?? 999));
   const waiting = items.filter(isWaiting).length;
   // This week leads; the rest follow in order.
   const ordered = [...weeks.filter(week => weekPlace(startedOn, week, today) === "now"), ...weeks.filter(week => weekPlace(startedOn, week, today) !== "now")];
@@ -63,7 +67,8 @@ export default function WeekCards<T extends Dated>({ startedOn, items, sessions,
                   {startedOn && week !== null && <span className="text-xs text-ink-muted">{weekLabel(startedOn, week)}</span>}
                   {place === "now" && <span className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold text-white">This week</span>}
                 </span>
-                <span className="block text-xs text-ink-muted">{summary || "Nothing this week"}</span>
+                <span className="block text-xs text-ink-muted">{summary || (note?.(week) ? "" : "Nothing this week")}</span>
+                {note?.(week) && <span className="block text-xs text-brand">{note(week)}</span>}
               </span>
               <ChevronDown aria-hidden className={`h-4 w-4 shrink-0 text-ink-muted transition-transform ${open ? "rotate-180" : ""}`} />
             </button>

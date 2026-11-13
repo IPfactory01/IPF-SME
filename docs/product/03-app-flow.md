@@ -378,6 +378,9 @@ info@ipfactory.co.
 | Items still open three days after their date, once the client was reminded (R16) | The engagement's lead, else the office | *Outstanding after reminders: {business}*: each item, its date and how many days late | Built (11 November 2026) |
 | A First edit or First draft due within a day, or past its time (R78) | The person it goes to (the person who asked, else the Content Producer for footage); once past its time, the lead too | *{First edit} due within a day: {item}*; *{First edit} past its time: {item}, {business}* | Built (11 November 2026) |
 | A booked Session tomorrow, or later today (R59), in the morning run | Everyone on the engagement who still has access, and the client (the owner, else the engagement's contact or the check) | *Tomorrow: {Session} at {time}*; *Today: {Session} at {time}*: the time in Lagos, how long, the Join link (or that it will be in the room), the room; to the client, a WhatsApp link to their main contact where one has agreed to show a number. Once per Session and time: a moved Session is reminded again. An hour before, the calendar invitation's own alert (every Session invitation carries one) | Built (12 November 2026) |
+| A message on a team item (R86) | The person the item is for, never the writer | *{first name} wrote on your item: {item}* | Built (13 November 2026) |
+| Tagged with @ in an item's messages (R86) | The person tagged | *{first name} mentioned you on {item}* | Built (13 November 2026) |
+| A team item handed in (R86) | The engagement's Engagement Manager and Lead Consultant, else the office | *Ready for review: {item}, {business}* | Built (13 November 2026) |
 | A prospect's follow-up on day 2 and day 7; the desk's follow-up alerts | — | To write | To build (R48, R64) |
 | Buy-now order paid | Owner; office | Receipt and invitation; *New order: {product}, {business}* | To build (R13) |
 | Engagement closed; Day-30 Review | Owner | *Your {engagement} is complete*; *Day-30 Review: is it still working?* | To build (R26, R27) |
@@ -476,7 +479,9 @@ Paystack's signed notifications arrive at `POST /api/paystack/webhook`.
 the left rail holds Home, My tasks, Your projects and, for whoever's role has them, **The desk**: Pipeline, Clients,
 Finance and Team. Each place below keeps its screens and its permission; it opens inside the frame. Every engagement
 opens as its workspace (R82); its Work Plan is the room's weekly cards (R85), as the client sees them, with each week's Sessions; each item
-opens beside them with its form, its files and its conversation. **Files** shows every file as cards, one per item it
+opens beside them with its form, its files and its conversation. Below the lead, the cards hold the person's own tasks only (R86); the lead upwards sees every task. A
+team item's panel: its form (the lead changes it), **Attach a file**, messages inside IP Factory (**Send**, **Send a
+link**, **@** to tag a colleague), and **Ready for review** for the person it is for. **Files** shows every file as cards, one per item it
 belongs to (its reference, title and status, then each file with who sent it and when), Deliverables' files in theirs,
 and the drop box's unmatched files in a card of their own (**To match**) at the top.
 

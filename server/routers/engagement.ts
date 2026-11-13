@@ -81,6 +81,7 @@ import {
   startAwaitingEngagement,
   addMissingPlan,
   askClient,
+  handInTask,
   todayFor,
   bookMeeting,
   staffTaskComment,
@@ -259,6 +260,8 @@ const staffRouter = router({
   /** Write in a client item's conversation (R78): manage_engagements, or the Specialist the item goes to. */
   taskComment: staff.input(z.object({ taskId: id, body: text(TASK_COMMENT_MAX).min(1, "Write your message first.") })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.engagementComment, `staff:${ctx.actor.id}`); return guarded(async () => staffTaskComment(await engagementDb(), ctx.actor, input)); }),
   /** The First edit or draft is shared (R78): as for the conversation, once it has arrived, once. */
+  /** Ready for review (R86): the owner of a team item hands it in; the lead is emailed. */
+  handIn: staff.input(z.object({ taskId: id })).mutation(async ({ ctx, input }) => guarded(async () => handInTask(await engagementDb(), ctx.actor, input))),
   followUpShared: staff.input(z.object({ taskId: id })).mutation(async ({ ctx, input }) => guarded(async () => followUpShared(await engagementDb(), ctx.actor, input))),
   /** Adds what the type's current plan has and this engagement lacks, dated from its kickoff (R77). Nothing already there changes. */
   addMissingPlan: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => addMissingPlan(await engagementDb(), ctx.actor, input))),

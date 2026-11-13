@@ -134,13 +134,79 @@ function Clock({ task, now, onShare, sharing }: { task: Task; now: number; onSha
  * On each of the client's items (R78): who asked and whom it goes to, its clock, and its conversation with the client,
  * where the person it goes to, or anyone who works on the engagement, writes back. The client is emailed each message.
  */
-export function ItemConversation({ task, engagementId, now = Date.now() }: { task: Task; engagementId: number; now?: number }) {
+/**
+ * A message box that offers the engagement's people when "@" is typed (R86): picking one writes "@Full Name", which
+ * the server reads to email them and put the item on their Today.
+ */
+export function MentionBox({ id, value, onChange, people, placeholder, label }: { id: string; value: string; onChange: (text: string) => void; people: { name: string }[]; placeholder: string; label: string }) {
+  const typed = /(^|\s)@([^\s@]*)$/.exec(value);
+  const query = typed ? typed[2]!.toLowerCase() : null;
+  // A name is offered from the start of any of its words: "@le" offers Lewis, not Miracle.
+  const offered = query === null ? [] : people.filter(person => person.name && person.name.toLowerCase().split(/\s+/).some(word => word.startsWith(query))).slice(0, 6);
+  return (
+    <div className="space-y-1">
+      <label className="sr-only" htmlFor={id}>{label}</label>
+      <textarea id={id} className={FIELD} rows={2} maxLength={TASK_COMMENT_MAX} placeholder={placeholder} value={value} onChange={event => onChange(event.target.value)} />
+      {offered.length > 0 && (
+        <ul aria-label="Tag someone" className="flex flex-wrap gap-1">
+          {offered.map(person => <li key={person.name}><button type="button" className="rounded-full border border-line-soft bg-white px-2 py-0.5 text-xs text-ink" onClick={() => onChange(`${value.replace(/@[^\s@]*$/, "")}@${person.name} `)}>@{person.name}</button></li>)}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A team item's own panel (R86): its messages inside IP Factory (tag a colleague with @), a link, and Ready for review
+ * for the person it is for. Files are attached above it, in the item's form.
+ */
+function TeamItemConversation({ task, engagementId, people }: { task: Task; engagementId: number; people: { name: string }[] }) {
+  const refresh = useRefresh(engagementId);
+  const [body, setBody] = useState("");
+  const [link, setLink] = useState<string | null>(null);
+  const write = trpc.engagement.staff.taskComment.useMutation({ onSuccess: result => { setBody(""); setLink(null); refresh(); toast.success(result.mentioned ? `Sent. ${result.mentioned === 1 ? "The person you tagged is" : "The people you tagged are"} emailed.` : "Sent."); }, onError: error => toast.error(error.message) });
+  const handIn = trpc.engagement.staff.handIn.useMutation({ onSuccess: () => { refresh(); toast.success("Handed in. The lead is emailed to review it."); }, onError: error => toast.error(error.message) });
+  const validLink = link !== null && /^https:\/\/\S+$/i.test(link.trim());
+  return (
+    <div className="space-y-2 border-t border-line-soft pt-2">
+      <p className="text-xs font-semibold text-ink">Messages ({task.comments.length}) <span className="font-normal text-ink-muted">· inside IP Factory; the client never sees them</span></p>
+      <ul className="space-y-1.5">
+        {task.comments.map(comment => (
+          <li key={comment.id} className="border-l-2 border-line pl-2 text-sm">
+            <p className="text-xs text-ink-muted">{comment.authorName || "IP Factory"} · {formatDateTime(comment.createdAt)}</p>
+            <p className="whitespace-pre-line break-words text-ink">{comment.body}</p>
+          </li>
+        ))}
+      </ul>
+      {task.canAnswer && (
+        <>
+          <MentionBox id={`note-${task.id}`} value={body} onChange={setBody} people={people} label={`Write on ${task.title}`} placeholder="Write a note. Type @ to tag a colleague." />
+          {link !== null && (
+            <div className="space-y-1">
+              <label className={LABEL} htmlFor={`link-${task.id}`}>Link to the work</label>
+              <input id={`link-${task.id}`} className={FIELD} placeholder="https://…" value={link} onChange={event => setLink(event.target.value)} />
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={write.isPending || (!body.trim() && !validLink)}
+              onClick={() => write.mutate({ taskId: task.id, body: [validLink ? `Link: ${link!.trim()}` : "", body.trim()].filter(Boolean).join("\n") })}>{write.isPending ? "Sending…" : "Send"}</Button>
+            {link === null && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setLink("")}>Send a link</Button>}
+            {task.canHandIn && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={handIn.isPending} onClick={() => handIn.mutate({ taskId: task.id })}>{handIn.isPending ? "Handing in…" : "Ready for review"}</Button>}
+          </div>
+        </>
+      )}
+      {task.side === "ipf" && task.status === "received" && <p className="text-xs text-brand">Handed in: waiting for the lead to review it.</p>}
+    </div>
+  );
+}
+
+export function ItemConversation({ task, engagementId, people = [], now = Date.now() }: { task: Task; engagementId: number; people?: { name: string }[]; now?: number }) {
   const refresh = useRefresh(engagementId);
   const [open, setOpen] = useState(task.comments.length > 0 && task.comments[task.comments.length - 1]!.fromClient);
   const [body, setBody] = useState("");
   const write = trpc.engagement.staff.taskComment.useMutation({ onSuccess: result => { setBody(""); refresh(); toast.success(result.emailed ? "Sent. The client is emailed." : "Saved."); }, onError: error => toast.error(error.message) });
   const share = trpc.engagement.staff.followUpShared.useMutation({ onSuccess: result => { refresh(); toast.success(result.emailed ? "Shared. The client is emailed that it is ready for their approval." : "Recorded as shared."); }, onError: error => toast.error(error.message) });
-  if (task.side !== "client") return null;
+  if (task.side !== "client") return <TeamItemConversation task={task} engagementId={engagementId} people={people} />;
   const goesTo = task.goesTo?.name ? firstNameOf(task.goesTo.name) : null;
   return (
     <div className="space-y-2 border-t border-line-soft pt-2">
@@ -165,8 +231,7 @@ export function ItemConversation({ task, engagementId, now = Date.now() }: { tas
           </ul>
           {task.canAnswer ? (
             <div className="space-y-1">
-              <label className="sr-only" htmlFor={`reply-${task.id}`}>Write to the client about {task.title}</label>
-              <textarea id={`reply-${task.id}`} className={FIELD} rows={2} maxLength={TASK_COMMENT_MAX} placeholder="Write to the client. They are emailed." value={body} onChange={event => setBody(event.target.value)} />
+              <MentionBox id={`reply-${task.id}`} value={body} onChange={setBody} people={people} label={`Write to the client about ${task.title}`} placeholder="Write to the client. They are emailed. Type @ to tag a colleague." />
               <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={write.isPending || !body.trim()} onClick={() => write.mutate({ taskId: task.id, body })}>{write.isPending ? "Sending…" : "Send"}</Button>
             </div>
           ) : <p className="text-xs text-ink-muted">{goesTo ? `${goesTo} or the lead answers here.` : "The lead answers here."}</p>}

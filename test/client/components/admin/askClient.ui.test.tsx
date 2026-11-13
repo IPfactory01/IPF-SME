@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { lagosDay } from "@shared/agreement";
 import { earliestRequestDue, requestDueOn } from "@shared/requests";
@@ -15,7 +15,7 @@ const mutation = (name: string, reply: unknown = { success: true }) => (options?
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, list: { invalidate: () => undefined } } } }),
+    useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, list: { invalidate: () => undefined }, today: { invalidate: () => undefined } } } }),
     engagement: {
       staff: {
         askClient: { useMutation: mutation("askClient", { taskId: 70, emailed: 1 }) },
@@ -23,6 +23,7 @@ vi.mock("@/lib/trpc", () => ({
         confirmUpload: { useMutation: mutation("confirmUpload") },
         taskComment: { useMutation: mutation("taskComment", { success: true, emailed: 1 }) },
         followUpShared: { useMutation: mutation("followUpShared", { success: true, late: false, emailed: 1 }) },
+        handIn: { useMutation: mutation("handIn", { success: true, emailed: 1 }) },
       },
     },
   },
@@ -110,14 +111,28 @@ describe("an item's conversation and clock on the team's side", () => {
     expect(api.calls.taskComment).toEqual([{ taskId: 70, body: "Upright, please." }]);
   });
 
-  it("gives someone the item does not go to no reply box and no button, and nothing on the team's own items", () => {
+  it("gives someone the item does not go to no reply box and no button", () => {
     const { unmount } = render(<ItemConversation task={task({ canAnswer: false, receivedAt: new Date(now), followUpDueAt: new Date(now + 3_600_000) })} engagementId={4} now={now} />);
     fireEvent.click(screen.getByRole("button", { name: "Conversation with the client (0)" }));
     expect(screen.queryByRole("textbox")).toBeNull();
     expect(screen.queryByRole("button", { name: "First edit shared" })).toBeNull();
     expect(screen.getByText("Kemi or the lead answers here.")).toBeTruthy();
     unmount();
-    const { container } = render(<ItemConversation task={task({ side: "ipf" } as Partial<Task>)} engagementId={4} now={now} />);
-    expect(container.textContent).toBe("");
+  });
+
+  it("gives a team item its own messages inside IP Factory, a link, @ to tag a colleague, and Ready for review for its owner (R86)", () => {
+    const people = [{ name: "Miracle Marketer" }, { name: "Lola Lead" }];
+    render(<ItemConversation task={task({ side: "ipf", canAnswer: true, canHandIn: true, comments: [] } as Partial<Task>)} engagementId={4} people={people} now={now} />);
+    expect(screen.getByText(/the client never sees them/)).toBeTruthy();
+    const box = screen.getByRole("textbox", { name: /^Write on/ });
+    fireEvent.change(box, { target: { value: "Plan attached @lo" } });
+    fireEvent.click(within(screen.getByRole("list", { name: "Tag someone" })).getByRole("button", { name: "@Lola Lead" }));
+    expect((box as HTMLTextAreaElement).value).toBe("Plan attached @Lola Lead ");
+    fireEvent.click(screen.getByRole("button", { name: "Send a link" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Link to the work" }), { target: { value: "https://docs.example.test/plan" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(api.calls.taskComment.at(-1)).toEqual({ taskId: 70, body: "Link: https://docs.example.test/plan\nPlan attached @Lola Lead" });
+    fireEvent.click(screen.getByRole("button", { name: "Ready for review" }));
+    expect(api.calls.handIn).toEqual([{ taskId: 70 }]);
   });
 });

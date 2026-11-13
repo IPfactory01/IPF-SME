@@ -475,8 +475,10 @@ Paystack's signed notifications arrive at `POST /api/paystack/webhook`.
 **Retired as its own screen (R83, 13 November 2026).** Everyone at `/admin` works in the client's room's frame (8.2):
 the left rail holds Home, My tasks, Your projects and, for whoever's role has them, **The desk**: Pipeline, Clients,
 Finance and Team. Each place below keeps its screens and its permission; it opens inside the frame. Every engagement
-opens as its workspace (R82); its Work Plan is the room's table (With the client, With IP Factory, Sent to check, Done;
-Task, Who, Due, Priority, Type), each row opening beside it with its form and its conversation.
+opens as its workspace (R82); its Work Plan is the room's weekly cards (R85), as the client sees them, with each week's Sessions; each item
+opens beside them with its form, its files and its conversation. **Files** shows every file as cards, one per item it
+belongs to (its reference, title and status, then each file with who sent it and when), Deliverables' files in theirs,
+and the drop box's unmatched files in a card of their own (**To match**) at the top.
 
 
 Five tabs, one job each, in the order work flows. A person sees only the tabs their permissions allow, and the server
@@ -538,8 +540,8 @@ the team) and the views as tabs.
 |---|---|---|
 | **Overview** | Getting started (until the first Session is held), the stage band, four figures, the next action, the next meeting, the timeline, Waiting on you, the team, What we will do, Your projects, Fix the next problem | Everyone in the room; the fees in What we will do, owner and full access |
 | **Content** (Digital marketing) | The month's pieces against the programme; approve or ask for changes | Owner and full access |
-| **Work Plan** | Every request and action by week, with who and when; on each of the client's, who asked, the brief, its conversation (**Write to {first name}**) and when the First edit follows (R78) | Everyone; contributors their own |
-| **Data Request** | The checklist by section, each item with its conversation (R78), the drop box, documents received | Everyone; contributors their own |
+| **Work Plan** | **Weekly cards** (R85): one card per week of the engagement, dated (*Week 3 · 25 Nov to 1 Dec*), holding that week's items and its Sessions (time, Join link). This week's card comes first and open; next week's open; later weeks closed to one line (*Week 6 · 2 items · 1 Session*); past weeks closed to *5 of 5 done* unless something is still outstanding. **Waiting on you** is a switch at the top. Each item opens its panel beside the cards: who asked, the brief, **Upload a file**, **Send a link**, WhatsApp, its conversation (**Write to {first name}**) and when the First edit follows (R78). Every item is listed here once, Data Requests included || Everyone; contributors their own |
+| **Data Request** | The drop box, for many files at once in any order (the team matches them), and where the Data Requests stand (requested, received, outstanding, overdue). No second list: each item is answered in the Work Plan (R85) | Everyone; contributors their own |
 | **Sessions** | Every booked Session (R81: the plan's without a time are not shown, except a Business Review Session to book on Calendly) with its time, Join link, agenda, shared notes; booking on Calendly | Everyone |
 | **Business**, **Founder** | The Business Health Check or Full Report, area by area | Owner and full access |
 | **Deliverables** | Findings, the Problem Statement, the Prescription, tools, the plan, the Full Report; comments; Sign-off | By audience; Sign-off by the owner |

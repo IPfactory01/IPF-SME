@@ -525,7 +525,7 @@ describe("the team's workspace (R82)", () => {
     expect(page.getByText("You are the Content Producer")).toBeTruthy();
     expect(page.getByRole("img", { name: "Team: Kemi Producer, Lewis Lead" })).toBeTruthy();
     // The tabs, in order; no Fees for someone who does not see them.
-    expect(page.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Overview1", "Work Plan1", "Sessions", "Deliverables"]);
+    expect(page.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Overview1", "Work Plan1", "Files", "Sessions", "Deliverables"]);
     // What needs them here is this engagement's only; the next meeting has its Join link.
     const needs = within(page.getByRole("region", { name: /What needs you here/ }));
     expect(needs.getAllByRole("group").map(card => card.getAttribute("aria-label"))).toEqual(["Client wrote: Send week 3 footage"]);
@@ -542,7 +542,7 @@ describe("the team's workspace (R82)", () => {
     expect(window.location.hash).toBe("");
   });
 
-  it("shows the Work Plan as the client's room's table with a detail panel, and each Deliverable as a row that opens, in the workspace only", () => {
+  it("shows the Work Plan as the client's room's weekly cards with a detail panel, and each Deliverable as a row that opens, in the workspace only", () => {
     api.seesAll = false;
     api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };
     api.detail = { ...detail({ manage: true, assign: false, review: true }, [deliverable({ status: "awaiting_approval" })], [task({ id: 51, title: "Your price list", dueOn: "2026-10-21", comments: [{ id: 1, taskId: 51, body: "Here", fromClient: true, authorName: "Ada Okafor", authorUserId: 3, createdAt: new Date() }] })]), team };
@@ -550,15 +550,16 @@ describe("the team's workspace (R82)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
     const page = within(screen.getByRole("region", { name: "Ada Foods workspace" }));
     fireEvent.click(page.getByRole("tab", { name: /^Work Plan/ }));
-    // The client's room's table: grouped by where each item stands, with who, when, priority and type.
-    const group = within(page.getByRole("region", { name: "With the client" }));
-    const line = group.getByRole("button", { name: "Open Your price list" }).closest("tr")!;
+    // The client's room's weekly cards (R85): each item with where it stands, who, when and priority.
+    for (const week of page.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    const line = page.getByRole("button", { name: "Open Your price list" });
+    expect(line.textContent).toContain("With the client");
     expect(line.textContent).toContain("Overdue by");
     expect(line.textContent).toContain("1 message");
     expect(within(line).getByText("Ada Foods", { selector: ".sr-only" })).toBeTruthy();
     expect(line.textContent).toContain("Data Request");
     expect(page.queryByRole("textbox", { name: "What" })).toBeNull();
-    fireEvent.click(group.getByRole("button", { name: "Open Your price list" }));
+    fireEvent.click(line);
     const details = within(page.getByRole("complementary", { name: "Task details" }));
     expect((details.getByRole("textbox", { name: "What" }) as HTMLInputElement).value).toBe("Your price list");
     fireEvent.click(details.getByRole("button", { name: "Close" }));
@@ -604,6 +605,25 @@ describe("the team's workspace (R82)", () => {
     expect(page.queryByRole("textbox", { name: "Fee 1" })).toBeNull();
   });
 
+  it("sorts the files into cards by the item they belong to, with the unmatched first (R85)", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };
+    const file = { id: 81, fileName: "sales.pdf", contentType: "application/pdf", sizeBytes: 2048, audience: "owner", uploadedByName: "Ada Okafor", createdAt: new Date() };
+    api.detail = { ...detail({ manage: true, assign: false, review: true }, [deliverable({ files: [{ ...file, id: 82, fileName: "cash-count.xlsx", uploadedByName: "Lola Lead" }] })], [task({ id: 51, title: "Your price list", ref: "C1", files: [file] }), task({ id: 52, title: "Logo, colours and fonts" })]), team,
+      inbox: [{ id: 90, fileName: "IMG_2041.jpg", contentType: "image/jpeg", sizeBytes: 9000, createdAt: new Date(), uploadedByName: "Ada Okafor", note: null, taskIds: [] }] };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    const page = within(screen.getByRole("region", { name: "Ada Foods workspace" }));
+    fireEvent.click(page.getByRole("tab", { name: /^Files/ }));
+    expect(page.getByRole("region", { name: "To match" }).textContent).toContain("IMG_2041.jpg");
+    const price = within(page.getByRole("region", { name: "Your price list" }));
+    expect(price.getByText("C1 · Data Request")).toBeTruthy();
+    expect(price.getByText("sales.pdf")).toBeTruthy();
+    expect(within(page.getByRole("region", { name: "Daily cash count" })).getByText("cash-count.xlsx")).toBeTruthy();
+    // An item with no files has no card.
+    expect(page.queryByRole("region", { name: "Logo, colours and fonts" })).toBeNull();
+  });
+
   it("gives a lead who sees fees the Fees tab and the count to approve", () => {
     api.seesAll = false;
     api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };
@@ -611,7 +631,7 @@ describe("the team's workspace (R82)", () => {
     render(<EngagementsView />);
     fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
     const page = within(screen.getByRole("region", { name: "Ada Foods workspace" }));
-    expect(page.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Overview", "Work Plan", "Sessions", "Deliverables1", "Fees"]);
+    expect(page.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Overview", "Work Plan", "Files", "Sessions", "Deliverables1", "Fees"]);
     expect(page.getByRole("tab", { name: /^Deliverables/ }).textContent).toBe("Deliverables1");
     expect(page.getByText("Nothing needs you on Ada Foods right now.")).toBeTruthy();
   });

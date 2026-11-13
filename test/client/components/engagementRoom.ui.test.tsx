@@ -339,6 +339,20 @@ describe("the first visit (R46) and What we will do (R47)", () => {
   });
 });
 
+/**
+ * Opens an item from the Work Plan's weekly cards (R85): unfolds every week, picks the item, and returns its panel,
+ * where the client uploads, sends a link, marks it not available and writes.
+ */
+function openItem(title: string) {
+  fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
+  for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) {
+    const header = within(week).getAllByRole("button")[0]!;
+    if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header);
+  }
+  fireEvent.click(screen.getByRole("button", { name: title }));
+  return within(screen.getByRole("complementary", { name: "Task details" }));
+}
+
 describe("files in the room", () => {
   const openData = () => fireEvent.click(screen.getByRole("tab", { name: /^Data Request/ }));
 
@@ -379,9 +393,7 @@ describe("files in the room", () => {
 
   it("answers an item with a link to a shared folder, and shows the link once sent (R43)", () => {
     render(<EngagementRoom room={room()} />);
-    openData();
-    const sales = within(screen.getByRole("listitem", { name: "Your last 12 months of sales" }));
-    fireEvent.click(sales.getByRole("button", { name: /Your last 12 months of sales/ }));
+    const sales = openItem("Your last 12 months of sales");
     fireEvent.click(sales.getByRole("button", { name: "Send a link" }));
     expect(sales.getByText(/Google Drive, Dropbox, WeTransfer or iCloud/)).toBeTruthy();
     fireEvent.change(sales.getByLabelText("Link to the folder for Your last 12 months of sales"), { target: { value: "https://drive.google.com/drive/folders/abc" } });
@@ -390,9 +402,7 @@ describe("files in the room", () => {
     cleanup();
     const base = room();
     render(<EngagementRoom room={room({ tasks: base.tasks.map(task => (task.id === 12 ? { ...task, status: "received" as const, responseLink: "https://www.dropbox.com/scl/fo/xyz" } : task)) })} />);
-    openData();
-    const prices = within(screen.getByRole("listitem", { name: "Your price list" }));
-    fireEvent.click(prices.getByRole("button", { name: /Your price list/ }));
+    const prices = openItem("Your price list");
     expect(prices.getByRole("link", { name: "dropbox.com" }).getAttribute("href")).toBe("https://www.dropbox.com/scl/fo/xyz");
   });
 
@@ -405,26 +415,22 @@ describe("files in the room", () => {
       { id: 44, fileName: "Sales 2025.xlsx", sizeBytes: 9_000, createdAt: new Date(), mine: true, note: null, matchedTo: [{ taskId: 11, ref: "B1", title: "Your last 12 months of sales" }] },
     ];
     render(<EngagementRoom room={room({ tasks, sentFiles })} />);
-    openData();
-    const sales = within(screen.getByRole("listitem", { name: "Your last 12 months of sales" }));
-    fireEvent.click(sales.getByRole("button", { name: /Your last 12 months of sales/ }));
+    const sales = openItem("Your last 12 months of sales");
     fireEvent.click(sales.getByRole("button", { name: "Remove" }));
     fireEvent.click(sales.getByRole("button", { name: "Remove it" }));
     expect(api.calls.removeFile).toEqual([{ fileId: 41 }]);
     // Accepted by the team: no Remove; asked on WhatsApp instead.
-    const staffList = within(screen.getByRole("listitem", { name: "Who works in the business" }));
-    fireEvent.click(staffList.getByRole("button", { name: /Who works in the business/ }));
+    const staffList = openItem("Who works in the business");
     expect(staffList.queryByRole("button", { name: "Remove" })).toBeNull();
     // In Documents received: the unmatched file can be taken back, the matched one cannot.
+    openData();
     const received = within(screen.getByRole("region", { name: /Documents received/ }));
     expect(received.getAllByRole("button", { name: "Remove" })).toHaveLength(1);
   });
 
   it("lets the client mark an item not available, with a note", () => {
     render(<EngagementRoom room={room()} />);
-    openData();
-    const sales = within(screen.getByRole("listitem", { name: "Your last 12 months of sales" }));
-    fireEvent.click(sales.getByRole("button", { name: /Your last 12 months of sales/ }));
+    const sales = openItem("Your last 12 months of sales");
     fireEvent.click(sales.getByRole("button", { name: "Not available" }));
     fireEvent.change(sales.getByLabelText("Note on Your last 12 months of sales"), { target: { value: "We kept no records before March" } });
     fireEvent.click(sales.getByRole("button", { name: "Confirm" }));
@@ -450,9 +456,8 @@ describe("files in the room", () => {
     const files = [{ id: 99, fileName: "sales.pdf", sizeBytes: 120_000, createdAt: new Date(), mine: true, fromTeam: false }, { id: 100, fileName: "cash-template.xlsx", sizeBytes: 9_000, createdAt: new Date(), mine: false, fromTeam: true }];
     const base = room();
     render(<EngagementRoom room={room({ tasks: [{ ...base.tasks[2], files }], deliverables: [] })} />);
-    openData();
-    fireEvent.click(screen.getByRole("button", { name: /Who works in the business/ }));
-    const list = within(screen.getAllByRole("list", { name: "Files" })[0]);
+    const panel = openItem("Who works in the business");
+    const list = within(panel.getAllByRole("list", { name: "Files" })[0]!);
     expect(list.getByText("sales.pdf")).toBeTruthy();
     expect(list.getByText(/117 KB · you/)).toBeTruthy();
     expect(list.getByText(/9 KB · from your team at IP Factory/)).toBeTruthy();
@@ -779,12 +784,11 @@ describe("the room on a laptop or desktop", () => {
 });
 
 describe("a Data Request's detail", () => {
-  it("shows numbered questions as a list, one per line, when the item is opened in the Data Request", () => {
+  it("shows numbered questions as a list, one per line, when the item is opened", () => {
     const six = "A few words each is enough. 1. What do you sell, and who buys it? 2. Which decisions wait for you? 3. What would you fix first?";
     const base = room();
     render(<EngagementRoom room={room({ tasks: [{ ...base.tasks[0], detail: six }], deliverables: [] })} />);
-    fireEvent.click(screen.getByRole("tab", { name: /^Data Request/ }));
-    fireEvent.click(screen.getByRole("button", { name: /Your last 12 months of sales/ }));
+    openItem("Your last 12 months of sales");
     const lists = screen.getAllByRole("list").filter(list => list.tagName === "OL" && !list.querySelector("ol") && list.textContent?.includes("Which decisions wait for you?"));
     expect(lists.length).toBeGreaterThan(0);
     expect(within(lists[0]).getAllByRole("listitem").map(item => item.textContent)).toEqual(["What do you sell, and who buys it?", "Which decisions wait for you?", "What would you fix first?"]);
@@ -818,16 +822,21 @@ describe("the Plan, Meetings and Data requests views", () => {
   const NOW = new Date("2026-10-13T10:00:00Z").getTime();
   const open = (name: RegExp | string) => fireEvent.click(screen.getByRole("tab", { name }));
 
-  it("groups every task by where it stands, with who owns it and a due flag, and opens one to act on it", () => {
+  it("cards the plan by week with each week's Sessions, flags who, when and what waits on the client, and opens one to act on it (R85)", () => {
     render(<EngagementRoom room={room()} now={NOW} />);
     open(/^Work Plan/);
-    const waiting = within(screen.getByRole("region", { name: "Waiting on you" }));
-    expect(waiting.getByText("Your last 12 months of sales")).toBeTruthy();
-    // Twice per row: in the Due column and in the line under the title that phones show instead.
-    expect(waiting.getAllByText("Due in 1 day")).toHaveLength(4);
-    expect(within(screen.getByRole("region", { name: "With IP Factory" })).getByText("Send the cash template")).toBeTruthy();
-    expect(within(screen.getByRole("region", { name: "Done" })).getByText("Who works in the business")).toBeTruthy();
-    fireEvent.click(waiting.getByRole("button", { name: /Your price list/ }));
+    const weeks = screen.getAllByRole("region", { name: /^(Week \d+|No week)$/ });
+    expect(weeks.length).toBeGreaterThan(0);
+    const all = weeks.map(week => week.textContent ?? "").join(" ");
+    expect(all).toContain("Your last 12 months of sales");
+    expect(all).toContain("Due in 1 day");
+    // Waiting on you narrows the cards to the client's open items.
+    fireEvent.click(screen.getByRole("switch", { name: /Waiting on you/ }));
+    const waiting = screen.getAllByRole("region", { name: /^(Week \d+|No week)$/ }).map(week => week.textContent ?? "").join(" ");
+    expect(waiting).toContain("Your price list");
+    expect(waiting).not.toContain("Send the cash template");
+    expect(waiting).not.toContain("Who works in the business");
+    fireEvent.click(screen.getByRole("button", { name: "Your price list" }));
     const panel = within(screen.getByRole("complementary", { name: "Task details" }));
     expect(panel.getByRole("heading", { name: "Your price list" })).toBeTruthy();
     expect(panel.getByText("We need a bit more: the delivery prices too")).toBeTruthy();
@@ -847,7 +856,8 @@ describe("the Plan, Meetings and Data requests views", () => {
     const tasks = [{ ...base.tasks[0], assigneeName: "Marcelle Tiogo", priority: "high" as const }, { ...base.tasks[1], priority: "medium" as const }, base.tasks[3]];
     render(<EngagementRoom room={room({ tasks })} now={NOW} />);
     open(/^Work Plan/);
-    const row = (title: string) => screen.getAllByText(title).map(item => item.closest("tr")).find(Boolean)!;
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    const row = (title: string) => screen.getByRole("button", { name: title });
     expect(within(row("Your last 12 months of sales")).getByTitle("Marcelle Tiogo").textContent).toContain("MT");
     expect(within(row("Your price list")).getByTitle("Ada Foods").textContent).toContain("AF");
     expect(within(row("Send the cash template")).getByTitle("IP Factory").textContent).toBe("IPFIP Factory");
@@ -866,17 +876,42 @@ describe("the Plan, Meetings and Data requests views", () => {
     expect(within(meetings[1]).getByRole("link", { name: "Join the Session" }).getAttribute("href")).toBe("https://zoom.example.test/j/1");
   });
 
-  it("shows the Data Request as a list, with requested, received, outstanding and overdue above it", () => {
+  it("shows where the Data Requests stand and the drop box, with no second list: each item is answered in the Work Plan (R85)", () => {
     render(<EngagementRoom room={room()} now={NOW} />);
     open("Data Request");
     const summary = screen.getByRole("group", { name: "Where your Data Requests stand" });
     expect(summary.textContent).toContain("Requested3");
     expect(summary.textContent).toContain("Outstanding2");
-    // The open items come first; the received one last.
-    const rows = within(screen.getByRole("region", { name: "Data Request" })).getAllByRole("listitem").map(item => item.getAttribute("aria-label"));
-    expect(rows).toEqual(["Your last 12 months of sales", "Your price list", "Who works in the business"]);
-    expect(screen.getByRole("listitem", { name: "Your price list" }).textContent).toContain("We need a bit more");
+    expect(screen.queryByRole("listitem", { name: "Your price list" })).toBeNull();
+    expect(screen.getByRole("link", { name: "Work Plan" }).getAttribute("href")).toBe("#plan");
   });
+
+  it("puts each week's Sessions in its card, with Join before and Held after (R85)", () => {
+    const base = room();
+    const s0 = base.sessions[0]!;
+    const sessions = [{ ...s0, id: 1, title: "Kick-off", scheduledFor: new Date("2026-10-07T14:00:00Z"), status: "held" as const, weekNumber: 1 }, { ...s0, id: 2, title: "Weekly Check-in", scheduledFor: new Date("2026-10-14T15:00:00Z"), status: "planned" as const, weekNumber: 2, meetingLink: "https://zoom.example.test/j/2" }];
+    render(<EngagementRoom room={room({ startedOn: "2026-10-06", sessions })} now={NOW} />);
+    open(/^Work Plan/);
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    const first = within(screen.getByRole("list", { name: "Week 1 Sessions" }));
+    expect(first.getByText("Kick-off")).toBeTruthy();
+    expect(first.getByText("Held")).toBeTruthy();
+    expect(first.queryByRole("link", { name: "Join" })).toBeNull();
+    const second = within(screen.getByRole("list", { name: "Week 2 Sessions" }));
+    expect(second.getByRole("link", { name: "Join" }).getAttribute("href")).toBe("https://zoom.example.test/j/2");
+    expect(screen.getByRole("region", { name: "Week 2" }).textContent).toContain("This week");
+  });
+
+  it("lets the client upload a file inside the item they are looking at (R85)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true })));
+    render(<EngagementRoom room={room({ uploadsEnabled: true })} now={NOW} />);
+    const sales = openItem("Your last 12 months of sales");
+    fireEvent.change(sales.getByLabelText("Upload a file for Your last 12 months of sales"), { target: { files: [new File(["%PDF-1.4"], "sales.pdf", { type: "application/pdf" })] } });
+    await waitFor(() => expect(api.calls.confirmUpload).toHaveLength(1));
+    expect(api.calls.requestUpload[0]).toMatchObject({ taskId: 11, fileName: "sales.pdf" });
+    expect(api.calls.requestDrop).toEqual([]);
+  });
+;
 });
 
 describe("a Digital marketing room", () => {
@@ -953,9 +988,7 @@ describe("the team on the room", () => {
   it("offers to send an item on WhatsApp to the person it goes to (R44)", () => {
     const base = room();
     render(<EngagementRoom room={room({ tasks: base.tasks.map(task => (task.id === 11 ? { ...task, ref: "B1", sendTo: { name: "Femi Adebayo", whatsapp: "+2348030000002" } } : task)) })} />);
-    fireEvent.click(screen.getByRole("tab", { name: /^Data Request/ }));
-    const sales = within(screen.getByRole("listitem", { name: "Your last 12 months of sales" }));
-    fireEvent.click(sales.getByRole("button", { name: /Your last 12 months of sales/ }));
+    const sales = openItem("Your last 12 months of sales");
     expect(sales.getByRole("link", { name: "Send on WhatsApp to Femi" }).getAttribute("href")).toBe(`https://wa.me/2348030000002?text=${encodeURIComponent("Hello Femi, here is B1 Your last 12 months of sales.")}`);
   });
 

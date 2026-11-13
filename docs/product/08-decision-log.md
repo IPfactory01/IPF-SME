@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| The Work Plan is weekly cards with each week's Sessions, for client and team; a client uploads inside the item they are looking at; the Data Request tab keeps only the drop box and the progress; the team's files are sorted into cards by item (R85) | ET, 13 November 2026 ("yes go ahead with all three, include sessions"; "categorize them into the different tasks") |
 | The console is retired: everyone, the Super Admins included, works in the client's room's frame; Pipeline, Clients, Finance and Team become places in its rail for whoever's role has them. Supersedes "the console stays for the desk and admins" (R83, 12 November) | ET, 13 November 2026 ("get rid of the console… everybody's interface like client") |
 | Specialists never use Preview as client: it is for those who manage or review engagements, refused on the server and hidden on screen (R25) | ET, 13 November 2026 ("specialists should not be able to preview as clients") |
 | Session reminders go in the morning run, the day before and on the day; the hour-before reminder is the calendar invitation's own alert, since the free plan runs the schedule once a day (R59) | ET, 12 November 2026 ("go ahead with the session reminders") |

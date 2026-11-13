@@ -63,6 +63,7 @@ import RoomTabs, { type RoomTab } from "@/components/room/RoomTabs";
 import { avatarColour, dueFlag, FLAG_TONE, initials } from "@/components/EngagementRoom";
 import { METHOD } from "@shared/method";
 import { TodayCard } from "./Today";
+import WeekCards from "@/components/room/WeekCards";
 import { FeePaymentList, RecordPaymentForm, WriteOffControls } from "./FeePayments";
 import { AskClient, ItemConversation } from "./AskClient";
 import BookMeeting from "./BookMeeting";
@@ -187,48 +188,33 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
   const task = data.tasks.find(item => item.id === selected) ?? null;
   const nameOf = (item: Task) => (item.assigneeUserId !== null ? [...data.clientPeople.map(person => ({ id: person.userId, name: person.name })), ...data.team.map(member => ({ id: member.userId, name: member.name ?? "" }))].find(person => person.id === item.assigneeUserId)?.name : undefined)
     || (item.side === "client" ? data.businessName || "The client" : "IP Factory");
+  const groupOf = (item: Task) => TEAM_PLAN_GROUPS.find(group => group.test(item)) ?? TEAM_PLAN_GROUPS[1]!;
   if (!data.tasks.length) return <p className="text-sm text-ink-muted">Nothing on the {METHOD.workPlan} yet.</p>;
   return (
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start">
-      <div className={`min-w-0 space-y-5 ${task ? "" : "xl:col-span-2"}`}>
-        {TEAM_PLAN_GROUPS.map(group => {
-          const items = data.tasks.filter(group.test).sort((a, b) => (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999") || (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id - b.id);
-          if (!items.length) return null;
-          return (
-            <section key={group.id} aria-label={group.name}>
-              <h4 className="flex items-center gap-2 pb-2"><span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${group.pill}`}>{group.name}</span><span className="text-xs tabular-nums text-ink-muted">{items.length}</span></h4>
-              <div className="overflow-hidden rounded-xl border border-line-soft bg-white">
-                <table className="w-full table-fixed text-sm">
-                  <thead><tr className="border-b border-line-soft text-left text-xs text-ink-muted"><th className="py-2 pl-3 pr-2 font-normal">Task</th><th className="hidden w-16 px-2 font-normal sm:table-cell">Who</th><th className="hidden w-36 px-2 font-normal sm:table-cell">Due</th><th className="hidden w-24 px-2 font-normal md:table-cell">Priority</th><th className="hidden w-32 px-2 pr-3 font-normal md:table-cell">Type</th></tr></thead>
-                  <tbody>
-                    {items.map(item => {
-                      // Something the client has sent is not late: it waits on us to check it.
-                      const flag = group.id === "checking" ? { text: "Sent", tone: "calm" as const } : dueFlag(item.dueOn, group.id === "done", now);
-                      const who = nameOf(item);
-                      return (
-                        <tr key={item.id} className={`border-b border-line-soft last:border-b-0 ${selected === item.id ? "bg-brand-tint" : "hover:bg-paper-sunken"}`}>
-                          <td className="py-2 pl-3 pr-2">
-                            <button type="button" onClick={() => setSelected(selected === item.id ? null : item.id)} aria-expanded={selected === item.id} aria-label={`Open ${item.title}`} className="flex w-full items-center gap-2.5 text-left">
-                              <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />
-                              <span className="min-w-0"><span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}</span>
-                                <span className="block text-xs text-ink-muted sm:hidden">{who}{flag ? ` · ${flag.text}` : ""}</span>
-                                {(item.comments.length > 0 || item.files.length > 0) && <span className="hidden text-xs text-ink-muted sm:block">{[item.comments.length ? `${item.comments.length} ${item.comments.length === 1 ? "message" : "messages"}` : "", item.files.length ? `${item.files.length} ${item.files.length === 1 ? "file" : "files"}` : ""].filter(Boolean).join(" · ")}</span>}
-                              </span>
-                            </button>
-                          </td>
-                          <td className="hidden px-2 sm:table-cell"><span title={who} className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-medium text-white ${avatarColour(who)}`}><span aria-hidden>{initials(who)}</span><span className="sr-only">{who}</span></span></td>
-                          <td className={`hidden whitespace-nowrap px-2 sm:table-cell ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? "-"}</td>
-                          <td className="hidden whitespace-nowrap px-2 md:table-cell">{item.priority ? <span className={`inline-flex items-center gap-1.5 ${item.priority === "high" ? "font-medium text-health-stuck" : "text-ink-muted"}`}><Flag className={`h-3.5 w-3.5 ${item.priority === "high" ? "fill-current" : ""}`} aria-hidden />{PRIORITY_WORDS[item.priority]}</span> : <span className="text-ink-muted">-</span>}</td>
-                          <td className="hidden whitespace-nowrap px-2 pr-3 text-ink-muted md:table-cell">{item.kind === "data_request" ? METHOD.dataRequest : "Action"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          );
-        })}
+      <div className={`min-w-0 ${task ? "" : "xl:col-span-2"}`}>
+        {/* Weekly cards (R85), as the client sees them, with each week's Sessions. */}
+        <WeekCards startedOn={data.engagement.startedOn ?? null} items={data.tasks} sessions={data.sessions} now={now}
+          isDone={item => groupOf(item).id === "done"} isWaiting={item => groupOf(item).id === "us" || groupOf(item).id === "checking"} waitingLabel="Waiting on IP Factory"
+          renderItem={item => {
+            const group = groupOf(item);
+            // Something the client has sent is not late: it waits on us to check it.
+            const flag = group.id === "checking" ? { text: "Sent", tone: "calm" as const } : dueFlag(item.dueOn, group.id === "done", now);
+            const who = nameOf(item);
+            return (
+              <button type="button" onClick={() => setSelected(selected === item.id ? null : item.id)} aria-expanded={selected === item.id} aria-label={`Open ${item.title}`}
+                className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm ${selected === item.id ? "bg-brand-tint" : "hover:bg-paper-sunken"}`}>
+                <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />
+                <span className="min-w-0 flex-1">
+                  <span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}</span>
+                  <span className="block text-xs text-ink-muted">{[group.name, item.kind === "data_request" ? METHOD.dataRequest : "Action", item.comments.length ? `${item.comments.length} ${item.comments.length === 1 ? "message" : "messages"}` : "", item.files.length ? `${item.files.length} ${item.files.length === 1 ? "file" : "files"}` : ""].filter(Boolean).join(" · ")}</span>
+                </span>
+                <span title={who} className={`hidden h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium text-white sm:inline-flex ${avatarColour(who)}`}><span aria-hidden>{initials(who)}</span><span className="sr-only">{who}</span></span>
+                <span className={`hidden w-32 shrink-0 whitespace-nowrap text-right sm:block ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? ""}</span>
+                <span className="hidden w-20 shrink-0 whitespace-nowrap md:block">{item.priority ? <span className={`inline-flex items-center gap-1.5 ${item.priority === "high" ? "font-medium text-health-stuck" : "text-ink-muted"}`}><Flag className={`h-3.5 w-3.5 ${item.priority === "high" ? "fill-current" : ""}`} aria-hidden />{PRIORITY_WORDS[item.priority]}</span> : null}</span>
+              </button>
+            );
+          }} />
       </div>
       {task && (
         <aside aria-label="Task details" className="space-y-3 rounded-xl border border-line-soft bg-white p-4 xl:sticky xl:top-16">
@@ -239,6 +225,42 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
           <TaskCard key={task.id} task={task} data={data} engagementId={engagementId} />
         </aside>
       )}
+    </div>
+  );
+}
+
+/**
+ * Every file on the engagement, sorted (R85): the drop box's unmatched files first (To match), then one card per item or
+ * Deliverable that has files, with its reference, title and status, and each file with who sent it and when.
+ */
+function FilesByItem({ data, engagementId }: { data: Detail; engagementId: number }) {
+  const withFiles = data.tasks.filter(task => task.files.length).sort((a, b) => (a.ref ?? "").localeCompare(b.ref ?? "", undefined, { numeric: true }) || a.id - b.id);
+  const outputs = data.deliverables.filter(item => item.files.length);
+  const unsorted = data.inbox.filter(file => !file.taskIds.length).length;
+  return (
+    <div className="space-y-4">
+      {unsorted > 0 && <section aria-label="To match" className="rounded-xl border border-brand bg-white p-4"><FileInbox data={data} engagementId={engagementId} /></section>}
+      {!withFiles.length && !outputs.length && !unsorted && <p className="rounded-xl border border-line-soft bg-white p-4 text-sm text-ink-muted">No files yet. What the client sends against an item appears here, under that item.</p>}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {withFiles.map(task => (
+          <section key={task.id} aria-label={task.title} className="space-y-2 rounded-xl border border-line-soft bg-white p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0"><p className="text-xs text-ink-muted">{[task.ref, task.kind === "data_request" ? METHOD.dataRequest : "Action"].filter(Boolean).join(" · ")}</p><h4 className="font-medium text-ink">{task.title}</h4></div>
+              <span className="shrink-0 rounded-full bg-paper-sunken px-2 py-0.5 text-xs text-ink-600">{task.statusLabel}</span>
+            </div>
+            <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={false} canManage={data.can.manage} />
+          </section>
+        ))}
+        {outputs.map(item => (
+          <section key={`d-${item.id}`} aria-label={item.title} className="space-y-2 rounded-xl border border-line-soft bg-white p-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0"><p className="text-xs text-ink-muted">{item.kindLabel}</p><h4 className="font-medium text-ink">{item.title}</h4></div>
+              <span className="shrink-0 rounded-full bg-paper-sunken px-2 py-0.5 text-xs text-ink-600">{DELIVERABLE_STATUS_WORDS[item.status]}</span>
+            </div>
+            <StaffFiles files={item.files} engagementId={engagementId} target={{ kind: "deliverable", id: item.id }} canUpload={false} canManage={data.can.manage} />
+          </section>
+        ))}
+      </div>
     </div>
   );
 }
@@ -298,7 +320,7 @@ export function EngagementWorkspace({ engagementId, myRole, onBack, now = Date.n
     { id: "overview", label: "Overview", count: count(mine.length, `${mine.length} for you`), content: overview },
     ...(data.engagement.type === "digital_marketing" ? [{ id: "content", label: "Content", content: pane(<ContentAdmin data={data} engagementId={engagementId} />) }] : []),
     { id: "plan", label: METHOD.workPlan, count: count(withClient, `${withClient} with the client`), content: pane(<Tasks data={data} engagementId={engagementId} />) },
-    ...(data.inbox.length ? [{ id: "files", label: "Files", count: count(unsorted, `${unsorted} to match`), content: pane(<FileInbox data={data} engagementId={engagementId} />) }] : []),
+    { id: "files", label: "Files", count: count(unsorted, `${unsorted} to match`), content: <div className="p-4 sm:p-7"><FilesByItem data={data} engagementId={engagementId} /></div> },
     { id: "meetings", label: `${METHOD.session}s`, content: pane(<Sessions data={data} engagementId={engagementId} />) },
     { id: "deliverables", label: METHOD.deliverables, count: count(toApprove, `${toApprove} to approve`), content: <div className="space-y-4 p-4 sm:p-7"><Card><Deliverables data={data} engagementId={engagementId} /></Card>{STAGED_TYPES.includes(data.engagement.type) && <Card><TheFix data={data} engagementId={engagementId} /></Card>}</div> },
     ...(data.can.seeFees ? [{ id: "fees", label: "Fees", content: pane(<FeesAdmin engagementId={engagementId} owner={data.owner} />) }] : []),

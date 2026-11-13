@@ -3,7 +3,7 @@ import { MotionConfig } from "framer-motion";
 import { trpc } from "@/lib/trpc";
 import { READINESS_LABELS } from "@shared/businessCheck/engine";
 import { AREA_NAMES } from "@shared/businessCheck/questions";
-import { ASSESSMENT_DAYS, ASSESSMENT_WEEKS, ENGAGEMENT_TASK_PRIORITY_LABELS, FIX_WEEKS, FOLDER_HOSTS, formatFileSize, formatMeasure, OPEN_TASK_STATUSES, UPLOAD_ACCEPT, UPLOAD_MAX_MB } from "@shared/engagement";
+import { ASSESSMENT_DAYS, ASSESSMENT_WEEKS, FIX_WEEKS, FOLDER_HOSTS, formatFileSize, formatMeasure, OPEN_TASK_STATUSES, UPLOAD_ACCEPT, UPLOAD_MAX_MB } from "@shared/engagement";
 import { METHOD, METHOD_MEANING } from "@shared/method";
 import type { inferRouterOutputs } from "@trpc/server";
 import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlash, Download, FileText, Flag, Paperclip, UploadCloud } from "lucide-react";
@@ -22,6 +22,7 @@ import { firstNameOf, whatsappLink } from "@shared/whatsapp";
 import { workOf, WORK_TITLE } from "@shared/engagementWork";
 import { BusinessPanel, FounderPanel } from "./room/RoomInsight";
 import RoomDashboard from "./room/RoomDashboard";
+import WeekCards from "./room/WeekCards";
 import RoomTabs from "./room/RoomTabs";
 import { useRoomPreview } from "./room/RoomPreview";
 import TaskDetail from "./TaskDetail";
@@ -909,7 +910,7 @@ function FileList({ files, canRemove }: { files: RoomFile[]; canRemove?: (file: 
  */
 function TaskControls({ task, uploadsEnabled, due }: { task: Task; uploadsEnabled: boolean; due?: boolean }) {
   if (useRoomPreview()) return null;
-  if (task.kind === "data_request") return <RequestControls task={task} />;
+  if (task.kind === "data_request") return <RequestControls task={task} uploadsEnabled={uploadsEnabled} />;
   return <ActionControls task={task} uploadsEnabled={uploadsEnabled} due={due} />;
 }
 
@@ -940,7 +941,8 @@ function SentLink({ link }: { link: string | null }) {
   return <p className="mt-2 text-xs text-ink-600">Link sent: <a href={link} target="_blank" rel="noopener noreferrer" className="font-medium text-brand underline underline-offset-2">{host}</a></p>;
 }
 
-function RequestControls({ task }: { task: Task }) {
+/** A Data Request's answers, in its own panel (R85): upload the file here, send a link, WhatsApp, or say it is not available. */
+function RequestControls({ task, uploadsEnabled }: { task: Task; uploadsEnabled: boolean }) {
   const refresh = useRoomRefresh();
   const [mode, setMode] = useState<"none" | "missing" | "other" | "link">("none");
   const [note, setNote] = useState("");
@@ -964,7 +966,7 @@ function RequestControls({ task }: { task: Task }) {
   }
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
-      <a href="#drop" className="inline-flex items-center gap-1 font-medium text-brand underline underline-offset-2"><UploadCloud className="h-3.5 w-3.5" aria-hidden />Upload</a>
+      {uploadsEnabled && <ItemUpload task={task} />}
       <button type="button" className="font-medium text-brand underline underline-offset-2" onClick={() => setMode("link")}>Send a link</button>
       {task.sendTo && <a href={whatsappLink(task.sendTo.whatsapp, `Hello ${firstNameOf(task.sendTo.name)}, here is ${task.ref ? `${task.ref} ` : ""}${task.title}.`)} target="_blank" rel="noopener noreferrer" className="font-medium text-brand underline underline-offset-2">Send on WhatsApp to {firstNameOf(task.sendTo.name)}</a>}
       <button type="button" className="font-medium text-ink-600 underline underline-offset-2 hover:text-ink" onClick={() => setMode("missing")}>Not available</button>
@@ -993,7 +995,8 @@ function ActionControls({ task, uploadsEnabled, due }: { task: Task; uploadsEnab
     <div className="mt-3 flex flex-wrap items-center gap-2">
       <Button type="button" size="sm" className="rounded-lg bg-brand text-xs text-white" onClick={() => setAsking(true)}>Mark as done</Button>
       <button type="button" className="text-xs font-medium text-brand underline underline-offset-2" onClick={() => setLinking(true)}>Send a link</button>
-      {task.askedBy !== null && uploadsEnabled && <ItemUpload task={task} />}
+      {/* Every item takes a file where it is seen (R85), not only the team's requests. */}
+      {uploadsEnabled && <ItemUpload task={task} />}
       {due && task.dueOn && <span className="text-xs text-ink-muted">{dueText(task.dueOn)}</span>}
     </div>
   );
@@ -1182,40 +1185,27 @@ function PlanView({ room, now }: { room: Room; now: number }) {
   if (!room.tasks.length) return <p className="text-sm text-ink-muted">Your tasks appear here, grouped by where they stand, once your team sets the {METHOD.workPlan}.</p>;
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-      <div className={`space-y-6 ${task ? "" : "lg:col-span-2"}`}>
-        {PLAN_GROUPS.map(group => {
-          const items = room.tasks.filter(group.test).sort((a, b) => (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999") || a.sortOrder - b.sortOrder || a.id - b.id);
-          if (!items.length) return null;
-          return (
-            <section key={group.id} aria-label={group.name}>
-              <h3 className="flex items-center gap-2 pb-2 font-sans"><span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${group.pill}`}>{group.name}</span><span className="text-xs font-normal tabular-nums text-ink-muted">{items.length}</span></h3>
-              <div className="overflow-hidden rounded-xl border border-line-soft bg-white">
-                <table className="w-full table-fixed text-sm">
-                  <thead><tr className="border-b border-line-soft text-left text-xs text-ink-muted"><th className="py-2 pl-3 pr-2 font-normal">Task</th><th className="hidden w-20 px-2 font-normal sm:table-cell">Who</th><th className="hidden w-40 px-2 font-normal sm:table-cell">Due</th><th className="hidden w-28 px-2 font-normal md:table-cell">Priority</th><th className="hidden w-32 px-2 pr-3 font-normal sm:table-cell">Type</th></tr></thead>
-                  <tbody>
-                    {items.map(item => {
-                      const flag = dueFlag(item.dueOn, group.id === "done", now);
-                      return (
-                        <tr key={item.id} id={`task-${item.id}`} className={`scroll-mt-24 border-b border-line-soft last:border-b-0 ${selected === item.id ? "bg-brand-tint" : "hover:bg-paper-sunken"}`}>
-                          <td className="py-2 pl-3 pr-2">
-                            <button type="button" onClick={() => setSelected(selected === item.id ? null : item.id)} aria-expanded={selected === item.id} className="flex w-full items-center gap-2.5 text-left">
-                              <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />
-                              <span className="min-w-0"><span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}{item.mine && <span className="ml-2 text-xs text-brand">for you</span>}</span><span className="block text-xs text-ink-muted sm:hidden">{item.side === "client" ? "You" : "IP Factory"}{flag ? <> · <span className={FLAG_TONE[flag.tone]}>{flag.text}</span></> : null}</span></span>
-                            </button>
-                          </td>
-                          <td className="hidden px-2 sm:table-cell"><Avatar name={whoName(item, room)} /></td>
-                          <td className={`hidden whitespace-nowrap px-2 sm:table-cell ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? "-"}</td>
-                          <td className="hidden whitespace-nowrap px-2 md:table-cell">{item.priority ? <span className={`inline-flex items-center gap-1.5 ${PRIORITY_TONE[item.priority]}`}><Flag className={`h-3.5 w-3.5 ${item.priority === "high" ? "fill-current" : ""}`} aria-hidden />{ENGAGEMENT_TASK_PRIORITY_LABELS[item.priority]}</span> : <span className="text-ink-muted">-</span>}</td>
-                          <td className="hidden whitespace-nowrap px-2 pr-3 text-ink-muted sm:table-cell">{item.kind === "data_request" ? METHOD.dataRequest : "Action"}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          );
-        })}
+      <div className={`min-w-0 ${task ? "" : "lg:col-span-2"}`}>
+        {/* Weekly cards (R85): each week's items and its Sessions, this week first. */}
+        <WeekCards startedOn={room.startedOn ?? null} items={room.tasks} sessions={room.sessions} now={now}
+          isDone={item => PLAN_GROUPS.find(group => group.test(item))?.id === "done"} isWaiting={isClientOpen} waitingLabel="Waiting on you"
+          renderItem={item => {
+            const group = PLAN_GROUPS.find(entry => entry.test(item)) ?? PLAN_GROUPS[1]!;
+            const flag = group.id === "checking" ? { text: "Sent", tone: "calm" as const } : dueFlag(item.dueOn, group.id === "done", now);
+            return (
+              <button type="button" id={`task-${item.id}`} onClick={() => setSelected(selected === item.id ? null : item.id)} aria-expanded={selected === item.id} aria-label={item.title}
+                className={`flex w-full scroll-mt-24 items-center gap-3 px-4 py-2.5 text-left text-sm ${selected === item.id ? "bg-brand-tint" : "hover:bg-paper-sunken"}`}>
+                <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />
+                <span className="min-w-0 flex-1">
+                  <span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}{item.mine && <span className="ml-2 text-xs text-brand">for you</span>}</span>
+                  <span className="block text-xs text-ink-muted">{item.kind === "data_request" ? METHOD.dataRequest : "Action"}{group.id === "checking" ? " · Sent, we are checking" : ""}</span>
+                </span>
+                <span className="hidden sm:block"><Avatar name={whoName(item, room)} /></span>
+                <span className={`hidden w-32 shrink-0 whitespace-nowrap text-right sm:block ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? ""}</span>
+                <span className="hidden w-20 shrink-0 whitespace-nowrap md:block">{item.priority ? <span className={`inline-flex items-center gap-1.5 ${PRIORITY_TONE[item.priority]}`}><Flag className={`h-3.5 w-3.5 ${item.priority === "high" ? "fill-current" : ""}`} aria-hidden />{item.priority === "high" ? "High" : item.priority === "medium" ? "Medium" : "Low"}</span> : null}</span>
+              </button>
+            );
+          }} />
       </div>
       {task && (
         <aside aria-label="Task details" className="rounded-xl border border-line-soft bg-white p-5 lg:sticky lg:top-16">
@@ -1230,6 +1220,8 @@ function PlanView({ room, now }: { room: Room; now: number }) {
             <dt className="text-ink-muted">Type</dt><dd>{task.kind === "data_request" ? METHOD.dataRequest : "Action"}</dd>
           </dl>
           {task.detail && <TaskDetail text={task.detail} className="mt-3 text-sm text-ink-600" />}
+          {task.informs && <p className="mt-2 text-sm text-ink-600"><span className="text-ink-muted">Purpose: </span>{task.informs}</p>}
+          {task.format && <p className="mt-1 text-sm text-ink-600"><span className="text-ink-muted">Format: </span>{task.format}</p>}
           <RequestFacts task={task} now={now} />
           {task.status === "needs_more" && task.statusNote && <p className="mt-2 text-sm text-danger">We need a bit more: {task.statusNote}</p>}
           <FileList files={task.files} canRemove={file => file.mine && !file.fromTeam && ["open", "received", "needs_more"].includes(task.status)} />
@@ -1246,7 +1238,6 @@ function PlanView({ room, now }: { room: Room; now: number }) {
 
 /** Only high priority carries colour; the overdue flag is the other red on a row. */
 const PRIORITY_TONE = { high: "font-medium text-health-stuck", medium: "text-ink-muted", low: "text-ink-muted" } as const;
-const PRIORITY_ORDER = { high: 0, medium: 1, low: 2 } as const;
 const answeredShare = (task: Task) => (task.status === "accepted" || task.status === "done" || task.status === "not_available" ? 1 : task.status === "received" || task.status === "needs_more" ? 0.5 : 0);
 
 /** What we need, at a glance: how much is in (a part-answered item counts as half), what is still to come, what is late. */
@@ -1350,80 +1341,18 @@ const STATUS_MARK: Record<string, { icon: React.ReactNode; tone: string }> = {
   missing: { icon: <CircleSlash className="h-3.5 w-3.5" aria-hidden />, tone: "border-line text-ink-muted bg-paper-sunken" },
   open: { icon: <CircleDashed className="h-3.5 w-3.5" aria-hidden />, tone: "border-line-strong text-ink-faint bg-white" },
 };
-const markOf = (task: Task) => (task.status === "accepted" || task.status === "done" ? "done" : task.status === "not_available" ? "missing" : task.status === "received" || task.status === "needs_more" ? "half" : "open");
-
-/** One requested item: a line you can open for why we ask, the format, the files matched to it and the two answers. */
-function RequestRow({ task, now }: { task: Task; now: number }) {
-  const [open, setOpen] = useState(false);
-  const mark = STATUS_MARK[markOf(task)]!;
-  const finished = markOf(task) === "done" || markOf(task) === "missing";
-  const flag = dueFlag(task.dueOn, finished, now);
-  return (
-    <li aria-label={task.title} className="py-3">
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className="flex w-full items-start gap-3 text-left">
-        <span className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border ${mark.tone}`}>{mark.icon}</span>
-        <span className="min-w-0 flex-1">
-          <span className={`block font-medium ${finished ? "text-ink-muted" : "text-ink"}`}>{task.ref && <span className="mr-2 font-mono text-xs text-ink-muted">{task.ref}</span>}{task.title}</span>
-          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
-            <span className={task.status === "needs_more" ? "text-danger" : ""}>{task.statusLabel}</span>
-            {flag && !finished && <span className={FLAG_TONE[flag.tone]}>{flag.text}</span>}
-            {task.priority && isOpen(task) && <span className={PRIORITY_TONE[task.priority]}>{ENGAGEMENT_TASK_PRIORITY_LABELS[task.priority]} priority</span>}
-            {task.files.length > 0 && <span className="inline-flex items-center gap-0.5"><Paperclip className="h-3 w-3" aria-hidden />{task.files.length}</span>}
-          </span>
-        </span>
-        <ChevronDown className={`mt-1 h-4 w-4 shrink-0 text-ink-muted transition-transform ${open ? "rotate-180" : ""}`} aria-hidden />
-      </button>
-      {open && (
-        <div className="ml-9 mt-2 space-y-1.5 text-sm">
-          {task.detail && <TaskDetail text={task.detail} className="text-ink-600" />}
-          {task.informs && <p className="text-ink-600"><span className="text-ink-muted">Purpose: </span>{task.informs}</p>}
-          {task.format && <p className="text-ink-600"><span className="text-ink-muted">Format: </span>{task.format}</p>}
-          {task.status === "needs_more" && task.statusNote && <p className="text-danger">Further information required: {task.statusNote}</p>}
-          {task.status === "not_available" && task.statusNote && <p className="text-ink-600"><span className="text-ink-muted">Your note: </span>{task.statusNote}</p>}
-          <FileList files={task.files} canRemove={file => file.mine && !file.fromTeam && ["open", "received", "needs_more"].includes(task.status)} />
-          <SentLink link={task.responseLink} />
-          <RequestControls task={task} />
-          <TaskConversation task={task} />
-        </div>
-      )}
-    </li>
-  );
-}
 
 /** The Data Requests: where they stand, the drop box, and the checklist by section, with what still waits on you first. */
 function DataRequestsView({ room, now }: { room: Room; now: number }) {
   const items = room.tasks.filter(task => task.kind === "data_request");
-  const sections = Array.from(new Set(items.map(task => task.section ?? ""))).sort((a, b) => (a === "" ? 1 : b === "" ? -1 : a.localeCompare(b)));
-  const order = (a: Task, b: Task) => Number(!isOpen(a)) - Number(!isOpen(b)) || (a.ref ?? "").localeCompare(b.ref ?? "", undefined, { numeric: true }) || PRIORITY_ORDER[a.priority ?? "low"] - PRIORITY_ORDER[b.priority ?? "low"] || (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999") || a.sortOrder - b.sortOrder || a.id - b.id;
+  // Each item is answered in the Work Plan, in its own panel (R85): here, where they stand and the drop box for many files at once.
   return (
     <div className="space-y-5">
       <RequestSummary items={items} now={now} />
-      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] [&>*]:min-w-0">
-        <section aria-labelledby="asked-title" className="rounded-xl border border-line-soft bg-white p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h3 id="asked-title" className="font-sans text-base font-semibold tracking-tight">{METHOD.dataRequest}</h3>
-            <a href="#drop" className="inline-flex items-center gap-1 rounded-lg bg-brand px-2.5 py-1.5 text-xs font-medium text-white lg:hidden"><UploadCloud className="h-3.5 w-3.5" aria-hidden />Upload</a>
-          </div>
-          {sections.map(section => {
-            const list = items.filter(task => (task.section ?? "") === section).sort(order);
-            const done = list.filter(task => !isOpen(task)).length;
-            return (
-              <div key={section || "other"} className="mt-4">
-                {(sections.length > 1 || section) && (
-                  <div className="flex items-center justify-between gap-3 border-b border-line-soft pb-1.5">
-                    <h4 className="font-sans text-xs font-semibold text-ink">{section || "Other"}</h4>
-                    <span className="flex items-center gap-2 text-xs tabular-nums text-ink-muted">{done} of {list.length}<span aria-hidden className="h-1.5 w-16 overflow-hidden rounded-full bg-chart-track"><span className="block h-full rounded-full bg-brand" style={{ width: `${(done / list.length) * 100}%` }} /></span></span>
-                  </div>
-                )}
-                <ul className="divide-y divide-line-soft">{list.map(task => <RequestRow key={task.id} task={task} now={now} />)}</ul>
-              </div>
-            );
-          })}
-        </section>
-        <div className="space-y-5 lg:sticky lg:top-16">
-          <DropBox uploadsEnabled={room.uploadsEnabled} engagementId={room.engagementId} />
-          <SentFiles files={room.sentFiles} />
-        </div>
+      <p className="text-sm text-ink-600">Answer each {METHOD.dataRequest} item in the <a href="#plan" className="font-medium text-brand underline underline-offset-2">{METHOD.workPlan}</a>: open it and upload there. Have many files at once? Drop them all here and we match each one.</p>
+      <div className="grid items-start gap-5 lg:grid-cols-2 [&>*]:min-w-0">
+        <DropBox uploadsEnabled={room.uploadsEnabled} engagementId={room.engagementId} />
+        <SentFiles files={room.sentFiles} />
       </div>
     </div>
   );

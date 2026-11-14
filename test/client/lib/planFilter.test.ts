@@ -38,5 +38,8 @@ describe("whose items and the search (ET, 13 November 2026)", () => {
     expect(roleTag({ ...item(), status: "open" }, 4)).toEqual({ text: "To review", tone: "review" });
     expect(roleTag({ ...item(), status: "received" }, 4)).toEqual({ text: "Ready for your review", tone: "ready" });
     expect(roleTag({ ...item(), status: "open" }, 5)).toBeNull();
+    // A client item: the client does it; the team member on it follows it up.
+    expect(roleTag({ ...item({ side: "client" }), status: "open" }, 7)).toEqual({ text: "You follow up", tone: "follow" });
+    expect(roleTag({ ...item({ side: "client" }), status: "received" }, 4)).toEqual({ text: "Ready for your review", tone: "ready" });
   });
 });

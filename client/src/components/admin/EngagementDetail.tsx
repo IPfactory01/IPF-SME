@@ -253,7 +253,10 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
           // Handed in or sent is done from the sender's side (R87); for the lead it waits on their review.
           // ...except for its reviewer, for whom it waits: ready for their review, first in its week.
           isDone={item => groupOf(item).id === "done" || (!data.can.seeAllTasks && groupOf(item).id === "checking" && !roleOf(item, data.viewerUserId).reviews)}
-          isWaiting={item => groupOf(item).id === "us" || ((data.can.seeAllTasks || roleOf(item, data.viewerUserId).reviews) && groupOf(item).id === "checking")} waitingLabel={data.can.seeAllTasks ? "Waiting on IP Factory" : "Waiting on you"}
+          // Waiting on the lead: all of ours and all to check. On anyone else: their own team items and what waits for their review.
+          isWaiting={item => data.can.seeAllTasks
+            ? groupOf(item).id === "us" || groupOf(item).id === "checking"
+            : (groupOf(item).id === "us" && roleOf(item, data.viewerUserId).owns) || (groupOf(item).id === "checking" && roleOf(item, data.viewerUserId).reviews)} waitingLabel={data.can.seeAllTasks ? "Waiting on IP Factory" : "Waiting on you"}
           renderItem={item => {
             const group = groupOf(item);
             // Something the client has sent is not late: it waits on us to check it.
@@ -271,7 +274,7 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
                   <span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}{(() => {
                     // Whose part this is, for the person reading (ET, 14 November 2026).
                     const tag = group.id === "done" ? null : roleTag(item, data.viewerUserId);
-                    return tag && <span className={`ml-2 inline-block rounded-full px-2 py-0.5 align-middle text-[11px] font-semibold no-underline ${tag.tone === "ready" ? "bg-highlight text-brand-deep" : tag.tone === "review" ? "border border-brand-plum text-brand-plum" : "bg-brand-tint text-brand-deep"}`}>{tag.text}</span>;
+                    return tag && <span className={`ml-2 inline-block rounded-full px-2 py-0.5 align-middle text-[11px] font-semibold no-underline ${tag.tone === "ready" ? "bg-highlight text-brand-deep" : tag.tone === "review" ? "border border-brand-plum text-brand-plum" : tag.tone === "follow" ? "border border-line text-ink-600" : "bg-brand-tint text-brand-deep"}`}>{tag.text}</span>;
                   })()}</span>
                   <span className="block text-xs text-ink-muted">{[group.id === "checking" ? (item.side === "ipf" ? (data.can.seeAllTasks ? "Handed in: review it" : "Handed in, pending review") : (data.can.seeAllTasks ? "Sent by the client: review it" : "Sent, pending review")) : group.id === "done" ? "Completed" : group.name, item.kind === "data_request" ? METHOD.dataRequest : "Action", item.comments.length ? `${item.comments.length} ${item.comments.length === 1 ? "message" : "messages"}` : "", item.files.length ? `${item.files.length} ${item.files.length === 1 ? "file" : "files"}` : ""].filter(Boolean).join(" · ")}</span>
                 </span>
@@ -400,7 +403,11 @@ function ReviewDecision({ task, engagementId }: { task: Task; engagementId: numb
 function YourPart({ task, data }: { task: Task; data: Detail }) {
   const role = roleOf(task, data.viewerUserId);
   if (!role.owns && !role.reviews) return null;
-  const text = role.owns && role.reviews ? "You own this and review it." : role.owns ? "You own this: it is yours to do." : task.status === "received" ? "You review this, and it is ready for your review." : "You review this once it is sent.";
+  const client = data.businessName || "The client";
+  // The client does their own items: the team member on one follows it up, and may also check what arrives.
+  const text = task.side === "client"
+    ? (role.owns && role.reviews ? `${client} does this; you follow it up and review what they send.` : role.owns ? `${client} does this; you follow it up.` : task.status === "received" ? `${client} sent this, and it is ready for your review.` : `${client} does this; you review what they send.`)
+    : role.owns && role.reviews ? "You own this and review it." : role.owns ? "You own this: it is yours to do." : task.status === "received" ? "You review this, and it is ready for your review." : "You review this once it is handed in.";
   return <p className="rounded-lg bg-brand-tint-soft px-3 py-2 text-sm font-medium text-brand-deep">{text}</p>;
 }
 

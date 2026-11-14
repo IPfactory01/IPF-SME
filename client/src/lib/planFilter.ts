@@ -25,9 +25,11 @@ export function matchesWhose(item: Filterable, whose: Whose, viewerUserId: numbe
 }
 
 /** The tag a row carries for the person reading it: theirs to do, theirs to review, or waiting for their review now. */
-export function roleTag(item: Filterable & { status: string }, userId: number | null): { text: string; tone: "do" | "review" | "ready" } | null {
+export function roleTag(item: Filterable & { status: string }, userId: number | null): { text: string; tone: "do" | "follow" | "review" | "ready" } | null {
   const role = roleOf(item, userId);
   if (role.reviews && item.status === "received") return { text: "Ready for your review", tone: "ready" };
+  // The client does their own items; the team member named on one follows it up (ET, 14 November 2026).
+  if (role.owns && item.side === "client") return { text: "You follow up", tone: "follow" };
   if (role.owns) return { text: "To do", tone: "do" };
   if (role.reviews) return { text: "To review", tone: "review" };
   return null;

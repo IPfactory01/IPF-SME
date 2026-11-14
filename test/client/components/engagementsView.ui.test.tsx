@@ -728,6 +728,8 @@ describe("the team's workspace (R82)", () => {
     expect(whose.value).toBe("tasks");
     expect(titles()).toEqual(["Prepare shot lists and editing templates"]);
     expect(screen.getByRole("button", { name: "Open Prepare shot lists and editing templates" }).textContent).toContain("To do");
+    // Only her own team item waits on her, not Lewis's.
+    expect(screen.getByRole("switch", { name: /Waiting on you/ }).textContent).toContain("1");
     fireEvent.change(whose, { target: { value: "everyone" } });
     expect(titles()).toHaveLength(3);
     fireEvent.change(whose, { target: { value: "2" } });
@@ -781,7 +783,7 @@ describe("the team's workspace (R82)", () => {
     expect(screen.getByRole("switch", { name: /Waiting on you/ }).textContent).toContain("1");
     fireEvent.click(screen.getByRole("button", { name: "Open A video of the new menu" }));
     const details = within(screen.getByRole("complementary", { name: "Task details" }));
-    expect(details.getByText("You review this, and it is ready for your review.")).toBeTruthy();
+    expect(details.getByText("Ada Foods sent this, and it is ready for your review.")).toBeTruthy();
     expect(details.getByText("Kemi Producer")).toBeTruthy();
     fireEvent.click(details.getByRole("button", { name: "Mark received" }));
     expect(api.calls.reviewTask.at(-1)).toEqual({ taskId: 71, decision: "received", note: null });

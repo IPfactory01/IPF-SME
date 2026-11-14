@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| On a client's item the team member named follows it up (tag You follow up), not To do; Waiting on you counts only the reader's own (R91 amended) | ET, 14 November 2026 |
 | Mine splits into My tasks (owned) and My reviews (checked, ready first); every row is tagged To do, To review or Ready for your review, and the panel says the reader's part (R91 amended) | ET, 14 November 2026 |
 | Today and What needs you here become one row per item (reasons together) and a row opens the item in the Work Plan (R93) | ET, 14 November 2026 |
 | A Progress tab second after the Overview for the client and the team, worked out from the records (no chart library, no data entered twice); the team also sees each owner's load (R92) | ET, 14 November 2026 |

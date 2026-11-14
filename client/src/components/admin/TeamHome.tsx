@@ -27,6 +27,7 @@ const RAIL_ACTIVE = "bg-brand-tint font-medium text-ink";
 /** The tabs of an open engagement, as the rail lists them (the workspace keeps the tab in the address). */
 const ENGAGEMENT_LINKS = [
   { id: "overview", label: "Overview" },
+  { id: "progress", label: "Progress" },
   { id: "plan", label: METHOD.workPlan },
   { id: "meetings", label: `${METHOD.session}s` },
   { id: "deliverables", label: METHOD.deliverables },

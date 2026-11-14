@@ -480,7 +480,7 @@ describe("the room's views", () => {
 
   it("shows the same views for every client, opening on the Overview, without Founder and Business when nothing is behind the room", () => {
     render(<EngagementRoom room={room()} />);
-    expect(names()).toEqual(["Overview", "Work Plan", "Sessions", "Deliverables"]);
+    expect(names()).toEqual(["Overview", "Progress", "Work Plan", "Sessions", "Deliverables"]);
     expect(screen.getByRole("tab", { name: "Overview" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("list", { name: "Engagement timeline" })).toBeTruthy();
   });
@@ -488,13 +488,13 @@ describe("the room's views", () => {
   it("puts Business and Founder under what we found, before Deliverables, counts the stuck areas, and moves between tabs by tap and by arrow key", () => {
     render(<EngagementRoom room={room({ insight: fromReport })} />);
     const tabs = within(screen.getByRole("tablist", { name: "Your engagement" })).getAllByRole("tab");
-    expect(names()).toEqual(["Overview", "Work Plan", "Sessions", "Business", "Founder", "Deliverables"]);
-    expect(tabs[3]!.textContent).toBe(`Business${fromReport.areas.filter(area => area.health === "stuck").length || ""}`);
+    expect(names()).toEqual(["Overview", "Progress", "Work Plan", "Sessions", "Business", "Founder", "Deliverables"]);
+    expect(tabs[4]!.textContent).toBe(`Business${fromReport.areas.filter(area => area.health === "stuck").length || ""}`);
     expect(tabs[0].getAttribute("aria-selected")).toBe("true");
     // Hidden panels are out of reach: not in the accessibility tree.
     expect(screen.queryByRole("heading", { name: "You, as the founder" })).toBeNull();
 
-    const founder = tabs[4]!;
+    const founder = tabs[5]!;
     fireEvent.click(founder);
     expect(founder.getAttribute("aria-selected")).toBe("true");
     expect(screen.getByRole("heading", { name: "You, as the founder" })).toBeTruthy();
@@ -520,11 +520,11 @@ describe("the room's views", () => {
     render(<EngagementRoom room={room()} />);
     fireEvent.click(screen.getByRole("tab", { name: "Deliverables" }));
     const track = screen.getByRole("tabpanel", { name: "Deliverables" }).parentElement!;
-    // Deliverables is the fourth panel now the Data Request tab is gone (R89).
-    await waitFor(() => expect(track.style.transform).toContain("-2400px"));
+    // Deliverables is the fifth panel: the Data Request tab is gone (R89) and Progress follows the Overview (R92).
+    await waitFor(() => expect(track.style.transform).toContain("-3200px"));
     width = 1000;
     act(() => { for (const callback of observers) callback(); });
-    await waitFor(() => expect(track.style.transform).toContain("-3000px"));
+    await waitFor(() => expect(track.style.transform).toContain("-4000px"));
     // A panel never lets wide content (a long table in Founder) spill into the next one.
     for (const panel of screen.getAllByRole("tabpanel", { hidden: true })) expect(panel.className).toContain("overflow-x-clip");
     clientWidth.mockRestore();
@@ -868,6 +868,17 @@ describe("the Plan, Meetings and Data requests views", () => {
     const second = within(screen.getByRole("list", { name: "Week 2 Sessions" }));
     expect(second.getByRole("link", { name: "Join" }).getAttribute("href")).toBe("https://zoom.example.test/j/2");
     expect(screen.getByRole("region", { name: "Week 2" }).textContent).toContain("This week");
+  });
+
+  it("shows the client Progress second, their side in tiles and bars, one figure for IP Factory's work, and no one's load by name (R92)", () => {
+    render(<EngagementRoom room={room()} now={NOW} />);
+    open("Progress");
+    const panel = within(screen.getByRole("tabpanel", { name: "Progress" }));
+    expect(panel.getAllByText("Done").length).toBeGreaterThan(0);
+    expect(panel.getByText("IP Factory's work")).toBeTruthy();
+    expect(panel.getByRole("region", { name: "Progress: Data Requests" })).toBeTruthy();
+    expect(panel.getByRole("region", { name: "Progress: Work Plan by week" })).toBeTruthy();
+    expect(panel.queryByRole("region", { name: "Progress: By person" })).toBeNull();
   });
 
   it("lets the client search their Work Plan by title or code (ET, 13 November 2026)", () => {

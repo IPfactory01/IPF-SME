@@ -1,9 +1,11 @@
+import ProgressView from "@/components/room/Progress";
+import { progressOf } from "@/lib/progress";
 import { matchesSearch, matchesWhose, whoseFrom, whoseValue, type Whose } from "@/lib/planFilter";
 import { firstNameOf } from "@shared/whatsapp";
 import WhatsAppShare from "./WhatsAppShare";
 import { Failed, Loading } from "@/components/states";
 import { isRefusal } from "@/lib/readPolicy";
-import { DATED_TYPES, STAGED_TYPES } from "@shared/engagementTypes";
+import { DATED_TYPES, datedProgress, monthOfDay, STAGED_TYPES } from "@shared/engagementTypes";
 import { lagosDay } from "@shared/agreement";
 import { dayInWords } from "@shared/requests";
 import { DATA_REQUEST_TEMPLATES, parsePastedDataRequest, templateById } from "@shared/dataRequestTemplates";
@@ -461,6 +463,25 @@ function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; 
   );
 }
 
+/**
+ * Progress for the team (R92): both sides of the Work Plan, each owner's load, Sessions, content and the Measure of
+ * Success from the record already loaded; fees only for those who see them, from the fees they already may read.
+ */
+function TeamProgress({ data, engagementId, now }: { data: Detail; engagementId: number; now: number }) {
+  const fees = trpc.engagement.staff.fees.useQuery({ engagementId }, { enabled: data.can.seeFees });
+  const dated = DATED_TYPES[data.engagement.type];
+  const started = data.engagement.startedOn ?? null;
+  const currentMonth = dated && started ? monthOfDay(datedProgress(dated, started, now).day, dated.durationDays) : null;
+  const latest = [...(data.checkins as { measureReading: number | null }[])].reverse().find(row => row.measureReading !== null)?.measureReading ?? null;
+  const measure = data.measure as { name: string; unit: string | null; baselineValue: number | null; targetValue: number | null } | null;
+  return <ProgressView audience="team" progress={progressOf({
+    tasks: data.tasks, sessions: data.sessions, content: data.content, contentTargets: dated?.monthly ?? [], currentMonth,
+    fees: data.can.seeFees ? fees.data?.feeLines ?? null : null,
+    measure: measure ? { name: measure.name, unit: measure.unit, baselineValue: measure.baselineValue, targetValue: measure.targetValue, latest } : null,
+    startedOn: started, today: lagosDay(new Date(now)), now,
+  })} />;
+}
+
 /** A section of the record as a card in the workspace (R82). */
 const Card = ({ children }: { children: React.ReactNode }) => <div className="rounded-xl border border-line-soft bg-white p-4">{children}</div>;
 
@@ -514,6 +535,7 @@ export function EngagementWorkspace({ engagementId, myRole, onBack, openTaskId =
   const pane = (children: React.ReactNode) => <div className="space-y-4 p-4 sm:p-7"><Card>{children}</Card></div>;
   const tabs: RoomTab[] = [
     { id: "overview", label: "Overview", count: count(mine.length, `${mine.length} for you`), content: overview },
+    { id: "progress", label: "Progress", content: <div className="p-4 sm:p-7"><TeamProgress data={data} engagementId={engagementId} now={now} /></div> },
     ...(data.engagement.type === "digital_marketing" ? [{ id: "content", label: "Content", content: pane(<ContentAdmin data={data} engagementId={engagementId} />) }] : []),
     { id: "plan", label: METHOD.workPlan, count: count(withClient, `${withClient} with the client`), content: pane(<Tasks data={data} engagementId={engagementId} />) },
     { id: "files", label: "Files", count: count(unsorted, `${unsorted} to match`), content: <div className="p-4 sm:p-7"><FilesByItem data={data} engagementId={engagementId} /></div> },

@@ -1,3 +1,5 @@
+import ProgressView from "./room/Progress";
+import { progressOf } from "@/lib/progress";
 import { matchesSearch } from "@/lib/planFilter";
 import { Button } from "@/components/ui/button";
 import { MotionConfig } from "framer-motion";
@@ -300,6 +302,11 @@ function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps)
   // found, and what they receive. Named as the method names them.
   const tabs: (RoomTab & { content: React.ReactNode })[] = [
     { id: "overview", label: "Overview", content: overview },
+    // Progress (R92): where the engagement stands, from the room's own records; the client's side, and one figure for ours.
+    { id: "progress", label: "Progress", content: <ProgressView audience="client" ourWork={(() => { const ours = room.tasks.filter(item => item.side !== "client" && item.status !== "cancelled"); return ours.length ? { done: ours.filter(item => item.status === "done" || item.status === "accepted").length, total: ours.length } : null; })()}
+      progress={progressOf({ tasks: room.tasks.filter(item => item.side === "client"), sessions: room.sessions, content: room.content, contentTargets: room.contentTargets, currentMonth: contentMonth?.month ?? null, fees: room.fees,
+        measure: room.measure ? { name: room.measure.name, unit: room.measure.unit, baselineValue: room.measure.baselineValue, targetValue: room.measure.targetValue, latest: room.measure.latest?.reading ?? null } : null,
+        startedOn: room.startedOn ?? null, today: lagosDay(new Date(now)), now })} /> },
     ...(contentMonth ? [{ id: "content", label: "Content", group: "The work", count: awaitingApproval ? { value: awaitingApproval, label: `${awaitingApproval} for your approval` } : undefined, content: <ContentBoard room={room} currentMonth={contentMonth.month} months={contentMonth.months} /> }] : []),
     { id: "plan", label: METHOD.workPlan, group: "The work", count: counts.waiting ? { value: counts.waiting, label: `${counts.waiting} waiting on you` } : undefined, content: <PlanView room={room} now={now} /> },
     { id: "meetings", label: `${METHOD.session}s`, group: "The work", content: <MeetingsView room={room} now={now} isOwner={isOwner} /> },

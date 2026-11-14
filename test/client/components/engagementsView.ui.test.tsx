@@ -525,7 +525,7 @@ describe("the team's workspace (R82)", () => {
     expect(page.getByText("You are the Content Producer")).toBeTruthy();
     expect(page.getByRole("img", { name: "Team: Kemi Producer, Lewis Lead" })).toBeTruthy();
     // The tabs, in order; no Fees for someone who does not see them.
-    expect(page.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Overview1", "Work Plan1", "Files", "Sessions", "Deliverables"]);
+    expect(page.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Overview1", "Progress", "Work Plan1", "Files", "Sessions", "Deliverables"]);
     // What needs them here is this engagement's only; the next meeting has its Join link.
     const needs = within(page.getByRole("region", { name: /What needs you here/ }));
     expect(needs.getAllByRole("group").map(card => card.getAttribute("aria-label"))).toEqual(["Client wrote: Send week 3 footage"]);
@@ -735,6 +735,18 @@ describe("the team's workspace (R82)", () => {
     expect(screen.getByText("Nothing matches. Try everyone's, or another word.")).toBeTruthy();
   });
 
+  it("shows the team Progress second, with each owner's load (R92)", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };
+    api.detail = { ...detail({ manage: true, assign: false, review: true }, [], [task({ id: 61, title: "Content plan", side: "ipf", kind: "action", owners: [{ userId: 2, name: "Lewis Lead", lead: true }] }), task({ id: 62, title: "Your price list" })]), team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Progress" }));
+    const panel = within(screen.getByRole("tabpanel", { name: "Progress" }));
+    expect(within(panel.getByRole("region", { name: "Progress: By person" })).getByRole("img", { name: /^Lewis Lead: 1 overdue, of 1$/ })).toBeTruthy();
+    expect(panel.getByRole("region", { name: "Progress: Data Requests" })).toBeTruthy();
+  });
+
   it("starts the lead on everyone's items", () => {
     api.seesAll = false;
     api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };
@@ -801,7 +813,7 @@ describe("the team's workspace (R82)", () => {
     render(<EngagementsView />);
     fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
     const page = within(screen.getByRole("region", { name: "Ada Foods workspace" }));
-    expect(page.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Overview", "Work Plan", "Files", "Sessions", "Deliverables1", "Fees"]);
+    expect(page.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Overview", "Progress", "Work Plan", "Files", "Sessions", "Deliverables1", "Fees"]);
     expect(page.getByRole("tab", { name: /^Deliverables/ }).textContent).toBe("Deliverables1");
     expect(page.getByText("Nothing needs you on Ada Foods right now.")).toBeTruthy();
   });

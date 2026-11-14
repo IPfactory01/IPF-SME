@@ -183,7 +183,7 @@ describe("the client's room", () => {
     expect(within(plan.getByRole("listitem", { name: "Send the cash template" })).getByText("IP Factory")).toBeTruthy();
     expect(within(plan.getByRole("listitem", { name: "Business Review Session 1" })).getByText("Together")).toBeTruthy();
     expect(within(plan.getByRole("listitem", { name: "Your price list" })).getByText("We need a bit more")).toBeTruthy();
-    expect(within(plan.getByRole("listitem", { name: "Your price list" })).getByText("for you")).toBeTruthy();
+    expect(within(plan.getByRole("listitem", { name: "Your price list" })).getByText("To do")).toBeTruthy();
     // No detail or buttons in the timeline: a line opens the item in the List, a Session in Schedule.
     expect(plan.queryByRole("button", { name: "Submitted another way" })).toBeNull();
     expect(plan.queryByText("Monthly totals are enough.")).toBeNull();
@@ -881,6 +881,16 @@ describe("the Plan, Meetings and Data requests views", () => {
     expect(panel.queryByRole("region", { name: "Progress: By person" })).toBeNull();
   });
 
+  it("marks the client's open items To do, and shows the one person's initials when the business has only them (ET, 14 November 2026)", () => {
+    render(<EngagementRoom room={room({ people: [{ name: "Ada Okafor", label: "Owner", you: true }] })} now={NOW} />);
+    open(/^Work Plan/);
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    const row = screen.getByRole("button", { name: "Your price list" });
+    expect(row.textContent).toContain("To do");
+    expect(within(row).getAllByTitle("Ada Okafor").length).toBeGreaterThan(0);
+    expect(row.textContent).not.toContain("for you");
+  });
+
   it("lets the client search their Work Plan by title or code (ET, 13 November 2026)", () => {
     render(<EngagementRoom room={room()} now={NOW} />);
     open(/^Work Plan/);
@@ -956,7 +966,7 @@ describe("a Digital marketing room", () => {
     expect(board.getByText("Stories, month 1").closest("a")!.textContent).toContain("0 of 20");
     // The Content view comes first in the work, counting what waits for approval.
     fireEvent.click(screen.getByRole("tab", { name: /^Content/ }));
-    const approval = within(screen.getByRole("region", { name: "For your approval" }));
+    const approval = within(screen.getByRole("region", { name: "For approval" }));
     const card = within(approval.getByRole("article", { name: "Reel 6: knotless braids" }));
     fireEvent.click(card.getByRole("button", { name: "Approve" }));
     expect(api.calls.respondToContent).toEqual([{ itemId: 1, approve: true, note: null }]);

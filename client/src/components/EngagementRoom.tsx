@@ -307,7 +307,7 @@ function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps)
       progress={progressOf({ tasks: room.tasks.filter(item => item.side === "client"), sessions: room.sessions, content: room.content, contentTargets: room.contentTargets, currentMonth: contentMonth?.month ?? null, fees: room.fees,
         measure: room.measure ? { name: room.measure.name, unit: room.measure.unit, baselineValue: room.measure.baselineValue, targetValue: room.measure.targetValue, latest: room.measure.latest?.reading ?? null } : null,
         startedOn: room.startedOn ?? null, today: lagosDay(new Date(now)), now })} /> },
-    ...(contentMonth ? [{ id: "content", label: "Content", group: "The work", count: awaitingApproval ? { value: awaitingApproval, label: `${awaitingApproval} for your approval` } : undefined, content: <ContentBoard room={room} currentMonth={contentMonth.month} months={contentMonth.months} /> }] : []),
+    ...(contentMonth ? [{ id: "content", label: "Content", group: "The work", count: awaitingApproval ? { value: awaitingApproval, label: `${awaitingApproval} to approve` } : undefined, content: <ContentBoard room={room} currentMonth={contentMonth.month} months={contentMonth.months} /> }] : []),
     { id: "plan", label: METHOD.workPlan, group: "The work", count: counts.waiting ? { value: counts.waiting, label: `${counts.waiting} waiting on you` } : undefined, content: <PlanView room={room} now={now} /> },
     { id: "meetings", label: `${METHOD.session}s`, group: "The work", content: <MeetingsView room={room} now={now} isOwner={isOwner} /> },
     ...(room.insight ? [
@@ -773,7 +773,7 @@ function PlanRowView({ row, number }: { row: PlanRow; number: number }) {
     <li className="border-t border-line-soft" aria-label={row.title}>
       <a href={href} className="flex items-center gap-3 rounded-md px-1 py-2 transition-colors hover:bg-paper-sunken">
         <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-medium tabular-nums ${row.status === "done" ? "border-brand bg-brand text-white" : row.status === "submitted" ? "border-brand text-brand" : "border-line-strong text-ink-muted"}`}>{row.status === "done" ? <Check className="h-3 w-3" aria-hidden /> : number}</span>
-        <span className={`min-w-0 flex-1 truncate text-sm ${finished ? "text-ink-muted" : "text-ink"}`}>{row.title}{row.task?.mine ? <span className="ml-2 text-xs text-brand">for you</span> : null}</span>
+        <span className={`min-w-0 flex-1 truncate text-sm ${finished ? "text-ink-muted" : "text-ink"}`}>{row.title}{row.task && !finished && isClientOpen(row.task) ? <span className="ml-2 inline-block rounded-full bg-brand-tint px-2 py-0.5 align-middle text-[11px] font-semibold text-brand-deep">To do</span> : null}</span>
         <span className="hidden shrink-0 text-xs text-ink-muted sm:inline">{row.who}</span>
         <span className={`w-36 shrink-0 truncate text-right text-xs ${row.status === "needs_more" ? "text-danger" : "text-ink-muted"}`}>{row.status === "needs_more" ? row.task?.statusLabel : row.when}</span>
       </a>
@@ -1135,7 +1135,8 @@ const AVATAR_COLOURS = ["bg-brand-deep"] as const;
 export const avatarColour = (name: string) => AVATAR_COLOURS[name.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0) % AVATAR_COLOURS.length];
 
 /** Who an item is with: the person named on it, else the business (client side) or IP Factory. */
-const whoName = (task: Task, room: Room) => task.assigneeName || (task.side === "client" ? room.businessName : BRAND.organisationName);
+/** Whose an item is: the person named; on the client's side with one person, that person (ET, 14 November 2026). */
+const whoName = (task: Task, room: Room) => task.assigneeName || (task.side === "client" ? (room.people.length === 1 ? room.people[0]!.name : room.businessName) : BRAND.organisationName);
 /** A person's initials in a circle; the name shows on hover and to screen readers. */
 function Avatar({ name }: { name: string }) {
   return <span title={name} className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-medium text-white ${avatarColour(name)}`}><span aria-hidden>{initials(name)}</span><span className="sr-only">{name}</span></span>;
@@ -1209,7 +1210,7 @@ function PlanView({ room, now }: { room: Room; now: number }) {
                   ? <span aria-hidden className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${group.id === "done" ? "bg-health-clear" : "bg-brand"} text-white`}><Check className="h-3 w-3" /></span>
                   : <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />}
                 <span className="min-w-0 flex-1">
-                  <span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}{item.mine && <span className="ml-2 text-xs text-brand">for you</span>}</span>
+                  <span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}{isClientOpen(item) && <span className="ml-2 inline-block rounded-full bg-brand-tint px-2 py-0.5 align-middle text-[11px] font-semibold text-brand-deep">To do</span>}</span>
                   <span className="block text-xs text-ink-muted">{item.kind === "data_request" ? METHOD.dataRequest : "Action"}{group.id === "checking" || group.id === "done" ? ` · ${clientStatus(item)}` : ""}</span>
                 </span>
                 <span className="hidden sm:block"><Avatar name={whoName(item, room)} /></span>

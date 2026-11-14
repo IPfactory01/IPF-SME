@@ -970,7 +970,7 @@ function ContentAdmin({ data, engagementId }: { data: Detail; engagementId: numb
   const months = Array.from(new Set([1, 2, 3, ...data.content.map(item => item.month)])).sort((a, b) => a - b);
   return (
     <DetailSection title={`Content (${data.content.length})`}>
-      <p className="text-xs text-ink-muted">Reels, posts and stories by month. Move a piece to For your approval when the client should see it; it counts once they approve it. Nothing is published without their yes.</p>
+      <p className="text-xs text-ink-muted">Reels, posts and stories by month. Move a piece to For approval when the client should see it; it counts once they approve it. Nothing is published without their yes.</p>
       {months.map(month => {
         const items = data.content.filter(item => item.month === month);
         if (!items.length) return null;

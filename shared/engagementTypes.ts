@@ -128,7 +128,7 @@ export const CONTENT_KIND_LABELS: Record<ContentKind, string> = { reel: "Reel", 
 export const CONTENT_STATUSES = ["planned", "in_edit", "for_approval", "changes_requested", "approved", "published"] as const;
 export type ContentStatus = (typeof CONTENT_STATUSES)[number];
 export const CONTENT_STATUS_LABELS: Record<ContentStatus, string> = {
-  planned: "Planned", in_edit: "In edit", for_approval: "For your approval", changes_requested: "Changes requested", approved: "Approved", published: "Published",
+  planned: "Planned", in_edit: "In edit", for_approval: "For approval", changes_requested: "Changes requested", approved: "Approved", published: "Published",
 };
 /** Counted towards the month's numbers once the client has approved it. */
 /** What counts towards the month: content published, not only approved (R77, as the Crown Studio agreement counts it). */

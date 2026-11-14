@@ -13,7 +13,7 @@ type Item = Room["content"][number];
 
 /** The board's columns, in the order work moves; what waits on the client comes first. */
 const COLUMNS: { id: string; name: string; statuses: ContentStatus[] }[] = [
-  { id: "approval", name: "For your approval", statuses: ["for_approval"] },
+  { id: "approval", name: "For approval", statuses: ["for_approval"] },
   { id: "progress", name: "In progress", statuses: ["planned", "in_edit", "changes_requested"] },
   { id: "approved", name: "Approved", statuses: ["approved"] },
   { id: "published", name: "Published", statuses: ["published"] },

@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Tags name the action alone (To do, To follow up, To review, Ready for review, For approval), never \"you\"; the client's open items read To do, with the one person's initials when the business has one person | ET, 14 November 2026 |
 | One person follows up each client item, chosen by its kind of work (Content: Content Producer; Marketing: Digital Marketer; Engagement: Engagement Manager, who oversees all); every Work Plan item starts with a verb; migration 0027 (R94) | ET, 14 November 2026 |
 | On a client's item the team member named follows it up (tag You follow up), not To do; Waiting on you counts only the reader's own (R91 amended) | ET, 14 November 2026 |
 | Mine splits into My tasks (owned) and My reviews (checked, ready first); every row is tagged To do, To review or Ready for your review, and the panel says the reader's part (R91 amended) | ET, 14 November 2026 |

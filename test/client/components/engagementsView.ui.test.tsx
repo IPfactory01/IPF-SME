@@ -778,7 +778,7 @@ describe("the team's workspace (R82)", () => {
     // Hers to review, not to do: under My reviews, tagged, and her part said in the panel.
     fireEvent.change(screen.getByRole("combobox", { name: "Whose items" }), { target: { value: "reviews" } });
     for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
-    expect(screen.getByRole("button", { name: "Open A video of the new menu" }).textContent).toContain("Ready for your review");
+    expect(screen.getByRole("button", { name: "Open A video of the new menu" }).textContent).toContain("Ready for review");
     // Waiting on her, not ticked off as done.
     expect(screen.getByRole("switch", { name: /Waiting on you/ }).textContent).toContain("1");
     fireEvent.click(screen.getByRole("button", { name: "Open A video of the new menu" }));

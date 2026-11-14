@@ -725,8 +725,9 @@ describe("the team's workspace (R82)", () => {
     const open = () => { for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); } };
     const titles = () => { open(); return screen.queryAllByRole("button", { name: /^Open (?!Ada Foods)/ }).map(button => button.getAttribute("aria-label")!.replace(/^Open /, "")); };
     const whose = screen.getByRole("combobox", { name: "Whose items" }) as HTMLSelectElement;
-    expect(whose.value).toBe("mine");
+    expect(whose.value).toBe("tasks");
     expect(titles()).toEqual(["Prepare shot lists and editing templates"]);
+    expect(screen.getByRole("button", { name: "Open Prepare shot lists and editing templates" }).textContent).toContain("To do");
     fireEvent.change(whose, { target: { value: "everyone" } });
     expect(titles()).toHaveLength(3);
     fireEvent.change(whose, { target: { value: "2" } });
@@ -772,8 +773,15 @@ describe("the team's workspace (R82)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
     fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
     for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    // Hers to review, not to do: under My reviews, tagged, and her part said in the panel.
+    fireEvent.change(screen.getByRole("combobox", { name: "Whose items" }), { target: { value: "reviews" } });
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    expect(screen.getByRole("button", { name: "Open A video of the new menu" }).textContent).toContain("Ready for your review");
+    // Waiting on her, not ticked off as done.
+    expect(screen.getByRole("switch", { name: /Waiting on you/ }).textContent).toContain("1");
     fireEvent.click(screen.getByRole("button", { name: "Open A video of the new menu" }));
     const details = within(screen.getByRole("complementary", { name: "Task details" }));
+    expect(details.getByText("You review this, and it is ready for your review.")).toBeTruthy();
     expect(details.getByText("Kemi Producer")).toBeTruthy();
     fireEvent.click(details.getByRole("button", { name: "Mark received" }));
     expect(api.calls.reviewTask.at(-1)).toEqual({ taskId: 71, decision: "received", note: null });

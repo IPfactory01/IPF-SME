@@ -13,11 +13,13 @@ const sessionTime = (date: Date) => new Intl.DateTimeFormat("en-GB", { timeZone:
  * holding that week's items and its booked Sessions. This week first and open, next week open, later weeks folded to
  * one line, past weeks folded to what is done unless something is still outstanding. The caller draws each item.
  */
-export default function WeekCards<T extends Dated>({ startedOn, items, sessions, isDone, isWaiting, waitingLabel, renderItem, note, noteWeeks = [], onMarkHeld, emptyText, now = Date.now() }: {
+export default function WeekCards<T extends Dated>({ startedOn, items, sessions, isDone, isWaiting, waitingLabel, renderItem, note, noteWeeks = [], onMarkHeld, emptyText, firstIf, now = Date.now() }: {
   startedOn: string | null;
   items: T[];
   sessions: WeekSession[];
   isDone: (item: T) => boolean;
+  /** Items to lead their week, such as those waiting for this person's review. */
+  firstIf?: (item: T) => boolean;
   /** Whether an item waits on the person reading, for the switch at the top. */
   isWaiting: (item: T) => boolean;
   waitingLabel: string;
@@ -54,7 +56,7 @@ export default function WeekCards<T extends Dated>({ startedOn, items, sessions,
       </div>
       {ordered.map(week => {
         const key = week === null ? "none" : String(week);
-        const its = shown.filter(item => weekOfItem(item) === week).sort((a, b) => Number(isDone(a)) - Number(isDone(b)) || (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999") || a.id - b.id);
+        const its = shown.filter(item => weekOfItem(item) === week).sort((a, b) => Number(Boolean(firstIf?.(b))) - Number(Boolean(firstIf?.(a))) || Number(isDone(a)) - Number(isDone(b)) || (a.dueOn ?? "9999").localeCompare(b.dueOn ?? "9999") || a.id - b.id);
         const meetings = onlyWaiting ? [] : booked.filter(session => weekOfSession(session) === week).sort((a, b) => new Date(a.scheduledFor!).getTime() - new Date(b.scheduledFor!).getTime());
         const place = weekPlace(startedOn, week, today);
         const done = its.filter(isDone).length;

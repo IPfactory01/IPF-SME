@@ -1,6 +1,6 @@
 import ProgressView from "@/components/room/Progress";
 import { progressOf } from "@/lib/progress";
-import { matchesSearch, matchesWhose, whoseFrom, whoseValue, type Whose } from "@/lib/planFilter";
+import { matchesSearch, matchesWhose, roleOf, roleTag, whoseFrom, whoseValue, type Whose } from "@/lib/planFilter";
 import { firstNameOf } from "@shared/whatsapp";
 import WhatsAppShare from "./WhatsAppShare";
 import { Failed, Loading } from "@/components/states";
@@ -223,7 +223,7 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
     || (item.side === "client" ? data.businessName || "The client" : item.ownerName || "No one yet");
   const groupOf = (item: Task) => TEAM_PLAN_GROUPS.find(group => group.test(item)) ?? TEAM_PLAN_GROUPS[1]!;
   // Whose items, and a search (ET, 13 November 2026): the lead starts on everyone's, everyone else on their own.
-  const [whose, setWhose] = useState<Whose>(() => (data.can.seeAllTasks ? "everyone" : "mine"));
+  const [whose, setWhose] = useState<Whose>(() => (data.can.seeAllTasks ? "everyone" : "tasks"));
   const [query, setQuery] = useState("");
   const shown = data.tasks.filter(item => item.id === selected || (matchesWhose(item, whose, data.viewerUserId) && matchesSearch(item, query)));
   const people = data.team.filter(member => member.name);
@@ -237,7 +237,8 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
           <label className="flex items-center gap-2 text-sm text-ink-600">Show
             <select aria-label="Whose items" className="min-h-9 rounded-md border border-line-soft bg-white px-2 text-sm text-ink" value={whoseValue(whose)} onChange={event => setWhose(whoseFrom(event.target.value))}>
               <option value="everyone">Everyone's</option>
-              <option value="mine">Mine</option>
+              <option value="tasks">My tasks</option>
+              <option value="reviews">My reviews</option>
               <option value="client">{data.businessName || "The client"}</option>
               {people.filter(member => member.userId !== data.viewerUserId).map(member => <option key={member.userId} value={member.userId}>{member.name}</option>)}
             </select>
@@ -246,12 +247,13 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
             className="min-h-9 min-w-0 flex-1 rounded-md border border-line-soft bg-white px-3 text-sm text-ink placeholder:text-ink-muted sm:max-w-xs" />
         </div>
         {/* Weekly cards (R85), as the client sees them, with each week's Sessions. */}
-        <WeekCards startedOn={data.engagement.startedOn ?? null} items={shown} sessions={query.trim() || (whose !== "everyone" && whose !== "mine") ? [] : data.sessions} now={now}
-          emptyText={whose === "mine" && !query.trim() ? "Nothing on the plan is yours. Show everyone's to see the rest." : "Nothing matches. Try everyone's, or another word."}
+        <WeekCards startedOn={data.engagement.startedOn ?? null} items={shown} firstIf={item => item.status === "received" && roleOf(item, data.viewerUserId).reviews} sessions={query.trim() || (whose !== "everyone" && whose !== "tasks") ? [] : data.sessions} now={now}
+          emptyText={query.trim() ? "Nothing matches. Try everyone's, or another word." : whose === "tasks" ? "No tasks of yours on the plan. Show everyone's to see the rest." : whose === "reviews" ? "Nothing on the plan for you to review." : "Nothing matches. Try everyone's, or another word."}
           onMarkHeld={data.can.markHeld ? (sessionId, held) => { if (!markHeld.isPending) markHeld.mutate({ sessionId, held }); } : undefined}
           // Handed in or sent is done from the sender's side (R87); for the lead it waits on their review.
-          isDone={item => groupOf(item).id === "done" || (!data.can.seeAllTasks && groupOf(item).id === "checking")}
-          isWaiting={item => groupOf(item).id === "us" || (data.can.seeAllTasks && groupOf(item).id === "checking")} waitingLabel={data.can.seeAllTasks ? "Waiting on IP Factory" : "Waiting on you"}
+          // ...except for its reviewer, for whom it waits: ready for their review, first in its week.
+          isDone={item => groupOf(item).id === "done" || (!data.can.seeAllTasks && groupOf(item).id === "checking" && !roleOf(item, data.viewerUserId).reviews)}
+          isWaiting={item => groupOf(item).id === "us" || ((data.can.seeAllTasks || roleOf(item, data.viewerUserId).reviews) && groupOf(item).id === "checking")} waitingLabel={data.can.seeAllTasks ? "Waiting on IP Factory" : "Waiting on you"}
           renderItem={item => {
             const group = groupOf(item);
             // Something the client has sent is not late: it waits on us to check it.
@@ -266,7 +268,11 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
                   ? <span aria-hidden className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${group.id === "done" ? "bg-health-clear" : "bg-brand"} text-white`}><Check className="h-3 w-3" /></span>
                   : <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />}
                 <span className="min-w-0 flex-1">
-                  <span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}</span>
+                  <span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}{(() => {
+                    // Whose part this is, for the person reading (ET, 14 November 2026).
+                    const tag = group.id === "done" ? null : roleTag(item, data.viewerUserId);
+                    return tag && <span className={`ml-2 inline-block rounded-full px-2 py-0.5 align-middle text-[11px] font-semibold no-underline ${tag.tone === "ready" ? "bg-highlight text-brand-deep" : tag.tone === "review" ? "border border-brand-plum text-brand-plum" : "bg-brand-tint text-brand-deep"}`}>{tag.text}</span>;
+                  })()}</span>
                   <span className="block text-xs text-ink-muted">{[group.id === "checking" ? (item.side === "ipf" ? (data.can.seeAllTasks ? "Handed in: review it" : "Handed in, pending review") : (data.can.seeAllTasks ? "Sent by the client: review it" : "Sent, pending review")) : group.id === "done" ? "Completed" : group.name, item.kind === "data_request" ? METHOD.dataRequest : "Action", item.comments.length ? `${item.comments.length} ${item.comments.length === 1 ? "message" : "messages"}` : "", item.files.length ? `${item.files.length} ${item.files.length === 1 ? "file" : "files"}` : ""].filter(Boolean).join(" · ")}</span>
                 </span>
                 {item.owners.length > 0
@@ -344,6 +350,7 @@ function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detai
       <h3 className="font-sans text-lg font-semibold tracking-tight text-ink">{task.title}</h3>
       <Owners task={task} data={data} engagementId={engagementId} />
       <Reviewer task={task} data={data} engagementId={engagementId} />
+      <YourPart task={task} data={data} />
       <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
         <dt className="text-ink-muted">With</dt><dd>{task.side === "client" ? data.businessName || "The client" : task.goesTo?.name || "IP Factory"}</dd>
         <dt className="text-ink-muted">Due</dt><dd className={flag && !sent ? FLAG_TONE[flag.tone] : ""}>{task.dueOn ? dayInWords(task.dueOn) : "No date"}{flag && !sent && flag.tone === "late" ? ` · ${flag.text}` : ""}</dd>
@@ -387,6 +394,14 @@ function ReviewDecision({ task, engagementId }: { task: Task; engagementId: numb
       </div>
     </div>
   );
+}
+
+/** The reader's part in the item: theirs to do, theirs to review, or both (ET, 14 November 2026). */
+function YourPart({ task, data }: { task: Task; data: Detail }) {
+  const role = roleOf(task, data.viewerUserId);
+  if (!role.owns && !role.reviews) return null;
+  const text = role.owns && role.reviews ? "You own this and review it." : role.owns ? "You own this: it is yours to do." : task.status === "received" ? "You review this, and it is ready for your review." : "You review this once it is sent.";
+  return <p className="rounded-lg bg-brand-tint-soft px-3 py-2 text-sm font-medium text-brand-deep">{text}</p>;
 }
 
 /** Who checks the item (R89): its reviewer by name; the lead can name someone else, or go back to the default. */
@@ -461,6 +476,7 @@ function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; 
       <h3 className="font-sans text-lg font-semibold tracking-tight text-ink">{task.title}</h3>
       <Owners task={task} data={data} engagementId={engagementId} />
       <Reviewer task={task} data={data} engagementId={engagementId} />
+      <YourPart task={task} data={data} />
       <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
         <dt className="text-ink-muted">For</dt><dd>{task.side === "client" ? data.businessName || "The client" : "IP Factory"}</dd>
         <dt className="text-ink-muted">Due</dt><dd className={flag ? FLAG_TONE[flag.tone] : ""}>{flag?.text ?? "No date"}</dd>

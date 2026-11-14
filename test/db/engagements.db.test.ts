@@ -430,7 +430,7 @@ for (const target of targets) {
 
         // The client sends it: Kemi has it on Today, not the lead; Mira cannot decide it; Kemi marks it received.
         await (await s.owner.call()).engagement.client.respondToTask({ taskId: logo.id, note: "Sent on WhatsApp" });
-        expect((await kemi.engagement.staff.today()).find(item => item.kind === "check" && item.engagementId === s.engagementId)).toMatchObject({ title: "Logo, colours and fonts" });
+        expect((await kemi.engagement.staff.today()).find(item => item.kind === "check" && item.engagementId === s.engagementId)).toMatchObject({ title: "Logo, colours and fonts", taskId: logo.id });
         expect((await lead.engagement.staff.today()).some(item => item.kind === "check" && item.engagementId === s.engagementId)).toBe(false);
         // A day on, Kemi is reminded; three days on, Kemi and the lead.
         await db.update(schema.engagementTasks).set({ receivedAt: new Date(`${s.today}T09:00:00+01:00`) }).where(eq(schema.engagementTasks.id, logo.id));

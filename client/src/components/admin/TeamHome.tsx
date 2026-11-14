@@ -3,6 +3,7 @@ import { BRAND } from "@shared/brand";
 import { METHOD } from "@shared/method";
 import { firstNameOf } from "@shared/whatsapp";
 import { taskFromLink } from "@shared/links";
+import { groupToday } from "./Today";
 import { ADMIN_SECTIONS, PIPELINE_STAGES, visibleAdminSections, type AdminAccessView, type AdminSectionId, type ConsoleTarget, type PipelineStage } from "@/lib/adminSections";
 import { trpc } from "@/lib/trpc";
 import { avatarColour, initials } from "@/components/EngagementRoom";
@@ -47,6 +48,9 @@ export default function TeamHome({ access, now = new Date() }: { access: Access;
   const [arrival] = useState(() => (typeof window === "undefined" ? null : taskFromLink(window.location.search)));
   const [view, setView] = useState<View>(() => (arrival ? { kind: "engagement", id: arrival.engagementId } : { kind: "home" }));
   const [stage, setStage] = useState<PipelineStage>("checks");
+  // A row in Today opens its item in the engagement's Work Plan (ET, 14 November 2026).
+  const [picked, setPicked] = useState<{ engagementId: number; taskId: number } | null>(null);
+  const waiting = today.data ? groupToday(today.data).length : 0;
   // The desk's sections other than delivery, for those whose role has them (Pipeline, Clients, Finance).
   // The desk's sections other than delivery, for those whose role has them: Pipeline, Clients, Finance, and Team for a
   // Super Admin. The console is retired: these are its screens, in the room's frame (ET, 13 November 2026).
@@ -83,7 +87,7 @@ export default function TeamHome({ access, now = new Date() }: { access: Access;
         </a>
         <ul className="space-y-0.5">
           <li><button type="button" className={`${RAIL_LINK} ${view.kind === "home" ? RAIL_ACTIVE : ""}`} onClick={() => go({ kind: "home" })}>Home</button></li>
-          <li><button type="button" className={RAIL_LINK} onClick={() => go({ kind: "home" })}><span>My tasks</span>{(today.data?.length ?? 0) > 0 && <span className="rounded-full bg-brand-plum px-2 text-xs font-medium text-white tabular-nums" aria-label={`${today.data!.length} for you today`}>{today.data!.length}</span>}</button></li>
+          <li><button type="button" className={RAIL_LINK} onClick={() => go({ kind: "home" })}><span>My tasks</span>{waiting > 0 && <span className="rounded-full bg-brand-plum px-2 text-xs font-medium text-white tabular-nums" aria-label={`${waiting} for you today`}>{waiting}</span>}</button></li>
         </ul>
         <div>
           <p className="px-3 text-xs text-ink-muted">Your projects</p>
@@ -142,7 +146,7 @@ export default function TeamHome({ access, now = new Date() }: { access: Access;
           )}
         </div>
         {view.kind === "engagement" ? (
-          <EngagementWorkspace engagementId={view.id} myRole={open?.myRole ?? null} onBack={() => go({ kind: "home" })} openTaskId={arrival && arrival.engagementId === view.id ? arrival.taskId : null} />
+          <EngagementWorkspace engagementId={view.id} myRole={open?.myRole ?? null} onBack={() => go({ kind: "home" })} openTaskId={picked && picked.engagementId === view.id ? picked.taskId : arrival && arrival.engagementId === view.id ? arrival.taskId : null} />
         ) : (
           <main className="mx-auto max-w-6xl space-y-4 px-4 py-5 sm:px-7">
             <DatabaseBehind />
@@ -153,7 +157,7 @@ export default function TeamHome({ access, now = new Date() }: { access: Access;
                 <h1 className="font-sans text-2xl font-semibold tracking-tight text-ink">{sectionLabel(view.id)}</h1>
                 <div className="overflow-hidden rounded-xl border border-line-soft bg-white"><ConsoleSection id={view.id} access={access} stage={stage} onStage={setStage} onOpen={openTarget} /></div>
               </>
-            ) : <EngagementsView home header={greeting} onOpenProject={id => go({ kind: "engagement", id })} />}
+            ) : <EngagementsView home header={greeting} onOpenProject={(id, taskId) => { setPicked(taskId ? { engagementId: id, taskId } : null); go({ kind: "engagement", id }); }} />}
           </main>
         )}
       </div>

@@ -513,7 +513,7 @@ export async function todayFor(db: Database, actor: StaffActor, now = Date.now()
   const manages = authorityAllows(actor.authority, "manage_engagements");
   const reviews = authorityAllows(actor.authority, "review_engagements");
   const matchedIds = new Set(matched.map(row => row.fileId));
-  type Item = { key: string; kind: "reply" | "clock" | "check" | "request" | "meeting" | "held" | "files" | "approval" | "fee" | "mention" | "review" | "due"; engagementId: number; businessName: string; title: string; detail: string; at: Date | null; late: boolean };
+  type Item = { key: string; taskId?: number; kind: "reply" | "clock" | "check" | "request" | "meeting" | "held" | "files" | "approval" | "fee" | "mention" | "review" | "due"; engagementId: number; businessName: string; title: string; detail: string; at: Date | null; late: boolean };
   const items: Item[] = [];
   for (const engagement of rows) {
     const businessName = await businessNameOf(db, engagement);
@@ -530,22 +530,22 @@ export async function todayFor(db: Database, actor: StaffActor, now = Date.now()
       const said = comments.filter(comment => comment.taskId === task.id);
       const tagged = [...said].reverse().find(comment => comment.authorUserId !== actor.id && mentionedIn(comment.body, people).some(person => person.userId === actor.id));
       const replied = tagged && said.some(comment => comment.authorUserId === actor.id && comment.id > tagged.id);
-      if (tagged && !replied) items.push({ key: `mention-${task.id}`, kind: "mention", engagementId: engagement.id, businessName, title: task.title, detail: `${tagged.authorName || "A colleague"}: ${tagged.body.length > 90 ? `${tagged.body.slice(0, 90)}…` : tagged.body}`, at: tagged.createdAt, late: false });
+      if (tagged && !replied) items.push({ key: `mention-${task.id}`, taskId: task.id, kind: "mention", engagementId: engagement.id, businessName, title: task.title, detail: `${tagged.authorName || "A colleague"}: ${tagged.body.length > 90 ? `${tagged.body.slice(0, 90)}…` : tagged.body}`, at: tagged.createdAt, late: false });
       // A team item that is this person's, due by tomorrow or late (R88).
-      if (task.side === "ipf" && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn <= addDays(today, 1) && ownersOfTask(crew, task, extra.get(task.id)).includes(actor.id)) items.push({ key: `due-${task.id}`, kind: "due", engagementId: engagement.id, businessName, title: task.title, detail: task.dueOn < today ? `Was due ${dayInWords(task.dueOn)}: hand it in, or tell the lead` : task.dueOn === today ? "Due today" : "Due tomorrow", at: new Date(`${task.dueOn}T12:00:00Z`), late: task.dueOn < today });
+      if (task.side === "ipf" && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn <= addDays(today, 1) && ownersOfTask(crew, task, extra.get(task.id)).includes(actor.id)) items.push({ key: `due-${task.id}`, taskId: task.id, kind: "due", engagementId: engagement.id, businessName, title: task.title, detail: task.dueOn < today ? `Was due ${dayInWords(task.dueOn)}: hand it in, or tell the lead` : task.dueOn === today ? "Due today" : "Due tomorrow", at: new Date(`${task.dueOn}T12:00:00Z`), late: task.dueOn < today });
       // A team item handed in waits on the lead (R86).
-      if (task.side === "ipf" && task.status === "received" && reviewerOfTask(crew, task) === actor.id) items.push({ key: `review-${task.id}`, kind: "review", engagementId: engagement.id, businessName, title: task.title, detail: `Handed in by ${crew.find(member => member.userId === (task.assigneeUserId ?? task.createdByUserId))?.name ?? "a colleague"}: mark it done or ask for more`, at: task.updatedAt, late: false });
+      if (task.side === "ipf" && task.status === "received" && reviewerOfTask(crew, task) === actor.id) items.push({ key: `review-${task.id}`, taskId: task.id, kind: "review", engagementId: engagement.id, businessName, title: task.title, detail: `Handed in by ${crew.find(member => member.userId === (task.assigneeUserId ?? task.createdByUserId))?.name ?? "a colleague"}: mark it done or ask for more`, at: task.updatedAt, late: false });
     }
     for (const task of own) {
       const last = comments.filter(comment => comment.taskId === task.id).at(-1);
-      if (last?.fromClient && goesToMe(task)) items.push({ key: `reply-${task.id}`, kind: "reply", engagementId: engagement.id, businessName, title: task.title, detail: `${last.authorName || "The client"}: ${last.body.length > 90 ? `${last.body.slice(0, 90)}…` : last.body}`, at: last.createdAt, late: false });
+      if (last?.fromClient && goesToMe(task)) items.push({ key: `reply-${task.id}`, taskId: task.id, kind: "reply", engagementId: engagement.id, businessName, title: task.title, detail: `${last.authorName || "The client"}: ${last.body.length > 90 ? `${last.body.slice(0, 90)}…` : last.body}`, at: last.createdAt, late: false });
       if (task.turnaround && task.followUpDueAt && !task.followUpDoneAt && goesToMe(task)) {
         const left = task.followUpDueAt.getTime() - now;
-        items.push({ key: `clock-${task.id}`, kind: "clock", engagementId: engagement.id, businessName, title: task.title, detail: `${TURNAROUND_LABELS[task.turnaround]} ${left < 0 ? "is late" : "due"}`, at: task.followUpDueAt, late: left < 0 });
+        items.push({ key: `clock-${task.id}`, taskId: task.id, kind: "clock", engagementId: engagement.id, businessName, title: task.title, detail: `${TURNAROUND_LABELS[task.turnaround]} ${left < 0 ? "is late" : "due"}`, at: task.followUpDueAt, late: left < 0 });
       }
       // What the client sent waits for review (R87): late once it has waited a day.
-      if (task.status === "received" && reviewerOfTask(crew, task) === actor.id) items.push({ key: `check-${task.id}`, kind: "check", engagementId: engagement.id, businessName, title: task.title, detail: "Sent by the client: review it, then mark it Received or ask for more. They see it as pending review.", at: task.receivedAt, late: Boolean(task.receivedAt && now - task.receivedAt.getTime() >= 86_400_000) });
-      if (task.requestedByUserId === actor.id && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn < today) items.push({ key: `request-${task.id}`, kind: "request", engagementId: engagement.id, businessName, title: task.title, detail: `Your request, due ${dayInWords(task.dueOn)}, is not answered yet`, at: new Date(`${task.dueOn}T12:00:00Z`), late: true });
+      if (task.status === "received" && reviewerOfTask(crew, task) === actor.id) items.push({ key: `check-${task.id}`, taskId: task.id, kind: "check", engagementId: engagement.id, businessName, title: task.title, detail: "Sent by the client: review it, then mark it Received or ask for more. They see it as pending review.", at: task.receivedAt, late: Boolean(task.receivedAt && now - task.receivedAt.getTime() >= 86_400_000) });
+      if (task.requestedByUserId === actor.id && OPEN_TASK_STATUSES.includes(task.status) && task.dueOn && task.dueOn < today) items.push({ key: `request-${task.id}`, taskId: task.id, kind: "request", engagementId: engagement.id, businessName, title: task.title, detail: `Your request, due ${dayInWords(task.dueOn)}, is not answered yet`, at: new Date(`${task.dueOn}T12:00:00Z`), late: true });
     }
     for (const session of sessions.filter(item => item.engagementId === engagement.id && item.scheduledFor && item.scheduledFor.getTime() >= now && item.scheduledFor.getTime() < now + 7 * 86_400_000)) {
       items.push({ key: `meeting-${session.id}`, kind: "meeting", engagementId: engagement.id, businessName, title: session.title, detail: session.meetingLink ? "With the Join link" : "No Join link yet", at: session.scheduledFor, late: false });
@@ -564,7 +564,8 @@ export async function todayFor(db: Database, actor: StaffActor, now = Date.now()
     }
   }
   // Late first, then what is soonest; replies and checks oldest first, as they have waited longest.
-  return items.sort((a, b) => Number(b.late) - Number(a.late) || (a.at ? a.at.getTime() : Infinity) - (b.at ? b.at.getTime() : Infinity));
+  // Each item says which Work Plan item it is about, so a click opens that item (ET, 14 November 2026).
+  return items.map(item => ({ ...item, taskId: item.taskId ?? null })).sort((a, b) => Number(b.late) - Number(a.late) || (a.at ? a.at.getTime() : Infinity) - (b.at ? b.at.getTime() : Infinity));
 }
 
 /** The engagements this person may see, newest first, with what the desk needs at a glance. */

@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Today and What needs you here become one row per item (reasons together) and a row opens the item in the Work Plan (R93) | ET, 14 November 2026 |
 | A Progress tab second after the Overview for the client and the team, worked out from the records (no chart library, no data entered twice); the team also sees each owner's load (R92) | ET, 14 November 2026 |
 | The Work Plan filters by whose items (everyone's, Mine, the client's, a colleague's: owned or reviewed) and searches by title or code; the lead starts on everyone's, everyone else on Mine; the client has the search (R91) | ET, 13 November 2026 |
 | Several files per upload on an item (the client and the team); links in messages open; everyone's initials are two letters so owners can be told apart | ET, 13 November 2026 |

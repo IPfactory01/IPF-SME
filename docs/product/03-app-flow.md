@@ -256,12 +256,12 @@ flowchart TD
 Every team member has a WhatsApp number on their profile (R44); the room shows it beside them, and an item meant for
 one of them offers **Send on WhatsApp to {name}**. Each person agrees to their number being shown (PRD K11).
 
-**Today** (R52, built): at the top of the Engagements tab, one list across a person's projects, late first, so nobody
+**Today** (R52, built; one row per item since R93): at the top of the Engagements tab, one list across a person's projects, late first, so nobody
 opens every project to find their work. Each card names the kind, the item and the business, and opens the engagement:
 *Client wrote* (the last message on an item is the client's), *Clock* (a First edit, with the hours left or how late),
 *To check* (the client sent it; mark it received or ask for more), *Your request* (past its day), *Meeting* (the next
 seven days), *Did it happen?* (a booked Session that has ended and nobody marked, for its lead and whoever booked it, R90), *Files* (to match), *To approve* (a Deliverable, for leads and Partners), *Fee* (late or paused, for those
-who see fees). An item that goes to someone else is left out; the lead of an engagement sees all of its items. With
+who see fees). An item that needs the person for several reasons is one row with the reasons together (*Client wrote · To check*); a row opens that item in its engagement's Work Plan, selected, and a Session, files, an approval or a fee opens its own tab; the same list is *What needs you here* on an engagement's Overview (R93). An item that goes to someone else is left out; the lead of an engagement sees all of its items. With
 nothing waiting it says *Nothing needs you right now across your projects.*
 
 What the team never does by hand now that R12, R16 and R36 are built: chase a Data Request, chase a fee, work out a

@@ -509,12 +509,13 @@ describe("the team's workspace (R82)", () => {
     { userId: 2, role: "manager", roleLabel: "Engagement Manager", name: "Lewis Lead", email: "lewis@example.test", jobTitle: null },
   ];
 
-  it("opens a project as a full page in the room's layout for someone who does not see every engagement, and goes back", () => {
+  it("opens a project as a full page in the room's layout for someone who does not see every engagement, and goes back", async () => {
     api.seesAll = false;
     api.list = { setUp: true, items: [{ ...row, myRole: "Content Producer" }, { ...row, id: 5, businessName: "Bola Bakery", myRole: "Content Producer" }] };
     api.detail = { ...detail({ manage: false, assign: false, review: false, contribute: true, seeFees: false }, [], [task({ id: 51, title: "Send week 3 footage" })]), team, sessions: [{ ...session, title: "Weekly Check-in", scheduledFor: soon, meetingLink: "https://us02web.zoom.us/j/81234567890" }] };
     api.today = [
-      { key: "reply-51", kind: "reply", engagementId: 4, businessName: "Ada Foods", title: "Send week 3 footage", detail: "Ada Okafor: Is landscape fine?", at: new Date(), late: false },
+      { key: "reply-51", taskId: 51, kind: "reply", engagementId: 4, businessName: "Ada Foods", title: "Send week 3 footage", detail: "Ada Okafor: Is landscape fine?", at: new Date(), late: false },
+      { key: "check-51", taskId: 51, kind: "check", engagementId: 4, businessName: "Ada Foods", title: "Send week 3 footage", detail: "Sent by the client: review it", at: new Date(), late: false },
       { key: "files-5", kind: "files", engagementId: 5, businessName: "Bola Bakery", title: "2 files to match", detail: "Sent to the drop box", at: null, late: false },
     ];
     render(<EngagementsView />);
@@ -528,7 +529,12 @@ describe("the team's workspace (R82)", () => {
     expect(page.getAllByRole("tab").map(tab => tab.textContent)).toEqual(["Overview1", "Progress", "Work Plan1", "Files", "Sessions", "Deliverables"]);
     // What needs them here is this engagement's only; the next meeting has its Join link.
     const needs = within(page.getByRole("region", { name: /What needs you here/ }));
-    expect(needs.getAllByRole("group").map(card => card.getAttribute("aria-label"))).toEqual(["Client wrote: Send week 3 footage"]);
+    // One row for the item, with both reasons; a tap opens it in the Work Plan (ET, 14 November 2026).
+    expect(needs.getAllByRole("button").map(row => row.getAttribute("aria-label"))).toEqual(["Client wrote · To check: Send week 3 footage"]);
+    fireEvent.click(needs.getByRole("button", { name: "Client wrote · To check: Send week 3 footage" }));
+    await waitFor(() => expect(page.getByRole("tab", { name: /^Work Plan/ }).getAttribute("aria-selected")).toBe("true"));
+    expect(within(page.getByRole("complementary", { name: "Task details" })).getByRole("heading", { name: "Send week 3 footage" })).toBeTruthy();
+    fireEvent.click(page.getByRole("tab", { name: /^Overview/ }));
     const next = within(page.getByRole("region", { name: "Next meeting" }));
     expect(next.getByText("Weekly Check-in")).toBeTruthy();
     expect(next.getByRole("link", { name: "Join" }).getAttribute("href")).toBe("https://us02web.zoom.us/j/81234567890");
@@ -907,6 +913,16 @@ describe("my projects", () => {
     expect(cards[1]!.textContent).toContain("Is landscape fine?");
     fireEvent.click(cards[1]!);
     expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("opens Home's Today rows on their item in the project's Work Plan (ET, 14 November 2026)", () => {
+    api.list = { setUp: true, items: [{ ...row, myRole: "Content Producer" }] };
+    api.detail = { ...detail({ manage: false, assign: false, review: false, contribute: true }, [], [task({ id: 52, title: "A video of the new menu" })]) };
+    api.today = [{ key: "reply-52", taskId: 52, kind: "reply", engagementId: 4, businessName: "Ada Foods", title: "A video of the new menu", detail: "Ada Okafor: Is landscape fine?", at: new Date(), late: false }];
+    const opened: unknown[] = [];
+    render(<EngagementsView home onOpenProject={(id, taskId) => opened.push([id, taskId])} />);
+    fireEvent.click(within(screen.getByRole("region", { name: /Today/ })).getByRole("button", { name: "Client wrote: A video of the new menu, Ada Foods" }));
+    expect(opened).toEqual([[4, 52]]);
   });
 
   it("says so when nothing needs the person", () => {

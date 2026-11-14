@@ -55,7 +55,7 @@ import {
 } from "@shared/engagement";
 import type { inferRouterOutputs } from "@trpc/server";
 import { CONTENT_KIND_LABELS, CONTENT_KINDS, CONTENT_STATUS_LABELS, CONTENT_STATUSES, type ContentKind, type ContentStatus } from "@shared/engagementTypes";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Linked from "@/components/room/Linked";
 import { toast } from "sonner";
 import type { AppRouter } from "../../../../server/routers";
@@ -67,7 +67,7 @@ import { ArrowLeft, Check, Flag } from "lucide-react";
 import RoomTabs, { type RoomTab } from "@/components/room/RoomTabs";
 import { avatarColour, dueFlag, FLAG_TONE, initials } from "@/components/EngagementRoom";
 import { METHOD } from "@shared/method";
-import { TodayCard } from "./Today";
+import { groupToday, TodayList } from "./Today";
 import WeekCards from "@/components/room/WeekCards";
 import { StaffFileStrip } from "@/components/room/FileStrip";
 import { FeePaymentList, RecordPaymentForm, WriteOffControls } from "./FeePayments";
@@ -141,7 +141,15 @@ function TheClient({ data, engagementId }: { data: Detail; engagementId: number 
 /** In the workspace each item is a short row that opens into its form; in the drawer the forms show as before (R82). */
 const Compact = React.createContext(false);
 /** The item a link from an email opens (R89): the workspace starts on the Work Plan with its panel open. */
-const FocusTask = React.createContext<number | null>(null);
+/** The item to open in the Work Plan: from an email's link, or a row in What needs you here (a new time opens it again). */
+const FocusTask = React.createContext<{ taskId: number; at: number } | null>(null);
+
+/** Shows a tab of the workspace, even when the address already names it. */
+function showTab(id: string) {
+  if (typeof window === "undefined") return;
+  if (window.location.hash === `#${id}`) window.dispatchEvent(new HashChangeEvent("hashchange"));
+  else window.location.hash = `#${id}`;
+}
 const ROW = "flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-line-soft bg-white px-3 py-2.5 text-left";
 const PILL = "rounded-full bg-paper-sunken px-2 py-0.5 text-xs text-ink-600";
 const DELIVERABLE_STATUS_WORDS: Record<Deliverable["status"], string> = { draft: "Draft", awaiting_approval: "Waiting for approval", approved: "Approved", shared: "Shared" };
@@ -205,7 +213,11 @@ const PRIORITY_WORDS = { high: "High", medium: "Medium", low: "Low" } as const;
  */
 function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; engagementId: number; now?: number }) {
   const focus = React.useContext(FocusTask);
-  const [selected, setSelected] = useState<number | null>(() => (focus !== null && data.tasks.some(item => item.id === focus) ? focus : null));
+  const [selected, setSelected] = useState<number | null>(() => (focus !== null && data.tasks.some(item => item.id === focus.taskId) ? focus.taskId : null));
+  // A row in What needs you here opens its item here.
+  useEffect(() => {
+    if (focus && data.tasks.some(item => item.id === focus.taskId)) setSelected(focus.taskId);
+  }, [focus, data.tasks]);
   const task = data.tasks.find(item => item.id === selected) ?? null;
   const nameOf = (item: Task) => (item.assigneeUserId !== null ? [...data.clientPeople.map(person => ({ id: person.userId, name: person.name })), ...data.team.map(member => ({ id: member.userId, name: member.name ?? "" }))].find(person => person.id === item.assigneeUserId)?.name : undefined)
     || (item.side === "client" ? data.businessName || "The client" : item.ownerName || "No one yet");
@@ -493,11 +505,13 @@ const Card = ({ children }: { children: React.ReactNode }) => <div className="ro
 export function EngagementWorkspace({ engagementId, myRole, onBack, openTaskId = null, now = Date.now() }: { engagementId: number; myRole: string | null; onBack: () => void; openTaskId?: number | null; now?: number }) {
   const detail = trpc.engagement.staff.detail.useQuery({ engagementId });
   const today = trpc.engagement.staff.today.useQuery(undefined);
+  const [focus, setFocus] = useState<{ taskId: number; at: number } | null>(() => (openTaskId !== null ? { taskId: openTaskId, at: 0 } : null));
   const back = <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm font-medium text-brand"><ArrowLeft className="h-4 w-4" aria-hidden />All my projects</button>;
   if (detail.error && detail.data === undefined) return <div className="space-y-3 p-4">{back}<Failed error={detail.error} onRetry={() => void detail.refetch()} retrying={detail.isFetching} /></div>;
   if (!detail.data) return <div className="space-y-3 p-4">{back}<Loading label="Loading the engagement" rows={4} /></div>;
   const data = detail.data;
   const mine = (today.data ?? []).filter(item => item.engagementId === engagementId);
+  const rows = groupToday(mine);
   const next = data.sessions.filter(session => session.status === "planned" && session.scheduledFor && new Date(session.scheduledFor).getTime() >= now).sort((a, b) => new Date(a.scheduledFor!).getTime() - new Date(b.scheduledFor!).getTime())[0] ?? null;
   const withClient = data.tasks.filter(task => task.side === "client" && OPEN_TASK_STATUSES.includes(task.status)).length;
   const unsorted = data.inbox.filter(file => !file.taskIds.length).length;
@@ -512,8 +526,12 @@ export function EngagementWorkspace({ engagementId, myRole, onBack, openTaskId =
     <div className="grid gap-4 p-4 sm:p-7 lg:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="min-w-0 space-y-4">
         <section aria-labelledby="needs-you-here" className="space-y-2">
-          <h2 id="needs-you-here" className="text-sm font-semibold text-ink">What needs you here <span className="font-normal text-ink-muted">({mine.length})</span></h2>
-          {mine.length ? <ul className="grid gap-2 sm:grid-cols-2">{mine.map(item => <li key={item.key}><TodayCard item={item} now={now} /></li>)}</ul>
+          <h2 id="needs-you-here" className="text-sm font-semibold text-ink">What needs you here <span className="font-normal text-ink-muted">({rows.length})</span></h2>
+          {rows.length ? <TodayList rows={rows} now={now} onOpen={(_, taskId, kind) => {
+            // An item opens in the Work Plan; the rest open where they live.
+            if (taskId !== null) { setFocus({ taskId, at: Date.now() }); showTab("plan"); return; }
+            showTab(kind === "meeting" || kind === "held" ? "meetings" : kind === "files" ? "files" : kind === "approval" ? "deliverables" : kind === "fee" ? "fees" : "overview");
+          }} />
             : <p className="rounded-xl border border-line-soft bg-white p-4 text-sm text-ink-muted">Nothing needs you on {data.businessName || "this engagement"} right now.</p>}
         </section>
         <section aria-labelledby="next-meeting" className="rounded-xl border border-line-soft bg-white p-4">
@@ -534,7 +552,7 @@ export function EngagementWorkspace({ engagementId, myRole, onBack, openTaskId =
   );
   const pane = (children: React.ReactNode) => <div className="space-y-4 p-4 sm:p-7"><Card>{children}</Card></div>;
   const tabs: RoomTab[] = [
-    { id: "overview", label: "Overview", count: count(mine.length, `${mine.length} for you`), content: overview },
+    { id: "overview", label: "Overview", count: count(rows.length, `${rows.length} for you`), content: overview },
     { id: "progress", label: "Progress", content: <div className="p-4 sm:p-7"><TeamProgress data={data} engagementId={engagementId} now={now} /></div> },
     ...(data.engagement.type === "digital_marketing" ? [{ id: "content", label: "Content", content: pane(<ContentAdmin data={data} engagementId={engagementId} />) }] : []),
     { id: "plan", label: METHOD.workPlan, count: count(withClient, `${withClient} with the client`), content: pane(<Tasks data={data} engagementId={engagementId} />) },
@@ -571,7 +589,7 @@ export function EngagementWorkspace({ engagementId, myRole, onBack, openTaskId =
         </div>
       </section>
       {data.hold && <div className="px-4 pt-4 sm:px-7"><FeeHoldNote hold={data.hold} /></div>}
-      <Compact.Provider value={true}><FocusTask.Provider value={openTaskId}><RoomTabs label={`${data.businessName} workspace`} initial={openTaskId !== null ? "plan" : "overview"} tabs={tabs} /></FocusTask.Provider></Compact.Provider>
+      <Compact.Provider value={true}><FocusTask.Provider value={focus}><RoomTabs label={`${data.businessName} workspace`} initial={openTaskId !== null ? "plan" : "overview"} tabs={tabs} /></FocusTask.Provider></Compact.Provider>
     </div>
   );
 }

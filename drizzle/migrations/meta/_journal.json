@@ -190,6 +190,13 @@
       "when": 1794601559001,
       "tag": "0026_engagement_task_owners",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1794648485359,
+      "tag": "0027_task_work",
+      "breakpoints": true
     }
   ]
 }

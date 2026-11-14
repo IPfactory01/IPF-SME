@@ -107,8 +107,8 @@ describe("the Digital Marketing plan (R77, ET 11 November 2026)", () => {
     ]);
     const footage = DIGITAL_MARKETING.clientActions.filter(item => /^Send week \d+ footage$/.test(item.title));
     expect(footage.map(item => [item.week, item.weekday])).toEqual(Array.from({ length: 12 }, (_, index) => [index + 1, 4]));
-    expect(DIGITAL_MARKETING.dataRequests[0]).toMatchObject({ ref: "K1", title: "Kick-off questions", week: 1 });
-    expect(DIGITAL_MARKETING.teamActions.map(item => item.title)).toEqual(["Content plan for month 1", "Baseline numbers", "Google Business Profile assessment and growth plan", "Content plan for month 2", "Content plan for month 3"]);
+    expect(DIGITAL_MARKETING.dataRequests[0]).toMatchObject({ ref: "K1", title: "Answer the kick-off questions", week: 1 });
+    expect(DIGITAL_MARKETING.teamActions.map(item => item.title)).toEqual(["Prepare the content plan for month 1", "Record the baseline numbers", "Assess the Google Business Profile and plan its growth", "Prepare the content plan for month 2", "Prepare the content plan for month 3"]);
     expect(DIGITAL_MARKETING.stages.map(stage => stage.title)).toEqual(["Onboarding", "Month 1", "Month 1 review", "Month 2", "Month 2 review", "Month 3", "Month 3 review"]);
   });
 

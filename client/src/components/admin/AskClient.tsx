@@ -76,7 +76,7 @@ export function AskClient({ data, engagementId, onDone }: { data: Detail; engage
       <p className="text-sm font-semibold text-ink">Ask {business}</p>
       <p className="text-xs text-ink-muted">{business} is emailed and sees it in their room, with your name. Their messages about it, and what they send, come to you.</p>
       <label className={LABEL} htmlFor="ask-title">What you need</label>
-      <input id="ask-title" className={FIELD} maxLength={REQUEST_TITLE_MAX} placeholder="A video of the new menu being made" value={title} onChange={event => setTitle(event.target.value)} />
+      <input id="ask-title" className={FIELD} maxLength={REQUEST_TITLE_MAX} placeholder="Start with a verb: Film the new menu being made" value={title} onChange={event => setTitle(event.target.value)} />
       <label className={LABEL} htmlFor="ask-brief">The brief</label>
       <textarea id="ask-brief" className={FIELD} rows={3} maxLength={REQUEST_BRIEF_MAX} placeholder="What, why and how: what to film or send, how long, what to avoid." value={brief} onChange={event => setBrief(event.target.value)} />
       {data.uploadsEnabled && (

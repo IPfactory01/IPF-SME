@@ -37,6 +37,9 @@ import {
   ENGAGEMENT_DELIVERABLE_KIND_LABELS,
   ENGAGEMENT_STAGE_LABELS,
   ENGAGEMENT_TASK_STATUS_LABELS,
+  ENGAGEMENT_TASK_WORK_LABELS,
+  workOfRole,
+  type EngagementTaskWork,
   ENGAGEMENT_TEAM_ROLE_LABELS,
   ENGAGEMENT_TEAM_ROLE_ORDER,
   journeyOf,
@@ -263,7 +266,7 @@ function starterTaskRows(engagementId: number, starter: Starter, startsOn: strin
     ...starter.teamActions.map(item => ({ kind: "action" as const, side: "ipf" as const, ...item })),
   ].map(item => ({
     engagementId, kind: item.kind, side: item.side, title: item.title, detail: item.detail, dueOn: starterDueOn(startsOn, item.week, item.weekday), weekNumber: item.week, sortOrder: item.order,
-    section: item.section ?? null, ref: item.ref ?? null, informs: item.informs ?? null, format: item.format ?? null, priority: item.priority ?? null, turnaround: item.turnaround ?? null, createdByUserId: actorUserId,
+    section: item.section ?? null, ref: item.ref ?? null, informs: item.informs ?? null, format: item.format ?? null, priority: item.priority ?? null, turnaround: item.turnaround ?? null, work: "work" in item ? item.work ?? null : null, createdByUserId: actorUserId,
   }));
 }
 
@@ -460,6 +463,8 @@ export function reviewerOfTask<T extends { userId: number; role: EngagementTeamR
 /** Everyone an item belongs to on the team (R89): its lead owner, then the others. */
 export function ownersOfTask<T extends { userId: number; role: EngagementTeamRole }>(team: readonly T[], task: Pick<typeof engagementTasks.$inferSelect, "side" | "assigneeUserId" | "requestedByUserId" | "turnaround">, others: readonly number[] = []) {
   const lead = ownerOfTask(team, task);
+  // A client's item has one person on the team, who follows it up (ET, 14 November 2026); a team item may be shared.
+  if (task.side === "client") return lead === null ? [] : [lead];
   return Array.from(new Set([...(lead === null ? [] : [lead]), ...others.filter(id => team.some(member => member.userId === id))]));
 }
 
@@ -871,6 +876,18 @@ export async function reviewTask(db: Database, actor: StaffActor, input: { taskI
   return { success: true, status } as const;
 }
 
+/**
+ * The kind of work of a client's item (0027, ET 14 November 2026): it decides who follows the item up (the Content
+ * Producer, the Digital Marketer or the Engagement Manager). The lead, or whoever assigns engagements.
+ */
+export async function setTaskWork(db: Database, actor: StaffActor, input: { taskId: number; work: EngagementTaskWork | null }) {
+  const { task, leads } = await requireStaffTask(db, actor, input.taskId);
+  if (!leads && !authorityAllows(actor.authority, "assign_engagements")) throw new TRPCError({ code: "FORBIDDEN", message: "The lead sets an item's kind of work." });
+  await db.update(engagementTasks).set({ work: input.work }).where(eq(engagementTasks.id, task.id));
+  await recordAudit(db, { action: "engagement_task_work_set", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, work: input.work } });
+  return { success: true } as const;
+}
+
 /** Name an item's reviewer (R89), or clear it back to the default. The lead, or whoever assigns engagements. */
 export async function setTaskReviewer(db: Database, actor: StaffActor, input: { taskId: number; userId: number | null }) {
   const { task, team, leads } = await requireStaffTask(db, actor, input.taskId);
@@ -888,6 +905,7 @@ export async function setTaskReviewer(db: Database, actor: StaffActor, input: { 
 export async function setTaskOwners(db: Database, actor: StaffActor, input: { taskId: number; leadUserId: number; otherUserIds: number[] }) {
   const { task, team, leads } = await requireStaffTask(db, actor, input.taskId);
   if (!leads && ownerOfTask(team, task) !== actor.id) throw new TRPCError({ code: "FORBIDDEN", message: "The lead, or the item's lead owner, sets who owns it." });
+  if (task.side === "client") throw new TRPCError({ code: "BAD_REQUEST", message: "A client's item has one person who follows it up, set by its kind of work. Change its kind of work instead." });
   const others = Array.from(new Set(input.otherUserIds.filter(id => id !== input.leadUserId)));
   if (![input.leadUserId, ...others].every(id => team.some(member => member.userId === id))) throw new TRPCError({ code: "BAD_REQUEST", message: "Everyone who owns an item must be on the engagement team." });
   await db.transaction(async tx => {
@@ -1234,10 +1252,12 @@ export async function askClient(db: Database, actor: StaffActor, input: AskInput
   const weekNumber = engagement.startedOn
     ? Math.min(12, Math.max(1, Math.floor((Date.parse(`${input.dueOn}T12:00:00Z`) - Date.parse(`${engagement.startedOn}T12:00:00Z`)) / (7 * 86_400_000)) + 1))
     : null;
+  // The kind of work follows the asker's role: footage asked by the Content Producer is content (0027).
+  const asker = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and(eq(engagementTeam.engagementId, engagement.id), eq(engagementTeam.userId, actor.id))).limit(1))[0];
   const taskId = await db.transaction(async tx => {
     const [created] = await tx.insert(engagementTasks).values({
       engagementId: engagement.id, kind: "action", side: "client", title: input.title.trim(), detail: input.brief, dueOn: input.dueOn, status: "open",
-      weekNumber, sortOrder, turnaround: input.turnaround, requestedByUserId: actor.id, createdByUserId: actor.id,
+      weekNumber, sortOrder, turnaround: input.turnaround, work: input.turnaround ? "content" : workOfRole(asker?.role), requestedByUserId: actor.id, createdByUserId: actor.id,
     }).returning({ id: engagementTasks.id });
     await recordAudit(tx, { action: "engagement_request_sent", actorUserId: actor.id, details: { engagementId: engagement.id, taskId: created.id, dueOn: input.dueOn, ...(input.turnaround ? { turnaround: input.turnaround } : {}) } });
     return created.id;

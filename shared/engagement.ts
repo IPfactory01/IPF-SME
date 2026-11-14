@@ -122,6 +122,29 @@ export const ENGAGEMENT_TASK_STATUS_LABELS: Record<EngagementTaskStatus, string>
  * week 1, low by the end of week 2. Shown to the client beside each item.
  */
 export const ENGAGEMENT_TASK_PRIORITIES = ["high", "medium", "low"] as const;
+
+/**
+ * The kind of work an item is (0027, ET 14 November 2026): it decides who on the team follows a client's item up.
+ * Content (footage, edits, reels to approve, brand assets for content) is the Content Producer's; Marketing (accounts,
+ * profiles, services and prices, offers, booking, ads, reviews, results) the Digital Marketer's; Engagement (scope,
+ * kick-off answers, payments, decisions, handover) the Engagement Manager's.
+ */
+export const ENGAGEMENT_TASK_WORKS = ["content", "marketing", "engagement"] as const;
+export type EngagementTaskWork = (typeof ENGAGEMENT_TASK_WORKS)[number];
+export const ENGAGEMENT_TASK_WORK_LABELS: Record<EngagementTaskWork, string> = { content: "Content", marketing: "Marketing", engagement: "Engagement" };
+/** Who follows up each kind of work, in order: the first of these roles on the team. */
+export const WORK_ROLES: Record<EngagementTaskWork, readonly EngagementTeamRole[]> = {
+  content: ["content_producer"],
+  marketing: ["digital_marketer"],
+  engagement: ["manager", "lead"],
+};
+/** The kind of work a team member's request to the client is, from their role on the engagement. */
+export function workOfRole(role: EngagementTeamRole | null | undefined): EngagementTaskWork | null {
+  if (role === "content_producer") return "content";
+  if (role === "digital_marketer") return "marketing";
+  if (role === "manager" || role === "lead") return "engagement";
+  return null;
+}
 export type EngagementTaskPriority = (typeof ENGAGEMENT_TASK_PRIORITIES)[number];
 export const ENGAGEMENT_TASK_PRIORITY_LABELS: Record<EngagementTaskPriority, string> = { high: "High", medium: "Medium", low: "Low" };
 /** Lengths of a Data Request's section ("B Financial performance"), reference ("B1"), purpose and format. */
@@ -160,20 +183,20 @@ export type EngagementDeliverableStatus = (typeof ENGAGEMENT_DELIVERABLE_STATUSE
 export const ASSESSMENT_TEMPLATE = {
   /** What we need from the client, by week. Week 1 is due in three working days, week 2 in eight. */
   dataRequests: [
-    { week: 1, order: 1, factor: "internal" as const, title: "Six quick questions before your first Session", detail: "A few words each is enough. 1. What do you sell, and who buys it? 2. At month end, how do you know whether you made money? 3. Does more than one business run through the same account? 4. Which decisions wait for you? 5. What happens when you are away for a week? 6. If you could fix one thing in three months, what would it be?" },
-    { week: 1, order: 2, factor: "internal" as const, title: "Your sales for the last 12 months", detail: "Month by month. A sales book, a till report or photos of your records all work." },
-    { week: 1, order: 3, factor: "internal" as const, title: "What you spend each month", detail: "Rent, salaries, stock, power, fuel and loan repayments. A rough list is fine." },
-    { week: 1, order: 4, factor: "internal" as const, title: "Your price list", detail: "What you charge for each product or service, and the discounts you give." },
-    { week: 1, order: 5, factor: "internal" as const, title: "Who works in the business", detail: "Each role, what they do and what they are paid. Names are optional." },
-    { week: 2, order: 1, factor: "internal" as const, title: "Bank statements for the last 6 months", detail: "The business account, and any personal account that business money passes through." },
-    { week: 2, order: 2, factor: "internal" as const, title: "Money owed to you, and money you owe", detail: "Unpaid customer bills, supplier debts and loans." },
-    { week: 2, order: 3, factor: "internal" as const, title: "Anything you already track", detail: "Spreadsheets, notebooks or app reports. Send them as they are." },
-    { week: 2, order: 4, factor: "external" as const, title: "Ten customers: why they buy, and why some stopped", detail: "Names are optional. A line each is enough; we may call two or three of them with you." },
+    { week: 1, order: 1, factor: "internal" as const, title: "Answer six quick questions before your first Session", detail: "A few words each is enough. 1. What do you sell, and who buys it? 2. At month end, how do you know whether you made money? 3. Does more than one business run through the same account? 4. Which decisions wait for you? 5. What happens when you are away for a week? 6. If you could fix one thing in three months, what would it be?" },
+    { week: 1, order: 2, factor: "internal" as const, title: "Send your sales for the last 12 months", detail: "Month by month. A sales book, a till report or photos of your records all work." },
+    { week: 1, order: 3, factor: "internal" as const, title: "List what you spend each month", detail: "Rent, salaries, stock, power, fuel and loan repayments. A rough list is fine." },
+    { week: 1, order: 4, factor: "internal" as const, title: "Send your price list", detail: "What you charge for each product or service, and the discounts you give." },
+    { week: 1, order: 5, factor: "internal" as const, title: "List who works in the business", detail: "Each role, what they do and what they are paid. Names are optional." },
+    { week: 2, order: 1, factor: "internal" as const, title: "Send bank statements for the last 6 months", detail: "The business account, and any personal account that business money passes through." },
+    { week: 2, order: 2, factor: "internal" as const, title: "List money owed to you, and money you owe", detail: "Unpaid customer bills, supplier debts and loans." },
+    { week: 2, order: 3, factor: "internal" as const, title: "Send anything you already track", detail: "Spreadsheets, notebooks or app reports. Send them as they are." },
+    { week: 2, order: 4, factor: "external" as const, title: "Tell us why ten customers buy, and why some stopped", detail: "Names are optional. A line each is enough; we may call two or three of them with you." },
   ],
   /** What the team does in the Work Plan, so the client sees our side of the two weeks as well as theirs. */
   teamActions: [
-    { week: 1, order: 6, factor: "external" as const, title: "Your three main competitors and what they charge", detail: "From their price lists, their customers and a visit where we can." },
-    { week: 2, order: 5, factor: "internal" as const, title: "Profit by product or outlet, from your numbers", detail: "What each line of the business actually makes once its own costs are counted." },
+    { week: 1, order: 6, factor: "external" as const, title: "Find your three main competitors and what they charge", detail: "From their price lists, their customers and a visit where we can." },
+    { week: 2, order: 5, factor: "internal" as const, title: "Work out profit by product or outlet, from your numbers", detail: "What each line of the business actually makes once its own costs are counted." },
   ],
   sessions: [
     {
@@ -349,7 +372,7 @@ export function splitNumberedList(text: string): { intro: string; items: string[
  */
 export function planRoleOf(type: string, title: string): EngagementTeamRole | null {
   if (type === "digital_marketing") return "digital_marketer";
-  if (/^consultant review$/i.test(title.trim())) return "lead";
+  if (/^(consultant review|review the work before handover)$/i.test(title.trim())) return "lead";
   if (type === "business_review" || type === "assessment" || type === "done_for_you" || type === "six_week_fix" || type === "monthly_service") return "analyst";
   return null;
 }

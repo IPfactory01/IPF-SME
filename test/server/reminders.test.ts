@@ -56,12 +56,12 @@ describe("the reminder emails", () => {
   });
 
   it("lists the client's items in one email, and tells the lead what is outstanding", () => {
-    const items = [{ title: "Your price list", dueOn: "2026-11-19" }, { title: "Logo, colours and fonts", dueOn: "2026-11-20" }];
+    const items = [{ title: "Send your price list", dueOn: "2026-11-19" }, { title: "Send your logo, colours and fonts", dueOn: "2026-11-20" }];
     const soon = itemsReminderEmail({ stage: "soon", name: "Ada Okafor", title: "Digital Marketing", items, roomUrl: "https://ipfactory.example.test/dashboard" });
-    expect(soon.subject).toBe("Coming up: Your price list and 1 more, due Thursday 19 November");
-    expect(soon.body).toContain("• Logo, colours and fonts, due Friday 20 November");
-    expect(itemsReminderEmail({ stage: "late", name: "", title: "Digital Marketing", items: items.slice(0, 1), roomUrl: "x" }).subject).toBe("Still waiting: Your price list");
-    expect(outstandingLeadEmail({ businessName: "Ada Foods", items: items.slice(0, 1), today: "2026-11-23" }).body).toContain("Your price list, due Thursday 19 November (4 days late)");
+    expect(soon.subject).toBe("Coming up: Send your price list and 1 more, due Thursday 19 November");
+    expect(soon.body).toContain("• Send your logo, colours and fonts, due Friday 20 November");
+    expect(itemsReminderEmail({ stage: "late", name: "", title: "Digital Marketing", items: items.slice(0, 1), roomUrl: "x" }).subject).toBe("Still waiting: Send your price list");
+    expect(outstandingLeadEmail({ businessName: "Ada Foods", items: items.slice(0, 1), today: "2026-11-23" }).body).toContain("Send your price list, due Thursday 19 November (4 days late)");
   });
 
   it("warns of a First edit due within a day, and says when it is past its time", () => {
@@ -89,10 +89,10 @@ describe("the reminder emails", () => {
   });
 
   it("tells the lead what the client sent and nobody has reviewed, a day on and three days on (R87)", () => {
-    const base = { title: "Your price list", businessName: "Ada Foods", receivedAt: new Date("2026-11-12T09:00:00Z") };
-    expect(reviewReminderEmail({ ...base, late: false }).subject).toBe("Waiting for your review: Your price list, Ada Foods");
+    const base = { title: "Send your price list", businessName: "Ada Foods", receivedAt: new Date("2026-11-12T09:00:00Z") };
+    expect(reviewReminderEmail({ ...base, late: false }).subject).toBe("Waiting for your review: Send your price list, Ada Foods");
     const late = reviewReminderEmail({ ...base, late: true });
-    expect(late.subject).toBe("Still waiting for your review: Your price list, Ada Foods");
+    expect(late.subject).toBe("Still waiting for your review: Send your price list, Ada Foods");
     expect(late.body).toContain("sent, pending review");
   });
 });

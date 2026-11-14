@@ -9,7 +9,7 @@
  * client directly (the first is Crown Studio, from the JUMP programme), with the scope of the approved prototype:
  * 15 reels, 5 posts and 20 stories a month over 90 days, a weekly check-in and a review each month.
  */
-import type { EngagementSessionKind, EngagementTaskPriority, EngagementTaskTurnaround } from "./engagement";
+import type { EngagementSessionKind, EngagementTaskPriority, EngagementTaskTurnaround, EngagementTaskWork } from "./engagement";
 import { PRODUCTS, type Product, type WayToBuy } from "./products";
 
 /**
@@ -46,7 +46,7 @@ export type TypeStage = { title: string; summary: string; from: number; to: numb
  * `weekday` (0 Sunday to 6 Saturday): the item falls due on that day of its week, not on day 3 (R77). `turnaround`: what
  * the team sends back once it arrives, against a clock (R78): footage becomes the First edit within 48 hours.
  */
-type StarterItem = { title: string; detail: string; week: number; order: number; section?: string; ref?: string; priority?: EngagementTaskPriority; informs?: string; format?: string; weekday?: number; turnaround?: EngagementTaskTurnaround };
+type StarterItem = { title: string; detail: string; week: number; order: number; section?: string; ref?: string; priority?: EngagementTaskPriority; informs?: string; format?: string; weekday?: number; turnaround?: EngagementTaskTurnaround; work?: EngagementTaskWork };
 type StarterSession = { kind: EngagementSessionKind; title: string; week: number; order: number; durationMinutes: number; agenda: string };
 
 export type DatedEngagementType = {
@@ -74,24 +74,24 @@ export const DIGITAL_MARKETING: DatedEngagementType = {
   ],
   monthly: [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }],
   dataRequests: [
-    { week: 1, order: 0, section: "K Kick-off", ref: "K1", priority: "high", title: "Kick-off questions", detail: "Before the kick-off: where the business is today, your goals for the 90 days, your best sellers, your typical customers, the competitors you watch, and what has worked before.", informs: "The goals and the Measures of Success we agree at the kick-off", format: "A note, or a voice note" },
-    { week: 1, order: 1, section: "A Brand", ref: "A1", priority: "high", title: "Logo, colours and fonts", detail: "Whatever you use today: the logo files, and the colours and fonts if you have them.", informs: "So every reel and post looks like your business", format: "Any" },
-    { week: 1, order: 2, section: "A Brand", ref: "A2", priority: "medium", title: "Past content that worked", detail: "Five to ten posts or videos you liked, yours or anyone's.", informs: "The style to build on", format: "Links or screenshots" },
-    { week: 1, order: 3, section: "B Accounts", ref: "B1", priority: "high", title: "Access to your accounts", detail: "Instagram and Facebook through Meta Business Suite, TikTok, and your Google Business Profile. We send the steps for each. Never your password.", informs: "Posting, scheduling and the monthly numbers", format: "Partner or manager access" },
-    { week: 1, order: 4, section: "C Offers", ref: "C1", priority: "high", title: "Your services and prices", detail: "What you sell, what each costs, and any offer you are running.", informs: "What the content sells", format: "A list or price board photo" },
-    { week: 1, order: 5, section: "C Offers", ref: "C2", priority: "medium", title: "Your booking link and opening hours", detail: "Where a customer books, and when you are open.", informs: "The call to action in every post", format: "A link" },
+    { week: 1, order: 0, section: "K Kick-off", ref: "K1", priority: "high", work: "engagement", title: "Answer the kick-off questions", detail: "Before the kick-off: where the business is today, your goals for the 90 days, your best sellers, your typical customers, the competitors you watch, and what has worked before.", informs: "The goals and the Measures of Success we agree at the kick-off", format: "A note, or a voice note" },
+    { week: 1, order: 1, section: "A Brand", ref: "A1", priority: "high", work: "content", title: "Send your logo, colours and fonts", detail: "Whatever you use today: the logo files, and the colours and fonts if you have them.", informs: "So every reel and post looks like your business", format: "Any" },
+    { week: 1, order: 2, section: "A Brand", ref: "A2", priority: "medium", work: "content", title: "Share past content that worked", detail: "Five to ten posts or videos you liked, yours or anyone's.", informs: "The style to build on", format: "Links or screenshots" },
+    { week: 1, order: 3, section: "B Accounts", ref: "B1", priority: "high", work: "marketing", title: "Give us access to your accounts", detail: "Instagram and Facebook through Meta Business Suite, TikTok, and your Google Business Profile. We send the steps for each. Never your password.", informs: "Posting, scheduling and the monthly numbers", format: "Partner or manager access" },
+    { week: 1, order: 4, section: "C Offers", ref: "C1", priority: "high", work: "marketing", title: "Send your services and prices", detail: "What you sell, what each costs, and any offer you are running.", informs: "What the content sells", format: "A list or price board photo" },
+    { week: 1, order: 5, section: "C Offers", ref: "C2", priority: "medium", work: "marketing", title: "Send your booking link and opening hours", detail: "Where a customer books, and when you are open.", informs: "The call to action in every post", format: "A link" },
   ],
   // The weekly cycle (R77): footage every Thursday, edited within 48 hours, shared for approval on Saturday.
   clientActions: [
-    ...Array.from({ length: 12 }, (_, index) => ({ week: index + 1, order: 6, weekday: 4, priority: "high" as const, turnaround: "first_edit" as const, title: `Send week ${index + 1} footage`, detail: "Six or more vertical clips by Thursday, filmed with your Content Producer's guidance for the week: they make next week's reels. We edit within 48 hours of them arriving." })),
-    { week: 2, order: 1, priority: "high", title: "Approve the first reels", detail: "Nothing is published without your yes. Two rounds of changes are included." },
+    ...Array.from({ length: 12 }, (_, index) => ({ week: index + 1, order: 6, weekday: 4, priority: "high" as const, turnaround: "first_edit" as const, work: "content" as const, title: `Send week ${index + 1} footage`, detail: "Six or more vertical clips by Thursday, filmed with your Content Producer's guidance for the week: they make next week's reels. We edit within 48 hours of them arriving." })),
+    { week: 2, order: 1, priority: "high", work: "content", title: "Approve the first reels", detail: "Nothing is published without your yes. Two rounds of changes are included." },
   ],
   teamActions: [
-    { week: 1, order: 7, title: "Content plan for month 1", detail: "The reels, posts and stories for the month, by week, with the offers they carry. Shared in the room for the client's approval." },
-    { week: 1, order: 8, title: "Baseline numbers", detail: "Reach, engagement, enquiries and sales from each platform today, to measure against." },
-    { week: 2, order: 3, title: "Google Business Profile assessment and growth plan", detail: "What the profile shows today, what to fix, and how it grows enquiries. Shared in the room." },
-    { week: 4, order: 3, title: "Content plan for month 2", detail: "Shaped by the month 1 numbers. Shared in the room for the client's approval before month 2 starts." },
-    { week: 8, order: 3, title: "Content plan for month 3", detail: "Shaped by the month 2 numbers. Shared in the room for the client's approval before month 3 starts." },
+    { week: 1, order: 7, work: "content", title: "Prepare the content plan for month 1", detail: "The reels, posts and stories for the month, by week, with the offers they carry. Shared in the room for the client's approval." },
+    { week: 1, order: 8, work: "marketing", title: "Record the baseline numbers", detail: "Reach, engagement, enquiries and sales from each platform today, to measure against." },
+    { week: 2, order: 3, work: "marketing", title: "Assess the Google Business Profile and plan its growth", detail: "What the profile shows today, what to fix, and how it grows enquiries. Shared in the room." },
+    { week: 4, order: 3, work: "content", title: "Prepare the content plan for month 2", detail: "Shaped by the month 1 numbers. Shared in the room for the client's approval before month 2 starts." },
+    { week: 8, order: 3, work: "content", title: "Prepare the content plan for month 3", detail: "Shaped by the month 2 numbers. Shared in the room for the client's approval before month 3 starts." },
   ],
   // Weekly Check-ins in month 1, then every two weeks; a review at the end of each month (R77).
   sessions: [
@@ -158,14 +158,14 @@ export function serviceStep(input: { recordsOpen: number; shared: number; accept
  * of work ends with one).
  */
 export function serviceStarter(product: Product): Pick<DatedEngagementType, "dataRequests" | "clientActions" | "teamActions" | "sessions"> {
-  const records = product.intake.records.map((record, index) => ({ week: 1, order: index + 1, section: "A Records", ref: `A${index + 1}`, priority: (record.required ? "high" : "medium") as EngagementTaskPriority, title: record.label, detail: record.detail }));
-  const questions = product.intake.questions.map((question, index) => ({ week: 1, order: records.length + index + 1, section: "B Questions", ref: `B${index + 1}`, priority: (question.required ? "high" : "medium") as EngagementTaskPriority, title: question.label, detail: question.hint ?? "Answer in a few lines; a voice note is fine.", format: "A short answer" }));
+  const records = product.intake.records.map((record, index) => ({ week: 1, order: index + 1, section: "A Records", ref: `A${index + 1}`, priority: (record.required ? "high" : "medium") as EngagementTaskPriority, title: `Send ${record.label.charAt(0).toLowerCase()}${record.label.slice(1)}`, detail: record.detail }));
+  const questions = product.intake.questions.map((question, index) => ({ week: 1, order: records.length + index + 1, section: "B Questions", ref: `B${index + 1}`, priority: (question.required ? "high" : "medium") as EngagementTaskPriority, title: `Answer: ${question.label}`, detail: question.hint ?? "Answer in a few lines; a voice note is fine.", format: "A short answer" }));
   return {
     dataRequests: [...records, ...questions],
     clientActions: [],
     teamActions: [
       { week: 1, order: 20, title: `Draft the ${product.name}`, detail: "From the records and answers, once they are complete." },
-      { week: 2, order: 21, title: "Consultant review", detail: "A named consultant checks the work before the client sees it." },
+      { week: 2, order: 21, title: "Review the work before handover", detail: "A named consultant checks the work before the client sees it." },
     ],
     sessions: [
       { kind: "other", title: "Kick-off", week: 1, order: 0, durationMinutes: 30, agenda: `What the ${product.name} is for, the records we need, and the delivery date.` },

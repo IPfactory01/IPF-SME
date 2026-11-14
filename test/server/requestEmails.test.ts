@@ -14,7 +14,7 @@ describe("the request emails", () => {
     expect(email.body).toContain("Due: Thursday 19 November.");
     expect(email.body).toContain("we send you the first edit within 48 hours");
     expect(email.body).toContain(`${origin}/dashboard`);
-    expect(requestEmail({ name: "", askedBy: "", title: "Your price list", brief: null, dueOn: "2026-11-19", turnaround: null, engagementTitle: "Business Review", origin }).body).not.toContain("within 48 hours");
+    expect(requestEmail({ name: "", askedBy: "", title: "Send your price list", brief: null, dueOn: "2026-11-19", turnaround: null, engagementTitle: "Business Review", origin }).body).not.toContain("within 48 hours");
   });
 
   it("carries a message to the other side: the team member's first name to the client, the business to the team", () => {
@@ -33,7 +33,7 @@ describe("the request emails", () => {
     expect(email.subject).toBe("Received from Ada Foods: Send week 3 footage. First edit due Sat, 14 Nov 2026, 3:05 pm");
     expect(email.body).toContain("Ada Foods has sent \"Send week 3 footage\" (a link to a shared folder).");
     expect(email.body).toContain("The first edit is due by Sat, 14 Nov 2026, 3:05 pm (Lagos time): 48 hours from when it arrived.");
-    expect(receivedEmail({ name: "", businessName: "Ada Foods", title: "Your price list", how: null, note: "On WhatsApp", clock: null, origin }).subject).toBe("Received from Ada Foods: Your price list");
+    expect(receivedEmail({ name: "", businessName: "Ada Foods", title: "Send your price list", how: null, note: "On WhatsApp", clock: null, origin }).subject).toBe("Received from Ada Foods: Send your price list");
   });
 
   it("tells the owner the First edit waits for their approval", () => {
@@ -43,10 +43,10 @@ describe("the request emails", () => {
   });
 
   it("tells the owners and the lead of a new file on an item, with a link to the item (R89)", () => {
-    const fromClient = newFileEmail({ name: "Lola Lead", uploader: "Ada Okafor", fromClient: true, businessName: "Ada Foods", title: "Logo, colours and fonts", fileName: "IMG_1264.jpeg", link: "https://ipfactory.example.test/admin?engagement=4&task=51" });
-    expect(fromClient.subject).toBe("New file on Logo, colours and fonts: IMG_1264.jpeg");
-    expect(fromClient.body).toContain("Ada Foods added \"IMG_1264.jpeg\" to \"Logo, colours and fonts\".");
+    const fromClient = newFileEmail({ name: "Lola Lead", uploader: "Ada Okafor", fromClient: true, businessName: "Ada Foods", title: "Send your logo, colours and fonts", fileName: "IMG_1264.jpeg", link: "https://ipfactory.example.test/admin?engagement=4&task=51" });
+    expect(fromClient.subject).toBe("New file on Send your logo, colours and fonts: IMG_1264.jpeg");
+    expect(fromClient.body).toContain("Ada Foods added \"IMG_1264.jpeg\" to \"Send your logo, colours and fonts\".");
     expect(fromClient.body).toContain("Open the item: https://ipfactory.example.test/admin?engagement=4&task=51");
-    expect(newFileEmail({ name: "", uploader: "Mira Marketer", fromClient: false, businessName: "Ada Foods", title: "Content plan for month 1", fileName: "plan.pdf", link: "x" }).body).toContain("Mira added \"plan.pdf\" to \"Content plan for month 1\" for Ada Foods.");
+    expect(newFileEmail({ name: "", uploader: "Mira Marketer", fromClient: false, businessName: "Ada Foods", title: "Prepare the content plan for month 1", fileName: "plan.pdf", link: "x" }).body).toContain("Mira added \"plan.pdf\" to \"Prepare the content plan for month 1\" for Ada Foods.");
   });
 });

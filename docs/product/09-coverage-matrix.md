@@ -251,6 +251,7 @@ person is not on is not found unless they see every engagement.
 | `engagement.staff.assignByRole` | Assign by role (R88): team items with no one go to the person in their plan role, else the main contact | The lead, or `assign_engagements` | Engagement |
 | `engagement.staff.setOwners` | An item's owners (R89): a lead owner and anyone who shares it | The lead, or the item's lead owner; everyone named on the team | Engagement |
 | `engagement.staff.reviewTask` | The reviewer's decision (R89): Mark received, or Ask for more with a note | The item's reviewer, or the lead | Engagement |
+| `engagement.staff.setWork` | A client item's kind of work (0027): content, marketing or engagement, which decides who follows it up | The lead, or whoever assigns engagements | Engagement |
 | `engagement.staff.setReviewer` | Who reviews an item (R89), or back to the default | The lead, or whoever assigns engagements; someone on the team | Engagement |
 | `engagement.staff.handIn` | Ready for review (R86): the person a team item is for hands it in; the lead is emailed | Their own team item | Engagement |
 | `engagement.staff.awaitingStart`, `engagement.staff.start`, `engagement.staff.clientBusinesses`, `engagement.staff.createDirect` | Paid with no engagement yet, and starting it; the businesses a new engagement can be for; New engagement | `view_all_businesses` and `manage_engagements` | Engagement |

@@ -3,7 +3,7 @@ import { ASSESSMENT_TEMPLATE, splitNumberedList } from "@shared/engagement";
 
 describe("numbered questions in a task's detail", () => {
   it("splits the six pre-call questions into their opening line and six items", () => {
-    const six = ASSESSMENT_TEMPLATE.dataRequests.find(item => item.title.startsWith("Six quick questions"))!;
+    const six = ASSESSMENT_TEMPLATE.dataRequests.find(item => item.title.startsWith("Answer six quick questions"))!;
     const list = splitNumberedList(six.detail)!;
     expect(list.intro).toBe("A few words each is enough.");
     expect(list.items).toHaveLength(6);

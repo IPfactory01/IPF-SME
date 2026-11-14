@@ -490,24 +490,24 @@ var DIGITAL_MARKETING = {
   ],
   monthly: [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }],
   dataRequests: [
-    { week: 1, order: 0, section: "K Kick-off", ref: "K1", priority: "high", title: "Kick-off questions", detail: "Before the kick-off: where the business is today, your goals for the 90 days, your best sellers, your typical customers, the competitors you watch, and what has worked before.", informs: "The goals and the Measures of Success we agree at the kick-off", format: "A note, or a voice note" },
-    { week: 1, order: 1, section: "A Brand", ref: "A1", priority: "high", title: "Logo, colours and fonts", detail: "Whatever you use today: the logo files, and the colours and fonts if you have them.", informs: "So every reel and post looks like your business", format: "Any" },
-    { week: 1, order: 2, section: "A Brand", ref: "A2", priority: "medium", title: "Past content that worked", detail: "Five to ten posts or videos you liked, yours or anyone's.", informs: "The style to build on", format: "Links or screenshots" },
-    { week: 1, order: 3, section: "B Accounts", ref: "B1", priority: "high", title: "Access to your accounts", detail: "Instagram and Facebook through Meta Business Suite, TikTok, and your Google Business Profile. We send the steps for each. Never your password.", informs: "Posting, scheduling and the monthly numbers", format: "Partner or manager access" },
-    { week: 1, order: 4, section: "C Offers", ref: "C1", priority: "high", title: "Your services and prices", detail: "What you sell, what each costs, and any offer you are running.", informs: "What the content sells", format: "A list or price board photo" },
-    { week: 1, order: 5, section: "C Offers", ref: "C2", priority: "medium", title: "Your booking link and opening hours", detail: "Where a customer books, and when you are open.", informs: "The call to action in every post", format: "A link" }
+    { week: 1, order: 0, section: "K Kick-off", ref: "K1", priority: "high", work: "engagement", title: "Answer the kick-off questions", detail: "Before the kick-off: where the business is today, your goals for the 90 days, your best sellers, your typical customers, the competitors you watch, and what has worked before.", informs: "The goals and the Measures of Success we agree at the kick-off", format: "A note, or a voice note" },
+    { week: 1, order: 1, section: "A Brand", ref: "A1", priority: "high", work: "content", title: "Send your logo, colours and fonts", detail: "Whatever you use today: the logo files, and the colours and fonts if you have them.", informs: "So every reel and post looks like your business", format: "Any" },
+    { week: 1, order: 2, section: "A Brand", ref: "A2", priority: "medium", work: "content", title: "Share past content that worked", detail: "Five to ten posts or videos you liked, yours or anyone's.", informs: "The style to build on", format: "Links or screenshots" },
+    { week: 1, order: 3, section: "B Accounts", ref: "B1", priority: "high", work: "marketing", title: "Give us access to your accounts", detail: "Instagram and Facebook through Meta Business Suite, TikTok, and your Google Business Profile. We send the steps for each. Never your password.", informs: "Posting, scheduling and the monthly numbers", format: "Partner or manager access" },
+    { week: 1, order: 4, section: "C Offers", ref: "C1", priority: "high", work: "marketing", title: "Send your services and prices", detail: "What you sell, what each costs, and any offer you are running.", informs: "What the content sells", format: "A list or price board photo" },
+    { week: 1, order: 5, section: "C Offers", ref: "C2", priority: "medium", work: "marketing", title: "Send your booking link and opening hours", detail: "Where a customer books, and when you are open.", informs: "The call to action in every post", format: "A link" }
   ],
   // The weekly cycle (R77): footage every Thursday, edited within 48 hours, shared for approval on Saturday.
   clientActions: [
-    ...Array.from({ length: 12 }, (_, index2) => ({ week: index2 + 1, order: 6, weekday: 4, priority: "high", turnaround: "first_edit", title: `Send week ${index2 + 1} footage`, detail: "Six or more vertical clips by Thursday, filmed with your Content Producer's guidance for the week: they make next week's reels. We edit within 48 hours of them arriving." })),
-    { week: 2, order: 1, priority: "high", title: "Approve the first reels", detail: "Nothing is published without your yes. Two rounds of changes are included." }
+    ...Array.from({ length: 12 }, (_, index2) => ({ week: index2 + 1, order: 6, weekday: 4, priority: "high", turnaround: "first_edit", work: "content", title: `Send week ${index2 + 1} footage`, detail: "Six or more vertical clips by Thursday, filmed with your Content Producer's guidance for the week: they make next week's reels. We edit within 48 hours of them arriving." })),
+    { week: 2, order: 1, priority: "high", work: "content", title: "Approve the first reels", detail: "Nothing is published without your yes. Two rounds of changes are included." }
   ],
   teamActions: [
-    { week: 1, order: 7, title: "Content plan for month 1", detail: "The reels, posts and stories for the month, by week, with the offers they carry. Shared in the room for the client's approval." },
-    { week: 1, order: 8, title: "Baseline numbers", detail: "Reach, engagement, enquiries and sales from each platform today, to measure against." },
-    { week: 2, order: 3, title: "Google Business Profile assessment and growth plan", detail: "What the profile shows today, what to fix, and how it grows enquiries. Shared in the room." },
-    { week: 4, order: 3, title: "Content plan for month 2", detail: "Shaped by the month 1 numbers. Shared in the room for the client's approval before month 2 starts." },
-    { week: 8, order: 3, title: "Content plan for month 3", detail: "Shaped by the month 2 numbers. Shared in the room for the client's approval before month 3 starts." }
+    { week: 1, order: 7, work: "content", title: "Prepare the content plan for month 1", detail: "The reels, posts and stories for the month, by week, with the offers they carry. Shared in the room for the client's approval." },
+    { week: 1, order: 8, work: "marketing", title: "Record the baseline numbers", detail: "Reach, engagement, enquiries and sales from each platform today, to measure against." },
+    { week: 2, order: 3, work: "marketing", title: "Assess the Google Business Profile and plan its growth", detail: "What the profile shows today, what to fix, and how it grows enquiries. Shared in the room." },
+    { week: 4, order: 3, work: "content", title: "Prepare the content plan for month 2", detail: "Shaped by the month 1 numbers. Shared in the room for the client's approval before month 2 starts." },
+    { week: 8, order: 3, work: "content", title: "Prepare the content plan for month 3", detail: "Shaped by the month 2 numbers. Shared in the room for the client's approval before month 3 starts." }
   ],
   // Weekly Check-ins in month 1, then every two weeks; a review at the end of each month (R77).
   sessions: [
@@ -545,14 +545,14 @@ function serviceStep(input) {
   return 2;
 }
 function serviceStarter(product2) {
-  const records = product2.intake.records.map((record, index2) => ({ week: 1, order: index2 + 1, section: "A Records", ref: `A${index2 + 1}`, priority: record.required ? "high" : "medium", title: record.label, detail: record.detail }));
-  const questions = product2.intake.questions.map((question, index2) => ({ week: 1, order: records.length + index2 + 1, section: "B Questions", ref: `B${index2 + 1}`, priority: question.required ? "high" : "medium", title: question.label, detail: question.hint ?? "Answer in a few lines; a voice note is fine.", format: "A short answer" }));
+  const records = product2.intake.records.map((record, index2) => ({ week: 1, order: index2 + 1, section: "A Records", ref: `A${index2 + 1}`, priority: record.required ? "high" : "medium", title: `Send ${record.label.charAt(0).toLowerCase()}${record.label.slice(1)}`, detail: record.detail }));
+  const questions = product2.intake.questions.map((question, index2) => ({ week: 1, order: records.length + index2 + 1, section: "B Questions", ref: `B${index2 + 1}`, priority: question.required ? "high" : "medium", title: `Answer: ${question.label}`, detail: question.hint ?? "Answer in a few lines; a voice note is fine.", format: "A short answer" }));
   return {
     dataRequests: [...records, ...questions],
     clientActions: [],
     teamActions: [
       { week: 1, order: 20, title: `Draft the ${product2.name}`, detail: "From the records and answers, once they are complete." },
-      { week: 2, order: 21, title: "Consultant review", detail: "A named consultant checks the work before the client sees it." }
+      { week: 2, order: 21, title: "Review the work before handover", detail: "A named consultant checks the work before the client sees it." }
     ],
     sessions: [
       { kind: "other", title: "Kick-off", week: 1, order: 0, durationMinutes: 30, agenda: `What the ${product2.name} is for, the records we need, and the delivery date.` },
@@ -1261,6 +1261,18 @@ var ENGAGEMENT_TASK_FACTORS = ["internal", "external"];
 var ENGAGEMENT_TASK_STATUSES = ["open", "received", "accepted", "needs_more", "done", "not_available", "cancelled"];
 var ENGAGEMENT_TASK_STATUS_LABELS = { open: "To do", received: "Sent, we are checking", accepted: "Received", needs_more: "We need a bit more", done: "Done", not_available: "Not available", cancelled: "No longer needed" };
 var ENGAGEMENT_TASK_PRIORITIES = ["high", "medium", "low"];
+var ENGAGEMENT_TASK_WORKS = ["content", "marketing", "engagement"];
+var WORK_ROLES = {
+  content: ["content_producer"],
+  marketing: ["digital_marketer"],
+  engagement: ["manager", "lead"]
+};
+function workOfRole(role) {
+  if (role === "content_producer") return "content";
+  if (role === "digital_marketer") return "marketing";
+  if (role === "manager" || role === "lead") return "engagement";
+  return null;
+}
 var TASK_SECTION_MAX = 80;
 var TASK_REF_MAX = 8;
 var TASK_INFORMS_MAX = 200;
@@ -1276,20 +1288,20 @@ var ENGAGEMENT_DELIVERABLE_STATUSES = ["draft", "awaiting_approval", "approved",
 var ASSESSMENT_TEMPLATE = {
   /** What we need from the client, by week. Week 1 is due in three working days, week 2 in eight. */
   dataRequests: [
-    { week: 1, order: 1, factor: "internal", title: "Six quick questions before your first Session", detail: "A few words each is enough. 1. What do you sell, and who buys it? 2. At month end, how do you know whether you made money? 3. Does more than one business run through the same account? 4. Which decisions wait for you? 5. What happens when you are away for a week? 6. If you could fix one thing in three months, what would it be?" },
-    { week: 1, order: 2, factor: "internal", title: "Your sales for the last 12 months", detail: "Month by month. A sales book, a till report or photos of your records all work." },
-    { week: 1, order: 3, factor: "internal", title: "What you spend each month", detail: "Rent, salaries, stock, power, fuel and loan repayments. A rough list is fine." },
-    { week: 1, order: 4, factor: "internal", title: "Your price list", detail: "What you charge for each product or service, and the discounts you give." },
-    { week: 1, order: 5, factor: "internal", title: "Who works in the business", detail: "Each role, what they do and what they are paid. Names are optional." },
-    { week: 2, order: 1, factor: "internal", title: "Bank statements for the last 6 months", detail: "The business account, and any personal account that business money passes through." },
-    { week: 2, order: 2, factor: "internal", title: "Money owed to you, and money you owe", detail: "Unpaid customer bills, supplier debts and loans." },
-    { week: 2, order: 3, factor: "internal", title: "Anything you already track", detail: "Spreadsheets, notebooks or app reports. Send them as they are." },
-    { week: 2, order: 4, factor: "external", title: "Ten customers: why they buy, and why some stopped", detail: "Names are optional. A line each is enough; we may call two or three of them with you." }
+    { week: 1, order: 1, factor: "internal", title: "Answer six quick questions before your first Session", detail: "A few words each is enough. 1. What do you sell, and who buys it? 2. At month end, how do you know whether you made money? 3. Does more than one business run through the same account? 4. Which decisions wait for you? 5. What happens when you are away for a week? 6. If you could fix one thing in three months, what would it be?" },
+    { week: 1, order: 2, factor: "internal", title: "Send your sales for the last 12 months", detail: "Month by month. A sales book, a till report or photos of your records all work." },
+    { week: 1, order: 3, factor: "internal", title: "List what you spend each month", detail: "Rent, salaries, stock, power, fuel and loan repayments. A rough list is fine." },
+    { week: 1, order: 4, factor: "internal", title: "Send your price list", detail: "What you charge for each product or service, and the discounts you give." },
+    { week: 1, order: 5, factor: "internal", title: "List who works in the business", detail: "Each role, what they do and what they are paid. Names are optional." },
+    { week: 2, order: 1, factor: "internal", title: "Send bank statements for the last 6 months", detail: "The business account, and any personal account that business money passes through." },
+    { week: 2, order: 2, factor: "internal", title: "List money owed to you, and money you owe", detail: "Unpaid customer bills, supplier debts and loans." },
+    { week: 2, order: 3, factor: "internal", title: "Send anything you already track", detail: "Spreadsheets, notebooks or app reports. Send them as they are." },
+    { week: 2, order: 4, factor: "external", title: "Tell us why ten customers buy, and why some stopped", detail: "Names are optional. A line each is enough; we may call two or three of them with you." }
   ],
   /** What the team does in the Work Plan, so the client sees our side of the two weeks as well as theirs. */
   teamActions: [
-    { week: 1, order: 6, factor: "external", title: "Your three main competitors and what they charge", detail: "From their price lists, their customers and a visit where we can." },
-    { week: 2, order: 5, factor: "internal", title: "Profit by product or outlet, from your numbers", detail: "What each line of the business actually makes once its own costs are counted." }
+    { week: 1, order: 6, factor: "external", title: "Find your three main competitors and what they charge", detail: "From their price lists, their customers and a visit where we can." },
+    { week: 2, order: 5, factor: "internal", title: "Work out profit by product or outlet, from your numbers", detail: "What each line of the business actually makes once its own costs are counted." }
   ],
   sessions: [
     {
@@ -1386,7 +1398,7 @@ function safeFileName(fileName2) {
 var MAX_CHECKIN_WEEKS = 12;
 function planRoleOf(type, title) {
   if (type === "digital_marketing") return "digital_marketer";
-  if (/^consultant review$/i.test(title.trim())) return "lead";
+  if (/^(consultant review|review the work before handover)$/i.test(title.trim())) return "lead";
   if (type === "business_review" || type === "assessment" || type === "done_for_you" || type === "six_week_fix" || type === "monthly_service") return "analyst";
   return null;
 }
@@ -2022,6 +2034,7 @@ var engagementTasksStatusEnum = pgEnum("engagement_tasks_status", ENGAGEMENT_TAS
 var engagementTasksFactorEnum = pgEnum("engagement_tasks_factor", ENGAGEMENT_TASK_FACTORS);
 var engagementTasksPriorityEnum = pgEnum("engagement_tasks_priority", ENGAGEMENT_TASK_PRIORITIES);
 var engagementTasksTurnaroundEnum = pgEnum("engagement_tasks_turnaround", ENGAGEMENT_TASK_TURNAROUNDS);
+var engagementTasksWorkEnum = pgEnum("engagement_tasks_work", ENGAGEMENT_TASK_WORKS);
 var engagementDeliverablesKindEnum = pgEnum("engagement_deliverables_kind", ENGAGEMENT_DELIVERABLE_KINDS);
 var engagementDeliverablesStatusEnum = pgEnum("engagement_deliverables_status", ENGAGEMENT_DELIVERABLE_STATUSES);
 var clientAccessLevelEnum = pgEnum("client_access_level", CLIENT_ACCESS_LEVELS);
@@ -2125,6 +2138,10 @@ var engagementTasks = pgTable("engagement_tasks", {
   /** What the team sends back once it arrives (the First edit of footage, the First draft of a carousel), within
    *  TURNAROUND_HOURS. */
   turnaround: engagementTasksTurnaroundEnum("turnaround"),
+  /** The kind of work (0027, ET 14 November 2026): content, marketing or engagement. On a client's item it decides who
+   *  follows it up: the Content Producer, the Digital Marketer or the Engagement Manager. Empty: the person who asked,
+   *  else the main contact, as before. */
+  work: engagementTasksWorkEnum("work"),
   /** When the client's side arrived, and when the First edit or draft is due from then; both cleared when the team asks
    *  for more or reopens it, so the clock starts again from what is usable. */
   receivedAt: timestamp("receivedAt", { withTimezone: true }),
@@ -4738,6 +4755,13 @@ var journal_default = {
       version: "7",
       when: 1794601559001,
       tag: "0026_engagement_task_owners",
+      breakpoints: true
+    },
+    {
+      idx: 27,
+      version: "7",
+      when: 1794648485359,
+      tag: "0027_task_work",
       breakpoints: true
     }
   ]
@@ -8278,6 +8302,10 @@ function recipientOf(team, askedBy) {
   return chosen ? { name: chosen.name ?? "", whatsapp: agreedWhatsapp(chosen) } : null;
 }
 function followUpOwnerOf(team, task) {
+  if (task.work) for (const role of WORK_ROLES[task.work]) {
+    const member = team.find((person) => person.role === role);
+    if (member) return member;
+  }
   const asker = task.requestedByUserId === null ? void 0 : team.find((member) => member.userId === task.requestedByUserId);
   if (asker) return asker;
   const producer = task.turnaround ? team.find((member) => member.role === "content_producer") : void 0;
@@ -12448,6 +12476,7 @@ function starterTaskRows(engagementId, starter, startsOn, actorUserId) {
     format: item2.format ?? null,
     priority: item2.priority ?? null,
     turnaround: item2.turnaround ?? null,
+    work: "work" in item2 ? item2.work ?? null : null,
     createdByUserId: actorUserId
   }));
 }
@@ -12583,6 +12612,7 @@ function reviewerOfTask(team, task) {
 }
 function ownersOfTask(team, task, others = []) {
   const lead = ownerOfTask(team, task);
+  if (task.side === "client") return lead === null ? [] : [lead];
   return Array.from(/* @__PURE__ */ new Set([...lead === null ? [] : [lead], ...others.filter((id3) => team.some((member) => member.userId === id3))]));
 }
 function ownerOfTask(team, task) {
@@ -12924,6 +12954,13 @@ async function reviewTask(db, actor, input) {
   await recordAudit(db, { action: "engagement_task_reviewed", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, decision: input.decision } });
   return { success: true, status };
 }
+async function setTaskWork(db, actor, input) {
+  const { task, leads } = await requireStaffTask(db, actor, input.taskId);
+  if (!leads && !authorityAllows(actor.authority, "assign_engagements")) throw new TRPCError18({ code: "FORBIDDEN", message: "The lead sets an item's kind of work." });
+  await db.update(engagementTasks).set({ work: input.work }).where(eq24(engagementTasks.id, task.id));
+  await recordAudit(db, { action: "engagement_task_work_set", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, work: input.work } });
+  return { success: true };
+}
 async function setTaskReviewer(db, actor, input) {
   const { task, team, leads } = await requireStaffTask(db, actor, input.taskId);
   if (!leads && !authorityAllows(actor.authority, "assign_engagements")) throw new TRPCError18({ code: "FORBIDDEN", message: "The lead names who reviews an item." });
@@ -12935,6 +12972,7 @@ async function setTaskReviewer(db, actor, input) {
 async function setTaskOwners(db, actor, input) {
   const { task, team, leads } = await requireStaffTask(db, actor, input.taskId);
   if (!leads && ownerOfTask(team, task) !== actor.id) throw new TRPCError18({ code: "FORBIDDEN", message: "The lead, or the item's lead owner, sets who owns it." });
+  if (task.side === "client") throw new TRPCError18({ code: "BAD_REQUEST", message: "A client's item has one person who follows it up, set by its kind of work. Change its kind of work instead." });
   const others = Array.from(new Set(input.otherUserIds.filter((id3) => id3 !== input.leadUserId)));
   if (![input.leadUserId, ...others].every((id3) => team.some((member) => member.userId === id3))) throw new TRPCError18({ code: "BAD_REQUEST", message: "Everyone who owns an item must be on the engagement team." });
   await db.transaction(async (tx) => {
@@ -13214,6 +13252,7 @@ async function askClient(db, actor, input) {
   const orders = await db.select({ sortOrder: engagementTasks.sortOrder }).from(engagementTasks).where(eq24(engagementTasks.engagementId, engagement.id));
   const sortOrder = Math.min(999, orders.reduce((max, row) => Math.max(max, row.sortOrder ?? 0), 0) + 1);
   const weekNumber = engagement.startedOn ? Math.min(12, Math.max(1, Math.floor((Date.parse(`${input.dueOn}T12:00:00Z`) - Date.parse(`${engagement.startedOn}T12:00:00Z`)) / (7 * 864e5)) + 1)) : null;
+  const asker = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and16(eq24(engagementTeam.engagementId, engagement.id), eq24(engagementTeam.userId, actor.id))).limit(1))[0];
   const taskId = await db.transaction(async (tx) => {
     const [created] = await tx.insert(engagementTasks).values({
       engagementId: engagement.id,
@@ -13226,6 +13265,7 @@ async function askClient(db, actor, input) {
       weekNumber,
       sortOrder,
       turnaround: input.turnaround,
+      work: input.turnaround ? "content" : workOfRole(asker?.role),
       requestedByUserId: actor.id,
       createdByUserId: actor.id
     }).returning({ id: engagementTasks.id });
@@ -15164,6 +15204,8 @@ var staffRouter = router({
   /** The reviewer's decision (R89): Received, or Ask for more with a note. The item's reviewer, or the lead. */
   reviewTask: staff.input(z15.object({ taskId: id, decision: z15.enum(["received", "more"]), note: optionalText2(500) })).mutation(async ({ ctx, input }) => guarded(async () => reviewTask(await engagementDb(), ctx.actor, input))),
   /** Who reviews an item (R89), or null for the default. The lead. */
+  /** A client item's kind of work (0027): decides who follows it up. The lead. */
+  setWork: staff.input(z15.object({ taskId: id, work: z15.enum(ENGAGEMENT_TASK_WORKS).nullable() })).mutation(async ({ ctx, input }) => guarded(async () => setTaskWork(await engagementDb(), ctx.actor, input))),
   setReviewer: staff.input(z15.object({ taskId: id, userId: id.nullable() })).mutation(async ({ ctx, input }) => guarded(async () => setTaskReviewer(await engagementDb(), ctx.actor, input))),
   /** An item's owners (R89): a lead owner and anyone who shares it, all reminded. */
   setOwners: staff.input(z15.object({ taskId: id, leadUserId: id, otherUserIds: z15.array(id).max(12) })).mutation(async ({ ctx, input }) => guarded(async () => setTaskOwners(await engagementDb(), ctx.actor, input))),

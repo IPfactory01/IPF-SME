@@ -55,8 +55,8 @@ describe("before migration 0008 is applied", () => {
 describe("the Business Review template (from IP Factory's assessment proposals, 10 October)", () => {
   it("asks for the six pre-call questions, the numbers, the people, the bank statements and what is owed", () => {
     const titles = ASSESSMENT_TEMPLATE.dataRequests.map(item => item.title);
-    expect(titles[0]).toBe("Six quick questions before your first Session");
-    expect(titles).toEqual(expect.arrayContaining(["Your sales for the last 12 months", "What you spend each month", "Your price list", "Who works in the business", "Bank statements for the last 6 months", "Money owed to you, and money you owe", "Anything you already track", "Ten customers: why they buy, and why some stopped"]));
+    expect(titles[0]).toBe("Answer six quick questions before your first Session");
+    expect(titles).toEqual(expect.arrayContaining(["Send your sales for the last 12 months", "List what you spend each month", "Send your price list", "List who works in the business", "Send bank statements for the last 6 months", "List money owed to you, and money you owe", "Send anything you already track", "Tell us why ten customers buy, and why some stopped"]));
     expect(titles).toHaveLength(9);
     for (const item of ASSESSMENT_TEMPLATE.dataRequests) {
       expect(item.title.length).toBeLessThanOrEqual(60);

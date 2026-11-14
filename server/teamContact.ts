@@ -5,7 +5,7 @@
  */
 import { asc, eq } from "drizzle-orm";
 import { engagementTeam, users } from "../drizzle/schema";
-import type { EngagementTeamRole } from "../shared/engagement";
+import { WORK_ROLES, type EngagementTaskWork, type EngagementTeamRole } from "../shared/engagement";
 import type { Database } from "./accountAuth";
 
 type Member = { userId: number; name: string | null; role: EngagementTeamRole; whatsapp: string | null; whatsappConsentAt: Date | null };
@@ -30,7 +30,13 @@ export function recipientOf(team: readonly Member[], askedBy: number | null) {
  * engagement, else for an item with a clock (footage) its Content Producer, else the main contact. The client's messages
  * and what they send reach this person, who may also answer them.
  */
-export function followUpOwnerOf<T extends { userId: number; role: EngagementTeamRole }>(team: readonly T[], task: { requestedByUserId: number | null; turnaround: string | null }): T | null {
+export function followUpOwnerOf<T extends { userId: number; role: EngagementTeamRole }>(team: readonly T[], task: { requestedByUserId: number | null; turnaround: string | null; work?: EngagementTaskWork | null }): T | null {
+  // The kind of work decides first (0027, ET 14 November 2026): content to the Content Producer, marketing to the
+  // Digital Marketer, the engagement itself to the Engagement Manager; one person per item.
+  if (task.work) for (const role of WORK_ROLES[task.work]) {
+    const member = team.find(person => person.role === role);
+    if (member) return member;
+  }
   const asker = task.requestedByUserId === null ? undefined : team.find(member => member.userId === task.requestedByUserId);
   if (asker) return asker;
   const producer = task.turnaround ? team.find(member => member.role === "content_producer") : undefined;

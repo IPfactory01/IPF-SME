@@ -181,6 +181,12 @@ Work Plan. Paste `drizzle/supabase/apply-0024-engagement-requests.sql` into the 
 site uses and press Run; it stops, changing nothing, unless exactly `0000` to `0023` are recorded and the table is not
 there yet. Health then counts 25 of 25.
 
+**`0027` and deployment order** (written 14 November 2026). The kind of work on a Work Plan item (R94): one column,
+`engagement_tasks.work` (`content`, `marketing`, `engagement`), filled in for the Digital Marketing plan's own items and for
+requests already sent (from the sender's role), and the standard plans' items renamed to start with a verb. Nothing is
+removed. Apply it just before deploying that code: paste `drizzle/supabase/apply-0027-task-work.sql` into the Supabase SQL
+Editor and press Run; it stops, changing nothing, unless the database is exactly at 0026.
+
 **`0026` and deployment order** (written 13 November 2026). Several owners on an item and its reviewer (R89): one table,
 `engagement_task_owners`, the owners of an item beyond its lead owner, and one empty column,
 `engagement_tasks.reviewerUserId` (empty means the default reviewer). No existing value changes. Apply it just

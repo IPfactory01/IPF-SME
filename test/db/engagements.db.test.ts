@@ -175,7 +175,7 @@ for (const target of targets) {
         }
         await db.update(schema.engagementSessions).set({ title: "Weekly check-in", scheduledFor: new Date("2026-11-17T09:00:00Z") }).where(and(eq(schema.engagementSessions.engagementId, engagementId), eq(schema.engagementSessions.title, "Weekly Check-in")));
         const tasks = await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.engagementId, engagementId));
-        for (const task of tasks.filter((row: { title: string }) => (/^Send week \d+ footage$/.test(row.title) && row.title !== "Send week 1 footage") || row.title === "Kick-off questions" || row.title.startsWith("Content plan for month ") && row.title !== "Content plan for month 1" || row.title.startsWith("Google Business Profile"))) {
+        for (const task of tasks.filter((row: { title: string }) => (/^Send week \d+ footage$/.test(row.title) && row.title !== "Send week 1 footage") || row.title === "Answer the kick-off questions" || row.title.startsWith("Prepare the content plan for month ") && row.title !== "Prepare the content plan for month 1" || row.title.startsWith("Assess the Google Business Profile"))) {
           await db.delete(schema.engagementTasks).where(eq(schema.engagementTasks.id, task.id));
         }
 
@@ -195,7 +195,7 @@ for (const target of targets) {
         const footage = after.tasks.filter((row: { title: string }) => /^Send week \d+ footage$/.test(row.title));
         expect(footage).toHaveLength(12);
         expect(footage.find((row: { title: string }) => row.title === "Send week 2 footage")).toMatchObject({ dueOn: "2026-11-19" });
-        expect(after.tasks.map((row: { title: string }) => row.title)).toEqual(expect.arrayContaining(["Kick-off questions", "Content plan for month 2", "Content plan for month 3", "Google Business Profile assessment and growth plan"]));
+        expect(after.tasks.map((row: { title: string }) => row.title)).toEqual(expect.arrayContaining(["Answer the kick-off questions", "Prepare the content plan for month 2", "Prepare the content plan for month 3", "Assess the Google Business Profile and plan its growth"]));
         const recorded = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_plan_updated"));
         expect(recorded.map((row: { details: string }) => JSON.parse(row.details)).filter((entry: { engagementId: number }) => entry.engagementId === engagementId)).toEqual([
           { engagementId, sessions: 6, items: 15 }, { engagementId, sessions: 0, items: 0 },
@@ -309,10 +309,15 @@ for (const target of targets) {
         const footage = detail.tasks.find(task => task.title === "Send week 1 footage")!;
         expect(footage).toMatchObject({ turnaround: "first_edit", goesTo: { userId: s.producer.id } });
         await (await s.producer.browser.call()).engagement.staff.taskComment({ taskId: footage.id, body: "Film the kitchen this week." });
-        // A plan item without a clock goes to the main contact, the Digital Marketer.
-        const logo = detail.tasks.find(task => task.title === "Logo, colours and fonts")!;
+        // A plan item goes by its kind of work (0027): the logo is content, the Content Producer's; prices are marketing,
+        // the Digital Marketer's. One person each.
+        const logo = detail.tasks.find(task => task.title === "Send your logo, colours and fonts")!;
         mocked.deliverEmail.mockClear();
         await (await s.owner.call()).engagement.client.taskComment({ taskId: logo.id, body: "We only have a PNG." });
+        expect(emails().map(sent => sent.to)).toEqual([s.producer.email]);
+        const prices = detail.tasks.find(task => task.title === "Send your services and prices")!;
+        mocked.deliverEmail.mockClear();
+        await (await s.owner.call()).engagement.client.taskComment({ taskId: prices.id, body: "They are on our site." });
         expect(emails().map(sent => sent.to)).toEqual([s.marketer.email]);
         // Another business never reaches the item; the team's own items have no conversation.
         const other = await client("talk-other");
@@ -372,7 +377,7 @@ for (const target of targets) {
         const s = await studio("owners");
         const lead = await s.lead.browser.call();
         const mira = await (await s.marketer.browser.call()).engagement.staff.detail({ engagementId: s.engagementId });
-        const plan = mira.tasks.find(task => task.title === "Content plan for month 1")!;
+        const plan = mira.tasks.find(task => task.title === "Prepare the content plan for month 1")!;
         // The lead adds Kemi as a second owner; Mira stays lead owner.
         await lead.engagement.staff.setOwners({ taskId: plan.id, leadUserId: s.marketer.id, otherUserIds: [s.producer.id] });
         const seen = (await (await s.producer.browser.call()).engagement.staff.detail({ engagementId: s.engagementId })).tasks.find(task => task.id === plan.id)!;
@@ -383,18 +388,18 @@ for (const target of targets) {
         await expect((await s.producer.browser.call()).engagement.staff.setOwners({ taskId: plan.id, leadUserId: s.producer.id, otherUserIds: [] })).rejects.toMatchObject({ code: "FORBIDDEN" });
         // Both owners see it Due on Today, and both are emailed when it is a day late.
         await db.update(schema.engagementTasks).set({ dueOn: addDays(s.today, 1) }).where(eq(schema.engagementTasks.id, plan.id));
-        expect((await (await s.producer.browser.call()).engagement.staff.today()).some(item => item.kind === "due" && item.title === "Content plan for month 1")).toBe(true);
+        expect((await (await s.producer.browser.call()).engagement.staff.today()).some(item => item.kind === "due" && item.title === "Prepare the content plan for month 1")).toBe(true);
         await db.update(schema.engagementTasks).set({ dueOn: addDays(s.today, -1) }).where(eq(schema.engagementTasks.id, plan.id));
         mocked.deliverEmail.mockClear();
         await runReminders(db, new Date(`${s.today}T07:31:00+01:00`));
-        expect(emails().filter(mail => mail.subject === "Late: Content plan for month 1, Studio owners").map(mail => mail.to).sort()).toEqual([s.marketer.email, s.producer.email].sort());
+        expect(emails().filter(mail => mail.subject === "Late: Prepare the content plan for month 1, Studio owners").map(mail => mail.to).sort()).toEqual([s.marketer.email, s.producer.email].sort());
 
         // A new file on a client item: its owners and the lead hear, never the uploader; a burst sends one email.
-        const logo = mira.tasks.find(task => task.title === "Logo, colours and fonts")!;
+        const logo = mira.tasks.find(task => task.title === "Send your logo, colours and fonts")!;
         mocked.deliverEmail.mockClear();
         const now = Date.UTC(2026, 10, 13, 10, 0);
         await sendNewFileEmails(db, { taskId: logo.id, uploaderUserId: s.marketer.id, fileName: "IMG_1264.jpeg", fromClient: false, now });
-        const first = emails().filter(mail => mail.subject === "New file on Logo, colours and fonts: IMG_1264.jpeg");
+        const first = emails().filter(mail => mail.subject === "New file on Send your logo, colours and fonts: IMG_1264.jpeg");
         expect(first.map(mail => mail.to)).toContain(s.lead.email);
         expect(first.map(mail => mail.to)).not.toContain(s.marketer.email);
         expect(first[0]!.body).toContain(`/admin?engagement=${s.engagementId}&task=${logo.id}`);
@@ -402,7 +407,7 @@ for (const target of targets) {
         await sendNewFileEmails(db, { taskId: logo.id, uploaderUserId: s.marketer.id, fileName: "IMG_0291.jpeg", fromClient: false, now: now + 5 * 60_000 });
         expect(emails().some(mail => mail.subject.startsWith("New file on Logo"))).toBe(false);
         await sendNewFileEmails(db, { taskId: logo.id, uploaderUserId: s.marketer.id, fileName: "IMG_0292.jpeg", fromClient: false, now: now + 20 * 60_000 });
-        expect(emails().some(mail => mail.subject === "New file on Logo, colours and fonts: IMG_0292.jpeg")).toBe(true);
+        expect(emails().some(mail => mail.subject === "New file on Send your logo, colours and fonts: IMG_0292.jpeg")).toBe(true);
       });
 
       it("gives each item a reviewer: by default the person or the lead, named by the lead, who gets the review, its Today and its reminders (R89)", async () => {
@@ -411,10 +416,11 @@ for (const target of targets) {
         const kemi = await s.producer.browser.call();
         const mira = await s.marketer.browser.call();
         const tasks = (await lead.engagement.staff.detail({ engagementId: s.engagementId })).tasks;
-        const logo = tasks.find(task => task.title === "Logo, colours and fonts")!;
-        const plan = tasks.find(task => task.title === "Content plan for month 1")!;
-        // By default: the client's item, the engagement's main contact (here the Digital Marketer); the team's, the lead.
-        expect(logo.reviewer).toMatchObject({ userId: s.marketer.id });
+        const logo = tasks.find(task => task.title === "Send your logo, colours and fonts")!;
+        const plan = tasks.find(task => task.title === "Prepare the content plan for month 1")!;
+        // By default: the client's item, the person for its kind of work (the logo is content: the Content Producer); the
+        // team's, the lead.
+        expect(logo.reviewer).toMatchObject({ userId: s.producer.id });
         expect(plan.reviewer).toMatchObject({ userId: s.lead.id });
         // Only the lead names a reviewer, and only someone on the team.
         await expect(mira.engagement.staff.setReviewer({ taskId: logo.id, userId: s.marketer.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
@@ -430,11 +436,11 @@ for (const target of targets) {
 
         // The client sends it: Kemi has it on Today, not the lead; Mira cannot decide it; Kemi marks it received.
         await (await s.owner.call()).engagement.client.respondToTask({ taskId: logo.id, note: "Sent on WhatsApp" });
-        expect((await kemi.engagement.staff.today()).find(item => item.kind === "check" && item.engagementId === s.engagementId)).toMatchObject({ title: "Logo, colours and fonts", taskId: logo.id });
+        expect((await kemi.engagement.staff.today()).find(item => item.kind === "check" && item.engagementId === s.engagementId)).toMatchObject({ title: "Send your logo, colours and fonts", taskId: logo.id });
         expect((await lead.engagement.staff.today()).some(item => item.kind === "check" && item.engagementId === s.engagementId)).toBe(false);
         // A day on, Kemi is reminded; three days on, Kemi and the lead.
         await db.update(schema.engagementTasks).set({ receivedAt: new Date(`${s.today}T09:00:00+01:00`) }).where(eq(schema.engagementTasks.id, logo.id));
-        const reminded = () => emails().filter(mail => mail.subject.includes("review: Logo, colours and fonts")).map(mail => mail.to).sort();
+        const reminded = () => emails().filter(mail => mail.subject.includes("review: Send your logo, colours and fonts")).map(mail => mail.to).sort();
         mocked.deliverEmail.mockClear();
         await runReminders(db, new Date(`${addDays(s.today, 1)}T09:31:00+01:00`));
         expect(reminded()).toEqual([s.producer.email]);
@@ -450,9 +456,9 @@ for (const target of targets) {
         // Mira hands in the plan: Kemi is emailed to review it, not the lead; Kemi asks for more with a note.
         mocked.deliverEmail.mockClear();
         await mira.engagement.staff.handIn({ taskId: plan.id });
-        const ready = emails().filter(mail => mail.subject.startsWith("Ready for review: Content plan for month 1")).map(mail => mail.to);
+        const ready = emails().filter(mail => mail.subject.startsWith("Ready for review: Prepare the content plan for month 1")).map(mail => mail.to);
         expect(ready).toEqual([s.producer.email]);
-        expect((await kemi.engagement.staff.today()).find(item => item.kind === "review" && item.engagementId === s.engagementId)).toMatchObject({ title: "Content plan for month 1" });
+        expect((await kemi.engagement.staff.today()).find(item => item.kind === "review" && item.engagementId === s.engagementId)).toMatchObject({ title: "Prepare the content plan for month 1" });
         await expect(kemi.engagement.staff.reviewTask({ taskId: plan.id, decision: "more", note: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });
         await kemi.engagement.staff.reviewTask({ taskId: plan.id, decision: "more", note: "Add the Thursday footage slots" });
         expect((await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.id, plan.id)))[0]).toMatchObject({ status: "needs_more", statusNote: "Add the Thursday footage slots" });
@@ -492,12 +498,38 @@ for (const target of targets) {
         expect((await db.select().from(schema.engagementSessions).where(eq(schema.engagementSessions.id, review.id)))[0]).toMatchObject({ status: "cancelled" });
       });
 
+      it("has one person follow up each client item, by its kind of work, which the lead can change (0027, ET 14 November 2026)", async () => {
+        const s = await studio("work");
+        const lead = await s.lead.browser.call();
+        const tasks = (await lead.engagement.staff.detail({ engagementId: s.engagementId })).tasks;
+        const prices = tasks.find(task => task.title === "Send your services and prices")!;
+        const kickoff = tasks.find(task => task.title === "Answer the kick-off questions")!;
+        // The plan sets the kind; one owner each: marketing to the Digital Marketer, the engagement's own to its manager.
+        expect(prices).toMatchObject({ work: "marketing", owners: [{ userId: s.marketer.id, lead: true }] });
+        expect(kickoff).toMatchObject({ work: "engagement" });
+        expect(kickoff.owners.map(owner => owner.userId)).toEqual([s.lead.id]);
+        // Nobody adds a second person to a client's item.
+        await expect(lead.engagement.staff.setOwners({ taskId: prices.id, leadUserId: s.marketer.id, otherUserIds: [s.producer.id] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        // Only the lead changes the kind; the follow-up moves with it, and the client's messages go to them.
+        await expect((await s.marketer.browser.call()).engagement.staff.setWork({ taskId: prices.id, work: "content" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await lead.engagement.staff.setWork({ taskId: prices.id, work: "content" });
+        expect((await lead.engagement.staff.detail({ engagementId: s.engagementId })).tasks.find(task => task.id === prices.id)).toMatchObject({ work: "content", owners: [{ userId: s.producer.id }], reviewer: { userId: s.producer.id } });
+        mocked.deliverEmail.mockClear();
+        await (await s.owner.call()).engagement.client.taskComment({ taskId: prices.id, body: "Updated the menu." });
+        expect(emails().map(mail => mail.to)).toEqual([s.producer.email]);
+        const recorded = await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_task_work_set"));
+        expect(recorded.map((row: { details: string }) => JSON.parse(row.details))).toContainEqual({ engagementId: s.engagementId, taskId: prices.id, work: "content" });
+        // A request takes the kind from the asker's role: the Digital Marketer's is marketing, footage is content.
+        const { taskId: asked } = await (await s.marketer.browser.call()).engagement.staff.askClient({ engagementId: s.engagementId, title: "Share your Google reviews link", brief: null, dueOn: requestDueOn(s.today), turnaround: null });
+        expect((await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.id, asked)))[0]).toMatchObject({ work: "marketing" });
+      });
+
       it("names a person on every team item: the plan's by role, Assign by role for the rest, with Due on Today and late emails (R88)", async () => {
         const s = await studio("owner");
         const lead = await s.lead.browser.call();
         // The Digital Marketer joined: the plan's own items became theirs.
         const mira = await (await s.marketer.browser.call()).engagement.staff.detail({ engagementId: s.engagementId });
-        const plan = mira.tasks.find(task => task.title === "Content plan for month 1")!;
+        const plan = mira.tasks.find(task => task.title === "Prepare the content plan for month 1")!;
         expect(plan).toMatchObject({ side: "ipf", assigneeUserId: s.marketer.id, canHandIn: true, ownerName: "Mira Marketer" });
         expect((await (await s.producer.browser.call()).engagement.staff.detail({ engagementId: s.engagementId })).tasks.find(task => task.id === plan.id)).toMatchObject({ canHandIn: false });
         // A team item cannot be saved with no one on it.
@@ -510,14 +542,14 @@ for (const target of targets) {
         expect((await lead.engagement.staff.detail({ engagementId: s.engagementId })).unassignedTeamItems).toBe(0);
         // Due by tomorrow: on Mira's Today. A day late: Mira is emailed; three days late: the lead.
         await db.update(schema.engagementTasks).set({ dueOn: addDays(s.today, 1) }).where(eq(schema.engagementTasks.id, plan.id));
-        expect((await (await s.marketer.browser.call()).engagement.staff.today()).find(item => item.kind === "due" && item.title === "Content plan for month 1")).toMatchObject({ detail: "Due tomorrow", late: false });
+        expect((await (await s.marketer.browser.call()).engagement.staff.today()).find(item => item.kind === "due" && item.title === "Prepare the content plan for month 1")).toMatchObject({ detail: "Due tomorrow", late: false });
         await db.update(schema.engagementTasks).set({ dueOn: addDays(s.today, -1) }).where(eq(schema.engagementTasks.id, plan.id));
         mocked.deliverEmail.mockClear();
         await runReminders(db, new Date(`${s.today}T07:31:00+01:00`));
-        expect(emails().filter(mail => mail.subject === "Late: Content plan for month 1, Studio owner").map(mail => mail.to)).toEqual([s.marketer.email]);
+        expect(emails().filter(mail => mail.subject === "Late: Prepare the content plan for month 1, Studio owner").map(mail => mail.to)).toEqual([s.marketer.email]);
         mocked.deliverEmail.mockClear();
         await runReminders(db, new Date(`${addDays(s.today, 2)}T07:31:00+01:00`));
-        expect(emails().filter(mail => mail.subject === "Three days late: Content plan for month 1, Studio owner").map(mail => mail.to)).toEqual([s.lead.email]);
+        expect(emails().filter(mail => mail.subject === "Three days late: Prepare the content plan for month 1, Studio owner").map(mail => mail.to)).toEqual([s.lead.email]);
       });
 ;
 
@@ -618,7 +650,7 @@ for (const target of targets) {
         await desk.engagement.staff.openRoomNow({ engagementId });
         const lead = await person(["analyst"], "Lola Lead");
         await desk.engagement.staff.assign({ engagementId, userId: lead.id, role: "manager" });
-        const [item] = await db.select().from(schema.engagementTasks).where(and(eq(schema.engagementTasks.engagementId, engagementId), eq(schema.engagementTasks.title, "Your services and prices")));
+        const [item] = await db.select().from(schema.engagementTasks).where(and(eq(schema.engagementTasks.engagementId, engagementId), eq(schema.engagementTasks.title, "Send your services and prices")));
         const sentAt = new Date(`${today}T09:00:00+01:00`);
         await db.update(schema.engagementTasks).set({ status: "received", receivedAt: sentAt }).where(eq(schema.engagementTasks.id, item.id));
         const ours = () => emails().filter(mail => mail.to === lead.email && mail.subject.includes("review")).map(mail => mail.subject);
@@ -626,11 +658,11 @@ for (const target of targets) {
         await runReminders(db, new Date(`${today}T20:00:00+01:00`));
         expect(ours()).toEqual([]);
         await runReminders(db, new Date(`${addDays(today, 1)}T09:31:00+01:00`));
-        expect(ours()).toEqual(["Waiting for your review: Your services and prices, Review Studio"]);
+        expect(ours()).toEqual(["Waiting for your review: Send your services and prices, Review Studio"]);
         await runReminders(db, new Date(`${addDays(today, 1)}T10:31:00+01:00`));
         expect(ours()).toHaveLength(1);
         await runReminders(db, new Date(`${addDays(today, 3)}T09:31:00+01:00`));
-        expect(ours()).toEqual(["Waiting for your review: Your services and prices, Review Studio", "Still waiting for your review: Your services and prices, Review Studio"]);
+        expect(ours()).toEqual(["Waiting for your review: Send your services and prices, Review Studio", "Still waiting for your review: Send your services and prices, Review Studio"]);
         // Reviewed: nothing more.
         await db.update(schema.engagementTasks).set({ status: "accepted" }).where(eq(schema.engagementTasks.id, item.id));
         mocked.deliverEmail.mockClear();
@@ -1151,9 +1183,9 @@ for (const target of targets) {
         const items = [
           { section: "1 Sales", ref: "1.1", title: "Sales by month", detail: "Last 12 months.", informs: "How the business is doing", format: "Excel", priority: "high" as const, dueOn: null },
           { section: "1 Sales", ref: "1.2", title: "Top customers", detail: null, informs: null, format: null, priority: null, dueOn: "2026-12-01" },
-          { section: "2 Costs", ref: "2.1", title: "What you spend each month", detail: null, informs: null, format: null, priority: "low" as const, dueOn: null },
+          { section: "2 Costs", ref: "2.1", title: "List what you spend each month", detail: null, informs: null, format: null, priority: "low" as const, dueOn: null },
         ];
-        // "What you spend each month" is already on a Business Review, so it is skipped.
+        // "List what you spend each month" is already on a Business Review, so it is skipped.
         expect(await desk.engagement.staff.loadDataRequest({ engagementId, items })).toEqual({ added: 2, skipped: 1 });
         const tasks = (await desk.engagement.staff.detail({ engagementId })).tasks;
         expect(tasks.length).toBe(before + 2);
@@ -1207,7 +1239,7 @@ for (const target of targets) {
         const room = (await (await owner.call()).engagement.client.room())!;
         expect(room).toMatchObject({ engagementId: deck.engagementId, type: "done_for_you", service: "pitch_deck", title: "Pitch Deck", serviceStep: 1 });
         expect(room.projects.map(item => [item.title, item.current])).toEqual([["Pitch Deck", true], ["Business Review", false]]);
-        expect(room.tasks.filter(task => task.kind === "data_request").map(task => task.title)).toEqual(["Sales records", "Your main costs", "Any plan, deck or notes", "What do you want this work to help you decide or do?", "Who will you present to, and what do you want them to do?", "What are you asking for, and what will you do with it?"]);
+        expect(room.tasks.filter(task => task.kind === "data_request").map(task => task.title)).toEqual(["Send sales records", "Send your main costs", "Send any plan, deck or notes", "Answer: What do you want this work to help you decide or do?", "Answer: Who will you present to, and what do you want them to do?", "Answer: What are you asking for, and what will you do with it?"]);
         // The client sees booked Sessions only (R81): the plan's are in the team's view until they have a time.
         expect(room.sessions).toEqual([]);
         expect((await (await superAdmin.call()).engagement.staff.detail({ engagementId: deck.engagementId })).sessions.map(item => item.title)).toEqual(["Kick-off", "Handover"]);

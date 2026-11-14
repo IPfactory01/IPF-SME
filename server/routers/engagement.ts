@@ -6,6 +6,7 @@ import {
   ENGAGEMENT_DELIVERABLE_KINDS,
   ENGAGEMENT_SESSION_KINDS,
   ENGAGEMENT_SESSION_STATUSES,
+  ENGAGEMENT_TASK_WORKS,
   ENGAGEMENT_STAGES,
   ENGAGEMENT_TASK_FACTORS,
   ENGAGEMENT_TASK_PRIORITIES,
@@ -87,6 +88,7 @@ import {
   setTaskOwners,
   reviewTask,
   setTaskReviewer,
+  setTaskWork,
   todayFor,
   bookMeeting,
   staffTaskComment,
@@ -270,6 +272,8 @@ const staffRouter = router({
   /** The reviewer's decision (R89): Received, or Ask for more with a note. The item's reviewer, or the lead. */
   reviewTask: staff.input(z.object({ taskId: id, decision: z.enum(["received", "more"]), note: optionalText(500) })).mutation(async ({ ctx, input }) => guarded(async () => reviewTask(await engagementDb(), ctx.actor, input))),
   /** Who reviews an item (R89), or null for the default. The lead. */
+  /** A client item's kind of work (0027): decides who follows it up. The lead. */
+  setWork: staff.input(z.object({ taskId: id, work: z.enum(ENGAGEMENT_TASK_WORKS).nullable() })).mutation(async ({ ctx, input }) => guarded(async () => setTaskWork(await engagementDb(), ctx.actor, input))),
   setReviewer: staff.input(z.object({ taskId: id, userId: id.nullable() })).mutation(async ({ ctx, input }) => guarded(async () => setTaskReviewer(await engagementDb(), ctx.actor, input))),
   /** An item's owners (R89): a lead owner and anyone who shares it, all reminded. */
   setOwners: staff.input(z.object({ taskId: id, leadUserId: id, otherUserIds: z.array(id).max(12) })).mutation(async ({ ctx, input }) => guarded(async () => setTaskOwners(await engagementDb(), ctx.actor, input))),

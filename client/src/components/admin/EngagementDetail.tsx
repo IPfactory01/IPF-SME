@@ -31,6 +31,9 @@ import {
   ENGAGEMENT_STAGES,
   ENGAGEMENT_TASK_STATUS_LABELS,
   ENGAGEMENT_TASK_STATUSES,
+  ENGAGEMENT_TASK_WORK_LABELS,
+  ENGAGEMENT_TASK_WORKS,
+  type EngagementTaskWork,
   ENGAGEMENT_TASK_PRIORITIES,
   ENGAGEMENT_TASK_PRIORITY_LABELS,
   type EngagementTaskPriority,
@@ -352,6 +355,7 @@ function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detai
     <div className="space-y-3">
       <h3 className="font-sans text-lg font-semibold tracking-tight text-ink">{task.title}</h3>
       <Owners task={task} data={data} engagementId={engagementId} />
+      {task.side === "client" && <KindOfWork task={task} data={data} engagementId={engagementId} />}
       <Reviewer task={task} data={data} engagementId={engagementId} />
       <YourPart task={task} data={data} />
       <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
@@ -399,6 +403,26 @@ function ReviewDecision({ task, engagementId }: { task: Task; engagementId: numb
   );
 }
 
+/**
+ * A client's item's kind of work (0027, ET 14 November 2026): Content goes to the Content Producer, Marketing to the
+ * Digital Marketer, Engagement to the Engagement Manager. The lead changes it; everyone else reads it.
+ */
+function KindOfWork({ task, data, engagementId }: { task: Task; data: Detail; engagementId: number }) {
+  const refresh = useRefresh(engagementId);
+  const save = trpc.engagement.staff.setWork.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Saved. The person for that kind of work follows it up."); } });
+  const work = (task as { work?: EngagementTaskWork | null }).work ?? null;
+  if (!data.can.seeAllTasks) return <p className="text-xs text-ink-muted">Kind of work: <span className="text-ink">{work ? ENGAGEMENT_TASK_WORK_LABELS[work] : "Not set"}</span></p>;
+  return (
+    <label className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">Kind of work
+      <select aria-label="Kind of work" className="min-h-8 rounded-md border border-line-soft bg-white px-2 text-sm text-ink" disabled={save.isPending} value={work ?? ""}
+        onChange={event => save.mutate({ taskId: task.id, work: (event.target.value || null) as EngagementTaskWork | null })}>
+        <option value="">Not set (whoever asked, else the main contact)</option>
+        {ENGAGEMENT_TASK_WORKS.map(kind => <option key={kind} value={kind}>{ENGAGEMENT_TASK_WORK_LABELS[kind]}</option>)}
+      </select>
+    </label>
+  );
+}
+
 /** The reader's part in the item: theirs to do, theirs to review, or both (ET, 14 November 2026). */
 function YourPart({ task, data }: { task: Task; data: Detail }) {
   const role = roleOf(task, data.viewerUserId);
@@ -434,7 +458,8 @@ function Reviewer({ task, data, engagementId }: { task: Task; data: Detail; enga
  */
 function Owners({ task, data, engagementId }: { task: Task; data: Detail; engagementId: number }) {
   const refresh = useRefresh(engagementId);
-  const canChange = data.can.seeAllTasks || task.owners[0]?.userId === data.viewerUserId;
+  // A client's item has one person, set by its kind of work (ET, 14 November 2026): no picker there.
+  const canChange = task.side !== "client" && (data.can.seeAllTasks || task.owners[0]?.userId === data.viewerUserId);
   const [open, setOpen] = useState(false);
   const [lead, setLead] = useState<number | null>(task.owners[0]?.userId ?? null);
   const [others, setOthers] = useState<number[]>(task.owners.slice(1).map(owner => owner.userId));
@@ -482,6 +507,7 @@ function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; 
     <div className="space-y-3">
       <h3 className="font-sans text-lg font-semibold tracking-tight text-ink">{task.title}</h3>
       <Owners task={task} data={data} engagementId={engagementId} />
+      {task.side === "client" && <KindOfWork task={task} data={data} engagementId={engagementId} />}
       <Reviewer task={task} data={data} engagementId={engagementId} />
       <YourPart task={task} data={data} />
       <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
@@ -1109,7 +1135,7 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
         <div><label className={LABEL} htmlFor={`task-side-${id}`}>Whose job</label><select id={`task-side-${id}`} className={FIELD} disabled={!lead} value={side} onChange={event => { setSide(event.target.value as EngagementTaskSide); setAssignee(""); }}>{(["client", "ipf"] as const).map(item => <option key={item} value={item}>{SIDE_LABELS[item]}</option>)}</select></div>
       </div>
       <label className={LABEL} htmlFor={`task-title-${id}`}>What</label>
-      <input id={`task-title-${id}`} className={FIELD} disabled={!canManage} value={title} onChange={event => setTitle(event.target.value)} />
+      <input id={`task-title-${id}`} className={FIELD} disabled={!canManage} placeholder="Start with a verb: Send…, Prepare…, Approve…" value={title} onChange={event => setTitle(event.target.value)} />
       <label className={LABEL} htmlFor={`task-detail-${id}`}>Detail</label>
       <textarea id={`task-detail-${id}`} className={FIELD} rows={2} disabled={!canManage} value={detail} onChange={event => setDetail(event.target.value)} />
       <div className="grid gap-2 sm:grid-cols-3">

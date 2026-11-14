@@ -19,6 +19,7 @@ import {
   ENGAGEMENT_TASK_PRIORITIES,
   ENGAGEMENT_TASK_STATUSES,
   ENGAGEMENT_TASK_TURNAROUNDS,
+  ENGAGEMENT_TASK_WORKS,
   ENGAGEMENT_TEAM_ROLES,
 } from "../shared/engagement";
 
@@ -913,6 +914,7 @@ export const engagementTasksStatusEnum = pgEnum("engagement_tasks_status", ENGAG
 export const engagementTasksFactorEnum = pgEnum("engagement_tasks_factor", ENGAGEMENT_TASK_FACTORS);
 export const engagementTasksPriorityEnum = pgEnum("engagement_tasks_priority", ENGAGEMENT_TASK_PRIORITIES);
 export const engagementTasksTurnaroundEnum = pgEnum("engagement_tasks_turnaround", ENGAGEMENT_TASK_TURNAROUNDS);
+export const engagementTasksWorkEnum = pgEnum("engagement_tasks_work", ENGAGEMENT_TASK_WORKS);
 export const engagementDeliverablesKindEnum = pgEnum("engagement_deliverables_kind", ENGAGEMENT_DELIVERABLE_KINDS);
 export const engagementDeliverablesStatusEnum = pgEnum("engagement_deliverables_status", ENGAGEMENT_DELIVERABLE_STATUSES);
 export const clientAccessLevelEnum = pgEnum("client_access_level", CLIENT_ACCESS_LEVELS);
@@ -1030,6 +1032,10 @@ export const engagementTasks = pgTable("engagement_tasks", {
   /** What the team sends back once it arrives (the First edit of footage, the First draft of a carousel), within
    *  TURNAROUND_HOURS. */
   turnaround: engagementTasksTurnaroundEnum("turnaround"),
+  /** The kind of work (0027, ET 14 November 2026): content, marketing or engagement. On a client's item it decides who
+   *  follows it up: the Content Producer, the Digital Marketer or the Engagement Manager. Empty: the person who asked,
+   *  else the main contact, as before. */
+  work: engagementTasksWorkEnum("work"),
   /** When the client's side arrived, and when the First edit or draft is due from then; both cleared when the team asks
    *  for more or reopens it, so the clock starts again from what is usable. */
   receivedAt: timestamp("receivedAt", { withTimezone: true }),

@@ -533,7 +533,7 @@ var CONTENT_STATUSES = ["planned", "in_edit", "for_approval", "changes_requested
 var CONTENT_STATUS_LABELS = {
   planned: "Planned",
   in_edit: "In edit",
-  for_approval: "For your approval",
+  for_approval: "For approval",
   changes_requested: "Changes requested",
   approved: "Approved",
   published: "Published"

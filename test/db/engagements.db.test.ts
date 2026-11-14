@@ -1487,7 +1487,7 @@ for (const target of targets) {
 
         let room = (await (await owner.call()).engagement.client.room())!;
         expect(room.contentTargets).toEqual([{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }]);
-        expect(room.content.map(item => [item.title, item.statusLabel])).toEqual([["Knotless braids, before and after", "For your approval"], ["December offer", "Planned"]]);
+        expect(room.content.map(item => [item.title, item.statusLabel])).toEqual([["Knotless braids, before and after", "For approval"], ["December offer", "Planned"]]);
 
         // Changes need a note; then the team sends it again and the owner approves.
         await expect((await owner.call()).engagement.client.respondToContent({ itemId: reel, approve: false, note: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });

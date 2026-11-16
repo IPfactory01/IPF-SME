@@ -794,6 +794,37 @@ describe("the team's workspace (R82)", () => {
     expect(panel.getByRole("region", { name: "Progress: Data Requests" })).toBeTruthy();
   });
 
+  it("opens the Work Plan on the items behind a Progress card, on everyone's, with Clear (ET, 16 November 2026)", async () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Analyst" }] };
+    api.detail = { ...detail({ manage: true, assign: false, review: true }, [], [
+      task({ id: 61, title: "Content plan", side: "ipf", kind: "action", owners: [{ userId: 2, name: "Lewis Lead", lead: true }] }),
+      task({ id: 62, title: "Your price list" }),
+      task({ id: 63, title: "Your booking link", status: "accepted", statusLabel: "Received", dueOn: null }),
+    ]), team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Progress" }));
+    const panel = within(screen.getByRole("tabpanel", { name: "Progress" }));
+    // Overdue is said inside Open; a card at nought opens nothing.
+    expect(panel.getByRole("button", { name: "Open: 2, show them" }).textContent).toContain("2 overdue");
+    expect(panel.queryByRole("button", { name: /^Being checked/ })).toBeNull();
+    fireEvent.click(panel.getByRole("button", { name: "Overdue: 2, show them" }));
+    const plan = screen;
+    // The tab changes on the address's hash, a moment later.
+    await waitFor(() => expect(plan.getByRole("button", { name: "Clear" })).toBeTruthy());
+    expect(plan.getByText(/Showing: Overdue/)).toBeTruthy();
+    const titles = () => plan.queryAllByRole("button", { name: /^Open (Content plan|Your price list|Your booking link)$/, hidden: true }).map(button => button.getAttribute("aria-label"));
+    expect(titles().sort()).toEqual(["Open Content plan", "Open Your price list"]);
+    // Clear: back to the whole plan.
+    fireEvent.click(plan.getByRole("button", { name: "Clear" }));
+    expect(plan.queryByText(/Showing:/)).toBeNull();
+    // Done shows the completed one, its week open.
+    fireEvent.click(screen.getByRole("tab", { name: "Progress" }));
+    fireEvent.click(within(screen.getByRole("tabpanel", { name: "Progress" })).getByRole("button", { name: "Done: 1, show them" }));
+    await waitFor(() => expect(titles()).toEqual(["Open Your booking link"]));
+  });
+
   it("starts the lead on everyone's items", () => {
     api.seesAll = false;
     api.list = { setUp: true, items: [{ ...row, myRole: "Engagement Manager" }] };

@@ -121,3 +121,29 @@ export function progressOf(input: {
 }
 
 export type Progress = ReturnType<typeof progressOf>;
+
+/**
+ * The items behind a Progress card (ET, 16 November 2026): a card opens the Work Plan showing exactly what it counted,
+ * by the same rules, so the list never disagrees with the number.
+ */
+export type PlanSlice = {
+  label: string;
+  state?: "done" | "checking" | "open" | "overdue" | "received" | "high";
+  /** Data Requests only (the client's), and optionally one section of them. */
+  dataRequests?: boolean;
+  section?: string;
+};
+export function inSlice(task: ProgressTask, slice: PlanSlice, today: string) {
+  if (task.status === "cancelled") return false;
+  if (slice.dataRequests && !(task.kind === "data_request" && task.side === "client")) return false;
+  if (slice.section !== undefined && (task.section || "Other") !== slice.section) return false;
+  switch (slice.state) {
+    case "done": return DONE.includes(task.status);
+    case "checking": return task.status === "received";
+    case "open": return OPEN.includes(task.status);
+    case "overdue": return OPEN.includes(task.status) && task.dueOn !== null && task.dueOn < today;
+    case "received": return RECEIVED.includes(task.status);
+    case "high": return OPEN.includes(task.status) && task.priority === "high";
+    default: return true;
+  }
+}

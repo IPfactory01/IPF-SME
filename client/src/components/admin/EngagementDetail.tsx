@@ -1,6 +1,6 @@
 import { ItemScreenBar, ItemSheet, StickyActions } from "@/components/room/ItemScreen";
 import ProgressView from "@/components/room/Progress";
-import { progressOf } from "@/lib/progress";
+import { inSlice, progressOf, type PlanSlice } from "@/lib/progress";
 import { matchesSearch, matchesWhose, roleOf, roleTag, whoseFrom, whoseValue, type Whose } from "@/lib/planFilter";
 import { firstNameOf } from "@shared/whatsapp";
 import WhatsAppShare from "./WhatsAppShare";
@@ -148,6 +148,9 @@ const Compact = React.createContext(false);
 /** The item to open in the Work Plan: from an email's link, or a row in What needs you here (a new time opens it again). */
 const FocusTask = React.createContext<{ taskId: number; at: number } | null>(null);
 
+/** What a Progress card opened the Work Plan on (ET, 16 November 2026), and how to go back to the whole plan. */
+const ShownSlice = React.createContext<{ slice: (PlanSlice & { at: number }) | null; clear: () => void }>({ slice: null, clear: () => undefined });
+
 /** Shows a tab of the workspace, even when the address already names it. */
 function showTab(id: string) {
   if (typeof window === "undefined") return;
@@ -231,7 +234,13 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
   // Whose items, and a search (ET, 13 November 2026): the lead starts on everyone's, everyone else on their own.
   const [whose, setWhose] = useState<Whose>(() => (data.can.seeAllTasks ? "everyone" : "tasks"));
   const [query, setQuery] = useState("");
-  const shown = data.tasks.filter(item => item.id === selected || (matchesWhose(item, whose, data.viewerUserId) && matchesSearch(item, query)));
+  // A Progress card shows what it counted, on everyone's items, every week open; Clear goes back to the whole plan.
+  const { slice, clear } = React.useContext(ShownSlice);
+  useEffect(() => {
+    if (slice) setWhose("everyone");
+  }, [slice]);
+  const today = lagosDay(new Date(now));
+  const shown = data.tasks.filter(item => item.id === selected || ((slice ? inSlice(item, slice, today) : matchesWhose(item, whose, data.viewerUserId)) && matchesSearch(item, query)));
   const people = data.team.filter(member => member.name);
   const refresh = useRefresh(engagementId);
   const markHeld = trpc.engagement.staff.markHeld.useMutation({ ...refresh, onSuccess: (result) => { refresh.onSuccess(); toast.success(result.status === "held" ? "Marked held. Write the notes in Sessions." : "Taken off the plan. Book it again when you have a date."); } });
@@ -241,7 +250,7 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
       <div className={`min-w-0 ${task ? "" : "xl:col-span-2"}`}>
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-2 text-sm text-ink-600">Show
-            <select aria-label="Whose items" className="min-h-9 rounded-md border border-line-soft bg-white px-2 text-sm text-ink" value={whoseValue(whose)} onChange={event => setWhose(whoseFrom(event.target.value))}>
+            <select aria-label="Whose items" className="min-h-9 rounded-md border border-line-soft bg-white px-2 text-sm text-ink" value={whoseValue(whose)} onChange={event => { clear(); setWhose(whoseFrom(event.target.value)); }}>
               <option value="everyone">Everyone's</option>
               <option value="tasks">My tasks</option>
               <option value="reviews">My reviews</option>
@@ -252,9 +261,15 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
           <input type="search" aria-label={`Search the ${METHOD.workPlan}`} placeholder="Search by title or code" value={query} onChange={event => setQuery(event.target.value)}
             className="min-h-9 min-w-0 flex-1 rounded-md border border-line-soft bg-white px-3 text-sm text-ink placeholder:text-ink-muted sm:max-w-xs" />
         </div>
+        {slice && (
+          <p className="flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
+            <span className="rounded-full bg-brand-tint px-3 py-1 font-medium text-brand-deep">Showing: {slice.label} <span className="font-normal tabular-nums">({data.tasks.filter(item => inSlice(item, slice, today)).length})</span></span>
+            <button type="button" onClick={clear} className="min-h-9 px-2 text-sm font-medium text-brand underline underline-offset-2">Clear</button>
+          </p>
+        )}
         <PeopleKey data={data} />
         {/* Weekly cards (R85), as the client sees them, with each week's Sessions. */}
-        <WeekCards startedOn={data.engagement.startedOn ?? null} items={shown} firstIf={item => item.status === "received" && roleOf(item, data.viewerUserId).reviews} sessions={query.trim() || (whose !== "everyone" && whose !== "tasks") ? [] : data.sessions} now={now}
+        <WeekCards key={slice ? `slice-${slice.at}` : "plan"} openAll={Boolean(slice)} startedOn={data.engagement.startedOn ?? null} items={shown} firstIf={item => item.status === "received" && roleOf(item, data.viewerUserId).reviews} sessions={slice || query.trim() || (whose !== "everyone" && whose !== "tasks") ? [] : data.sessions} now={now}
           emptyText={query.trim() ? "Nothing matches. Try everyone's, or another word." : whose === "tasks" ? "No tasks of yours on the plan. Show everyone's to see the rest." : whose === "reviews" ? "Nothing on the plan for you to review." : "Nothing matches. Try everyone's, or another word."}
           onMarkHeld={data.can.markHeld ? (sessionId, held) => { if (!markHeld.isPending) markHeld.mutate({ sessionId, held }); } : undefined}
           // Handed in or sent is done from the sender's side (R87); for the lead it waits on their review.
@@ -649,14 +664,14 @@ function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; 
  * Progress for the team (R92): both sides of the Work Plan, each owner's load, Sessions, content and the Measure of
  * Success from the record already loaded; fees only for those who see them, from the fees they already may read.
  */
-function TeamProgress({ data, engagementId, now }: { data: Detail; engagementId: number; now: number }) {
+function TeamProgress({ data, engagementId, now, onShow, onSessions }: { data: Detail; engagementId: number; now: number; onShow?: (slice: PlanSlice) => void; onSessions?: () => void }) {
   const fees = trpc.engagement.staff.fees.useQuery({ engagementId }, { enabled: data.can.seeFees });
   const dated = DATED_TYPES[data.engagement.type];
   const started = data.engagement.startedOn ?? null;
   const currentMonth = dated && started ? monthOfDay(datedProgress(dated, started, now).day, dated.durationDays) : null;
   const latest = [...(data.checkins as { measureReading: number | null }[])].reverse().find(row => row.measureReading !== null)?.measureReading ?? null;
   const measure = data.measure as { name: string; unit: string | null; baselineValue: number | null; targetValue: number | null } | null;
-  return <ProgressView audience="team" progress={progressOf({
+  return <ProgressView audience="team" onShow={onShow} onSessions={onSessions} progress={progressOf({
     tasks: data.tasks, sessions: data.sessions, content: data.content, contentTargets: dated?.monthly ?? [], currentMonth,
     fees: data.can.seeFees ? fees.data?.feeLines ?? null : null,
     measure: measure ? { name: measure.name, unit: measure.unit, baselineValue: measure.baselineValue, targetValue: measure.targetValue, latest } : null,
@@ -676,6 +691,7 @@ export function EngagementWorkspace({ engagementId, myRole, onBack, openTaskId =
   const detail = trpc.engagement.staff.detail.useQuery({ engagementId });
   const today = trpc.engagement.staff.today.useQuery(undefined);
   const [focus, setFocus] = useState<{ taskId: number; at: number } | null>(() => (openTaskId !== null ? { taskId: openTaskId, at: 0 } : null));
+  const [slice, setSlice] = useState<(PlanSlice & { at: number }) | null>(null);
   const back = <button type="button" onClick={onBack} className="inline-flex items-center gap-1 text-sm font-medium text-brand"><ArrowLeft className="h-4 w-4" aria-hidden />All my projects</button>;
   if (detail.error && detail.data === undefined) return <div className="space-y-3 p-4">{back}<Failed error={detail.error} onRetry={() => void detail.refetch()} retrying={detail.isFetching} /></div>;
   if (!detail.data) return <div className="space-y-3 p-4">{back}<Loading label="Loading the engagement" rows={4} /></div>;
@@ -723,7 +739,7 @@ export function EngagementWorkspace({ engagementId, myRole, onBack, openTaskId =
   const pane = (children: React.ReactNode) => <div className="space-y-4 p-4 sm:p-7"><Card>{children}</Card></div>;
   const tabs: RoomTab[] = [
     { id: "overview", label: "Overview", count: count(rows.length, `${rows.length} for you`), content: overview },
-    { id: "progress", label: "Progress", content: <div className="p-4 sm:p-7"><TeamProgress data={data} engagementId={engagementId} now={now} /></div> },
+    { id: "progress", label: "Progress", content: <div className="p-4 sm:p-7"><TeamProgress data={data} engagementId={engagementId} now={now} onShow={shown => { setSlice({ ...shown, at: Date.now() }); showTab("plan"); }} onSessions={() => showTab("meetings")} /></div> },
     ...(data.engagement.type === "digital_marketing" ? [{ id: "content", label: "Content", content: pane(<ContentAdmin data={data} engagementId={engagementId} />) }] : []),
     { id: "plan", label: METHOD.workPlan, count: count(withClient, `${withClient} with the client`), content: pane(<Tasks data={data} engagementId={engagementId} />) },
     { id: "files", label: "Files", count: count(unsorted, `${unsorted} to match`), content: <div className="p-4 sm:p-7"><FilesByItem data={data} engagementId={engagementId} /></div> },
@@ -759,7 +775,7 @@ export function EngagementWorkspace({ engagementId, myRole, onBack, openTaskId =
         </div>
       </section>
       {data.hold && <div className="px-4 pt-4 sm:px-7"><FeeHoldNote hold={data.hold} /></div>}
-      <Compact.Provider value={true}><FocusTask.Provider value={focus}><RoomTabs label={`${data.businessName} workspace`} initial={openTaskId !== null ? "plan" : "overview"} tabs={tabs} /></FocusTask.Provider></Compact.Provider>
+      <Compact.Provider value={true}><FocusTask.Provider value={focus}><ShownSlice.Provider value={{ slice, clear: () => setSlice(null) }}><RoomTabs label={`${data.businessName} workspace`} initial={openTaskId !== null ? "plan" : "overview"} tabs={tabs} /></ShownSlice.Provider></FocusTask.Provider></Compact.Provider>
     </div>
   );
 }

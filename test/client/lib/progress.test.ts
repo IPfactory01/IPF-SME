@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { progressOf, type ProgressTask } from "@/lib/progress";
+import { inSlice, progressOf, type ProgressTask } from "@/lib/progress";
 
 const task = (over: Partial<ProgressTask>): ProgressTask => ({ id: 1, side: "client", kind: "data_request", status: "open", title: "Item", ref: null, section: null, priority: null, dueOn: null, weekNumber: 1, owners: [], ...over });
 const base = { sessions: [], startedOn: "2026-11-11", today: "2026-11-14", now: Date.UTC(2026, 10, 14, 12) };
@@ -55,5 +55,31 @@ describe("Progress (R92)", () => {
     expect(result.content).toEqual({ month: 1, rows: [{ label: "Reels", target: 15, published: 1 }, { label: "Posts", target: 5, published: 0 }, { label: "Stories", target: 20, published: 1 }] });
     expect(result.sessions).toEqual({ held: 1, due: 2, next: new Date("2026-11-18T10:00:00Z") });
     expect(result.fees).toEqual({ total: 1_500_000, paid: 500_000, left: 1_000_000, late: 500_000 });
+  });
+
+  it("shows behind each card exactly the items it counted (ET, 16 November 2026)", () => {
+    const tasks = [
+      task({ id: 1, section: "A Brand", status: "accepted" }),
+      task({ id: 2, section: "A Brand", status: "received" }),
+      task({ id: 3, section: "B Accounts", status: "open", priority: "high", dueOn: "2026-11-13" }),
+      task({ id: 4, section: "B Accounts", status: "needs_more", dueOn: "2026-11-20" }),
+      task({ id: 5, section: "C Offers", status: "not_available" }),
+      task({ id: 6, status: "cancelled" }),
+      task({ id: 7, kind: "action", side: "ipf", status: "done" }),
+      task({ id: 8, kind: "action", side: "ipf", status: "open", dueOn: "2026-11-10" }),
+    ];
+    const { plan, dataRequests } = progressOf({ ...base, tasks });
+    const ids = (slice: Parameters<typeof inSlice>[1]) => tasks.filter(item => inSlice(item, slice, base.today)).map(item => item.id);
+    expect(ids({ label: "Done", state: "done" })).toHaveLength(plan.done);
+    expect(ids({ label: "Being checked", state: "checking" })).toHaveLength(plan.checking);
+    expect(ids({ label: "Open", state: "open" })).toHaveLength(plan.open);
+    expect(ids({ label: "Overdue", state: "overdue" })).toEqual([3, 8]);
+    expect(ids({ label: "Overdue", state: "overdue" })).toHaveLength(plan.overdue);
+    expect(ids({ label: "Data Requests", dataRequests: true })).toHaveLength(dataRequests!.requested);
+    expect(ids({ label: "Received", dataRequests: true, state: "received" })).toHaveLength(dataRequests!.received);
+    expect(ids({ label: "Outstanding", dataRequests: true, state: "open" })).toHaveLength(dataRequests!.outstanding);
+    expect(ids({ label: "Overdue", dataRequests: true, state: "overdue" })).toEqual([3]);
+    expect(ids({ label: "High", dataRequests: true, state: "high" })).toEqual([3]);
+    expect(ids({ label: "B Accounts", dataRequests: true, section: "B Accounts" })).toEqual([3, 4]);
   });
 });

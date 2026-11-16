@@ -13,7 +13,7 @@ const sessionTime = (date: Date) => new Intl.DateTimeFormat("en-GB", { timeZone:
  * holding that week's items and its booked Sessions. This week first and open, next week open, later weeks folded to
  * one line, past weeks folded to what is done unless something is still outstanding. The caller draws each item.
  */
-export default function WeekCards<T extends Dated>({ startedOn, items, sessions, isDone, isWaiting, waitingLabel, renderItem, note, noteWeeks = [], onMarkHeld, emptyText, firstIf, now = Date.now() }: {
+export default function WeekCards<T extends Dated>({ startedOn, items, sessions, isDone, isWaiting, waitingLabel, renderItem, note, noteWeeks = [], onMarkHeld, emptyText, firstIf, openAll = false, now = Date.now() }: {
   startedOn: string | null;
   items: T[];
   sessions: WeekSession[];
@@ -32,6 +32,8 @@ export default function WeekCards<T extends Dated>({ startedOn, items, sessions,
   onMarkHeld?: (sessionId: number, held: boolean) => void;
   /** What to say when nothing is shown, such as a filter or search that matches nothing. */
   emptyText?: string;
+  /** Every week open, as when a Progress card shows its items (ET, 16 November 2026). */
+  openAll?: boolean;
   now?: number;
 }) {
   const today = lagosDay(new Date(now));
@@ -61,7 +63,7 @@ export default function WeekCards<T extends Dated>({ startedOn, items, sessions,
         const place = weekPlace(startedOn, week, today);
         const done = its.filter(isDone).length;
         const outstanding = its.length - done;
-        const openByDefault = onlyWaiting || place === "now" || place === "next" || place === "none" || (place === "past" && outstanding > 0);
+        const openByDefault = openAll || onlyWaiting || place === "now" || place === "next" || place === "none" || (place === "past" && outstanding > 0);
         const open = toggled[key] ?? openByDefault;
         const title = week === null ? "No week" : `Week ${week}`;
         const summary = [its.length ? (place === "past" ? `${done} of ${its.length} done` : `${its.length} ${its.length === 1 ? "item" : "items"}`) : "", meetings.length ? `${meetings.length} ${meetings.length === 1 ? "Session" : "Sessions"}` : ""].filter(Boolean).join(" · ");

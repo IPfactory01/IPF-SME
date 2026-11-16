@@ -885,6 +885,19 @@ describe("the Plan, Meetings and Data requests views", () => {
     expect(panel.queryByRole("region", { name: "Progress: By person" })).toBeNull();
   });
 
+  it("opens Your plan on the items behind a Progress card, with Clear, and IP Factory's one figure opens nothing (ET, 16 November 2026)", async () => {
+    render(<EngagementRoom room={room()} now={NOW} />);
+    open("Progress");
+    const panel = within(screen.getByRole("tabpanel", { name: "Progress" }));
+    expect(panel.queryByRole("button", { name: /^IP Factory's work/ })).toBeNull();
+    fireEvent.click(panel.getByRole("button", { name: /^Open: \d+, show them$/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Clear" })).toBeTruthy());
+    expect(screen.getByText(/Showing: Open/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Your price list" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Clear" }));
+    expect(screen.queryByText(/Showing:/)).toBeNull();
+  });
+
   it("marks the client's open items To do, and shows the one person's initials when the business has only them (ET, 14 November 2026)", () => {
     render(<EngagementRoom room={room({ people: [{ name: "Ada Okafor", label: "Owner", you: true }] })} now={NOW} />);
     open(/^Work Plan/);

@@ -1,6 +1,6 @@
 import { ItemScreenBar, ItemSheet, StickyActions } from "./room/ItemScreen";
 import ProgressView from "./room/Progress";
-import { progressOf } from "@/lib/progress";
+import { inSlice, progressOf, type PlanSlice } from "@/lib/progress";
 import { matchesSearch } from "@/lib/planFilter";
 import { Button } from "@/components/ui/button";
 import { MotionConfig } from "framer-motion";
@@ -92,6 +92,9 @@ function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps)
   useAppManifest("client", !useRoomPreview());
   // Which view is on screen, and whether the full header has scrolled out of sight (phones only; R71).
   const [view, setView] = useState("overview");
+  // What a Progress card opened Your plan on (ET, 16 November 2026); Clear goes back to every item.
+  const [slice, setSlice] = useState<(PlanSlice & { at: number }) | null>(null);
+  const showView = (id: string) => { if (window.location.hash === `#${id}`) window.dispatchEvent(new HashChangeEvent("hashchange")); else window.location.hash = `#${id}`; };
   const headerRef = useRef<HTMLElement>(null);
   const [headerGone, setHeaderGone] = useState(false);
   useEffect(() => {
@@ -308,12 +311,12 @@ function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps)
   const tabs: (RoomTab & { content: React.ReactNode })[] = [
     { id: "overview", label: "Overview", content: overview },
     // Progress (R92): where the engagement stands, from the room's own records; the client's side, and one figure for ours.
-    { id: "progress", label: "Progress", content: <ProgressView audience="client" ourWork={(() => { const ours = room.tasks.filter(item => item.side !== "client" && item.status !== "cancelled"); return ours.length ? { done: ours.filter(item => item.status === "done" || item.status === "accepted").length, total: ours.length } : null; })()}
+    { id: "progress", label: "Progress", content: <ProgressView audience="client" onShow={shown => { setSlice({ ...shown, at: Date.now() }); showView("plan"); }} onSessions={() => showView("meetings")} ourWork={(() => { const ours = room.tasks.filter(item => item.side !== "client" && item.status !== "cancelled"); return ours.length ? { done: ours.filter(item => item.status === "done" || item.status === "accepted").length, total: ours.length } : null; })()}
       progress={progressOf({ tasks: room.tasks.filter(item => item.side === "client"), sessions: room.sessions, content: room.content, contentTargets: room.contentTargets, currentMonth: contentMonth?.month ?? null, fees: room.fees,
         measure: room.measure ? { name: room.measure.name, unit: room.measure.unit, baselineValue: room.measure.baselineValue, targetValue: room.measure.targetValue, latest: room.measure.latest?.reading ?? null } : null,
         startedOn: room.startedOn ?? null, today: lagosDay(new Date(now)), now })} /> },
     ...(contentMonth ? [{ id: "content", label: "Content", group: "The work", count: awaitingApproval ? { value: awaitingApproval, label: `${awaitingApproval} to approve` } : undefined, content: <ContentBoard room={room} currentMonth={contentMonth.month} months={contentMonth.months} /> }] : []),
-    { id: "plan", label: METHOD.workPlan, group: "The work", count: counts.waiting ? { value: counts.waiting, label: `${counts.waiting} waiting on you` } : undefined, content: <PlanView room={room} now={now} /> },
+    { id: "plan", label: METHOD.workPlan, group: "The work", count: counts.waiting ? { value: counts.waiting, label: `${counts.waiting} waiting on you` } : undefined, content: <PlanView room={room} now={now} slice={slice} onClear={() => setSlice(null)} /> },
     { id: "meetings", label: `${METHOD.session}s`, group: "The work", content: <MeetingsView room={room} now={now} isOwner={isOwner} /> },
     ...(room.insight ? [
       { id: "business", label: "Business", group: "What we found", count: stuckCount(room.insight), content: <BusinessPanel insight={room.insight} /> },
@@ -1179,10 +1182,13 @@ const PLAN_GROUPS: { id: string; name: string; dot: string; pill: string; test: 
 ];
 
 /** Every task in the engagement, grouped by where it stands, with who owns it and when it is due. Open one to act on it. */
-function PlanView({ room, now }: { room: Room; now: number }) {
+function PlanView({ room, now, slice = null, onClear }: { room: Room; now: number; slice?: (PlanSlice & { at: number }) | null; onClear?: () => void }) {
   const [selected, setSelected] = useState<number | null>(null);
   const [query, setQuery] = useState("");
-  const searching = query.trim().length > 0;
+  // A Progress card shows the items it counted, every week open, until Clear.
+  const searching = query.trim().length > 0 || slice !== null;
+  const today = lagosDay(new Date(now));
+  const mineShown = room.tasks.filter(item => item.side === "client" && (slice ? inSlice(item, slice, today) : true));
   // The client sees their own items; IP Factory's work shows as one line a week (R86), not item by item.
   const ours = room.tasks.filter(item => item.side !== "client");
   const ourWeek = (week: number | null) => {
@@ -1209,8 +1215,14 @@ function PlanView({ room, now }: { room: Room; now: number }) {
         {/* Search by title or code (ET, 13 November 2026); while searching, only the matching items show. */}
         <input type="search" aria-label={`Search the ${METHOD.workPlan}`} placeholder="Search by title or code" value={query} onChange={event => setQuery(event.target.value)}
           className="mb-3 min-h-9 w-full rounded-md border border-line-soft bg-white px-3 text-sm text-ink placeholder:text-ink-muted sm:max-w-xs" />
-        <WeekCards startedOn={room.startedOn ?? null} items={room.tasks.filter(item => item.side === "client" && (item.id === selected || matchesSearch(item, query)))} sessions={searching ? [] : room.sessions} now={now}
-          note={searching ? undefined : ourWeek} noteWeeks={searching ? [] : ours.map(item => item.weekNumber ?? weekOfDay(room.startedOn ?? null, item.dueOn))} emptyText={searching ? "Nothing matches. Try another word." : undefined}
+        {slice && (
+          <p className="flex flex-wrap items-center gap-2 text-sm" aria-live="polite">
+            <span className="rounded-full bg-brand-tint px-3 py-1 font-medium text-brand-deep">Showing: {slice.label} <span className="font-normal tabular-nums">({mineShown.length})</span></span>
+            <button type="button" onClick={onClear} className="min-h-9 px-2 text-sm font-medium text-brand underline underline-offset-2">Clear</button>
+          </p>
+        )}
+        <WeekCards key={slice ? `slice-${slice.at}` : "plan"} openAll={slice !== null} startedOn={room.startedOn ?? null} items={room.tasks.filter(item => item.side === "client" && (item.id === selected || ((slice ? inSlice(item, slice, today) : true) && matchesSearch(item, query))))} sessions={searching ? [] : room.sessions} now={now}
+          note={searching ? undefined : ourWeek} noteWeeks={searching ? [] : ours.map(item => item.weekNumber ?? weekOfDay(room.startedOn ?? null, item.dueOn))} emptyText={slice ? "Nothing here now. Clear to see every item." : searching ? "Nothing matches. Try another word." : undefined}
           isDone={item => ["done", "checking"].includes(PLAN_GROUPS.find(group => group.test(item))?.id ?? "")} isWaiting={isClientOpen} waitingLabel="Waiting on you"
           renderItem={item => {
             const group = PLAN_GROUPS.find(entry => entry.test(item)) ?? PLAN_GROUPS[1]!;

@@ -80,8 +80,9 @@ export default function EngagementsView({ home = false, header = null, onOpenPro
       )}
       {canOpen && <ServiceRequests onOpen={setPrefill} />}
       {canOpen && <NewEngagement key={prefill?.requestId ?? "new"} onCreated={setOpenId} prefill={prefill} onDone={() => setPrefill(null)} />}
-      <Today onOpen={(id, taskId) => (onOpenProject ? onOpenProject(id, taskId) : setOpenIdState(id))} />
+      {/* Your projects first, then Today (ET, 16 November 2026): the client's card was below a long list and went unseen. */}
       <MyProjects items={list.data?.items ?? []} onOpen={setOpenId} matchesFiles={Boolean(list.data && "matchesFiles" in list.data && list.data.matchesFiles)} />
+      <Today onOpen={(id, taskId) => (onOpenProject ? onOpenProject(id, taskId) : setOpenIdState(id))} />
       {home && seesAll && <MyProjects title="Every engagement" others items={list.data?.items ?? []} onOpen={setOpenId} matchesFiles={Boolean(list.data && "matchesFiles" in list.data && list.data.matchesFiles)} />}
       {home ? (list.isLoading ? <Loading label="Loading your projects" /> : list.data?.items.length === 0 && <p className="rounded-xl border border-line-soft bg-white p-4 text-sm text-ink-muted">You are not on any project yet. When a lead adds you to one, it appears here and you get an email.</p>) : list.isLoading ? <Loading label="Loading the engagements" /> : (
         <div className="overflow-x-auto border border-line bg-white">

@@ -256,7 +256,7 @@ flowchart TD
 Every team member has a WhatsApp number on their profile (R44); the room shows it beside them, and an item meant for
 one of them offers **Send on WhatsApp to {name}**. Each person agrees to their number being shown (PRD K11).
 
-**Today** (R52, built; one row per item since R93; tiles since R96: To do, Client wrote, To review and Mentioned, each with its count and late ones, filtering the list): at the top of the Engagements tab, one list across a person's projects, late first, so nobody
+**Today** (R52, built; one row per item since R93; tiles since R96: To do, Client wrote, To review and Mentioned, each with its count and late ones, filtering the list; since R100 under My projects, its first five rows then **Show all N**, a tile showing all of its kind): one list across a person's projects, late first, so nobody
 opens every project to find their work. Each card names the kind, the item and the business, and opens the engagement:
 *Client wrote* (the last message on an item is the client's), *Clock* (a First edit, with the hours left or how late),
 *To check* (the client sent it; mark it received or ask for more), *Your request* (past its day), *Meeting* (the next
@@ -468,7 +468,7 @@ Paystack's signed notifications arrive at `POST /api/paystack/webhook`.
   authenticator app after the password; recovery codes work in the code box. Once the code is accepted, the page asks the browser to offer to save the email and password (ET, 16 November 2026): a sign-in in two steps on one page never prompted Chrome; the password goes to the browser's password manager only, and only if the person says yes. The client's sign-in does the same.
 - A person with no business and at least one internal role lands on `/admin`; everyone else on `/dashboard`.
 - At `/admin`, everyone, the Super Admins included, sees **the team's home** (R83): the room's top bar with their name and **Sign out**; *Good
-  morning, {first name}* (afternoon, evening by Lagos time) and their level; then **Today** and **My projects**, each
+  morning, {first name}* (afternoon, evening by Lagos time) and their level; then **My projects** and **Today** (projects first since R100), each
   project opening as their workspace (R82). A Partner also sees **Finance**, as a second tab beside **My work**.
   A project card counts files to sort only for those who match files (`manage_engagements`); the Stage is a control
   only for those who can change it, and plain text for everyone else.

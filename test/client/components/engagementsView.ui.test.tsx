@@ -975,6 +975,25 @@ describe("my projects", () => {
     expect(screen.getByRole("dialog")).toBeTruthy();
   });
 
+  it("puts My projects above Today, and shows Today's first five with Show all (ET, 16 November 2026)", () => {
+    api.list = { setUp: true, items: [{ ...row, myRole: "Specialist" }] };
+    api.today = Array.from({ length: 7 }, (_, index) => ({ key: `due-${index}`, taskId: 100 + index, kind: "due", engagementId: 4, businessName: "Ada Foods", title: `Item ${index + 1}`, detail: "Due today", at: null, late: false }));
+    render(<EngagementsView home />);
+    const projects = screen.getByRole("region", { name: "My projects" });
+    const today = screen.getByRole("region", { name: /Today/ });
+    // The client's card comes first on the page.
+    expect(projects.compareDocumentPosition(today) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const rows = () => within(within(today).getByRole("list", { name: "What needs you" })).getAllByRole("button");
+    expect(rows()).toHaveLength(5);
+    fireEvent.click(within(today).getByRole("button", { name: "Show all 7" }));
+    expect(rows()).toHaveLength(7);
+    fireEvent.click(within(today).getByRole("button", { name: "Show fewer" }));
+    expect(rows()).toHaveLength(5);
+    // A tile shows all of its kind.
+    fireEvent.click(within(today).getByRole("button", { name: /^To do: 7/ }));
+    expect(rows()).toHaveLength(7);
+  });
+
   it("starts the day from Today: what needs this person, late first, each card opening the engagement (R52)", () => {
     const now = Date.now();
     api.list = { setUp: true, items: [{ ...row, myRole: "Content Producer" }] };

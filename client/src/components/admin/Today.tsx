@@ -55,9 +55,13 @@ export function groupToday(items: readonly Item[]): TodayRow[] {
 export default function Today({ onOpen, now = Date.now() }: { onOpen: (engagementId: number, taskId: number | null, kind: Item["kind"]) => void; now?: number }) {
   const today = trpc.engagement.staff.today.useQuery(undefined);
   const [tile, setTile] = useState<TileId | null>(null);
+  const [all, setAll] = useState(false);
   if (!today.data) return null;
   const rows = groupToday(today.data);
-  const shown = tile ? rows.filter(row => inTile(row, tile)) : rows;
+  const picked = tile ? rows.filter(row => inTile(row, tile)) : rows;
+  // The first few, late first, so what sits below is seen (ET, 16 November 2026); a tile or Show all gives the rest.
+  const shown = all || tile ? picked : picked.slice(0, TODAY_FIRST);
+  const more = picked.length - shown.length;
   return (
     <section aria-labelledby="today" className="space-y-2">
       <h2 id="today" className="text-sm font-semibold text-ink">Today <span className="font-normal text-ink-muted">({rows.length})</span></h2>
@@ -66,10 +70,21 @@ export default function Today({ onOpen, now = Date.now() }: { onOpen: (engagemen
         ? <p className="rounded-xl border border-line bg-white p-4 text-sm text-ink-muted">Nothing needs you right now across your projects.</p>
         : shown.length === 0
           ? <p className="rounded-xl border border-line bg-white p-4 text-sm text-ink-muted">Nothing here right now.</p>
-          : <TodayList rows={shown} now={now} onOpen={onOpen} showBusiness />}
+          : <>
+            <TodayList rows={shown} now={now} onOpen={onOpen} showBusiness />
+            {(more > 0 || (all && !tile && rows.length > TODAY_FIRST)) && (
+              <button type="button" onClick={() => setAll(value => !value)} aria-expanded={all}
+                className="flex min-h-11 w-full items-center justify-center rounded-xl border border-line-soft bg-white text-sm font-semibold text-brand hover:border-brand">
+                {all ? "Show fewer" : `Show all ${picked.length}`}
+              </button>
+            )}
+          </>}
     </section>
   );
 }
+
+/** How many of Today's rows show before Show all. */
+export const TODAY_FIRST = 5;
 
 /**
  * Home's tiles (ET, 16 November 2026, after ClickUp's Today, Replies and Assigned): what needs the person, by kind, with

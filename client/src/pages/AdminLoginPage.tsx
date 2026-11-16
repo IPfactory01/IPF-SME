@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { isOAuthLoginConfigured } from "@/const";
 import { trpc } from "@/lib/trpc";
+import { offerToSaveSignIn } from "@/lib/saveSignIn";
 import { BRAND } from "@shared/brand";
 import { isTwoStepChallenge, type TwoStepChallenge } from "@shared/auth";
 import { ArrowLeft, Lock } from "lucide-react";
@@ -34,6 +35,8 @@ export default function AdminLoginPage() {
   }, [access.data?.passwordVerified, setLocation]);
 
   const enter = async () => {
+    // Signed in: let the browser offer to save the email and password, so next time only the code is asked for.
+    await offerToSaveSignIn(email, password);
     await Promise.all([utils.auth.me.invalidate(), utils.adminAccess.status.invalidate(), utils.account.me.invalidate()]);
     setLocation("/admin");
   };

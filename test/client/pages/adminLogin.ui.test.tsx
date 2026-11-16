@@ -125,6 +125,24 @@ describe("admin sign-in page", () => {
     await waitFor(() => expect(location.history.at(-1)).toBe("/admin"));
   });
 
+  it("asks the browser to save the email and password once the code is accepted, not before (ET, 16 November 2026)", async () => {
+    const saved: { id: string; password: string }[] = [];
+    vi.stubGlobal("PasswordCredential", class { id: string; password: string; constructor(data: { id: string; password: string }) { this.id = data.id; this.password = data.password; } });
+    Object.defineProperty(navigator, "credentials", { configurable: true, value: { store: async (credential: { id: string; password: string }) => { saved.push({ id: credential.id, password: credential.password }); return credential; } } });
+    api.signInResult = { twoStepRequired: true, challenge: "c".repeat(43), setup: null };
+    const location = renderPage();
+    fill("Email", "staff@example.test");
+    fill("Password", "correct horse 42");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    expect(saved).toEqual([]);
+    fill("Code", "123456");
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+    await waitFor(() => expect(location.history.at(-1)).toBe("/admin"));
+    expect(saved).toEqual([{ id: "staff@example.test", password: "correct horse 42" }]);
+    vi.unstubAllGlobals();
+    Object.defineProperty(navigator, "credentials", { configurable: true, value: undefined });
+  });
+
   it("shows the server's message, such as the generic not-authorised refusal, and stays on the page", () => {
     api.error = "This account is not authorised for the IPF administrator area.";
     const location = renderPage();

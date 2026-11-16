@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| After a successful sign-in the page asks the browser to offer to save the email and password, so only the two-step code is typed next time | ET, 16 November 2026 |
 | Home opens with tiles that filter Today (To do, Client wrote, To review, Mentioned); on a phone a Work Plan row is the title and one line of when and whose part (R96) | ET, 16 November 2026 |
 | On a phone The Shift works as an app: a bottom bar, an item as its own screen with its actions at the foot, and Add to Home Screen (R95) | ET, 16 November 2026 |
 | On a phone an item opens as a full screen over the Work Plan, for the team and the client (the Specialists could not see what a tap opened) | ET, 16 November 2026 |

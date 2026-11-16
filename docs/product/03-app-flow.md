@@ -464,7 +464,7 @@ Paystack's signed notifications arrive at `POST /api/paystack/webhook`.
 ### 8.2 Signing in
 
 - Clients at `/login`, staff at `/admin/login`. Everyone with an internal role uses a six-digit code from an
-  authenticator app after the password; recovery codes work in the code box.
+  authenticator app after the password; recovery codes work in the code box. Once the code is accepted, the page asks the browser to offer to save the email and password (ET, 16 November 2026): a sign-in in two steps on one page never prompted Chrome; the password goes to the browser's password manager only, and only if the person says yes. The client's sign-in does the same.
 - A person with no business and at least one internal role lands on `/admin`; everyone else on `/dashboard`.
 - At `/admin`, everyone, the Super Admins included, sees **the team's home** (R83): the room's top bar with their name and **Sign out**; *Good
   morning, {first name}* (afternoon, evening by Lagos time) and their level; then **Today** and **My projects**, each

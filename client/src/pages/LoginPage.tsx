@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAccount } from "@/hooks/useAccount";
 import { trpc } from "@/lib/trpc";
+import { offerToSaveSignIn } from "@/lib/saveSignIn";
 import { BRAND } from "@shared/brand";
 import { usePageMeta } from "@/components/SiteShell";
 import { ArrowLeft, Eye, EyeOff } from "lucide-react";
@@ -44,8 +45,11 @@ export default function LoginPage() {
   });
 
   const signedIn = (view: AccountSessionView) => {
-    utils.account.me.setData(undefined, view);
-    setLocation(view.landingPath);
+    // Signed in: let the browser offer to save the email and password, then go in.
+    void offerToSaveSignIn(email, password).finally(() => {
+      utils.account.me.setData(undefined, view);
+      setLocation(view.landingPath);
+    });
   };
 
   const submit = (event: FormEvent<HTMLFormElement>) => {

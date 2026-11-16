@@ -7,7 +7,10 @@ import { groupToday } from "./Today";
 import { ADMIN_SECTIONS, PIPELINE_STAGES, visibleAdminSections, type AdminAccessView, type AdminSectionId, type ConsoleTarget, type PipelineStage } from "@/lib/adminSections";
 import { trpc } from "@/lib/trpc";
 import { avatarColour, initials } from "@/components/EngagementRoom";
+import { FolderKanban, House, LayoutGrid, ListChecks } from "lucide-react";
 import React, { useState } from "react";
+import BottomBar from "@/components/room/BottomBar";
+import { useAppManifest } from "@/lib/appManifest";
 import { ConsoleSection } from "./BusinessSupportConsole";
 import DatabaseBehind from "./DatabaseBehind";
 import { EngagementWorkspace } from "./EngagementDetail";
@@ -42,6 +45,8 @@ const ENGAGEMENT_LINKS = [
  */
 export default function TeamHome({ access, now = new Date() }: { access: Access; now?: Date }) {
   const { logout } = useAuth();
+  // Add to Home Screen opens the team's app (ET, 16 November 2026).
+  useAppManifest("team");
   const list = trpc.engagement.staff.list.useQuery(undefined);
   const today = trpc.engagement.staff.today.useQuery(undefined);
   // A link from an email (R89) opens its engagement on the item: /admin?engagement=…&task=….
@@ -68,6 +73,11 @@ export default function TeamHome({ access, now = new Date() }: { access: Access;
   const openTarget = (target: ConsoleTarget) => {
     if (PIPELINE_STAGES.some(item => item.id === target)) { setStage(target as PipelineStage); go({ kind: "section", id: "pipeline" }); return; }
     go(target === "engagements" ? { kind: "home" } : { kind: "section", id: target as AdminSectionId });
+  };
+  // Home's sections (Today, My projects) from the bottom bar: home first, then scroll to it once it is drawn.
+  const toSection = (id: string) => {
+    go({ kind: "home" });
+    requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" })));
   };
   const signOut = () => void logout().then(() => window.location.assign("/admin/login"));
   const greeting = (
@@ -127,23 +137,13 @@ export default function TeamHome({ access, now = new Date() }: { access: Access;
         </div>
       </nav>
 
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 flex-1 pb-20 lg:pb-0">
         <div aria-hidden className="h-[3px] bg-gradient-to-r from-brand-plum via-highlight-ink to-highlight" />
-        {/* On a phone: the room's one-line bar, then the places the rail holds on a laptop. */}
+        {/* On a phone: a one-line bar at the top; the places the rail holds on a laptop are in the bottom bar. */}
         <div className="border-b border-line-soft bg-white lg:hidden">
           <div className="flex items-center justify-between gap-3 px-4 py-1">
             <a href="/admin" className="flex min-h-11 items-center gap-2" aria-label={BRAND.productEndorsement}><img src={BRAND.markUrl} alt="" className="h-7 w-auto" /><span className="text-sm font-semibold">{BRAND.productName}</span></a>
-            <button type="button" onClick={signOut} className="inline-flex min-h-11 items-center px-2 text-sm text-ink-600">Sign out</button>
           </div>
-          {desk.length > 0 && (
-            <div role="tablist" aria-label="Your home" className="flex gap-1 overflow-x-auto px-4 pb-2 text-sm">
-              {[{ id: "home" as const, label: "My work" }, ...desk.map(section => ({ id: section.id, label: sectionLabel(section.id) }))].map(item => {
-                const selected = item.id === "home" ? view.kind !== "section" : view.kind === "section" && view.id === item.id;
-                return <button key={item.id} type="button" role="tab" aria-selected={selected} onClick={() => go(item.id === "home" ? { kind: "home" } : { kind: "section", id: item.id })}
-                  className={`min-h-9 shrink-0 rounded-full px-4 ${selected ? "bg-brand text-white" : "text-ink-600"}`}>{item.label}</button>;
-              })}
-            </div>
-          )}
         </div>
         {view.kind === "engagement" ? (
           <EngagementWorkspace engagementId={view.id} myRole={open?.myRole ?? null} onBack={() => go({ kind: "home" })} openTaskId={picked && picked.engagementId === view.id ? picked.taskId : arrival && arrival.engagementId === view.id ? arrival.taskId : null} />
@@ -161,6 +161,13 @@ export default function TeamHome({ access, now = new Date() }: { access: Access;
           </main>
         )}
       </div>
+      {/* On a phone, the places used most within thumb's reach, as ClickUp has them (ET, 16 November 2026). */}
+      <BottomBar label="Your work on a phone" items={[
+        { id: "home", label: "Home", icon: <House className="h-5 w-5" aria-hidden />, onSelect: () => { go({ kind: "home" }); window.scrollTo({ top: 0 }); }, active: view.kind === "home" },
+        { id: "tasks", label: "My tasks", icon: <ListChecks className="h-5 w-5" aria-hidden />, onSelect: () => toSection("today"), badge: waiting || undefined },
+        { id: "projects", label: "Projects", icon: <FolderKanban className="h-5 w-5" aria-hidden />, onSelect: () => (projects.length === 1 ? go({ kind: "engagement", id: projects[0]!.id }) : toSection("my-projects")), active: view.kind === "engagement" },
+      ]} more={desk.map(section => ({ id: section.id, label: sectionLabel(section.id), icon: <LayoutGrid className="h-5 w-5" aria-hidden />, onSelect: () => go({ kind: "section", id: section.id }), active: view.kind === "section" && view.id === section.id }))}
+        footer={<div className="mt-2 border-t border-line-soft pt-2"><p className="py-1 text-xs text-ink-muted">{who}{access.level ? ` · ${access.level}` : ""}</p><button type="button" onClick={signOut} className="flex min-h-12 w-full items-center text-sm text-ink">Sign out</button></div>} />
     </div>
   );
 }

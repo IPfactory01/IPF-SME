@@ -64,10 +64,16 @@ describe("the team's home (R83): everyone, in the client's room's frame", () => 
 
   it("gives a Partner Finance beside their work, on a phone too", () => {
     render(<TeamHome access={{ permissions: [], platformPermissions: PLATFORM_ROLE_PERMISSIONS.partner, name: "Pat Partner", level: "Partner" }} now={morning} />);
-    expect(screen.getByRole("tab", { name: "My work" }).getAttribute("aria-selected")).toBe("true");
-    fireEvent.click(screen.getByRole("tab", { name: "Finance" }));
+    // On a phone the bottom bar holds Home, My tasks and Projects; the desk's sections and Sign out are under More (ET, 16 November 2026).
+    const bar = within(screen.getByRole("navigation", { name: "Your work on a phone" }));
+    expect(bar.getByRole("button", { name: "Home" }).getAttribute("aria-current")).toBe("page");
+    fireEvent.click(bar.getByRole("button", { name: "More" }));
+    const more = within(screen.getByRole("dialog", { name: "More" }));
+    expect(more.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    fireEvent.click(more.getByRole("button", { name: "Finance" }));
     expect(screen.getByText("Section finance")).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "My work" }));
+    expect(screen.queryByRole("dialog", { name: "More" })).toBeNull();
+    fireEvent.click(bar.getByRole("button", { name: "Home" }));
     expect(screen.getByText("Projects at home")).toBeTruthy();
   });
 

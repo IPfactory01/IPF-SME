@@ -1,3 +1,4 @@
+import { ItemScreenBar, StickyActions } from "./room/ItemScreen";
 import ProgressView from "./room/Progress";
 import { progressOf } from "@/lib/progress";
 import { matchesSearch } from "@/lib/planFilter";
@@ -9,7 +10,9 @@ import { AREA_NAMES } from "@shared/businessCheck/questions";
 import { ASSESSMENT_DAYS, ASSESSMENT_WEEKS, FIX_WEEKS, FOLDER_HOSTS, formatFileSize, formatMeasure, OPEN_TASK_STATUSES, UPLOAD_ACCEPT, UPLOAD_MAX_MB } from "@shared/engagement";
 import { METHOD, METHOD_MEANING } from "@shared/method";
 import type { inferRouterOutputs } from "@trpc/server";
-import { ArrowRight, CalendarClock, Check, ChevronDown, CircleDashed, CircleSlash, Download, FileText, Flag, Paperclip, UploadCloud } from "lucide-react";
+import { ArrowRight, CalendarClock, CalendarDays, Check, ChevronDown, CircleDashed, CircleSlash, Download, FileText, Flag, House, LayoutGrid, ListChecks, Paperclip, UploadCloud } from "lucide-react";
+import BottomBar from "./room/BottomBar";
+import { useAppManifest } from "@/lib/appManifest";
 import React, { useEffect, useRef, useState } from "react";
 import Linked from "./room/Linked";
 import { useLocation } from "wouter";
@@ -85,6 +88,8 @@ function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps)
   const current = steps.find(step => step.state === "now")?.n ?? null;
   const shown = (n: number) => (open === null ? n === current : open === n);
   const wide = useWide();
+  // Add to Home Screen opens the client's room; not inside a preview in Admin (ET, 16 November 2026).
+  useAppManifest("client", !useRoomPreview());
   // Which view is on screen, and whether the full header has scrolled out of sight (phones only; R71).
   const [view, setView] = useState("overview");
   const headerRef = useRef<HTMLElement>(null);
@@ -371,7 +376,16 @@ function RoomView({ room, aside, account, notice, now = Date.now() }: RoomProps)
         {floating && <div aria-hidden data-room-header="floating" className="fixed inset-x-0 top-0 z-40 flex h-10 items-center justify-between gap-3 border-b border-line-soft bg-white px-4 text-sm font-semibold text-ink">{compactLine}</div>}
         {!room.awaitingPayment && <FeeHoldBanner room={room} />}
         {room.awaitingPayment ? <PaymentGate room={room} /> : <RoomTabs label="Your engagement" initial="overview" tabs={tabs} onChange={setView} top={floating ? 40 : undefined} />}
+        {/* Room for the bottom bar on a phone. */}
+        {!wide && !room.awaitingPayment && <div aria-hidden className="h-20" />}
       </div>
+      {/* On a phone the room's main places sit in a bottom bar, as an app has them (ET, 16 November 2026); the rest under More. */}
+      {!wide && !room.awaitingPayment && (() => {
+        const show = (id: string) => { if (window.location.hash === `#${id}`) window.dispatchEvent(new HashChangeEvent("hashchange")); else window.location.hash = `#${id}`; };
+        const MAIN: Record<string, React.ReactNode> = { overview: <House className="h-5 w-5" aria-hidden />, plan: <ListChecks className="h-5 w-5" aria-hidden />, meetings: <CalendarDays className="h-5 w-5" aria-hidden /> };
+        const item = (tab: RoomTab) => ({ id: tab.id, label: tab.label, icon: MAIN[tab.id] ?? <LayoutGrid className="h-5 w-5" aria-hidden />, onSelect: () => show(tab.id), active: view === tab.id, badge: tab.count?.value });
+        return <BottomBar label="Your room on a phone" items={tabs.filter(tab => tab.id in MAIN).map(item)} more={tabs.filter(tab => !(tab.id in MAIN)).map(item)} />;
+      })()}
     </div>
   );
 }
@@ -1225,9 +1239,10 @@ function PlanView({ room, now }: { room: Room; now: number }) {
       {task && (
         // On a phone the item opens as a full screen over the list, not below every week (ET, 16 November 2026).
         <aside aria-label="Task details" style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top, 0px))" }} className="bg-white p-5 max-lg:fixed max-lg:inset-0 max-lg:z-50 max-lg:overflow-y-auto max-lg:overscroll-contain lg:sticky lg:top-16 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-xl lg:border lg:border-line-soft">
+          <ItemScreenBar wide="lg" taskId={task.id} onBack={() => setSelected(null)} />
           <div className="flex items-start justify-between gap-3">
             <p className="text-xs text-ink-muted">{clientStatus(task)}</p>
-            <button type="button" onClick={() => setSelected(null)} className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-brand underline underline-offset-2 lg:min-h-0 lg:px-0 lg:text-xs lg:font-normal">Close</button>
+            <button type="button" onClick={() => setSelected(null)} className="hidden text-xs text-brand underline underline-offset-2 lg:inline">Close</button>
           </div>
           <h3 className="mt-1 font-sans text-lg font-semibold tracking-tight">{task.title}</h3>
           <dl className="mt-3 grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
@@ -1243,8 +1258,8 @@ function PlanView({ room, now }: { room: Room; now: number }) {
           {task.status === "received" && <p className="mt-2 rounded-lg bg-brand-tint p-2 text-sm text-ink">Ticked: you have sent it. Your team reviews it within a working day; then it shows as Completed, or they ask for a bit more.</p>}
           <FileList files={task.files} canRemove={file => file.mine && !file.fromTeam && ["open", "received", "needs_more"].includes(task.status)} />
           <SentLink link={task.responseLink} />
-          {isClientOpen(task) && <TaskControls task={task} uploadsEnabled={room.uploadsEnabled} />}
-          <TaskConversation task={task} />
+          {isClientOpen(task) && <StickyActions wide="lg"><TaskControls task={task} uploadsEnabled={room.uploadsEnabled} /></StickyActions>}
+          <div id={`messages-${task.id}`} className="scroll-mt-4"><TaskConversation task={task} /></div>
         </aside>
       )}
     </div>

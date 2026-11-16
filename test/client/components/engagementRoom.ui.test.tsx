@@ -893,6 +893,25 @@ describe("the Plan, Meetings and Data requests views", () => {
     expect(row.textContent).not.toContain("for you");
   });
 
+  it("gives the client a bottom bar on a phone, and an item a back arrow, Details and Messages (ET, 16 November 2026)", async () => {
+    render(<EngagementRoom room={room()} now={NOW} />);
+    const bar = within(screen.getByRole("navigation", { name: "Your room on a phone" }));
+    expect(bar.getAllByRole("button").map(button => button.textContent)).toEqual(["Overview", "Work Plan2", "Sessions", "More"]);
+    fireEvent.click(bar.getByRole("button", { name: /^Work Plan/ }));
+    await waitFor(() => expect(screen.getByRole("tab", { name: /^Work Plan/ }).getAttribute("aria-selected")).toBe("true"));
+    // More holds the rest, Progress first.
+    fireEvent.click(bar.getByRole("button", { name: "More" }));
+    expect(within(screen.getByRole("dialog", { name: "More" })).getAllByRole("button").map(button => button.textContent)).toContain("Progress");
+    fireEvent.click(within(screen.getByRole("dialog", { name: "More" })).getByRole("button", { name: "Close" }));
+    // An item opens as a screen with the way back, and its Messages a tap away.
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    fireEvent.click(screen.getByRole("button", { name: "Your price list" }));
+    const panel = within(screen.getByRole("complementary", { name: "Task details" }));
+    expect(panel.getByRole("button", { name: "Messages" })).toBeTruthy();
+    fireEvent.click(panel.getByRole("button", { name: "Back to the Work Plan" }));
+    expect(screen.queryByRole("complementary", { name: "Task details" })).toBeNull();
+  });
+
   it("lets the client search their Work Plan by title or code (ET, 13 November 2026)", () => {
     render(<EngagementRoom room={room()} now={NOW} />);
     open(/^Work Plan/);

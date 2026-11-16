@@ -157,7 +157,8 @@ the link is wrong, and only then does the page say so. A signed-in person whose 
 - **Icons** come from `lucide-react`: 16 px beside text (`h-4 w-4`), 20 px in a button or a call-out, as drawn. An icon
   beside a word is `aria-hidden`; a button that is only an icon has an `aria-label`. Status is always written in words,
   never shown by an icon or a colour alone ("Done · Fri 9 Oct", "Received", "Sign-off given").
-- **An item's panel** stays beside the list as it scrolls and, when the item is longer than the screen, scrolls on its own (ET, 13 November 2026). On a phone or narrow tablet it opens as a full screen over the list, with Close at the top, not below the whole Work Plan, where a tap seemed to do nothing (ET, 16 November 2026).
+- **On a phone (R95):** a bottom bar holds the places used most (the team: Home, My tasks, Projects, More; a client: Overview, Work Plan, Sessions, More), and The Shift can be added to the home screen, opening full screen from the IP Factory mark.
+- **An item's panel** stays beside the list as it scrolls and, when the item is longer than the screen, scrolls on its own (ET, 13 November 2026). On a phone or narrow tablet it opens as a full screen over the list (R95: a back arrow to the Work Plan, Details and Messages at the top, the main actions held at the foot), with Close at the top on a laptop, not below the whole Work Plan, where a tap seemed to do nothing (ET, 16 November 2026).
 - **Team avatars:** two-letter initials (first and last name, or the first two letters of a single name, so Miracle is MI and Marcelle Tiogo MT); a web address in a message is a link that opens in a new tab; the group is a labelled image ("Team: Femi Adebayo, Ngozi Eze").
 - **Client logos** (home page and About, under the track record figures): identical square tiles with a hairline border;
   each logo sized by area, not height (`client/src/lib/logoSize.ts`); drawn as an ink silhouette (`bg-ink` through the

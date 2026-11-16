@@ -163,7 +163,7 @@ function MyProjects({ items, onOpen, matchesFiles, title = "My projects", others
   const mine = items.filter(item => (others ? !item.myRole : item.myRole));
   if (!mine.length) return null;
   return (
-    <section aria-label={title} className="space-y-2">
+    <section aria-label={title} id={others ? undefined : "my-projects"} className="scroll-mt-4 space-y-2">
       <h2 className="text-sm font-semibold text-ink">{title} <span className="font-normal text-ink-muted">({mine.length})</span></h2>
       <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {mine.map(item => (

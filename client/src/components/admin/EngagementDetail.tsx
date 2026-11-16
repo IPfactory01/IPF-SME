@@ -1,3 +1,4 @@
+import { ItemScreenBar, StickyActions } from "@/components/room/ItemScreen";
 import ProgressView from "@/components/room/Progress";
 import { progressOf } from "@/lib/progress";
 import { matchesSearch, matchesWhose, roleOf, roleTag, whoseFrom, whoseValue, type Whose } from "@/lib/planFilter";
@@ -296,8 +297,9 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
         // On a phone or narrow tablet the panel is a full screen over the list, not below the whole Work Plan, where a tap
         // seemed to do nothing (ET, 16 November 2026).
         <aside aria-label="Task details" style={{ paddingTop: "max(1rem, env(safe-area-inset-top, 0px))" }} className="space-y-3 bg-white p-4 max-xl:fixed max-xl:inset-0 max-xl:z-50 max-xl:overflow-y-auto max-xl:overscroll-contain xl:sticky xl:top-16 xl:max-h-[calc(100vh-5rem)] xl:overflow-y-auto xl:overscroll-contain xl:rounded-xl xl:border xl:border-line-soft">
-          <div className="flex justify-end">
-            <button type="button" onClick={() => setSelected(null)} className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-brand underline underline-offset-2 xl:min-h-0 xl:px-0 xl:text-xs xl:font-normal">Close</button>
+          <ItemScreenBar wide="xl" taskId={task.id} onBack={() => setSelected(null)} />
+          <div className="hidden justify-end xl:flex">
+            <button type="button" onClick={() => setSelected(null)} className="text-xs text-brand underline underline-offset-2">Close</button>
           </div>
           {/* The lead changes an item; below the lead, a person reads it and works on it: files, messages, Ready for review (R86). */}
           {data.can.manage && data.can.seeAllTasks ? <ReviewItem key={task.id} task={task} data={data} engagementId={engagementId} now={now} /> : <OwnItem key={task.id} task={task} data={data} engagementId={engagementId} now={now} />}
@@ -375,9 +377,9 @@ function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detai
           <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={false} canManage={data.can.manage} />
         </section>
       )}
-      {sent && task.canReview && <ReviewDecision task={task} engagementId={engagementId} />}
+      {sent && task.canReview && <StickyActions wide="xl"><ReviewDecision task={task} engagementId={engagementId} /></StickyActions>}
       {task.detail && <p className="whitespace-pre-line text-sm text-ink-600">{task.detail}</p>}
-      <ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} />
+      <div id={`messages-${task.id}`} className="scroll-mt-4"><ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} /></div>
       <button type="button" className="text-xs font-medium text-ink-600 underline underline-offset-2" onClick={() => setEditing(true)}>Edit the item</button>
     </div>
   );
@@ -518,10 +520,10 @@ function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; 
         {task.priority && <><dt className="text-ink-muted">Priority</dt><dd>{PRIORITY_WORDS[task.priority]}</dd></>}
         <dt className="text-ink-muted">Status</dt><dd>{task.status === "received" ? "Ticked: sent, pending review" : task.status === "done" || task.status === "accepted" ? "Completed" : task.statusLabel}</dd>
       </dl>
-      {task.status === "received" && task.canReview && <ReviewDecision task={task} engagementId={engagementId} />}
+      {task.status === "received" && task.canReview && <StickyActions wide="xl"><ReviewDecision task={task} engagementId={engagementId} /></StickyActions>}
       {task.detail && <p className="whitespace-pre-line text-sm text-ink-600">{task.detail}</p>}
       <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && (task.canHandIn || task.requestedByUserId === data.viewerUserId)} canManage={false} briefFor={task.requestedByUserId === data.viewerUserId} />
-      <ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} />
+      <div id={`messages-${task.id}`} className="scroll-mt-4"><ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} /></div>
     </div>
   );
 }

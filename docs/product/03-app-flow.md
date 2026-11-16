@@ -509,7 +509,7 @@ the business's name, the type and their role on it, and the team's initials. The
 count where something waits: **Overview** (*What needs you here*: their Today cards for this engagement; the next
 meeting with its Join link; the client; stage and team), **Content** (Digital marketing), **Work Plan** (open client
 items), **Files** (files to match), **Sessions**, **Deliverables** (waiting for approval, for those who approve; The
-Fix below), **Fees** (only for those who see fees). On a phone the tabs swipe as in the room; the tab is kept in the
+Fix below), **Fees** (only for those who see fees). On a phone the tabs swipe as in the room, a bottom bar holds Home, My tasks, Projects and More (the desk's sections, Sign out), an item opens as its own screen with a back arrow, Details and Messages and its actions at the foot, and Add to Home Screen opens The Shift at /admin (R95); the tab is kept in the
 address (#plan). Each tab holds the record's own sections below, so what a person may do is unchanged and the server
 checks every action as before. With `view_all_businesses` (the desk, admins, the Super Admin) the record opens in the
 drawer. In the workspace each Work Plan item and each Deliverable is a short row (title, who it is with or its
@@ -544,7 +544,7 @@ question as the owner saw it and their answer (the option's words; several joine
 
 ### 8.4 The room
 
-The client's room fills the screen: a left rail (phones: a slim top bar), a header (business, stage, title, day N of M,
+The client's room fills the screen: a left rail (phones: a slim top bar, and a bottom bar with Overview, Work Plan, Sessions and More, R95), a header (business, stage, title, day N of M,
 the team) and the views as tabs.
 
 | Tab | Shows | Who sees it |

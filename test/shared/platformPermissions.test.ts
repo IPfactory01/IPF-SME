@@ -213,3 +213,16 @@ describe("granting by seniority", () => {
     expect(ROLES_REQUIRING_END_DATE).toEqual(["subject_matter_expert"]);
   });
 });
+
+describe("Senior Business Analysts and above tick off items (ET, 16 November 2026)", () => {
+  const authority = (level: string | null, roles: Parameters<typeof resolveAuthority>[0]["storedRoles"] = ["analyst"]) =>
+    resolveAuthority({ storedRoles: roles, legacyAdmin: false, ownerBridge: false, legacyProfile: [], active: true, level });
+  it("gives Associates and Senior Business Analysts review_assigned_items from their level, and nobody else below", () => {
+    expect(authority("Associate").permissions).toContain("review_assigned_items");
+    expect(authority("Senior Business Analyst").permissions).toContain("review_assigned_items");
+    expect(authority("Business Analyst").permissions).not.toContain("review_assigned_items");
+    expect(authority(null).permissions).not.toContain("review_assigned_items");
+    expect(authority("Senior Business Analyst", ["subject_matter_expert"]).permissions).not.toContain("review_assigned_items");
+    expect(resolveAuthority({ storedRoles: ["analyst"], legacyAdmin: false, ownerBridge: false, legacyProfile: [], active: false, level: "Senior Business Analyst" }).permissions).toEqual([]);
+  });
+});

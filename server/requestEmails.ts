@@ -209,6 +209,17 @@ export function mentionEmail(input: { name: string; author: string; businessName
   };
 }
 
+/** Someone else decided an item (ET, 16 November 2026): completed, or more needed, to its owners. */
+export function reviewedEmail(input: { name: string; author: string; businessName: string; title: string; decision: "received" | "more"; note: string | null; origin: string; link?: string }) {
+  const who = input.author || "A colleague";
+  return {
+    subject: input.decision === "more" ? `More needed: ${input.title}, ${input.businessName}` : `Completed: ${input.title}, ${input.businessName}`,
+    body: [hello(input.name), "", input.decision === "more" ? `${who} asked for more on "${input.title}" for ${input.businessName}:` : `${who} marked "${input.title}" for ${input.businessName} completed.`,
+      ...(input.decision === "more" && input.note ? ["", input.note] : []),
+      "", input.decision === "more" ? `See what is still needed: ${input.link ?? `${input.origin}/admin`}` : `If it is not done, open it and ask for more: ${input.link ?? `${input.origin}/admin`}`, "", BRAND.organisationName].join("\n"),
+  };
+}
+
 /** A team item handed in for review (R86), to the engagement's lead. */
 export function readyForReviewEmail(input: { name: string; author: string; businessName: string; title: string; origin: string ; link?: string}) {
   return {
@@ -233,6 +244,20 @@ export async function sendTeamItemEmails(db: Db, input: { taskId: number; author
     return await sendAll(people.map(person => ({ to: person.email, businessCheckId: null, ...teamMessageEmail({ name: person.name, author: author?.name ?? "", businessName: item.businessName, title: item.task.title, body: input.body, origin, link: taskLink(origin, item.task.engagementId, item.task.id) }) })));
   } catch (error) {
     return failed("A team message")(error);
+  }
+}
+
+/** Emails an item's owners, other than whoever decided it, that it was completed or needs more. */
+export async function sendReviewedEmails(db: Db, input: { taskId: number; actorUserId: number; decision: "received" | "more"; note: string | null; to: readonly number[] }) {
+  try {
+    const item = await itemOf(db, input.taskId);
+    if (!item) return 0;
+    const author = (await db.select({ name: users.name }).from(users).where(eq(users.id, input.actorUserId)).limit(1))[0];
+    const people = await teamPeople(db, item.task.engagementId, input.to.filter(id => id !== input.actorUserId));
+    const origin = getTrustedApplicationOrigin();
+    return await sendAll(people.map(person => ({ to: person.email, businessCheckId: null, ...reviewedEmail({ name: person.name, author: author?.name ?? "", businessName: item.businessName, title: item.task.title, decision: input.decision, note: input.note, origin, link: taskLink(origin, item.task.engagementId, item.task.id) }) })));
+  } catch (error) {
+    return failed("A review notice")(error);
   }
 }
 

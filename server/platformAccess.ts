@@ -36,9 +36,10 @@ export const NO_AUTHORITY: Authority = { roles: [], permissions: [], legacyCapab
  * password) and the account channel (email/password session) call this, so one person always gets one answer.
  */
 export async function loadAuthority(db: Pick<Database, "select">, person: Person): Promise<Authority> {
-  const [stored, profile] = await Promise.all([
+  const [stored, profile, level] = await Promise.all([
     db.select({ role: userPlatformRoles.role }).from(userPlatformRoles).where(and(eq(userPlatformRoles.userId, person.id), roleIsCurrent())),
     db.select({ permissionsJson: adminPermissionProfiles.permissionsJson }).from(adminPermissionProfiles).where(eq(adminPermissionProfiles.userId, person.id)).limit(1),
+    db.select({ jobTitle: users.jobTitle }).from(users).where(eq(users.id, person.id)).limit(1),
   ]);
   return resolveAuthority({
     storedRoles: stored.map(row => row.role),
@@ -46,6 +47,7 @@ export async function loadAuthority(db: Pick<Database, "select">, person: Person
     ownerBridge: isOwnerAdmin({ email: person.email }),
     legacyProfile: parseAdminPermissions(profile[0]?.permissionsJson),
     active: person.status === "active",
+    level: level[0]?.jobTitle ?? null,
   });
 }
 

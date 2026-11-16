@@ -369,6 +369,7 @@ function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detai
       {task.side === "client" && <KindOfWork task={task} data={data} engagementId={engagementId} />}
       <Reviewer task={task} data={data} engagementId={engagementId} />
       <YourPart task={task} data={data} />
+      <DecidedBy task={task} />
       <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
         <dt className="text-ink-muted">With</dt><dd>{task.side === "client" ? data.businessName || "The client" : task.goesTo?.name || "IP Factory"}</dd>
         <dt className="text-ink-muted">Due</dt><dd className={flag && !sent ? FLAG_TONE[flag.tone] : ""}>{task.dueOn ? dayInWords(task.dueOn) : "No date"}{flag && !sent && flag.tone === "late" ? ` · ${flag.text}` : ""}</dd>
@@ -399,8 +400,8 @@ function ReviewDecision({ task, engagementId }: { task: Task; engagementId: numb
   const review = trpc.engagement.staff.reviewTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); setAsking(null); toast.success("Saved. The owners see it."); } });
   return asking === null ? (
     <div className="flex flex-wrap gap-2">
-      <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={review.isPending} onClick={() => review.mutate({ taskId: task.id, decision: "received", note: null })}>Mark received</Button>
-      <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAsking("")}>Ask for more</Button>
+      <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={review.isPending} onClick={() => review.mutate({ taskId: task.id, decision: "received", note: null })}>{task.status === "received" ? "Mark received" : "Mark done"}</Button>
+      {task.status === "received" && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setAsking("")}>Ask for more</Button>}
     </div>
   ) : (
     <div className="space-y-1">
@@ -432,6 +433,13 @@ function KindOfWork({ task, data, engagementId }: { task: Task; data: Detail; en
       </select>
     </label>
   );
+}
+
+/** Who last decided the item and when (ET, 16 November 2026), so a tick by someone else is plain to see. */
+function DecidedBy({ task }: { task: Task }) {
+  const decided = (task as { decidedBy?: { name: string; at: Date | string; decision: "received" | "more" } | null }).decidedBy;
+  if (!decided) return null;
+  return <p className="text-xs text-ink-muted">{decided.decision === "more" ? "More asked for by" : "Completed by"} <span className="text-ink">{decided.name}</span>, {formatDateTime(decided.at)}</p>;
 }
 
 /** The reader's part in the item: theirs to do, theirs to review, or both (ET, 14 November 2026). */
@@ -521,13 +529,15 @@ function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; 
       {task.side === "client" && <KindOfWork task={task} data={data} engagementId={engagementId} />}
       <Reviewer task={task} data={data} engagementId={engagementId} />
       <YourPart task={task} data={data} />
+      <DecidedBy task={task} />
       <dl className="grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
         <dt className="text-ink-muted">For</dt><dd>{task.side === "client" ? data.businessName || "The client" : "IP Factory"}</dd>
         <dt className="text-ink-muted">Due</dt><dd className={flag ? FLAG_TONE[flag.tone] : ""}>{flag?.text ?? "No date"}</dd>
         {task.priority && <><dt className="text-ink-muted">Priority</dt><dd>{PRIORITY_WORDS[task.priority]}</dd></>}
         <dt className="text-ink-muted">Status</dt><dd>{task.status === "received" ? "Ticked: sent, pending review" : task.status === "done" || task.status === "accepted" ? "Completed" : task.statusLabel}</dd>
       </dl>
-      {task.status === "received" && task.canReview && <StickyActions wide="xl"><ReviewDecision task={task} engagementId={engagementId} /></StickyActions>}
+      {/* Ticking off (ET, 16 November 2026): sent and waiting, or still open and someone else's, for whoever may decide it. */}
+      {task.canReview && (task.status === "received" || (OPEN_TASK_STATUSES.includes(task.status) && !roleOf(task, data.viewerUserId).owns)) && <StickyActions wide="xl"><ReviewDecision task={task} engagementId={engagementId} /></StickyActions>}
       {task.detail && <p className="whitespace-pre-line text-sm text-ink-600">{task.detail}</p>}
       <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && (task.canHandIn || task.requestedByUserId === data.viewerUserId)} canManage={false} briefFor={task.requestedByUserId === data.viewerUserId} />
       <div id={`messages-${task.id}`} className="scroll-mt-4"><ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} /></div>

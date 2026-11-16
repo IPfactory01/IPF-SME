@@ -1125,6 +1125,9 @@ var PLATFORM_PERMISSIONS = [
   "assign_engagements",
   "review_engagements",
   "contribute_engagements",
+  // Ticking off anyone's item on an engagement they are on (ET, 16 November 2026): complete it, mark it received or ask
+  // for more, but never their own work, and never owners, reviewer, kind of work or dates. From the level, below.
+  "review_assigned_items",
   "manage_payments",
   // Work before the first payment (ET, 10 November 2026): opening a client's room before it is paid, or moving the
   // first fee past the start date. Partners and the Super Admin only; terms otherwise follow what is bought (R36, D4).
@@ -1171,6 +1174,7 @@ function resolveAuthority(input) {
   const isSuperAdmin2 = roles2.has("super_admin");
   const permissions = /* @__PURE__ */ new Set();
   for (const role of Array.from(roles2)) for (const permission of PLATFORM_ROLE_PERMISSIONS[role]) permissions.add(permission);
+  if (isFirmLevel(input.level) && roles2.has("analyst")) for (const permission of LEVEL_PERMISSIONS[input.level] ?? []) permissions.add(permission);
   for (const capability of input.legacyProfile) {
     const equivalent = LEGACY_CAPABILITY_TO_PLATFORM[capability];
     if (equivalent) permissions.add(equivalent);
@@ -1218,6 +1222,10 @@ var LEVEL_ROLES = {
   "Business Analyst": ["analyst"],
   Specialist: ["subject_matter_expert"],
   Finance: ["finance"]
+};
+var LEVEL_PERMISSIONS = {
+  Associate: ["review_assigned_items"],
+  "Senior Business Analyst": ["review_assigned_items"]
 };
 var isFirmLevel = (value) => FIRM_LEVELS.includes(value ?? "");
 
@@ -3703,16 +3711,18 @@ var roleIsCurrent = () => or(isNull2(userPlatformRoles.expiresAt), gt2(userPlatf
 var roleLabel = (role) => PLATFORM_ROLE_LABELS[role];
 var NO_AUTHORITY = { roles: [], permissions: [], legacyCapabilities: [], isSuperAdmin: false };
 async function loadAuthority(db, person) {
-  const [stored, profile] = await Promise.all([
+  const [stored, profile, level] = await Promise.all([
     db.select({ role: userPlatformRoles.role }).from(userPlatformRoles).where(and2(eq4(userPlatformRoles.userId, person.id), roleIsCurrent())),
-    db.select({ permissionsJson: adminPermissionProfiles.permissionsJson }).from(adminPermissionProfiles).where(eq4(adminPermissionProfiles.userId, person.id)).limit(1)
+    db.select({ permissionsJson: adminPermissionProfiles.permissionsJson }).from(adminPermissionProfiles).where(eq4(adminPermissionProfiles.userId, person.id)).limit(1),
+    db.select({ jobTitle: users.jobTitle }).from(users).where(eq4(users.id, person.id)).limit(1)
   ]);
   return resolveAuthority({
     storedRoles: stored.map((row) => row.role),
     legacyAdmin: person.role === "admin",
     ownerBridge: isOwnerAdmin({ email: person.email }),
     legacyProfile: parseAdminPermissions(profile[0]?.permissionsJson),
-    active: person.status === "active"
+    active: person.status === "active",
+    level: level[0]?.jobTitle ?? null
   });
 }
 async function listSuperAdminIds(db) {
@@ -6811,7 +6821,7 @@ import { TRPCError as TRPCError19 } from "@trpc/server";
 
 // server/engagements.ts
 import { TRPCError as TRPCError18 } from "@trpc/server";
-import { and as and16, asc as asc7, desc as desc8, eq as eq24, gte, inArray as inArray11, isNull as isNull12, ne as ne3, sql as sql8 } from "drizzle-orm";
+import { and as and16, asc as asc7, desc as desc8, eq as eq24, gte, inArray as inArray11, isNull as isNull12, like, ne as ne3, sql as sql8 } from "drizzle-orm";
 
 // server/accountInvitations.ts
 import { randomBytes as randomBytes6, randomUUID } from "crypto";
@@ -9707,6 +9717,22 @@ function mentionEmail(input) {
     body: [hello(input.name), "", `${input.author || "A colleague"} mentioned you on "${input.title}" (${input.businessName}):`, "", input.body, "", `Open it: ${input.link ?? `${input.origin}/admin`}`, "", BRAND.organisationName].join("\n")
   };
 }
+function reviewedEmail(input) {
+  const who = input.author || "A colleague";
+  return {
+    subject: input.decision === "more" ? `More needed: ${input.title}, ${input.businessName}` : `Completed: ${input.title}, ${input.businessName}`,
+    body: [
+      hello(input.name),
+      "",
+      input.decision === "more" ? `${who} asked for more on "${input.title}" for ${input.businessName}:` : `${who} marked "${input.title}" for ${input.businessName} completed.`,
+      ...input.decision === "more" && input.note ? ["", input.note] : [],
+      "",
+      input.decision === "more" ? `See what is still needed: ${input.link ?? `${input.origin}/admin`}` : `If it is not done, open it and ask for more: ${input.link ?? `${input.origin}/admin`}`,
+      "",
+      BRAND.organisationName
+    ].join("\n")
+  };
+}
 function readyForReviewEmail(input) {
   return {
     subject: `Ready for review: ${input.title}, ${input.businessName}`,
@@ -9726,6 +9752,18 @@ async function sendTeamItemEmails(db, input) {
     return await sendAll(people.map((person) => ({ to: person.email, businessCheckId: null, ...teamMessageEmail({ name: person.name, author: author?.name ?? "", businessName: item2.businessName, title: item2.task.title, body: input.body, origin, link: taskLink(origin, item2.task.engagementId, item2.task.id) }) })));
   } catch (error) {
     return failed("A team message")(error);
+  }
+}
+async function sendReviewedEmails(db, input) {
+  try {
+    const item2 = await itemOf(db, input.taskId);
+    if (!item2) return 0;
+    const author = (await db.select({ name: users.name }).from(users).where(eq21(users.id, input.actorUserId)).limit(1))[0];
+    const people = await teamPeople(db, item2.task.engagementId, input.to.filter((id3) => id3 !== input.actorUserId));
+    const origin = getTrustedApplicationOrigin();
+    return await sendAll(people.map((person) => ({ to: person.email, businessCheckId: null, ...reviewedEmail({ name: person.name, author: author?.name ?? "", businessName: item2.businessName, title: item2.task.title, decision: input.decision, note: input.note, origin, link: taskLink(origin, item2.task.engagementId, item2.task.id) }) })));
+  } catch (error) {
+    return failed("A review notice")(error);
   }
 }
 async function sendMentionEmails(db, input) {
@@ -12619,6 +12657,22 @@ function ownerOfTask(team, task) {
   if (task.side === "client") return followUpOwnerOf(team, task)?.userId ?? null;
   return task.assigneeUserId ?? followUpOwnerOf(team, { requestedByUserId: null, turnaround: null })?.userId ?? null;
 }
+function mayTickOff(actor, team, task, others) {
+  return authorityAllows(actor.authority, "review_assigned_items") && team.some((member) => member.userId === actor.id) && !ownersOfTask(team, task, others).includes(actor.id);
+}
+async function decisionsOf(db, engagementId) {
+  const rows = await db.select({ actorUserId: adminAccessAuditEvents.actorUserId, details: adminAccessAuditEvents.details, createdAt: adminAccessAuditEvents.createdAt }).from(adminAccessAuditEvents).where(and16(eq24(adminAccessAuditEvents.action, "engagement_task_reviewed"), like(adminAccessAuditEvents.details, `{"engagementId":${engagementId},%`))).orderBy(asc7(adminAccessAuditEvents.id));
+  const names = await namesOf2(db, rows.map((row) => row.actorUserId));
+  const latest = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    try {
+      const detail = JSON.parse(row.details ?? "{}");
+      if (typeof detail.taskId === "number" && (detail.decision === "received" || detail.decision === "more")) latest.set(detail.taskId, { name: (row.actorUserId !== null ? names.get(row.actorUserId) : null) || "Someone at IP Factory", at: row.createdAt, decision: detail.decision });
+    } catch {
+    }
+  }
+  return latest;
+}
 async function requireStaffTask(db, actor, taskId) {
   const task = (await db.select().from(engagementTasks).where(eq24(engagementTasks.id, taskId)).limit(1))[0];
   if (!task || task.status === "cancelled") throw notFound4();
@@ -12800,6 +12854,7 @@ async function getStaffEngagement(db, actor, engagementId) {
   const manages = authorityAllows(actor.authority, "manage_engagements");
   const seesAllTasks = await canReviewEngagement(db, actor, engagementId);
   const extraOwners = await otherOwnersOf(db, { engagementId });
+  const decisions = await decisionsOf(db, engagementId);
   const held = engagement.opensOnPayment ? null : feeHold(waiting.map((fee) => ({ dueOn: fee.dueOn, paid: false })), lagosDay());
   const staffFile = (file) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt });
   const filesFor = (where, id3) => files.filter((file) => file[where] === id3 || where === "taskId" && matches.some((match) => match.fileId === file.id && match.taskId === id3)).map(staffFile);
@@ -12837,7 +12892,9 @@ async function getStaffEngagement(db, actor, engagementId) {
           const id3 = reviewerOfTask(team, task);
           return id3 === null ? null : { userId: id3, name: team.find((member) => member.userId === id3)?.name ?? "" };
         })(),
-        canReview: seesAllTasks || reviewerOfTask(team, task) === actor.id,
+        canReview: seesAllTasks || reviewerOfTask(team, task) === actor.id || mayTickOff(actor, team, task, others),
+        // Who last decided it, and when (ET, 16 November 2026), from the record of reviews.
+        decidedBy: decisions.get(task.id) ?? null,
         // Everyone it belongs to (R89): the lead owner first, then the others.
         owners: ownersOfTask(team, task, others).map((userId, index2) => ({ userId, name: team.find((member) => member.userId === userId)?.name ?? "", lead: index2 === 0 && owner === userId })),
         // A team item its owner hands in for review (R86): uploads, a link, messages, then Ready for review.
@@ -12945,13 +13002,17 @@ async function assignTeamMember(db, actor, input) {
   return { success: true, added: !existing, notified };
 }
 async function reviewTask(db, actor, input) {
-  const { task, team, leads } = await requireStaffTask(db, actor, input.taskId);
-  if (!leads && reviewerOfTask(team, task) !== actor.id) throw new TRPCError18({ code: "FORBIDDEN", message: "The item's reviewer, or the lead, reviews it." });
+  const { task, team, leads, others } = await requireStaffTask(db, actor, input.taskId);
+  const tickingOff = !leads && reviewerOfTask(team, task) !== actor.id && mayTickOff(actor, team, task, others);
+  if (!leads && reviewerOfTask(team, task) !== actor.id && !tickingOff) {
+    throw new TRPCError18({ code: "FORBIDDEN", message: authorityAllows(actor.authority, "review_assigned_items") && ownersOfTask(team, task, others).includes(actor.id) ? "This is your own work: someone else checks it." : "The item's reviewer, or the lead, reviews it." });
+  }
   const note = input.note?.trim() || null;
   if (input.decision === "more" && !note) throw new TRPCError18({ code: "BAD_REQUEST", message: "Say what is still needed: they see it." });
   const status = input.decision === "more" ? "needs_more" : task.side === "client" ? "accepted" : "done";
   await db.update(engagementTasks).set({ status, statusNote: input.decision === "more" ? note : task.statusNote, ...arrivalFields(task, status, /* @__PURE__ */ new Date()), ...status === "done" || status === "accepted" ? { completedAt: /* @__PURE__ */ new Date() } : {} }).where(eq24(engagementTasks.id, task.id));
   await recordAudit(db, { action: "engagement_task_reviewed", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, decision: input.decision } });
+  await sendReviewedEmails(db, { taskId: task.id, actorUserId: actor.id, decision: input.decision, note, to: ownersOfTask(team, task, others) });
   return { success: true, status };
 }
 async function setTaskWork(db, actor, input) {

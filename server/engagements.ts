@@ -1,5 +1,5 @@
 import { TRPCError } from "@trpc/server";
-import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, like, ne, sql } from "drizzle-orm";
 import {
   businessChecks,
   fullReports,
@@ -25,6 +25,7 @@ import {
   engagementContentItems,
   serviceRequests,
   engagementFeeLines,
+  adminAccessAuditEvents,
 } from "../drizzle/schema";
 import { authorityAllows, type Authority } from "../shared/platformPermissions";
 import {
@@ -84,7 +85,7 @@ import { workLines } from "../shared/engagementWork";
 import { agreedWhatsapp, followUpOwnerOf, recipientOf } from "./teamContact";
 import { arrivalFields, dayInWords, earliestRequestDue, hasArrived, REQUEST_MAX_DAYS, REQUESTS_PER_WEEK, weekStartOf } from "../shared/requests";
 import { TURNAROUND_LABELS, type EngagementTaskTurnaround } from "../shared/engagement";
-import { businessNameOf, namesOf, sendMentionEmails, sendMessageEmails, sendNewFileEmails, sendReadyEmail, sendReadyForReviewEmails, sendReceivedEmail, sendRequestEmail, sendTeamItemEmails } from "./requestEmails";
+import { businessNameOf, namesOf, sendMentionEmails, sendReviewedEmails, sendMessageEmails, sendNewFileEmails, sendReadyEmail, sendReadyForReviewEmails, sendReceivedEmail, sendRequestEmail, sendTeamItemEmails } from "./requestEmails";
 import { mentionedIn } from "../shared/mentions";
 import { sharedDebriefFor } from "./debriefs";
 import { getDb } from "./db";
@@ -482,6 +483,34 @@ export function ownerOfTask<T extends { userId: number; role: EngagementTeamRole
  * One task on an engagement in this person's scope (R88: everyone on the engagement sees every task), with whether it is
  * theirs and whether they lead the engagement. What they may do with it is checked by each action.
  */
+/**
+ * Ticking off someone else's item (ET, 16 November 2026): an Associate or Senior Business Analyst (review_assigned_items)
+ * on the engagement's team completes it, marks it received or asks for more, for a colleague or the client. Never their
+ * own work: an item they own is someone else's to check.
+ */
+export function mayTickOff<T extends { userId: number; role: EngagementTeamRole }>(actor: StaffActor, team: readonly T[], task: Pick<typeof engagementTasks.$inferSelect, "side" | "assigneeUserId" | "requestedByUserId" | "turnaround" | "work">, others: readonly number[]) {
+  return authorityAllows(actor.authority, "review_assigned_items")
+    && team.some(member => member.userId === actor.id)
+    && !ownersOfTask(team, task, others).includes(actor.id);
+}
+
+/** Who last decided each item of an engagement (received, or more needed), and when, from the audit record. */
+async function decisionsOf(db: Pick<Database, "select">, engagementId: number) {
+  const rows = await db.select({ actorUserId: adminAccessAuditEvents.actorUserId, details: adminAccessAuditEvents.details, createdAt: adminAccessAuditEvents.createdAt })
+    .from(adminAccessAuditEvents)
+    .where(and(eq(adminAccessAuditEvents.action, "engagement_task_reviewed"), like(adminAccessAuditEvents.details, `{"engagementId":${engagementId},%`)))
+    .orderBy(asc(adminAccessAuditEvents.id));
+  const names = await namesOf(db, rows.map(row => row.actorUserId));
+  const latest = new Map<number, { name: string; at: Date; decision: "received" | "more" }>();
+  for (const row of rows) {
+    try {
+      const detail = JSON.parse(row.details ?? "{}") as { taskId?: number; decision?: "received" | "more" };
+      if (typeof detail.taskId === "number" && (detail.decision === "received" || detail.decision === "more")) latest.set(detail.taskId, { name: (row.actorUserId !== null ? names.get(row.actorUserId) : null) || "Someone at IP Factory", at: row.createdAt, decision: detail.decision });
+    } catch { /* a record that does not parse is skipped */ }
+  }
+  return latest;
+}
+
 async function requireStaffTask(db: Pick<Database, "select">, actor: StaffActor, taskId: number) {
   const task = (await db.select().from(engagementTasks).where(eq(engagementTasks.id, taskId)).limit(1))[0];
   if (!task || task.status === "cancelled") throw notFound();
@@ -694,6 +723,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
   const manages = authorityAllows(actor.authority, "manage_engagements");
   const seesAllTasks = await canReviewEngagement(db, actor, engagementId);
   const extraOwners = await otherOwnersOf(db, { engagementId });
+  const decisions = await decisionsOf(db, engagementId);
   const held = engagement.opensOnPayment ? null : feeHold(waiting.map(fee => ({ dueOn: fee.dueOn, paid: false })), lagosDay());
   const staffFile = (file: EngagementFile) => ({ id: file.id, fileName: file.fileName, contentType: file.contentType, sizeBytes: file.sizeBytes, audience: file.audience, uploadedByName: file.uploadedByName, createdAt: file.createdAt });
   const filesFor = (where: "taskId" | "deliverableId", id: number) => files.filter(file => file[where] === id || (where === "taskId" && matches.some(match => match.fileId === file.id && match.taskId === id))).map(staffFile);
@@ -723,7 +753,9 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
         ownerName: (() => { const id = ownerOfTask(team, task); return id === null ? null : team.find(member => member.userId === id)?.name ?? null; })(),
         // Who checks it (R89), and whether this person may mark it received or ask for more.
         reviewer: (() => { const id = reviewerOfTask(team, task); return id === null ? null : { userId: id, name: team.find(member => member.userId === id)?.name ?? "" }; })(),
-        canReview: seesAllTasks || reviewerOfTask(team, task) === actor.id,
+        canReview: seesAllTasks || reviewerOfTask(team, task) === actor.id || mayTickOff(actor, team, task, others),
+        // Who last decided it, and when (ET, 16 November 2026), from the record of reviews.
+        decidedBy: decisions.get(task.id) ?? null,
         // Everyone it belongs to (R89): the lead owner first, then the others.
         owners: ownersOfTask(team, task, others).map((userId, index) => ({ userId, name: team.find(member => member.userId === userId)?.name ?? "", lead: index === 0 && owner === userId })),
         // A team item its owner hands in for review (R86): uploads, a link, messages, then Ready for review.
@@ -866,13 +898,18 @@ export async function assignTeamMember(db: Database, actor: StaffActor, input: {
  * as Completed to everyone; or Ask for more, with a note the owners see. The item's reviewer, or the lead.
  */
 export async function reviewTask(db: Database, actor: StaffActor, input: { taskId: number; decision: "received" | "more"; note: string | null }) {
-  const { task, team, leads } = await requireStaffTask(db, actor, input.taskId);
-  if (!leads && reviewerOfTask(team, task) !== actor.id) throw new TRPCError({ code: "FORBIDDEN", message: "The item's reviewer, or the lead, reviews it." });
+  const { task, team, leads, others } = await requireStaffTask(db, actor, input.taskId);
+  const tickingOff = !leads && reviewerOfTask(team, task) !== actor.id && mayTickOff(actor, team, task, others);
+  if (!leads && reviewerOfTask(team, task) !== actor.id && !tickingOff) {
+    throw new TRPCError({ code: "FORBIDDEN", message: authorityAllows(actor.authority, "review_assigned_items") && ownersOfTask(team, task, others).includes(actor.id) ? "This is your own work: someone else checks it." : "The item's reviewer, or the lead, reviews it." });
+  }
   const note = input.note?.trim() || null;
   if (input.decision === "more" && !note) throw new TRPCError({ code: "BAD_REQUEST", message: "Say what is still needed: they see it." });
   const status: EngagementTaskStatus = input.decision === "more" ? "needs_more" : task.side === "client" ? "accepted" : "done";
   await db.update(engagementTasks).set({ status, statusNote: input.decision === "more" ? note : task.statusNote, ...arrivalFields(task, status, new Date()), ...(status === "done" || status === "accepted" ? { completedAt: new Date() } : {}) }).where(eq(engagementTasks.id, task.id));
   await recordAudit(db, { action: "engagement_task_reviewed", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, decision: input.decision } });
+  // Its owners hear when someone else decided it, so a mistaken tick is seen and reopened.
+  await sendReviewedEmails(db, { taskId: task.id, actorUserId: actor.id, decision: input.decision, note, to: ownersOfTask(team, task, others) });
   return { success: true, status } as const;
 }
 

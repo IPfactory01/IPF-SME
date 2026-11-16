@@ -22,6 +22,9 @@ export const PLATFORM_PERMISSIONS = [
   "assign_engagements",
   "review_engagements",
   "contribute_engagements",
+  // Ticking off anyone's item on an engagement they are on (ET, 16 November 2026): complete it, mark it received or ask
+  // for more, but never their own work, and never owners, reviewer, kind of work or dates. From the level, below.
+  "review_assigned_items",
   "manage_payments",
   // Work before the first payment (ET, 10 November 2026): opening a client's room before it is paid, or moving the
   // first fee past the start date. Partners and the Super Admin only; terms otherwise follow what is bought (R36, D4).
@@ -102,6 +105,8 @@ export function resolveAuthority(input: {
   legacyProfile: readonly AdminPermission[];
   /** A disabled or suspended person has no authority at all. */
   active: boolean;
+  /** The person's level in the firm (`users.jobTitle`); a level may add permissions to its roles (LEVEL_PERMISSIONS). */
+  level?: string | null;
 }): Authority {
   if (!input.active) return { roles: [], permissions: [], legacyCapabilities: [], isSuperAdmin: false };
 
@@ -112,6 +117,9 @@ export function resolveAuthority(input: {
 
   const permissions = new Set<PlatformPermission>();
   for (const role of Array.from(roles)) for (const permission of PLATFORM_ROLE_PERMISSIONS[role]) permissions.add(permission);
+  // Associates and Senior Business Analysts share the analyst role with Business Analysts; their level adds what is
+  // theirs alone, and only while they hold the analyst role.
+  if (isFirmLevel(input.level) && roles.has("analyst")) for (const permission of LEVEL_PERMISSIONS[input.level] ?? []) permissions.add(permission);
   for (const capability of input.legacyProfile) {
     const equivalent = LEGACY_CAPABILITY_TO_PLATFORM[capability];
     if (equivalent) permissions.add(equivalent);
@@ -186,13 +194,18 @@ export const LEVEL_ROLES: Record<FirmLevel, readonly PlatformRole[]> = {
   Specialist: ["subject_matter_expert"],
   Finance: ["finance"],
 };
+/** What a level adds to its roles (ET, 16 November 2026): Senior Business Analysts and above tick off items. */
+export const LEVEL_PERMISSIONS: Partial<Record<FirmLevel, readonly PlatformPermission[]>> = {
+  Associate: ["review_assigned_items"],
+  "Senior Business Analyst": ["review_assigned_items"],
+};
 /** What a level can do, in one line, for the invite form and People. */
 export const LEVEL_ACCESS: Record<FirmLevel, string> = {
   Partner: "Every engagement; assigns people and approves; sees Finance",
   "Vice President": "Every engagement; assigns people and approves; sees Finance",
   "Senior Associate": "Every engagement; assigns people and approves; sees Finance",
-  Associate: "Engagements they are on; approves when leading one",
-  "Senior Business Analyst": "Engagements they are on",
+  Associate: "Engagements they are on; approves when leading one; ticks off items there",
+  "Senior Business Analyst": "Engagements they are on; ticks off items there",
   "Business Analyst": "Engagements they are on",
   Specialist: "Engagements they are on, until an end date; hands in drafts for the lead",
   Finance: "Payments only",

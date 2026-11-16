@@ -524,6 +524,45 @@ for (const target of targets) {
         expect((await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.id, asked)))[0]).toMatchObject({ work: "marketing" });
       });
 
+      it("lets a Senior Business Analyst on the engagement tick off others' items, never their own, and tells the owners (ET, 16 November 2026)", async () => {
+        const s = await studio("tickoff");
+        const desk = await superAdmin.call();
+        const senior = await person(["analyst"], "Sade Senior");
+        await db.update(schema.users).set({ jobTitle: "Senior Business Analyst" }).where(eq(schema.users.id, senior.id));
+        const junior = await person(["analyst"], "Bisi Junior");
+        await db.update(schema.users).set({ jobTitle: "Business Analyst" }).where(eq(schema.users.id, junior.id));
+        await desk.engagement.staff.assign({ engagementId: s.engagementId, userId: senior.id, role: "analyst" });
+        await desk.engagement.staff.assign({ engagementId: s.engagementId, userId: junior.id, role: "analyst" });
+        const sade = await (await signIn(senior, true)).call();
+        const bisi = await (await signIn(junior, true)).call();
+        const tasks = (await sade.engagement.staff.detail({ engagementId: s.engagementId })).tasks;
+        const plan = tasks.find(task => task.title === "Prepare the content plan for month 1")!;
+        const logo = tasks.find(task => task.title === "Send your logo, colours and fonts")!;
+        expect(plan).toMatchObject({ canReview: true });
+        // A Business Analyst may not.
+        expect((await bisi.engagement.staff.detail({ engagementId: s.engagementId })).tasks.find(task => task.id === plan.id)).toMatchObject({ canReview: false });
+        await expect(bisi.engagement.staff.reviewTask({ taskId: plan.id, decision: "received", note: null })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        // Sade completes Mira's team item: Mira is emailed, and the item shows who did it.
+        mocked.deliverEmail.mockClear();
+        await sade.engagement.staff.reviewTask({ taskId: plan.id, decision: "received", note: null });
+        expect((await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.id, plan.id)))[0]).toMatchObject({ status: "done" });
+        expect(emails().filter(mail => mail.subject === "Completed: Prepare the content plan for month 1, Studio tickoff").map(mail => mail.to)).toEqual([s.marketer.email]);
+        expect((await (await s.lead.browser.call()).engagement.staff.detail({ engagementId: s.engagementId })).tasks.find(task => task.id === plan.id)).toMatchObject({ decidedBy: { name: "Sade Senior", decision: "received" } });
+        // And the client's item: received.
+        await sade.engagement.staff.reviewTask({ taskId: logo.id, decision: "received", note: null });
+        expect((await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.id, logo.id)))[0]).toMatchObject({ status: "accepted" });
+        // Never her own work: once it is hers, someone else checks it.
+        const { taskId: hers } = await (await s.lead.browser.call()).engagement.staff.saveTask({ engagementId: s.engagementId, kind: "action", title: "Draft the competitor scan", detail: null, side: "ipf", assigneeUserId: senior.id, dueOn: null, status: "open", statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 50, factor: null, section: null, ref: null, informs: null, format: null, priority: null });
+        expect((await sade.engagement.staff.detail({ engagementId: s.engagementId })).tasks.find(task => task.id === hers)).toMatchObject({ canReview: false });
+        await expect(sade.engagement.staff.reviewTask({ taskId: hers, decision: "received", note: null })).rejects.toMatchObject({ code: "FORBIDDEN", message: "This is your own work: someone else checks it." });
+        // Nor owners or the kind of work: those stay with the lead.
+        await expect(sade.engagement.staff.setWork({ taskId: logo.id, work: "marketing" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        // Off the engagement, nothing.
+        const other = await studio("tickoff-other");
+        const otherPlan = (await (await other.lead.browser.call()).engagement.staff.detail({ engagementId: other.engagementId })).tasks.find(task => task.title === "Prepare the content plan for month 1")!;
+        await expect(sade.engagement.staff.reviewTask({ taskId: otherPlan.id, decision: "received", note: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+      });
+
       it("names a person on every team item: the plan's by role, Assign by role for the rest, with Due on Today and late emails (R88)", async () => {
         const s = await studio("owner");
         const lead = await s.lead.browser.call();

@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Every item takes files from whoever sees it; anyone but the lead attaches for IP Factory only, the lead shares | ET, 16 November 2026 |
 | Home puts My projects above Today; Today shows five rows then Show all | ET, 16 November 2026 |
 | Each Progress card opens the Work Plan on the items it counted, on everyone's, with Clear; a card at nought opens nothing; Open says how many are overdue | ET, 16 November 2026 |
 | A client's item shows the client first (the person, else the business) then the follow-up person; the reader's own initials are ringed; a key names everyone on the plan | ET, 16 November 2026 |

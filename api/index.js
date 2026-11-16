@@ -14020,19 +14020,14 @@ async function requireStaffTarget(db, actor, engagementId, target) {
 }
 async function requireUploader(db, actor, engagementId, target, audience) {
   if (authorityAllows(actor.authority, "manage_engagements")) return;
+  if (target.kind === "task" && (audience === null || audience === "team")) return;
   if (!canContribute(actor)) return requireManage2(actor);
   if (target.kind === "deliverable" && (audience === null || audience === "team")) return;
-  if (target.kind === "task" && (audience === null || audience === "team")) {
-    const own = (await db.select().from(engagementTasks).where(eq24(engagementTasks.id, target.id)).limit(1))[0];
-    const team = own ? await db.select({ userId: engagementTeam.userId, role: engagementTeam.role }).from(engagementTeam).where(eq24(engagementTeam.engagementId, own.engagementId)) : [];
-    const others = own ? (await otherOwnersOf(db, { taskId: own.id })).get(own.id) ?? [] : [];
-    if (own && own.engagementId === engagementId && own.side === "ipf" && (ownersOfTask(team, own, others).includes(actor.id) || own.createdByUserId === actor.id)) return;
-  }
   if (target.kind === "task" && audience !== "team") {
     const task = (await db.select({ engagementId: engagementTasks.engagementId, requestedByUserId: engagementTasks.requestedByUserId }).from(engagementTasks).where(eq24(engagementTasks.id, target.id)).limit(1))[0];
     if (task && task.engagementId === engagementId && task.requestedByUserId === actor.id) return;
   }
-  throw new TRPCError18({ code: "FORBIDDEN", message: "You can add draft files to a Deliverable, for IP Factory only, and a brief to a request you sent. The lead shares the rest." });
+  throw new TRPCError18({ code: "FORBIDDEN", message: "You can attach files to any item and drafts to a Deliverable, for IP Factory only, and a brief to a request you sent. The lead shares the rest." });
 }
 async function staffRequestUpload(db, actor, input) {
   requireUploads();

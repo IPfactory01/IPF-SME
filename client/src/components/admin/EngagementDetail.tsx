@@ -406,6 +406,8 @@ function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detai
           <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={false} canManage={data.can.manage} />
         </section>
       )}
+      {/* Every item takes files from whoever sees it (ET, 16 November 2026); the lead chooses who sees them, anyone else's are IP Factory's until shared. */}
+      {data.uploadsEnabled && task.status !== "cancelled" && <StaffFiles files={[]} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload canManage={data.can.manage} startAudience={task.side === "client" ? "owner" : "team"} />}
       {/* The client may have sent it another way (WhatsApp, in the Session): whoever decides it completes it all the same. */}
       {task.canReview && TICKABLE.includes(task.status) && <StickyActions wide="xl"><ReviewDecision task={task} engagementId={engagementId} /></StickyActions>}
       {task.canReview && (task.status === "accepted" || task.status === "done") && <ReopenItem task={task} engagementId={engagementId} />}
@@ -654,7 +656,7 @@ function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; 
       {task.canReview && (task.status === "received" || (OPEN_TASK_STATUSES.includes(task.status) && !roleOf(task, data.viewerUserId).owns)) && <StickyActions wide="xl"><ReviewDecision task={task} engagementId={engagementId} /></StickyActions>}
       {task.canReview && task.status === "done" && <ReopenItem task={task} engagementId={engagementId} />}
       {task.detail && <p className="whitespace-pre-line text-sm text-ink-600">{task.detail}</p>}
-      <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && (task.canHandIn || task.requestedByUserId === data.viewerUserId)} canManage={false} briefFor={task.requestedByUserId === data.viewerUserId} />
+      <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && task.status !== "cancelled"} canManage={false} briefFor={task.requestedByUserId === data.viewerUserId} />
       <div id={`messages-${task.id}`} className="scroll-mt-4"><ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} /></div>
     </div>
   );
@@ -835,12 +837,12 @@ function RemoveStaffFile({ fileId, fileName, engagementId }: { fileId: number; f
 }
 
 /** `briefFor`: a Specialist attaching the brief to a request they sent (R78): the client sees it. */
-function StaffFiles({ files, engagementId, target, canUpload, canManage, briefFor = false }: { files: StaffFile[]; engagementId: number; target: UploadTarget; canUpload: boolean; canManage: boolean; briefFor?: boolean }) {
+function StaffFiles({ files, engagementId, target, canUpload, canManage, briefFor = false, startAudience = "owner" }: { files: StaffFile[]; engagementId: number; target: UploadTarget; canUpload: boolean; canManage: boolean; briefFor?: boolean; startAudience?: EngagementAudience }) {
   const refresh = useRefresh(engagementId);
   const link = trpc.engagement.staff.fileLink.useMutation({ onError: error => toast.error(error.message) });
   const request = trpc.engagement.staff.requestUpload.useMutation();
   const confirm = trpc.engagement.staff.confirmUpload.useMutation();
-  const [chosen, setAudience] = useState<EngagementAudience>("owner");
+  const [chosen, setAudience] = useState<EngagementAudience>(startAudience);
   const audience: EngagementAudience = canManage ? chosen : briefFor ? "business" : "team";
   const shareFile = trpc.engagement.staff.shareFile.useMutation({ onSuccess: () => { refresh.onSuccess(); toast.success("Shared with the client."); }, onError: error => toast.error(error.message) });
   const [busy, setBusy] = useState(false);

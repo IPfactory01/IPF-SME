@@ -1850,7 +1850,7 @@ for (const target of targets) {
       afterEach(() => { ENV.supabaseUrl = saved.url; ENV.supabaseServiceRoleKey = saved.key; ENV.supabaseStorageBucket = saved.bucket; vi.unstubAllGlobals(); });
       const pdf = (fileName: string) => ({ fileName, contentType: "application/pdf", sizeBytes: 120_000 });
 
-      it("never counts a brief from the team as the client's answer, and lets a Specialist attach one only to their own request (R78)", async () => {
+      it("never counts a brief from the team as the client's answer; a Specialist briefs only their own request, and attaches to any other item for IP Factory only (R78; ET, 16 November 2026)", async () => {
         configure();
         storage();
         const a = await client("brief");
@@ -1871,11 +1871,15 @@ for (const target of targets) {
         const theirs = await (await signIn(specialist, true)).call();
         const { taskId } = await theirs.engagement.staff.askClient({ engagementId: a.engagementId, title: "Your supplier invoices", brief: "The last three months.", dueOn: requestDueOn(lagosDay()), turnaround: null });
         const own = await theirs.engagement.staff.requestUpload({ engagementId: a.engagementId, target: { kind: "task", id: taskId }, ...pdf("what-we-need.pdf") });
-        await expect(theirs.engagement.staff.confirmUpload({ engagementId: a.engagementId, target: { kind: "task", id: taskId }, storageKey: own.storageKey, audience: "team", ...pdf("what-we-need.pdf") })).rejects.toMatchObject({ code: "FORBIDDEN" });
         await theirs.engagement.staff.confirmUpload({ engagementId: a.engagementId, target: { kind: "task", id: taskId }, storageKey: own.storageKey, audience: "business", ...pdf("what-we-need.pdf") });
-        await expect(theirs.engagement.staff.requestUpload({ engagementId: a.engagementId, target: { kind: "task", id: task.id }, ...pdf("other.pdf") })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        // Any other item takes their file too (ET, 16 November 2026), for IP Factory only: never straight to the client.
+        const other = await theirs.engagement.staff.requestUpload({ engagementId: a.engagementId, target: { kind: "task", id: task.id }, ...pdf("other.pdf") });
+        await expect(theirs.engagement.staff.confirmUpload({ engagementId: a.engagementId, target: { kind: "task", id: task.id }, storageKey: other.storageKey, audience: "owner", ...pdf("other.pdf") })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await theirs.engagement.staff.confirmUpload({ engagementId: a.engagementId, target: { kind: "task", id: task.id }, storageKey: other.storageKey, audience: "team", ...pdf("other.pdf") });
         const room = (await (await a.owner.call()).engagement.client.room())!;
         expect(room.tasks.find(item => item.id === taskId)!.files.map(file => [file.fileName, file.fromTeam])).toEqual([["what-we-need.pdf", true]]);
+        expect(room.tasks.find(item => item.id === task.id)!.files.map(file => file.fileName)).not.toContain("other.pdf");
+        expect((await desk.engagement.staff.detail({ engagementId: a.engagementId })).tasks.find(item => item.id === task.id)!.files.map(file => file.fileName)).toContain("other.pdf");
       });
 
       it("says uploads are off, and what to do instead, until the bucket is set up", async () => {
@@ -2071,7 +2075,8 @@ for (const target of targets) {
         const specialist = await (await signIn(specialistUser, true)).call();
         const target = { kind: "deliverable" as const, id: deliverableId };
         const file = pdf("calendar.pdf");
-        await expect(specialist.engagement.staff.requestUpload({ engagementId, target: { kind: "task", id: taskId }, ...file })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        // An item takes their file too (ET, 16 November 2026), for IP Factory only.
+        expect(await specialist.engagement.staff.requestUpload({ engagementId, target: { kind: "task", id: taskId }, ...file })).toMatchObject({ storageKey: expect.any(String) });
         const ticket = await specialist.engagement.staff.requestUpload({ engagementId, target, ...file });
         await expect(specialist.engagement.staff.confirmUpload({ engagementId, target, storageKey: ticket.storageKey, audience: "owner", ...file })).rejects.toMatchObject({ code: "FORBIDDEN" });
         const { fileId } = await specialist.engagement.staff.confirmUpload({ engagementId, target, storageKey: ticket.storageKey, audience: "team", ...file });

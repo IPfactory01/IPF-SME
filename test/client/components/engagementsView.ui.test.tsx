@@ -794,6 +794,26 @@ describe("the team's workspace (R82)", () => {
     expect(panel.getByRole("region", { name: "Progress: Data Requests" })).toBeTruthy();
   });
 
+  it("lets whoever sees an item attach a file to it, theirs or not, for IP Factory only (ET, 16 November 2026)", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Analyst" }] };
+    api.detail = { ...detail({ manage: false, assign: false, review: false, contribute: true }, [], [
+      task({ id: 81, title: "Someone else's plan", side: "ipf", kind: "action", owners: [{ userId: 2, name: "Lewis Lead", lead: true }], canHandIn: false }),
+      task({ id: 82, title: "Your price list" }),
+    ]), team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Whose items" }), { target: { value: "everyone" } });
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    for (const [id, title] of [[81, "Someone else's plan"], [82, "Your price list"]] as const) {
+      fireEvent.click(screen.getByRole("button", { name: `Open ${title}` }));
+      const details = within(screen.getByRole("complementary", { name: "Task details" }));
+      expect(details.getByLabelText(`Attach a file to task ${id}`)).toBeTruthy();
+      expect(details.getByText(/IP Factory only|the lead shares it/i)).toBeTruthy();
+    }
+  });
+
   it("opens the Work Plan on the items behind a Progress card, on everyone's, with Clear (ET, 16 November 2026)", async () => {
     api.seesAll = false;
     api.list = { setUp: true, items: [{ ...row, myRole: "Analyst" }] };

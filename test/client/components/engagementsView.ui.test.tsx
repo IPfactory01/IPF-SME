@@ -919,8 +919,15 @@ describe("my projects", () => {
     render(<EngagementsView />);
     const today = within(screen.getByRole("region", { name: /Today/ }));
     expect(today.getByRole("heading").textContent).toBe("Today (2)");
-    const cards = today.getAllByRole("button");
+    const cards = within(today.getByRole("list", { name: "What needs you" })).getAllByRole("button");
     expect(cards.map(card => card.getAttribute("aria-label"))).toEqual(["Clock: Send week 3 footage, Ada Foods", "Client wrote: A video of the new menu, Ada Foods"]);
+    // The tiles (ET, 16 November 2026): each counts its kind and its late ones, and filters the list until tapped again.
+    const tiles = within(today.getByRole("group", { name: "What needs you, by kind" }));
+    expect(tiles.getByRole("button", { name: "To do: 1, 1 overdue" })).toBeTruthy();
+    fireEvent.click(tiles.getByRole("button", { name: /^Client wrote/ }));
+    expect(within(today.getByRole("list", { name: "What needs you" })).getAllByRole("button").map(card => card.getAttribute("aria-label"))).toEqual(["Client wrote: A video of the new menu, Ada Foods"]);
+    fireEvent.click(tiles.getByRole("button", { name: /^Client wrote/ }));
+    expect(within(today.getByRole("list", { name: "What needs you" })).getAllByRole("button")).toHaveLength(2);
     expect(cards[0]!.textContent).toContain("3 hours late");
     expect(cards[1]!.textContent).toContain("Is landscape fine?");
     fireEvent.click(cards[1]!);

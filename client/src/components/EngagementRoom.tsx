@@ -1224,10 +1224,15 @@ function PlanView({ room, now }: { room: Room; now: number }) {
                   ? <span aria-hidden className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${group.id === "done" ? "bg-health-clear" : "bg-brand"} text-white`}><Check className="h-3 w-3" /></span>
                   : <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />}
                 <span className="min-w-0 flex-1">
-                  <span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}{isClientOpen(item) && <span className="ml-2 inline-block rounded-full bg-brand-tint px-2 py-0.5 align-middle text-[11px] font-semibold text-brand-deep">To do</span>}</span>
-                  <span className="block text-xs text-ink-muted">{item.kind === "data_request" ? METHOD.dataRequest : "Action"}{group.id === "checking" || group.id === "done" ? ` · ${clientStatus(item)}` : ""}</span>
+                  <span className={`block ${group.id === "done" ? "text-ink-muted line-through decoration-line-strong" : "text-ink"}`}>{item.title}{isClientOpen(item) && <span className="ml-2 hidden rounded-full bg-brand-tint px-2 py-0.5 align-middle text-[11px] font-semibold text-brand-deep sm:inline-block">To do</span>}</span>
+                  {/* On a phone, one line under the title: when it is due, or where it stands, and To do (ET, 16 November 2026). */}
+                  <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:hidden">
+                    <span className={flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}>{group.id === "checking" || group.id === "done" ? clientStatus(item) : flag?.text ?? "No date"}</span>
+                    {isClientOpen(item) && <span className="rounded-full bg-brand-tint px-2 py-0.5 text-[11px] font-semibold text-brand-deep">To do</span>}
+                  </span>
+                  <span className="hidden text-xs text-ink-muted sm:block">{item.kind === "data_request" ? METHOD.dataRequest : "Action"}{group.id === "checking" || group.id === "done" ? ` · ${clientStatus(item)}` : ""}</span>
                 </span>
-                <span className="hidden sm:block"><Avatar name={whoName(item, room)} /></span>
+                <span className="shrink-0"><Avatar name={whoName(item, room)} /></span>
                 <span className={`hidden w-32 shrink-0 whitespace-nowrap text-right sm:block ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? ""}</span>
                 <span className="hidden w-20 shrink-0 whitespace-nowrap md:block">{item.priority ? <span className={`inline-flex items-center gap-1.5 ${PRIORITY_TONE[item.priority]}`}><Flag className={`h-3.5 w-3.5 ${item.priority === "high" ? "fill-current" : ""}`} aria-hidden />{item.priority === "high" ? "High" : item.priority === "medium" ? "Medium" : "Low"}</span> : null}</span>
               </button>

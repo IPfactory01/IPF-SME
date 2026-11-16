@@ -1,6 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import type { inferRouterOutputs } from "@trpc/server";
-import React from "react";
+import React, { useState } from "react";
 import type { AppRouter } from "../../../../server/routers";
 import { formatDateTime } from "./format";
 
@@ -54,15 +54,53 @@ export function groupToday(items: readonly Item[]): TodayRow[] {
  */
 export default function Today({ onOpen, now = Date.now() }: { onOpen: (engagementId: number, taskId: number | null, kind: Item["kind"]) => void; now?: number }) {
   const today = trpc.engagement.staff.today.useQuery(undefined);
+  const [tile, setTile] = useState<TileId | null>(null);
   if (!today.data) return null;
   const rows = groupToday(today.data);
+  const shown = tile ? rows.filter(row => inTile(row, tile)) : rows;
   return (
     <section aria-labelledby="today" className="space-y-2">
       <h2 id="today" className="text-sm font-semibold text-ink">Today <span className="font-normal text-ink-muted">({rows.length})</span></h2>
+      {rows.length > 0 && <TodayTiles rows={rows} tile={tile} onTile={setTile} />}
       {rows.length === 0
         ? <p className="rounded-xl border border-line bg-white p-4 text-sm text-ink-muted">Nothing needs you right now across your projects.</p>
-        : <TodayList rows={rows} now={now} onOpen={onOpen} showBusiness />}
+        : shown.length === 0
+          ? <p className="rounded-xl border border-line bg-white p-4 text-sm text-ink-muted">Nothing here right now.</p>
+          : <TodayList rows={shown} now={now} onOpen={onOpen} showBusiness />}
     </section>
+  );
+}
+
+/**
+ * Home's tiles (ET, 16 November 2026, after ClickUp's Today, Replies and Assigned): what needs the person, by kind, with
+ * the count and how many are late. A tile filters the list below; tapped again, the whole list returns.
+ */
+export const TILES = [
+  { id: "todo", label: "To do", kinds: ["due", "clock", "request", "held", "fee"] },
+  { id: "replies", label: "Client wrote", kinds: ["reply"] },
+  { id: "review", label: "To review", kinds: ["check", "review", "approval", "files"] },
+  { id: "mentions", label: "Mentioned", kinds: ["mention"] },
+] as const satisfies readonly { id: string; label: string; kinds: readonly Item["kind"][] }[];
+export type TileId = (typeof TILES)[number]["id"];
+export const inTile = (row: TodayRow, tile: TileId) => row.kinds.some(kind => (TILES.find(entry => entry.id === tile)!.kinds as readonly string[]).includes(kind));
+
+function TodayTiles({ rows, tile, onTile }: { rows: readonly TodayRow[]; tile: TileId | null; onTile: (tile: TileId | null) => void }) {
+  return (
+    <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-4 sm:overflow-visible sm:px-0" role="group" aria-label="What needs you, by kind">
+      {TILES.map(entry => {
+        const its = rows.filter(row => inTile(row, entry.id));
+        const late = its.filter(row => row.late).length;
+        const on = tile === entry.id;
+        return (
+          <button key={entry.id} type="button" aria-pressed={on} onClick={() => onTile(on ? null : entry.id)} aria-label={`${entry.label}: ${its.length}, ${late ? `${late} overdue` : "none late"}`}
+            className={`min-w-[8.5rem] shrink-0 rounded-xl border p-3 text-left transition-colors sm:min-w-0 ${on ? "border-brand bg-brand-tint" : "border-line-soft bg-white hover:border-brand"}`}>
+            <span className="block text-xs font-semibold text-ink-600">{entry.label}</span>
+            <span className="mt-1 block text-2xl font-semibold tabular-nums text-ink">{its.length}</span>
+            <span className={`block text-xs ${late ? "text-danger" : "text-ink-muted"}`}>{late ? `${late} overdue` : "None late"}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

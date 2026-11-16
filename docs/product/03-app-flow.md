@@ -256,7 +256,7 @@ flowchart TD
 Every team member has a WhatsApp number on their profile (R44); the room shows it beside them, and an item meant for
 one of them offers **Send on WhatsApp to {name}**. Each person agrees to their number being shown (PRD K11).
 
-**Today** (R52, built; one row per item since R93): at the top of the Engagements tab, one list across a person's projects, late first, so nobody
+**Today** (R52, built; one row per item since R93; tiles since R96: To do, Client wrote, To review and Mentioned, each with its count and late ones, filtering the list): at the top of the Engagements tab, one list across a person's projects, late first, so nobody
 opens every project to find their work. Each card names the kind, the item and the business, and opens the engagement:
 *Client wrote* (the last message on an item is the client's), *Clock* (a First edit, with the hours left or how late),
 *To check* (the client sent it; mark it received or ask for more), *Your request* (past its day), *Meeting* (the next

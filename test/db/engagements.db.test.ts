@@ -551,6 +551,14 @@ for (const target of targets) {
         // And the client's item: received.
         await sade.engagement.staff.reviewTask({ taskId: logo.id, decision: "received", note: null });
         expect((await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.id, logo.id)))[0]).toMatchObject({ status: "accepted" });
+        // Undo (ET, 16 November 2026): the tick is put back as it was, recorded, and "Completed by" goes with it.
+        await expect(bisi.engagement.staff.reopenTask({ taskId: plan.id, status: "open" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        await sade.engagement.staff.reopenTask({ taskId: plan.id, status: "open" });
+        expect((await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.id, plan.id)))[0]).toMatchObject({ status: "open", completedAt: null });
+        expect((await sade.engagement.staff.detail({ engagementId: s.engagementId })).tasks.find(task => task.id === plan.id)).toMatchObject({ decidedBy: null, canReview: true });
+        expect((await db.select().from(schema.adminAccessAuditEvents).where(eq(schema.adminAccessAuditEvents.action, "engagement_task_reopened"))).some((row: { details: string }) => JSON.parse(row.details).taskId === plan.id)).toBe(true);
+        // Only a completed item is reopened.
+        await expect(sade.engagement.staff.reopenTask({ taskId: plan.id, status: "open" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
         // Never her own work: once it is hers, someone else checks it.
         const { taskId: hers } = await (await s.lead.browser.call()).engagement.staff.saveTask({ engagementId: s.engagementId, kind: "action", title: "Draft the competitor scan", detail: null, side: "ipf", assigneeUserId: senior.id, dueOn: null, status: "open", statusNote: null, sessionId: null, weekNumber: 1, sortOrder: 50, factor: null, section: null, ref: null, informs: null, format: null, priority: null });
         expect((await sade.engagement.staff.detail({ engagementId: s.engagementId })).tasks.find(task => task.id === hers)).toMatchObject({ canReview: false });
@@ -561,6 +569,20 @@ for (const target of targets) {
         const other = await studio("tickoff-other");
         const otherPlan = (await (await other.lead.browser.call()).engagement.staff.detail({ engagementId: other.engagementId })).tasks.find(task => task.title === "Prepare the content plan for month 1")!;
         await expect(sade.engagement.staff.reviewTask({ taskId: otherPlan.id, decision: "received", note: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+      });
+
+      it("lets a Senior Associate who still holds the analyst role tick off items: the level wins (ET, 16 November 2026)", async () => {
+        const s = await studio("tickoff-senior");
+        const desk = await superAdmin.call();
+        const lewis = await person(["analyst"], "Lola Senior Associate");
+        await db.update(schema.users).set({ jobTitle: "Senior Associate" }).where(eq(schema.users.id, lewis.id));
+        await desk.engagement.staff.assign({ engagementId: s.engagementId, userId: lewis.id, role: "analyst" });
+        const lola = await (await signIn(lewis, true)).call();
+        const access = (await lola.engagement.staff.detail({ engagementId: s.engagementId })).tasks.find(task => task.title === "Send your logo, colours and fonts")!;
+        expect(access).toMatchObject({ canReview: true, status: "open" });
+        // Not sent through the portal (it came on WhatsApp): she completes it all the same.
+        await lola.engagement.staff.reviewTask({ taskId: access.id, decision: "received", note: null });
+        expect((await db.select().from(schema.engagementTasks).where(eq(schema.engagementTasks.id, access.id)))[0]).toMatchObject({ status: "accepted" });
       });
 
       it("names a person on every team item: the plan's by role, Assign by role for the rest, with Due on Today and late emails (R88)", async () => {

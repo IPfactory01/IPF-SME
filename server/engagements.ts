@@ -755,7 +755,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
         reviewer: (() => { const id = reviewerOfTask(team, task); return id === null ? null : { userId: id, name: team.find(member => member.userId === id)?.name ?? "" }; })(),
         canReview: seesAllTasks || reviewerOfTask(team, task) === actor.id || mayTickOff(actor, team, task, others),
         // Who last decided it, and when (ET, 16 November 2026), from the record of reviews.
-        decidedBy: decisions.get(task.id) ?? null,
+        decidedBy: task.status === "done" || task.status === "accepted" || task.status === "needs_more" ? decisions.get(task.id) ?? null : null,
         // Everyone it belongs to (R89): the lead owner first, then the others.
         owners: ownersOfTask(team, task, others).map((userId, index) => ({ userId, name: team.find(member => member.userId === userId)?.name ?? "", lead: index === 0 && owner === userId })),
         // A team item its owner hands in for review (R86): uploads, a link, messages, then Ready for review.
@@ -911,6 +911,19 @@ export async function reviewTask(db: Database, actor: StaffActor, input: { taskI
   // Its owners hear when someone else decided it, so a mistaken tick is seen and reopened.
   await sendReviewedEmails(db, { taskId: task.id, actorUserId: actor.id, decision: input.decision, note, to: ownersOfTask(team, task, others) });
   return { success: true, status } as const;
+}
+
+/**
+ * Undo a tick (ET, 16 November 2026): whoever may decide an item puts a completed one back as it was, for a mistaken tap
+ * on the Work Plan's circle. Only a completed item, and only back to an open, sent or more-needed state.
+ */
+export async function reopenTask(db: Database, actor: StaffActor, input: { taskId: number; status: "open" | "received" | "needs_more" }) {
+  const { task, team, leads, others } = await requireStaffTask(db, actor, input.taskId);
+  if (!leads && reviewerOfTask(team, task) !== actor.id && !mayTickOff(actor, team, task, others)) throw new TRPCError({ code: "FORBIDDEN", message: "The item's reviewer, or the lead, reopens it." });
+  if (task.status !== "done" && task.status !== "accepted") throw new TRPCError({ code: "BAD_REQUEST", message: "Only a completed item is reopened." });
+  await db.update(engagementTasks).set({ status: input.status, completedAt: null, ...arrivalFields(task, input.status, new Date()) }).where(eq(engagementTasks.id, task.id));
+  await recordAudit(db, { action: "engagement_task_reopened", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, status: input.status } });
+  return { success: true, status: input.status } as const;
 }
 
 /**

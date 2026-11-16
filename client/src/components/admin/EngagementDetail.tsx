@@ -226,6 +226,8 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
   const nameOf = (item: Task) => (item.assigneeUserId !== null ? [...data.clientPeople.map(person => ({ id: person.userId, name: person.name })), ...data.team.map(member => ({ id: member.userId, name: member.name ?? "" }))].find(person => person.id === item.assigneeUserId)?.name : undefined)
     || (item.side === "client" ? data.businessName || "The client" : item.ownerName || "No one yet");
   const groupOf = (item: Task) => TEAM_PLAN_GROUPS.find(group => group.test(item)) ?? TEAM_PLAN_GROUPS[1]!;
+  // The circle ticks it off for whoever may decide it, except on their own work (the lead aside): the server checks again.
+  const canTick = (item: Task) => item.canReview && TICKABLE.includes(item.status) && (data.can.seeAllTasks || !roleOf(item, data.viewerUserId).owns);
   // Whose items, and a search (ET, 13 November 2026): the lead starts on everyone's, everyone else on their own.
   const [whose, setWhose] = useState<Whose>(() => (data.can.seeAllTasks ? "everyone" : "tasks"));
   const [query, setQuery] = useState("");
@@ -269,10 +271,13 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
             const who = nameOf(item);
             return (
               <>
+              <div className={`flex items-stretch ${selected === item.id ? "bg-brand-tint" : "hover:bg-paper-sunken"}`}>
+              {/* Whoever may decide it ticks it off from the circle (ET, 16 November 2026); for everyone else the circle shows its state. */}
+              {canTick(item) && <TickCircle item={item} sent={group.id === "checking"} engagementId={engagementId} />}
               <button type="button" onClick={() => setSelected(selected === item.id ? null : item.id)} aria-expanded={selected === item.id} aria-label={`Open ${item.title}`}
-                className={`flex w-full items-center gap-3 px-4 py-2.5 text-left text-sm ${selected === item.id ? "bg-brand-tint" : "hover:bg-paper-sunken"}`}>
+                className={`flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-4 text-left text-sm ${canTick(item) ? "pl-1" : "pl-4"}`}>
                 {/* Sent or handed in is ticked, pending review; completed once the lead has reviewed it (R87). */}
-                {group.id === "checking" || group.id === "done"
+                {canTick(item) ? null : group.id === "checking" || group.id === "done"
                   ? <span aria-hidden className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${group.id === "done" ? "bg-health-clear" : "bg-brand"} text-white`}><Check className="h-3 w-3" /></span>
                   : <span aria-hidden className={`h-3 w-3 shrink-0 rounded-full border-2 ${group.dot}`} />}
                 <span className="min-w-0 flex-1">
@@ -293,6 +298,7 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
                 <span className={`hidden w-32 shrink-0 whitespace-nowrap text-right sm:block ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? ""}</span>
                 <span className="hidden w-20 shrink-0 whitespace-nowrap md:block">{item.priority ? <span className={`inline-flex items-center gap-1.5 ${item.priority === "high" ? "font-medium text-health-stuck" : "text-ink-muted"}`}><Flag className={`h-3.5 w-3.5 ${item.priority === "high" ? "fill-current" : ""}`} aria-hidden />{PRIORITY_WORDS[item.priority]}</span> : null}</span>
               </button>
+              </div>
               {(item.files.length > 0 || item.responseLink) && <div className="pb-2.5 pl-11 pr-4"><StaffFileStrip files={item.files} link={item.responseLink ?? null} /></div>}
               </>
             );
@@ -385,7 +391,9 @@ function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detai
           <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={false} canManage={data.can.manage} />
         </section>
       )}
-      {sent && task.canReview && <StickyActions wide="xl"><ReviewDecision task={task} engagementId={engagementId} /></StickyActions>}
+      {/* The client may have sent it another way (WhatsApp, in the Session): whoever decides it completes it all the same. */}
+      {task.canReview && TICKABLE.includes(task.status) && <StickyActions wide="xl"><ReviewDecision task={task} engagementId={engagementId} /></StickyActions>}
+      {task.canReview && (task.status === "accepted" || task.status === "done") && <ReopenItem task={task} engagementId={engagementId} />}
       {task.detail && <p className="whitespace-pre-line text-sm text-ink-600">{task.detail}</p>}
       <div id={`messages-${task.id}`} className="scroll-mt-4"><ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} /></div>
       <button type="button" className="text-xs font-medium text-ink-600 underline underline-offset-2" onClick={() => setEditing(true)}>Edit the item</button>
@@ -394,6 +402,49 @@ function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detai
 }
 
 /** The reviewer's two decisions on what was sent or handed in (R89): Mark received, or Ask for more with a note. */
+/** What a tick can complete, and what Undo or Reopen puts it back to. */
+const TICKABLE: readonly string[] = ["open", "received", "needs_more"];
+type Reopened = "open" | "received" | "needs_more";
+
+/** After a tick or a reopen: the plan, the list, Today and Progress all read the new state. */
+function useTickRefresh(engagementId: number) {
+  const utils = trpc.useUtils();
+  const refresh = useRefresh(engagementId);
+  return { ...refresh, onSuccess: () => { refresh.onSuccess(); void utils.engagement.staff.today.invalidate(); } };
+}
+
+/**
+ * The Work Plan row's circle as a tick (ET, 16 November 2026, after ClickUp): one tap completes the item, the same
+ * decision as Mark done inside it, and Undo puts it back as it was. Its owners are told, as for any decision.
+ */
+function TickCircle({ item, sent, engagementId }: { item: Task; sent: boolean; engagementId: number }) {
+  const refresh = useTickRefresh(engagementId);
+  const reopen = trpc.engagement.staff.reopenTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Put back as it was."); } });
+  const before = item.status as Reopened;
+  const tick = trpc.engagement.staff.reviewTask.useMutation({
+    ...refresh,
+    onSuccess: () => {
+      refresh.onSuccess();
+      toast.success(`Completed: ${item.title}`, { action: { label: "Undo", onClick: () => reopen.mutate({ taskId: item.id, status: before }) } });
+    },
+  });
+  return (
+    <button type="button" disabled={tick.isPending} onClick={() => tick.mutate({ taskId: item.id, decision: "received", note: null })} aria-label={`Mark ${item.title} done`} title="Mark done"
+      className="group flex min-h-11 w-10 shrink-0 items-center justify-center pl-3 disabled:opacity-50">
+      <span aria-hidden className={`flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors group-hover:border-health-clear group-hover:bg-health-clear group-hover:text-white ${sent ? "border-brand bg-brand text-white" : "border-line-strong text-transparent"}`}><Check className="h-3 w-3" /></span>
+    </button>
+  );
+}
+
+/** Reopen a completed item (ET, 16 November 2026): for a tick made by mistake once Undo has gone. */
+function ReopenItem({ task, engagementId }: { task: Task; engagementId: number }) {
+  const refresh = useTickRefresh(engagementId);
+  const reopen = trpc.engagement.staff.reopenTask.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Reopened. It is back on the plan."); } });
+  // A client's item that came with something is back to be checked; anything else is back to do.
+  const to: Reopened = task.side === "client" && (task.files.length > 0 || task.responseLink) ? "received" : "open";
+  return <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={reopen.isPending} onClick={() => reopen.mutate({ taskId: task.id, status: to })}>Reopen</Button>;
+}
+
 function ReviewDecision({ task, engagementId }: { task: Task; engagementId: number }) {
   const refresh = useRefresh(engagementId);
   const [asking, setAsking] = useState<string | null>(null);
@@ -586,6 +637,7 @@ function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; 
       </dl>
       {/* Ticking off (ET, 16 November 2026): sent and waiting, or still open and someone else's, for whoever may decide it. */}
       {task.canReview && (task.status === "received" || (OPEN_TASK_STATUSES.includes(task.status) && !roleOf(task, data.viewerUserId).owns)) && <StickyActions wide="xl"><ReviewDecision task={task} engagementId={engagementId} /></StickyActions>}
+      {task.canReview && task.status === "done" && <ReopenItem task={task} engagementId={engagementId} />}
       {task.detail && <p className="whitespace-pre-line text-sm text-ink-600">{task.detail}</p>}
       <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && (task.canHandIn || task.requestedByUserId === data.viewerUserId)} canManage={false} briefFor={task.requestedByUserId === data.viewerUserId} />
       <div id={`messages-${task.id}`} className="scroll-mt-4"><ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} /></div>

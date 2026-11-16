@@ -194,8 +194,14 @@ export const LEVEL_ROLES: Record<FirmLevel, readonly PlatformRole[]> = {
   Specialist: ["subject_matter_expert"],
   Finance: ["finance"],
 };
-/** What a level adds to its roles (ET, 16 November 2026): Senior Business Analysts and above tick off items. */
+/**
+ * What a level adds to its roles (ET, 16 November 2026): Senior Business Analysts and above tick off items. The level
+ * wins over the role someone was first given: a Senior Associate still holding the analyst role ticks off too.
+ */
 export const LEVEL_PERMISSIONS: Partial<Record<FirmLevel, readonly PlatformPermission[]>> = {
+  Partner: ["review_assigned_items"],
+  "Vice President": ["review_assigned_items"],
+  "Senior Associate": ["review_assigned_items"],
   Associate: ["review_assigned_items"],
   "Senior Business Analyst": ["review_assigned_items"],
 };

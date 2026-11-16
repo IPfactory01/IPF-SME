@@ -1224,6 +1224,9 @@ var LEVEL_ROLES = {
   Finance: ["finance"]
 };
 var LEVEL_PERMISSIONS = {
+  Partner: ["review_assigned_items"],
+  "Vice President": ["review_assigned_items"],
+  "Senior Associate": ["review_assigned_items"],
   Associate: ["review_assigned_items"],
   "Senior Business Analyst": ["review_assigned_items"]
 };
@@ -12894,7 +12897,7 @@ async function getStaffEngagement(db, actor, engagementId) {
         })(),
         canReview: seesAllTasks || reviewerOfTask(team, task) === actor.id || mayTickOff(actor, team, task, others),
         // Who last decided it, and when (ET, 16 November 2026), from the record of reviews.
-        decidedBy: decisions.get(task.id) ?? null,
+        decidedBy: task.status === "done" || task.status === "accepted" || task.status === "needs_more" ? decisions.get(task.id) ?? null : null,
         // Everyone it belongs to (R89): the lead owner first, then the others.
         owners: ownersOfTask(team, task, others).map((userId, index2) => ({ userId, name: team.find((member) => member.userId === userId)?.name ?? "", lead: index2 === 0 && owner === userId })),
         // A team item its owner hands in for review (R86): uploads, a link, messages, then Ready for review.
@@ -13014,6 +13017,14 @@ async function reviewTask(db, actor, input) {
   await recordAudit(db, { action: "engagement_task_reviewed", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, decision: input.decision } });
   await sendReviewedEmails(db, { taskId: task.id, actorUserId: actor.id, decision: input.decision, note, to: ownersOfTask(team, task, others) });
   return { success: true, status };
+}
+async function reopenTask(db, actor, input) {
+  const { task, team, leads, others } = await requireStaffTask(db, actor, input.taskId);
+  if (!leads && reviewerOfTask(team, task) !== actor.id && !mayTickOff(actor, team, task, others)) throw new TRPCError18({ code: "FORBIDDEN", message: "The item's reviewer, or the lead, reopens it." });
+  if (task.status !== "done" && task.status !== "accepted") throw new TRPCError18({ code: "BAD_REQUEST", message: "Only a completed item is reopened." });
+  await db.update(engagementTasks).set({ status: input.status, completedAt: null, ...arrivalFields(task, input.status, /* @__PURE__ */ new Date()) }).where(eq24(engagementTasks.id, task.id));
+  await recordAudit(db, { action: "engagement_task_reopened", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, status: input.status } });
+  return { success: true, status: input.status };
 }
 async function setTaskWork(db, actor, input) {
   const { task, leads } = await requireStaffTask(db, actor, input.taskId);
@@ -15264,6 +15275,8 @@ var staffRouter = router({
   /** The First edit or draft is shared (R78): as for the conversation, once it has arrived, once. */
   /** The reviewer's decision (R89): Received, or Ask for more with a note. The item's reviewer, or the lead. */
   reviewTask: staff.input(z15.object({ taskId: id, decision: z15.enum(["received", "more"]), note: optionalText2(500) })).mutation(async ({ ctx, input }) => guarded(async () => reviewTask(await engagementDb(), ctx.actor, input))),
+  /** Undo a tick (ET, 16 November 2026): a completed item back as it was. Whoever may decide it. */
+  reopenTask: staff.input(z15.object({ taskId: id, status: z15.enum(["open", "received", "needs_more"]) })).mutation(async ({ ctx, input }) => guarded(async () => reopenTask(await engagementDb(), ctx.actor, input))),
   /** Who reviews an item (R89), or null for the default. The lead. */
   /** A client item's kind of work (0027): decides who follows it up. The lead. */
   setWork: staff.input(z15.object({ taskId: id, work: z15.enum(ENGAGEMENT_TASK_WORKS).nullable() })).mutation(async ({ ctx, input }) => guarded(async () => setTaskWork(await engagementDb(), ctx.actor, input))),

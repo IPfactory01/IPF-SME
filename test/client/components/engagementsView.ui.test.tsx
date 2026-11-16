@@ -31,7 +31,7 @@ const mutation = (name: string) => (options?: { onSuccess?: (value: never, input
 vi.mock("sonner", () => ({ toast: { success: () => undefined, error: () => undefined } }));
 vi.mock("@/lib/trpc", () => ({
   trpc: {
-    useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, list: { invalidate: () => undefined }, awaitingStart: { invalidate: () => undefined }, serviceRequests: { invalidate: () => undefined }, fees: { invalidate: () => undefined } }, finance: { list: { invalidate: () => undefined } } } }),
+    useUtils: () => ({ engagement: { staff: { detail: { invalidate: () => undefined }, today: { invalidate: () => undefined }, list: { invalidate: () => undefined }, awaitingStart: { invalidate: () => undefined }, serviceRequests: { invalidate: () => undefined }, fees: { invalidate: () => undefined } }, finance: { list: { invalidate: () => undefined } } } }),
     onboarding: { sendSignInLink: { useMutation: mutation("sendSignInLink") } },
     businessSupport: { emailDeliveryStatus: { useQuery: () => ({ data: [], isLoading: false, error: undefined }) } },
     engagement: {
@@ -47,7 +47,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         fees: { useQuery: () => ({ data: api.failed.fees ? undefined : api.fees, error: api.failed.fees ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("fees"); } }) },
-        ...Object.fromEntries(["handIn", "setOwners", "reviewTask", "setReviewer", "setWork", "markHeld", "assignByRole", "start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "bookMeeting", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["handIn", "setOwners", "reviewTask", "reopenTask", "setReviewer", "setWork", "markHeld", "assignByRole", "start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "bookMeeting", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -657,6 +657,34 @@ describe("the team's workspace (R82)", () => {
     fireEvent.change(details.getByLabelText(/What is still needed/), { target: { value: "The logo as a PNG with no background" } });
     fireEvent.click(details.getByRole("button", { name: "Send" }));
     expect(api.calls.reviewTask.at(-1)).toEqual({ taskId: 51, decision: "more", note: "The logo as a PNG with no background" });
+  });
+
+  it("ticks an item off from its circle for whoever may decide it, and reopens a completed one (ET, 16 November 2026)", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Analyst" }] };
+    api.detail = { ...detail({ manage: true, assign: false, review: true }, [], [
+      task({ id: 61, title: "Give us access to your accounts", status: "open", canReview: true }),
+      task({ id: 62, title: "Send your services and prices", status: "open", canReview: false }),
+      task({ id: 63, title: "Send your booking link", status: "accepted", statusLabel: "Received", canReview: true }),
+    ]), team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Whose items" }), { target: { value: "everyone" } });
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    // One tap completes it, even though the client sent nothing through the portal.
+    fireEvent.click(screen.getByRole("button", { name: "Mark Give us access to your accounts done" }));
+    expect(api.calls.reviewTask.at(-1)).toEqual({ taskId: 61, decision: "received", note: null });
+    // Not theirs to decide: the circle only shows its state, and the row opens the item.
+    expect(screen.queryByRole("button", { name: "Mark Send your services and prices done" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Mark Send your booking link done" })).toBeNull();
+    // Inside an open item, Mark done is there before anything was sent.
+    fireEvent.click(screen.getByRole("button", { name: "Open Give us access to your accounts" }));
+    expect(within(screen.getByRole("complementary", { name: "Task details" })).getByRole("button", { name: "Mark done" })).toBeTruthy();
+    // A completed one reopens, back to do.
+    fireEvent.click(screen.getByRole("button", { name: "Open Send your booking link" }));
+    fireEvent.click(within(screen.getByRole("complementary", { name: "Task details" })).getByRole("button", { name: "Reopen" }));
+    expect(api.calls.reopenTask.at(-1)).toEqual({ taskId: 63, status: "open" });
   });
 
   it("shows each item's owners and lets the lead change them, and the files shared so far under it (R89)", async () => {

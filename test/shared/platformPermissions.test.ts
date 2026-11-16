@@ -221,6 +221,8 @@ describe("Senior Business Analysts and above tick off items (ET, 16 November 202
     expect(authority("Associate").permissions).toContain("review_assigned_items");
     expect(authority("Senior Business Analyst").permissions).toContain("review_assigned_items");
     expect(authority("Business Analyst").permissions).not.toContain("review_assigned_items");
+    // Above them too, when someone still holds the analyst role they were first given (ET, 16 November 2026).
+    for (const level of ["Senior Associate", "Vice President", "Partner"] as const) expect(authority(level).permissions).toContain("review_assigned_items");
     expect(authority(null).permissions).not.toContain("review_assigned_items");
     expect(authority("Senior Business Analyst", ["subject_matter_expert"]).permissions).not.toContain("review_assigned_items");
     expect(resolveAuthority({ storedRoles: ["analyst"], legacyAdmin: false, ownerBridge: false, legacyProfile: [], active: false, level: "Senior Business Analyst" }).permissions).toEqual([]);

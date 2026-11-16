@@ -1,4 +1,4 @@
-import { ItemScreenBar, StickyActions } from "@/components/room/ItemScreen";
+import { ItemScreenBar, ItemSheet, StickyActions } from "@/components/room/ItemScreen";
 import ProgressView from "@/components/room/Progress";
 import { progressOf } from "@/lib/progress";
 import { matchesSearch, matchesWhose, roleOf, roleTag, whoseFrom, whoseValue, type Whose } from "@/lib/planFilter";
@@ -301,6 +301,7 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
       {task && (
         // On a phone or narrow tablet the panel is a full screen over the list, not below the whole Work Plan, where a tap
         // seemed to do nothing (ET, 16 November 2026).
+        <ItemSheet wide="xl" skin="room-skin text-ink">
         <aside aria-label="Task details" style={{ paddingTop: "max(1rem, env(safe-area-inset-top, 0px))" }} className="space-y-3 bg-white p-4 max-xl:fixed max-xl:inset-0 max-xl:z-50 max-xl:overflow-y-auto max-xl:overscroll-contain xl:sticky xl:top-16 xl:max-h-[calc(100vh-5rem)] xl:overflow-y-auto xl:overscroll-contain xl:rounded-xl xl:border xl:border-line-soft">
           <ItemScreenBar wide="xl" taskId={task.id} onBack={() => setSelected(null)} />
           <div className="hidden justify-end xl:flex">
@@ -309,6 +310,7 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
           {/* The lead changes an item; below the lead, a person reads it and works on it: files, messages, Ready for review (R86). */}
           {data.can.manage && data.can.seeAllTasks ? <ReviewItem key={task.id} task={task} data={data} engagementId={engagementId} now={now} /> : <OwnItem key={task.id} task={task} data={data} engagementId={engagementId} now={now} />}
         </aside>
+        </ItemSheet>
       )}
     </div>
   );
@@ -865,7 +867,7 @@ function PlanUpdate({ engagementId }: { engagementId: number }) {
   });
   return (
     <div role="group" aria-label="The plan" className="flex flex-wrap items-center justify-between gap-2 border border-line bg-white p-2 text-xs">
-      <span className="min-w-0 flex-1 text-ink-muted">The plan has Weekly Check-ins in month 1 then every two weeks, a review each month, and footage every Thursday. Add what this engagement is missing, dated from its kickoff. Nothing already here changes.</span>
+      <span className="min-w-[14rem] flex-1 text-ink-muted">The plan has Weekly Check-ins in month 1 then every two weeks, a review each month, and footage every Thursday. Add what this engagement is missing, dated from its kickoff. Nothing already here changes.</span>
       <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={add.isPending} onClick={() => add.mutate({ engagementId })}>Add what's missing from the plan</Button>
     </div>
   );

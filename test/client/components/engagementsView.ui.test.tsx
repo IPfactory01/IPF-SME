@@ -533,7 +533,7 @@ describe("the team's workspace (R82)", () => {
     expect(needs.getAllByRole("button").map(row => row.getAttribute("aria-label"))).toEqual(["Client wrote · To check: Send week 3 footage"]);
     fireEvent.click(needs.getByRole("button", { name: "Client wrote · To check: Send week 3 footage" }));
     await waitFor(() => expect(page.getByRole("tab", { name: /^Work Plan/ }).getAttribute("aria-selected")).toBe("true"));
-    expect(within(page.getByRole("complementary", { name: "Task details" })).getByRole("heading", { name: "Send week 3 footage" })).toBeTruthy();
+    expect(within(screen.getByRole("complementary", { name: "Task details" })).getByRole("heading", { name: "Send week 3 footage" })).toBeTruthy();
     fireEvent.click(page.getByRole("tab", { name: /^Overview/ }));
     const next = within(page.getByRole("region", { name: "Next meeting" }));
     expect(next.getByText("Weekly Check-in")).toBeTruthy();
@@ -566,7 +566,7 @@ describe("the team's workspace (R82)", () => {
     expect(line.textContent).toContain("Data Request");
     expect(page.queryByRole("textbox", { name: "What" })).toBeNull();
     fireEvent.click(line);
-    const details = within(page.getByRole("complementary", { name: "Task details" }));
+    const details = within(screen.getByRole("complementary", { name: "Task details" }));
     // The lead reads the item first; the full form is behind Edit the item.
     expect(details.getByRole("heading", { name: "Your price list" })).toBeTruthy();
     expect(details.queryByRole("textbox", { name: "What" })).toBeNull();
@@ -679,6 +679,9 @@ describe("the team's workspace (R82)", () => {
     expect(screen.getByRole("complementary", { name: "Task details" }).className).toMatch(/max-h-\[calc\(100vh-5rem\)\].*overflow-y-auto/);
     // On a phone the panel is a full screen over the list, not below the whole Work Plan (ET, 16 November 2026).
     expect(screen.getByRole("complementary", { name: "Task details" }).className).toMatch(/max-xl:fixed max-xl:inset-0 max-xl:z-50/);
+    // ...drawn on the page itself, outside the sliding tabs, which placed it off to one side: a blank phone (ET, 16 November 2026).
+    expect(screen.getByRole("complementary", { name: "Task details" }).parentElement!.parentElement).toBe(document.body);
+    expect(screen.getByRole("complementary", { name: "Task details" }).parentElement!.className).toContain("room-skin");
     fireEvent.click(details.getByRole("button", { name: "Change owners" }));
     fireEvent.click(details.getByRole("checkbox", { name: /Lewis Lead/ }));
     fireEvent.click(details.getByRole("button", { name: "Save owners" }));

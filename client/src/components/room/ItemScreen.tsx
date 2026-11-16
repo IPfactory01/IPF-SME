@@ -1,6 +1,7 @@
 import { METHOD } from "@shared/method";
 import { ArrowLeft } from "lucide-react";
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 /** Below the wide layout an item is its own screen (ET, 16 November 2026); `wide` is where it sits beside the list instead. */
 type Wide = "lg" | "xl";
@@ -35,4 +36,33 @@ const STICKY: Record<Wide, string> = {
 /** An item's main actions, held at the foot of the screen on a phone so nobody scrolls to find them. */
 export function StickyActions({ wide, children }: { wide: Wide; children: React.ReactNode }) {
   return <div className={STICKY[wide]} style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))" }}>{children}</div>;
+}
+
+const QUERY: Record<Wide, string> = { lg: "(min-width: 1024px)", xl: "(min-width: 1280px)" };
+
+/** Whether the screen is at least `wide` (lg or xl); false where the browser cannot say (tests). */
+function useAtLeast(wide: Wide) {
+  const read = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(QUERY[wide]).matches;
+  const [at, setAt] = useState(read);
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return undefined;
+    const query = window.matchMedia(QUERY[wide]);
+    const onChange = () => setAt(query.matches);
+    query.addEventListener?.("change", onChange);
+    onChange();
+    return () => query.removeEventListener?.("change", onChange);
+  }, [wide]);
+  return at;
+}
+
+/**
+ * Where an item's screen is drawn (ET, 16 November 2026). Beside the list on a wide screen; on a phone straight onto the
+ * page, outside the sliding strip of tabs: inside it the full screen was placed against the strip, off to one side, and
+ * the phone showed a blank page.
+ */
+export function ItemSheet({ wide, skin, children }: { wide: Wide; skin?: string; children: React.ReactNode }) {
+  const atLeast = useAtLeast(wide);
+  if (atLeast || typeof document === "undefined") return <>{children}</>;
+  // Outside the page it keeps the look its page gives it (the team's workspace: rounded fields, full-height buttons).
+  return createPortal(skin ? <div className={skin}>{children}</div> : children, document.body);
 }

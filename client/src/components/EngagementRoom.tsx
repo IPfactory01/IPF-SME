@@ -1,4 +1,4 @@
-import { ItemScreenBar, StickyActions } from "./room/ItemScreen";
+import { ItemScreenBar, ItemSheet, StickyActions } from "./room/ItemScreen";
 import ProgressView from "./room/Progress";
 import { progressOf } from "@/lib/progress";
 import { matchesSearch } from "@/lib/planFilter";
@@ -1243,6 +1243,7 @@ function PlanView({ room, now }: { room: Room; now: number }) {
       </div>
       {task && (
         // On a phone the item opens as a full screen over the list, not below every week (ET, 16 November 2026).
+        <ItemSheet wide="lg">
         <aside aria-label="Task details" style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top, 0px))" }} className="bg-white p-5 max-lg:fixed max-lg:inset-0 max-lg:z-50 max-lg:overflow-y-auto max-lg:overscroll-contain lg:sticky lg:top-16 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-xl lg:border lg:border-line-soft">
           <ItemScreenBar wide="lg" taskId={task.id} onBack={() => setSelected(null)} />
           <div className="flex items-start justify-between gap-3">
@@ -1266,6 +1267,7 @@ function PlanView({ room, now }: { room: Room; now: number }) {
           {isClientOpen(task) && <StickyActions wide="lg"><TaskControls task={task} uploadsEnabled={room.uploadsEnabled} /></StickyActions>}
           <div id={`messages-${task.id}`} className="scroll-mt-4"><TaskConversation task={task} /></div>
         </aside>
+        </ItemSheet>
       )}
     </div>
   );

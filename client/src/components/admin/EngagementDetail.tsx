@@ -412,7 +412,7 @@ function ReviewItem({ task, data, engagementId, now }: { task: Task; data: Detai
       {task.canReview && TICKABLE.includes(task.status) && <StickyActions wide="xl"><ReviewDecision task={task} engagementId={engagementId} /></StickyActions>}
       {task.canReview && (task.status === "accepted" || task.status === "done") && <ReopenItem task={task} engagementId={engagementId} />}
       {task.detail && <p className="whitespace-pre-line text-sm text-ink-600">{task.detail}</p>}
-      <div id={`messages-${task.id}`} className="scroll-mt-4"><ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} /></div>
+      <div id={`messages-${task.id}`} className="scroll-mt-4"><ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} uploads={data.uploadsEnabled && task.status !== "cancelled"} clientAudience={data.can.manage ? "owner" : task.requestedByUserId === data.viewerUserId ? "business" : "team"} /></div>
       <button type="button" className="text-xs font-medium text-ink-600 underline underline-offset-2" onClick={() => setEditing(true)}>Edit the item</button>
     </div>
   );
@@ -657,7 +657,7 @@ function OwnItem({ task, data, engagementId, now }: { task: Task; data: Detail; 
       {task.canReview && task.status === "done" && <ReopenItem task={task} engagementId={engagementId} />}
       {task.detail && <p className="whitespace-pre-line text-sm text-ink-600">{task.detail}</p>}
       <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && task.status !== "cancelled"} canManage={false} briefFor={task.requestedByUserId === data.viewerUserId} />
-      <div id={`messages-${task.id}`} className="scroll-mt-4"><ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} /></div>
+      <div id={`messages-${task.id}`} className="scroll-mt-4"><ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} uploads={data.uploadsEnabled && task.status !== "cancelled"} clientAudience={data.can.manage ? "owner" : task.requestedByUserId === data.viewerUserId ? "business" : "team"} /></div>
     </div>
   );
 }
@@ -1301,7 +1301,7 @@ function TaskCard({ task, data, engagementId, onDone }: { task?: Task; data: Det
       {task?.responseLink && <p className="text-xs text-ink-600">The client sent a link: <a href={task.responseLink} target="_blank" rel="noopener noreferrer" className="font-semibold text-brand underline underline-offset-2">Open the link</a> <span className="text-ink-muted">({(() => { try { return new URL(task.responseLink).hostname.replace(/^www\./, ""); } catch { return "link"; } })()})</span></p>}
       {/* The person a team item is for attaches what they hand in (R86), for IP Factory only until the lead shares it. */}
       {task && <StaffFiles files={task.files} engagementId={engagementId} target={{ kind: "task", id: task.id }} canUpload={data.uploadsEnabled && (canManage || task.requestedByUserId === data.viewerUserId || task.canHandIn)} canManage={canManage} briefFor={!canManage && task.requestedByUserId === data.viewerUserId} />}
-      {task && <ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} />}
+      {task && <ItemConversation task={task} engagementId={engagementId} people={data.team.map(member => ({ name: member.name ?? "" }))} uploads={data.uploadsEnabled && task.status !== "cancelled"} clientAudience={data.can.manage ? "owner" : task.requestedByUserId === data.viewerUserId ? "business" : "team"} />}
       {canManage && (
         <div className="flex gap-2">
           <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !title.trim() || (side === "ipf" && !assignee)} onClick={() => save.mutate({

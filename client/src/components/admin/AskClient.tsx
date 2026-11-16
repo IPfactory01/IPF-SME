@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
+import { Paperclip } from "lucide-react";
 import Linked from "@/components/room/Linked";
 import { toast } from "sonner";
 import type { inferRouterOutputs } from "@trpc/server";
 import { lagosDay } from "@shared/agreement";
-import { TURNAROUND_HOURS, TURNAROUND_LABELS, UPLOAD_ACCEPT, type EngagementTaskTurnaround } from "@shared/engagement";
+import { TURNAROUND_HOURS, TURNAROUND_LABELS, UPLOAD_ACCEPT, type EngagementAudience, type EngagementTaskTurnaround } from "@shared/engagement";
 import { clockText, dayInWords, earliestRequestDue, followUpOf, REQUEST_BRIEF_MAX, REQUEST_TITLE_MAX, requestDueOn, TASK_COMMENT_MAX } from "@shared/requests";
 import { firstNameOf } from "@shared/whatsapp";
 import { Button } from "@/components/ui/button";
@@ -139,7 +140,40 @@ function Clock({ task, now, onShare, sharing }: { task: Task; now: number; onSha
  * A message box that offers the engagement's people when "@" is typed (R86): picking one writes "@Full Name", which
  * the server reads to email them and put the item on their Today.
  */
-export function MentionBox({ id, value, onChange, people, placeholder, label }: { id: string; value: string; onChange: (text: string) => void; people: { name: string }[]; placeholder: string; label: string }) {
+/** Files from a message box's paperclip go onto the item, like Attach files: who sees them is the box's to say. */
+export type Attach = { enabled: boolean; engagementId: number; taskId: number; audience: EngagementAudience };
+
+function useAttach(attach: Attach | undefined) {
+  const utils = trpc.useUtils();
+  const request = trpc.engagement.staff.requestUpload.useMutation();
+  const confirm = trpc.engagement.staff.confirmUpload.useMutation();
+  const [busy, setBusy] = useState(false);
+  if (!attach?.enabled) return null;
+  const send = async (files: File[]) => {
+    setBusy(true);
+    try {
+      for (const file of files) {
+        const target = { kind: "task" as const, id: attach.taskId };
+        const meta = { fileName: file.name, contentType: file.type, sizeBytes: file.size };
+        const ticket = await request.mutateAsync({ engagementId: attach.engagementId, target, ...meta });
+        const put = await fetch(ticket.uploadUrl, { method: "PUT", headers: ticket.headers, body: file });
+        if (!put.ok) throw new Error("The upload did not finish. Try again.");
+        await confirm.mutateAsync({ engagementId: attach.engagementId, target, storageKey: ticket.storageKey, audience: attach.audience, ...meta });
+      }
+      void utils.engagement.staff.detail.invalidate({ engagementId: attach.engagementId });
+      toast.success(attach.audience === "team" ? "Attached to the item, for IP Factory only." : "Attached to the item. The client sees it there.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The upload did not finish.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return { send, busy };
+}
+
+export function MentionBox({ id, value, onChange, people, placeholder, label, attach }: { id: string; value: string; onChange: (text: string) => void; people: { name: string }[]; placeholder: string; label: string; attach?: Attach }) {
+  const files = useAttach(attach);
+  const picker = useRef<HTMLInputElement>(null);
   const typed = /(^|\s)@([^\s@]*)$/.exec(value);
   const query = typed ? typed[2]!.toLowerCase() : null;
   // A name is offered from the start of any of its words: "@le" offers Lewis, not Miracle.
@@ -147,7 +181,19 @@ export function MentionBox({ id, value, onChange, people, placeholder, label }: 
   return (
     <div className="space-y-1">
       <label className="sr-only" htmlFor={id}>{label}</label>
-      <textarea id={id} className={FIELD} rows={2} maxLength={TASK_COMMENT_MAX} placeholder={placeholder} value={value} onChange={event => onChange(event.target.value)} />
+      {/* A paperclip in the box (ET, 16 November 2026), as WhatsApp and ClickUp have it: the file goes onto the item. */}
+      <div className="relative">
+        <textarea id={id} className={`${FIELD} ${files ? "pr-10" : ""}`} rows={2} maxLength={TASK_COMMENT_MAX} placeholder={placeholder} value={value} onChange={event => onChange(event.target.value)} />
+        {files && (
+          <>
+            <button type="button" onClick={() => picker.current?.click()} disabled={files.busy} aria-label={files.busy ? "Attaching…" : `Attach a file: ${label}`} title="Attach a file"
+              className="absolute right-1 bottom-1 flex h-8 w-8 items-center justify-center rounded-md text-ink-muted hover:bg-paper-sunken hover:text-brand disabled:opacity-50">
+              <Paperclip className={`h-4 w-4 ${files.busy ? "animate-pulse" : ""}`} aria-hidden />
+            </button>
+            <input ref={picker} type="file" className="sr-only" tabIndex={-1} aria-hidden accept={UPLOAD_ACCEPT} multiple onChange={event => { const picked = Array.from(event.target.files ?? []); event.target.value = ""; if (picked.length) void files.send(picked); }} />
+          </>
+        )}
+      </div>
       {offered.length > 0 && (
         <ul aria-label="Tag someone" className="flex flex-wrap gap-1">
           {offered.map(person => <li key={person.name}><button type="button" className="rounded-full border border-line-soft bg-white px-2 py-0.5 text-xs text-ink" onClick={() => onChange(`${value.replace(/@[^\s@]*$/, "")}@${person.name} `)}>@{person.name}</button></li>)}
@@ -158,16 +204,14 @@ export function MentionBox({ id, value, onChange, people, placeholder, label }: 
 }
 
 /**
- * A team item's own panel (R86): its messages inside IP Factory (tag a colleague with @), a link, and Ready for review
+ * A team item's own panel (R86): its messages inside IP Factory (tag a colleague with @; paste a link, or attach with the paperclip), and Ready for review
  * for the person it is for. Files are attached above it, in the item's form.
  */
-function TeamItemConversation({ task, engagementId, people }: { task: Task; engagementId: number; people: { name: string }[] }) {
+function TeamItemConversation({ task, engagementId, people, uploads = false }: { task: Task; engagementId: number; people: { name: string }[]; uploads?: boolean }) {
   const refresh = useRefresh(engagementId);
   const [body, setBody] = useState("");
-  const [link, setLink] = useState<string | null>(null);
-  const write = trpc.engagement.staff.taskComment.useMutation({ onSuccess: result => { setBody(""); setLink(null); refresh(); toast.success(result.mentioned ? `Sent. ${result.mentioned === 1 ? "The person you tagged is" : "The people you tagged are"} emailed.` : "Sent."); }, onError: error => toast.error(error.message) });
+  const write = trpc.engagement.staff.taskComment.useMutation({ onSuccess: result => { setBody(""); refresh(); toast.success(result.mentioned ? `Sent. ${result.mentioned === 1 ? "The person you tagged is" : "The people you tagged are"} emailed.` : "Sent."); }, onError: error => toast.error(error.message) });
   const handIn = trpc.engagement.staff.handIn.useMutation({ onSuccess: () => { refresh(); toast.success("Handed in. The lead is emailed to review it."); }, onError: error => toast.error(error.message) });
-  const validLink = link !== null && /^https:\/\/\S+$/i.test(link.trim());
   return (
     <div className="space-y-2 border-t border-line-soft pt-2">
       <p className="text-xs font-semibold text-ink">Messages ({task.comments.length}) <span className="font-normal text-ink-muted">· inside IP Factory; the client never sees them</span></p>
@@ -181,17 +225,10 @@ function TeamItemConversation({ task, engagementId, people }: { task: Task; enga
       </ul>
       {task.canAnswer && (
         <>
-          <MentionBox id={`note-${task.id}`} value={body} onChange={setBody} people={people} label={`Write on ${task.title}`} placeholder="Write a note. Type @ to tag a colleague." />
-          {link !== null && (
-            <div className="space-y-1">
-              <label className={LABEL} htmlFor={`link-${task.id}`}>Link to the work</label>
-              <input id={`link-${task.id}`} className={FIELD} placeholder="https://…" value={link} onChange={event => setLink(event.target.value)} />
-            </div>
-          )}
+          <MentionBox id={`note-${task.id}`} value={body} onChange={setBody} people={people} label={`Write on ${task.title}`} placeholder="Write a note. Type @ to tag a colleague." attach={{ enabled: uploads, engagementId, taskId: task.id, audience: "team" }} />
           <div className="flex flex-wrap gap-2">
-            <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={write.isPending || (!body.trim() && !validLink)}
-              onClick={() => write.mutate({ taskId: task.id, body: [validLink ? `Link: ${link!.trim()}` : "", body.trim()].filter(Boolean).join("\n") })}>{write.isPending ? "Sending…" : "Send"}</Button>
-            {link === null && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} onClick={() => setLink("")}>Send a link</Button>}
+            <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={write.isPending || !body.trim()}
+              onClick={() => write.mutate({ taskId: task.id, body: body.trim() })}>{write.isPending ? "Sending…" : "Send"}</Button>
             {task.canHandIn && <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={handIn.isPending} onClick={() => handIn.mutate({ taskId: task.id })}>{handIn.isPending ? "Handing in…" : "Ready for review"}</Button>}
           </div>
         </>
@@ -201,7 +238,11 @@ function TeamItemConversation({ task, engagementId, people }: { task: Task; enga
   );
 }
 
-export function ItemConversation({ task, engagementId, people = [], now = Date.now() }: { task: Task; engagementId: number; people?: { name: string }[]; now?: number }) {
+export function ItemConversation({ task, engagementId, people = [], now = Date.now(), uploads = false, clientAudience = "team" }: {
+  task: Task; engagementId: number; people?: { name: string }[]; now?: number;
+  /** Whether files can be attached, and who sees one attached while writing to the client (the lead: the client; else IP Factory). */
+  uploads?: boolean; clientAudience?: EngagementAudience;
+}) {
   const refresh = useRefresh(engagementId);
   // The conversation with the client, and the team's notes on the item beside it (ET, 16 November 2026).
   const withClient = task.comments.filter(comment => !comment.internal);
@@ -212,7 +253,7 @@ export function ItemConversation({ task, engagementId, people = [], now = Date.n
   const writeNote = trpc.engagement.staff.taskComment.useMutation({ onSuccess: result => { setNote(""); refresh(); toast.success(result.mentioned ? `Saved. ${result.mentioned === 1 ? "The person you tagged is" : "Everyone you tagged is"} emailed.` : "Saved for the team."); }, onError: error => toast.error(error.message) });
   const write = trpc.engagement.staff.taskComment.useMutation({ onSuccess: result => { setBody(""); refresh(); toast.success(result.emailed ? "Sent. The client is emailed." : "Saved."); }, onError: error => toast.error(error.message) });
   const share = trpc.engagement.staff.followUpShared.useMutation({ onSuccess: result => { refresh(); toast.success(result.emailed ? "Shared. The client is emailed that it is ready for their approval." : "Recorded as shared."); }, onError: error => toast.error(error.message) });
-  if (task.side !== "client") return <TeamItemConversation task={task} engagementId={engagementId} people={people} />;
+  if (task.side !== "client") return <TeamItemConversation task={task} engagementId={engagementId} people={people} uploads={uploads} />;
   const goesTo = task.goesTo?.name ? firstNameOf(task.goesTo.name) : null;
   return (
     <div className="space-y-2 border-t border-line-soft pt-2">
@@ -237,7 +278,7 @@ export function ItemConversation({ task, engagementId, people = [], now = Date.n
           </ul>
           {task.canAnswer ? (
             <div className="space-y-1">
-              <MentionBox id={`reply-${task.id}`} value={body} onChange={setBody} people={people} label={`Write to the client about ${task.title}`} placeholder="Write to the client. They are emailed. Type @ to tag a colleague." />
+              <MentionBox id={`reply-${task.id}`} value={body} onChange={setBody} people={people} label={`Write to the client about ${task.title}`} placeholder="Write to the client. They are emailed. Type @ to tag a colleague." attach={{ enabled: uploads, engagementId, taskId: task.id, audience: clientAudience }} />
               <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={write.isPending || !body.trim()} onClick={() => write.mutate({ taskId: task.id, body })}>{write.isPending ? "Sending…" : "Send"}</Button>
             </div>
           ) : <p className="text-xs text-ink-muted">{goesTo ? `${goesTo} or the lead writes to the client. Leave a team note below.` : "The lead writes to the client. Leave a team note below."}</p>}
@@ -258,7 +299,7 @@ export function ItemConversation({ task, engagementId, people = [], now = Date.n
         )}
         {task.status !== "cancelled" && (
           <>
-            <MentionBox id={`note-${task.id}`} value={note} onChange={setNote} people={people} label={`Team note on ${task.title}`} placeholder="A note for the team. Type @ to tag a colleague." />
+            <MentionBox id={`note-${task.id}`} value={note} onChange={setNote} people={people} label={`Team note on ${task.title}`} placeholder="A note for the team. Type @ to tag a colleague." attach={{ enabled: uploads, engagementId, taskId: task.id, audience: "team" }} />
             <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={writeNote.isPending || !note.trim()} onClick={() => writeNote.mutate({ taskId: task.id, body: note, internal: true })}>{writeNote.isPending ? "Saving…" : "Save note"}</Button>
           </>
         )}

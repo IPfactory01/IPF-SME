@@ -119,22 +119,39 @@ describe("an item's conversation and clock on the team's side", () => {
     expect(screen.getByText("Kemi or the lead writes to the client. Leave a team note below.")).toBeTruthy();
     // A team note instead, inside IP Factory (ET, 16 November 2026).
     expect(screen.getByRole("textbox", { name: /^Team note on/ })).toBeTruthy();
+    // Without file storage, no paperclip.
+    expect(screen.queryByRole("button", { name: /^Attach a file/ })).toBeNull();
     unmount();
   });
 
-  it("gives a team item its own messages inside IP Factory, a link, @ to tag a colleague, and Ready for review for its owner (R86)", () => {
+  it("gives a team item its own messages inside IP Factory, a paperclip, @ to tag a colleague, and Ready for review for its owner (R86)", () => {
     const people = [{ name: "Miracle Marketer" }, { name: "Lola Lead" }];
-    render(<ItemConversation task={task({ side: "ipf", canAnswer: true, canHandIn: true, comments: [] } as Partial<Task>)} engagementId={4} people={people} now={now} />);
+    render(<ItemConversation task={task({ side: "ipf", canAnswer: true, canHandIn: true, comments: [] } as Partial<Task>)} engagementId={4} people={people} now={now} uploads />);
     expect(screen.getByText(/the client never sees them/)).toBeTruthy();
     const box = screen.getByRole("textbox", { name: /^Write on/ });
     fireEvent.change(box, { target: { value: "Plan attached @lo" } });
     fireEvent.click(within(screen.getByRole("list", { name: "Tag someone" })).getByRole("button", { name: "@Lola Lead" }));
     expect((box as HTMLTextAreaElement).value).toBe("Plan attached @Lola Lead ");
-    fireEvent.click(screen.getByRole("button", { name: "Send a link" }));
-    fireEvent.change(screen.getByRole("textbox", { name: "Link to the work" }), { target: { value: "https://docs.example.test/plan" } });
+    // No Send a link (ET, 16 November 2026): a link is pasted in the message; a file goes in with the paperclip.
+    expect(screen.queryByRole("button", { name: "Send a link" })).toBeNull();
+    expect(screen.getByRole("button", { name: /^Attach a file: Write on/ })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    expect(api.calls.taskComment.at(-1)).toEqual({ taskId: 70, body: "Link: https://docs.example.test/plan\nPlan attached @Lola Lead" });
+    expect(api.calls.taskComment.at(-1)).toEqual({ taskId: 70, body: "Plan attached @Lola Lead" });
     fireEvent.click(screen.getByRole("button", { name: "Ready for review" }));
     expect(api.calls.handIn).toEqual([{ taskId: 70 }]);
+  });
+
+  it("puts a file from the paperclip onto the item: to the client from the client box, IP Factory only from a team note (ET, 16 November 2026)", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true })));
+    render(<ItemConversation task={task({ canAnswer: true, comments: [] })} engagementId={4} now={now} uploads clientAudience="owner" />);
+    fireEvent.click(screen.getByRole("button", { name: /^Conversation with the client/ }));
+    const pdf = new File(["x"], "plan.pdf", { type: "application/pdf" });
+    const inputs = () => Array.from(document.querySelectorAll<HTMLInputElement>("input[type=file]"));
+    expect(inputs()).toHaveLength(2);
+    fireEvent.change(inputs()[0]!, { target: { files: [pdf] } });
+    await waitFor(() => expect(api.calls.confirmUpload?.at(-1)).toMatchObject({ engagementId: 4, target: { kind: "task", id: 70 }, audience: "owner", fileName: "plan.pdf" }));
+    fireEvent.change(inputs()[1]!, { target: { files: [pdf] } });
+    await waitFor(() => expect(api.calls.confirmUpload?.at(-1)).toMatchObject({ audience: "team" }));
+    vi.unstubAllGlobals();
   });
 });

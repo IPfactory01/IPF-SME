@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| A paperclip in every item's message box; the team's Send a link removed (the client's stays, as it answers their item) | ET, 16 November 2026 |
 | Client items get Team notes for everyone; writing to the client stays one voice (the item's person or the lead) | ET, 16 November 2026 |
 | Every item takes files from whoever sees it; anyone but the lead attaches for IP Factory only, the lead shares | ET, 16 November 2026 |
 | Home puts My projects above Today; Today shows five rows then Show all | ET, 16 November 2026 |

@@ -114,9 +114,11 @@ describe("an item's conversation and clock on the team's side", () => {
   it("gives someone the item does not go to no reply box and no button", () => {
     const { unmount } = render(<ItemConversation task={task({ canAnswer: false, receivedAt: new Date(now), followUpDueAt: new Date(now + 3_600_000) })} engagementId={4} now={now} />);
     fireEvent.click(screen.getByRole("button", { name: "Conversation with the client (0)" }));
-    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.queryByRole("textbox", { name: /^Write to the client/ })).toBeNull();
     expect(screen.queryByRole("button", { name: "First edit shared" })).toBeNull();
-    expect(screen.getByText("Kemi or the lead answers here.")).toBeTruthy();
+    expect(screen.getByText("Kemi or the lead writes to the client. Leave a team note below.")).toBeTruthy();
+    // A team note instead, inside IP Factory (ET, 16 November 2026).
+    expect(screen.getByRole("textbox", { name: /^Team note on/ })).toBeTruthy();
     unmount();
   });
 

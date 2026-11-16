@@ -306,6 +306,16 @@ for (const target of targets) {
 
         // Another Specialist sees it but does not write to the client on it: one voice to the client (R88).
         await expect((await s.marketer.browser.call()).engagement.staff.taskComment({ taskId, body: "Hello" })).rejects.toMatchObject({ code: "FORBIDDEN" });
+        // A team note instead (0028, ET 16 November 2026): anyone on the team, the item's person emailed, the client never.
+        await (await s.owner.call()).engagement.client.taskComment({ taskId, body: "And the lighting?" });
+        mocked.deliverEmail.mockClear();
+        await (await s.marketer.browser.call()).engagement.staff.taskComment({ taskId, body: "They asked about lighting on WhatsApp too", internal: true });
+        expect(emails().map(sent => sent.to)).toEqual([s.producer.email]);
+        expect((await (await s.owner.call()).engagement.client.room())!.tasks.find(task => task.id === taskId)!.comments.map(comment => comment.body)).toEqual(["Is landscape fine?", "Upright, please.", "And the lighting?"]);
+        expect((await (await s.lead.browser.call()).engagement.staff.detail({ engagementId: s.engagementId })).tasks.find(task => task.id === taskId)!.comments.map(comment => [comment.body, comment.internal]))
+          .toEqual([["Is landscape fine?", false], ["Upright, please.", false], ["And the lighting?", false], ["They asked about lighting on WhatsApp too", true]]);
+        // The client's message still waits on its person: a team note after it does not answer the client.
+        expect((await (await s.producer.browser.call()).engagement.staff.today()).some(item => item.kind === "reply" && item.taskId === taskId)).toBe(true);
         const footage = detail.tasks.find(task => task.title === "Send week 1 footage")!;
         expect(footage).toMatchObject({ turnaround: "first_edit", goesTo: { userId: s.producer.id } });
         await (await s.producer.browser.call()).engagement.staff.taskComment({ taskId: footage.id, body: "Film the kitchen this week." });

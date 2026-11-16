@@ -1313,6 +1313,8 @@ export const engagementTaskComments = pgTable("engagement_task_comments", {
   taskId: integer("taskId").notNull().references(() => engagementTasks.id, { onDelete: "cascade" }),
   authorUserId: integer("authorUserId").notNull().references(() => users.id),
   body: text("body").notNull(),
+  // A team note on a client's item (0028, ET 16 November 2026): IP Factory only, never shown or emailed to the client.
+  internal: boolean("internal").default(false).notNull(),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
 }, table => [index("engagement_task_comments_task_idx").on(table.taskId), index("engagement_task_comments_engagement_idx").on(table.engagementId)]);
 

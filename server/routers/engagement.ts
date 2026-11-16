@@ -268,7 +268,7 @@ const staffRouter = router({
     turnaround: z.enum(ENGAGEMENT_TASK_TURNAROUNDS).nullable(),
   })).mutation(async ({ ctx, input }) => guarded(async () => askClient(await engagementDb(), ctx.actor, input))),
   /** Write in a client item's conversation (R78): manage_engagements, or the Specialist the item goes to. */
-  taskComment: staff.input(z.object({ taskId: id, body: text(TASK_COMMENT_MAX).min(1, "Write your message first.") })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.engagementComment, `staff:${ctx.actor.id}`); return guarded(async () => staffTaskComment(await engagementDb(), ctx.actor, input)); }),
+  taskComment: staff.input(z.object({ taskId: id, body: text(TASK_COMMENT_MAX).min(1, "Write your message first."), internal: z.boolean().optional() })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.engagementComment, `staff:${ctx.actor.id}`); return guarded(async () => staffTaskComment(await engagementDb(), ctx.actor, input)); }),
   /** The First edit or draft is shared (R78): as for the conversation, once it has arrived, once. */
   /** The reviewer's decision (R89): Received, or Ask for more with a note. The item's reviewer, or the lead. */
   reviewTask: staff.input(z.object({ taskId: id, decision: z.enum(["received", "more"]), note: optionalText(500) })).mutation(async ({ ctx, input }) => guarded(async () => reviewTask(await engagementDb(), ctx.actor, input))),

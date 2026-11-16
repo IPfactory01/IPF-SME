@@ -203,8 +203,13 @@ function TeamItemConversation({ task, engagementId, people }: { task: Task; enga
 
 export function ItemConversation({ task, engagementId, people = [], now = Date.now() }: { task: Task; engagementId: number; people?: { name: string }[]; now?: number }) {
   const refresh = useRefresh(engagementId);
-  const [open, setOpen] = useState(task.comments.length > 0 && task.comments[task.comments.length - 1]!.fromClient);
+  // The conversation with the client, and the team's notes on the item beside it (ET, 16 November 2026).
+  const withClient = task.comments.filter(comment => !comment.internal);
+  const notes = task.comments.filter(comment => comment.internal);
+  const [open, setOpen] = useState(withClient.length > 0 && withClient[withClient.length - 1]!.fromClient);
   const [body, setBody] = useState("");
+  const [note, setNote] = useState("");
+  const writeNote = trpc.engagement.staff.taskComment.useMutation({ onSuccess: result => { setNote(""); refresh(); toast.success(result.mentioned ? `Saved. ${result.mentioned === 1 ? "The person you tagged is" : "Everyone you tagged is"} emailed.` : "Saved for the team."); }, onError: error => toast.error(error.message) });
   const write = trpc.engagement.staff.taskComment.useMutation({ onSuccess: result => { setBody(""); refresh(); toast.success(result.emailed ? "Sent. The client is emailed." : "Saved."); }, onError: error => toast.error(error.message) });
   const share = trpc.engagement.staff.followUpShared.useMutation({ onSuccess: result => { refresh(); toast.success(result.emailed ? "Shared. The client is emailed that it is ready for their approval." : "Recorded as shared."); }, onError: error => toast.error(error.message) });
   if (task.side !== "client") return <TeamItemConversation task={task} engagementId={engagementId} people={people} />;
@@ -217,13 +222,13 @@ export function ItemConversation({ task, engagementId, people = [], now = Date.n
       </p>
       <Clock task={task} now={now} sharing={share.isPending} onShare={task.canAnswer ? () => share.mutate({ taskId: task.id }) : null} />
       <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" aria-expanded={open} onClick={() => setOpen(!open)}>
-        Conversation with the client ({task.comments.length})
+        Conversation with the client ({withClient.length})
       </button>
       {open && (
         <div className="space-y-2">
-          {task.comments.length === 0 && <p className="text-xs text-ink-muted">No messages yet. The client sees what you write here.</p>}
+          {withClient.length === 0 && <p className="text-xs text-ink-muted">No messages yet. The client sees what you write here.</p>}
           <ul className="space-y-1.5">
-            {task.comments.map(comment => (
+            {withClient.map(comment => (
               <li key={comment.id} className={`border-l-2 pl-2 text-sm ${comment.fromClient ? "border-brand" : "border-line"}`}>
                 <p className="text-xs text-ink-muted">{comment.authorName || (comment.fromClient ? "The client" : "IP Factory")}{comment.fromClient ? " (client)" : ""} · {formatDateTime(comment.createdAt)}</p>
                 <p className="whitespace-pre-line break-words text-ink"><Linked text={comment.body} /></p>
@@ -235,9 +240,29 @@ export function ItemConversation({ task, engagementId, people = [], now = Date.n
               <MentionBox id={`reply-${task.id}`} value={body} onChange={setBody} people={people} label={`Write to the client about ${task.title}`} placeholder="Write to the client. They are emailed. Type @ to tag a colleague." />
               <Button type="button" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={write.isPending || !body.trim()} onClick={() => write.mutate({ taskId: task.id, body })}>{write.isPending ? "Sending…" : "Send"}</Button>
             </div>
-          ) : <p className="text-xs text-ink-muted">{goesTo ? `${goesTo} or the lead answers here.` : "The lead answers here."}</p>}
+          ) : <p className="text-xs text-ink-muted">{goesTo ? `${goesTo} or the lead writes to the client. Leave a team note below.` : "The lead writes to the client. Leave a team note below."}</p>}
         </div>
       )}
+      {/* Team notes: anyone on the team, inside IP Factory only; the client never sees or hears of them. */}
+      <section aria-label={`Team notes on ${task.title}`} className="space-y-1.5 rounded-lg bg-paper-sunken p-2">
+        <p className="text-xs font-semibold text-ink">Team notes ({notes.length}) <span className="font-normal text-ink-muted">· inside IP Factory; the client never sees them</span></p>
+        {notes.length > 0 && (
+          <ul className="space-y-1.5">
+            {notes.map(comment => (
+              <li key={comment.id} className="border-l-2 border-line pl-2 text-sm">
+                <p className="text-xs text-ink-muted">{comment.authorName || "IP Factory"} · {formatDateTime(comment.createdAt)}</p>
+                <p className="whitespace-pre-line break-words text-ink"><Linked text={comment.body} /></p>
+              </li>
+            ))}
+          </ul>
+        )}
+        {task.status !== "cancelled" && (
+          <>
+            <MentionBox id={`note-${task.id}`} value={note} onChange={setNote} people={people} label={`Team note on ${task.title}`} placeholder="A note for the team. Type @ to tag a colleague." />
+            <Button type="button" size="sm" variant="outline" className={SMALL_BUTTON} disabled={writeNote.isPending || !note.trim()} onClick={() => writeNote.mutate({ taskId: task.id, body: note, internal: true })}>{writeNote.isPending ? "Saving…" : "Save note"}</Button>
+          </>
+        )}
+      </section>
     </div>
   );
 }

@@ -197,6 +197,13 @@
       "when": 1794648485359,
       "tag": "0027_task_work",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1794842542239,
+      "tag": "0028_team_notes",
+      "breakpoints": true
     }
   ]
 }

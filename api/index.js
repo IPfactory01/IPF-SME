@@ -2365,6 +2365,8 @@ var engagementTaskComments = pgTable("engagement_task_comments", {
   taskId: integer("taskId").notNull().references(() => engagementTasks.id, { onDelete: "cascade" }),
   authorUserId: integer("authorUserId").notNull().references(() => users.id),
   body: text("body").notNull(),
+  // A team note on a client's item (0028, ET 16 November 2026): IP Factory only, never shown or emailed to the client.
+  internal: boolean("internal").default(false).notNull(),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
 }, (table2) => [index("engagement_task_comments_task_idx").on(table2.taskId), index("engagement_task_comments_engagement_idx").on(table2.engagementId)]);
 var engagementReminders = pgTable("engagement_reminders", {
@@ -4775,6 +4777,13 @@ var journal_default = {
       version: "7",
       when: 1794648485359,
       tag: "0027_task_work",
+      breakpoints: true
+    },
+    {
+      idx: 28,
+      version: "7",
+      when: 1794842542239,
+      tag: "0028_team_notes",
       breakpoints: true
     }
   ]
@@ -12724,7 +12733,7 @@ async function todayFor(db, actor, now = Date.now()) {
       if (task.side === "ipf" && task.status === "received" && reviewerOfTask(crew, task) === actor.id) items.push({ key: `review-${task.id}`, taskId: task.id, kind: "review", engagementId: engagement.id, businessName, title: task.title, detail: `Handed in by ${crew.find((member) => member.userId === (task.assigneeUserId ?? task.createdByUserId))?.name ?? "a colleague"}: mark it done or ask for more`, at: task.updatedAt, late: false });
     }
     for (const task of own) {
-      const last = comments.filter((comment) => comment.taskId === task.id).at(-1);
+      const last = comments.filter((comment) => comment.taskId === task.id && !comment.internal).at(-1);
       if (last?.fromClient && goesToMe(task)) items.push({ key: `reply-${task.id}`, taskId: task.id, kind: "reply", engagementId: engagement.id, businessName, title: task.title, detail: `${last.authorName || "The client"}: ${last.body.length > 90 ? `${last.body.slice(0, 90)}\u2026` : last.body}`, at: last.createdAt, late: false });
       if (task.turnaround && task.followUpDueAt && !task.followUpDoneAt && goesToMe(task)) {
         const left = task.followUpDueAt.getTime() - now;
@@ -13355,10 +13364,12 @@ async function requireStaffClientItem(db, actor, taskId) {
 var clientVoiceRefusal = () => new TRPCError18({ code: "FORBIDDEN", message: "The person this item goes to, or the lead, writes to the client on it. Tag them with @ on a team item instead." });
 async function staffTaskComment(db, actor, input) {
   const { task, team, leads, own, others } = await requireStaffTask(db, actor, input.taskId);
-  if (task.side === "client" && !leads && !own) throw clientVoiceRefusal();
+  const note = task.side === "client" && input.internal === true;
+  if (task.side === "client" && !note && !leads && !own) throw clientVoiceRefusal();
   const body = input.body.trim();
-  await db.insert(engagementTaskComments).values({ engagementId: task.engagementId, taskId: task.id, authorUserId: actor.id, body });
-  const emailed = task.side === "client" ? await sendMessageEmails(db, { taskId: task.id, fromTeam: true, authorUserId: actor.id, body }) : await sendTeamItemEmails(db, { taskId: task.id, authorUserId: actor.id, body, to: ownersOfTask(team, task, others).length ? ownersOfTask(team, task, others) : [task.createdByUserId].filter((id3) => id3 !== null) });
+  await db.insert(engagementTaskComments).values({ engagementId: task.engagementId, taskId: task.id, authorUserId: actor.id, body, internal: note });
+  const owners = ownersOfTask(team, task, others).length ? ownersOfTask(team, task, others) : [task.createdByUserId].filter((id3) => id3 !== null);
+  const emailed = task.side === "client" && !note ? await sendMessageEmails(db, { taskId: task.id, fromTeam: true, authorUserId: actor.id, body }) : await sendTeamItemEmails(db, { taskId: task.id, authorUserId: actor.id, body, to: owners });
   const tagged = mentionedIn(body, team.map((member) => ({ userId: member.userId, name: member.name ?? "" }))).map((member) => member.userId).filter((id3) => id3 !== actor.id);
   const mentioned = tagged.length ? await sendMentionEmails(db, { taskId: task.id, authorUserId: actor.id, body, userIds: tagged }) : 0;
   return { success: true, emailed: emailed + mentioned, mentioned: tagged.length };
@@ -13396,16 +13407,17 @@ async function followUpShared(db, actor, input) {
   if (!shared) throw new TRPCError18({ code: "CONFLICT", message: `The ${label.toLowerCase()} is already shared.` });
   return { success: true, late, emailed: await sendReadyEmail(db, { taskId: task.id }) };
 }
-async function taskCommentsOf(db, engagementId) {
+async function taskCommentsOf(db, engagementId, options = {}) {
   const rows = await db.select({
     id: engagementTaskComments.id,
     taskId: engagementTaskComments.taskId,
     body: engagementTaskComments.body,
     createdAt: engagementTaskComments.createdAt,
+    internal: engagementTaskComments.internal,
     authorUserId: engagementTaskComments.authorUserId,
     authorName: users.name,
     membershipId: businessMemberships.id
-  }).from(engagementTaskComments).innerJoin(users, eq24(engagementTaskComments.authorUserId, users.id)).innerJoin(engagements, eq24(engagementTaskComments.engagementId, engagements.id)).leftJoin(businessMemberships, and16(eq24(businessMemberships.userId, engagementTaskComments.authorUserId), eq24(businessMemberships.businessId, engagements.businessId))).where(eq24(engagementTaskComments.engagementId, engagementId)).orderBy(asc7(engagementTaskComments.id));
+  }).from(engagementTaskComments).innerJoin(users, eq24(engagementTaskComments.authorUserId, users.id)).innerJoin(engagements, eq24(engagementTaskComments.engagementId, engagements.id)).leftJoin(businessMemberships, and16(eq24(businessMemberships.userId, engagementTaskComments.authorUserId), eq24(businessMemberships.businessId, engagements.businessId))).where(and16(eq24(engagementTaskComments.engagementId, engagementId), options.forClient ? eq24(engagementTaskComments.internal, false) : void 0)).orderBy(asc7(engagementTaskComments.id));
   return rows.map(({ membershipId, ...row }) => ({ ...row, authorName: row.authorName ?? "", fromClient: membershipId !== null }));
 }
 async function saveDeliverable(db, actor, input) {
@@ -13559,7 +13571,7 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
     checkinsOf(db, engagement.id),
     matchesOf(db, engagement.id)
   ]);
-  const [itemComments, askers] = await Promise.all([taskCommentsOf(db, engagement.id), namesOf2(db, tasks.map((task) => task.requestedByUserId))]);
+  const [itemComments, askers] = await Promise.all([taskCommentsOf(db, engagement.id, { forClient: true }), namesOf2(db, tasks.map((task) => task.requestedByUserId))]);
   const assigneeIds = Array.from(new Set(tasks.map((task) => task.assigneeUserId).filter((value) => value !== null)));
   const assigneeNames = new Map((assigneeIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray11(users.id, assigneeIds)) : []).map((row) => [row.id, row.name ?? ""]));
   const fullView = viewer.kind === "owner" || viewer.access === "full";
@@ -15263,7 +15275,7 @@ var staffRouter = router({
     turnaround: z15.enum(ENGAGEMENT_TASK_TURNAROUNDS).nullable()
   })).mutation(async ({ ctx, input }) => guarded(async () => askClient(await engagementDb(), ctx.actor, input))),
   /** Write in a client item's conversation (R78): manage_engagements, or the Specialist the item goes to. */
-  taskComment: staff.input(z15.object({ taskId: id, body: text3(TASK_COMMENT_MAX).min(1, "Write your message first.") })).mutation(async ({ ctx, input }) => {
+  taskComment: staff.input(z15.object({ taskId: id, body: text3(TASK_COMMENT_MAX).min(1, "Write your message first."), internal: z15.boolean().optional() })).mutation(async ({ ctx, input }) => {
     await enforceLimit(LIMITS.engagementComment, `staff:${ctx.actor.id}`);
     return guarded(async () => staffTaskComment(await engagementDb(), ctx.actor, input));
   }),

@@ -177,7 +177,7 @@ describe("the team's engagements", () => {
     fireEvent.click(screen.getByText("Ada Foods"));
     const plan = await screen.findByRole("heading", { name: "Work Plan" });
     const section = plan.closest("section")!;
-    const labels = within(section).getAllByLabelText(/price list|Bank statements|competitors/).map(card => card.getAttribute("aria-label"));
+    const labels = within(section).getAllByLabelText(/^(Your price list|Bank statements|Your three main competitors)/).map(card => card.getAttribute("aria-label"));
     expect(labels).toEqual(["Your price list", "Your three main competitors and what they charge", "Bank statements for the last 6 months"]);
     expect(section.textContent).toContain("Week 1");
     expect(section.textContent).toContain("Week 2");
@@ -812,6 +812,30 @@ describe("the team's workspace (R82)", () => {
       expect(details.getByLabelText(`Attach a file to task ${id}`)).toBeTruthy();
       expect(details.getByText(/IP Factory only|the lead shares it/i)).toBeTruthy();
     }
+  });
+
+  it("gives every client item Team notes for anyone on the team, while one voice writes to the client (ET, 16 November 2026)", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Analyst" }] };
+    api.detail = { ...detail({ manage: false, assign: false, review: false, contribute: true }, [], [
+      task({ id: 91, title: "Your price list", canAnswer: false, comments: [
+        { id: 1, body: "On our site", createdAt: new Date(), authorUserId: 50, authorName: "Ada Okafor", fromClient: true, internal: false },
+        { id: 2, body: "Checked: the prices are old", createdAt: new Date(), authorUserId: 2, authorName: "Lewis Lead", fromClient: false, internal: true },
+      ] }),
+    ]), team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Whose items" }), { target: { value: "everyone" } });
+    for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); }
+    fireEvent.click(screen.getByRole("button", { name: "Open Your price list" }));
+    const details = within(screen.getByRole("complementary", { name: "Task details" }));
+    expect(details.getByRole("button", { name: "Conversation with the client (1)" })).toBeTruthy();
+    const notes = within(details.getByRole("region", { name: "Team notes on Your price list" }));
+    expect(notes.getByText("Checked: the prices are old")).toBeTruthy();
+    fireEvent.change(notes.getByLabelText("Team note on Your price list"), { target: { value: "I will call them" } });
+    fireEvent.click(notes.getByRole("button", { name: "Save note" }));
+    expect(api.calls.taskComment.at(-1)).toEqual({ taskId: 91, body: "I will call them", internal: true });
   });
 
   it("opens the Work Plan on the items behind a Progress card, on everyone's, with Clear (ET, 16 November 2026)", async () => {

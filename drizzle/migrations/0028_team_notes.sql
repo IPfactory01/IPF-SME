@@ -1,0 +1,1 @@
+ALTER TABLE "engagement_task_comments" ADD COLUMN "internal" boolean DEFAULT false NOT NULL;

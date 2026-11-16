@@ -571,7 +571,8 @@ export async function todayFor(db: Database, actor: StaffActor, now = Date.now()
       if (task.side === "ipf" && task.status === "received" && reviewerOfTask(crew, task) === actor.id) items.push({ key: `review-${task.id}`, taskId: task.id, kind: "review", engagementId: engagement.id, businessName, title: task.title, detail: `Handed in by ${crew.find(member => member.userId === (task.assigneeUserId ?? task.createdByUserId))?.name ?? "a colleague"}: mark it done or ask for more`, at: task.updatedAt, late: false });
     }
     for (const task of own) {
-      const last = comments.filter(comment => comment.taskId === task.id).at(-1);
+      // The conversation with the client only: a team note after the client wrote does not answer them.
+      const last = comments.filter(comment => comment.taskId === task.id && !comment.internal).at(-1);
       if (last?.fromClient && goesToMe(task)) items.push({ key: `reply-${task.id}`, taskId: task.id, kind: "reply", engagementId: engagement.id, businessName, title: task.title, detail: `${last.authorName || "The client"}: ${last.body.length > 90 ? `${last.body.slice(0, 90)}…` : last.body}`, at: last.createdAt, late: false });
       if (task.turnaround && task.followUpDueAt && !task.followUpDoneAt && goesToMe(task)) {
         const left = task.followUpDueAt.getTime() - now;
@@ -1331,16 +1332,19 @@ async function requireStaffClientItem(db: Pick<Database, "select">, actor: Staff
 const clientVoiceRefusal = () => new TRPCError({ code: "FORBIDDEN", message: "The person this item goes to, or the lead, writes to the client on it. Tag them with @ on a team item instead." });
 
 /** The team writes in an item's conversation; the owner, and the person in the business it is for, are emailed. */
-export async function staffTaskComment(db: Database, actor: StaffActor, input: { taskId: number; body: string }) {
+export async function staffTaskComment(db: Database, actor: StaffActor, input: { taskId: number; body: string; internal?: boolean }) {
   const { task, team, leads, own, others } = await requireStaffTask(db, actor, input.taskId);
-  // Anyone on the team writes on a team item; on the client's item, its person or the lead (one voice to the client).
-  if (task.side === "client" && !leads && !own) throw clientVoiceRefusal();
+  // A team note on a client's item (ET, 16 November 2026): anyone on the team, inside IP Factory only.
+  const note = task.side === "client" && input.internal === true;
+  // Anyone on the team writes on a team item; to the client on their item, its person or the lead (one voice to the client).
+  if (task.side === "client" && !note && !leads && !own) throw clientVoiceRefusal();
   const body = input.body.trim();
-  await db.insert(engagementTaskComments).values({ engagementId: task.engagementId, taskId: task.id, authorUserId: actor.id, body });
-  // On the client's item the client hears; on a team item the conversation stays inside IP Factory, and its owner hears.
-  const emailed = task.side === "client"
+  await db.insert(engagementTaskComments).values({ engagementId: task.engagementId, taskId: task.id, authorUserId: actor.id, body, internal: note });
+  // On the client's item the client hears; a team note, or a team item, stays inside IP Factory, and its owners hear.
+  const owners = ownersOfTask(team, task, others).length ? ownersOfTask(team, task, others) : [task.createdByUserId].filter((id): id is number => id !== null);
+  const emailed = task.side === "client" && !note
     ? await sendMessageEmails(db, { taskId: task.id, fromTeam: true, authorUserId: actor.id, body })
-    : await sendTeamItemEmails(db, { taskId: task.id, authorUserId: actor.id, body, to: ownersOfTask(team, task, others).length ? ownersOfTask(team, task, others) : [task.createdByUserId].filter((id): id is number => id !== null) });
+    : await sendTeamItemEmails(db, { taskId: task.id, authorUserId: actor.id, body, to: owners });
   // Whoever is tagged (@name) is emailed too, once (R86).
   const tagged = mentionedIn(body, team.map(member => ({ userId: member.userId, name: member.name ?? "" }))).map(member => member.userId).filter(id => id !== actor.id);
   const mentioned = tagged.length ? await sendMentionEmails(db, { taskId: task.id, authorUserId: actor.id, body, userIds: tagged }) : 0;
@@ -1393,15 +1397,16 @@ export async function followUpShared(db: Database, actor: StaffActor, input: { t
 }
 
 /** The conversation on each of an engagement's items, oldest first, with who wrote and whether they are the client. */
-async function taskCommentsOf(db: Pick<Database, "select">, engagementId: number) {
+async function taskCommentsOf(db: Pick<Database, "select">, engagementId: number, options: { forClient?: boolean } = {}) {
   const rows = await db.select({
-    id: engagementTaskComments.id, taskId: engagementTaskComments.taskId, body: engagementTaskComments.body, createdAt: engagementTaskComments.createdAt,
+    id: engagementTaskComments.id, taskId: engagementTaskComments.taskId, body: engagementTaskComments.body, createdAt: engagementTaskComments.createdAt, internal: engagementTaskComments.internal,
     authorUserId: engagementTaskComments.authorUserId, authorName: users.name, membershipId: businessMemberships.id,
   }).from(engagementTaskComments)
     .innerJoin(users, eq(engagementTaskComments.authorUserId, users.id))
     .innerJoin(engagements, eq(engagementTaskComments.engagementId, engagements.id))
     .leftJoin(businessMemberships, and(eq(businessMemberships.userId, engagementTaskComments.authorUserId), eq(businessMemberships.businessId, engagements.businessId)))
-    .where(eq(engagementTaskComments.engagementId, engagementId)).orderBy(asc(engagementTaskComments.id));
+    // The client never reads a team note.
+    .where(and(eq(engagementTaskComments.engagementId, engagementId), options.forClient ? eq(engagementTaskComments.internal, false) : undefined)).orderBy(asc(engagementTaskComments.id));
   return rows.map(({ membershipId, ...row }) => ({ ...row, authorName: row.authorName ?? "", fromClient: membershipId !== null }));
 }
 
@@ -1624,7 +1629,7 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
     checkinsOf(db, engagement.id),
     matchesOf(db, engagement.id),
   ]);
-  const [itemComments, askers] = await Promise.all([taskCommentsOf(db, engagement.id), namesOf(db, tasks.map(task => task.requestedByUserId))]);
+  const [itemComments, askers] = await Promise.all([taskCommentsOf(db, engagement.id, { forClient: true }), namesOf(db, tasks.map(task => task.requestedByUserId))]);
   const assigneeIds = Array.from(new Set(tasks.map(task => task.assigneeUserId).filter((value): value is number => value !== null)));
   const assigneeNames = new Map((assigneeIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, assigneeIds)) : []).map(row => [row.id, row.name ?? ""]));
   const fullView = viewer.kind === "owner" || viewer.access === "full";

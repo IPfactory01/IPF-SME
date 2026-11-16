@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| A client's item shows the client first (the person, else the business) then the follow-up person; the reader's own initials are ringed; a key names everyone on the plan | ET, 16 November 2026 |
 | Associates and Senior Business Analysts tick off items on engagements they are on, never their own work and never owners, reviewer, kind or dates; who decided shows on the item and its owners are emailed (R97) | ET, 16 November 2026 |
 | After a successful sign-in the page asks the browser to offer to save the email and password, so only the two-step code is typed next time | ET, 16 November 2026 |
 | Home opens with tiles that filter Today (To do, Client wrote, To review, Mentioned); on a phone a Work Plan row is the title and one line of when and whose part (R96) | ET, 16 November 2026 |

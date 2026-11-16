@@ -250,6 +250,7 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
           <input type="search" aria-label={`Search the ${METHOD.workPlan}`} placeholder="Search by title or code" value={query} onChange={event => setQuery(event.target.value)}
             className="min-h-9 min-w-0 flex-1 rounded-md border border-line-soft bg-white px-3 text-sm text-ink placeholder:text-ink-muted sm:max-w-xs" />
         </div>
+        <PeopleKey data={data} />
         {/* Weekly cards (R85), as the client sees them, with each week's Sessions. */}
         <WeekCards startedOn={data.engagement.startedOn ?? null} items={shown} firstIf={item => item.status === "received" && roleOf(item, data.viewerUserId).reviews} sessions={query.trim() || (whose !== "everyone" && whose !== "tasks") ? [] : data.sessions} now={now}
           emptyText={query.trim() ? "Nothing matches. Try everyone's, or another word." : whose === "tasks" ? "No tasks of yours on the plan. Show everyone's to see the rest." : whose === "reviews" ? "Nothing on the plan for you to review." : "Nothing matches. Try everyone's, or another word."}
@@ -287,9 +288,8 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
                   </span>
                   <span className="hidden text-xs text-ink-muted sm:block">{[group.id === "checking" ? (item.side === "ipf" ? (data.can.seeAllTasks ? "Handed in: review it" : "Handed in, pending review") : (data.can.seeAllTasks ? "Sent by the client: review it" : "Sent, pending review")) : group.id === "done" ? "Completed" : group.name, item.kind === "data_request" ? METHOD.dataRequest : "Action", item.comments.length ? `${item.comments.length} ${item.comments.length === 1 ? "message" : "messages"}` : "", item.files.length ? `${item.files.length} ${item.files.length === 1 ? "file" : "files"}` : ""].filter(Boolean).join(" · ")}</span>
                 </span>
-                {item.owners.length > 0
-                  ? <span className="flex shrink-0">{item.owners.slice(0, 3).map(owner => <span key={owner.userId} title={owner.name} className={`-ml-1.5 flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-[11px] font-medium text-white first:ml-0 ${avatarColour(owner.name)}`}><span aria-hidden>{initials(owner.name)}</span><span className="sr-only">{owner.name}</span></span>)}</span>
-                  : <span title={who} className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-medium text-white ${avatarColour(who)}`}><span aria-hidden>{initials(who)}</span><span className="sr-only">{who}</span></span>}
+                {/* Who does it, then who follows it up (ET, 16 November 2026): on a client's item the client comes first. */}
+                <ItemPeople item={item} data={data} />
                 <span className={`hidden w-32 shrink-0 whitespace-nowrap text-right sm:block ${flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}`}>{flag?.text ?? ""}</span>
                 <span className="hidden w-20 shrink-0 whitespace-nowrap md:block">{item.priority ? <span className={`inline-flex items-center gap-1.5 ${item.priority === "high" ? "font-medium text-health-stuck" : "text-ink-muted"}`}><Flag className={`h-3.5 w-3.5 ${item.priority === "high" ? "fill-current" : ""}`} aria-hidden />{PRIORITY_WORDS[item.priority]}</span> : null}</span>
               </button>
@@ -432,6 +432,54 @@ function KindOfWork({ task, data, engagementId }: { task: Task; data: Detail; en
         {ENGAGEMENT_TASK_WORKS.map(kind => <option key={kind} value={kind}>{ENGAGEMENT_TASK_WORK_LABELS[kind]}</option>)}
       </select>
     </label>
+  );
+}
+
+/**
+ * Whose an item is, at a glance (ET, 16 November 2026). On a client's item: the client first (the person named on it, or
+ * the business's one person, else the business), then the team member who follows it up, smaller. On a team item: its
+ * owners. The reader's own initials are ringed and read "You"; every name shows on hover.
+ */
+function clientDoerOf(item: Task, data: Detail) {
+  const named = item.assigneeUserId !== null ? data.clientPeople.find(person => person.userId === item.assigneeUserId)?.name : undefined;
+  return named || (data.clientPeople.length === 1 ? data.clientPeople[0]!.name : data.businessName || "The client");
+}
+
+function Initials({ name, you, small = false }: { name: string; you: boolean; small?: boolean }) {
+  return (
+    <span title={you ? `${name} (you)` : name} className={`-ml-1.5 flex shrink-0 items-center justify-center rounded-full border-2 font-medium text-white first:ml-0 ${small ? "h-6 w-6 text-[10px]" : "h-7 w-7 text-[11px]"} ${you ? "border-brand ring-2 ring-brand/30" : "border-white"} ${avatarColour(name)}`}>
+      <span aria-hidden>{initials(name)}</span><span className="sr-only">{you ? `${name}, you` : name}</span>
+    </span>
+  );
+}
+
+function ItemPeople({ item, data }: { item: Task; data: Detail }) {
+  const owners = item.owners.slice(0, 3);
+  if (item.side === "client") {
+    const doer = clientDoerOf(item, data);
+    const follow = owners[0];
+    return (
+      <span className="flex shrink-0 items-center gap-1" title={follow ? `${doer} does it; ${follow.name} follows it up` : `${doer} does it`}>
+        <Initials name={doer} you={false} />
+        {follow && <><span aria-hidden className="text-[10px] text-ink-muted">·</span><Initials name={follow.name} you={follow.userId === data.viewerUserId} small /></>}
+      </span>
+    );
+  }
+  if (!owners.length) return <Initials name={item.ownerName || "No one yet"} you={false} />;
+  return <span className="flex shrink-0">{owners.map(owner => <Initials key={owner.userId} name={owner.name} you={owner.userId === data.viewerUserId} />)}</span>;
+}
+
+/** Who is who on the plan: each person's initials and name, the client's people too, the reader marked "you". */
+function PeopleKey({ data }: { data: Detail }) {
+  const people = [
+    ...data.clientPeople.map(person => ({ key: `c${person.userId}`, name: person.name, you: false, note: data.businessName || "Client" })),
+    ...data.team.filter(member => member.name).map(member => ({ key: `t${member.userId}`, name: member.name!, you: member.userId === data.viewerUserId, note: member.roleLabel })),
+  ];
+  if (!people.length) return null;
+  return (
+    <p aria-label="Who is who" className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
+      {people.map(person => <span key={person.key} className="inline-flex items-center gap-1.5"><span className={`font-semibold ${person.you ? "text-brand" : "text-ink"}`}>{initials(person.name)}</span>{person.name}{person.you ? " (you)" : ""}</span>)}
+    </p>
   );
 }
 

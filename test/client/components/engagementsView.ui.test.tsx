@@ -562,7 +562,9 @@ describe("the team's workspace (R82)", () => {
     expect(line.textContent).toContain("With the client");
     expect(line.textContent).toContain("Overdue by");
     expect(line.textContent).toContain("1 message");
-    expect(within(line).getByText("Ada Foods", { selector: ".sr-only" })).toBeTruthy();
+    // The client first: the business's one person, by name (ET, 16 November 2026).
+    expect(within(line).getByText("Ada Okafor", { selector: ".sr-only" })).toBeTruthy();
+    expect(page.getByLabelText("Who is who").textContent).toContain("Ada Okafor");
     expect(line.textContent).toContain("Data Request");
     expect(page.queryByRole("textbox", { name: "What" })).toBeNull();
     fireEvent.click(line);
@@ -733,6 +735,9 @@ describe("the team's workspace (R82)", () => {
     expect(whose.value).toBe("tasks");
     expect(titles()).toEqual(["Prepare shot lists and editing templates"]);
     expect(screen.getByRole("button", { name: "Open Prepare shot lists and editing templates" }).textContent).toContain("To do");
+    // Her own initials say so; the key names everyone, her marked "(you)".
+    expect(within(screen.getByRole("button", { name: "Open Prepare shot lists and editing templates" })).getByText("Kemi Producer, you", { selector: ".sr-only" })).toBeTruthy();
+    expect(screen.getByLabelText("Who is who").textContent).toContain("Kemi Producer (you)");
     // Only her own team item waits on her, not Lewis's.
     expect(screen.getByRole("switch", { name: /Waiting on you/ }).textContent).toContain("1");
     fireEvent.change(whose, { target: { value: "everyone" } });

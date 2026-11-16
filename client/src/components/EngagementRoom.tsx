@@ -1223,10 +1223,11 @@ function PlanView({ room, now }: { room: Room; now: number }) {
           }} />
       </div>
       {task && (
-        <aside aria-label="Task details" className="rounded-xl border border-line-soft bg-white p-5 lg:sticky lg:top-16 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:overscroll-contain">
+        // On a phone the item opens as a full screen over the list, not below every week (ET, 16 November 2026).
+        <aside aria-label="Task details" style={{ paddingTop: "max(1.25rem, env(safe-area-inset-top, 0px))" }} className="bg-white p-5 max-lg:fixed max-lg:inset-0 max-lg:z-50 max-lg:overflow-y-auto max-lg:overscroll-contain lg:sticky lg:top-16 lg:max-h-[calc(100vh-5rem)] lg:overflow-y-auto lg:overscroll-contain lg:rounded-xl lg:border lg:border-line-soft">
           <div className="flex items-start justify-between gap-3">
             <p className="text-xs text-ink-muted">{clientStatus(task)}</p>
-            <button type="button" onClick={() => setSelected(null)} className="text-xs text-brand underline underline-offset-2">Close</button>
+            <button type="button" onClick={() => setSelected(null)} className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-brand underline underline-offset-2 lg:min-h-0 lg:px-0 lg:text-xs lg:font-normal">Close</button>
           </div>
           <h3 className="mt-1 font-sans text-lg font-semibold tracking-tight">{task.title}</h3>
           <dl className="mt-3 grid grid-cols-[5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">

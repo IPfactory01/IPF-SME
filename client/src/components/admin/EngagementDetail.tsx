@@ -293,9 +293,11 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
           }} />
       </div>
       {task && (
-        <aside aria-label="Task details" className="space-y-3 rounded-xl border border-line-soft bg-white p-4 xl:sticky xl:top-16 xl:max-h-[calc(100vh-5rem)] xl:overflow-y-auto xl:overscroll-contain">
+        // On a phone or narrow tablet the panel is a full screen over the list, not below the whole Work Plan, where a tap
+        // seemed to do nothing (ET, 16 November 2026).
+        <aside aria-label="Task details" style={{ paddingTop: "max(1rem, env(safe-area-inset-top, 0px))" }} className="space-y-3 bg-white p-4 max-xl:fixed max-xl:inset-0 max-xl:z-50 max-xl:overflow-y-auto max-xl:overscroll-contain xl:sticky xl:top-16 xl:max-h-[calc(100vh-5rem)] xl:overflow-y-auto xl:overscroll-contain xl:rounded-xl xl:border xl:border-line-soft">
           <div className="flex justify-end">
-            <button type="button" onClick={() => setSelected(null)} className="text-xs text-brand underline underline-offset-2">Close</button>
+            <button type="button" onClick={() => setSelected(null)} className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-brand underline underline-offset-2 xl:min-h-0 xl:px-0 xl:text-xs xl:font-normal">Close</button>
           </div>
           {/* The lead changes an item; below the lead, a person reads it and works on it: files, messages, Ready for review (R86). */}
           {data.can.manage && data.can.seeAllTasks ? <ReviewItem key={task.id} task={task} data={data} engagementId={engagementId} now={now} /> : <OwnItem key={task.id} task={task} data={data} engagementId={engagementId} now={now} />}

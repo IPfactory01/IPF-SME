@@ -806,6 +806,8 @@ describe("the Plan, Meetings and Data requests views", () => {
     expect(panel.getByText("We need a bit more: the delivery prices too")).toBeTruthy();
     // A long item scrolls inside its panel (ET, 13 November 2026).
     expect(screen.getByRole("complementary", { name: "Task details" }).className).toMatch(/max-h-\[calc\(100vh-5rem\)\].*overflow-y-auto/);
+    // On a phone it opens as a full screen over the list (ET, 16 November 2026).
+    expect(screen.getByRole("complementary", { name: "Task details" }).className).toMatch(/max-lg:fixed max-lg:inset-0 max-lg:z-50/);
     expect(panel.getByRole("button", { name: "Submitted another way" })).toBeTruthy();
   });
 

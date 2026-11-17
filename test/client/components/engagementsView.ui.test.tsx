@@ -839,6 +839,27 @@ describe("the team's workspace (R82)", () => {
     expect(api.calls.taskComment.at(-1)).toEqual({ taskId: 91, body: "I will call them", internal: true });
   });
 
+  it("keeps items no longer needed off the plan until asked, labelled as such (ET, 17 November 2026)", () => {
+    api.seesAll = false;
+    api.list = { setUp: true, items: [{ ...row, myRole: "Analyst" }] };
+    api.detail = { ...detail({ manage: true, assign: false, review: true }, [], [
+      task({ id: 95, title: "Your price list" }),
+      task({ id: 96, title: "Run the paid test", side: "ipf", kind: "action", status: "cancelled", statusLabel: "No longer needed" }),
+    ]), team };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByRole("button", { name: "Open Ada Foods" }));
+    fireEvent.click(screen.getByRole("tab", { name: /^Work Plan/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Whose items" }), { target: { value: "everyone" } });
+    const open = () => { for (const week of screen.queryAllByRole("region", { name: /^(Week \d+|No week)$/ })) { const header = within(week).getAllByRole("button")[0]!; if (header.getAttribute("aria-expanded") === "false") fireEvent.click(header); } };
+    open();
+    expect(screen.queryByRole("button", { name: "Open Run the paid test" })).toBeNull();
+    expect(screen.getByText(/1 item no longer needed/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show them" }));
+    open();
+    expect(screen.getByRole("button", { name: "Open Run the paid test" }).textContent).toContain("No longer needed");
+    expect(screen.getByRole("button", { name: "Open Run the paid test" }).textContent).not.toContain("Completed");
+  });
+
   it("opens the Work Plan on the items behind a Progress card, on everyone's, with Clear (ET, 16 November 2026)", async () => {
     api.seesAll = false;
     api.list = { setUp: true, items: [{ ...row, myRole: "Analyst" }] };

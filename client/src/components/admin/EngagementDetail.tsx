@@ -240,7 +240,10 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
     if (slice) setWhose("everyone");
   }, [slice]);
   const today = lagosDay(new Date(now));
-  const shown = data.tasks.filter(item => item.id === selected || ((slice ? inSlice(item, slice, today) : matchesWhose(item, whose, data.viewerUserId)) && matchesSearch(item, query)));
+  // Items no longer needed stay on record but off the plan, until someone asks to see them (ET, 17 November 2026).
+  const [showRetired, setShowRetired] = useState(false);
+  const retired = data.tasks.filter(item => item.status === "cancelled").length;
+  const shown = data.tasks.filter(item => item.id === selected || ((showRetired || item.status !== "cancelled") && (slice ? inSlice(item, slice, today) : matchesWhose(item, whose, data.viewerUserId)) && matchesSearch(item, query)));
   const people = data.team.filter(member => member.name);
   const refresh = useRefresh(engagementId);
   const markHeld = trpc.engagement.staff.markHeld.useMutation({ ...refresh, onSuccess: (result) => { refresh.onSuccess(); toast.success(result.status === "held" ? "Marked held. Write the notes in Sessions." : "Taken off the plan. Book it again when you have a date."); } });
@@ -268,6 +271,9 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
           </p>
         )}
         <PeopleKey data={data} />
+        {retired > 0 && (
+          <p className="text-xs text-ink-muted">{retired} {retired === 1 ? "item" : "items"} no longer needed{showRetired ? ", shown struck through" : ""}. <button type="button" onClick={() => setShowRetired(value => !value)} className="font-medium text-brand underline underline-offset-2">{showRetired ? "Hide them" : "Show them"}</button></p>
+        )}
         {/* Weekly cards (R85), as the client sees them, with each week's Sessions. */}
         <WeekCards key={slice ? `slice-${slice.at}` : "plan"} openAll={Boolean(slice)} startedOn={data.engagement.startedOn ?? null} items={shown} firstIf={item => item.status === "received" && roleOf(item, data.viewerUserId).reviews} sessions={slice || query.trim() || (whose !== "everyone" && whose !== "tasks") ? [] : data.sessions} now={now}
           emptyText={query.trim() ? "Nothing matches. Try everyone's, or another word." : whose === "tasks" ? "No tasks of yours on the plan. Show everyone's to see the rest." : whose === "reviews" ? "Nothing on the plan for you to review." : "Nothing matches. Try everyone's, or another word."}
@@ -303,10 +309,10 @@ function PlanTable({ data, engagementId, now = Date.now() }: { data: Detail; eng
                   })()}</span>
                   {/* On a phone, one line under the title: when it is due and the reader's part (ET, 16 November 2026). */}
                   <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs sm:hidden">
-                    <span className={flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}>{flag?.text ?? (group.id === "done" ? "Completed" : "No date")}</span>
+                    <span className={flag ? FLAG_TONE[flag.tone] : "text-ink-muted"}>{flag?.text ?? (item.status === "cancelled" ? "No longer needed" : group.id === "done" ? "Completed" : "No date")}</span>
                     {(() => { const tag = group.id === "done" ? null : roleTag(item, data.viewerUserId); return tag && <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${tag.tone === "ready" ? "bg-highlight text-brand-deep" : tag.tone === "review" ? "border border-brand-plum text-brand-plum" : tag.tone === "follow" ? "border border-line text-ink-600" : "bg-brand-tint text-brand-deep"}`}>{tag.text}</span>; })()}
                   </span>
-                  <span className="hidden text-xs text-ink-muted sm:block">{[group.id === "checking" ? (item.side === "ipf" ? (data.can.seeAllTasks ? "Handed in: review it" : "Handed in, pending review") : (data.can.seeAllTasks ? "Sent by the client: review it" : "Sent, pending review")) : group.id === "done" ? "Completed" : group.name, item.kind === "data_request" ? METHOD.dataRequest : "Action", item.comments.length ? `${item.comments.length} ${item.comments.length === 1 ? "message" : "messages"}` : "", item.files.length ? `${item.files.length} ${item.files.length === 1 ? "file" : "files"}` : ""].filter(Boolean).join(" · ")}</span>
+                  <span className="hidden text-xs text-ink-muted sm:block">{[group.id === "checking" ? (item.side === "ipf" ? (data.can.seeAllTasks ? "Handed in: review it" : "Handed in, pending review") : (data.can.seeAllTasks ? "Sent by the client: review it" : "Sent, pending review")) : item.status === "cancelled" ? "No longer needed" : group.id === "done" ? "Completed" : group.name, item.kind === "data_request" ? METHOD.dataRequest : "Action", item.comments.length ? `${item.comments.length} ${item.comments.length === 1 ? "message" : "messages"}` : "", item.files.length ? `${item.files.length} ${item.files.length === 1 ? "file" : "files"}` : ""].filter(Boolean).join(" · ")}</span>
                 </span>
                 {/* Who does it, then who follows it up (ET, 16 November 2026): on a client's item the client comes first. */}
                 <ItemPeople item={item} data={data} />

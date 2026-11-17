@@ -8,6 +8,8 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| MCS counts against 26 Stories a month (its own target); the offer and other clients keep 20 | ET, 17 November 2026 |
+| MCS's import of the engagement manager's plan: our start (11 November) stands; post days stay as agreed with the client and fit our weeks; reviews follow the contract (weekly Check-ins in Month 1, then every two weeks, a review each month) on Fridays at 7 a.m. Arlington, Texas (2 p.m. Lagos); the Week 7 Check-in moves from Christmas Day to Wednesday 23 December; specialist payments are not part of the plan; no dependencies | ET, 17 November 2026 |
 | A paperclip in every item's message box; the team's Send a link removed (the client's stays, as it answers their item) | ET, 16 November 2026 |
 | Client items get Team notes for everyone; writing to the client stays one voice (the item's person or the lead) | ET, 16 November 2026 |
 | Every item takes files from whoever sees it; anyone but the lead attaches for IP Factory only, the lead shares | ET, 16 November 2026 |

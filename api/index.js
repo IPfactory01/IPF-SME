@@ -521,6 +521,13 @@ var DIGITAL_MARKETING = {
   ]
 };
 var DATED_TYPES = { digital_marketing: DIGITAL_MARKETING };
+function contentTargetsOf(type, own) {
+  const base2 = DATED_TYPES[type]?.monthly ?? [];
+  return base2.map((target) => {
+    const set = own?.find((item2) => item2.label === target.label);
+    return set && Number.isInteger(set.count) && set.count >= 0 && set.count <= 200 ? { label: target.label, count: set.count } : target;
+  });
+}
 function datedProgress(type, startedOn, now) {
   const start = (/* @__PURE__ */ new Date(`${startedOn}T00:00:00+01:00`)).getTime();
   const day = Math.max(0, Math.floor((now - start) / 864e5));
@@ -636,7 +643,7 @@ var feeTotal = (lines) => lines.reduce((sum2, line) => sum2 + line.amount, 0);
 
 // drizzle/schema.ts
 import { sql } from "drizzle-orm";
-import { boolean, check, date, index, integer, numeric, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { boolean, check, date, index, integer, jsonb, numeric, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 
 // shared/businessCheck/pipeline.ts
 var PIPELINE_STAGES = ["lead", "qualified_lead", "call_booked", "opportunity", "won", "lost", "nurture", "referred"];
@@ -2068,6 +2075,8 @@ var engagements = pgTable("engagements", {
   opensOnPayment: boolean("opensOnPayment").default(false).notNull(),
   /** Paid in arrears (0023, R74): each month's fee falls due 30 days after its month, from the kickoff (startedOn). */
   paidInArrears: boolean("paidInArrears").default(false).notNull(),
+  /** This engagement's own monthly content targets (0029, ET 17 November 2026), in place of its type's; null keeps the type's. */
+  contentTargets: jsonb("contentTargets").$type(),
   /** The confirmed Current State Assessment payment that started it. */
   paymentRequestId: integer("paymentRequestId").references(() => paymentRequests.id),
   stage: engagementsStageEnum("stage").default("setting_up").notNull(),
@@ -4784,6 +4793,13 @@ var journal_default = {
       version: "7",
       when: 1794842542239,
       tag: "0028_team_notes",
+      breakpoints: true
+    },
+    {
+      idx: 29,
+      version: "7",
+      when: 1794928841478,
+      tag: "0029_content_targets",
       breakpoints: true
     }
   ]
@@ -12873,6 +12889,7 @@ async function getStaffEngagement(db, actor, engagementId) {
   return {
     uploadsEnabled: isFileStorageConfigured(),
     engagement: { ...engagement, stageLabel: engagementStageLabel(engagement, Date.now()), typeLabel: engagementTitle(engagement.type, engagement.service) },
+    contentTargets: contentTargetsOf(engagement.type, engagement.contentTargets),
     owner: check2 ? { name: check2.fullName, email: check2.email, whatsapp: check2.whatsapp } : null,
     businessName: business?.name ?? check2?.businessName ?? check2?.fullName ?? "",
     hasAccount: business !== null,
@@ -13034,6 +13051,16 @@ async function reopenTask(db, actor, input) {
   await db.update(engagementTasks).set({ status: input.status, completedAt: null, ...arrivalFields(task, input.status, /* @__PURE__ */ new Date()) }).where(eq24(engagementTasks.id, task.id));
   await recordAudit(db, { action: "engagement_task_reopened", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, status: input.status } });
   return { success: true, status: input.status };
+}
+async function setContentTargets(db, actor, input) {
+  requireManage2(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  const kinds = (DATED_TYPES[engagement.type]?.monthly ?? []).map((target) => target.label);
+  if (!kinds.length) throw new TRPCError18({ code: "BAD_REQUEST", message: "Only a dated engagement has monthly content targets." });
+  if (input.targets && input.targets.some((target) => !kinds.includes(target.label))) throw new TRPCError18({ code: "BAD_REQUEST", message: `The targets are for ${kinds.join(", ")}.` });
+  await db.update(engagements).set({ contentTargets: input.targets }).where(eq24(engagements.id, engagement.id));
+  await recordAudit(db, { action: "engagement_content_targets_set", actorUserId: actor.id, details: { engagementId: engagement.id, targets: input.targets } });
+  return { success: true, targets: contentTargetsOf(engagement.type, input.targets) };
 }
 async function setTaskWork(db, actor, input) {
   const { task, leads } = await requireStaffTask(db, actor, input.taskId);
@@ -13601,7 +13628,7 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
     awaitingPayment: engagement.opensOnPayment,
     // The content board (Digital marketing): the owner and full-access staff see it and approve.
     content: fullView ? (await contentOf(db, engagement.id)).map(clientContent) : [],
-    contentTargets: DATED_TYPES[engagement.type]?.monthly ?? [],
+    contentTargets: contentTargetsOf(engagement.type, engagement.contentTargets),
     type: engagement.type,
     typeLabel: ENGAGEMENT_TYPE_LABELS[engagement.type],
     /** The service bought, for a service engagement, and the engagement's name for people. */
@@ -15282,6 +15309,8 @@ var staffRouter = router({
   /** The First edit or draft is shared (R78): as for the conversation, once it has arrived, once. */
   /** The reviewer's decision (R89): Received, or Ask for more with a note. The item's reviewer, or the lead. */
   reviewTask: staff.input(z15.object({ taskId: id, decision: z15.enum(["received", "more"]), note: optionalText2(500) })).mutation(async ({ ctx, input }) => guarded(async () => reviewTask(await engagementDb(), ctx.actor, input))),
+  /** An engagement's own monthly content targets (0029): the lead; null goes back to the type's. */
+  setContentTargets: staff.input(z15.object({ engagementId: id, targets: z15.array(z15.object({ label: z15.string().trim().min(1).max(40), count: z15.number().int().min(0).max(200) })).max(10).nullable() })).mutation(async ({ ctx, input }) => guarded(async () => setContentTargets(await engagementDb(), ctx.actor, input))),
   /** Undo a tick (ET, 16 November 2026): a completed item back as it was. Whoever may decide it. */
   reopenTask: staff.input(z15.object({ taskId: id, status: z15.enum(["open", "received", "needs_more"]) })).mutation(async ({ ctx, input }) => guarded(async () => reopenTask(await engagementDb(), ctx.actor, input))),
   /** Who reviews an item (R89), or null for the default. The lead. */

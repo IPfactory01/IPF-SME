@@ -69,7 +69,7 @@ import {
   isVideoFile,
 } from "../shared/engagement";
 import type { AccountSession, Database } from "./accountAuth";
-import { CONTENT_KIND_LABELS, CONTENT_STATUS_LABELS, DATED_TYPES, datedProgress, engagementTitle, engagementTypeOf, ENGAGEMENT_TYPE_LABELS, SERVICE_TYPES, serviceStarter, servicesFor, serviceStep, SERVICE_STEPS, STAGED_TYPES, type ContentKind, type ContentStatus, type DatedEngagementType, type EngagementType } from "../shared/engagementTypes";
+import { CONTENT_KIND_LABELS, CONTENT_STATUS_LABELS, contentTargetsOf, DATED_TYPES, datedProgress, engagementTitle, engagementTypeOf, ENGAGEMENT_TYPE_LABELS, SERVICE_TYPES, serviceStarter, servicesFor, serviceStep, SERVICE_STEPS, STAGED_TYPES, type ContentKind, type ContentStatus, type DatedEngagementType, type EngagementType } from "../shared/engagementTypes";
 import { PRODUCTS, secondHalf } from "../shared/products";
 import { inviteBusinessOwner } from "./accountInvitations";
 import { slugify } from "./accountAuth";
@@ -731,6 +731,7 @@ export async function getStaffEngagement(db: Database, actor: StaffActor, engage
   return {
     uploadsEnabled: isFileStorageConfigured(),
     engagement: { ...engagement, stageLabel: engagementStageLabel(engagement, Date.now()), typeLabel: engagementTitle(engagement.type, engagement.service) },
+    contentTargets: contentTargetsOf(engagement.type, engagement.contentTargets),
     owner: check ? { name: check.fullName, email: check.email, whatsapp: check.whatsapp } : null,
     businessName: business?.name ?? check?.businessName ?? check?.fullName ?? "",
     hasAccount: business !== null,
@@ -925,6 +926,21 @@ export async function reopenTask(db: Database, actor: StaffActor, input: { taskI
   await db.update(engagementTasks).set({ status: input.status, completedAt: null, ...arrivalFields(task, input.status, new Date()) }).where(eq(engagementTasks.id, task.id));
   await recordAudit(db, { action: "engagement_task_reopened", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, status: input.status } });
   return { success: true, status: input.status } as const;
+}
+
+/**
+ * An engagement's own monthly content targets (0029, ET 17 November 2026): the lead sets them where the plan schedules more
+ * than the type's offer (MCS: 26 Stories). Only the type's kinds; null goes back to the type's.
+ */
+export async function setContentTargets(db: Database, actor: StaffActor, input: { engagementId: number; targets: { label: string; count: number }[] | null }) {
+  requireManage(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  const kinds = (DATED_TYPES[engagement.type]?.monthly ?? []).map(target => target.label);
+  if (!kinds.length) throw new TRPCError({ code: "BAD_REQUEST", message: "Only a dated engagement has monthly content targets." });
+  if (input.targets && input.targets.some(target => !kinds.includes(target.label))) throw new TRPCError({ code: "BAD_REQUEST", message: `The targets are for ${kinds.join(", ")}.` });
+  await db.update(engagements).set({ contentTargets: input.targets }).where(eq(engagements.id, engagement.id));
+  await recordAudit(db, { action: "engagement_content_targets_set", actorUserId: actor.id, details: { engagementId: engagement.id, targets: input.targets } });
+  return { success: true, targets: contentTargetsOf(engagement.type, input.targets) } as const;
 }
 
 /**
@@ -1670,7 +1686,7 @@ async function buildClientRoom(db: Database, engagement: typeof engagements.$inf
     awaitingPayment: engagement.opensOnPayment,
     // The content board (Digital marketing): the owner and full-access staff see it and approve.
     content: fullView ? (await contentOf(db, engagement.id)).map(clientContent) : [],
-    contentTargets: DATED_TYPES[engagement.type]?.monthly ?? [],
+    contentTargets: contentTargetsOf(engagement.type, engagement.contentTargets),
     type: engagement.type,
     typeLabel: ENGAGEMENT_TYPE_LABELS[engagement.type],
     /** The service bought, for a service engagement, and the engagement's name for people. */

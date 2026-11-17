@@ -47,7 +47,7 @@ vi.mock("@/lib/trpc", () => ({
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         fees: { useQuery: () => ({ data: api.failed.fees ? undefined : api.fees, error: api.failed.fees ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("fees"); } }) },
-        ...Object.fromEntries(["handIn", "setOwners", "reviewTask", "reopenTask", "setReviewer", "setWork", "markHeld", "assignByRole", "start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "bookMeeting", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["handIn", "setOwners", "reviewTask", "reopenTask", "setContentTargets", "setReviewer", "setWork", "markHeld", "assignByRole", "start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "bookMeeting", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -64,6 +64,7 @@ const session = { id: 31, engagementId: 4, kind: "assessment_call", title: "Busi
 const deliverable = (over: Record<string, unknown>) => ({ id: 41, engagementId: 4, kind: "prescription", kindLabel: "Prescription", title: "Daily cash count", summary: "Count every evening.", status: "draft", audience: "owner", approvedByUserId: null, approvedAt: null, sharedByUserId: null, sharedAt: null, clientAcceptedByUserId: null, clientAcceptedAt: null, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date(), needsApproval: true, comments: [], files: [], ...over });
 const detail = (given: { manage: boolean; assign: boolean; review: boolean; sendSignIn?: boolean; contribute?: boolean; seeInternal?: boolean; seeFees?: boolean }, deliverables = [deliverable({})], tasks: unknown[] = []) => ({
   uploadsEnabled: true,
+  contentTargets: [] as { label: string; count: number }[],
   engagement: { id: 4, businessCheckId: 1, businessId: 7, paymentRequestId: 2, stage: "setting_up", stageLabel: "Getting set up", problemArea: null, subProblem: null, problemStatement: null, assessmentStartedAt: null, fixStartedAt: null, closedAt: null, createdAt: new Date(), updatedAt: new Date() },
   owner: { name: "Ada Okafor", email: "ada@example.test", whatsapp: "+234 800 000 0001" },
   businessName: "Ada Foods",
@@ -1126,6 +1127,23 @@ describe("a new engagement opened directly", () => {
 });
 
 describe("the content board on the team's side", () => {
+  it("lets the lead set this engagement's own monthly targets, such as 26 Stories (ET, 17 November 2026)", () => {
+    const base = detail({ manage: true, assign: false, review: false }, []);
+    api.detail = { ...base, contentTargets: [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }], engagement: { ...base.engagement, type: "digital_marketing" }, content: [] };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const form = within(within(screen.getByRole("dialog")).getByRole("form", { name: "Monthly content targets" }));
+    fireEvent.change(form.getByLabelText("Stories"), { target: { value: "26" } });
+    fireEvent.click(form.getByRole("button", { name: "Save targets" }));
+    expect(api.calls.setContentTargets.at(-1)).toEqual({ engagementId: 4, targets: [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 26 }] });
+    cleanup();
+    // Only the lead: no form for anyone who does not manage the engagement.
+    api.detail = { ...base, ...detail({ manage: false, assign: false, review: false }, []), contentTargets: [{ label: "Reels", count: 15 }], engagement: { ...base.engagement, type: "digital_marketing" }, content: [] };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    expect(within(screen.getByRole("dialog")).queryByRole("form", { name: "Monthly content targets" })).toBeNull();
+  });
+
   it("adds a reel to a Digital marketing engagement and shows the client's request for changes", () => {
     const base = detail({ manage: true, assign: false, review: false }, []);
     api.detail = { ...base, engagement: { ...base.engagement, type: "digital_marketing" }, content: [{ id: 7, engagementId: 4, kind: "reel", kindLabel: "Reel", title: "Reel 6", month: 1, status: "changes_requested", statusLabel: "Changes requested", dueOn: null, link: null, clientNote: "Shorter intro", approvedByUserId: null, approvedAt: null, publishedAt: null, sortOrder: 0, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() }] };

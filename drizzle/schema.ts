@@ -1,6 +1,6 @@
 import { AGREEMENT_STATUSES } from "../shared/agreement";
 import { sql } from "drizzle-orm";
-import { type AnyPgColumn, boolean, check, date, index, integer, numeric, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, boolean, check, date, index, integer, jsonb, numeric, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, varchar } from "drizzle-orm/pg-core";
 import { PIPELINE_STAGES } from "../shared/businessCheck/pipeline";
 import { PAYMENT_ITEMS, PAYMENT_STATUSES } from "../shared/payments";
 import { CONTENT_KINDS, CONTENT_STATUSES, ENGAGEMENT_TYPES } from "../shared/engagementTypes";
@@ -943,6 +943,8 @@ export const engagements = pgTable("engagements", {
   opensOnPayment: boolean("opensOnPayment").default(false).notNull(),
   /** Paid in arrears (0023, R74): each month's fee falls due 30 days after its month, from the kickoff (startedOn). */
   paidInArrears: boolean("paidInArrears").default(false).notNull(),
+  /** This engagement's own monthly content targets (0029, ET 17 November 2026), in place of its type's; null keeps the type's. */
+  contentTargets: jsonb("contentTargets").$type<{ label: string; count: number }[]>(),
   /** The confirmed Current State Assessment payment that started it. */
   paymentRequestId: integer("paymentRequestId").references(() => paymentRequests.id),
   stage: engagementsStageEnum("stage").default("setting_up").notNull(),

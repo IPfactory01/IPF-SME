@@ -88,6 +88,7 @@ import {
   setTaskOwners,
   reviewTask,
   reopenTask,
+  setContentTargets,
   setTaskReviewer,
   setTaskWork,
   todayFor,
@@ -272,6 +273,9 @@ const staffRouter = router({
   /** The First edit or draft is shared (R78): as for the conversation, once it has arrived, once. */
   /** The reviewer's decision (R89): Received, or Ask for more with a note. The item's reviewer, or the lead. */
   reviewTask: staff.input(z.object({ taskId: id, decision: z.enum(["received", "more"]), note: optionalText(500) })).mutation(async ({ ctx, input }) => guarded(async () => reviewTask(await engagementDb(), ctx.actor, input))),
+  /** An engagement's own monthly content targets (0029): the lead; null goes back to the type's. */
+  setContentTargets: staff.input(z.object({ engagementId: id, targets: z.array(z.object({ label: z.string().trim().min(1).max(40), count: z.number().int().min(0).max(200) })).max(10).nullable() }))
+    .mutation(async ({ ctx, input }) => guarded(async () => setContentTargets(await engagementDb(), ctx.actor, input))),
   /** Undo a tick (ET, 16 November 2026): a completed item back as it was. Whoever may decide it. */
   reopenTask: staff.input(z.object({ taskId: id, status: z.enum(["open", "received", "needs_more"]) })).mutation(async ({ ctx, input }) => guarded(async () => reopenTask(await engagementDb(), ctx.actor, input))),
   /** Who reviews an item (R89), or null for the default. The lead. */

@@ -101,7 +101,7 @@ for (const target of targets) {
       it("creates every column with the declared type, nullability and default", async () => {
         const rows = await harness.query(sql`select table_name, column_name, data_type, udt_name, is_nullable, column_default, is_identity, character_maximum_length from information_schema.columns where table_schema = current_schema()`);
         const byKey = new Map(rows.map(row => [`${row.table_name}.${row.column_name}`, row]));
-        const dataTypes: Record<string, string> = { PgInteger: "integer", PgVarchar: "character varying", PgText: "text", PgTimestamp: "timestamp with time zone", PgEnumColumn: "USER-DEFINED", PgBoolean: "boolean", PgDateString: "date", PgNumeric: "numeric" };
+        const dataTypes: Record<string, string> = { PgInteger: "integer", PgVarchar: "character varying", PgText: "text", PgTimestamp: "timestamp with time zone", PgEnumColumn: "USER-DEFINED", PgBoolean: "boolean", PgDateString: "date", PgNumeric: "numeric", PgJsonb: "jsonb" };
         for (const table of allTables) {
           const config = getTableConfig(table);
           for (const column of config.columns) {

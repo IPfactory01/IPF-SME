@@ -107,6 +107,18 @@ export const DIGITAL_MARKETING: DatedEngagementType = {
 
 export const DATED_TYPES: Partial<Record<EngagementType, DatedEngagementType>> = { digital_marketing: DIGITAL_MARKETING };
 
+/**
+ * An engagement's monthly content targets (0029, ET 17 November 2026): its own where the lead set them (MCS schedules 26
+ * Stories), else its type's. Only the type's own kinds count, so a stored value can never add one the board does not have.
+ */
+export function contentTargetsOf(type: EngagementType, own: readonly { label: string; count: number }[] | null | undefined) {
+  const base = DATED_TYPES[type]?.monthly ?? [];
+  return base.map(target => {
+    const set = own?.find(item => item.label === target.label);
+    return set && Number.isInteger(set.count) && set.count >= 0 && set.count <= 200 ? { label: target.label, count: set.count } : target;
+  });
+}
+
 /** Where a dated engagement stands on a given day: the day number and each stage's state. */
 export function datedProgress(type: DatedEngagementType, startedOn: string, now: number) {
   const start = new Date(`${startedOn}T00:00:00+01:00`).getTime();

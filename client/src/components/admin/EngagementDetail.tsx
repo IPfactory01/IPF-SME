@@ -674,7 +674,7 @@ function TeamProgress({ data, engagementId, now, onShow, onSessions }: { data: D
   const latest = [...(data.checkins as { measureReading: number | null }[])].reverse().find(row => row.measureReading !== null)?.measureReading ?? null;
   const measure = data.measure as { name: string; unit: string | null; baselineValue: number | null; targetValue: number | null } | null;
   return <ProgressView audience="team" onShow={onShow} onSessions={onSessions} progress={progressOf({
-    tasks: data.tasks, sessions: data.sessions, content: data.content, contentTargets: dated?.monthly ?? [], currentMonth,
+    tasks: data.tasks, sessions: data.sessions, content: data.content, contentTargets: data.contentTargets, currentMonth,
     fees: data.can.seeFees ? fees.data?.feeLines ?? null : null,
     measure: measure ? { name: measure.name, unit: measure.unit, baselineValue: measure.baselineValue, targetValue: measure.targetValue, latest } : null,
     startedOn: started, today: lagosDay(new Date(now)), now,
@@ -1104,11 +1104,34 @@ type ContentItem = Detail["content"][number];
  * The content board, for the team: each reel, post and story by month, moved through planned, in edit and for the
  * client's approval to published. The client approves or asks for changes in their room.
  */
+/**
+ * This engagement's monthly content targets (0029, ET 17 November 2026), for the lead: where its plan schedules more than
+ * the offer (MCS: 26 Stories). Progress and the content board count against them, for the client too.
+ */
+function ContentTargets({ data, engagementId }: { data: Detail; engagementId: number }) {
+  const refresh = useRefresh(engagementId);
+  const [counts, setCounts] = useState(() => Object.fromEntries(data.contentTargets.map(target => [target.label, String(target.count)])));
+  const save = trpc.engagement.staff.setContentTargets.useMutation({ ...refresh, onSuccess: () => { refresh.onSuccess(); toast.success("Monthly targets saved."); } });
+  const valid = data.contentTargets.every(target => /^\d{1,3}$/.test(counts[target.label] ?? ""));
+  return (
+    <form aria-label="Monthly content targets" className="flex flex-wrap items-end gap-3 rounded-lg border border-line-soft p-3" onSubmit={event => { event.preventDefault(); if (valid) save.mutate({ engagementId, targets: data.contentTargets.map(target => ({ label: target.label, count: Number(counts[target.label]) })) }); }}>
+      <p className="w-full text-xs font-semibold text-ink">Monthly targets <span className="font-normal text-ink-muted">· what Progress counts against, for you and the client</span></p>
+      {data.contentTargets.map(target => (
+        <label key={target.label} className="text-xs text-ink-muted">{target.label}
+          <input type="number" min={0} max={200} inputMode="numeric" className="mt-1 block w-20 border border-line bg-white px-2 py-1.5 text-sm text-ink" value={counts[target.label] ?? ""} onChange={event => setCounts(current => ({ ...current, [target.label]: event.target.value }))} />
+        </label>
+      ))}
+      <Button type="submit" size="sm" className={`${SMALL_BUTTON} bg-brand text-white`} disabled={save.isPending || !valid}>Save targets</Button>
+    </form>
+  );
+}
+
 function ContentAdmin({ data, engagementId }: { data: Detail; engagementId: number }) {
   const [adding, setAdding] = useState(false);
   const months = Array.from(new Set([1, 2, 3, ...data.content.map(item => item.month)])).sort((a, b) => a - b);
   return (
     <DetailSection title={`Content (${data.content.length})`}>
+      {data.can.manage && data.contentTargets.length > 0 && <ContentTargets data={data} engagementId={engagementId} />}
       <p className="text-xs text-ink-muted">Reels, posts and stories by month. Move a piece to For approval when the client should see it; it counts once they approve it. Nothing is published without their yes.</p>
       {months.map(month => {
         const items = data.content.filter(item => item.month === month);

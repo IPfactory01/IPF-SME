@@ -1577,6 +1577,17 @@ for (const target of targets) {
         // An analyst not on the engagement cannot touch it.
         const analyst = await signIn(await person(["analyst"]), true);
         await expect((await analyst.call()).engagement.staff.saveContent({ engagementId, kind: "story", title: "Nope", month: 1, status: "planned", dueOn: null, link: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+        // This engagement's own targets (0029, ET 17 November 2026): the lead sets 26 Stories; the client's room counts against
+        // them; only the type's kinds; a Business Review has none; an analyst off the engagement cannot; null goes back.
+        await admin.engagement.staff.setContentTargets({ engagementId, targets: [{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 26 }] });
+        expect((await (await owner.call()).engagement.client.room())!.contentTargets).toEqual([{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 26 }]);
+        expect((await admin.engagement.staff.detail({ engagementId })).contentTargets).toEqual([{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 26 }]);
+        await expect(admin.engagement.staff.setContentTargets({ engagementId, targets: [{ label: "Podcasts", count: 4 }] })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await expect(admin.engagement.staff.setContentTargets({ engagementId: other.engagementId, targets: null })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+        await expect((await analyst.call()).engagement.staff.setContentTargets({ engagementId, targets: null })).rejects.toMatchObject({ code: "NOT_FOUND" });
+        await admin.engagement.staff.setContentTargets({ engagementId, targets: null });
+        expect((await (await owner.call()).engagement.client.room())!.contentTargets).toEqual([{ label: "Reels", count: 15 }, { label: "Posts", count: 5 }, { label: "Stories", count: 20 }]);
       });
 
       it("puts an existing client account straight in as owner, refuses a staff email, and is the desk's call only", async () => {

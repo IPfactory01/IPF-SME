@@ -8,6 +8,7 @@ now the Business Review (₦600,000), and the JUMP programme views have been rem
 
 | Decision | Taken by |
 |---|---|
+| Familiar first: build on the gestures, steps and words people already use on WhatsApp, Drive, Gmail and ClickUp; depart only where it plainly serves the work, and record why. First applied: files open to look at before they download | ET, 17 November 2026 |
 | MCS's Work Plan follows the signed 90-day agreement: Collins's 38 removals are out of its scope and marked No longer needed; the Google Business Profile growth plan stays (section 4); the Month 2 review decision (section 9) and the three confirmations that the specialists were paid (section 6) are added, inside IP Factory | ET, 17 November 2026 |
 | MCS counts against 26 Stories a month (its own target); the offer and other clients keep 20 | ET, 17 November 2026 |
 | MCS's import of the engagement manager's plan: our start (11 November) stands; post days stay as agreed with the client and fit our weeks; reviews follow the contract (weekly Check-ins in Month 1, then every two weeks, a review each month) on Fridays at 7 a.m. Arlington, Texas (2 p.m. Lagos); the Week 7 Check-in moves from Christmas Day to Wednesday 23 December; specialist payments are not part of the plan; no dependencies | ET, 17 November 2026 |

@@ -67,7 +67,8 @@ import { DetailField, DetailSection } from "./AdminPrimitives";
 import DeliveryShareNote from "./DeliveryShareNote";
 import { combineDateAndTime, formatDate, formatDateTime, toDateInput, toTimeInput, whatsappLink } from "./format";
 import { FeeHoldNote } from "./FeeHoldBadge";
-import { ArrowLeft, Check, Flag } from "lucide-react";
+import { ArrowLeft, Check, Download, Flag } from "lucide-react";
+import { openInNewTab } from "@/lib/openFile";
 import RoomTabs, { type RoomTab } from "@/components/room/RoomTabs";
 import { avatarColour, dueFlag, FLAG_TONE, initials } from "@/components/EngagementRoom";
 import { METHOD } from "@shared/method";
@@ -876,7 +877,8 @@ function StaffFiles({ files, engagementId, target, canUpload, canManage, briefFo
             <li key={file.id} className="flex flex-wrap items-center gap-2">
               <span>{file.fileName}</span>
               <span className="text-xs text-ink-muted">{formatFileSize(file.sizeBytes)} · {file.uploadedByName || "unknown"} · {ENGAGEMENT_AUDIENCE_LABELS[file.audience].toLowerCase()}</span>
-              <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>Open</button>
+              <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => void openInNewTab(async () => (await link.mutateAsync({ fileId: file.id, mode: "view" })).url).catch(() => undefined)}>Open</button>
+              <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>Download</button>
               {canManage && file.audience === "team" && <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" disabled={shareFile.isPending} onClick={() => shareFile.mutate({ fileId: file.id, audience: "owner" })}>Share with the owner</button>}
               {canManage && <RemoveStaffFile fileId={file.id} fileName={file.fileName} engagementId={engagementId} />}
             </li>
@@ -1216,7 +1218,8 @@ function InboxRow({ file, data, engagementId }: { file: InboxFile; data: Detail;
   return (
     <div className="border border-line bg-paper-raised p-3" aria-label={file.fileName}>
       <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-        <button type="button" className="font-medium text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>{file.fileName}</button>
+        <button type="button" className="font-medium text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => void openInNewTab(async () => (await link.mutateAsync({ fileId: file.id, mode: "view" })).url).catch(() => undefined)}>{file.fileName}</button>
+        <button type="button" aria-label={`Download ${file.fileName}`} title="Download" className="text-ink-muted hover:text-brand" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}><Download className="h-3.5 w-3.5" aria-hidden /></button>
         <span className="text-xs text-ink-muted">{formatFileSize(file.sizeBytes)} · {file.uploadedByName ?? "The client"} · {formatDateTime(file.createdAt)}</span>
       </div>
       {file.note && <p className="mt-1 text-xs text-ink-600">“{file.note}”</p>}

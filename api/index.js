@@ -1387,6 +1387,8 @@ var UPLOAD_TYPES = {
   aac: ["audio/aac", "audio/x-aac", "audio/mp4"],
   wav: ["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"]
 };
+var VIEWABLE_EXTENSIONS = ["pdf", "jpg", "jpeg", "png", "webp", "txt", "m4a", "mp3", "ogg", "wav", "aac"];
+var opensInBrowser = (fileName2) => VIEWABLE_EXTENSIONS.includes(fileName2.toLowerCase().split(".").pop() ?? "");
 var VIDEO_EXTENSIONS = ["mp4", "mov", "m4v", "avi", "mkv", "webm", "3gp", "wmv", "mts"];
 var isVideoFile = (fileName2) => VIDEO_EXTENSIONS.includes(fileName2.toLowerCase().split(".").pop() ?? "");
 function cleanResponseLink(value) {
@@ -3179,7 +3181,7 @@ async function deleteObject(key) {
   if (res.status === 400 && !await objectExists(key)) return;
   throw new Error(`Storage refused to remove the file (${res.status}).`);
 }
-async function signedDownloadUrl(key, fileName2, expiresInSeconds = 300) {
+async function signedDownloadUrl(key, fileName2, expiresInSeconds = 300, mode = "download") {
   requireConfigured();
   const res = await fetch(`${base()}/object/sign/${bucket()}/${encodeKey(key)}`, {
     method: "POST",
@@ -3190,6 +3192,7 @@ async function signedDownloadUrl(key, fileName2, expiresInSeconds = 300) {
   if (!res.ok) throw new Error(`Storage refused the link (${res.status}).`);
   const data = await res.json();
   const full = absolute(data.signedURL ?? data.signedUrl ?? "");
+  if (mode === "view" && opensInBrowser(fileName2)) return full;
   return `${full}${full.includes("?") ? "&" : "?"}download=${encodeURIComponent(fileName2)}`;
 }
 async function checkFileStorage() {
@@ -13920,7 +13923,7 @@ async function clientFileLink(db, session, input) {
     const deliverable = (await db.select().from(engagementDeliverables).where(eq24(engagementDeliverables.id, file.deliverableId)).limit(1))[0];
     if (!deliverable || deliverable.status !== "shared" || !clientCanSee(deliverable.audience, viewer)) throw notFound4();
   }
-  return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+  return { url: await signedDownloadUrl(file.storageKey, file.fileName, void 0, input.mode) };
 }
 async function contentOf(db, engagementId) {
   return db.select().from(engagementContentItems).where(eq24(engagementContentItems.engagementId, engagementId)).orderBy(asc7(engagementContentItems.month), asc7(engagementContentItems.sortOrder), asc7(engagementContentItems.id));
@@ -14159,7 +14162,7 @@ async function staffFileLink(db, actor, input) {
   const file = (await db.select().from(engagementFiles).where(eq24(engagementFiles.id, input.fileId)).limit(1))[0];
   if (!file) throw notFound4();
   await requireStaffEngagement(db, actor, file.engagementId);
-  return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+  return { url: await signedDownloadUrl(file.storageKey, file.fileName, void 0, input.mode) };
 }
 var asNumber = (value) => value === null ? null : Number(value);
 var asNumeric = (value) => value === null ? null : String(value);
@@ -15263,7 +15266,7 @@ var staffRouter = router({
     return guarded(async () => staffRequestUpload(await engagementDb(), ctx.actor, input));
   }),
   confirmUpload: staff.input(z15.object({ engagementId: id, target: uploadTarget, storageKey, audience: z15.enum(["team", "owner", "business"]), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => staffConfirmUpload(await engagementDb(), ctx.actor, input))),
-  fileLink: staff.input(z15.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
+  fileLink: staff.input(z15.object({ fileId: id, mode: z15.enum(["download", "view"]).optional() })).mutation(async ({ ctx, input }) => guarded(async () => staffFileLink(await engagementDb(), ctx.actor, input))),
   shareFile: staff.input(z15.object({ fileId: id, audience: sharedAudience })).mutation(async ({ ctx, input }) => guarded(async () => shareTeamFile(await engagementDb(), ctx.actor, input))),
   /** Remove any file on the engagement, with the reason recorded; the stored object is deleted (R61). */
   removeFile: staff.input(z15.object({ fileId: id, reason: z15.string().trim().min(3, "Say why the file is removed.").max(300) })).mutation(async ({ ctx, input }) => guarded(async () => staffRemoveFile(await engagementDb(), ctx.actor, input))),
@@ -15397,7 +15400,7 @@ var clientRouter = router({
     return guarded(async () => clientRequestUpload(await engagementDb(), ctx.account, input));
   }),
   confirmUpload: accountProcedure.input(z15.object({ taskId: id, storageKey, note: optionalText2(500), ...upload })).mutation(async ({ ctx, input }) => guarded(async () => clientConfirmUpload(await engagementDb(), ctx.account, input))),
-  fileLink: accountProcedure.input(z15.object({ fileId: id })).mutation(async ({ ctx, input }) => guarded(async () => clientFileLink(await engagementDb(), ctx.account, input))),
+  fileLink: accountProcedure.input(z15.object({ fileId: id, mode: z15.enum(["download", "view"]).optional() })).mutation(async ({ ctx, input }) => guarded(async () => clientFileLink(await engagementDb(), ctx.account, input))),
   /** The drop box: send any file without saying which request it answers; the team sorts it. */
   requestDrop: accountProcedure.input(z15.object({ ...upload, engagementId: id.nullish() })).mutation(async ({ ctx, input }) => {
     await enforceLimit(LIMITS.fileDrop, `account:${ctx.account.user.id}`);

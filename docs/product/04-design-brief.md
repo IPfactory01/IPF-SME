@@ -102,6 +102,12 @@ palette (`rose`, `red`, `amber`).
 
 ## 4. Layout and components
 
+**Familiar first (ET, 17 November 2026).** Build on what people already do every day on WhatsApp, Google Drive, Gmail
+and ClickUp: the same gestures, the same order of steps, the same words. A tap on a circle ticks it; a paperclip
+attaches; a file opens to look at before it downloads; back goes back. Only depart from a familiar pattern where it
+plainly serves the work, and say so in the decision log. A screen that needs explaining is a screen to change.
+
+
 - **Corners (ET, 9 November 2026): 8 px** (`rounded-lg`) on cards, panels, buttons, inputs and chips everywhere a client or
   visitor sees: the public site, the check, the room, account, sign-in and pay pages. Pills, avatars, dots and progress
   bars are round (`rounded-full`). The room, the home page and the pay pages (R72, 10 November 2026) are rounded; the

@@ -11,6 +11,7 @@ import { ASSESSMENT_DAYS, ASSESSMENT_WEEKS, FIX_WEEKS, FOLDER_HOSTS, formatFileS
 import { METHOD, METHOD_MEANING } from "@shared/method";
 import type { inferRouterOutputs } from "@trpc/server";
 import { ArrowRight, CalendarClock, CalendarDays, Check, ChevronDown, CircleDashed, CircleSlash, Download, FileText, Flag, House, LayoutGrid, ListChecks, Paperclip, UploadCloud } from "lucide-react";
+import { openInNewTab } from "@/lib/openFile";
 import BottomBar from "./room/BottomBar";
 import { useAppManifest } from "@/lib/appManifest";
 import React, { useEffect, useRef, useState } from "react";
@@ -889,6 +890,7 @@ function FileList({ files, canRemove }: { files: RoomFile[]; canRemove?: (file: 
           <Paperclip className="h-3.5 w-3.5 text-ink-muted" aria-hidden />
           <span>{file.fileName}</span>
           <span className="text-xs text-ink-muted">{formatFileSize(file.sizeBytes)}{file.fromTeam ? " · from your team at IP Factory" : file.mine ? " · you" : ""}</span>
+          {!preview && <button type="button" className="text-xs font-semibold text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => void openInNewTab(async () => (await link.mutateAsync({ fileId: file.id, mode: "view" })).url).catch(() => undefined)}>Open</button>}
           {!preview && <button type="button" className="inline-flex items-center gap-1 text-xs font-semibold text-brand underline underline-offset-2" disabled={link.isPending} onClick={() => link.mutateAsync({ fileId: file.id }).then(result => window.open(result.url, "_blank", "noopener"))}>
             <Download className="h-3.5 w-3.5" aria-hidden />Download
           </button>}

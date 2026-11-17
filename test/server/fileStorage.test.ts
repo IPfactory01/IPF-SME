@@ -74,6 +74,17 @@ describe("file storage (private Supabase bucket)", () => {
     expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: "POST", body: JSON.stringify({ expiresIn: 300 }) });
   });
 
+  it("opens a PDF, photo, text or voice note in the browser to look at first, and still downloads anything else (ET, 17 November 2026)", async () => {
+    configure();
+    vi.stubGlobal("fetch", vi.fn(async () => reply(true, { signedURL: "/object/sign/engagement-files/k?token=V" })));
+    expect(await signedDownloadUrl("k", "Sales 2026.pdf", 300, "view")).toBe("https://example-project.supabase.co/storage/v1/object/sign/engagement-files/k?token=V");
+    expect(await signedDownloadUrl("k", "logo.PNG", 300, "view")).not.toContain("download=");
+    // A browser cannot show Word or Excel, and nothing that could run in the page opens there: those download.
+    expect(await signedDownloadUrl("k", "prices.xlsx", 300, "view")).toContain("download=prices.xlsx");
+    expect(await signedDownloadUrl("k", "page.html", 300, "view")).toContain("download=page.html");
+    expect(await signedDownloadUrl("k", "a.pdf")).toContain("download=a.pdf");
+  });
+
   it("encodes each part of the key, never the slashes", async () => {
     configure();
     const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => reply(true, { token: "t" }));

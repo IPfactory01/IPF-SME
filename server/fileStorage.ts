@@ -1,4 +1,5 @@
 import { ENV } from "./_core/env";
+import { opensInBrowser } from "../shared/engagement";
 
 /**
  * Private file storage for the engagement room: a Supabase Storage bucket, reached with the service key over its
@@ -73,8 +74,11 @@ export async function deleteObject(key: string) {
   throw new Error(`Storage refused to remove the file (${res.status}).`);
 }
 
-/** A link that opens the file for a few minutes, as a download under its own name. */
-export async function signedDownloadUrl(key: string, fileName: string, expiresInSeconds = 300) {
+/**
+ * A link that opens the file for a few minutes: as a download under its own name, or, with `view`, in the browser's
+ * own viewer (ET, 17 November 2026). Only a file a browser shows safely opens in view; anything else still downloads.
+ */
+export async function signedDownloadUrl(key: string, fileName: string, expiresInSeconds = 300, mode: "download" | "view" = "download") {
   requireConfigured();
   const res = await fetch(`${base()}/object/sign/${bucket()}/${encodeKey(key)}`, {
     method: "POST",
@@ -85,6 +89,7 @@ export async function signedDownloadUrl(key: string, fileName: string, expiresIn
   if (!res.ok) throw new Error(`Storage refused the link (${res.status}).`);
   const data = (await res.json()) as { signedURL?: string; signedUrl?: string };
   const full = absolute(data.signedURL ?? data.signedUrl ?? "");
+  if (mode === "view" && opensInBrowser(fileName)) return full;
   return `${full}${full.includes("?") ? "&" : "?"}download=${encodeURIComponent(fileName)}`;
 }
 

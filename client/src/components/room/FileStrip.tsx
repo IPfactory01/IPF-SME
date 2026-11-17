@@ -1,5 +1,6 @@
 import { trpc } from "@/lib/trpc";
 import { FileText, Link2 } from "lucide-react";
+import { openInNewTab } from "@/lib/openFile";
 import React, { useEffect, useState } from "react";
 
 type StripFile = { id: number; fileName: string };
@@ -11,9 +12,10 @@ const SHOWN = 4;
  * named chips, the rest as "+N more" (all of them are in the item's panel). Opening one asks the server for a short-lived
  * link, as the panel does; nothing is public.
  */
-function Strip({ files, link, getLink, label }: { files: StripFile[]; link: string | null; getLink: (fileId: number) => Promise<string>; label: string }) {
+function Strip({ files, link, getLink, label }: { files: StripFile[]; link: string | null; getLink: (fileId: number, mode?: "view" | "download") => Promise<string>; label: string }) {
   if (!files.length && !link) return null;
-  const open = (fileId: number) => void getLink(fileId).then(url => window.open(url, "_blank", "noopener")).catch(() => undefined);
+  // A tap opens the file to look at (ET, 17 November 2026); the browser's own viewer offers the download.
+  const open = (fileId: number) => void openInNewTab(() => getLink(fileId, "view")).catch(() => undefined);
   return (
     <ul aria-label={label} className="mt-1.5 flex flex-wrap items-center gap-1.5">
       {files.slice(0, SHOWN).map(file => (
@@ -30,7 +32,7 @@ function Strip({ files, link, getLink, label }: { files: StripFile[]; link: stri
 }
 
 /** A picture's thumbnail, from a short-lived link fetched once it is on screen. */
-function Thumb({ file, getLink, onOpen }: { file: StripFile; getLink: (fileId: number) => Promise<string>; onOpen: () => void }) {
+function Thumb({ file, getLink, onOpen }: { file: StripFile; getLink: (fileId: number, mode?: "view" | "download") => Promise<string>; onOpen: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
@@ -49,11 +51,11 @@ function Thumb({ file, getLink, onOpen }: { file: StripFile; getLink: (fileId: n
 /** The strip in the client's room. */
 export function ClientFileStrip({ files, link }: { files: StripFile[]; link: string | null }) {
   const fileLink = trpc.engagement.client.fileLink.useMutation();
-  return <Strip files={files} link={link} label="Files shared so far" getLink={async fileId => (await fileLink.mutateAsync({ fileId })).url} />;
+  return <Strip files={files} link={link} label="Files shared so far" getLink={async (fileId, mode) => (await fileLink.mutateAsync({ fileId, mode })).url} />;
 }
 
 /** The strip in the team's workspace. */
 export function StaffFileStrip({ files, link }: { files: StripFile[]; link: string | null }) {
   const fileLink = trpc.engagement.staff.fileLink.useMutation();
-  return <Strip files={files} link={link} label="Files shared so far" getLink={async fileId => (await fileLink.mutateAsync({ fileId })).url} />;
+  return <Strip files={files} link={link} label="Files shared so far" getLink={async (fileId, mode) => (await fileLink.mutateAsync({ fileId, mode })).url} />;
 }

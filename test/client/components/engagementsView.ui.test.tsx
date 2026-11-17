@@ -401,9 +401,12 @@ describe("files on the team's side", () => {
     fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
     const card = within(within(screen.getByRole("dialog")).getByLabelText("Your price list"));
     expect(card.getByText(/117 KB · Ada Okafor · owner only/)).toBeTruthy();
+    // Open shows it first (ET, 17 November 2026); Download saves it.
     fireEvent.click(card.getByRole("button", { name: "Open" }));
+    await waitFor(() => expect(api.calls.fileLink).toEqual([{ fileId: 99, mode: "view" }]));
+    fireEvent.click(card.getByRole("button", { name: "Download" }));
     await waitFor(() => expect(open).toHaveBeenCalledWith(expect.stringContaining("download=sales.pdf"), "_blank", "noopener"));
-    expect(api.calls.fileLink).toEqual([{ fileId: 99 }]);
+    expect(api.calls.fileLink).toEqual([{ fileId: 99, mode: "view" }, { fileId: 99 }]);
     expect(card.getByLabelText("Attach a file to task 7")).toBeTruthy();
     vi.unstubAllGlobals();
   });

@@ -1969,7 +1969,7 @@ export async function clientConfirmUpload(db: Database, session: AccountSession,
 }
 
 /** A short-lived link to a file the client may see: their own upload, or one shared with them on a visible item. */
-export async function clientFileLink(db: Database, session: AccountSession, input: { fileId: number }) {
+export async function clientFileLink(db: Database, session: AccountSession, input: { fileId: number; mode?: "download" | "view" }) {
   requireUploads();
   const file = (await db.select().from(engagementFiles).where(eq(engagementFiles.id, input.fileId)).limit(1))[0];
   if (!file) throw notFound();
@@ -1982,7 +1982,7 @@ export async function clientFileLink(db: Database, session: AccountSession, inpu
     const deliverable = (await db.select().from(engagementDeliverables).where(eq(engagementDeliverables.id, file.deliverableId)).limit(1))[0];
     if (!deliverable || deliverable.status !== "shared" || !clientCanSee(deliverable.audience, viewer)) throw notFound();
   }
-  return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+  return { url: await signedDownloadUrl(file.storageKey, file.fileName, undefined, input.mode) };
 }
 
 // ---- The content board: reels, posts and stories, approved by the client before they go out ------------------------
@@ -2266,12 +2266,12 @@ export async function staffRemoveFile(db: Database, actor: StaffActor, input: { 
 }
 
 /** The team opens any file on an engagement in scope. */
-export async function staffFileLink(db: Database, actor: StaffActor, input: { fileId: number }) {
+export async function staffFileLink(db: Database, actor: StaffActor, input: { fileId: number; mode?: "download" | "view" }) {
   requireUploads();
   const file = (await db.select().from(engagementFiles).where(eq(engagementFiles.id, input.fileId)).limit(1))[0];
   if (!file) throw notFound();
   await requireStaffEngagement(db, actor, file.engagementId);
-  return { url: await signedDownloadUrl(file.storageKey, file.fileName) };
+  return { url: await signedDownloadUrl(file.storageKey, file.fileName, undefined, input.mode) };
 }
 
 // ---- The fix: the one number and the weekly check-in -----------------------------------------------------------------

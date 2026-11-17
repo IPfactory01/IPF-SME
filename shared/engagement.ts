@@ -280,6 +280,12 @@ export const UPLOAD_TYPES: Record<string, readonly string[]> = {
   aac: ["audio/aac", "audio/x-aac", "audio/mp4"],
   wav: ["audio/wav", "audio/x-wav", "audio/wave", "audio/vnd.wave"],
 };
+/**
+ * Files a browser shows in a tab (ET, 17 November 2026: open first, then choose to download): PDFs, photos, plain text
+ * and voice notes. Word, Excel and the rest always download; a browser cannot show them.
+ */
+export const VIEWABLE_EXTENSIONS = ["pdf", "jpg", "jpeg", "png", "webp", "txt", "m4a", "mp3", "ogg", "wav", "aac"] as const;
+export const opensInBrowser = (fileName: string) => (VIEWABLE_EXTENSIONS as readonly string[]).includes(fileName.toLowerCase().split(".").pop() ?? "");
 /** Video files: refused with a pointer to a link or WhatsApp, so footage never fills the store (R43, K10). */
 export const VIDEO_EXTENSIONS = ["mp4", "mov", "m4v", "avi", "mkv", "webm", "3gp", "wmv", "mts"] as const;
 export const isVideoFile = (fileName: string) => (VIDEO_EXTENSIONS as readonly string[]).includes(fileName.toLowerCase().split(".").pop() ?? "");

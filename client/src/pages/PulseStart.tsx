@@ -272,9 +272,9 @@ export default function PulseStart() {
                     <SelectTrigger id="pulse-country" className="w-full bg-paper-raised">
                       <SelectValue placeholder="Select country" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="border-line bg-paper-raised text-ink shadow-lg">
                       {countries.map((v) => (
-                        <SelectItem key={v} value={v}>{v}</SelectItem>
+                        <SelectItem key={v} value={v} className="focus:bg-brand-tint focus:text-brand-deep">{v}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -287,9 +287,9 @@ export default function PulseStart() {
                     <SelectTrigger id="pulse-industry" className="w-full bg-paper-raised">
                       <SelectValue placeholder="Select industry" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="border-line bg-paper-raised text-ink shadow-lg">
                       {industries.map((v) => (
-                        <SelectItem key={v} value={v}>{v}</SelectItem>
+                        <SelectItem key={v} value={v} className="focus:bg-brand-tint focus:text-brand-deep">{v}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -318,9 +318,9 @@ export default function PulseStart() {
                     <SelectTrigger id="pulse-size" className="w-full bg-paper-raised">
                       <SelectValue placeholder="Select size" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="border-line bg-paper-raised text-ink shadow-lg">
                       {employeeRanges.map((v) => (
-                        <SelectItem key={v} value={v}>{v}</SelectItem>
+                        <SelectItem key={v} value={v} className="focus:bg-brand-tint focus:text-brand-deep">{v}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

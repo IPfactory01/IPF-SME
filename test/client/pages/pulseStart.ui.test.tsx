@@ -1,6 +1,8 @@
 /** @vitest-environment jsdom */
 
 import React from "react";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Router } from "wouter";
@@ -46,5 +48,17 @@ describe("starting the Pulse", () => {
     fireEvent.change(email, { target: { value: "ngozi at gmail" } });
     fireEvent.blur(email);
     expect(screen.getByText("Please enter a valid email address.")).toBeTruthy();
+  });
+
+  it("gives every Pulse dropdown and dialog a solid background: The Shift has no template popover colour, so without one the list shows through the form", () => {
+    const files = [
+      ...["PulseStart.tsx", "PulseAssessment.tsx", "PulseResults.tsx"].map((name) => join("client/src/pages", name)),
+      ...readdirSync("client/src/components/pulse").map((name) => join("client/src/components/pulse", name)),
+    ];
+    const bare = files.flatMap((file) =>
+      Array.from(readFileSync(file, "utf8").matchAll(/<(SelectContent|AlertDialogContent|DialogContent|PopoverContent)\b[^>]*>/g))
+        .filter((match) => !/className="[^"]*\bbg-/.test(match[0]))
+        .map((match) => `${file}: ${match[0]}`));
+    expect(bare).toEqual([]);
   });
 });

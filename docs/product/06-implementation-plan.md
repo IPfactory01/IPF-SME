@@ -178,6 +178,18 @@ Each release is planned in full, like sections 3 and 4, before it starts.
 
 S is under a week, M one to two weeks, L more.
 
+## 5a. The AI & Workflow Readiness Pulse joins The Shift (ET, 20 November 2026)
+
+The Pulse was built separately on Manus, with no proper domain. It moves into The Shift at `/pulse`, its admin into
+The Shift's admin, and its existing respondents come across. Its code is in GitHub at IPfactory01/ipf-ai-pulse.
+
+| Batch | What | Migration | State |
+| --- | --- | --- | --- |
+| 1 | The scoring, pathway and question engine and the v1.0.0 question set, in `shared/pulse/`, with their tests | None | Built 20 November 2026 |
+| 2 | The Pulse's tables in PostgreSQL and the public Pulse at `/pulse` (start, questions, results, PDF report, emails) | 0030 | Next |
+| 3 | A Pulse section in The Shift's admin (respondents, results, leads, consent, question-set versions), its leads in the Pipeline, its paid next steps through Paystack and the ledger | Possibly 0031 | Planned |
+| 4 | The existing respondents imported from the Manus database by a guarded script kept out of the repository; then Manus is retired | None | Needs the export from Manus |
+
 ## 6. How each piece is delivered
 
 1. **In the documents first:** the requirement is in the PRD and the App flow before the code (rule 8).

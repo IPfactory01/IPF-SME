@@ -1,0 +1,1411 @@
+{
+  "assessment_version": "v1.0.0",
+  "effective_date": "2026-08-13",
+  "status": "draft",
+  "approved_by": "IPF Product Owner (Lewis Osako)",
+  "questions": [
+    {
+      "question_id": "S-01",
+      "section": "strategy",
+      "text": "How clearly has the organisation defined the business problem it wants AI or workflow improvement to solve?",
+      "required": true,
+      "display_order": 1,
+      "active": true,
+      "trigger": "GATE-02",
+      "options": [
+        {
+          "option_id": "S-01-0",
+          "label": "No defined problem",
+          "raw_score": 0,
+          "risk_trigger": "GATE-02"
+        },
+        {
+          "option_id": "S-01-1",
+          "label": "Broad ambition",
+          "raw_score": 1,
+          "risk_trigger": "GATE-02"
+        },
+        {
+          "option_id": "S-01-2",
+          "label": "Defined problem",
+          "raw_score": 2,
+          "risk_trigger": "GATE-02"
+        },
+        {
+          "option_id": "S-01-3",
+          "label": "Defined problem with measurable outcome",
+          "raw_score": 3,
+          "risk_trigger": "GATE-02"
+        },
+        {
+          "option_id": "S-01-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "GATE-02"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "S-02",
+      "section": "strategy",
+      "text": "Who is accountable for deciding and sponsoring AI or workflow-improvement work?",
+      "required": true,
+      "display_order": 2,
+      "active": true,
+      "trigger": "GATE-01",
+      "options": [
+        {
+          "option_id": "S-02-0",
+          "label": "No owner or unknown",
+          "raw_score": 0,
+          "risk_trigger": "GATE-01"
+        },
+        {
+          "option_id": "S-02-1",
+          "label": "Informal advocate",
+          "raw_score": 1,
+          "risk_trigger": "GATE-01"
+        },
+        {
+          "option_id": "S-02-2",
+          "label": "Named owner",
+          "raw_score": 2,
+          "risk_trigger": "GATE-01"
+        },
+        {
+          "option_id": "S-02-3",
+          "label": "Named executive sponsor with authority",
+          "raw_score": 3,
+          "risk_trigger": "GATE-01"
+        },
+        {
+          "option_id": "S-02-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "GATE-01"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "S-03",
+      "section": "strategy",
+      "text": "How are AI or workflow-improvement opportunities prioritised and funded?",
+      "required": true,
+      "display_order": 3,
+      "active": true,
+      "options": [
+        {
+          "option_id": "S-03-0",
+          "label": "Not prioritised",
+          "raw_score": 0
+        },
+        {
+          "option_id": "S-03-1",
+          "label": "Opportunistic",
+          "raw_score": 1
+        },
+        {
+          "option_id": "S-03-2",
+          "label": "Criteria and limited funding",
+          "raw_score": 2
+        },
+        {
+          "option_id": "S-03-3",
+          "label": "Portfolio with owners, funding and review",
+          "raw_score": 3
+        },
+        {
+          "option_id": "S-03-UNK",
+          "label": "I do not know",
+          "unknown_flag": true
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "P-01",
+      "section": "process",
+      "text": "How consistently are priority workflows documented and followed?",
+      "required": true,
+      "display_order": 1,
+      "active": true,
+      "trigger": "WF-ROUTE",
+      "options": [
+        {
+          "option_id": "P-01-0",
+          "label": "Undocumented",
+          "raw_score": 0,
+          "risk_trigger": "WF-ROUTE"
+        },
+        {
+          "option_id": "P-01-1",
+          "label": "Understood informally",
+          "raw_score": 1,
+          "risk_trigger": "WF-ROUTE"
+        },
+        {
+          "option_id": "P-01-2",
+          "label": "Documented in priority areas",
+          "raw_score": 2,
+          "risk_trigger": "WF-ROUTE"
+        },
+        {
+          "option_id": "P-01-3",
+          "label": "Documented, followed and reviewed",
+          "raw_score": 3,
+          "risk_trigger": "WF-ROUTE"
+        },
+        {
+          "option_id": "P-01-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "WF-ROUTE"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "P-02",
+      "section": "process",
+      "text": "How clearly are owners, handoffs, approvals and exceptions defined?",
+      "required": true,
+      "display_order": 2,
+      "active": true,
+      "trigger": "WF-ROUTE",
+      "options": [
+        {
+          "option_id": "P-02-0",
+          "label": "Unclear",
+          "raw_score": 0,
+          "risk_trigger": "WF-ROUTE"
+        },
+        {
+          "option_id": "P-02-1",
+          "label": "Person-dependent",
+          "raw_score": 1,
+          "risk_trigger": "WF-ROUTE"
+        },
+        {
+          "option_id": "P-02-2",
+          "label": "Mostly defined",
+          "raw_score": 2,
+          "risk_trigger": "WF-ROUTE"
+        },
+        {
+          "option_id": "P-02-3",
+          "label": "Consistently defined and controlled",
+          "raw_score": 3,
+          "risk_trigger": "WF-ROUTE"
+        },
+        {
+          "option_id": "P-02-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "WF-ROUTE"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "P-03",
+      "section": "process",
+      "text": "How well does the organisation measure workflow time, volume, error, rework or cost?",
+      "required": true,
+      "display_order": 3,
+      "active": true,
+      "options": [
+        {
+          "option_id": "P-03-0",
+          "label": "Not measured",
+          "raw_score": 0
+        },
+        {
+          "option_id": "P-03-1",
+          "label": "Estimates only",
+          "raw_score": 1
+        },
+        {
+          "option_id": "P-03-2",
+          "label": "Some measures",
+          "raw_score": 2
+        },
+        {
+          "option_id": "P-03-3",
+          "label": "Reliable baseline and regular review",
+          "raw_score": 3
+        },
+        {
+          "option_id": "P-03-UNK",
+          "label": "I do not know",
+          "unknown_flag": true
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "D-01",
+      "section": "data",
+      "text": "How available and digitised is the information required for priority workflows?",
+      "required": true,
+      "display_order": 1,
+      "active": true,
+      "trigger": "GATE-05",
+      "options": [
+        {
+          "option_id": "D-01-0",
+          "label": "Unavailable or mainly paper",
+          "raw_score": 0,
+          "risk_trigger": "GATE-05"
+        },
+        {
+          "option_id": "D-01-1",
+          "label": "Fragmented",
+          "raw_score": 1,
+          "risk_trigger": "GATE-05"
+        },
+        {
+          "option_id": "D-01-2",
+          "label": "Mostly digital and accessible",
+          "raw_score": 2,
+          "risk_trigger": "GATE-05"
+        },
+        {
+          "option_id": "D-01-3",
+          "label": "Governed and reliably accessible",
+          "raw_score": 3,
+          "risk_trigger": "GATE-05"
+        },
+        {
+          "option_id": "D-01-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "GATE-05"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "D-02",
+      "section": "data",
+      "text": "How consistently is data quality defined, checked and owned?",
+      "required": true,
+      "display_order": 2,
+      "active": true,
+      "options": [
+        {
+          "option_id": "D-02-0",
+          "label": "No checks or unknown",
+          "raw_score": 0
+        },
+        {
+          "option_id": "D-02-1",
+          "label": "Ad hoc checks",
+          "raw_score": 1
+        },
+        {
+          "option_id": "D-02-2",
+          "label": "Owners and checks in priority areas",
+          "raw_score": 2
+        },
+        {
+          "option_id": "D-02-3",
+          "label": "Measured quality and remediation",
+          "raw_score": 3
+        },
+        {
+          "option_id": "D-02-UNK",
+          "label": "I do not know",
+          "unknown_flag": true
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "D-03",
+      "section": "data",
+      "text": "How clearly does the organisation control permitted use, access, retention and sharing of data?",
+      "required": true,
+      "display_order": 3,
+      "active": true,
+      "trigger": "GOV-RISK",
+      "options": [
+        {
+          "option_id": "D-03-0",
+          "label": "No controls or unknown",
+          "raw_score": 0,
+          "risk_trigger": "GOV-RISK"
+        },
+        {
+          "option_id": "D-03-1",
+          "label": "Informal",
+          "raw_score": 1,
+          "risk_trigger": "GOV-RISK"
+        },
+        {
+          "option_id": "D-03-2",
+          "label": "Documented in priority areas",
+          "raw_score": 2,
+          "risk_trigger": "GOV-RISK"
+        },
+        {
+          "option_id": "D-03-3",
+          "label": "Operational, reviewed and evidenced",
+          "raw_score": 3,
+          "risk_trigger": "GOV-RISK"
+        },
+        {
+          "option_id": "D-03-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "GOV-RISK"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "T-01",
+      "section": "technology",
+      "text": "How well do core systems support priority workflows without repeated manual transfer?",
+      "required": true,
+      "display_order": 1,
+      "active": true,
+      "trigger": "AUTO-OPP",
+      "options": [
+        {
+          "option_id": "T-01-0",
+          "label": "Mainly disconnected/manual",
+          "raw_score": 0,
+          "risk_trigger": "AUTO-OPP"
+        },
+        {
+          "option_id": "T-01-1",
+          "label": "Limited support",
+          "raw_score": 1,
+          "risk_trigger": "AUTO-OPP"
+        },
+        {
+          "option_id": "T-01-2",
+          "label": "Core systems support most work",
+          "raw_score": 2,
+          "risk_trigger": "AUTO-OPP"
+        },
+        {
+          "option_id": "T-01-3",
+          "label": "Integrated and monitored",
+          "raw_score": 3,
+          "risk_trigger": "AUTO-OPP"
+        },
+        {
+          "option_id": "T-01-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "AUTO-OPP"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "T-02",
+      "section": "technology",
+      "text": "How mature are access control, backup, incident response and security review?",
+      "required": true,
+      "display_order": 2,
+      "active": true,
+      "trigger": "GATE-06",
+      "options": [
+        {
+          "option_id": "T-02-0",
+          "label": "Material gaps or unknown",
+          "raw_score": 0,
+          "risk_trigger": "GATE-06"
+        },
+        {
+          "option_id": "T-02-1",
+          "label": "Partial controls",
+          "raw_score": 1,
+          "risk_trigger": "GATE-06"
+        },
+        {
+          "option_id": "T-02-2",
+          "label": "Defined core controls",
+          "raw_score": 2,
+          "risk_trigger": "GATE-06"
+        },
+        {
+          "option_id": "T-02-3",
+          "label": "Tested and reviewed controls",
+          "raw_score": 3,
+          "risk_trigger": "GATE-06"
+        },
+        {
+          "option_id": "T-02-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "GATE-06"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "T-03",
+      "section": "technology",
+      "text": "How are AI and automation tools approved, configured and monitored?",
+      "required": true,
+      "display_order": 3,
+      "active": true,
+      "trigger": "GATE-03",
+      "options": [
+        {
+          "option_id": "T-03-0",
+          "label": "Uncontrolled or unknown",
+          "raw_score": 0,
+          "risk_trigger": "GATE-03"
+        },
+        {
+          "option_id": "T-03-1",
+          "label": "Individual choice",
+          "raw_score": 1,
+          "risk_trigger": "GATE-03"
+        },
+        {
+          "option_id": "T-03-2",
+          "label": "Approved tools and basic review",
+          "raw_score": 2,
+          "risk_trigger": "GATE-03"
+        },
+        {
+          "option_id": "T-03-3",
+          "label": "Formal vendor, access and monitoring controls",
+          "raw_score": 3,
+          "risk_trigger": "GATE-03"
+        },
+        {
+          "option_id": "T-03-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "GATE-03"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "PE-01",
+      "section": "people",
+      "text": "How capable are employees in using approved digital and AI tools for their roles?",
+      "required": true,
+      "display_order": 1,
+      "active": true,
+      "trigger": "CAP-ROUTE",
+      "options": [
+        {
+          "option_id": "PE-01-0",
+          "label": "No assessed capability",
+          "raw_score": 0,
+          "risk_trigger": "CAP-ROUTE"
+        },
+        {
+          "option_id": "PE-01-1",
+          "label": "A few confident users",
+          "raw_score": 1,
+          "risk_trigger": "CAP-ROUTE"
+        },
+        {
+          "option_id": "PE-01-2",
+          "label": "Priority roles trained",
+          "raw_score": 2,
+          "risk_trigger": "CAP-ROUTE"
+        },
+        {
+          "option_id": "PE-01-3",
+          "label": "Role-based capability measured and refreshed",
+          "raw_score": 3,
+          "risk_trigger": "CAP-ROUTE"
+        },
+        {
+          "option_id": "PE-01-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "CAP-ROUTE"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "PE-02",
+      "section": "people",
+      "text": "How clearly are change ownership, training and manager responsibilities defined?",
+      "required": true,
+      "display_order": 2,
+      "active": true,
+      "trigger": "CAP-ROUTE",
+      "options": [
+        {
+          "option_id": "PE-02-0",
+          "label": "Not defined",
+          "raw_score": 0,
+          "risk_trigger": "CAP-ROUTE"
+        },
+        {
+          "option_id": "PE-02-1",
+          "label": "Informal",
+          "raw_score": 1,
+          "risk_trigger": "CAP-ROUTE"
+        },
+        {
+          "option_id": "PE-02-2",
+          "label": "Defined for priority changes",
+          "raw_score": 2,
+          "risk_trigger": "CAP-ROUTE"
+        },
+        {
+          "option_id": "PE-02-3",
+          "label": "Consistently applied and reviewed",
+          "raw_score": 3,
+          "risk_trigger": "CAP-ROUTE"
+        },
+        {
+          "option_id": "PE-02-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "CAP-ROUTE"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "PE-03",
+      "section": "people",
+      "text": "How does the organisation monitor adoption, user feedback and workarounds?",
+      "required": true,
+      "display_order": 3,
+      "active": true,
+      "options": [
+        {
+          "option_id": "PE-03-0",
+          "label": "Not monitored",
+          "raw_score": 0
+        },
+        {
+          "option_id": "PE-03-1",
+          "label": "Anecdotal",
+          "raw_score": 1
+        },
+        {
+          "option_id": "PE-03-2",
+          "label": "Periodic measures",
+          "raw_score": 2
+        },
+        {
+          "option_id": "PE-03-3",
+          "label": "Measured with action and accountability",
+          "raw_score": 3
+        },
+        {
+          "option_id": "PE-03-UNK",
+          "label": "I do not know",
+          "unknown_flag": true
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "G-01",
+      "section": "governance",
+      "text": "What organisation-wide rules govern permitted and restricted AI use?",
+      "required": true,
+      "display_order": 1,
+      "active": true,
+      "trigger": "GATE-03",
+      "options": [
+        {
+          "option_id": "G-01-0",
+          "label": "No policy or unknown",
+          "raw_score": 0,
+          "risk_trigger": "GATE-03"
+        },
+        {
+          "option_id": "G-01-1",
+          "label": "Informal guidance",
+          "raw_score": 1,
+          "risk_trigger": "GATE-03"
+        },
+        {
+          "option_id": "G-01-2",
+          "label": "Documented policy",
+          "raw_score": 2,
+          "risk_trigger": "GATE-03"
+        },
+        {
+          "option_id": "G-01-3",
+          "label": "Policy embedded, reviewed and updated",
+          "raw_score": 3,
+          "risk_trigger": "GATE-03"
+        },
+        {
+          "option_id": "G-01-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "GATE-03"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "G-02",
+      "section": "governance",
+      "text": "How clearly are human review and accountability defined for AI-assisted work?",
+      "required": true,
+      "display_order": 2,
+      "active": true,
+      "trigger": "GATE-04",
+      "options": [
+        {
+          "option_id": "G-02-0",
+          "label": "Not defined",
+          "raw_score": 0,
+          "risk_trigger": "GATE-04"
+        },
+        {
+          "option_id": "G-02-1",
+          "label": "Left to individuals",
+          "raw_score": 1,
+          "risk_trigger": "GATE-04"
+        },
+        {
+          "option_id": "G-02-2",
+          "label": "Defined for material uses",
+          "raw_score": 2,
+          "risk_trigger": "GATE-04"
+        },
+        {
+          "option_id": "G-02-3",
+          "label": "Consistently applied and evidenced",
+          "raw_score": 3,
+          "risk_trigger": "GATE-04"
+        },
+        {
+          "option_id": "G-02-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "GATE-04"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "G-03",
+      "section": "governance",
+      "text": "How are AI use cases, incidents, exceptions and material changes recorded and escalated?",
+      "required": true,
+      "display_order": 3,
+      "active": true,
+      "options": [
+        {
+          "option_id": "G-03-0",
+          "label": "Not recorded",
+          "raw_score": 0
+        },
+        {
+          "option_id": "G-03-1",
+          "label": "Informal reporting",
+          "raw_score": 1
+        },
+        {
+          "option_id": "G-03-2",
+          "label": "Defined records and escalation",
+          "raw_score": 2
+        },
+        {
+          "option_id": "G-03-3",
+          "label": "Monitored, reviewed and improved",
+          "raw_score": 3
+        },
+        {
+          "option_id": "G-03-UNK",
+          "label": "I do not know",
+          "unknown_flag": true
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "O-01",
+      "section": "opportunity",
+      "text": "How much employee time is spent on repetitive, rules-based activities?",
+      "required": true,
+      "display_order": 1,
+      "active": true,
+      "trigger": "O-WFA",
+      "options": [
+        {
+          "option_id": "O-01-0",
+          "label": "Little",
+          "raw_score": 0,
+          "risk_trigger": "O-WFA"
+        },
+        {
+          "option_id": "O-01-1",
+          "label": "Occasional",
+          "raw_score": 1,
+          "risk_trigger": "O-WFA"
+        },
+        {
+          "option_id": "O-01-2",
+          "label": "Frequent",
+          "raw_score": 2,
+          "risk_trigger": "O-WFA"
+        },
+        {
+          "option_id": "O-01-3",
+          "label": "Material time or capacity constraint",
+          "raw_score": 3,
+          "risk_trigger": "O-WFA"
+        },
+        {
+          "option_id": "O-01-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "O-WFA"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "O-02",
+      "section": "opportunity",
+      "text": "How often is information manually transferred between spreadsheets, emails or disconnected systems?",
+      "required": true,
+      "display_order": 2,
+      "active": true,
+      "trigger": "O-WFA",
+      "options": [
+        {
+          "option_id": "O-02-0",
+          "label": "Rarely",
+          "raw_score": 0,
+          "risk_trigger": "O-WFA"
+        },
+        {
+          "option_id": "O-02-1",
+          "label": "Occasional",
+          "raw_score": 1,
+          "risk_trigger": "O-WFA"
+        },
+        {
+          "option_id": "O-02-2",
+          "label": "Frequent",
+          "raw_score": 2,
+          "risk_trigger": "O-WFA"
+        },
+        {
+          "option_id": "O-02-3",
+          "label": "Material delay or error source",
+          "raw_score": 3,
+          "risk_trigger": "O-WFA"
+        },
+        {
+          "option_id": "O-02-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "O-WFA"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "O-03",
+      "section": "opportunity",
+      "text": "How much time is spent searching, classifying, drafting, summarising or reviewing recurring information?",
+      "required": true,
+      "display_order": 3,
+      "active": true,
+      "trigger": "O-AEW",
+      "options": [
+        {
+          "option_id": "O-03-0",
+          "label": "Little",
+          "raw_score": 0,
+          "risk_trigger": "O-AEW"
+        },
+        {
+          "option_id": "O-03-1",
+          "label": "Occasional",
+          "raw_score": 1,
+          "risk_trigger": "O-AEW"
+        },
+        {
+          "option_id": "O-03-2",
+          "label": "Frequent",
+          "raw_score": 2,
+          "risk_trigger": "O-AEW"
+        },
+        {
+          "option_id": "O-03-3",
+          "label": "Material knowledge-work constraint",
+          "raw_score": 3,
+          "risk_trigger": "O-AEW"
+        },
+        {
+          "option_id": "O-03-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "O-AEW"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "O-04",
+      "section": "opportunity",
+      "text": "How widely are employees using public or unapproved AI tools for work?",
+      "required": true,
+      "display_order": 4,
+      "active": true,
+      "trigger": "O-AIG",
+      "options": [
+        {
+          "option_id": "O-04-0",
+          "label": "No known use",
+          "raw_score": 0,
+          "risk_trigger": "O-AIG"
+        },
+        {
+          "option_id": "O-04-1",
+          "label": "Isolated",
+          "raw_score": 1,
+          "risk_trigger": "O-AIG"
+        },
+        {
+          "option_id": "O-04-2",
+          "label": "Several teams",
+          "raw_score": 2,
+          "risk_trigger": "O-AIG"
+        },
+        {
+          "option_id": "O-04-3",
+          "label": "Widespread or unknown exposure",
+          "raw_score": 3,
+          "risk_trigger": "O-AIG"
+        },
+        {
+          "option_id": "O-04-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "O-AIG"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "O-05",
+      "section": "opportunity",
+      "text": "What is the status of existing AI or automation pilots?",
+      "required": true,
+      "display_order": 5,
+      "active": true,
+      "trigger": "O-DSR",
+      "options": [
+        {
+          "option_id": "O-05-0",
+          "label": "None",
+          "raw_score": 0,
+          "risk_trigger": "O-DSR"
+        },
+        {
+          "option_id": "O-05-1",
+          "label": "Ideas only",
+          "raw_score": 1,
+          "risk_trigger": "O-DSR"
+        },
+        {
+          "option_id": "O-05-2",
+          "label": "Pilots with limited evidence",
+          "raw_score": 2,
+          "risk_trigger": "O-DSR"
+        },
+        {
+          "option_id": "O-05-3",
+          "label": "Live use with measured outcomes",
+          "raw_score": 3,
+          "risk_trigger": "O-DSR"
+        },
+        {
+          "option_id": "O-05-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "O-DSR"
+        }
+      ],
+      "help_text": ""
+    },
+    {
+      "question_id": "O-06",
+      "section": "opportunity",
+      "text": "Is there a recurring workflow with measurable volume, delay, error, rework or control failure?",
+      "required": true,
+      "display_order": 6,
+      "active": true,
+      "trigger": "O-WFO",
+      "options": [
+        {
+          "option_id": "O-06-0",
+          "label": "None identified",
+          "raw_score": 0,
+          "risk_trigger": "O-WFO"
+        },
+        {
+          "option_id": "O-06-1",
+          "label": "Possible",
+          "raw_score": 1,
+          "risk_trigger": "O-WFO"
+        },
+        {
+          "option_id": "O-06-2",
+          "label": "Defined",
+          "raw_score": 2,
+          "risk_trigger": "O-WFO"
+        },
+        {
+          "option_id": "O-06-3",
+          "label": "Defined with baseline evidence",
+          "raw_score": 3,
+          "risk_trigger": "O-WFO"
+        },
+        {
+          "option_id": "O-06-UNK",
+          "label": "I do not know",
+          "unknown_flag": true,
+          "risk_trigger": "O-WFO"
+        }
+      ],
+      "help_text": ""
+    }
+  ],
+  "dimensions": [
+    {
+      "dimension_id": "strategy",
+      "name": "Strategy and value",
+      "weight": 0.15,
+      "question_ids": [
+        "S-01",
+        "S-02",
+        "S-03"
+      ],
+      "explanation": "How clearly the organisation has defined the problem, the owner and the way improvement work is chosen and funded."
+    },
+    {
+      "dimension_id": "process",
+      "name": "Process and workflow",
+      "weight": 0.2,
+      "question_ids": [
+        "P-01",
+        "P-02",
+        "P-03"
+      ],
+      "explanation": "Whether priority workflows are documented, who is responsible for each step, and whether time, volume, error or cost is measured."
+    },
+    {
+      "dimension_id": "data",
+      "name": "Data readiness",
+      "weight": 0.2,
+      "question_ids": [
+        "D-01",
+        "D-02",
+        "D-03"
+      ],
+      "explanation": "Whether the information needed for priority workflows is available and digital, whether its quality is checked and owned, and whether its use, access and sharing are controlled."
+    },
+    {
+      "dimension_id": "technology",
+      "name": "Technology and security",
+      "weight": 0.15,
+      "question_ids": [
+        "T-01",
+        "T-02",
+        "T-03"
+      ],
+      "explanation": "How well core systems support the work, how mature the security controls are, and how AI and automation tools are approved and monitored."
+    },
+    {
+      "dimension_id": "people",
+      "name": "People and adoption",
+      "weight": 0.15,
+      "question_ids": [
+        "PE-01",
+        "PE-02",
+        "PE-03"
+      ],
+      "explanation": "Whether employees can use the tools their roles require, whether change responsibility is defined, and whether adoption is monitored and acted on."
+    },
+    {
+      "dimension_id": "governance",
+      "name": "Governance and responsible AI",
+      "weight": 0.15,
+      "question_ids": [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      "explanation": "Whether the organisation has clear rules for AI use, defined human review and accountability, and a way to record and escalate AI-related events."
+    }
+  ],
+  "classifications": [
+    {
+      "minimum_score": 0,
+      "maximum_score": 29,
+      "label": "Foundations required",
+      "interpretation": "Material foundations must be addressed before an AI or automation pilot."
+    },
+    {
+      "minimum_score": 30,
+      "maximum_score": 49,
+      "label": "Emerging",
+      "interpretation": "Some foundations exist. The organisation should address priority gaps before a material deployment."
+    },
+    {
+      "minimum_score": 50,
+      "maximum_score": 69,
+      "label": "Pilot-ready",
+      "interpretation": "A narrow, controlled pilot may be considered after confirming critical risks and evidence."
+    },
+    {
+      "minimum_score": 70,
+      "maximum_score": 84,
+      "label": "Deployment-ready",
+      "interpretation": "Several foundations support structured implementation, subject to consultant validation."
+    },
+    {
+      "minimum_score": 85,
+      "maximum_score": 100,
+      "label": "Ready to scale selectively",
+      "interpretation": "The organisation reports mature foundations. Evidence and risk controls still require validation."
+    }
+  ],
+  "gates": [
+    {
+      "gate_id": "GATE-01",
+      "trigger_expression": "S-02 == 0",
+      "effect": "cap-emerging",
+      "risk_text": "No named sponsor or accountable owner for improvement work.",
+      "required_action": "Name an accountable owner with authority before an active implementation recommendation is made.",
+      "condition": ""
+    },
+    {
+      "gate_id": "GATE-02",
+      "trigger_expression": "S-01 == 0",
+      "effect": "route-workflow",
+      "risk_text": "No defined workflow problem or measurable outcome.",
+      "required_action": "Define the business problem and a measurable outcome before technology consideration.",
+      "condition": ""
+    },
+    {
+      "gate_id": "GATE-03",
+      "trigger_expression": "(T-03 == 0 OR G-01 == 0) AND AI-USE",
+      "effect": "high-governance-risk",
+      "risk_text": "Sensitive data may enter unapproved AI tools.",
+      "required_action": "Establish approved AI use and controls before deployment work.",
+      "condition": "AI-USE"
+    },
+    {
+      "gate_id": "GATE-04",
+      "trigger_expression": "G-02 == 0",
+      "effect": "no-wider-deployment",
+      "risk_text": "No human-review accountability for material outputs or decisions.",
+      "required_action": "Define human review and accountability before wider AI deployment is recommended.",
+      "condition": ""
+    },
+    {
+      "gate_id": "GATE-05",
+      "trigger_expression": "D-01 == 0",
+      "effect": "route-foundation",
+      "risk_text": "Core data is unavailable, non-digital or inaccessible.",
+      "required_action": "Route to data and workflow foundation actions before an AI pilot.",
+      "condition": ""
+    },
+    {
+      "gate_id": "GATE-06",
+      "trigger_expression": "T-02 == 0",
+      "effect": "security-review-required",
+      "risk_text": "Material access-control, security or resilience gap.",
+      "required_action": "Require a security review before integration or deployment.",
+      "condition": ""
+    }
+  ],
+  "routes": [
+    {
+      "route_id": "workflow-optimisation",
+      "label": "Workflow Optimisation",
+      "trigger_expression": "O-06 >= 2 OR (P-01 <= 1) OR (P-02 <= 1)",
+      "priority": 1,
+      "conflict_rule": "Gates first; then highest qualifying opportunity score."
+    },
+    {
+      "route_id": "workflow-automation",
+      "label": "Workflow Automation",
+      "trigger_expression": "O-01 >= 2 OR O-02 >= 2",
+      "priority": 2,
+      "conflict_rule": "Gates first; then highest qualifying opportunity score."
+    },
+    {
+      "route_id": "ai-enabled-workflow",
+      "label": "AI-enabled workflow solution",
+      "trigger_expression": "O-03 >= 2",
+      "priority": 2,
+      "conflict_rule": "Gates first; then highest qualifying opportunity score."
+    },
+    {
+      "route_id": "ai-governance-adoption",
+      "label": "AI Governance and Adoption",
+      "trigger_expression": "O-04 >= 2 OR GATE-03 OR G-01 <= 1 OR G-02 <= 1",
+      "priority": 1,
+      "conflict_rule": "Gates first; then highest qualifying opportunity score."
+    },
+    {
+      "route_id": "people-capability",
+      "label": "People and capability",
+      "trigger_expression": "(PE-01 <= 1 OR PE-02 <= 1) AND (O-01 <= 1 AND O-02 <= 1 AND O-03 <= 1)",
+      "priority": 2,
+      "conflict_rule": "Gates first; then highest qualifying opportunity score."
+    },
+    {
+      "route_id": "foundation-work",
+      "label": "Foundation work",
+      "trigger_expression": "overall_score < 30 OR (S-01 <= 1 AND S-02 <= 1 AND D-01 <= 1)",
+      "priority": 1,
+      "conflict_rule": "Gates first; then highest qualifying opportunity score."
+    }
+  ],
+  "recommendations": [
+    {
+      "recommendation_id": "REC-001",
+      "trigger": "S-01 <= 1",
+      "title": "Define the business problem",
+      "action": "State the specific business problem improvement work should solve, with one measurable outcome.",
+      "timeframe": "0-30 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-002",
+      "trigger": "S-02 == 0",
+      "title": "Name an accountable owner",
+      "action": "Assign a named owner with authority for AI and workflow-improvement decisions.",
+      "timeframe": "0-30 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-003",
+      "trigger": "P-01 <= 1",
+      "title": "Document priority workflows",
+      "action": "Document the two or three priority workflows end to end, including owners and handoffs.",
+      "timeframe": "31-60 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-004",
+      "trigger": "P-03 <= 1",
+      "title": "Start measuring the work",
+      "action": "Begin recording time, volume, error and rework for at least one priority workflow.",
+      "timeframe": "31-60 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-005",
+      "trigger": "D-01 <= 1",
+      "title": "Digitise core information",
+      "action": "Make the information required by priority workflows digital and accessible before piloting AI.",
+      "timeframe": "31-60 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-006",
+      "trigger": "D-03 <= 1",
+      "title": "Document data handling rules",
+      "action": "Write down who may use, access, retain and share the data involved in priority workflows.",
+      "timeframe": "31-60 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-007",
+      "trigger": "T-02 <= 1",
+      "title": "Review security fundamentals",
+      "action": "Review access control, backups and incident response before any integration or deployment work.",
+      "timeframe": "0-30 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-008",
+      "trigger": "T-03 <= 1 OR O-04 >= 2",
+      "title": "Control AI tool use",
+      "action": "Agree which AI tools are approved, for whom, with what data; restrict unapproved use.",
+      "timeframe": "0-30 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-009",
+      "trigger": "G-01 == 0",
+      "title": "Set AI use rules",
+      "action": "Publish organisation-wide rules for permitted and restricted AI use.",
+      "timeframe": "0-30 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-010",
+      "trigger": "G-02 == 0",
+      "title": "Define human review",
+      "action": "Define who reviews AI-assisted outputs and decisions, and for which material uses.",
+      "timeframe": "0-30 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-011",
+      "trigger": "G-03 <= 1",
+      "title": "Record and escalate AI events",
+      "action": "Establish a simple record of AI use cases, incidents and material changes, with an escalation route.",
+      "timeframe": "31-60 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-012",
+      "trigger": "PE-01 <= 1",
+      "title": "Assess role-based capability",
+      "action": "Assess what staff in priority roles need to use approved tools, and plan training accordingly.",
+      "timeframe": "61-90 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-013",
+      "trigger": "PE-03 <= 1",
+      "title": "Monitor adoption",
+      "action": "Track adoption, user feedback and workarounds for any tool in use, and act on findings.",
+      "timeframe": "61-90 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-014",
+      "trigger": "overall_score >= 50 AND NOT GATE-03 AND NOT GATE-04",
+      "title": "Consider a controlled pilot",
+      "action": "Discuss a narrow, controlled pilot of one priority workflow with an IPF diagnostic engagement.",
+      "timeframe": "61-90 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    },
+    {
+      "recommendation_id": "REC-015",
+      "trigger": "overall_score < 30",
+      "title": "Strengthen foundations first",
+      "action": "Focus the next 90 days on documentation, data availability and ownership before piloting AI.",
+      "timeframe": "0-30 days",
+      "status": "active",
+      "segment": null,
+      "pathway": null
+    }
+  ],
+  "controlled_lists": [
+    {
+      "field": "country",
+      "values": [
+        "Nigeria",
+        "Ghana",
+        "Kenya",
+        "South Africa",
+        "United Kingdom",
+        "United States"
+      ],
+      "default_value": "Nigeria"
+    },
+    {
+      "field": "industry",
+      "values": [
+        "Agriculture and agribusiness",
+        "Construction and real estate",
+        "Education and training",
+        "Financial services",
+        "Food and agriculture",
+        "Health and pharmaceuticals",
+        "Hospitality",
+        "Logistics and transport",
+        "Manufacturing",
+        "Professional and business services",
+        "Public sector",
+        "Retail and e-commerce",
+        "Technology and telecoms",
+        "Other (please specify)"
+      ]
+    },
+    {
+      "field": "employee_range",
+      "values": [
+        "1 to 10",
+        "11 to 50",
+        "51 to 200",
+        "201 to 500",
+        "500+"
+      ]
+    }
+  ],
+  "premium": {
+    "products": [
+      {
+        "key": "detailed-roadmaps",
+        "title": "Detailed 90-Day Roadmaps",
+        "tagline": "The complete build plan, dimension by dimension.",
+        "short_description": "A detailed, ordered roadmap for every readiness dimension the Pulse flagged, with the specific actions, sequencing and timeframes your business should follow before investing in AI tools.",
+        "price_naira": 15000,
+        "unlocks": [
+          "detailed_roadmaps"
+        ]
+      },
+      {
+        "key": "roi-projections",
+        "title": "Cost-Savings & ROI Projections",
+        "tagline": "What automation could be worth to your business.",
+        "short_description": "A Naira-denominated projection of hours saved per week, expected staff-cost recovery and annual savings, with a built-in error margin so you can frame the business case for automation.",
+        "price_naira": 25000,
+        "unlocks": [
+          "roi_projections"
+        ]
+      },
+      {
+        "key": "full-report",
+        "title": "Full Diagnosis Report",
+        "tagline": "Everything above, plus the complete branded report.",
+        "short_description": "A downloadable branded PDF containing your score, classification, dimension findings, the full 90-day plan, detailed roadmaps and ROI projections — ready to share with partners, advisers or management.",
+        "price_naira": 45000,
+        "unlocks": [
+          "detailed_roadmaps",
+          "roi_projections",
+          "full_pdf"
+        ]
+      }
+    ]
+  }
+}

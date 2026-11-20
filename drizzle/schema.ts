@@ -1430,3 +1430,88 @@ export const accountInvitations = pgTable("account_invitations", {
 }, table => [uniqueIndex("account_invitations_one_pending_per_email").on(sql`lower(${table.email})`).where(sql`${table.status} = 'pending'`)]);
 
 export type AccountInvitation = typeof accountInvitations.$inferSelect;
+
+/*
+ * The AI & Workflow Readiness Pulse (R107, migration 0030): the free check-up for AI and workflow readiness, moved from
+ * its Manus site to ipfactory.co/pulse. One row per attempt; the contact and the organisation's profile sit on the
+ * session (the Manus build kept them in separate tables and trusted a profile id from the browser). The method version
+ * is the bundled file shared/pulse/method-v1.0.0.json until the Pulse admin can publish new versions.
+ */
+export const pulseSessionsStatusEnum = pgEnum("pulse_sessions_status", ["draft", "completed", "expired"]);
+export const pulseLeadsKindEnum = pgEnum("pulse_leads_kind", ["consultation", "scope"]);
+
+export const pulseSessions = pgTable("pulse_sessions", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  /** The respondent's key to their draft and results (32 letters and digits, in the link). */
+  sessionId: varchar("sessionId", { length: 32 }).notNull().unique(),
+  /** Short invite code for links shared with colleagues (?ic=CODE). */
+  shortCode: varchar("shortCode", { length: 10 }).unique(),
+  assessmentVersion: varchar("assessmentVersion", { length: 32 }).notNull(),
+  status: pulseSessionsStatusEnum("status").default("draft").notNull(),
+  respondentName: varchar("respondentName", { length: 255 }).notNull(),
+  companyName: varchar("companyName", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  country: varchar("country", { length: 64 }),
+  industry: varchar("industry", { length: 128 }),
+  otherIndustry: varchar("otherIndustry", { length: 128 }),
+  employeeRange: varchar("employeeRange", { length: 32 }),
+  /** sessionId of the respondent whose invite link brought this one. */
+  referredBy: varchar("referredBy", { length: 32 }),
+  /** "shift" for a Pulse taken here; "manus" for one imported from the old site. */
+  source: varchar("source", { length: 16 }).default("shift").notNull(),
+  draftExpiry: timestamp("draftExpiry", { withTimezone: true }),
+  completedAt: timestamp("completedAt", { withTimezone: true }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [
+  index("pulse_sessions_created_idx").on(table.createdAt),
+  index("pulse_sessions_email_lower_idx").on(sql`lower(${table.email})`),
+]);
+
+/** One answer per question per session; a draft overwrites its own rows as the respondent goes. */
+export const pulseResponses = pgTable("pulse_responses", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  pulseSessionId: integer("pulseSessionId").notNull().references(() => pulseSessions.id, { onDelete: "cascade" }),
+  questionId: varchar("questionId", { length: 16 }).notNull(),
+  selectedOptionId: varchar("selectedOptionId", { length: 32 }),
+  isUnknown: boolean("isUnknown").default(false).notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [unique("pulse_responses_session_question_unique").on(table.pulseSessionId, table.questionId)]);
+
+/** The scored result, written once when the session completes. */
+export const pulseResults = pgTable("pulse_results", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  pulseSessionId: integer("pulseSessionId").notNull().unique().references(() => pulseSessions.id, { onDelete: "cascade" }),
+  assessmentVersion: varchar("assessmentVersion", { length: 32 }).notNull(),
+  overallScore: integer("overallScore").notNull(),
+  classification: varchar("classification", { length: 128 }).notNull(),
+  result: jsonb("result").notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+});
+
+/** Every privacy acknowledgement and marketing choice, kept as given (append only). */
+export const pulseConsents = pgTable("pulse_consents", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  pulseSessionId: integer("pulseSessionId").notNull().references(() => pulseSessions.id, { onDelete: "cascade" }),
+  privacyNoticeVersion: varchar("privacyNoticeVersion", { length: 16 }).notNull(),
+  marketingConsent: boolean("marketingConsent").default(false).notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+}, table => [index("pulse_consents_session_idx").on(table.pulseSessionId)]);
+
+/** Someone who asked IP Factory for more after a Pulse: a consultation or the scope and fee of the next step. */
+export const pulseLeads = pgTable("pulse_leads", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  /** Empty for a consultation asked for without a Pulse (imported from the old site). */
+  pulseSessionId: integer("pulseSessionId").references(() => pulseSessions.id, { onDelete: "set null" }),
+  kind: pulseLeadsKindEnum("kind").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  company: varchar("company", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  message: text("message"),
+  /** The next step the Pulse recommended when the request was made, e.g. its product name. */
+  recommended: varchar("recommended", { length: 192 }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+}, table => [index("pulse_leads_created_idx").on(table.createdAt)]);
+
+export type PulseSession = typeof pulseSessions.$inferSelect;

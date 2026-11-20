@@ -54,6 +54,18 @@ export const LIMITS = {
   engagementComment: { scope: "engagement_comment", max: 60, windowMs: HOUR },
   /** Invitation and sign-in-link sends initiated by one internal actor. */
   onboardingEmail: { scope: "onboarding_email", max: 10, windowMs: HOUR },
+  /** New Pulses (and restarts of expired ones) from one address, whatever email is typed. */
+  pulseStartIp: { scope: "pulse_start_ip", max: 20, windowMs: 15 * MINUTE },
+  /** New Pulses from one address and email. */
+  pulseStartEmail: { scope: "pulse_start_email", max: 5, windowMs: 15 * MINUTE },
+  /** Draft saves per Pulse (one per answer, with room for going back). */
+  pulseSave: { scope: "pulse_save", max: 300, windowMs: 15 * MINUTE },
+  /** Submissions per Pulse: each scores the answers and emails the office. */
+  pulseSubmit: { scope: "pulse_submit", max: 5, windowMs: HOUR },
+  /** Emailed copies of a Pulse result, per session. */
+  pulseReportEmail: { scope: "pulse_report_email", max: 3, windowMs: DAY },
+  /** Requests for the scope and fee, per Pulse: each emails the office. */
+  pulseLead: { scope: "pulse_lead", max: 3, windowMs: DAY },
 } as const satisfies Record<string, RateLimitRule>;
 
 const memory = new Map<string, { count: number; resetAt: number }>();

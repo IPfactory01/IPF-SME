@@ -127,6 +127,7 @@ export function fixtureRow(table: PgTable, overrides: Record<string, unknown> = 
       case "PgTimestamp": row[column.name] = new Date(); break;
       case "PgDateString": row[column.name] = "2026-01-01"; break;
       case "PgEnumColumn": row[column.name] = column.enumValues![0]; break;
+      case "PgJsonb": row[column.name] = { fixture: unique }; break;
       default: throw new Error(`fixtureRow: unsupported column type ${column.columnType} on ${column.name}`);
     }
   }

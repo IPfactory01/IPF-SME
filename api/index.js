@@ -2463,6 +2463,73 @@ var accountInvitations = pgTable("account_invitations", {
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
 }, (table2) => [uniqueIndex("account_invitations_one_pending_per_email").on(sql`lower(${table2.email})`).where(sql`${table2.status} = 'pending'`)]);
+var pulseSessionsStatusEnum = pgEnum("pulse_sessions_status", ["draft", "completed", "expired"]);
+var pulseLeadsKindEnum = pgEnum("pulse_leads_kind", ["consultation", "scope"]);
+var pulseSessions = pgTable("pulse_sessions", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  /** The respondent's key to their draft and results (32 letters and digits, in the link). */
+  sessionId: varchar("sessionId", { length: 32 }).notNull().unique(),
+  /** Short invite code for links shared with colleagues (?ic=CODE). */
+  shortCode: varchar("shortCode", { length: 10 }).unique(),
+  assessmentVersion: varchar("assessmentVersion", { length: 32 }).notNull(),
+  status: pulseSessionsStatusEnum("status").default("draft").notNull(),
+  respondentName: varchar("respondentName", { length: 255 }).notNull(),
+  companyName: varchar("companyName", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  country: varchar("country", { length: 64 }),
+  industry: varchar("industry", { length: 128 }),
+  otherIndustry: varchar("otherIndustry", { length: 128 }),
+  employeeRange: varchar("employeeRange", { length: 32 }),
+  /** sessionId of the respondent whose invite link brought this one. */
+  referredBy: varchar("referredBy", { length: 32 }),
+  /** "shift" for a Pulse taken here; "manus" for one imported from the old site. */
+  source: varchar("source", { length: 16 }).default("shift").notNull(),
+  draftExpiry: timestamp("draftExpiry", { withTimezone: true }),
+  completedAt: timestamp("completedAt", { withTimezone: true }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [
+  index("pulse_sessions_created_idx").on(table2.createdAt),
+  index("pulse_sessions_email_lower_idx").on(sql`lower(${table2.email})`)
+]);
+var pulseResponses = pgTable("pulse_responses", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  pulseSessionId: integer("pulseSessionId").notNull().references(() => pulseSessions.id, { onDelete: "cascade" }),
+  questionId: varchar("questionId", { length: 16 }).notNull(),
+  selectedOptionId: varchar("selectedOptionId", { length: 32 }),
+  isUnknown: boolean("isUnknown").default(false).notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [unique("pulse_responses_session_question_unique").on(table2.pulseSessionId, table2.questionId)]);
+var pulseResults = pgTable("pulse_results", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  pulseSessionId: integer("pulseSessionId").notNull().unique().references(() => pulseSessions.id, { onDelete: "cascade" }),
+  assessmentVersion: varchar("assessmentVersion", { length: 32 }).notNull(),
+  overallScore: integer("overallScore").notNull(),
+  classification: varchar("classification", { length: 128 }).notNull(),
+  result: jsonb("result").notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
+});
+var pulseConsents = pgTable("pulse_consents", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  pulseSessionId: integer("pulseSessionId").notNull().references(() => pulseSessions.id, { onDelete: "cascade" }),
+  privacyNoticeVersion: varchar("privacyNoticeVersion", { length: 16 }).notNull(),
+  marketingConsent: boolean("marketingConsent").default(false).notNull(),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
+}, (table2) => [index("pulse_consents_session_idx").on(table2.pulseSessionId)]);
+var pulseLeads = pgTable("pulse_leads", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  /** Empty for a consultation asked for without a Pulse (imported from the old site). */
+  pulseSessionId: integer("pulseSessionId").references(() => pulseSessions.id, { onDelete: "set null" }),
+  kind: pulseLeadsKindEnum("kind").notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  company: varchar("company", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }).notNull(),
+  message: text("message"),
+  /** The next step the Pulse recommended when the request was made, e.g. its product name. */
+  recommended: varchar("recommended", { length: 192 }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
+}, (table2) => [index("pulse_leads_created_idx").on(table2.createdAt)]);
 
 // server/_core/env.ts
 function originOf(value) {
@@ -3946,7 +4013,19 @@ var LIMITS = {
   /** Engagement-room comments from one actor. */
   engagementComment: { scope: "engagement_comment", max: 60, windowMs: HOUR },
   /** Invitation and sign-in-link sends initiated by one internal actor. */
-  onboardingEmail: { scope: "onboarding_email", max: 10, windowMs: HOUR }
+  onboardingEmail: { scope: "onboarding_email", max: 10, windowMs: HOUR },
+  /** New Pulses (and restarts of expired ones) from one address, whatever email is typed. */
+  pulseStartIp: { scope: "pulse_start_ip", max: 20, windowMs: 15 * MINUTE },
+  /** New Pulses from one address and email. */
+  pulseStartEmail: { scope: "pulse_start_email", max: 5, windowMs: 15 * MINUTE },
+  /** Draft saves per Pulse (one per answer, with room for going back). */
+  pulseSave: { scope: "pulse_save", max: 300, windowMs: 15 * MINUTE },
+  /** Submissions per Pulse: each scores the answers and emails the office. */
+  pulseSubmit: { scope: "pulse_submit", max: 5, windowMs: HOUR },
+  /** Emailed copies of a Pulse result, per session. */
+  pulseReportEmail: { scope: "pulse_report_email", max: 3, windowMs: DAY },
+  /** Requests for the scope and fee, per Pulse: each emails the office. */
+  pulseLead: { scope: "pulse_lead", max: 3, windowMs: DAY }
 };
 var memory = /* @__PURE__ */ new Map();
 var storeRetryAt = 0;
@@ -4803,6 +4882,13 @@ var journal_default = {
       version: "7",
       when: 1794928841478,
       tag: "0029_content_targets",
+      breakpoints: true
+    },
+    {
+      idx: 30,
+      version: "7",
+      when: 1795183362190,
+      tag: "0030_pulse",
       breakpoints: true
     }
   ]
@@ -15560,6 +15646,3338 @@ var onlinePaymentRouter = router({
   })
 });
 
+// server/routers/pulse.ts
+import { TRPCError as TRPCError31 } from "@trpc/server";
+import { randomInt } from "crypto";
+import { eq as eq30, sql as sql11 } from "drizzle-orm";
+import { z as z19 } from "zod";
+
+// shared/pulse/method-v1.0.0.json
+var method_v1_0_0_default = {
+  assessment_version: "v1.0.0",
+  effective_date: "2026-08-13",
+  status: "draft",
+  approved_by: "IPF Product Owner (Lewis Osako)",
+  questions: [
+    {
+      question_id: "S-01",
+      section: "strategy",
+      text: "How clearly has the organisation defined the business problem it wants AI or workflow improvement to solve?",
+      required: true,
+      display_order: 1,
+      active: true,
+      trigger: "GATE-02",
+      options: [
+        {
+          option_id: "S-01-0",
+          label: "No defined problem",
+          raw_score: 0,
+          risk_trigger: "GATE-02"
+        },
+        {
+          option_id: "S-01-1",
+          label: "Broad ambition",
+          raw_score: 1,
+          risk_trigger: "GATE-02"
+        },
+        {
+          option_id: "S-01-2",
+          label: "Defined problem",
+          raw_score: 2,
+          risk_trigger: "GATE-02"
+        },
+        {
+          option_id: "S-01-3",
+          label: "Defined problem with measurable outcome",
+          raw_score: 3,
+          risk_trigger: "GATE-02"
+        },
+        {
+          option_id: "S-01-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "GATE-02"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "S-02",
+      section: "strategy",
+      text: "Who is accountable for deciding and sponsoring AI or workflow-improvement work?",
+      required: true,
+      display_order: 2,
+      active: true,
+      trigger: "GATE-01",
+      options: [
+        {
+          option_id: "S-02-0",
+          label: "No owner or unknown",
+          raw_score: 0,
+          risk_trigger: "GATE-01"
+        },
+        {
+          option_id: "S-02-1",
+          label: "Informal advocate",
+          raw_score: 1,
+          risk_trigger: "GATE-01"
+        },
+        {
+          option_id: "S-02-2",
+          label: "Named owner",
+          raw_score: 2,
+          risk_trigger: "GATE-01"
+        },
+        {
+          option_id: "S-02-3",
+          label: "Named executive sponsor with authority",
+          raw_score: 3,
+          risk_trigger: "GATE-01"
+        },
+        {
+          option_id: "S-02-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "GATE-01"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "S-03",
+      section: "strategy",
+      text: "How are AI or workflow-improvement opportunities prioritised and funded?",
+      required: true,
+      display_order: 3,
+      active: true,
+      options: [
+        {
+          option_id: "S-03-0",
+          label: "Not prioritised",
+          raw_score: 0
+        },
+        {
+          option_id: "S-03-1",
+          label: "Opportunistic",
+          raw_score: 1
+        },
+        {
+          option_id: "S-03-2",
+          label: "Criteria and limited funding",
+          raw_score: 2
+        },
+        {
+          option_id: "S-03-3",
+          label: "Portfolio with owners, funding and review",
+          raw_score: 3
+        },
+        {
+          option_id: "S-03-UNK",
+          label: "I do not know",
+          unknown_flag: true
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "P-01",
+      section: "process",
+      text: "How consistently are priority workflows documented and followed?",
+      required: true,
+      display_order: 1,
+      active: true,
+      trigger: "WF-ROUTE",
+      options: [
+        {
+          option_id: "P-01-0",
+          label: "Undocumented",
+          raw_score: 0,
+          risk_trigger: "WF-ROUTE"
+        },
+        {
+          option_id: "P-01-1",
+          label: "Understood informally",
+          raw_score: 1,
+          risk_trigger: "WF-ROUTE"
+        },
+        {
+          option_id: "P-01-2",
+          label: "Documented in priority areas",
+          raw_score: 2,
+          risk_trigger: "WF-ROUTE"
+        },
+        {
+          option_id: "P-01-3",
+          label: "Documented, followed and reviewed",
+          raw_score: 3,
+          risk_trigger: "WF-ROUTE"
+        },
+        {
+          option_id: "P-01-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "WF-ROUTE"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "P-02",
+      section: "process",
+      text: "How clearly are owners, handoffs, approvals and exceptions defined?",
+      required: true,
+      display_order: 2,
+      active: true,
+      trigger: "WF-ROUTE",
+      options: [
+        {
+          option_id: "P-02-0",
+          label: "Unclear",
+          raw_score: 0,
+          risk_trigger: "WF-ROUTE"
+        },
+        {
+          option_id: "P-02-1",
+          label: "Person-dependent",
+          raw_score: 1,
+          risk_trigger: "WF-ROUTE"
+        },
+        {
+          option_id: "P-02-2",
+          label: "Mostly defined",
+          raw_score: 2,
+          risk_trigger: "WF-ROUTE"
+        },
+        {
+          option_id: "P-02-3",
+          label: "Consistently defined and controlled",
+          raw_score: 3,
+          risk_trigger: "WF-ROUTE"
+        },
+        {
+          option_id: "P-02-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "WF-ROUTE"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "P-03",
+      section: "process",
+      text: "How well does the organisation measure workflow time, volume, error, rework or cost?",
+      required: true,
+      display_order: 3,
+      active: true,
+      options: [
+        {
+          option_id: "P-03-0",
+          label: "Not measured",
+          raw_score: 0
+        },
+        {
+          option_id: "P-03-1",
+          label: "Estimates only",
+          raw_score: 1
+        },
+        {
+          option_id: "P-03-2",
+          label: "Some measures",
+          raw_score: 2
+        },
+        {
+          option_id: "P-03-3",
+          label: "Reliable baseline and regular review",
+          raw_score: 3
+        },
+        {
+          option_id: "P-03-UNK",
+          label: "I do not know",
+          unknown_flag: true
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "D-01",
+      section: "data",
+      text: "How available and digitised is the information required for priority workflows?",
+      required: true,
+      display_order: 1,
+      active: true,
+      trigger: "GATE-05",
+      options: [
+        {
+          option_id: "D-01-0",
+          label: "Unavailable or mainly paper",
+          raw_score: 0,
+          risk_trigger: "GATE-05"
+        },
+        {
+          option_id: "D-01-1",
+          label: "Fragmented",
+          raw_score: 1,
+          risk_trigger: "GATE-05"
+        },
+        {
+          option_id: "D-01-2",
+          label: "Mostly digital and accessible",
+          raw_score: 2,
+          risk_trigger: "GATE-05"
+        },
+        {
+          option_id: "D-01-3",
+          label: "Governed and reliably accessible",
+          raw_score: 3,
+          risk_trigger: "GATE-05"
+        },
+        {
+          option_id: "D-01-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "GATE-05"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "D-02",
+      section: "data",
+      text: "How consistently is data quality defined, checked and owned?",
+      required: true,
+      display_order: 2,
+      active: true,
+      options: [
+        {
+          option_id: "D-02-0",
+          label: "No checks or unknown",
+          raw_score: 0
+        },
+        {
+          option_id: "D-02-1",
+          label: "Ad hoc checks",
+          raw_score: 1
+        },
+        {
+          option_id: "D-02-2",
+          label: "Owners and checks in priority areas",
+          raw_score: 2
+        },
+        {
+          option_id: "D-02-3",
+          label: "Measured quality and remediation",
+          raw_score: 3
+        },
+        {
+          option_id: "D-02-UNK",
+          label: "I do not know",
+          unknown_flag: true
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "D-03",
+      section: "data",
+      text: "How clearly does the organisation control permitted use, access, retention and sharing of data?",
+      required: true,
+      display_order: 3,
+      active: true,
+      trigger: "GOV-RISK",
+      options: [
+        {
+          option_id: "D-03-0",
+          label: "No controls or unknown",
+          raw_score: 0,
+          risk_trigger: "GOV-RISK"
+        },
+        {
+          option_id: "D-03-1",
+          label: "Informal",
+          raw_score: 1,
+          risk_trigger: "GOV-RISK"
+        },
+        {
+          option_id: "D-03-2",
+          label: "Documented in priority areas",
+          raw_score: 2,
+          risk_trigger: "GOV-RISK"
+        },
+        {
+          option_id: "D-03-3",
+          label: "Operational, reviewed and evidenced",
+          raw_score: 3,
+          risk_trigger: "GOV-RISK"
+        },
+        {
+          option_id: "D-03-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "GOV-RISK"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "T-01",
+      section: "technology",
+      text: "How well do core systems support priority workflows without repeated manual transfer?",
+      required: true,
+      display_order: 1,
+      active: true,
+      trigger: "AUTO-OPP",
+      options: [
+        {
+          option_id: "T-01-0",
+          label: "Mainly disconnected/manual",
+          raw_score: 0,
+          risk_trigger: "AUTO-OPP"
+        },
+        {
+          option_id: "T-01-1",
+          label: "Limited support",
+          raw_score: 1,
+          risk_trigger: "AUTO-OPP"
+        },
+        {
+          option_id: "T-01-2",
+          label: "Core systems support most work",
+          raw_score: 2,
+          risk_trigger: "AUTO-OPP"
+        },
+        {
+          option_id: "T-01-3",
+          label: "Integrated and monitored",
+          raw_score: 3,
+          risk_trigger: "AUTO-OPP"
+        },
+        {
+          option_id: "T-01-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "AUTO-OPP"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "T-02",
+      section: "technology",
+      text: "How mature are access control, backup, incident response and security review?",
+      required: true,
+      display_order: 2,
+      active: true,
+      trigger: "GATE-06",
+      options: [
+        {
+          option_id: "T-02-0",
+          label: "Material gaps or unknown",
+          raw_score: 0,
+          risk_trigger: "GATE-06"
+        },
+        {
+          option_id: "T-02-1",
+          label: "Partial controls",
+          raw_score: 1,
+          risk_trigger: "GATE-06"
+        },
+        {
+          option_id: "T-02-2",
+          label: "Defined core controls",
+          raw_score: 2,
+          risk_trigger: "GATE-06"
+        },
+        {
+          option_id: "T-02-3",
+          label: "Tested and reviewed controls",
+          raw_score: 3,
+          risk_trigger: "GATE-06"
+        },
+        {
+          option_id: "T-02-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "GATE-06"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "T-03",
+      section: "technology",
+      text: "How are AI and automation tools approved, configured and monitored?",
+      required: true,
+      display_order: 3,
+      active: true,
+      trigger: "GATE-03",
+      options: [
+        {
+          option_id: "T-03-0",
+          label: "Uncontrolled or unknown",
+          raw_score: 0,
+          risk_trigger: "GATE-03"
+        },
+        {
+          option_id: "T-03-1",
+          label: "Individual choice",
+          raw_score: 1,
+          risk_trigger: "GATE-03"
+        },
+        {
+          option_id: "T-03-2",
+          label: "Approved tools and basic review",
+          raw_score: 2,
+          risk_trigger: "GATE-03"
+        },
+        {
+          option_id: "T-03-3",
+          label: "Formal vendor, access and monitoring controls",
+          raw_score: 3,
+          risk_trigger: "GATE-03"
+        },
+        {
+          option_id: "T-03-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "GATE-03"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "PE-01",
+      section: "people",
+      text: "How capable are employees in using approved digital and AI tools for their roles?",
+      required: true,
+      display_order: 1,
+      active: true,
+      trigger: "CAP-ROUTE",
+      options: [
+        {
+          option_id: "PE-01-0",
+          label: "No assessed capability",
+          raw_score: 0,
+          risk_trigger: "CAP-ROUTE"
+        },
+        {
+          option_id: "PE-01-1",
+          label: "A few confident users",
+          raw_score: 1,
+          risk_trigger: "CAP-ROUTE"
+        },
+        {
+          option_id: "PE-01-2",
+          label: "Priority roles trained",
+          raw_score: 2,
+          risk_trigger: "CAP-ROUTE"
+        },
+        {
+          option_id: "PE-01-3",
+          label: "Role-based capability measured and refreshed",
+          raw_score: 3,
+          risk_trigger: "CAP-ROUTE"
+        },
+        {
+          option_id: "PE-01-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "CAP-ROUTE"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "PE-02",
+      section: "people",
+      text: "How clearly are change ownership, training and manager responsibilities defined?",
+      required: true,
+      display_order: 2,
+      active: true,
+      trigger: "CAP-ROUTE",
+      options: [
+        {
+          option_id: "PE-02-0",
+          label: "Not defined",
+          raw_score: 0,
+          risk_trigger: "CAP-ROUTE"
+        },
+        {
+          option_id: "PE-02-1",
+          label: "Informal",
+          raw_score: 1,
+          risk_trigger: "CAP-ROUTE"
+        },
+        {
+          option_id: "PE-02-2",
+          label: "Defined for priority changes",
+          raw_score: 2,
+          risk_trigger: "CAP-ROUTE"
+        },
+        {
+          option_id: "PE-02-3",
+          label: "Consistently applied and reviewed",
+          raw_score: 3,
+          risk_trigger: "CAP-ROUTE"
+        },
+        {
+          option_id: "PE-02-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "CAP-ROUTE"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "PE-03",
+      section: "people",
+      text: "How does the organisation monitor adoption, user feedback and workarounds?",
+      required: true,
+      display_order: 3,
+      active: true,
+      options: [
+        {
+          option_id: "PE-03-0",
+          label: "Not monitored",
+          raw_score: 0
+        },
+        {
+          option_id: "PE-03-1",
+          label: "Anecdotal",
+          raw_score: 1
+        },
+        {
+          option_id: "PE-03-2",
+          label: "Periodic measures",
+          raw_score: 2
+        },
+        {
+          option_id: "PE-03-3",
+          label: "Measured with action and accountability",
+          raw_score: 3
+        },
+        {
+          option_id: "PE-03-UNK",
+          label: "I do not know",
+          unknown_flag: true
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "G-01",
+      section: "governance",
+      text: "What organisation-wide rules govern permitted and restricted AI use?",
+      required: true,
+      display_order: 1,
+      active: true,
+      trigger: "GATE-03",
+      options: [
+        {
+          option_id: "G-01-0",
+          label: "No policy or unknown",
+          raw_score: 0,
+          risk_trigger: "GATE-03"
+        },
+        {
+          option_id: "G-01-1",
+          label: "Informal guidance",
+          raw_score: 1,
+          risk_trigger: "GATE-03"
+        },
+        {
+          option_id: "G-01-2",
+          label: "Documented policy",
+          raw_score: 2,
+          risk_trigger: "GATE-03"
+        },
+        {
+          option_id: "G-01-3",
+          label: "Policy embedded, reviewed and updated",
+          raw_score: 3,
+          risk_trigger: "GATE-03"
+        },
+        {
+          option_id: "G-01-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "GATE-03"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "G-02",
+      section: "governance",
+      text: "How clearly are human review and accountability defined for AI-assisted work?",
+      required: true,
+      display_order: 2,
+      active: true,
+      trigger: "GATE-04",
+      options: [
+        {
+          option_id: "G-02-0",
+          label: "Not defined",
+          raw_score: 0,
+          risk_trigger: "GATE-04"
+        },
+        {
+          option_id: "G-02-1",
+          label: "Left to individuals",
+          raw_score: 1,
+          risk_trigger: "GATE-04"
+        },
+        {
+          option_id: "G-02-2",
+          label: "Defined for material uses",
+          raw_score: 2,
+          risk_trigger: "GATE-04"
+        },
+        {
+          option_id: "G-02-3",
+          label: "Consistently applied and evidenced",
+          raw_score: 3,
+          risk_trigger: "GATE-04"
+        },
+        {
+          option_id: "G-02-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "GATE-04"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "G-03",
+      section: "governance",
+      text: "How are AI use cases, incidents, exceptions and material changes recorded and escalated?",
+      required: true,
+      display_order: 3,
+      active: true,
+      options: [
+        {
+          option_id: "G-03-0",
+          label: "Not recorded",
+          raw_score: 0
+        },
+        {
+          option_id: "G-03-1",
+          label: "Informal reporting",
+          raw_score: 1
+        },
+        {
+          option_id: "G-03-2",
+          label: "Defined records and escalation",
+          raw_score: 2
+        },
+        {
+          option_id: "G-03-3",
+          label: "Monitored, reviewed and improved",
+          raw_score: 3
+        },
+        {
+          option_id: "G-03-UNK",
+          label: "I do not know",
+          unknown_flag: true
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "O-01",
+      section: "opportunity",
+      text: "How much employee time is spent on repetitive, rules-based activities?",
+      required: true,
+      display_order: 1,
+      active: true,
+      trigger: "O-WFA",
+      options: [
+        {
+          option_id: "O-01-0",
+          label: "Little",
+          raw_score: 0,
+          risk_trigger: "O-WFA"
+        },
+        {
+          option_id: "O-01-1",
+          label: "Occasional",
+          raw_score: 1,
+          risk_trigger: "O-WFA"
+        },
+        {
+          option_id: "O-01-2",
+          label: "Frequent",
+          raw_score: 2,
+          risk_trigger: "O-WFA"
+        },
+        {
+          option_id: "O-01-3",
+          label: "Material time or capacity constraint",
+          raw_score: 3,
+          risk_trigger: "O-WFA"
+        },
+        {
+          option_id: "O-01-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "O-WFA"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "O-02",
+      section: "opportunity",
+      text: "How often is information manually transferred between spreadsheets, emails or disconnected systems?",
+      required: true,
+      display_order: 2,
+      active: true,
+      trigger: "O-WFA",
+      options: [
+        {
+          option_id: "O-02-0",
+          label: "Rarely",
+          raw_score: 0,
+          risk_trigger: "O-WFA"
+        },
+        {
+          option_id: "O-02-1",
+          label: "Occasional",
+          raw_score: 1,
+          risk_trigger: "O-WFA"
+        },
+        {
+          option_id: "O-02-2",
+          label: "Frequent",
+          raw_score: 2,
+          risk_trigger: "O-WFA"
+        },
+        {
+          option_id: "O-02-3",
+          label: "Material delay or error source",
+          raw_score: 3,
+          risk_trigger: "O-WFA"
+        },
+        {
+          option_id: "O-02-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "O-WFA"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "O-03",
+      section: "opportunity",
+      text: "How much time is spent searching, classifying, drafting, summarising or reviewing recurring information?",
+      required: true,
+      display_order: 3,
+      active: true,
+      trigger: "O-AEW",
+      options: [
+        {
+          option_id: "O-03-0",
+          label: "Little",
+          raw_score: 0,
+          risk_trigger: "O-AEW"
+        },
+        {
+          option_id: "O-03-1",
+          label: "Occasional",
+          raw_score: 1,
+          risk_trigger: "O-AEW"
+        },
+        {
+          option_id: "O-03-2",
+          label: "Frequent",
+          raw_score: 2,
+          risk_trigger: "O-AEW"
+        },
+        {
+          option_id: "O-03-3",
+          label: "Material knowledge-work constraint",
+          raw_score: 3,
+          risk_trigger: "O-AEW"
+        },
+        {
+          option_id: "O-03-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "O-AEW"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "O-04",
+      section: "opportunity",
+      text: "How widely are employees using public or unapproved AI tools for work?",
+      required: true,
+      display_order: 4,
+      active: true,
+      trigger: "O-AIG",
+      options: [
+        {
+          option_id: "O-04-0",
+          label: "No known use",
+          raw_score: 0,
+          risk_trigger: "O-AIG"
+        },
+        {
+          option_id: "O-04-1",
+          label: "Isolated",
+          raw_score: 1,
+          risk_trigger: "O-AIG"
+        },
+        {
+          option_id: "O-04-2",
+          label: "Several teams",
+          raw_score: 2,
+          risk_trigger: "O-AIG"
+        },
+        {
+          option_id: "O-04-3",
+          label: "Widespread or unknown exposure",
+          raw_score: 3,
+          risk_trigger: "O-AIG"
+        },
+        {
+          option_id: "O-04-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "O-AIG"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "O-05",
+      section: "opportunity",
+      text: "What is the status of existing AI or automation pilots?",
+      required: true,
+      display_order: 5,
+      active: true,
+      trigger: "O-DSR",
+      options: [
+        {
+          option_id: "O-05-0",
+          label: "None",
+          raw_score: 0,
+          risk_trigger: "O-DSR"
+        },
+        {
+          option_id: "O-05-1",
+          label: "Ideas only",
+          raw_score: 1,
+          risk_trigger: "O-DSR"
+        },
+        {
+          option_id: "O-05-2",
+          label: "Pilots with limited evidence",
+          raw_score: 2,
+          risk_trigger: "O-DSR"
+        },
+        {
+          option_id: "O-05-3",
+          label: "Live use with measured outcomes",
+          raw_score: 3,
+          risk_trigger: "O-DSR"
+        },
+        {
+          option_id: "O-05-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "O-DSR"
+        }
+      ],
+      help_text: ""
+    },
+    {
+      question_id: "O-06",
+      section: "opportunity",
+      text: "Is there a recurring workflow with measurable volume, delay, error, rework or control failure?",
+      required: true,
+      display_order: 6,
+      active: true,
+      trigger: "O-WFO",
+      options: [
+        {
+          option_id: "O-06-0",
+          label: "None identified",
+          raw_score: 0,
+          risk_trigger: "O-WFO"
+        },
+        {
+          option_id: "O-06-1",
+          label: "Possible",
+          raw_score: 1,
+          risk_trigger: "O-WFO"
+        },
+        {
+          option_id: "O-06-2",
+          label: "Defined",
+          raw_score: 2,
+          risk_trigger: "O-WFO"
+        },
+        {
+          option_id: "O-06-3",
+          label: "Defined with baseline evidence",
+          raw_score: 3,
+          risk_trigger: "O-WFO"
+        },
+        {
+          option_id: "O-06-UNK",
+          label: "I do not know",
+          unknown_flag: true,
+          risk_trigger: "O-WFO"
+        }
+      ],
+      help_text: ""
+    }
+  ],
+  dimensions: [
+    {
+      dimension_id: "strategy",
+      name: "Strategy and value",
+      weight: 0.15,
+      question_ids: [
+        "S-01",
+        "S-02",
+        "S-03"
+      ],
+      explanation: "How clearly the organisation has defined the problem, the owner and the way improvement work is chosen and funded."
+    },
+    {
+      dimension_id: "process",
+      name: "Process and workflow",
+      weight: 0.2,
+      question_ids: [
+        "P-01",
+        "P-02",
+        "P-03"
+      ],
+      explanation: "Whether priority workflows are documented, who is responsible for each step, and whether time, volume, error or cost is measured."
+    },
+    {
+      dimension_id: "data",
+      name: "Data readiness",
+      weight: 0.2,
+      question_ids: [
+        "D-01",
+        "D-02",
+        "D-03"
+      ],
+      explanation: "Whether the information needed for priority workflows is available and digital, whether its quality is checked and owned, and whether its use, access and sharing are controlled."
+    },
+    {
+      dimension_id: "technology",
+      name: "Technology and security",
+      weight: 0.15,
+      question_ids: [
+        "T-01",
+        "T-02",
+        "T-03"
+      ],
+      explanation: "How well core systems support the work, how mature the security controls are, and how AI and automation tools are approved and monitored."
+    },
+    {
+      dimension_id: "people",
+      name: "People and adoption",
+      weight: 0.15,
+      question_ids: [
+        "PE-01",
+        "PE-02",
+        "PE-03"
+      ],
+      explanation: "Whether employees can use the tools their roles require, whether change responsibility is defined, and whether adoption is monitored and acted on."
+    },
+    {
+      dimension_id: "governance",
+      name: "Governance and responsible AI",
+      weight: 0.15,
+      question_ids: [
+        "G-01",
+        "G-02",
+        "G-03"
+      ],
+      explanation: "Whether the organisation has clear rules for AI use, defined human review and accountability, and a way to record and escalate AI-related events."
+    }
+  ],
+  classifications: [
+    {
+      minimum_score: 0,
+      maximum_score: 29,
+      label: "Foundations required",
+      interpretation: "Material foundations must be addressed before an AI or automation pilot."
+    },
+    {
+      minimum_score: 30,
+      maximum_score: 49,
+      label: "Emerging",
+      interpretation: "Some foundations exist. The organisation should address priority gaps before a material deployment."
+    },
+    {
+      minimum_score: 50,
+      maximum_score: 69,
+      label: "Pilot-ready",
+      interpretation: "A narrow, controlled pilot may be considered after confirming critical risks and evidence."
+    },
+    {
+      minimum_score: 70,
+      maximum_score: 84,
+      label: "Deployment-ready",
+      interpretation: "Several foundations support structured implementation, subject to consultant validation."
+    },
+    {
+      minimum_score: 85,
+      maximum_score: 100,
+      label: "Ready to scale selectively",
+      interpretation: "The organisation reports mature foundations. Evidence and risk controls still require validation."
+    }
+  ],
+  gates: [
+    {
+      gate_id: "GATE-01",
+      trigger_expression: "S-02 == 0",
+      effect: "cap-emerging",
+      risk_text: "No named sponsor or accountable owner for improvement work.",
+      required_action: "Name an accountable owner with authority before an active implementation recommendation is made.",
+      condition: ""
+    },
+    {
+      gate_id: "GATE-02",
+      trigger_expression: "S-01 == 0",
+      effect: "route-workflow",
+      risk_text: "No defined workflow problem or measurable outcome.",
+      required_action: "Define the business problem and a measurable outcome before technology consideration.",
+      condition: ""
+    },
+    {
+      gate_id: "GATE-03",
+      trigger_expression: "(T-03 == 0 OR G-01 == 0) AND AI-USE",
+      effect: "high-governance-risk",
+      risk_text: "Sensitive data may enter unapproved AI tools.",
+      required_action: "Establish approved AI use and controls before deployment work.",
+      condition: "AI-USE"
+    },
+    {
+      gate_id: "GATE-04",
+      trigger_expression: "G-02 == 0",
+      effect: "no-wider-deployment",
+      risk_text: "No human-review accountability for material outputs or decisions.",
+      required_action: "Define human review and accountability before wider AI deployment is recommended.",
+      condition: ""
+    },
+    {
+      gate_id: "GATE-05",
+      trigger_expression: "D-01 == 0",
+      effect: "route-foundation",
+      risk_text: "Core data is unavailable, non-digital or inaccessible.",
+      required_action: "Route to data and workflow foundation actions before an AI pilot.",
+      condition: ""
+    },
+    {
+      gate_id: "GATE-06",
+      trigger_expression: "T-02 == 0",
+      effect: "security-review-required",
+      risk_text: "Material access-control, security or resilience gap.",
+      required_action: "Require a security review before integration or deployment.",
+      condition: ""
+    }
+  ],
+  routes: [
+    {
+      route_id: "workflow-optimisation",
+      label: "Workflow Optimisation",
+      trigger_expression: "O-06 >= 2 OR (P-01 <= 1) OR (P-02 <= 1)",
+      priority: 1,
+      conflict_rule: "Gates first; then highest qualifying opportunity score."
+    },
+    {
+      route_id: "workflow-automation",
+      label: "Workflow Automation",
+      trigger_expression: "O-01 >= 2 OR O-02 >= 2",
+      priority: 2,
+      conflict_rule: "Gates first; then highest qualifying opportunity score."
+    },
+    {
+      route_id: "ai-enabled-workflow",
+      label: "AI-enabled workflow solution",
+      trigger_expression: "O-03 >= 2",
+      priority: 2,
+      conflict_rule: "Gates first; then highest qualifying opportunity score."
+    },
+    {
+      route_id: "ai-governance-adoption",
+      label: "AI Governance and Adoption",
+      trigger_expression: "O-04 >= 2 OR GATE-03 OR G-01 <= 1 OR G-02 <= 1",
+      priority: 1,
+      conflict_rule: "Gates first; then highest qualifying opportunity score."
+    },
+    {
+      route_id: "people-capability",
+      label: "People and capability",
+      trigger_expression: "(PE-01 <= 1 OR PE-02 <= 1) AND (O-01 <= 1 AND O-02 <= 1 AND O-03 <= 1)",
+      priority: 2,
+      conflict_rule: "Gates first; then highest qualifying opportunity score."
+    },
+    {
+      route_id: "foundation-work",
+      label: "Foundation work",
+      trigger_expression: "overall_score < 30 OR (S-01 <= 1 AND S-02 <= 1 AND D-01 <= 1)",
+      priority: 1,
+      conflict_rule: "Gates first; then highest qualifying opportunity score."
+    }
+  ],
+  recommendations: [
+    {
+      recommendation_id: "REC-001",
+      trigger: "S-01 <= 1",
+      title: "Define the business problem",
+      action: "State the specific business problem improvement work should solve, with one measurable outcome.",
+      timeframe: "0-30 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-002",
+      trigger: "S-02 == 0",
+      title: "Name an accountable owner",
+      action: "Assign a named owner with authority for AI and workflow-improvement decisions.",
+      timeframe: "0-30 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-003",
+      trigger: "P-01 <= 1",
+      title: "Document priority workflows",
+      action: "Document the two or three priority workflows end to end, including owners and handoffs.",
+      timeframe: "31-60 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-004",
+      trigger: "P-03 <= 1",
+      title: "Start measuring the work",
+      action: "Begin recording time, volume, error and rework for at least one priority workflow.",
+      timeframe: "31-60 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-005",
+      trigger: "D-01 <= 1",
+      title: "Digitise core information",
+      action: "Make the information required by priority workflows digital and accessible before piloting AI.",
+      timeframe: "31-60 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-006",
+      trigger: "D-03 <= 1",
+      title: "Document data handling rules",
+      action: "Write down who may use, access, retain and share the data involved in priority workflows.",
+      timeframe: "31-60 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-007",
+      trigger: "T-02 <= 1",
+      title: "Review security fundamentals",
+      action: "Review access control, backups and incident response before any integration or deployment work.",
+      timeframe: "0-30 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-008",
+      trigger: "T-03 <= 1 OR O-04 >= 2",
+      title: "Control AI tool use",
+      action: "Agree which AI tools are approved, for whom, with what data; restrict unapproved use.",
+      timeframe: "0-30 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-009",
+      trigger: "G-01 == 0",
+      title: "Set AI use rules",
+      action: "Publish organisation-wide rules for permitted and restricted AI use.",
+      timeframe: "0-30 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-010",
+      trigger: "G-02 == 0",
+      title: "Define human review",
+      action: "Define who reviews AI-assisted outputs and decisions, and for which material uses.",
+      timeframe: "0-30 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-011",
+      trigger: "G-03 <= 1",
+      title: "Record and escalate AI events",
+      action: "Establish a simple record of AI use cases, incidents and material changes, with an escalation route.",
+      timeframe: "31-60 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-012",
+      trigger: "PE-01 <= 1",
+      title: "Assess role-based capability",
+      action: "Assess what staff in priority roles need to use approved tools, and plan training accordingly.",
+      timeframe: "61-90 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-013",
+      trigger: "PE-03 <= 1",
+      title: "Monitor adoption",
+      action: "Track adoption, user feedback and workarounds for any tool in use, and act on findings.",
+      timeframe: "61-90 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-014",
+      trigger: "overall_score >= 50 AND NOT GATE-03 AND NOT GATE-04",
+      title: "Consider a controlled pilot",
+      action: "Discuss a narrow, controlled pilot of one priority workflow with an IPF diagnostic engagement.",
+      timeframe: "61-90 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    },
+    {
+      recommendation_id: "REC-015",
+      trigger: "overall_score < 30",
+      title: "Strengthen foundations first",
+      action: "Focus the next 90 days on documentation, data availability and ownership before piloting AI.",
+      timeframe: "0-30 days",
+      status: "active",
+      segment: null,
+      pathway: null
+    }
+  ],
+  controlled_lists: [
+    {
+      field: "country",
+      values: [
+        "Nigeria",
+        "Ghana",
+        "Kenya",
+        "South Africa",
+        "United Kingdom",
+        "United States"
+      ],
+      default_value: "Nigeria"
+    },
+    {
+      field: "industry",
+      values: [
+        "Agriculture and agribusiness",
+        "Construction and real estate",
+        "Education and training",
+        "Financial services",
+        "Food and agriculture",
+        "Health and pharmaceuticals",
+        "Hospitality",
+        "Logistics and transport",
+        "Manufacturing",
+        "Professional and business services",
+        "Public sector",
+        "Retail and e-commerce",
+        "Technology and telecoms",
+        "Other (please specify)"
+      ]
+    },
+    {
+      field: "employee_range",
+      values: [
+        "1 to 10",
+        "11 to 50",
+        "51 to 200",
+        "201 to 500",
+        "500+"
+      ]
+    }
+  ],
+  premium: {
+    products: [
+      {
+        key: "detailed-roadmaps",
+        title: "Detailed 90-Day Roadmaps",
+        tagline: "The complete build plan, dimension by dimension.",
+        short_description: "A detailed, ordered roadmap for every readiness dimension the Pulse flagged, with the specific actions, sequencing and timeframes your business should follow before investing in AI tools.",
+        price_naira: 15e3,
+        unlocks: [
+          "detailed_roadmaps"
+        ]
+      },
+      {
+        key: "roi-projections",
+        title: "Cost-Savings & ROI Projections",
+        tagline: "What automation could be worth to your business.",
+        short_description: "A Naira-denominated projection of hours saved per week, expected staff-cost recovery and annual savings, with a built-in error margin so you can frame the business case for automation.",
+        price_naira: 25e3,
+        unlocks: [
+          "roi_projections"
+        ]
+      },
+      {
+        key: "full-report",
+        title: "Full Diagnosis Report",
+        tagline: "Everything above, plus the complete branded report.",
+        short_description: "A downloadable branded PDF containing your score, classification, dimension findings, the full 90-day plan, detailed roadmaps and ROI projections \u2014 ready to share with partners, advisers or management.",
+        price_naira: 45e3,
+        unlocks: [
+          "detailed_roadmaps",
+          "roi_projections",
+          "full_pdf"
+        ]
+      }
+    ]
+  }
+};
+
+// shared/pulse/scoringEngine.ts
+function buildAnswers(config, selections, unknownOptionIds) {
+  const byOption = /* @__PURE__ */ new Map();
+  for (const q of config.questions) {
+    for (const o of q.options) {
+      byOption.set(o.option_id, {
+        questionId: q.question_id,
+        rawScore: o.raw_score ?? null
+      });
+    }
+  }
+  const out = {};
+  for (const [questionId, optionId] of Object.entries(selections)) {
+    const info = optionId ? byOption.get(optionId) : void 0;
+    out[questionId] = {
+      optionId: optionId ?? null,
+      unknown: optionId !== null && optionId !== void 0 && unknownOptionIds.has(optionId),
+      rawScore: info?.rawScore ?? null
+    };
+  }
+  return out;
+}
+function collectUnknownOptionIds(config) {
+  const ids = /* @__PURE__ */ new Set();
+  for (const q of config.questions) {
+    for (const o of q.options) {
+      if (o.unknown_flag) ids.add(o.option_id);
+    }
+  }
+  return ids;
+}
+function tokenize(expr) {
+  const tokens = [];
+  const re = /([A-Za-z_][A-Za-z0-9_.-]*)|([<>]=?|==)|([()])|(\d+(?:\.\d+)?)/g;
+  let m;
+  let lastEnd = 0;
+  while ((m = re.exec(expr)) !== null) {
+    if (m.index > lastEnd) {
+      lastEnd = m.index;
+    }
+    lastEnd = m.index + m[0].length;
+    const v = m[1] ?? m[2] ?? m[3] ?? m[4];
+    if (!v) continue;
+    let kind = "qid";
+    if (m[4] !== void 0) kind = "num";
+    else if (m[2] !== void 0) kind = "op";
+    else if (m[3] !== void 0) kind = "op";
+    else if (/^(AND|OR|NOT|TRUE|FALSE)$/.test(v)) kind = "kw";
+    else if (/^(TRUE|FALSE|overall_score|AI-USE)$/.test(v)) kind = "atom";
+    else if (/^[A-Z]+-\d+$/.test(v)) kind = "atom";
+    else kind = "qid";
+    tokens.push({ kind, value: v });
+  }
+  return tokens;
+}
+function peek(p) {
+  return p.tokens[p.pos];
+}
+function consume(p) {
+  const t2 = p.tokens[p.pos++];
+  if (!t2) throw new Error("Unexpected end of expression");
+  return t2;
+}
+function parseOr(p) {
+  let left = parseAnd(p);
+  while (peek(p)?.kind === "kw" && peek(p)?.value === "OR") {
+    consume(p);
+    const right = parseAnd(p);
+    left = left || right;
+  }
+  return left;
+}
+function parseAnd(p) {
+  let left = parseUnary(p);
+  while (peek(p)?.kind === "kw" && peek(p)?.value === "AND") {
+    consume(p);
+    const right = parseUnary(p);
+    left = left && right;
+  }
+  return left;
+}
+function parseUnary(p) {
+  if (peek(p)?.kind === "kw" && peek(p)?.value === "NOT") {
+    consume(p);
+    return !parseUnary(p);
+  }
+  if (peek(p)?.value === "(") {
+    consume(p);
+    const inner = parseOr(p);
+    if (consume(p).value !== ")") throw new Error("Missing closing parenthesis");
+    return inner;
+  }
+  return parseComparison(p);
+}
+function parseComparison(p) {
+  const left = consume(p);
+  const next = peek(p);
+  if (next?.kind === "op") {
+    consume(p);
+    const right = consume(p);
+    if (right.kind !== "num") {
+      throw new Error(`Comparison right side must be numeric, got ${right.value}`);
+    }
+    const rhs = Number(right.value);
+    const lhs = resolveScalar(p, left);
+    if (lhs === null) return false;
+    switch (next.value) {
+      case "==":
+        return lhs === rhs;
+      case "<":
+        return lhs < rhs;
+      case ">":
+        return lhs > rhs;
+      case "<=":
+        return lhs <= rhs;
+      case ">=":
+        return lhs >= rhs;
+    }
+  }
+  if (left.kind === "atom" || left.kind === "qid") {
+    if (/^GATE-\d+$/.test(left.value)) {
+      return !!p.gateTriggered[left.value];
+    }
+    if (left.value === "AI-USE") {
+      return Object.values(p.questionScores).some((s) => s !== null);
+    }
+    if (left.value === "TRUE") return true;
+    if (left.value === "FALSE") return false;
+    return false;
+  }
+  if (left.kind === "num") return Number(left.value) !== 0;
+  throw new Error(`Invalid expression token: ${left.value}`);
+}
+function resolveScalar(p, t2) {
+  if (t2.kind === "num") return Number(t2.value);
+  if (t2.value === "overall_score") return p.overallScore;
+  if (t2.kind === "qid" || t2.kind === "atom") {
+    const q = t2.kind === "atom" && /^[A-Z]+-\d+$/.test(t2.value) ? t2.value : null;
+    if (q && q in p.questionScores) return p.questionScores[q];
+    return null;
+  }
+  return null;
+}
+function evaluateExpression(expression, ctx) {
+  const p = {
+    tokens: tokenize(expression),
+    pos: 0,
+    questionScores: ctx.questionScores,
+    gateTriggered: ctx.gateTriggered,
+    overallScore: ctx.overallScore
+  };
+  const result = parseOr(p);
+  if (p.pos !== p.tokens.length) {
+    throw new Error(`Unconsumed expression tokens at ${p.tokens[p.pos]?.value}`);
+  }
+  return result;
+}
+function dimensionScore(questionIds, questions, answers) {
+  const byId = new Map(questions.map((q) => [q.question_id, q]));
+  const scoredQuestions = questionIds.map((id3) => byId.get(id3)).filter((q) => !!q && q.active !== false);
+  if (scoredQuestions.length === 0) return null;
+  let total = 0;
+  let answered = 0;
+  let unknowns = 0;
+  for (const q of scoredQuestions) {
+    const a = answers[q.question_id];
+    if (!a) continue;
+    if (a.rawScore === null && !a.unknown) continue;
+    answered++;
+    if (a.unknown) {
+      unknowns++;
+      continue;
+    }
+    total += a.rawScore;
+  }
+  if (answered === 0) return { score: 0, answered, unknowns };
+  return { score: Math.round(total / answered / 3 * 100), answered, unknowns };
+}
+function evaluate2(config, input) {
+  const answers = input.answers;
+  const dimensionScores = {};
+  let totalAnswered = 0;
+  let totalUnknowns = 0;
+  for (const w of config.dimensions) {
+    const d = dimensionScore(w.question_ids, config.questions, answers);
+    if (d) {
+      dimensionScores[w.dimension_id] = d.score;
+      totalAnswered += d.answered;
+      totalUnknowns += d.unknowns;
+    }
+  }
+  const totalWeight = config.dimensions.reduce((s, w) => s + (w.weight ?? 1), 0);
+  let weighted = 0;
+  for (const w of config.dimensions) {
+    weighted += (dimensionScores[w.dimension_id] ?? 0) * (w.weight ?? 1);
+  }
+  const overallScore = totalWeight > 0 ? Math.round(weighted / totalWeight) : 0;
+  const classification = [...config.classifications].sort((a, b) => a.minimum_score - b.minimum_score).find((c) => overallScore >= c.minimum_score && overallScore <= c.maximum_score);
+  const questionScores = {};
+  for (const q of config.questions) {
+    questionScores[q.question_id] = answers[q.question_id]?.rawScore ?? null;
+  }
+  const gatesCtx = { questionScores, gateTriggered: {}, overallScore };
+  const triggeredGates = [];
+  for (const g of config.gates) {
+    if (!g.trigger_expression) continue;
+    try {
+      const baseTriggered = evaluateExpression(g.trigger_expression, gatesCtx);
+      if (!baseTriggered) continue;
+      const condition = g.condition?.trim() || null;
+      if (condition === "AI-USE") {
+        const aiUseReported = Object.values(questionScores).some((s) => s !== null);
+        if (!aiUseReported) continue;
+      } else if (condition) {
+      }
+      gatesCtx.gateTriggered[g.gate_id] = true;
+      triggeredGates.push({
+        gateId: g.gate_id,
+        riskText: g.risk_text,
+        requiredAction: g.required_action,
+        effect: g.effect
+      });
+    } catch {
+    }
+  }
+  const routesCtx = { ...gatesCtx };
+  const eligibleRoutes = [];
+  for (const r of config.routes) {
+    if (!r.trigger_expression) continue;
+    try {
+      if (evaluateExpression(r.trigger_expression, routesCtx)) {
+        eligibleRoutes.push({ routeId: r.route_id, priority: r.priority });
+      }
+    } catch {
+    }
+  }
+  const sortedRoutes = [...eligibleRoutes].sort((a, b) => a.priority - b.priority);
+  const recommended = [];
+  for (const rec of config.recommendations) {
+    if (rec.status === "retired") continue;
+    if (rec.segment !== null || rec.pathway !== null) continue;
+    try {
+      if (rec.trigger && evaluateExpression(rec.trigger, routesCtx)) {
+        recommended.push({
+          recommendationId: rec.recommendation_id,
+          title: rec.title,
+          action: rec.action,
+          timeframe: rec.timeframe,
+          pathway: rec.pathway
+        });
+      }
+    } catch {
+    }
+  }
+  const showEvidenceWarning = totalAnswered > 0 && totalUnknowns / totalAnswered > 1 / 3;
+  return {
+    overallScore,
+    classification: classification ? { label: classification.label, interpretation: classification.interpretation } : { label: "Unscored", interpretation: "No applicable classification band." },
+    dimensions: dimensionScores,
+    gates: triggeredGates,
+    routes: sortedRoutes,
+    recommendations: recommended,
+    showEvidenceWarning,
+    unknownCount: totalUnknowns,
+    answeredCount: totalAnswered,
+    questionScores
+  };
+}
+
+// shared/pulse/pathwayEngine.ts
+function readCommercial(config) {
+  const raw = config?.commercial;
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw;
+  if (!Array.isArray(obj.products) || obj.products.length === 0) return null;
+  return {
+    products: obj.products,
+    route_reasons: Array.isArray(obj.route_reasons) ? obj.route_reasons ?? void 0 : void 0,
+    pathway_meanings: obj.pathway_meanings,
+    hierarchy_note: obj.hierarchy_note,
+    segment_rules: readSegmentRules(obj.segment_rules)
+  };
+}
+function readSegmentRules(raw) {
+  if (!raw || typeof raw !== "object") return void 0;
+  const obj = raw;
+  const pick2 = (name) => {
+    const map = obj[name];
+    if (!map || typeof map !== "object") return void 0;
+    const out = {};
+    for (const [groupKey, ids] of Object.entries(map)) {
+      const list2 = Array.isArray(ids) ? ids.filter((id3) => typeof id3 === "string") : [];
+      if (list2.length > 0) out[groupKey] = list2;
+    }
+    return Object.keys(out).length > 0 ? out : void 0;
+  };
+  const industry_groups = pick2("industry_groups");
+  const size_groups = pick2("size_groups");
+  if (!industry_groups && !size_groups) return void 0;
+  return { industry_groups, size_groups };
+}
+function applySegmentOrder(candidates, segment, rules) {
+  if (!segment || !rules) return candidates;
+  const matchedIds = /* @__PURE__ */ new Set();
+  const groupKeys = [
+    ...segment.industryId ? segment.industryId.split("|").filter(Boolean) : [],
+    ...segment.sizeId ? segment.sizeId.split("|").filter(Boolean) : []
+  ];
+  for (const key of groupKeys) {
+    const list2 = rules.industry_groups?.[key] ?? (rules.size_groups?.[key] ?? void 0);
+    for (const id3 of list2 ?? []) matchedIds.add(id3);
+  }
+  if (matchedIds.size === 0) return candidates;
+  return [...candidates.filter((id3) => matchedIds.has(id3)), ...candidates.filter((id3) => !matchedIds.has(id3))];
+}
+function clauseMatches(clause, ctx) {
+  const comp = clause.match(/^([A-Za-z_][A-Za-z0-9_.-]*)\s*(>=|<=|==)\s*(\d+(?:\.\d+)?)$/);
+  if (comp) {
+    const id3 = comp[1];
+    const op = comp[2];
+    const n = parseFloat(comp[3]);
+    let v = null;
+    if (id3 === "overall_score") v = ctx.overallScore;
+    else if (ctx.gateTriggered[id3] !== void 0) v = ctx.gateTriggered[id3] ? 1 : 0;
+    else v = ctx.questionScores[id3] ?? null;
+    if (v === null) return false;
+    if (op === ">=") return v >= n;
+    if (op === "<=") return v <= n;
+    return Math.abs(v - n) < 1e-9;
+  }
+  const atom = /^([A-Za-z_][A-Za-z0-9_.-]*)$/.exec(clause.trim());
+  if (atom) {
+    const id3 = atom[1];
+    if (ctx.gateTriggered[id3] !== void 0) return ctx.gateTriggered[id3];
+    if (id3 === "AI-USE") {
+      return Object.values(ctx.questionScores).some((s) => s !== null);
+    }
+    return (ctx.questionScores[id3] ?? null) !== null;
+  }
+  return false;
+}
+function findMatchingClauses(expr, ctx) {
+  const normalized = expr.replace(/\(/g, "").replace(/\)/g, "");
+  return normalized.split(/\s+(?:AND|OR)\s+/).map((c) => c.trim()).filter(Boolean).filter((c) => clauseMatches(c, ctx));
+}
+function buildPathwayResult(result, questionScores, config, segment = {}) {
+  const commercial = readCommercial(config);
+  const prerequisites = [];
+  for (const g of result.gates) {
+    let paidEntry = null;
+    if (commercial) {
+      paidEntry = commercial.products.find(
+        (p) => p.active && p.gate_ids.includes(g.gateId)
+      ) ?? null;
+    }
+    prerequisites.push({
+      gateId: g.gateId,
+      riskText: g.riskText,
+      requiredAction: g.requiredAction,
+      effect: g.effect,
+      paidEntryProductId: paidEntry?.product_id ?? null
+    });
+  }
+  const annexByRoute = /* @__PURE__ */ new Map();
+  for (const annex of commercial?.route_reasons ?? []) annexByRoute.set(annex.route_id, annex);
+  const clauseCtx = {
+    questionScores,
+    gateTriggered: Object.fromEntries(result.gates.map((g) => [g.gateId, true])),
+    overallScore: result.overallScore ?? 0
+  };
+  const pathways = [];
+  for (const route of result.routes) {
+    const routeConfig = config.routes.find((r) => r.route_id === route.routeId);
+    const clauses = routeConfig?.trigger_expression ? findMatchingClauses(routeConfig.trigger_expression, clauseCtx) : [];
+    if (clauses.length === 0) continue;
+    const annex = annexByRoute.get(route.routeId);
+    const reasons = clauses.map((clause) => {
+      const match = annex?.reasons?.find((r) => r.bound_clause === clause);
+      if (!match) return null;
+      return { reasonCodeId: match.reason_code_id, text: match.why_text };
+    }).filter((r) => Boolean(r));
+    if (reasons.length === 0) continue;
+    const meanings = reasons.map((r) => annex?.reasons?.find((m) => m.reason_code_id === r.reasonCodeId)?.meaning_text).filter((t2) => Boolean(t2));
+    pathways.push({
+      pathwayId: route.routeId,
+      label: annex?.label ?? route.label ?? routeConfig?.label ?? route.routeId,
+      rank: route.priority === 1 ? 1 : 0,
+      reasonCodes: reasons,
+      reasonText: `Your responses suggest ${reasons[0].text.toLowerCase()}`,
+      meaningText: meanings[0] ?? ""
+    });
+  }
+  const primary = pathways.find((p) => p.rank === 1) ?? pathways[0] ?? null;
+  const supporting = pathways.filter((p) => p !== primary).slice(0, 2);
+  let paidNextStep = null;
+  if (commercial) {
+    const targets = [];
+    for (const prereq of prerequisites) {
+      if (prereq.paidEntryProductId) targets.push(prereq.paidEntryProductId);
+    }
+    if (primary) {
+      const primaryProduct = commercial.products.find(
+        (p) => p.active && p.pathway_id === primary.pathwayId
+      );
+      if (primaryProduct) targets.push(primaryProduct.product_id);
+    }
+    for (const s of supporting) {
+      const supportingProduct = commercial.products.find(
+        (p) => p.active && p.pathway_id === s.pathwayId
+      );
+      if (supportingProduct && !targets.includes(supportingProduct.product_id)) {
+        targets.push(supportingProduct.product_id);
+      }
+    }
+    const orderedTargets = applySegmentOrder(targets, segment, commercial.segment_rules);
+    if (orderedTargets.length > 0) {
+      const productId = orderedTargets[0];
+      const product2 = commercial.products.find((p) => p.product_id === productId);
+      const blockingGates = prerequisites.filter((p) => p.paidEntryProductId === productId);
+      let gatingNote = null;
+      if (blockingGates.length > 0) {
+        gatingNote = `Your responses indicate a prerequisite that should be resolved first: ${blockingGates[0].riskText.toLowerCase()}. This diagnostic is designed to close that gap before wider work is considered.`;
+      }
+      const subsequent = product2.subsequent_pathway_id ? commercial.products.find((p) => p.pathway_id === product2.subsequent_pathway_id) ?? null : null;
+      paidNextStep = {
+        productId: product2.product_id,
+        productName: product2.product_name,
+        productTagline: product2.product_tagline,
+        examine: product2.examine,
+        receive: product2.receive,
+        indicativeDelivery: product2.duration_display,
+        feeNaira: product2.fee_naira,
+        paymentMode: product2.payment_mode,
+        gatingNote,
+        subsequentStep: subsequent ? subsequent.product_name : null,
+        termsVersion: product2.terms_version
+      };
+    }
+  }
+  return {
+    primary,
+    supporting,
+    prerequisites,
+    paidNextStep,
+    hierarchyNote: commercial?.hierarchy_note ?? "What follows is based only on your responses to this assessment. It is a professional direction of travel, not a diagnosis of your business."
+  };
+}
+
+// shared/pulse/questionGuidance.ts
+var QUESTION_GUIDANCE = {
+  "S-01": {
+    plainLanguage: "Think about the specific business issue your organisation hopes AI or a better way of working could address.",
+    example: "For example, reducing delays in responding to customers, cutting repeated data entry, or improving the quality of management reporting."
+  },
+  "S-02": {
+    plainLanguage: "Consider whether someone has both responsibility for this work and enough authority to make decisions or secure support.",
+    example: "For example, a director who can approve priorities and remove obstacles, rather than only an interested employee."
+  },
+  "S-03": {
+    plainLanguage: "Think about how your organisation decides which improvement ideas deserve attention and budget first.",
+    example: "For example, whether ideas are chosen case by case, or compared using agreed criteria such as urgency, customer impact or operational risk."
+  },
+  "P-01": {
+    plainLanguage: "A workflow is the repeatable set of steps people follow to complete an important task.",
+    example: "For example, the steps for onboarding a client, processing an order, approving an expense, or preparing a monthly report."
+  },
+  "P-02": {
+    plainLanguage: "Think about whether people know who does each step, who approves it, how work moves between teams, and what happens when something unusual occurs.",
+    example: "For example, when a customer request needs approval, is it clear who approves it and what staff should do if information is missing?"
+  },
+  "P-03": {
+    plainLanguage: "Consider whether you use evidence to understand how a workflow is performing, rather than relying only on impressions.",
+    example: "For example, tracking how long invoices take to process, how many applications are returned for correction, or how often an order is delayed."
+  },
+  "D-01": {
+    plainLanguage: "Think about whether the information people need for important work is available digitally and can be found when needed.",
+    example: "For example, customer records, transaction details or approval documents may sit in a system, spreadsheet, email inbox or paper file."
+  },
+  "D-02": {
+    plainLanguage: "Data quality means whether information is accurate, complete, current and consistent enough to rely on.",
+    example: "For example, checking for duplicate customer records, missing contact details, incorrect dates or conflicting figures between reports."
+  },
+  "D-03": {
+    plainLanguage: "Consider the rules that determine who may use information, who can access it, how long it is kept and when it may be shared.",
+    example: "For example, restricting staff access to payroll records or setting rules before customer information is shared with an external provider."
+  },
+  "T-01": {
+    plainLanguage: "Think about whether the tools your team uses work together for important day-to-day tasks without people repeatedly copying, retyping or manually transferring information.",
+    example: "For example, moving a customer\u2019s details from a sales enquiry into onboarding, invoicing or reporting without entering the same information again."
+  },
+  "T-02": {
+    plainLanguage: "Consider the basic safeguards that protect systems and information, and whether they are reviewed when something goes wrong.",
+    example: "For example, controlling passwords and user access, keeping backups, responding to a lost device, or checking lessons after an incident."
+  },
+  "T-03": {
+    plainLanguage: "Think about how the organisation decides which AI and automation tools may be used, how they are set up, and how their use is overseen.",
+    example: "For example, approving a generative-AI tool before staff use it with work information and reviewing who has access to it."
+  },
+  "PE-01": {
+    plainLanguage: "Consider whether employees have the confidence, practical skills and support to use the approved tools that matter in their roles.",
+    example: "For example, a team can use a new reporting or AI-assisted tool safely because it has received relevant training and can ask for help."
+  },
+  "PE-02": {
+    plainLanguage: "Think about whether the people responsible for introducing a change, training colleagues and supporting teams are clearly identified.",
+    example: "For example, a manager owns adoption, a subject-matter expert trains users, and staff know where to raise concerns."
+  },
+  "PE-03": {
+    plainLanguage: "Consider how you find out whether people are using a new process or tool as intended and where they are creating workarounds.",
+    example: "For example, checking user feedback, support requests, adoption data or the unofficial spreadsheets people create to get work done."
+  },
+  "G-01": {
+    plainLanguage: "Think about the organisation-wide rules that explain what employees may and may not do with AI for work.",
+    example: "For example, whether staff know not to put confidential client information into public AI tools without approval."
+  },
+  "G-02": {
+    plainLanguage: "Consider when a person must review AI-assisted work and who remains responsible for the final decision or output.",
+    example: "For example, an employee checks an AI-drafted customer response before it is sent and knows who is accountable for its accuracy."
+  },
+  "G-03": {
+    plainLanguage: "Think about whether the organisation keeps a clear record of important AI uses, problems, exceptions and changes, and knows when to escalate them.",
+    example: "For example, recording an AI tool that produced an incorrect output and escalating the issue when it affected a customer or control."
+  },
+  "O-01": {
+    plainLanguage: "Think about tasks that follow repeatable rules and use staff time repeatedly, rather than occasional one-off work.",
+    example: "For example, copying information into systems, checking standard documents, sending routine updates or reconciling recurring records."
+  },
+  "O-02": {
+    plainLanguage: "Consider how often staff move the same information manually between files, emails, spreadsheets and separate systems.",
+    example: "For example, downloading a spreadsheet, emailing it for approval and then typing the approved figures into another system."
+  },
+  "O-03": {
+    plainLanguage: "Think about recurring information work that takes time even when the content or task is similar each time.",
+    example: "For example, searching for a policy, classifying incoming requests, drafting standard correspondence or summarising meeting notes."
+  },
+  "O-04": {
+    plainLanguage: "Consider whether employees are using AI tools that the organisation has not formally approved for work.",
+    example: "For example, staff using personal accounts on public chatbots to help write documents or analyse work information."
+  },
+  "O-05": {
+    plainLanguage: "Think about any AI or automation trials already under way and how far they have progressed.",
+    example: "For example, a pilot that is only being explored, one being tested by a small team, or one already used in a live business process."
+  },
+  "O-06": {
+    plainLanguage: "Consider whether there is a regular process where you can see the scale of the work and evidence of delay, error, rework or weak control.",
+    example: "For example, a monthly reconciliation with a known backlog, repeated corrections or a measurable approval delay."
+  }
+};
+
+// shared/pulse/assessmentContent.ts
+var INDUSTRIES = [
+  { id: "retail", label: "Retail & Trading" },
+  { id: "professional", label: "Professional Services" },
+  { id: "manufacturing", label: "Manufacturing & Production" },
+  { id: "distribution", label: "Distribution & Logistics" },
+  { id: "hospitality", label: "Hospitality" },
+  { id: "food_agriculture", label: "Food & Agriculture" },
+  { id: "health", label: "Healthcare & Pharma" },
+  { id: "education", label: "Education & Training" },
+  { id: "other", label: "Other (please specify)" }
+];
+var STAFF_COUNT_OPTIONS = [
+  { id: "micro", label: "1\u201310 employees" },
+  { id: "small", label: "11\u201350 employees" },
+  { id: "medium", label: "51\u2013200 employees" },
+  { id: "large", label: "201+ employees" }
+];
+
+// shared/pulse/guidancePersonas.ts
+var STAFF_SIZE_FRAMING = {
+  micro: "In a small team where people often wear several hats, think about how the work actually moves between the few of you rather than what an organisation chart suggests.",
+  small: "Think about how the work moves between your colleagues, keeping in mind that in a team of this size some steps may still live informally with particular people.",
+  medium: "Think about how work moves between your departments, where defined roles mean handoffs and approvals matter more than in a small team.",
+  large: "Think about how work moves between your departments and divisions, where documented handoffs and approvals are essential for consistency across many teams."
+};
+var PERSONA_EXAMPLES = {
+  "S-01": {
+    retail: {
+      example: "For example, reducing delays in responding to customers on the shop floor, cutting repeated stock-taking entries, or improving daily sales reporting."
+    },
+    professional: {
+      example: "For example, reducing time spent preparing client documents, cutting repeated data entry between engagements, or improving the quality of client reporting."
+    },
+    manufacturing: {
+      example: "For example, reducing delays on the production line, cutting repeated quality-check entries, or improving the accuracy of production reporting."
+    },
+    distribution: {
+      example: "For example, reducing delays in dispatching orders, cutting repeated delivery documentation, or improving the visibility of stock in transit."
+    },
+    hospitality: {
+      example: "For example, reducing delays in responding to guest requests, cutting repeated reservation updates, or improving daily occupancy reporting."
+    },
+    health: {
+      example: "For example, reducing delays in patient follow-up, cutting repeated record entry, or improving the quality of daily clinical or administrative reporting."
+    },
+    education: {
+      example: "For example, reducing delays in responding to students or parents, cutting repeated enrolment data entry, or improving progress reporting."
+    },
+    food_agriculture: {
+      example: "For example, reducing delays in moving produce to market, cutting repeated harvest record-keeping, or improving yield and cost reporting."
+    },
+    other: {
+      example: "For example, reducing delays in responding to customers, cutting repeated data entry, or improving the quality of management reporting."
+    }
+  },
+  "S-02": {
+    retail: {
+      example: "For example, the owner or store manager who can approve priorities such as a new till system and remove obstacles, rather than only an interested sales assistant."
+    },
+    professional: {
+      example: "For example, a partner or practice lead who can approve priorities such as a new document workflow and remove obstacles, rather than only an interested associate."
+    },
+    manufacturing: {
+      example: "For example, a plant or operations manager who can approve priorities such as a new scheduling process and remove obstacles, rather than only an interested technician."
+    },
+    distribution: {
+      example: "For example, an operations director who can approve priorities such as a new dispatch system and remove obstacles, rather than only an interested logistics officer."
+    },
+    hospitality: {
+      example: "For example, the owner or general manager who can approve priorities such as a new booking or staffing process and remove obstacles, rather than only an interested front-desk staff member."
+    },
+    health: {
+      example: "For example, a medical director or facility manager who can approve priorities and remove obstacles, rather than only an interested clinician or administrator."
+    },
+    education: {
+      example: "For example, the principal or academic lead who can approve priorities and remove obstacles, rather than only an interested teacher or administrator."
+    },
+    food_agriculture: {
+      example: "For example, the farm or operations manager who can approve priorities such as a new record-keeping approach and remove obstacles, rather than only an interested worker."
+    },
+    other: {
+      example: "For example, a director who can approve priorities and remove obstacles, rather than only an interested employee."
+    }
+  },
+  "S-03": {
+    retail: {
+      example: "For example, whether spending on a new point-of-sale system or supplier relationship is decided case by case, or compared using agreed criteria such as urgency, customer impact or operational risk."
+    },
+    professional: {
+      example: "For example, whether investment in a new client tool or internal process is decided case by case, or compared using agreed criteria such as urgency, client impact or delivery risk."
+    },
+    manufacturing: {
+      example: "For example, whether investment in equipment or process changes is decided case by case, or compared using agreed criteria such as urgency, throughput impact or safety risk."
+    },
+    distribution: {
+      example: "For example, whether investment in vehicles, warehousing or routing tools is decided case by case, or compared using agreed criteria such as urgency, delivery impact or cost risk."
+    },
+    hospitality: {
+      example: "For example, whether spending on a booking system or kitchen process is decided case by case, or compared using agreed criteria such as urgency, guest impact or operational risk."
+    },
+    health: {
+      example: "For example, whether investment in patient records or equipment is decided case by case, or compared using agreed criteria such as urgency, patient impact or compliance risk."
+    },
+    education: {
+      example: "For example, whether investment in learning tools or administration is decided case by case, or compared using agreed criteria such as urgency, student impact or operational risk."
+    },
+    food_agriculture: {
+      example: "For example, whether investment in irrigation, machinery or market channels is decided case by case, or compared using agreed criteria such as urgency, yield impact or climate risk."
+    },
+    other: {
+      example: "For example, whether ideas are chosen case by case, or compared using agreed criteria such as urgency, customer impact or operational risk."
+    }
+  },
+  "P-01": {
+    retail: {
+      example: "For example, the steps for opening the shop each day, receiving a supplier delivery, handling a customer return, or closing the tills at night."
+    },
+    professional: {
+      example: "For example, the steps for onboarding a new client, preparing an engagement deliverable, reviewing a billable hour, or closing a completed file."
+    },
+    manufacturing: {
+      example: "For example, the steps for scheduling a production run, quality-checking an item, handling a machine breakdown, or dispatching finished goods."
+    },
+    distribution: {
+      example: "For example, the steps for receiving stock, picking an order, loading a vehicle, or reconciling deliveries with what was dispatched."
+    },
+    hospitality: {
+      example: "For example, the steps for checking a guest in, turning over a room, preparing a shift handover, or reconciling the day's takings."
+    },
+    health: {
+      example: "For example, the steps for registering a patient, moving them between appointments, handling a test result, or discharging them safely."
+    },
+    education: {
+      example: "For example, the steps for admitting a student, preparing a class timetable, marking assessments, or issuing a certificate."
+    },
+    food_agriculture: {
+      example: "For example, the steps for preparing a planting bed, applying inputs, harvesting a batch, or transporting produce to a buyer."
+    },
+    other: {
+      example: "For example, the steps for onboarding a client, processing an order, approving an expense, or preparing a monthly report."
+    }
+  },
+  "P-02": {
+    retail: {
+      example: "For example, when a refund needs manager approval, is it clear who approves it and what a sales assistant should do if a receipt is missing?"
+    },
+    professional: {
+      example: "For example, when a client document needs a sign-off, is it clear who reviews it and what an associate should do if required information is missing?"
+    },
+    manufacturing: {
+      example: "For example, when a quality issue is found on the line, is it clear who stops production and what an operator should do if the cause is unknown?"
+    },
+    distribution: {
+      example: "For example, when a delivery address looks wrong, is it clear who authorises the correction and what the driver should do if no one is reachable?"
+    },
+    hospitality: {
+      example: "For example, when a guest complaint needs compensation, is it clear who approves it and what front-desk staff should do if the guest is upset?"
+    },
+    health: {
+      example: "For example, when a test result is abnormal, is it clear who must be notified and what a clinician should do if the patient cannot be reached?"
+    },
+    education: {
+      example: "For example, when a student raises a grievance, is it clear who handles it and what a teacher should do if it involves another staff member?"
+    },
+    food_agriculture: {
+      example: "For example, when a batch fails inspection, is it clear who decides what happens to it and what a worker should do if the buyer rejects part of the load?"
+    },
+    other: {
+      example: "For example, when a customer request needs approval, is it clear who approves it and what staff should do if information is missing?"
+    }
+  },
+  "P-03": {
+    retail: {
+      example: "For example, tracking how long refunds take to process, how many stock counts disagree with records, or how often a till does not balance."
+    },
+    professional: {
+      example: "For example, tracking how long proposals take to produce, how many invoices are disputed, or how often deadlines are missed."
+    },
+    manufacturing: {
+      example: "For example, tracking how long a production run takes, how many items fail quality checks, or how often machines are unexpectedly down."
+    },
+    distribution: {
+      example: "For example, tracking how long orders take from placement to delivery, how many items are damaged in transit, or how often deliveries are returned for correction."
+    },
+    hospitality: {
+      example: "For example, tracking how long check-ins take, how many reservations are double-booked, or how often a table is held longer than needed."
+    },
+    health: {
+      example: "For example, tracking how long appointments run behind schedule, how many records are incomplete, or how often a follow-up is missed."
+    },
+    education: {
+      example: "For example, tracking how long admission applications take, how many records are returned for correction, or how often classes run short-staffed."
+    },
+    food_agriculture: {
+      example: "For example, tracking how long harvests take to reach market, how many batches are rejected, or how often deliveries are delayed."
+    },
+    other: {
+      example: "For example, tracking how long invoices take to process, how many applications are returned for correction, or how often an order is delayed."
+    }
+  },
+  "D-01": {
+    retail: {
+      example: "For example, supplier price lists, customer loyalty details or stock records may sit in a system, spreadsheet, email inbox or paper notebook."
+    },
+    professional: {
+      example: "For example, client files, engagement documents or billing records may sit in a practice system, shared drive, email inbox or paper folder."
+    },
+    manufacturing: {
+      example: "For example, supplier specifications, quality records or production schedules may sit in a system, spreadsheet, email inbox or paper file."
+    },
+    distribution: {
+      example: "For example, customer delivery records, stock locations or invoicing details may sit in a system, spreadsheet, email inbox or paper logbook."
+    },
+    hospitality: {
+      example: "For example, guest reservations, supplier menus or staff rotas may sit in a booking system, spreadsheet, email inbox or paper sheet."
+    },
+    health: {
+      example: "For example, patient records, test results or appointment details may sit in a clinic system, spreadsheet, email inbox or paper file."
+    },
+    education: {
+      example: "For example, student records, enrolment forms or assessment results may sit in a school system, spreadsheet, email inbox or paper file."
+    },
+    food_agriculture: {
+      example: "For example, land records, input purchases or sales receipts may sit in a system, notebook, spreadsheet or paper receipt file."
+    },
+    other: {
+      example: "For example, customer records, transaction details or approval documents may sit in a system, spreadsheet, email inbox or paper file."
+    }
+  },
+  "D-02": {
+    retail: {
+      example: "For example, checking for duplicate customer loyalty entries, missing supplier contact details, incorrect prices or stock figures that disagree between records."
+    },
+    professional: {
+      example: "For example, checking for duplicate client records, missing contact details, incorrect billing dates or fee figures that disagree between documents."
+    },
+    manufacturing: {
+      example: "For example, checking for duplicate supplier entries, missing specification documents, incorrect quantities or production figures that disagree between reports."
+    },
+    distribution: {
+      example: "For example, checking for duplicate customer addresses, missing delivery details, incorrect quantities or stock figures that disagree between warehouses."
+    },
+    hospitality: {
+      example: "For example, checking for duplicate guest profiles, missing contact details, incorrect rates or room availability that disagrees between systems."
+    },
+    health: {
+      example: "For example, checking for duplicate patient records, missing contact details, incorrect dates of birth or test results that disagree between visits."
+    },
+    education: {
+      example: "For example, checking for duplicate student records, missing guardian contacts, incorrect dates or grades that disagree between registers."
+    },
+    food_agriculture: {
+      example: "For example, checking for duplicate buyer records, missing input delivery details, incorrect weights or sales figures that disagree between notebooks."
+    },
+    other: {
+      example: "For example, checking for duplicate customer records, missing contact details, incorrect dates or conflicting figures between reports."
+    }
+  },
+  "D-03": {
+    retail: {
+      example: "For example, restricting staff access to takings records or setting rules before customer contact details are shared with a delivery partner."
+    },
+    professional: {
+      example: "For example, restricting staff access to client files or setting rules before client information is shared with an external provider."
+    },
+    manufacturing: {
+      example: "For example, restricting staff access to pricing or supplier contracts, or setting rules before technical specifications are shared with an external vendor."
+    },
+    distribution: {
+      example: "For example, restricting staff access to customer pricing or setting rules before delivery information is shared with a subcontracted transporter."
+    },
+    hospitality: {
+      example: "For example, restricting staff access to guest payment details or setting rules before guest information is shared with a tour operator."
+    },
+    health: {
+      example: "For example, restricting staff access to patient records to those who need them, or setting rules before information is shared with a referral facility."
+    },
+    education: {
+      example: "For example, restricting staff access to student records or setting rules before pupil information is shared with a third-party provider."
+    },
+    food_agriculture: {
+      example: "For example, restricting access to sales contracts or setting rules before buyer contact details are shared with an external agent."
+    },
+    other: {
+      example: "For example, restricting staff access to payroll records or setting rules before customer information is shared with an external provider."
+    }
+  },
+  "T-01": {
+    retail: {
+      example: "For example, moving a supplier order from a delivery note into the till or stock records without typing the same figures in twice."
+    },
+    professional: {
+      example: "For example, moving a client's details from an enquiry into the engagement file, invoicing or reporting without entering the same information again."
+    },
+    manufacturing: {
+      example: "For example, moving a production order from scheduling into quality records or inventory without re-entering the same quantities by hand."
+    },
+    distribution: {
+      example: "For example, moving an order from the sales record into dispatch and invoicing without retyping the same delivery details."
+    },
+    hospitality: {
+      example: "For example, moving a guest's reservation into check-in, billing or housekeeping records without re-entering the same booking details."
+    },
+    health: {
+      example: "For example, moving a patient's registration details into consultation, test orders or billing without re-entering the same information twice."
+    },
+    education: {
+      example: "For example, moving a student's admission details into class registers, fee records or reporting without typing the same information again."
+    },
+    food_agriculture: {
+      example: "For example, moving a harvest record into sales and payment records without rewriting the same quantities in another notebook or system."
+    },
+    other: {
+      example: "For example, moving a customer's details from a sales enquiry into onboarding, invoicing or reporting without entering the same information again."
+    }
+  },
+  "T-02": {
+    retail: {
+      example: "For example, controlling till user access, keeping copies of sales records, responding to a stolen card terminal, or checking lessons after a takings discrepancy."
+    },
+    professional: {
+      example: "For example, controlling user access to client files, keeping copies of engagement documents, responding to a lost laptop, or checking lessons after a data incident."
+    },
+    manufacturing: {
+      example: "For example, controlling machine operator access, keeping backups of production records, responding to an equipment failure, or checking lessons after an incident."
+    },
+    distribution: {
+      example: "For example, controlling driver and depot access, keeping copies of dispatch records, responding to a lost device, or checking lessons after a cargo incident."
+    },
+    hospitality: {
+      example: "For example, controlling user access to the booking system, keeping copies of takings records, responding to a card payment outage, or checking lessons after an incident."
+    },
+    health: {
+      example: "For example, controlling user access to patient records, keeping backups of clinical data, responding to a lost device, or checking lessons after a record breach."
+    },
+    education: {
+      example: "For example, controlling user access to student records, keeping backups of enrolment data, responding to a lost device, or checking lessons after an incident."
+    },
+    food_agriculture: {
+      example: "For example, controlling access to sales and financial records, keeping copies of receipts, responding to a stolen phone or device, or checking lessons after a loss."
+    },
+    other: {
+      example: "For example, controlling passwords and user access, keeping backups, responding to a lost device, or checking lessons after an incident."
+    }
+  },
+  "T-03": {
+    retail: {
+      example: "For example, approving an AI pricing or inventory assistant before staff use it with sales information and reviewing who has access to it."
+    },
+    professional: {
+      example: "For example, approving a generative-AI drafting tool before staff use it with client information and reviewing who has access to it."
+    },
+    manufacturing: {
+      example: "For example, approving an AI-based quality or scheduling tool before it is used with production information and reviewing who has access to it."
+    },
+    distribution: {
+      example: "For example, approving an AI route-planning or demand tool before it is used with customer delivery information and reviewing who has access to it."
+    },
+    hospitality: {
+      example: "For example, approving an AI booking or guest-service tool before it is used with guest information and reviewing who has access to it."
+    },
+    health: {
+      example: "For example, approving an AI scheduling or records tool before it is used with patient information and reviewing who has access to it."
+    },
+    education: {
+      example: "For example, approving an AI marking or administration tool before it is used with student information and reviewing who has access to it."
+    },
+    food_agriculture: {
+      example: "For example, approving an AI yield or market-price tool before it is used with production or sales information and reviewing who has access to it."
+    },
+    other: {
+      example: "For example, approving a generative-AI tool before staff use it with work information and reviewing who has access to it."
+    }
+  },
+  "PE-01": {
+    retail: {
+      example: "For example, sales assistants and cashiers can use a new till or stock tool confidently because they have been shown how and know who to ask."
+    },
+    professional: {
+      example: "For example, associates and support staff can use a new document or AI-assisted tool confidently because they have received relevant training and can ask for help."
+    },
+    manufacturing: {
+      example: "For example, operators and line supervisors can use a new production or quality tool confidently because they have been trained and know who to ask."
+    },
+    distribution: {
+      example: "For example, drivers, dispatchers and warehouse staff can use a new tracking or ordering tool confidently because they have been shown how and know who to ask."
+    },
+    hospitality: {
+      example: "For example, front-desk and kitchen staff can use a new booking or till tool confidently because they have been trained and know who to ask for help."
+    },
+    health: {
+      example: "For example, clinical and administrative staff can use a new records or scheduling tool confidently because they have been trained and know who to ask."
+    },
+    education: {
+      example: "For example, teachers and administrators can use a new learning or records tool confidently because they have been trained and know who to ask."
+    },
+    food_agriculture: {
+      example: "For example, field workers and sales staff can use a new record-keeping or market tool confidently because they have been shown how and know who to ask."
+    },
+    other: {
+      example: "For example, a team can use a new reporting or AI-assisted tool safely because it has received relevant training and can ask for help."
+    }
+  },
+  "PE-02": {
+    retail: {
+      example: "For example, a store manager owns the adoption of a new till process, a senior cashier trains others, and staff know where to raise problems."
+    },
+    professional: {
+      example: "For example, a practice manager owns adoption, a senior associate trains colleagues, and staff know where to raise concerns."
+    },
+    manufacturing: {
+      example: "For example, a production supervisor owns adoption, a senior operator trains the line, and staff know where to raise concerns."
+    },
+    distribution: {
+      example: "For example, a logistics manager owns adoption, a senior dispatcher trains drivers, and staff know where to raise concerns."
+    },
+    hospitality: {
+      example: "For example, a front-office manager owns adoption, an experienced team member trains new staff, and employees know where to raise concerns."
+    },
+    health: {
+      example: "For example, a clinical lead owns adoption, a senior nurse or administrator trains colleagues, and staff know where to raise concerns."
+    },
+    education: {
+      example: "For example, a head of administration owns adoption, a senior teacher trains colleagues, and staff know where to raise concerns."
+    },
+    food_agriculture: {
+      example: "For example, a farm manager owns adoption, a senior worker trains the team, and staff know where to raise concerns."
+    },
+    other: {
+      example: "For example, a manager owns adoption, a subject-matter expert trains users, and staff know where to raise concerns."
+    }
+  },
+  "PE-03": {
+    retail: {
+      example: "For example, checking till feedback, support requests, or the unofficial notebooks staff keep to track prices and supplier contacts."
+    },
+    professional: {
+      example: "For example, checking user feedback, support requests, or the unofficial spreadsheets staff keep to track billable work and client deadlines."
+    },
+    manufacturing: {
+      example: "For example, checking operator feedback, maintenance requests, or the unofficial paper logs used to track machine issues between shifts."
+    },
+    distribution: {
+      example: "For example, checking driver feedback, dispatch queries, or the unofficial notebooks used to track deliveries the system does not capture."
+    },
+    hospitality: {
+      example: "For example, checking guest feedback, front-desk queries, or the unofficial workarounds staff use when the booking system is slow."
+    },
+    health: {
+      example: "For example, checking clinician feedback, administrative queries, or the unofficial paper registers used when the system is unavailable."
+    },
+    education: {
+      example: "For example, checking teacher feedback, student queries, or the unofficial spreadsheets used to track attendance alongside the register."
+    },
+    food_agriculture: {
+      example: "For example, checking worker feedback, sales queries, or the unofficial notebooks used to record harvests the main record does not capture."
+    },
+    other: {
+      example: "For example, checking user feedback, support requests, adoption data or the unofficial spreadsheets people create to get work done."
+    }
+  },
+  "G-01": {
+    retail: {
+      example: "For example, whether staff know not to put supplier pricing or customer contact details into public AI tools without approval."
+    },
+    professional: {
+      example: "For example, whether staff know not to put confidential client information into public AI tools without approval."
+    },
+    manufacturing: {
+      example: "For example, whether staff know not to put production specifications or supplier contracts into public AI tools without approval."
+    },
+    distribution: {
+      example: "For example, whether staff know not to put customer delivery or pricing details into public AI tools without approval."
+    },
+    hospitality: {
+      example: "For example, whether staff know not to put guest payment or personal details into public AI tools without approval."
+    },
+    health: {
+      example: "For example, whether staff know not to put patient information into public AI tools without approval."
+    },
+    education: {
+      example: "For example, whether staff know not to put student or parent information into public AI tools without approval."
+    },
+    food_agriculture: {
+      example: "For example, whether staff know not to put sales contracts or buyer details into public AI tools without approval."
+    },
+    other: {
+      example: "For example, whether staff know not to put confidential client information into public AI tools without approval."
+    }
+  },
+  "G-02": {
+    retail: {
+      example: "For example, a cashier checks an AI-drafted stock note before it is shared with a supplier and knows who is accountable for its accuracy."
+    },
+    professional: {
+      example: "For example, an associate checks an AI-drafted client response before it is sent and knows who is accountable for its accuracy."
+    },
+    manufacturing: {
+      example: "For example, a quality officer checks an AI-suggested inspection note before it is recorded and knows who is accountable for it."
+    },
+    distribution: {
+      example: "For example, a dispatcher checks an AI-drafted delivery message before it is sent and knows who is accountable for its accuracy."
+    },
+    hospitality: {
+      example: "For example, front-desk staff check an AI-drafted guest message before it is sent and know who is accountable for its accuracy."
+    },
+    health: {
+      example: "For example, a clinician checks an AI-assisted summary before it enters the patient record and knows who remains responsible for it."
+    },
+    education: {
+      example: "For example, a teacher checks an AI-assisted report before it goes to a parent and knows who is accountable for its content."
+    },
+    food_agriculture: {
+      example: "For example, a sales officer checks an AI-drafted buyer message before it is sent and knows who is accountable for its accuracy."
+    },
+    other: {
+      example: "For example, an employee checks an AI-drafted customer response before it is sent and knows who is accountable for its accuracy."
+    }
+  },
+  "G-03": {
+    retail: {
+      example: "For example, recording an AI pricing assistant that gave a wrong figure and escalating when it affected a customer transaction."
+    },
+    professional: {
+      example: "For example, recording an AI tool that produced an incorrect output and escalating the issue when it affected a client or control."
+    },
+    manufacturing: {
+      example: "For example, recording an AI quality tool that missed a defect and escalating when it affected a batch or safety check."
+    },
+    distribution: {
+      example: "For example, recording an AI routing tool that gave a wrong address and escalating when it delayed a delivery."
+    },
+    hospitality: {
+      example: "For example, recording a booking assistant that double-booked a room and escalating when it affected a guest."
+    },
+    health: {
+      example: "For example, recording an AI scheduling tool that assigned a wrong appointment and escalating when it affected a patient."
+    },
+    education: {
+      example: "For example, recording an AI marking tool that scored incorrectly and escalating when it affected a student's record."
+    },
+    food_agriculture: {
+      example: "For example, recording a market-price tool that gave a wrong quote and escalating when it affected a sale."
+    },
+    other: {
+      example: "For example, recording an AI tool that produced an incorrect output and escalating the issue when it affected a customer or control."
+    }
+  },
+  "O-01": {
+    retail: {
+      example: "For example, entering daily sales into a record, updating stock after deliveries, reconciling till takings or preparing routine supplier orders."
+    },
+    professional: {
+      example: "For example, copying information into client files, checking standard documents, sending routine updates or reconciling recurring records."
+    },
+    manufacturing: {
+      example: "For example, logging production quantities, checking standard quality documents, reporting daily output or reconciling inventory counts."
+    },
+    distribution: {
+      example: "For example, entering delivery notes, checking dispatch documents, sending routine shipment updates or reconciling stock movements."
+    },
+    hospitality: {
+      example: "For example, updating reservations, checking housekeeping lists, sending routine confirmations or reconciling daily takings."
+    },
+    health: {
+      example: "For example, entering patient details, checking standard forms, sending routine appointment reminders or reconciling attendance records."
+    },
+    education: {
+      example: "For example, entering enrolment details, checking attendance lists, sending routine notices or reconciling fee records."
+    },
+    food_agriculture: {
+      example: "For example, recording daily harvest quantities, checking standard input lists, updating buyers on availability or reconciling sales records."
+    },
+    other: {
+      example: "For example, copying information into systems, checking standard documents, sending routine updates or reconciling recurring records."
+    }
+  },
+  "O-02": {
+    retail: {
+      example: "For example, photographing a supplier invoice, texting it to the owner for approval and then typing the figures into the till record."
+    },
+    professional: {
+      example: "For example, downloading a spreadsheet, emailing it for approval and then typing the approved figures into another system."
+    },
+    manufacturing: {
+      example: "For example, writing production figures on paper, passing the sheet to the supervisor and then typing them into the daily report."
+    },
+    distribution: {
+      example: "For example, photographing a delivery note, sending it to the office by messaging app and then typing the quantities into the stock record."
+    },
+    hospitality: {
+      example: "For example, writing reservations in a book, calling the kitchen and then typing the bookings into the system later."
+    },
+    health: {
+      example: "For example, noting patient details on paper, handing the sheet to the records officer and then typing them into the system."
+    },
+    education: {
+      example: "For example, marking attendance on paper, passing the register to the office and then typing the entries into the record system."
+    },
+    food_agriculture: {
+      example: "For example, writing harvest weights in a notebook, messaging them to the sales agent and then re-entering them in the sales record."
+    },
+    other: {
+      example: "For example, downloading a spreadsheet, emailing it for approval and then typing the approved figures into another system."
+    }
+  },
+  "O-03": {
+    retail: {
+      example: "For example, finding a supplier's price list, sorting customer enquiries by type, drafting routine order confirmations or summarising the day's sales."
+    },
+    professional: {
+      example: "For example, searching for a clause in a template, classifying incoming client enquiries, drafting standard correspondence or summarising meeting notes."
+    },
+    manufacturing: {
+      example: "For example, finding a standard operating procedure, classifying incoming quality issues, drafting routine production notices or summarising shift reports."
+    },
+    distribution: {
+      example: "For example, finding a customer's pricing terms, classifying incoming orders, drafting routine dispatch confirmations or summarising daily deliveries."
+    },
+    hospitality: {
+      example: "For example, finding a cancellation policy, classifying incoming booking enquiries, drafting standard confirmations or summarising the day's occupancy."
+    },
+    health: {
+      example: "For example, finding a treatment policy, classifying incoming appointment requests, drafting routine reminders or summarising daily attendance."
+    },
+    education: {
+      example: "For example, finding an admission policy, classifying incoming enquiries, drafting standard notices or summarising weekly attendance."
+    },
+    food_agriculture: {
+      example: "For example, finding a buyer's terms, classifying incoming offers, drafting routine availability updates or summarising weekly sales."
+    },
+    other: {
+      example: "For example, searching for a policy, classifying incoming requests, drafting standard correspondence or summarising meeting notes."
+    }
+  },
+  "O-04": {
+    retail: {
+      example: "For example, staff using personal accounts on public chatbots to help draft supplier messages or analyse sales figures."
+    },
+    professional: {
+      example: "For example, staff using personal accounts on public chatbots to help draft client documents or analyse engagement data."
+    },
+    manufacturing: {
+      example: "For example, staff using personal accounts on public chatbots to help draft production reports or analyse quality data."
+    },
+    distribution: {
+      example: "For example, staff using personal accounts on public chatbots to help draft dispatch messages or analyse delivery records."
+    },
+    hospitality: {
+      example: "For example, staff using personal accounts on public chatbots to help draft guest messages or analyse occupancy data."
+    },
+    health: {
+      example: "For example, staff using personal accounts on public chatbots to help draft correspondence or analyse patient administration data."
+    },
+    education: {
+      example: "For example, staff using personal accounts on public chatbots to help draft notices or analyse student records."
+    },
+    food_agriculture: {
+      example: "For example, staff using personal accounts on public chatbots to help draft buyer messages or analyse sales records."
+    },
+    other: {
+      example: "For example, staff using personal accounts on public chatbots to help write documents or analyse work information."
+    }
+  },
+  "O-05": {
+    retail: {
+      example: "For example, a pilot of an AI stock assistant that is only being explored, one being tested by the store manager, or one already used in daily sales records."
+    },
+    professional: {
+      example: "For example, a pilot of an AI drafting tool that is only being explored, one being tested by a small team, or one already used in live client work."
+    },
+    manufacturing: {
+      example: "For example, a pilot of a quality-assistance tool that is only being explored, one being tested by a shift team, or one already used on the production line."
+    },
+    distribution: {
+      example: "For example, a pilot of a route-planning tool that is only being explored, one being tested by a few drivers, or one already used in daily dispatch."
+    },
+    hospitality: {
+      example: "For example, a pilot of an automated guest-messaging tool that is only being explored, one being tested by front desk, or one already used in daily check-ins."
+    },
+    health: {
+      example: "For example, a pilot of a scheduling assistant that is only being explored, one being tested by the front office, or one already used in daily appointments."
+    },
+    education: {
+      example: "For example, a pilot of a learning or administration tool that is only being explored, one being tested by a few teachers, or one already used in daily records."
+    },
+    food_agriculture: {
+      example: "For example, a pilot of a market-price tool that is only being explored, one being tested by the sales lead, or one already used in live sales decisions."
+    },
+    other: {
+      example: "For example, a pilot that is only being explored, one being tested by a small team, or one already used in a live business process."
+    }
+  },
+  "O-06": {
+    retail: {
+      example: "For example, a weekly stock count with a known backlog of unrecorded deliveries, repeated till discrepancies or a measurable queue at the counter."
+    },
+    professional: {
+      example: "For example, a monthly client review with a known backlog of unprocessed files, repeated invoicing corrections or a measurable turnaround delay."
+    },
+    manufacturing: {
+      example: "For example, a daily production review with a known backlog of unprocessed items, repeated quality corrections or a measurable downtime figure."
+    },
+    distribution: {
+      example: "For example, a weekly dispatch review with a known backlog of unfulfilled orders, repeated delivery corrections or a measurable turnaround delay."
+    },
+    hospitality: {
+      example: "For example, a daily operations review with a known backlog of pending housekeeping, repeated booking corrections or a measurable check-in delay."
+    },
+    health: {
+      example: "For example, a weekly patient-flow review with a known backlog of pending results, repeated record corrections or a measurable appointment delay."
+    },
+    education: {
+      example: "For example, a weekly administration review with a known backlog of unprocessed applications, repeated record corrections or a measurable response delay."
+    },
+    food_agriculture: {
+      example: "For example, a weekly sales review with a known backlog of unfulfilled orders, repeated quantity corrections or a measurable delivery delay."
+    },
+    other: {
+      example: "For example, a monthly reconciliation with a known backlog, repeated corrections or a measurable approval delay."
+    }
+  }
+};
+
+// shared/pulse/guidanceResolver.ts
+var PERSONA_BY_CONTROLLED_LABEL = {
+  "Retail and e-commerce": "retail",
+  "Professional and business services": "professional",
+  "Manufacturing": "manufacturing",
+  "Logistics and transport": "distribution",
+  "Hospitality": "hospitality",
+  "Food and agriculture": "food_agriculture",
+  "Agriculture and agribusiness": "food_agriculture",
+  "Health and pharmaceuticals": "health",
+  "Education and training": "education",
+  "Other (please specify)": "other"
+};
+var VALID_STAFF_SIZES = new Set(STAFF_COUNT_OPTIONS.map((o) => o.id));
+function resolveGuidance(questionId, industry, staffSize) {
+  const generic = QUESTION_GUIDANCE[questionId];
+  if (!generic) {
+    return { plainLanguage: "", example: "", sizeFraming: "", isPersonalised: false };
+  }
+  const persona = PERSONA_EXAMPLES[questionId];
+  if (!persona) {
+    return { ...generic, sizeFraming: "", isPersonalised: false };
+  }
+  const industryId = PERSONA_BY_CONTROLLED_LABEL[industry ?? ""] ?? (INDUSTRIES.some((i) => i.id === industry) ? industry : "other");
+  const wasMatched = PERSONA_BY_CONTROLLED_LABEL[industry ?? ""] !== void 0 || INDUSTRIES.some((i) => i.id === industry);
+  const hasVariant = industryId !== "other";
+  const variant = persona[industryId];
+  const example = variant?.example ?? generic.example;
+  const resolvedSizeId = VALID_STAFF_SIZES.has(staffSize ?? "") ? staffSize : STAFF_COUNT_OPTIONS.find((o) => o.label === staffSize)?.id ?? null;
+  const sizeFraming = wasMatched && resolvedSizeId ? STAFF_SIZE_FRAMING[resolvedSizeId] ?? "" : "";
+  const appliedPersonalisation = hasVariant && Boolean(variant?.example);
+  return {
+    plainLanguage: generic.plainLanguage,
+    example,
+    sizeFraming,
+    isPersonalised: appliedPersonalisation
+  };
+}
+
+// shared/pulse/configTypes.ts
+var SECTION_ORDER = [
+  "strategy",
+  "process",
+  "data",
+  "technology",
+  "people",
+  "governance",
+  "opportunity"
+];
+
+// server/pulse/configValidation.ts
+function validateMethodConfig(config) {
+  const errors = [];
+  if (!config || typeof config !== "object") {
+    errors.push({ path: "", message: "Document must be a JSON object." });
+    return errors;
+  }
+  const questions = Array.isArray(config.questions) ? config.questions : [];
+  const dimensions = Array.isArray(config.dimensions) ? config.dimensions : [];
+  const classifications = Array.isArray(config.classifications) ? config.classifications : [];
+  const gates = Array.isArray(config.gates) ? config.gates : [];
+  const routes = Array.isArray(config.routes) ? config.routes : [];
+  const recommendations = Array.isArray(config.recommendations) ? config.recommendations : [];
+  const controlledLists = Array.isArray(config.controlled_lists) ? config.controlled_lists : [];
+  if (!config.assessment_version || typeof config.assessment_version !== "string") {
+    errors.push({ path: "assessment_version", message: "Required string." });
+  }
+  if (!config.effective_date || isNaN(Date.parse(config.effective_date))) {
+    errors.push({ path: "effective_date", message: "Required valid ISO date." });
+  }
+  if (!["draft", "active", "retired"].includes(config.status)) {
+    errors.push({ path: "status", message: "Must be draft, active or retired." });
+  }
+  if (!config.approved_by) {
+    errors.push({ path: "approved_by", message: "Required: approving owner." });
+  }
+  const questionIds = new Set(questions.map((q) => q.question_id));
+  const duplicateIds = questions.map((q) => q.question_id).filter((id3, i, arr) => arr.indexOf(id3) !== i);
+  if (duplicateIds.length) {
+    errors.push({
+      path: "questions",
+      message: `Duplicate question ids: ${duplicateIds.join(", ")}.`
+    });
+  }
+  for (const q of questions) {
+    const prefix = `questions.${q.question_id}`;
+    if (!questionIds.has(q.question_id)) continue;
+    if (!SECTION_ORDER.includes(q.section)) {
+      errors.push({ path: `${prefix}.section`, message: `Unknown section ${q.section}.` });
+    }
+    if (!q.text) errors.push({ path: `${prefix}.text`, message: "Required." });
+    if (typeof q.help_text !== "string") {
+      errors.push({ path: `${prefix}.help_text`, message: 'Required string; use "" when no help text is approved.' });
+    }
+    if (q.required === void 0) errors.push({ path: `${prefix}.required`, message: "Required." });
+    if (!Array.isArray(q.options) || q.options.length < 2) {
+      errors.push({ path: `${prefix}.options`, message: "At least two options required." });
+    }
+    const scoredOptions = q.options.filter((o) => o.raw_score !== void 0);
+    for (const o of scoredOptions) {
+      if (!Number.isInteger(o.raw_score) || o.raw_score < 0 || o.raw_score > 3) {
+        errors.push({
+          path: `${prefix}.options.${o.option_id}.raw_score`,
+          message: "Must be an integer between 0 and 3."
+        });
+      }
+    }
+    const unknowns = q.options.filter((o) => o.unknown_flag);
+    if (unknowns.length > 1) {
+      errors.push({
+        path: `${prefix}.options`,
+        message: "At most one unknown option per question."
+      });
+    }
+  }
+  const scoredQuestions = questions.filter((q) => q.active && q.section !== "opportunity");
+  if (scoredQuestions.length !== 18) {
+    errors.push({
+      path: "questions",
+      message: `Expected 18 active scored questions, found ${scoredQuestions.length}.`
+    });
+  }
+  const routingQuestions = questions.filter(
+    (q) => q.active && q.section === "opportunity"
+  );
+  if (routingQuestions.length !== 6) {
+    errors.push({
+      path: "questions",
+      message: `Expected 6 active opportunity-routing questions, found ${routingQuestions.length}.`
+    });
+  }
+  let weightSum = 0;
+  for (const d of dimensions) {
+    const prefix = `dimensions.${d.dimension_id}`;
+    if (d.dimension_id === "opportunity") {
+      errors.push({ path: `${prefix}`, message: "Opportunity routing is not scored." });
+    }
+    if (!Number.isFinite(d.weight) || d.weight < 0 || d.weight > 1) {
+      errors.push({ path: `${prefix}.weight`, message: "Weight must be 0\u20131." });
+    }
+    weightSum += d.weight;
+    for (const qid of d.question_ids) {
+      if (!questionIds.has(qid)) {
+        errors.push({
+          path: `${prefix}.question_ids`,
+          message: `References unknown question ${qid}.`
+        });
+      }
+    }
+    if (d.question_ids.length !== 3) {
+      errors.push({
+        path: `${prefix}.question_ids`,
+        message: `Expected 3 questions per dimension, found ${d.question_ids.length}.`
+      });
+    }
+  }
+  if (Math.abs(weightSum - 1) > 1e-9) {
+    errors.push({ path: "dimensions", message: `Dimension weights sum to ${weightSum}, must equal 1.` });
+  }
+  for (let i = 0; i < classifications.length; i++) {
+    const c = classifications[i];
+    const prefix = `classifications[${i}]`;
+    if (c.minimum_score > c.maximum_score) {
+      errors.push({ path: prefix, message: "minimum_score exceeds maximum_score." });
+    }
+    if (i > 0) {
+      const prev = classifications[i - 1];
+      if (c.minimum_score !== prev.maximum_score + 1) {
+        errors.push({ path: prefix, message: "Classification bands must be contiguous." });
+      }
+    }
+  }
+  if (classifications.length < 2) {
+    errors.push({ path: "classifications", message: "At least two classification bands required." });
+  }
+  if (gates.length === 0) {
+    errors.push({ path: "gates", message: "At least one critical gate required." });
+  }
+  if (routes.length === 0) {
+    errors.push({ path: "routes", message: "At least one intervention route required." });
+  }
+  for (const g of gates) {
+    if (!g.gate_id || !g.trigger_expression || !g.risk_text || !g.required_action) {
+      errors.push({ path: `gates.${g.gate_id}`, message: "Missing required gate fields." });
+    }
+  }
+  for (const r of routes) {
+    if (!r.route_id || !r.trigger_expression || !r.label) {
+      errors.push({ path: `routes.${r.route_id}`, message: "Missing required route fields." });
+    }
+  }
+  for (const rec of recommendations) {
+    if (!rec.recommendation_id || !rec.trigger || !rec.title || !rec.action || !rec.timeframe) {
+      errors.push({
+        path: `recommendations.${rec.recommendation_id}`,
+        message: "Missing required recommendation fields."
+      });
+    }
+  }
+  const premium = config.premium;
+  const premiumUnlockTokens = /* @__PURE__ */ new Set(["detailed_roadmaps", "roi_projections", "full_pdf"]);
+  if (premium) {
+    const products = Array.isArray(premium.products) ? premium.products : [];
+    if (products.length === 0) {
+      errors.push({ path: "premium.products", message: "premium.products must be a non-empty array." });
+    }
+    const seenProductKeys = /* @__PURE__ */ new Set();
+    products.forEach((product2, index2) => {
+      const prefix = `premium.products[${index2}]`;
+      if (!product2.key || typeof product2.key !== "string") {
+        errors.push({ path: `${prefix}.key`, message: "key is required." });
+      } else if (seenProductKeys.has(product2.key)) {
+        errors.push({ path: `${prefix}.key`, message: `Duplicate product key: ${product2.key}` });
+      } else {
+        seenProductKeys.add(product2.key);
+      }
+      for (const field of ["title", "tagline", "short_description"]) {
+        if (!product2[field] || typeof product2[field] !== "string") {
+          errors.push({ path: `${prefix}.${field}`, message: `${field} is required.` });
+        }
+      }
+      if (!Number.isInteger(product2.price_naira) || product2.price_naira <= 0) {
+        errors.push({ path: `${prefix}.price_naira`, message: "price_naira must be a positive whole Naira amount." });
+      }
+      if (!Array.isArray(product2.unlocks) || product2.unlocks.length === 0) {
+        errors.push({ path: `${prefix}.unlocks`, message: "unlocks must list at least one premium token." });
+      } else {
+        product2.unlocks.forEach((token3) => {
+          if (!premiumUnlockTokens.has(token3)) {
+            errors.push({ path: `${prefix}.unlocks`, message: `Unknown unlock token: ${token3}` });
+          }
+        });
+      }
+    });
+  }
+  const seenListFields = /* @__PURE__ */ new Set();
+  for (const l of controlledLists) {
+    if (!["country", "industry", "employee_range"].includes(l.field)) {
+      errors.push({ path: "controlled_lists", message: `Unknown field ${l.field}.` });
+    }
+    if (seenListFields.has(l.field)) {
+      errors.push({ path: "controlled_lists", message: `Duplicate list for ${l.field}.` });
+    }
+    seenListFields.add(l.field);
+    if (!l.values || l.values.length === 0) {
+      errors.push({ path: `controlled_lists.${l.field}`, message: "At least one value required." });
+    }
+  }
+  return errors;
+}
+
+// server/routers/pulse.ts
+var PULSE_METHOD = method_v1_0_0_default;
+var methodErrors = validateMethodConfig(PULSE_METHOD);
+if (methodErrors.length > 0) throw new Error(`The Pulse method file is invalid: ${methodErrors.slice(0, 3).map((e) => `${e.path} ${e.message}`).join("; ")}`);
+var PULSE_PRIVACY_NOTICE_VERSION = "v1";
+var DRAFT_HOURS = 24;
+var ALPHANUMERIC = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+var SHORT_CODE_LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+var REFERRAL = /^[A-Za-z0-9_-]{20,32}$/;
+var pick = (alphabet, length) => Array.from({ length }, () => alphabet[randomInt(alphabet.length)]).join("");
+var newPulseSessionId = () => pick(ALPHANUMERIC, 32);
+var draftExpiryFromNow = () => new Date(Date.now() + DRAFT_HOURS * 3600 * 1e3);
+var tooMany3 = (message) => new TRPCError31({ code: "TOO_MANY_REQUESTS", message });
+var noMarkup = (value) => !/<|>|&lt;|&gt;/.test(value);
+var sessionIdInput = z19.string().min(16).max(32);
+var answersInput2 = z19.array(z19.object({
+  questionId: z19.string().min(3).max(16),
+  selectedOptionId: z19.string().max(32).nullable(),
+  isUnknown: z19.boolean()
+})).max(80);
+async function database7() {
+  const db = await getDb();
+  if (!db) throw new TRPCError31({ code: "INTERNAL_SERVER_ERROR", message: "We could not reach the Pulse just now. Kindly try again shortly." });
+  return db;
+}
+async function findSession(db, sessionId) {
+  const [session] = await db.select().from(pulseSessions).where(eq30(pulseSessions.sessionId, sessionId)).limit(1);
+  if (!session) throw new TRPCError31({ code: "NOT_FOUND", message: "We could not find that Pulse. Kindly start again." });
+  return session;
+}
+var pastExpiry = (session) => Boolean(session.draftExpiry && session.draftExpiry.getTime() < Date.now());
+var expiredMessage = "This draft has expired. Kindly start a fresh Pulse.";
+async function liveDraft(db, sessionId) {
+  const session = await findSession(db, sessionId);
+  if (session.status === "completed") throw new TRPCError31({ code: "FORBIDDEN", message: "This Pulse is already complete." });
+  if (session.status !== "draft") throw new TRPCError31({ code: "PRECONDITION_FAILED", message: expiredMessage });
+  if (pastExpiry(session)) {
+    await db.update(pulseSessions).set({ status: "expired" }).where(eq30(pulseSessions.id, session.id));
+    throw new TRPCError31({ code: "PRECONDITION_FAILED", message: expiredMessage });
+  }
+  return session;
+}
+async function saveAnswers(db, pulseSessionId, answers) {
+  const latest = new Map(answers.map((a) => [a.questionId, a]));
+  for (const answer2 of Array.from(latest.values())) {
+    await db.insert(pulseResponses).values({ pulseSessionId, questionId: answer2.questionId, selectedOptionId: answer2.selectedOptionId, isUnknown: answer2.isUnknown }).onConflictDoUpdate({
+      target: [pulseResponses.pulseSessionId, pulseResponses.questionId],
+      set: { selectedOptionId: answer2.selectedOptionId, isUnknown: answer2.isUnknown, updatedAt: sql11`now()` }
+    });
+  }
+}
+async function uniqueShortCode(db) {
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const code = pick(SHORT_CODE_LETTERS, 7);
+    const [taken] = await db.select({ id: pulseSessions.id }).from(pulseSessions).where(eq30(pulseSessions.shortCode, code)).limit(1);
+    if (!taken) return code;
+  }
+  return `X${pick(SHORT_CODE_LETTERS, 6)}`;
+}
+function sizeIdOf(range) {
+  if (!range) return void 0;
+  if (/\b1\s*(–|-|to)\s*10\b/.test(range)) return "micro";
+  if (/\b11\s*(–|-|to)\s*50\b/.test(range)) return "small";
+  if (/\b51\s*(–|-|to)\s*200\b/.test(range)) return "medium";
+  if (/201|500\+/.test(range)) return "large";
+  return void 0;
+}
+function segmentOf(session) {
+  const sizeId = sizeIdOf(session.employeeRange);
+  return { ...session.industry ? { industryId: session.industry } : {}, ...sizeId ? { sizeId } : {} };
+}
+function renderProjection(config, persona) {
+  const personalised = Boolean(persona?.industry);
+  return {
+    assessment_version: config.assessment_version,
+    questions: config.questions.map((q) => ({
+      question_id: q.question_id,
+      section: q.section,
+      text: q.text,
+      help_text: q.help_text,
+      guidance: personalised ? resolveGuidance(q.question_id, persona.industry, persona.employeeRange) : { plainLanguage: QUESTION_GUIDANCE[q.question_id]?.plainLanguage ?? "", example: QUESTION_GUIDANCE[q.question_id]?.example ?? "", sizeFraming: "", isPersonalised: false },
+      required: q.required,
+      display_order: q.display_order,
+      options: q.options.map((o) => ({ option_id: o.option_id, label: o.label, unknown_flag: o.unknown_flag ?? false }))
+    })),
+    classification_labels: config.classifications.map((c) => ({ minimum_score: c.minimum_score, maximum_score: c.maximum_score, label: c.label, interpretation: c.interpretation })),
+    dimensions: config.dimensions.map((d) => ({ dimension_id: d.dimension_id, name: d.name, explanation: d.explanation })),
+    routes: config.routes.map((r) => ({ route_id: r.route_id, label: r.label, priority: r.priority })),
+    recommendations: config.recommendations.filter((r) => r.status === "active").map((r) => ({ recommendation_id: r.recommendation_id, title: r.title, action: r.action, timeframe: r.timeframe })),
+    controlled_lists: config.controlled_lists,
+    section_order: ["strategy", "process", "data", "technology", "people", "governance", "opportunity"]
+  };
+}
+function invalidAnswers(config, answers) {
+  const questions = new Map(config.questions.map((q) => [q.question_id, q]));
+  const problems = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const a of answers) {
+    const question = questions.get(a.questionId);
+    if (!question) {
+      problems.push(`unknown question "${a.questionId}"`);
+      continue;
+    }
+    seen.add(a.questionId);
+    if (!a.selectedOptionId) continue;
+    const option = question.options.find((o) => o.option_id === a.selectedOptionId);
+    if (!option) problems.push(`question "${a.questionId}": unknown option "${a.selectedOptionId}"`);
+    else if (a.isUnknown && !option.unknown_flag) problems.push(`question "${a.questionId}": option "${a.selectedOptionId}" is not an "I don't know" option`);
+  }
+  const missing = config.questions.filter((q) => q.required && !seen.has(q.question_id)).map((q) => q.question_id);
+  return { problems, missing };
+}
+function scoreAnswers(config, answers) {
+  const scored = buildAnswers(config, Object.fromEntries(answers.map((a) => [a.questionId, a.selectedOptionId ?? ""])), collectUnknownOptionIds(config));
+  for (const a of answers) if (a.isUnknown && a.selectedOptionId) scored[a.questionId] = { optionId: a.selectedOptionId, rawScore: null, unknown: true };
+  return evaluate2(config, { answers: scored });
+}
+function pathwayOf(config, result, session) {
+  const labels = new Map(config.routes.map((r) => [r.route_id, r.label]));
+  return buildPathwayResult(
+    {
+      gates: result.gates,
+      routes: result.routes.map((r) => ({ ...r, label: labels.get(r.routeId) ?? r.routeId })),
+      showEvidenceWarning: result.showEvidenceWarning,
+      unknownCount: result.unknownCount
+    },
+    result.questionScores ?? {},
+    config,
+    segmentOf(session)
+  );
+}
+var PULSE_SITE = "https://www.ipfactory.co";
+var resultsLink = (sessionId) => `${PULSE_SITE}/pulse/results/${encodeURIComponent(sessionId)}`;
+var pulseRouter = router({
+  /** The method as the browser may see it, with guidance tailored to the session's business when one is given. */
+  getActiveVersion: publicProcedure.input(z19.object({ sessionId: sessionIdInput.optional() }).optional()).query(async ({ input }) => {
+    if (!input?.sessionId) return renderProjection(PULSE_METHOD);
+    const db = await getDb();
+    const [session] = db ? await db.select().from(pulseSessions).where(eq30(pulseSessions.sessionId, input.sessionId)).limit(1) : [];
+    return renderProjection(PULSE_METHOD, session ? { industry: session.industry, employeeRange: session.employeeRange } : void 0);
+  }),
+  /** The first screen: who is answering, with the privacy notice acknowledged, before the first question. */
+  createSession: publicProcedure.input(z19.object({
+    respondentName: z19.string().trim().min(2).max(255).refine(noMarkup, "Names must not contain < or >."),
+    companyName: z19.string().trim().min(2).max(255).refine(noMarkup, "Company names must not contain < or >."),
+    email: z19.string().trim().toLowerCase().min(6).max(320).pipe(z19.string().email("Kindly enter a valid email address.")),
+    privacyNoticeVersion: z19.literal(PULSE_PRIVACY_NOTICE_VERSION),
+    privacyAcknowledged: z19.literal(true),
+    country: z19.string().trim().min(1).max(64).optional(),
+    industry: z19.string().trim().max(128).optional(),
+    employeeRange: z19.string().trim().max(32).optional(),
+    otherIndustry: z19.string().trim().max(128).optional(),
+    /** The session id of the respondent whose invite link brought this one. */
+    referredBy: z19.string().max(32).optional()
+  })).mutation(async ({ input, ctx }) => {
+    const ip = (ctx.req.ip || "unknown").toLowerCase();
+    if (!await consumeLimit(LIMITS.pulseStartIp, ip) || !await consumeLimit(LIMITS.pulseStartEmail, `${ip}:${input.email}`)) {
+      throw tooMany3("Kindly wait a few minutes before starting another Pulse.");
+    }
+    const db = await database7();
+    const sessionId = newPulseSessionId();
+    const draftExpiry = draftExpiryFromNow();
+    const [session] = await db.insert(pulseSessions).values({
+      sessionId,
+      shortCode: await uniqueShortCode(db),
+      assessmentVersion: PULSE_METHOD.assessment_version,
+      respondentName: input.respondentName,
+      companyName: input.companyName,
+      email: input.email,
+      country: input.country || null,
+      industry: input.industry || null,
+      otherIndustry: /\bother\b/i.test(input.industry ?? "") ? input.otherIndustry || null : null,
+      employeeRange: input.employeeRange || null,
+      referredBy: input.referredBy && REFERRAL.test(input.referredBy) ? input.referredBy : null,
+      draftExpiry
+    }).returning();
+    await db.insert(pulseConsents).values({ pulseSessionId: session.id, privacyNoticeVersion: input.privacyNoticeVersion });
+    await recordAudit(db, { action: "pulse_started", targetEmail: input.email, details: { pulseSessionId: session.id, assessmentVersion: session.assessmentVersion } });
+    return { sessionId, assessmentVersion: session.assessmentVersion, draftExpiry };
+  }),
+  /** An invite code from a shared link (?ic=CODE) to the session id of the person who shared it. */
+  resolveInviteCode: publicProcedure.input(z19.object({ code: z19.string().trim().min(5).max(12) })).query(async ({ input, ctx }) => {
+    if (!await consumeLimit(LIMITS.publicLookup, (ctx.req.ip || "unknown").toLowerCase())) throw tooMany3("Too many lookups. Kindly try again later.");
+    const db = await database7();
+    const [session] = await db.select({ sessionId: pulseSessions.sessionId }).from(pulseSessions).where(eq30(pulseSessions.shortCode, input.code.toUpperCase())).limit(1);
+    return { sessionId: session?.sessionId ?? null };
+  }),
+  /** A session with its saved answers, so the respondent can carry on where they stopped. */
+  getSession: publicProcedure.input(z19.object({ sessionId: sessionIdInput })).query(async ({ input }) => {
+    const db = await database7();
+    const session = await findSession(db, input.sessionId);
+    if (session.status === "draft" && pastExpiry(session)) {
+      await db.update(pulseSessions).set({ status: "expired" }).where(eq30(pulseSessions.id, session.id));
+      return { sessionId: session.sessionId, assessmentVersion: session.assessmentVersion, status: "expired", expired: true, answers: [] };
+    }
+    const responses = await db.select().from(pulseResponses).where(eq30(pulseResponses.pulseSessionId, session.id));
+    return {
+      sessionId: session.sessionId,
+      assessmentVersion: session.assessmentVersion,
+      status: session.status,
+      expired: session.status === "expired",
+      draftExpiry: session.draftExpiry,
+      completedAt: session.completedAt,
+      respondentName: session.respondentName,
+      companyName: session.companyName,
+      answers: responses.map((r) => ({ questionId: r.questionId, selectedOptionId: r.selectedOptionId, isUnknown: r.isUnknown }))
+    };
+  }),
+  /** Saves the answers so far. Only the answers: the business's profile was set on the first screen and stays there. */
+  saveDraft: publicProcedure.input(z19.object({ sessionId: sessionIdInput, answers: answersInput2 })).mutation(async ({ input }) => {
+    if (!await consumeLimit(LIMITS.pulseSave, input.sessionId)) throw tooMany3("Too many updates. Your answers are still on this page.");
+    const db = await database7();
+    const session = await liveDraft(db, input.sessionId);
+    await saveAnswers(db, session.id, input.answers);
+    return { success: true };
+  }),
+  /** Scores the finished Pulse against the method and keeps the result. */
+  submitAssessment: publicProcedure.input(z19.object({ sessionId: sessionIdInput, answers: answersInput2 })).mutation(async ({ input }) => {
+    if (!await consumeLimit(LIMITS.pulseSubmit, input.sessionId)) throw tooMany3("Kindly wait a moment before submitting again.");
+    const db = await database7();
+    const session = await liveDraft(db, input.sessionId);
+    const { problems, missing } = invalidAnswers(PULSE_METHOD, input.answers);
+    if (problems.length > 0) {
+      throw new TRPCError31({ code: "BAD_REQUEST", message: `${problems.length} answer${problems.length > 1 ? "s do" : " does"} not match the Pulse: ${problems.slice(0, 3).join("; ")}${problems.length > 3 ? "; \u2026" : ""}. Kindly start again.` });
+    }
+    if (missing.length > 0) {
+      throw new TRPCError31({ code: "BAD_REQUEST", message: `${missing.length} required question${missing.length > 1 ? "s are" : " is"} unanswered: ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? ", \u2026" : ""}.` });
+    }
+    await saveAnswers(db, session.id, input.answers);
+    const result = scoreAnswers(PULSE_METHOD, input.answers);
+    await db.insert(pulseResults).values({
+      pulseSessionId: session.id,
+      assessmentVersion: session.assessmentVersion,
+      overallScore: result.overallScore,
+      classification: result.classification.label,
+      result
+    });
+    await db.update(pulseSessions).set({ status: "completed", completedAt: /* @__PURE__ */ new Date() }).where(eq30(pulseSessions.id, session.id));
+    await recordAudit(db, { action: "pulse_completed", targetEmail: session.email, details: { pulseSessionId: session.id, overallScore: result.overallScore, classification: result.classification.label } });
+    const pathway = pathwayOf(PULSE_METHOD, result, session);
+    await deliverEmail({
+      to: BUSINESS_SUPPORT_MAILBOX,
+      sender: "business_support",
+      idempotencyKey: `pulse_sessions:${session.id}:completed:office`,
+      subject: `Pulse: ${session.companyName} scored ${result.overallScore} (${result.classification.label})`,
+      body: [
+        `${session.respondentName} finished the AI & Workflow Readiness Pulse.`,
+        "",
+        `Company: ${session.companyName}`,
+        `Email: ${session.email}`,
+        `Industry: ${session.industry || "Not given"}${session.otherIndustry ? ` (${session.otherIndustry})` : ""}`,
+        `Staff: ${session.employeeRange || "Not given"}`,
+        `Score: ${result.overallScore} of 100, ${result.classification.label}`,
+        `Recommended next step: ${pathway.paidNextStep?.productName ?? pathway.primary?.label ?? "None"}`,
+        `First prerequisite: ${pathway.prerequisites[0]?.riskText ?? "None"}`,
+        "",
+        `Results: ${resultsLink(session.sessionId)}`
+      ].join("\n")
+    }).catch(() => void 0);
+    return { success: true, sessionId: session.sessionId };
+  }),
+  /** The scored result. Anyone with the link may read it, as with a shared Business Check result. */
+  getResults: publicProcedure.input(z19.object({ sessionId: sessionIdInput })).query(async ({ input }) => {
+    const db = await database7();
+    const session = await findSession(db, input.sessionId);
+    if (session.status !== "completed") throw new TRPCError31({ code: "PRECONDITION_FAILED", message: "This Pulse is not finished yet." });
+    const [stored] = await db.select().from(pulseResults).where(eq30(pulseResults.pulseSessionId, session.id)).limit(1);
+    if (!stored) throw new TRPCError31({ code: "NOT_FOUND", message: "We could not find this result." });
+    const result = stored.result;
+    const labels = new Map(PULSE_METHOD.routes.map((r) => [r.route_id, r.label]));
+    const dimensionMeta = new Map(PULSE_METHOD.dimensions.map((d) => [d.dimension_id, d]));
+    return {
+      sessionId: session.sessionId,
+      assessmentVersion: stored.assessmentVersion,
+      companyName: session.companyName,
+      shortCode: session.shortCode,
+      classification: stored.classification,
+      overallScore: stored.overallScore,
+      dimensions: Object.entries(result.dimensions ?? {}).map(([dimensionId, score]) => ({
+        dimension_id: dimensionId,
+        name: dimensionMeta.get(dimensionId)?.name ?? dimensionId,
+        explanation: dimensionMeta.get(dimensionId)?.explanation ?? "",
+        score
+      })),
+      gates: result.gates ?? [],
+      routes: (result.routes ?? []).map((r) => ({ ...r, label: labels.get(r.routeId) ?? r.routeId })),
+      recommendations: result.recommendations ?? [],
+      showEvidenceWarning: Boolean(result.showEvidenceWarning),
+      unknownCount: result.unknownCount ?? 0,
+      answeredCount: result.answeredCount ?? 0,
+      pathwayResult: pathwayOf(PULSE_METHOD, result, session)
+    };
+  }),
+  /** Emails the respondent a link to their result, and records their marketing choice. */
+  requestEmailedReport: publicProcedure.input(z19.object({ sessionId: sessionIdInput, marketingConsent: z19.boolean() })).mutation(async ({ input }) => {
+    if (!await consumeLimit(LIMITS.pulseReportEmail, input.sessionId)) throw tooMany3("You have asked for several copies already. Kindly try again tomorrow.");
+    const db = await database7();
+    const session = await findSession(db, input.sessionId);
+    if (session.status !== "completed") throw new TRPCError31({ code: "PRECONDITION_FAILED", message: "This Pulse is not finished yet." });
+    const [stored] = await db.select().from(pulseResults).where(eq30(pulseResults.pulseSessionId, session.id)).limit(1);
+    await db.insert(pulseConsents).values({ pulseSessionId: session.id, privacyNoticeVersion: PULSE_PRIVACY_NOTICE_VERSION, marketingConsent: input.marketingConsent });
+    const delivery = await deliverEmail({
+      to: session.email,
+      sender: "business_support",
+      subject: "Your AI & Workflow Readiness Pulse result",
+      body: [
+        `Dear ${session.respondentName},`,
+        "",
+        `Thank you for taking the AI & Workflow Readiness Pulse for ${session.companyName}.`,
+        stored ? `Your score is ${stored.overallScore} of 100: ${stored.classification}.` : "",
+        "",
+        "Your full result, with the 90-day action plan, is here:",
+        resultsLink(session.sessionId),
+        "",
+        "Keep this link private: anyone who has it can read your result.",
+        `To talk it through with us, book a free Discovery Call: ${BRAND.discoveryCallUrl}`,
+        "",
+        BRAND.organisationName
+      ].filter((line, i, all) => line !== "" || all[i - 1] !== "").join("\n")
+    }).catch(() => ({ status: "Failed" }));
+    await recordAudit(db, { action: "pulse_report_emailed", targetEmail: session.email, details: { pulseSessionId: session.id, marketingConsent: input.marketingConsent, status: delivery.status } });
+    return { success: true, delivered: delivery.status === "Sent" };
+  }),
+  /** The respondent asks for the scope and fee of the next step the Pulse recommended. */
+  requestScope: publicProcedure.input(z19.object({ sessionId: sessionIdInput })).mutation(async ({ input }) => {
+    if (!await consumeLimit(LIMITS.pulseLead, input.sessionId)) throw tooMany3("Your request is already with us. The team will reply by email.");
+    const db = await database7();
+    const session = await findSession(db, input.sessionId);
+    if (session.status !== "completed") throw new TRPCError31({ code: "PRECONDITION_FAILED", message: "This Pulse is not finished yet." });
+    const [stored] = await db.select().from(pulseResults).where(eq30(pulseResults.pulseSessionId, session.id)).limit(1);
+    const pathway = stored ? pathwayOf(PULSE_METHOD, stored.result, session) : null;
+    const recommended = pathway?.paidNextStep?.productName ?? pathway?.primary?.label ?? null;
+    const [lead] = await db.insert(pulseLeads).values({
+      pulseSessionId: session.id,
+      kind: "scope",
+      name: session.respondentName,
+      company: session.companyName,
+      email: session.email,
+      recommended: recommended?.slice(0, 192) ?? null
+    }).returning();
+    await recordAudit(db, { action: "pulse_scope_requested", targetEmail: session.email, details: { pulseSessionId: session.id, pulseLeadId: lead.id } });
+    await deliverEmail({
+      to: BUSINESS_SUPPORT_MAILBOX,
+      sender: "business_support",
+      idempotencyKey: `pulse_leads:${lead.id}:office`,
+      subject: `Pulse: ${session.companyName} asked for the scope and fee`,
+      body: [
+        `${session.respondentName} asked for the scope and fee of the next step their Pulse recommended.`,
+        "",
+        `Company: ${session.companyName}`,
+        `Email: ${session.email}`,
+        `Recommended: ${recommended ?? "None"}`,
+        stored ? `Score: ${stored.overallScore} of 100, ${stored.classification}` : "",
+        "",
+        `Results: ${resultsLink(session.sessionId)}`
+      ].join("\n")
+    }).catch(() => void 0);
+    return { success: true };
+  }),
+  /** A draft past its 24 hours starts again with a new session, keeping the respondent and their business. */
+  restartExpiredSession: publicProcedure.input(z19.object({ expiredSessionId: sessionIdInput })).mutation(async ({ input, ctx }) => {
+    if (!await consumeLimit(LIMITS.pulseStartIp, (ctx.req.ip || "unknown").toLowerCase())) throw tooMany3("Kindly wait a few minutes before starting another Pulse.");
+    const db = await database7();
+    const old = await findSession(db, input.expiredSessionId);
+    if (old.status === "completed" || !(old.status === "expired" || pastExpiry(old))) {
+      throw new TRPCError31({ code: "PRECONDITION_FAILED", message: "Only an expired draft can be started again." });
+    }
+    if (old.status !== "expired") await db.update(pulseSessions).set({ status: "expired" }).where(eq30(pulseSessions.id, old.id));
+    const newSessionId = newPulseSessionId();
+    const draftExpiry = draftExpiryFromNow();
+    const [session] = await db.insert(pulseSessions).values({
+      sessionId: newSessionId,
+      shortCode: await uniqueShortCode(db),
+      assessmentVersion: PULSE_METHOD.assessment_version,
+      respondentName: old.respondentName,
+      companyName: old.companyName,
+      email: old.email,
+      country: old.country,
+      industry: old.industry,
+      otherIndustry: old.otherIndustry,
+      employeeRange: old.employeeRange,
+      referredBy: old.referredBy,
+      draftExpiry
+    }).returning();
+    await recordAudit(db, { action: "pulse_restarted", targetEmail: old.email, details: { pulseSessionId: session.id, expiredPulseSessionId: old.id } });
+    return { newSessionId, assessmentVersion: session.assessmentVersion, draftExpiry };
+  })
+});
+
 // server/routers.ts
 var appRouter = router({
   // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -15585,11 +19003,12 @@ var appRouter = router({
   engagement: engagementRouter,
   invitations: invitationsRouter,
   people: peopleRouter,
-  onlinePayment: onlinePaymentRouter
+  onlinePayment: onlinePaymentRouter,
+  pulse: pulseRouter
 });
 
 // server/_core/context.ts
-import { eq as eq30 } from "drizzle-orm";
+import { eq as eq31 } from "drizzle-orm";
 async function createContext(opts) {
   let user = null;
   let authChannel;
@@ -15604,7 +19023,7 @@ async function createContext(opts) {
       const session = await resolveAccountSession(opts.req);
       if (session && session.authority.roles.length > 0) {
         const db = await getDb();
-        const row = db ? (await db.select().from(users).where(eq30(users.id, session.user.id)).limit(1))[0] : void 0;
+        const row = db ? (await db.select().from(users).where(eq31(users.id, session.user.id)).limit(1))[0] : void 0;
         if (row && row.status === "active") {
           user = row;
           authChannel = "account";
@@ -15642,7 +19061,7 @@ function healthReport(settings = ENV) {
 
 // server/resendWebhook.ts
 import { createHmac as createHmac5, timingSafeEqual as timingSafeEqual6 } from "node:crypto";
-import { and as and21, eq as eq31, sql as sql11 } from "drizzle-orm";
+import { and as and21, eq as eq32, sql as sql12 } from "drizzle-orm";
 var SUPPORTED = /* @__PURE__ */ new Set(["email.sent", "email.delivered", "email.delivery_delayed", "email.bounced", "email.complained", "email.failed", "email.suppressed"]);
 var MAX_SKEW_SECONDS = 5 * 60;
 function verifyResendWebhookSignature(input) {
@@ -15698,7 +19117,7 @@ async function handleResendWebhook(req, res) {
     await db.transaction(async (tx) => {
       const [inserted] = await tx.insert(resendEmailEvents).values({ eventId, providerMessageId, eventType: state, recipientEmail, happenedAt }).onConflictDoNothing({ target: resendEmailEvents.eventId }).returning({ id: resendEmailEvents.id });
       if (!inserted) return;
-      await tx.update(businessSupportEmailDeliveries).set({ latestState: state, lastEventAt: happenedAt }).where(and21(eq31(businessSupportEmailDeliveries.providerMessageId, providerMessageId), sql11`(${businessSupportEmailDeliveries.lastEventAt} is null or ${businessSupportEmailDeliveries.lastEventAt} < ${happenedAt})`));
+      await tx.update(businessSupportEmailDeliveries).set({ latestState: state, lastEventAt: happenedAt }).where(and21(eq32(businessSupportEmailDeliveries.providerMessageId, providerMessageId), sql12`(${businessSupportEmailDeliveries.lastEventAt} is null or ${businessSupportEmailDeliveries.lastEventAt} < ${happenedAt})`));
     });
     return res.status(200).json({ received: true });
   } catch (error) {
@@ -15709,7 +19128,7 @@ async function handleResendWebhook(req, res) {
 
 // server/reminders.ts
 import { createHash as createHash2, timingSafeEqual as timingSafeEqual7 } from "node:crypto";
-import { and as and22, desc as desc12, eq as eq32, inArray as inArray15, ne as ne5 } from "drizzle-orm";
+import { and as and22, desc as desc12, eq as eq33, inArray as inArray15, ne as ne5 } from "drizzle-orm";
 var QUIET_FROM_HOUR = 21;
 var QUIET_UNTIL_HOUR = 7;
 var HOUR3 = 36e5;
@@ -15823,7 +19242,7 @@ async function claim(db, key, kind, engagementId) {
   return rows.length > 0;
 }
 async function leadsOf(db, engagementId) {
-  const leads = await db.select({ email: users.email }).from(engagementTeam).innerJoin(users, eq32(engagementTeam.userId, users.id)).where(and22(eq32(engagementTeam.engagementId, engagementId), inArray15(engagementTeam.role, ["manager", "lead"]), eq32(users.status, "active")));
+  const leads = await db.select({ email: users.email }).from(engagementTeam).innerJoin(users, eq33(engagementTeam.userId, users.id)).where(and22(eq33(engagementTeam.engagementId, engagementId), inArray15(engagementTeam.role, ["manager", "lead"]), eq33(users.status, "active")));
   const emails = Array.from(new Set(leads.flatMap((lead) => lead.email ? [lead.email] : [])));
   return emails.length ? emails : [BUSINESS_SUPPORT_MAILBOX];
 }
@@ -15897,7 +19316,7 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
         }
         if (stage === "late_7") for (const to of await leadsOf(db, engagement.id)) counts.leads += await send(to, feePausedLeadEmail({ businessName: found.businessName, title: found.title, label: fee.label, left: fee.left, dueOn: fee.dueOn }), null);
       }
-      const tasks = await db.select().from(engagementTasks).where(and22(eq32(engagementTasks.engagementId, engagement.id), eq32(engagementTasks.side, "client")));
+      const tasks = await db.select().from(engagementTasks).where(and22(eq33(engagementTasks.engagementId, engagement.id), eq33(engagementTasks.side, "client")));
       const businessName = await businessNameOf(db, engagement);
       const title = engagementTitle(engagement.type, engagement.service);
       if (!engagement.opensOnPayment && engagement.businessId !== null) {
@@ -15949,7 +19368,7 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
         const to = Array.from(/* @__PURE__ */ new Set([...reviewer ? [reviewer.email] : [], ...stage === "review_late" || !reviewer ? await leadsOf(db, engagement.id) : []]));
         for (const address of to) counts.reviews += await send(address, reviewReminderEmail({ late: stage === "review_late", title: task.title, businessName, receivedAt: task.receivedAt }), null);
       }
-      const ours = await db.select().from(engagementTasks).where(and22(eq32(engagementTasks.engagementId, engagement.id), eq32(engagementTasks.side, "ipf"), inArray15(engagementTasks.status, [...OPEN_TASK_STATUSES])));
+      const ours = await db.select().from(engagementTasks).where(and22(eq33(engagementTasks.engagementId, engagement.id), eq33(engagementTasks.side, "ipf"), inArray15(engagementTasks.status, [...OPEN_TASK_STATUSES])));
       const crew = ours.length ? await teamOf(db, engagement.id, now.getTime()) : [];
       const extra = ours.length ? await otherOwnersOf(db, { engagementId: engagement.id }) : /* @__PURE__ */ new Map();
       for (const task of ours.filter((item2) => item2.dueOn && item2.dueOn < today)) {
@@ -15961,7 +19380,7 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
         if (stage === "team_late") for (const person of owners) counts.team += await send(person.email, teamItemLateEmail({ toLead: false, name: person.name, ownerName: person.name, title: task.title, businessName, dueOn: task.dueOn }), null);
         if (stage === "team_lead") for (const to of await leadsOf(db, engagement.id)) counts.team += await send(to, teamItemLateEmail({ toLead: true, name: "", ownerName: owner?.name ?? "", title: task.title, businessName, dueOn: task.dueOn }), null);
       }
-      const booked = await db.select().from(engagementSessions).where(and22(eq32(engagementSessions.engagementId, engagement.id), eq32(engagementSessions.status, "planned")));
+      const booked = await db.select().from(engagementSessions).where(and22(eq33(engagementSessions.engagementId, engagement.id), eq33(engagementSessions.status, "planned")));
       for (const session of booked) {
         if (!session.scheduledFor || session.scheduledFor.getTime() <= now.getTime()) continue;
         const day = lagosDay(session.scheduledFor);
@@ -15993,7 +19412,7 @@ async function remindersStatus(db) {
   const configured = Boolean(ENV.cronSecret);
   if (!db) return { configured, lastRunAt: null };
   try {
-    const last = (await db.select({ createdAt: adminAccessAuditEvents.createdAt }).from(adminAccessAuditEvents).where(eq32(adminAccessAuditEvents.action, "reminders_run")).orderBy(desc12(adminAccessAuditEvents.id)).limit(1))[0];
+    const last = (await db.select({ createdAt: adminAccessAuditEvents.createdAt }).from(adminAccessAuditEvents).where(eq33(adminAccessAuditEvents.action, "reminders_run")).orderBy(desc12(adminAccessAuditEvents.id)).limit(1))[0];
     return { configured, lastRunAt: last?.createdAt ?? null };
   } catch {
     return { configured, lastRunAt: null };
@@ -16009,9 +19428,9 @@ function createApp() {
   app.get("/api/health", async (_req, res) => {
     const report = healthReport();
     const db = await getDb().catch(() => null);
-    const database7 = await checkDatabase(db);
-    const reminders = database7.ok ? await remindersStatus(db) : { configured: Boolean(ENV.cronSecret), lastRunAt: null };
-    res.status(database7.ok ? report.status : 503).json({ ...report.body, ok: report.body.ok && database7.ok, database: database7, reminders });
+    const database8 = await checkDatabase(db);
+    const reminders = database8.ok ? await remindersStatus(db) : { configured: Boolean(ENV.cronSecret), lastRunAt: null };
+    res.status(database8.ok ? report.status : 503).json({ ...report.body, ok: report.body.ok && database8.ok, database: database8, reminders });
   });
   app.get("/api/scheduled/reminders", async (req, res) => {
     if (!ENV.cronSecret) return void res.status(503).json({ ok: false, reason: "CRON_SECRET is not set, so no reminder is sent." });

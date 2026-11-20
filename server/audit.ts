@@ -127,6 +127,11 @@ export const AUDIT_ACTIONS = [
   "two_step_reset",
   "access_removed",
   "security_alert",
+  "pulse_started",
+  "pulse_completed",
+  "pulse_restarted",
+  "pulse_report_emailed",
+  "pulse_scope_requested",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

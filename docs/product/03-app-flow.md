@@ -343,6 +343,9 @@ info@ipfactory.co.
 | Full Report paid, or a Business Review link from before F3 | Owner; office | *Payment received: your Full Report* (or *your Business Review is booked*); *Paid online: …* | Built |
 | Business Review's first half paid | Owner; office | *Payment received: Business Review: half to start*, with the receipt number and what happens next; *Paid online: …* | Built (F3) |
 | Report Intake sent again | Owner | *Your Report Intake* | Built |
+| A Pulse finished (R107) | Office | *Pulse: {company} scored {score} ({classification})*: the contact, industry, staff, the recommended next step, the first prerequisite and the results link | Built |
+| The respondent asks for an emailed copy of their Pulse | Respondent | *Your AI & Workflow Readiness Pulse result*: the score and the link to the full result | Built (a link; the PDF comes with the Pulse admin) |
+| The respondent asks for the scope and fee after a Pulse | Office | *Pulse: {company} asked for the scope and fee*: the contact, the recommended next step and the results link | Built |
 | Full Report built | Owner; office | *Your Full Report: {business}* (PDF); *Full Report sent* | Built |
 | Discovery Call asked for | Office | *… asked for a free discovery call* | Built |
 | Engagement opened for a new client | Owner | *Your The Shift room for {business}*, with **What we will do**: the work, the start date and each fee with its date, before the link (R47) | Built |
@@ -443,6 +446,9 @@ info@ipfactory.co.
 | `/check` | `CheckPage.tsx`, then `BusinessCheck.tsx` | Every page | The free Business Health Check (4.1). The first screen opens alone; the questions load in the background and take over (R70) |
 | `/terms` | `LegalPage.tsx` | Footer, forms, pay pages | The Terms and Conditions |
 | `/privacy` | `LegalPage.tsx` | Footer, forms, pay pages | The Privacy Policy |
+| `/pulse` | `PulseStart.tsx` | A shared Pulse link (`?ic=CODE` from a colleague), the old Pulse site | The AI & Workflow Readiness Pulse (R107): name, company, email, country, industry and staff, with the privacy notice acknowledged, before the first question |
+| `/pulse/assessment` | `PulseAssessment.tsx` | `/pulse` | The 24 questions, one at a time by section, each with plain-language guidance for the business's industry and size; saved as the respondent goes; a draft lasts 24 hours, then starts again with the business kept |
+| `/pulse/results/:sessionId` | `PulseResults.tsx` | The finished Pulse; the emailed link | The score out of 100 and its classification, the six dimensions, the risks flagged, the 90-day action plan, the recommended next step (book a Discovery Call or ask for the scope and fee), an emailed link and an invite for a colleague. Anyone with the link can read it |
 | `/report/:token` | `FullReportPage.tsx` | *Payment received: your Full Report* | The Report Intake, then the download |
 | `/pay/:token/:item` | `PayPage.tsx` | The Full Report or Business Review payment email | Pay for the Full Report, or the first half of the Business Review (₦550,000 of ₦1,100,000), on Paystack, after "Before you pay" (R72) |
 | `/pay/fee/:feeLineId/:token` | `FeePayPage.tsx` | A fee's email, the room's Payments tab | Pay one engagement fee on Paystack, after "Before you pay" (R72); the token is an HMAC of the fee's id |

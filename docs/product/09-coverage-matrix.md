@@ -208,6 +208,9 @@ trusted browser origin.
 | `businessCheck.prices` | The prices the site shows, the same figures payments are created with | Public, read only | Business Health Check |
 | `businessCheck.start`, `businessCheck.saveProgress`, `businessCheck.submit` | Starts the check (a lead before the first question), saves it, finishes it and sends the emails | Public, by the check's token; rate-limited | Business Health Check |
 | `businessCheck.requestNext` | The owner asks for the free call or the Full Report from the result | Public, by the check's token | Discovery Call, Payment request |
+| `pulse.getActiveVersion` | The Pulse's questions, options, guidance and labels (never the scores or rules), with guidance for the session's business | Public, read only | Pulse |
+| `pulse.createSession`, `pulse.resolveInviteCode`, `pulse.getSession`, `pulse.saveDraft`, `pulse.submitAssessment`, `pulse.restartExpiredSession` | Starts a Pulse with consent, reads a colleague's invite code, reads and saves the draft, scores the finished Pulse and emails the office, starts an expired draft again | Public, by the session id; rate-limited | Pulse |
+| `pulse.getResults`, `pulse.requestEmailedReport`, `pulse.requestScope` | The result; an emailed link to it with the marketing choice; a request for the scope and fee | Public, by the session id; rate-limited | Pulse, Pulse lead |
 | `onlinePayment.page`, `onlinePayment.start`, `onlinePayment.status` | The pay page for the Full Report or Business Review; opens Paystack; the result on return | Public, by the check's token; rate-limited | Payment request |
 | `onlinePayment.feePage`, `onlinePayment.feeStart` | The pay page for one fee; opens Paystack | Public, by the fee's signed link; rate-limited | Fee |
 | `fullReport.form`, `fullReport.submit`, `fullReport.download` | The Report Intake, its answers, the report's download | Public, by the report's token | Full Report |

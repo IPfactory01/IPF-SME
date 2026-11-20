@@ -186,8 +186,8 @@ The Shift's admin, and its existing respondents come across. Its code is in GitH
 | Batch | What | Migration | State |
 | --- | --- | --- | --- |
 | 1 | The scoring, pathway and question engine and the v1.0.0 question set, in `shared/pulse/`, with their tests | None | Built 20 November 2026 |
-| 2 | The Pulse's tables in PostgreSQL and the public Pulse at `/pulse` (start, questions, results, PDF report, emails) | 0030 | Next |
-| 3 | A Pulse section in The Shift's admin (respondents, results, leads, consent, question-set versions), its leads in the Pipeline, its paid next steps through Paystack and the ledger | Possibly 0031 | Planned |
+| 2 | The Pulse's tables in PostgreSQL and the public Pulse at `/pulse` (start, questions, results, emails). The emailed copy is a link to the result; the PDF moves to batch 3 with the admin | 0030 | Built 20 November 2026; live once ET applies 0030 |
+| 3 | A Pulse section in The Shift's admin (respondents, results, leads, consent, question-set versions), the PDF report, its leads in the Pipeline, its paid next steps through Paystack and the ledger | Possibly 0031 | Planned |
 | 4 | The existing respondents imported from the Manus database by a guarded script kept out of the repository; then Manus is retired | None | Needs the export from Manus |
 
 ## 6. How each piece is delivered

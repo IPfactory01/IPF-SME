@@ -37,6 +37,9 @@ const AdminLoginPage = lazyPage(() => import("./pages/AdminLoginPage"));
 const AdminPasswordResetPage = lazyPage(() => import("./pages/AdminPasswordResetPage"));
 const Admin = lazyPage(() => import("./pages/Admin"));
 const NotFound = lazyPage(() => import("./pages/NotFound"));
+const PulseStart = lazyPage(() => import("./pages/PulseStart"));
+const PulseAssessment = lazyPage(() => import("./pages/PulseAssessment"));
+const PulseResults = lazyPage(() => import("./pages/PulseResults"));
 
 /** Every address, in the order wouter's Switch tries them. */
 const ROUTES: { path: string; page: LazyPage }[] = [
@@ -53,6 +56,10 @@ const ROUTES: { path: string; page: LazyPage }[] = [
   { path: "/contact", page: ContactPage },
   { path: "/terms", page: TermsPage },
   { path: "/privacy", page: PrivacyPage },
+  // The AI & Workflow Readiness Pulse (R107), moved here from its Manus site.
+  { path: "/pulse", page: PulseStart },
+  { path: "/pulse/assessment", page: PulseAssessment },
+  { path: "/pulse/results/:sessionId", page: PulseResults },
   { path: "/onboarding/:token", page: OnboardingPage },
   { path: "/join/:token", page: JoinPage },
   { path: "/reset/:token", page: ResetPasswordPage },

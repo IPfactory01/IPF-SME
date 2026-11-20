@@ -1,7 +1,7 @@
 /**
  * /pulse — Pulse entry screen (PRD §7.1, Phase 4 contact-first flow).
  *
- * Captures the respondent's name, company name and corporate email — plus
+ * Captures the respondent's name, company name and email — plus
  * an explicit privacy acknowledgement — BEFORE the session is created and
  * the 24-question wizard begins. Light organisation context (country,
  * industry, size) from the controlled lists is captured in the same step.
@@ -26,28 +26,11 @@ import { toast } from "sonner";
 import { ArrowRight, Clock, ShieldCheck, Timer, UserCheck, Zap } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
-/** Corporate / business email heuristic: reject well-known free mailboxes. */
-const FREE_MAILBOXES = [
-  "gmail.com",
-  "yahoo.com",
-  "hotmail.com",
-  "outlook.com",
-  "live.com",
-  "icloud.com",
-  "aol.com",
-  "protonmail.com",
-  "proton.me",
-  "zoho.com",
-  "mail.com",
-  "yandex.com",
-];
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
-function classifyEmail(email: string): "valid" | "invalid-format" | "free-mailbox" {
-  if (!EMAIL_PATTERN.test(email)) return "invalid-format";
-  const domain = email.trim().toLowerCase().split("@").pop() ?? "";
-  if (FREE_MAILBOXES.includes(domain)) return "free-mailbox";
-  return "valid";
+/** Any working email is accepted, a personal mailbox included (ET, 20 November 2026). */
+function classifyEmail(email: string): "valid" | "invalid-format" {
+  return EMAIL_PATTERN.test(email) ? "valid" : "invalid-format";
 }
 
 export default function PulseStart() {
@@ -138,11 +121,7 @@ export default function PulseStart() {
     setTouchedCompany(true);
     if (!canStart) {
       if (email && emailStatus !== "valid") {
-        toast.error(
-          emailStatus === "invalid-format"
-            ? "Please enter a valid email address."
-            : "Please use your corporate email address (not a free mailbox).",
-        );
+        toast.error("Kindly enter a valid email address.");
       }
       if (!respondentName.trim()) toast.error("Please enter the respondent's name.");
       if (!companyName.trim()) toast.error("Please enter the company name.");
@@ -258,10 +237,10 @@ export default function PulseStart() {
                 )}
               </div>
 
-              {/* Corporate email */}
+              {/* Email */}
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-ink/80" htmlFor="pulse-email">
-                  Corporate email <span className="text-danger">*</span>
+                  Email <span className="text-danger">*</span>
                 </Label>
                 <Input
                   id="pulse-email"
@@ -275,29 +254,22 @@ export default function PulseStart() {
                   className={`bg-paper-raised ${
                     touchedEmail && email && emailStatus === "invalid-format"
                       ? "border-danger"
-                      : touchedEmail && email && emailStatus === "free-mailbox"
-                        ? "border-amber-400"
-                        : ""
+                      : ""
                   }`}
                 />
                 {touchedEmail && email && emailStatus === "invalid-format" && (
                   <p className="text-xs text-danger">Please enter a valid email address.</p>
                 )}
-                {touchedEmail && email && emailStatus === "free-mailbox" && (
-                  <p className="text-xs text-amber-600">
-                    Please use a corporate email address rather than a free mailbox.
-                  </p>
-                )}
               </div>
 
               {/* Organisation context — kept optional, helps tailor the result */}
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid grid-flow-row-dense grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-ink/80" htmlFor="pulse-country">
                     Country
                   </Label>
                   <Select value={country} onValueChange={setCountry}>
-                    <SelectTrigger id="pulse-country" className="bg-paper-raised">
+                    <SelectTrigger id="pulse-country" className="w-full bg-paper-raised">
                       <SelectValue placeholder="Select country" />
                     </SelectTrigger>
                     <SelectContent>
@@ -307,12 +279,12 @@ export default function PulseStart() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5">
+                <div className="col-span-2 space-y-1.5">
                   <Label className="text-xs font-medium text-ink/80" htmlFor="pulse-industry">
                     Industry
                   </Label>
                   <Select value={industry} onValueChange={setIndustry}>
-                    <SelectTrigger id="pulse-industry" className="bg-paper-raised">
+                    <SelectTrigger id="pulse-industry" className="w-full bg-paper-raised">
                       <SelectValue placeholder="Select industry" />
                     </SelectTrigger>
                     <SelectContent>
@@ -343,7 +315,7 @@ export default function PulseStart() {
                     Business size
                   </Label>
                   <Select value={employeeRange} onValueChange={setEmployeeRange}>
-                    <SelectTrigger id="pulse-size" className="bg-paper-raised">
+                    <SelectTrigger id="pulse-size" className="w-full bg-paper-raised">
                       <SelectValue placeholder="Select size" />
                     </SelectTrigger>
                     <SelectContent>

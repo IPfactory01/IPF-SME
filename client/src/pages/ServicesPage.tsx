@@ -71,6 +71,18 @@ export default function ServicesPage() {
         </div>
       </section>
 
+      <section aria-label="AI & Workflow Readiness Pulse" className="border-b border-line bg-brand-tint">
+        <div className="container mx-auto flex max-w-6xl flex-col gap-4 py-8 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-display text-xl font-semibold tracking-[-0.015em] text-ink">Thinking about AI for your business?</h2>
+            <p className="mt-1.5 max-w-xl text-ink-soft">The free AI &amp; Workflow Readiness Pulse scores how ready your business is, out of 100, and gives you a 90-day plan. About 12 minutes.</p>
+          </div>
+          <Link href="/pulse" className="group inline-flex h-12 shrink-0 items-center gap-2 bg-brand px-6 font-semibold text-paper transition-[transform,background-color] hover:bg-brand-deep active:scale-[0.97]">
+            Take the free Pulse <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+          </Link>
+        </div>
+      </section>
+
       <section aria-label="Why buy from The Shift" className="container mx-auto grid max-w-6xl gap-9 py-16 md:grid-cols-3">
         {PROMISES.map(({ icon: Icon, title, body }) => (
           <div key={title}>

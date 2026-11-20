@@ -137,7 +137,7 @@ export function SiteFooter() {
     <footer className="border-t border-line bg-paper py-10">
       <div className="container flex flex-col items-center gap-3 text-center text-xs text-ink-muted">
         <nav aria-label="Footer" className="flex flex-wrap items-center justify-center gap-x-5 text-sm">
-          {[{ href: "/", label: "Home" }, ...SITE_PAGES, { href: "/guides", label: "Guides" }, { href: "/check", label: "Free Business Health Check" }, { href: "/login", label: "Client sign in" }].map((page) => (
+          {[{ href: "/", label: "Home" }, ...SITE_PAGES, { href: "/guides", label: "Guides" }, { href: "/check", label: "Free Business Health Check" }, { href: "/pulse", label: "AI & Workflow Readiness Pulse" }, { href: "/login", label: "Client sign in" }].map((page) => (
             <Link key={page.href} href={page.href} className="inline-flex min-h-11 items-center hover:text-ink hover:underline">{page.label}</Link>
           ))}
         </nav>

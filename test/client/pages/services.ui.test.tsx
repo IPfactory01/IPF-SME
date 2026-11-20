@@ -38,6 +38,14 @@ const at = (path: string) => render(
 afterEach(cleanup);
 
 describe("the services page (/services), laid out as a store", () => {
+  it("leads to the AI & Workflow Readiness Pulse, and every page's footer does too (R107)", () => {
+    at("/services");
+    const strip = screen.getByRole("region", { name: "AI & Workflow Readiness Pulse" });
+    expect(within(strip).getByRole("link", { name: /Take the free Pulse/ }).getAttribute("href")).toBe("/pulse");
+    const footer = screen.getByRole("navigation", { name: "Footer" });
+    expect(within(footer).getByRole("link", { name: "AI & Workflow Readiness Pulse" }).getAttribute("href")).toBe("/pulse");
+  });
+
   it("opens in the owner's words: their commonest worries, how we help and that every price is shown in naira (ET, 10 November 2026)", () => {
     at("/services");
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Sales slow? Cash tight? Need a loan?");

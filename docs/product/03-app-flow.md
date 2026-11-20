@@ -446,7 +446,7 @@ info@ipfactory.co.
 | `/check` | `CheckPage.tsx`, then `BusinessCheck.tsx` | Every page | The free Business Health Check (4.1). The first screen opens alone; the questions load in the background and take over (R70) |
 | `/terms` | `LegalPage.tsx` | Footer, forms, pay pages | The Terms and Conditions |
 | `/privacy` | `LegalPage.tsx` | Footer, forms, pay pages | The Privacy Policy |
-| `/pulse` | `PulseStart.tsx` | A shared Pulse link (`?ic=CODE` from a colleague), the old Pulse site | The AI & Workflow Readiness Pulse (R107): name, company, email, country, industry and staff, with the privacy notice acknowledged, before the first question |
+| `/pulse` | `PulseStart.tsx` | The footer of every page; the strip under "Not sure which one you need?" on `/services`; a shared Pulse link (`?ic=CODE` from a colleague) | The AI & Workflow Readiness Pulse (R107): name, company, email, country, industry and staff, with the privacy notice acknowledged, before the first question |
 | `/pulse/assessment` | `PulseAssessment.tsx` | `/pulse` | The 24 questions, one at a time by section, each with plain-language guidance for the business's industry and size; saved as the respondent goes; a draft lasts 24 hours, then starts again with the business kept |
 | `/pulse/results/:sessionId` | `PulseResults.tsx` | The finished Pulse; the emailed link | The score out of 100 and its classification, the six dimensions, the risks flagged, the 90-day action plan, the recommended next step (book a Discovery Call or ask for the scope and fee), an emailed link and an invite for a colleague. Anyone with the link can read it |
 | `/report/:token` | `FullReportPage.tsx` | *Payment received: your Full Report* | The Report Intake, then the download |

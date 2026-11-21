@@ -12620,7 +12620,7 @@ async function call2(fetcher, url, init) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok || body.error) {
     const code = body.error?.code;
-    throw new InstagramError(body.error?.message || body.error_message || `Instagram answered ${response.status}.`, code === 190 || body.error?.type === "OAuthException" && code !== 100);
+    throw new InstagramError(body.error?.message || body.error_message || `Instagram answered ${response.status}.`, code === 190);
   }
   return body;
 }

@@ -218,6 +218,13 @@
       "when": 1795183362190,
       "tag": "0030_pulse",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795245164001,
+      "tag": "0031_social_posts",
+      "breakpoints": true
     }
   ]
 }

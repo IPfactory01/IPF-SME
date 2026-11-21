@@ -89,6 +89,10 @@ import {
   reviewTask,
   reopenTask,
   setContentTargets,
+  instagramStatus,
+  instagramConnectUrl,
+  instagramSyncNow,
+  instagramDisconnect,
   setTaskReviewer,
   setTaskWork,
   todayFor,
@@ -104,7 +108,7 @@ import { loadAuthority } from "../platformAccess";
 import { accountProcedure, adminProcedure, router } from "../_core/trpc";
 import { consumeLimit, LIMITS } from "../rateLimit";
 
-async function enforceLimit(rule: typeof LIMITS.fileUpload | typeof LIMITS.fileDrop | typeof LIMITS.engagementComment, subject: string) {
+async function enforceLimit(rule: typeof LIMITS.fileUpload | typeof LIMITS.fileDrop | typeof LIMITS.engagementComment | typeof LIMITS.socialSync, subject: string) {
   if (!(await consumeLimit(rule, subject))) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Kindly try again later." });
 }
 
@@ -317,6 +321,11 @@ const staffRouter = router({
     status: z.enum(CONTENT_STATUSES), dueOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(), link: z.string().trim().url("Paste the full link, starting https://").max(1024).nullable().or(z.literal("").transform(() => null)),
   })).mutation(async ({ ctx, input }) => guarded(async () => saveContentItem(await engagementDb(), ctx.actor, input))),
   deleteContent: staff.input(z.object({ itemId: id })).mutation(async ({ ctx, input }) => guarded(async () => deleteContentItem(await engagementDb(), ctx.actor, input))),
+  /** Instagram on the Content board (R108): status and figures; connect (a link for the account owner); check now; disconnect. */
+  instagramStatus: staff.input(z.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => instagramStatus(await engagementDb(), ctx.actor, input))),
+  instagramConnectUrl: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => instagramConnectUrl(await engagementDb(), ctx.actor, input))),
+  instagramSyncNow: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => { await enforceLimit(LIMITS.socialSync, `staff:${ctx.actor.id}`); return guarded(async () => instagramSyncNow(await engagementDb(), ctx.actor, input)); }),
+  instagramDisconnect: staff.input(z.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => instagramDisconnect(await engagementDb(), ctx.actor, input))),
   /** Sort a file the client dropped: the Data Requests it answers (an empty list clears the match). */
   matchFile: staff.input(z.object({ fileId: id, taskIds: z.array(id).max(50) })).mutation(async ({ ctx, input }) => guarded(async () => matchFile(await engagementDb(), ctx.actor, input))),
   saveMeasure: staff.input(z.object({ engagementId: id, name: text(160).min(1, "Name the number."), definition: optionalText(2000), unit: optionalText(32), baselineValue: reading, targetValue: reading }))

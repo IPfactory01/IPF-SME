@@ -99,6 +99,8 @@ import type { Answers } from "../shared/businessCheck/questions";
 import { roomInsight } from "../shared/fullReport/insight";
 import { reportForCheck } from "./fullReport/service";
 import { findSessionBookings, isSessionBookingConfigured, sessionBookingUrl } from "./calendly";
+import { instagramAuthorizeUrl, instagramConfigured, postsFor, syncInstagram } from "./instagram";
+import { socialConnections } from "../drizzle/schema";
 
 /**
  * The engagement room (shared/engagement.ts). Every function here decides access on the server: the team by
@@ -2398,4 +2400,46 @@ export async function listClientBusinesses(db: Database, actor: StaffActor) {
   if (!canStart(actor)) return [];
   const rows = await db.selectDistinct({ id: businesses.id, name: businesses.name }).from(businesses).innerJoin(engagements, eq(engagements.businessId, businesses.id)).orderBy(asc(businesses.name));
   return rows;
+}
+
+// ---- Instagram on the Content board (R108) ------------------------------------------------------------------------------
+
+/** Whether the engagement's Instagram is connected, when it was last checked, and the posts read with their figures. */
+export async function instagramStatus(db: Database, actor: StaffActor, input: { engagementId: number }) {
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  const [connection] = await db.select().from(socialConnections).where(and(eq(socialConnections.engagementId, engagement.id), eq(socialConnections.platform, "instagram"))).limit(1);
+  const posts = connection ? await postsFor(db, engagement.id) : [];
+  return {
+    configured: instagramConfigured(),
+    connection: connection ? { username: connection.username, status: connection.status, lastSyncAt: connection.lastSyncAt, lastError: connection.lastError, tokenExpiresAt: connection.tokenExpiresAt } : null,
+    posts: posts.map(post => ({ id: post.id, kind: post.kind, permalink: post.permalink, caption: post.caption, postedAt: post.postedAt, views: post.views, reach: post.reach, likes: post.likes, comments: post.comments, shares: post.shares, saves: post.saves, metricsAt: post.metricsAt, contentItemId: post.contentItemId })),
+  };
+}
+
+/** The address where the account owner gives permission. Whoever works on engagements; opened in a new tab. */
+export async function instagramConnectUrl(db: Database, actor: StaffActor, input: { engagementId: number }) {
+  requireManage(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (!instagramConfigured()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Instagram is not set up on the server yet (INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET)." });
+  return { url: instagramAuthorizeUrl(engagement.id, actor.id) };
+}
+
+/** Check Instagram now instead of waiting for the next scheduled run. */
+export async function instagramSyncNow(db: Database, actor: StaffActor, input: { engagementId: number }) {
+  requireManage(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  const [connection] = await db.select().from(socialConnections).where(and(eq(socialConnections.engagementId, engagement.id), eq(socialConnections.platform, "instagram"))).limit(1);
+  if (!connection || connection.status === "disconnected") throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Connect Instagram first." });
+  const result = await syncInstagram(db as never, connection);
+  if (!result.ok) throw new TRPCError({ code: "BAD_GATEWAY", message: result.tokenProblem ? "Instagram needs connecting again: the permission has ended or was removed." : `Instagram did not answer as expected: ${result.error}` });
+  return result;
+}
+
+/** Stop reading the account. The token is removed; the posts already read and the board stay as they are. */
+export async function instagramDisconnect(db: Database, actor: StaffActor, input: { engagementId: number }) {
+  requireManage(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  await db.update(socialConnections).set({ status: "disconnected", tokenSealed: "removed", tokenExpiresAt: null }).where(and(eq(socialConnections.engagementId, engagement.id), eq(socialConnections.platform, "instagram")));
+  await recordAudit(db, { action: "social_account_disconnected", actorUserId: actor.id, details: { engagementId: engagement.id, platform: "instagram" } });
+  return { success: true } as const;
 }

@@ -132,6 +132,9 @@ export const AUDIT_ACTIONS = [
   "pulse_restarted",
   "pulse_report_emailed",
   "pulse_scope_requested",
+  "social_account_connected",
+  "social_account_disconnected",
+  "social_sync_run",
 ] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 

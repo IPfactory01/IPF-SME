@@ -10,6 +10,14 @@
     {
       "path": "/api/scheduled/reminders",
       "schedule": "31 6 * * *"
+    },
+    {
+      "path": "/api/scheduled/social?run=morning",
+      "schedule": "47 5 * * *"
+    },
+    {
+      "path": "/api/scheduled/social?run=evening",
+      "schedule": "47 17 * * *"
     }
   ],
   "functions": {

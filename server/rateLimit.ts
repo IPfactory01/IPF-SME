@@ -66,6 +66,8 @@ export const LIMITS = {
   pulseReportEmail: { scope: "pulse_report_email", max: 3, windowMs: DAY },
   /** Requests for the scope and fee, per Pulse: each emails the office. */
   pulseLead: { scope: "pulse_lead", max: 3, windowMs: DAY },
+  /** "Check Instagram now" per team member: each reads the account and every recent post's figures. */
+  socialSync: { scope: "social_sync", max: 12, windowMs: HOUR },
 } as const satisfies Record<string, RateLimitRule>;
 
 const memory = new Map<string, { count: number; resetAt: number }>();

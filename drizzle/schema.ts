@@ -1515,3 +1515,60 @@ export const pulseLeads = pgTable("pulse_leads", {
 }, table => [index("pulse_leads_created_idx").on(table.createdAt)]);
 
 export type PulseSession = typeof pulseSessions.$inferSelect;
+
+/*
+ * A client's social accounts and their posts (R108, migration 0031). The team connects the client's Instagram (TikTok
+ * later) once, with the account owner's permission; twice a day the server reads the posts and their figures and marks
+ * the Content board. The access token is sealed (AES-256-GCM) and never leaves the server.
+ */
+export const socialPlatformEnum = pgEnum("social_platform", ["instagram", "tiktok"]);
+export const socialConnectionStatusEnum = pgEnum("social_connections_status", ["connected", "needs_reconnect", "disconnected"]);
+
+export const socialConnections = pgTable("social_connections", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  platform: socialPlatformEnum("platform").notNull(),
+  /** The account's id on the platform, and its handle as shown. */
+  accountId: varchar("accountId", { length: 64 }).notNull(),
+  username: varchar("username", { length: 64 }).notNull(),
+  tokenSealed: text("tokenSealed").notNull(),
+  tokenExpiresAt: timestamp("tokenExpiresAt", { withTimezone: true }),
+  status: socialConnectionStatusEnum("status").default("connected").notNull(),
+  connectedByUserId: integer("connectedByUserId").references(() => users.id),
+  lastSyncAt: timestamp("lastSyncAt", { withTimezone: true }),
+  /** The last check's problem in plain words, cleared by the next good one. */
+  lastError: varchar("lastError", { length: 500 }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [unique("social_connections_engagement_platform_unique").on(table.engagementId, table.platform)]);
+
+export const socialPosts = pgTable("social_posts", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  connectionId: integer("connectionId").notNull().references(() => socialConnections.id, { onDelete: "cascade" }),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  platform: socialPlatformEnum("platform").notNull(),
+  externalId: varchar("externalId", { length: 64 }).notNull(),
+  kind: engagementContentKindEnum("kind").notNull(),
+  permalink: varchar("permalink", { length: 1024 }),
+  caption: text("caption"),
+  postedAt: timestamp("postedAt", { withTimezone: true }).notNull(),
+  views: integer("views"),
+  reach: integer("reach"),
+  likes: integer("likes"),
+  comments: integer("comments"),
+  shares: integer("shares"),
+  saves: integer("saves"),
+  /** When the figures were last read. A post's figures are refreshed for its first 30 days. */
+  metricsAt: timestamp("metricsAt", { withTimezone: true }),
+  /** The Content board item this post published; one post per item. */
+  contentItemId: integer("contentItemId").references(() => engagementContentItems.id, { onDelete: "set null" }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull(),
+}, table => [
+  unique("social_posts_connection_external_unique").on(table.connectionId, table.externalId),
+  uniqueIndex("social_posts_content_item_unique").on(table.contentItemId).where(sql`${table.contentItemId} is not null`),
+  index("social_posts_engagement_idx").on(table.engagementId, table.postedAt),
+]);
+
+export type SocialConnection = typeof socialConnections.$inferSelect;
+export type SocialPost = typeof socialPosts.$inferSelect;

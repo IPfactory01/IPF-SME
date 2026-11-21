@@ -64,6 +64,12 @@ export const ENV = {
   paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY?.trim() ?? "",
   paystackSecretKey: process.env.PAYSTACK_SECRET_KEY?.trim() ?? "",
   /**
+   * Instagram (server/instagram.ts, R108): the Meta app's Instagram app ID and secret, for "Instagram API with Instagram
+   * Login". Unset: the Content tab shows no Connect button and nothing is fetched. The secret is never sent to a browser.
+   */
+  instagramAppId: process.env.INSTAGRAM_APP_ID?.trim() ?? "",
+  instagramAppSecret: process.env.INSTAGRAM_APP_SECRET?.trim() ?? "",
+  /**
    * Canonical public origin (scheme + host) used for emailed links and CSRF checks in production. Without APP_ORIGIN
    * the deployment's own Vercel address stands in (links still work; health reports the gap); locally, localhost.
    */

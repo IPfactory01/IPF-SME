@@ -41,7 +41,7 @@ describe("rate limits without the shared store", () => {
   });
 
   it("names a limit for every public path that sends email, calls a provider or renders a file", () => {
-    expect(Object.keys(LIMITS).sort()).toEqual(["checkNext", "checkSave", "checkStartEmail", "checkStartIp", "checkSubmit", "engagementComment", "fileDrop", "fileUpload", "onboardingEmail", "paymentPage", "paymentStart", "paymentStatus", "paymentStatusAddress", "publicLookup", "pulseLead", "pulseReportEmail", "pulseSave", "pulseStartEmail", "pulseStartIp", "pulseSubmit", "reportDownload", "reportForm", "resetRequest"]);
+    expect(Object.keys(LIMITS).sort()).toEqual(["checkNext", "checkSave", "checkStartEmail", "checkStartIp", "checkSubmit", "engagementComment", "fileDrop", "fileUpload", "onboardingEmail", "paymentPage", "paymentStart", "paymentStatus", "paymentStatusAddress", "publicLookup", "pulseLead", "pulseReportEmail", "pulseSave", "pulseStartEmail", "pulseStartIp", "pulseSubmit", "reportDownload", "reportForm", "resetRequest", "socialSync"]);
     expect(LIMITS.checkSubmit).toEqual({ scope: "check_submit", max: 3, windowMs: 3_600_000 });
     // Paying online: each start opens a Paystack transaction and each status check asks Paystack.
     expect(LIMITS.paymentStart).toEqual({ scope: "payment_start", max: 10, windowMs: 3_600_000 });

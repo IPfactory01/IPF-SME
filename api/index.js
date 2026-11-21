@@ -2530,6 +2530,52 @@ var pulseLeads = pgTable("pulse_leads", {
   recommended: varchar("recommended", { length: 192 }),
   createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull()
 }, (table2) => [index("pulse_leads_created_idx").on(table2.createdAt)]);
+var socialPlatformEnum = pgEnum("social_platform", ["instagram", "tiktok"]);
+var socialConnectionStatusEnum = pgEnum("social_connections_status", ["connected", "needs_reconnect", "disconnected"]);
+var socialConnections = pgTable("social_connections", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  platform: socialPlatformEnum("platform").notNull(),
+  /** The account's id on the platform, and its handle as shown. */
+  accountId: varchar("accountId", { length: 64 }).notNull(),
+  username: varchar("username", { length: 64 }).notNull(),
+  tokenSealed: text("tokenSealed").notNull(),
+  tokenExpiresAt: timestamp("tokenExpiresAt", { withTimezone: true }),
+  status: socialConnectionStatusEnum("status").default("connected").notNull(),
+  connectedByUserId: integer("connectedByUserId").references(() => users.id),
+  lastSyncAt: timestamp("lastSyncAt", { withTimezone: true }),
+  /** The last check's problem in plain words, cleared by the next good one. */
+  lastError: varchar("lastError", { length: 500 }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [unique("social_connections_engagement_platform_unique").on(table2.engagementId, table2.platform)]);
+var socialPosts = pgTable("social_posts", {
+  id: integer("id").primaryKey().generatedByDefaultAsIdentity(),
+  connectionId: integer("connectionId").notNull().references(() => socialConnections.id, { onDelete: "cascade" }),
+  engagementId: integer("engagementId").notNull().references(() => engagements.id, { onDelete: "cascade" }),
+  platform: socialPlatformEnum("platform").notNull(),
+  externalId: varchar("externalId", { length: 64 }).notNull(),
+  kind: engagementContentKindEnum("kind").notNull(),
+  permalink: varchar("permalink", { length: 1024 }),
+  caption: text("caption"),
+  postedAt: timestamp("postedAt", { withTimezone: true }).notNull(),
+  views: integer("views"),
+  reach: integer("reach"),
+  likes: integer("likes"),
+  comments: integer("comments"),
+  shares: integer("shares"),
+  saves: integer("saves"),
+  /** When the figures were last read. A post's figures are refreshed for its first 30 days. */
+  metricsAt: timestamp("metricsAt", { withTimezone: true }),
+  /** The Content board item this post published; one post per item. */
+  contentItemId: integer("contentItemId").references(() => engagementContentItems.id, { onDelete: "set null" }),
+  createdAt: timestamp("createdAt", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }).defaultNow().$onUpdate(() => sql`now()`).notNull()
+}, (table2) => [
+  unique("social_posts_connection_external_unique").on(table2.connectionId, table2.externalId),
+  uniqueIndex("social_posts_content_item_unique").on(table2.contentItemId).where(sql`${table2.contentItemId} is not null`),
+  index("social_posts_engagement_idx").on(table2.engagementId, table2.postedAt)
+]);
 
 // server/_core/env.ts
 function originOf(value) {
@@ -2586,6 +2632,12 @@ var ENV = {
    */
   paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY?.trim() ?? "",
   paystackSecretKey: process.env.PAYSTACK_SECRET_KEY?.trim() ?? "",
+  /**
+   * Instagram (server/instagram.ts, R108): the Meta app's Instagram app ID and secret, for "Instagram API with Instagram
+   * Login". Unset: the Content tab shows no Connect button and nothing is fetched. The secret is never sent to a browser.
+   */
+  instagramAppId: process.env.INSTAGRAM_APP_ID?.trim() ?? "",
+  instagramAppSecret: process.env.INSTAGRAM_APP_SECRET?.trim() ?? "",
   /**
    * Canonical public origin (scheme + host) used for emailed links and CSRF checks in production. Without APP_ORIGIN
    * the deployment's own Vercel address stands in (links still work; health reports the gap); locally, localhost.
@@ -4025,7 +4077,9 @@ var LIMITS = {
   /** Emailed copies of a Pulse result, per session. */
   pulseReportEmail: { scope: "pulse_report_email", max: 3, windowMs: DAY },
   /** Requests for the scope and fee, per Pulse: each emails the office. */
-  pulseLead: { scope: "pulse_lead", max: 3, windowMs: DAY }
+  pulseLead: { scope: "pulse_lead", max: 3, windowMs: DAY },
+  /** "Check Instagram now" per team member: each reads the account and every recent post's figures. */
+  socialSync: { scope: "social_sync", max: 12, windowMs: HOUR }
 };
 var memory = /* @__PURE__ */ new Map();
 var storeRetryAt = 0;
@@ -4890,6 +4944,13 @@ var journal_default = {
       when: 1795183362190,
       tag: "0030_pulse",
       breakpoints: true
+    },
+    {
+      idx: 31,
+      version: "7",
+      when: 1795245164001,
+      tag: "0031_social_posts",
+      breakpoints: true
     }
   ]
 };
@@ -5288,8 +5349,8 @@ ${BRAND.organisationName}`,
 
 // server/routers/businessCheck.ts
 import { TRPCError as TRPCError20 } from "@trpc/server";
-import { randomBytes as randomBytes10 } from "crypto";
-import { and as and18, eq as eq26, isNull as isNull13 } from "drizzle-orm";
+import { randomBytes as randomBytes11 } from "crypto";
+import { and as and19, eq as eq27, isNull as isNull14 } from "drizzle-orm";
 import { z as z9 } from "zod";
 
 // shared/phone.ts
@@ -6933,12 +6994,12 @@ function officeEmail(input) {
 }
 
 // server/payments.ts
-import { and as and17, eq as eq25, inArray as inArray12, ne as ne4 } from "drizzle-orm";
+import { and as and18, eq as eq26, inArray as inArray13, ne as ne4 } from "drizzle-orm";
 import { TRPCError as TRPCError19 } from "@trpc/server";
 
 // server/engagements.ts
 import { TRPCError as TRPCError18 } from "@trpc/server";
-import { and as and16, asc as asc7, desc as desc8, eq as eq24, gte, inArray as inArray11, isNull as isNull12, like, ne as ne3, sql as sql8 } from "drizzle-orm";
+import { and as and17, asc as asc8, desc as desc8, eq as eq25, gte as gte2, inArray as inArray12, isNull as isNull13, like, ne as ne3, sql as sql8 } from "drizzle-orm";
 
 // server/accountInvitations.ts
 import { randomBytes as randomBytes6, randomUUID } from "crypto";
@@ -12486,6 +12547,259 @@ async function bookedCallTime(eventUri, inviteeEmail) {
   }
 }
 
+// server/instagram.ts
+import { createCipheriv as createCipheriv2, createDecipheriv as createDecipheriv2, createHmac as createHmac5, hkdfSync as hkdfSync2, randomBytes as randomBytes10, timingSafeEqual as timingSafeEqual6 } from "node:crypto";
+import { and as and16, asc as asc7, eq as eq24, gte, inArray as inArray11, isNull as isNull12 } from "drizzle-orm";
+var INSTAGRAM_CALLBACK_PATH = "/api/social/instagram/callback";
+var INSTAGRAM_SCOPES = ["instagram_business_basic", "instagram_business_manage_insights"];
+var GRAPH = "https://graph.instagram.com/v22.0";
+var REFRESH_DAYS = 30;
+var STATE_MINUTES = 15;
+var DAY_MS = 864e5;
+var instagramConfigured = () => Boolean(ENV.instagramAppId && ENV.instagramAppSecret);
+var instagramRedirectUri = () => `${ENV.appOrigin}${INSTAGRAM_CALLBACK_PATH}`;
+function tokenKey() {
+  const material = ENV.cookieSecret || (ENV.isProduction ? "" : "ipf-development-only-social-key");
+  if (!material) throw new Error("JWT_SECRET is not set, so social tokens cannot be sealed.");
+  return Buffer.from(hkdfSync2("sha256", material, "ipf-social-token-v1", "access-token", 32));
+}
+function sealToken(token3) {
+  const iv = randomBytes10(12);
+  const cipher = createCipheriv2("aes-256-gcm", tokenKey(), iv);
+  const body = Buffer.concat([cipher.update(token3, "utf8"), cipher.final()]);
+  return ["v1", iv.toString("base64url"), cipher.getAuthTag().toString("base64url"), body.toString("base64url")].join(".");
+}
+function openToken(sealed) {
+  const [version, iv, tag, body] = sealed.split(".");
+  if (version !== "v1" || !iv || !tag || !body) throw new Error("Unknown token format");
+  const decipher = createDecipheriv2("aes-256-gcm", tokenKey(), Buffer.from(iv, "base64url"));
+  decipher.setAuthTag(Buffer.from(tag, "base64url"));
+  return Buffer.concat([decipher.update(Buffer.from(body, "base64url")), decipher.final()]).toString("utf8");
+}
+var stateMac = (payload) => createHmac5("sha256", tokenKey()).update(`instagram-state:${payload}`).digest("base64url");
+function signConnectState(state) {
+  const payload = Buffer.from(JSON.stringify(state)).toString("base64url");
+  return `${payload}.${stateMac(payload)}`;
+}
+function readConnectState(value, now = Date.now()) {
+  const [payload, mac] = (value ?? "").split(".");
+  if (!payload || !mac) return null;
+  const expected = Buffer.from(stateMac(payload));
+  const given = Buffer.from(mac);
+  if (expected.length !== given.length || !timingSafeEqual6(expected, given)) return null;
+  try {
+    const state = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    if (!Number.isInteger(state.engagementId) || !Number.isInteger(state.userId) || state.expiresAt < now) return null;
+    return state;
+  } catch {
+    return null;
+  }
+}
+function instagramAuthorizeUrl(engagementId, userId, now = Date.now()) {
+  const url = new URL("https://www.instagram.com/oauth/authorize");
+  url.searchParams.set("client_id", ENV.instagramAppId);
+  url.searchParams.set("redirect_uri", instagramRedirectUri());
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", INSTAGRAM_SCOPES.join(","));
+  url.searchParams.set("state", signConnectState({ engagementId, userId, expiresAt: now + STATE_MINUTES * 6e4 }));
+  return url.toString();
+}
+var InstagramError = class extends Error {
+  constructor(message, tokenProblem = false) {
+    super(message);
+    this.tokenProblem = tokenProblem;
+  }
+};
+async function call2(fetcher, url, init) {
+  let response;
+  try {
+    response = await fetcher(url, { ...init, signal: AbortSignal.timeout(15e3) });
+  } catch {
+    throw new InstagramError("Instagram could not be reached.");
+  }
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || body.error) {
+    const code = body.error?.code;
+    throw new InstagramError(body.error?.message || body.error_message || `Instagram answered ${response.status}.`, code === 190 || body.error?.type === "OAuthException" && code !== 100);
+  }
+  return body;
+}
+async function exchangeCode(code, fetcher = fetch) {
+  const form = new URLSearchParams({ client_id: ENV.instagramAppId, client_secret: ENV.instagramAppSecret, grant_type: "authorization_code", redirect_uri: instagramRedirectUri(), code });
+  const short = await call2(fetcher, "https://api.instagram.com/oauth/access_token", { method: "POST", body: form });
+  const long = await call2(fetcher, `https://graph.instagram.com/access_token?${new URLSearchParams({ grant_type: "ig_exchange_token", client_secret: ENV.instagramAppSecret, access_token: short.access_token })}`);
+  const me = await call2(fetcher, `${GRAPH}/me?${new URLSearchParams({ fields: "user_id,username", access_token: long.access_token })}`);
+  return { token: long.access_token, expiresAt: new Date(Date.now() + long.expires_in * 1e3), accountId: String(me.user_id ?? me.id ?? short.user_id), username: me.username };
+}
+async function refreshToken(token3, fetcher) {
+  const fresh = await call2(fetcher, `https://graph.instagram.com/refresh_access_token?${new URLSearchParams({ grant_type: "ig_refresh_token", access_token: token3 })}`);
+  return { token: fresh.access_token, expiresAt: new Date(Date.now() + fresh.expires_in * 1e3) };
+}
+function kindOf(media) {
+  if (media.media_product_type === "REELS") return "reel";
+  if (media.media_product_type === "STORY") return "story";
+  return "post";
+}
+var METRICS = {
+  reel: ["views", "reach", "likes", "comments", "shares", "saved"],
+  post: ["views", "reach", "likes", "comments", "shares", "saved"],
+  story: ["views", "reach", "shares"]
+};
+async function figuresOf(media, kind, token3, fetcher) {
+  const figures = { views: null, reach: null, likes: media.like_count ?? null, comments: media.comments_count ?? null, shares: null, saves: null };
+  const read = async (metrics2) => {
+    const result = await call2(fetcher, `${GRAPH}/${media.id}/insights?${new URLSearchParams({ metric: metrics2.join(","), access_token: token3 })}`);
+    for (const row of result.data ?? []) {
+      const value = row.total_value?.value ?? row.values?.[0]?.value;
+      if (typeof value !== "number") continue;
+      const key = row.name === "saved" ? "saves" : row.name;
+      if (key in figures) figures[key] = value;
+    }
+  };
+  try {
+    await read(METRICS[kind]);
+  } catch (error) {
+    if (error instanceof InstagramError && error.tokenProblem) throw error;
+    for (const metric of METRICS[kind]) await read([metric]).catch(() => void 0);
+  }
+  return figures;
+}
+async function recentMedia(token3, since, fetcher) {
+  const fields = "id,caption,media_type,media_product_type,permalink,timestamp,like_count,comments_count";
+  const out = [];
+  let next = `${GRAPH}/me/media?${new URLSearchParams({ fields, limit: "50", access_token: token3 })}`;
+  for (let page2 = 0; next && page2 < 6; page2 += 1) {
+    const result = await call2(fetcher, next);
+    const fresh = (result.data ?? []).filter((media) => new Date(media.timestamp) >= since);
+    out.push(...fresh);
+    next = fresh.length === (result.data ?? []).length ? result.paging?.next : void 0;
+  }
+  const stories = await call2(fetcher, `${GRAPH}/me/stories?${new URLSearchParams({ fields: "id,caption,media_type,media_product_type,permalink,timestamp", access_token: token3 })}`).catch((error) => {
+    if (error instanceof InstagramError && error.tokenProblem) throw error;
+    return { data: [] };
+  });
+  out.push(...(stories.data ?? []).map((story) => ({ ...story, media_product_type: "STORY" })));
+  return out;
+}
+function engagementMonthOf(startedOn, day, durationDays) {
+  if (!startedOn || day < startedOn) return null;
+  const days = Math.round((Date.parse(`${day}T00:00:00Z`) - Date.parse(`${startedOn}T00:00:00Z`)) / DAY_MS);
+  if (durationDays !== void 0 && days >= durationDays) return null;
+  return Math.floor(days / 30) + 1;
+}
+function pickItem(items, post) {
+  const open = items.filter((item2) => item2.kind === post.kind && item2.month === post.month && !item2.linked && item2.status !== "published");
+  const distance = (item2) => item2.dueOn ? Math.abs(Date.parse(item2.dueOn) - Date.parse(post.day)) : Number.MAX_SAFE_INTEGER;
+  return open.sort((a, b) => distance(a) - distance(b) || a.sortOrder - b.sortOrder || a.id - b.id)[0] ?? null;
+}
+var titleFrom = (kind, caption, day) => {
+  const words = (caption ?? "").replace(/\s+/g, " ").trim();
+  const label = kind === "reel" ? "Reel" : kind === "story" ? "Story" : "Post";
+  return (words ? `${label}: ${words}` : `${label} posted ${day}`).slice(0, 120);
+};
+async function matchPosts(db, connection, startedOn, durationDays) {
+  const unmatched = await db.select().from(socialPosts).where(and16(eq24(socialPosts.connectionId, connection.id), isNull12(socialPosts.contentItemId))).orderBy(asc7(socialPosts.postedAt));
+  if (!unmatched.length) return { published: 0, added: 0 };
+  const linkedIds = new Set((await db.select({ id: socialPosts.contentItemId }).from(socialPosts).where(eq24(socialPosts.engagementId, connection.engagementId))).map((row) => row.id).filter((id3) => id3 !== null));
+  const board = (await db.select().from(engagementContentItems).where(eq24(engagementContentItems.engagementId, connection.engagementId))).map((item2) => ({ id: item2.id, kind: item2.kind, month: item2.month, status: item2.status, dueOn: item2.dueOn, sortOrder: item2.sortOrder, linked: linkedIds.has(item2.id) }));
+  let published = 0;
+  let added = 0;
+  for (const post of unmatched) {
+    const day = lagosDay(post.postedAt);
+    const month = engagementMonthOf(startedOn, day, durationDays);
+    if (month === null) continue;
+    const item2 = pickItem(board, { kind: post.kind, day, month });
+    if (item2) {
+      await db.update(engagementContentItems).set({ status: "published", publishedAt: post.postedAt, link: post.permalink }).where(eq24(engagementContentItems.id, item2.id));
+      item2.linked = true;
+      item2.status = "published";
+      await db.update(socialPosts).set({ contentItemId: item2.id }).where(eq24(socialPosts.id, post.id));
+      published += 1;
+    } else {
+      const [created] = await db.insert(engagementContentItems).values({
+        engagementId: connection.engagementId,
+        kind: post.kind,
+        title: titleFrom(post.kind, post.caption, day),
+        month,
+        status: "published",
+        dueOn: day,
+        link: post.permalink,
+        publishedAt: post.postedAt,
+        sortOrder: 1e3
+      }).returning({ id: engagementContentItems.id });
+      board.push({ id: created.id, kind: post.kind, month, status: "published", dueOn: day, sortOrder: 1e3, linked: true });
+      await db.update(socialPosts).set({ contentItemId: created.id }).where(eq24(socialPosts.id, post.id));
+      added += 1;
+    }
+  }
+  return { published, added };
+}
+async function syncInstagram(db, connection, fetcher = fetch, now = /* @__PURE__ */ new Date()) {
+  const [engagement] = await db.select({ startedOn: engagements.startedOn, type: engagements.type }).from(engagements).where(eq24(engagements.id, connection.engagementId)).limit(1);
+  try {
+    let token3 = openToken(connection.tokenSealed);
+    if (connection.tokenExpiresAt && connection.tokenExpiresAt.getTime() - now.getTime() < REFRESH_DAYS * DAY_MS) {
+      const fresh = await refreshToken(token3, fetcher);
+      token3 = fresh.token;
+      await db.update(socialConnections).set({ tokenSealed: sealToken(token3), tokenExpiresAt: fresh.expiresAt }).where(eq24(socialConnections.id, connection.id));
+    }
+    const since = new Date(now.getTime() - 30 * DAY_MS);
+    const media = await recentMedia(token3, since, fetcher);
+    for (const item2 of media) {
+      const kind = kindOf(item2);
+      const figures = await figuresOf(item2, kind, token3, fetcher);
+      const values2 = { permalink: item2.permalink ?? null, caption: item2.caption ?? null, ...figures, metricsAt: now };
+      await db.insert(socialPosts).values({ connectionId: connection.id, engagementId: connection.engagementId, platform: "instagram", externalId: item2.id, kind, postedAt: new Date(item2.timestamp), ...values2 }).onConflictDoUpdate({ target: [socialPosts.connectionId, socialPosts.externalId], set: values2 });
+    }
+    const matched = await matchPosts(db, connection, engagement?.startedOn ?? null, engagement ? DATED_TYPES[engagement.type]?.durationDays : void 0);
+    await db.update(socialConnections).set({ lastSyncAt: now, lastError: null, status: "connected" }).where(eq24(socialConnections.id, connection.id));
+    return { ok: true, read: media.length, ...matched };
+  } catch (error) {
+    const message = error instanceof Error ? error.message.slice(0, 500) : "The check failed.";
+    const tokenProblem = error instanceof InstagramError && error.tokenProblem;
+    await db.update(socialConnections).set({ lastError: tokenProblem ? `Instagram needs connecting again: ${message}`.slice(0, 500) : message, ...tokenProblem ? { status: "needs_reconnect" } : {} }).where(eq24(socialConnections.id, connection.id));
+    return { ok: false, error: message, tokenProblem };
+  }
+}
+async function runSocialSync(db, fetcher = fetch, now = /* @__PURE__ */ new Date()) {
+  const connections = await db.select().from(socialConnections).where(and16(eq24(socialConnections.platform, "instagram"), eq24(socialConnections.status, "connected")));
+  const results = [];
+  for (const connection of connections) results.push({ connectionId: connection.id, ...await syncInstagram(db, connection, fetcher, now) });
+  await recordAudit(db, { action: "social_sync_run", actorUserId: null, details: { accounts: results.length, failed: results.filter((r) => !r.ok).length } });
+  return { accounts: results.length, results };
+}
+var page = (title, body) => `<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
+<style>body{font-family:system-ui,sans-serif;background:#F7F9FA;color:#12324F;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px}main{max-width:28rem;background:#fff;border:1px solid #DDE3E8;border-radius:12px;padding:28px}h1{font-size:1.25rem;margin:0 0 8px}p{line-height:1.5;margin:0}</style></head>
+<body><main><h1>${title}</h1><p>${body}</p></main></body></html>`;
+var escapeHtml2 = (text4) => text4.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+async function handleInstagramCallback(req, res, fetcher = fetch) {
+  res.set("Cache-Control", "no-store");
+  const state = readConnectState(typeof req.query.state === "string" ? req.query.state : void 0);
+  if (!state) return void res.status(400).type("html").send(page("The link has expired", "Go back to the Content tab and press Connect Instagram again."));
+  if (typeof req.query.error === "string" || typeof req.query.code !== "string") {
+    return void res.status(200).type("html").send(page("Instagram was not connected", "Permission was not given. Nothing was saved. You can close this tab."));
+  }
+  if (!instagramConfigured()) return void res.status(503).type("html").send(page("Instagram is not set up", "The Instagram app details are missing on the server."));
+  const db = await getDb();
+  if (!db) return void res.status(503).type("html").send(page("Please try again", "The database is not available just now."));
+  try {
+    const account = await exchangeCode(req.query.code.replace(/#_$/, ""), fetcher);
+    const values2 = { accountId: account.accountId, username: account.username, tokenSealed: sealToken(account.token), tokenExpiresAt: account.expiresAt, status: "connected", connectedByUserId: state.userId, lastError: null };
+    const [connection] = await db.insert(socialConnections).values({ engagementId: state.engagementId, platform: "instagram", ...values2 }).onConflictDoUpdate({ target: [socialConnections.engagementId, socialConnections.platform], set: values2 }).returning();
+    await recordAudit(db, { action: "social_account_connected", actorUserId: state.userId, details: { engagementId: state.engagementId, platform: "instagram", username: account.username } });
+    const first = await syncInstagram(db, connection, fetcher);
+    const summary = first.ok ? `First check done: ${first.read} posts read.` : "The first check will run with the next scheduled one.";
+    res.status(200).type("html").send(page("Instagram connected", `@${escapeHtml2(account.username)} is connected to the Content board. ${summary} You can close this tab and go back to The Shift.`));
+  } catch (error) {
+    console.error("[Instagram] Connecting failed:", error instanceof Error ? error.message : error);
+    res.status(502).type("html").send(page("Instagram was not connected", "Instagram did not accept the request. Go back to the Content tab and try again."));
+  }
+}
+async function postsFor(db, engagementId, since) {
+  const where = since ? and16(eq24(socialPosts.engagementId, engagementId), gte(socialPosts.postedAt, /* @__PURE__ */ new Date(`${addDays(since, 0)}T00:00:00Z`))) : eq24(socialPosts.engagementId, engagementId);
+  return db.select().from(socialPosts).where(where).orderBy(asc7(socialPosts.postedAt));
+}
+
 // server/engagements.ts
 var NOT_FOUND = "This engagement is not available.";
 var notFound4 = () => new TRPCError18({ code: "NOT_FOUND", message: NOT_FOUND });
@@ -12512,7 +12826,7 @@ function addWorkingDays(from, days) {
 }
 async function businessReviewBalance(db, paymentRequestId) {
   if (paymentRequestId === null) return 0;
-  const request = (await db.select({ item: paymentRequests.item, amountNaira: paymentRequests.amountNaira }).from(paymentRequests).where(eq24(paymentRequests.id, paymentRequestId)).limit(1))[0];
+  const request = (await db.select({ item: paymentRequests.item, amountNaira: paymentRequests.amountNaira }).from(paymentRequests).where(eq25(paymentRequests.id, paymentRequestId)).limit(1))[0];
   if (!request || request.item !== "current_state") return 0;
   return secondHalf(request.amountNaira, PAYMENT_REQUEST_BUSINESS_REVIEW_PRICE);
 }
@@ -12560,7 +12874,7 @@ async function startEngagement(db, input) {
   const now = input.now ?? /* @__PURE__ */ new Date();
   return db.transaction(async (tx) => {
     const balance = await businessReviewBalance(tx, input.paymentRequestId);
-    const accepted = (await tx.select({ businessId: clientOnboardingInvitations.businessId }).from(clientOnboardingInvitations).where(and16(eq24(clientOnboardingInvitations.businessCheckId, input.businessCheckId), eq24(clientOnboardingInvitations.status, "accepted"))).orderBy(desc8(clientOnboardingInvitations.id)).limit(1))[0];
+    const accepted = (await tx.select({ businessId: clientOnboardingInvitations.businessId }).from(clientOnboardingInvitations).where(and17(eq25(clientOnboardingInvitations.businessCheckId, input.businessCheckId), eq25(clientOnboardingInvitations.status, "accepted"))).orderBy(desc8(clientOnboardingInvitations.id)).limit(1))[0];
     const [created] = await tx.insert(engagements).values({ businessCheckId: input.businessCheckId, paymentRequestId: input.paymentRequestId, businessId: accepted?.businessId ?? null }).onConflictDoNothing({ target: engagements.businessCheckId }).returning({ id: engagements.id });
     if (!created) return { engagementId: null, created: false };
     await loadAssessmentPlan(tx, created.id, { now, actorUserId: input.actorUserId });
@@ -12585,9 +12899,9 @@ async function createDirectEngagement(db, actor, input) {
   const starter = dated ?? (product2 ? serviceStarter(product2) : null);
   const dueFor = (week) => addDays2(input.startedOn, (week - 1) * 7 + 3);
   if (input.businessId) {
-    const business = (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq24(businesses.id, input.businessId)).limit(1))[0];
+    const business = (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq25(businesses.id, input.businessId)).limit(1))[0];
     if (!business) throw notFound4();
-    const owner = (await db.select({ email: users.email }).from(businessMemberships).innerJoin(users, eq24(businessMemberships.userId, users.id)).where(and16(eq24(businessMemberships.businessId, business.id), eq24(businessMemberships.role, "owner"))).limit(1))[0];
+    const owner = (await db.select({ email: users.email }).from(businessMemberships).innerJoin(users, eq25(businessMemberships.userId, users.id)).where(and17(eq25(businessMemberships.businessId, business.id), eq25(businessMemberships.role, "owner"))).limit(1))[0];
     const engagementId2 = await db.transaction(async (tx) => insertDirect(tx, actor, input, { businessId: business.id, service, starter, dueFor, contactName: null, contactEmail: owner?.email ?? null }));
     return { engagementId: engagementId2, invitationUrl: null, deliveryStatus: null, hasAccount: true };
   }
@@ -12597,7 +12911,7 @@ async function createDirectEngagement(db, actor, input) {
   if (businessName.length < 2 || contactName.length < 2 || !email.includes("@")) throw new TRPCError18({ code: "BAD_REQUEST", message: "Name the business and the client, and give the client's email." });
   const existing = (await db.select({ id: users.id, status: users.status }).from(users).where(sql8`lower(${users.email}) = ${email}`).limit(1))[0];
   if (existing) {
-    const staff2 = (await db.select({ id: userPlatformRoles.id }).from(userPlatformRoles).where(eq24(userPlatformRoles.userId, existing.id)).limit(1)).length > 0;
+    const staff2 = (await db.select({ id: userPlatformRoles.id }).from(userPlatformRoles).where(eq25(userPlatformRoles.userId, existing.id)).limit(1)).length > 0;
     if (staff2) throw new TRPCError18({ code: "BAD_REQUEST", message: "This email belongs to a staff account. Use the client's own email." });
   }
   const { engagementId, businessId } = await db.transaction(async (tx) => {
@@ -12645,8 +12959,8 @@ async function addMissingPlan(db, actor, input) {
   const startsOn = engagement.startedOn;
   return db.transaction(async (tx) => {
     const [tasks, sessions] = await Promise.all([
-      tx.select({ title: engagementTasks.title }).from(engagementTasks).where(eq24(engagementTasks.engagementId, engagement.id)),
-      tx.select({ title: engagementSessions.title, weekNumber: engagementSessions.weekNumber }).from(engagementSessions).where(eq24(engagementSessions.engagementId, engagement.id))
+      tx.select({ title: engagementTasks.title }).from(engagementTasks).where(eq25(engagementTasks.engagementId, engagement.id)),
+      tx.select({ title: engagementSessions.title, weekNumber: engagementSessions.weekNumber }).from(engagementSessions).where(eq25(engagementSessions.engagementId, engagement.id))
     ]);
     const key = (title) => title.trim().toLowerCase();
     const haveTasks = new Set(tasks.map((row) => key(row.title)));
@@ -12713,27 +13027,27 @@ async function listAwaitingStart(db, actor) {
     fullName: businessChecks.fullName,
     businessName: businessChecks.businessName,
     email: businessChecks.email
-  }).from(paymentRequests).innerJoin(businessChecks, eq24(paymentRequests.businessCheckId, businessChecks.id)).leftJoin(engagements, eq24(engagements.businessCheckId, paymentRequests.businessCheckId)).where(and16(eq24(paymentRequests.item, "current_state"), eq24(paymentRequests.status, "confirmed"), isNull12(engagements.id))).orderBy(asc7(paymentRequests.confirmedAt));
+  }).from(paymentRequests).innerJoin(businessChecks, eq25(paymentRequests.businessCheckId, businessChecks.id)).leftJoin(engagements, eq25(engagements.businessCheckId, paymentRequests.businessCheckId)).where(and17(eq25(paymentRequests.item, "current_state"), eq25(paymentRequests.status, "confirmed"), isNull13(engagements.id))).orderBy(asc8(paymentRequests.confirmedAt));
 }
 async function startAwaitingEngagement(db, actor, input) {
   requireStart(actor);
-  const payment = (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and16(eq24(paymentRequests.businessCheckId, input.businessCheckId), eq24(paymentRequests.item, "current_state"), eq24(paymentRequests.status, "confirmed"))).limit(1))[0];
+  const payment = (await db.select({ id: paymentRequests.id }).from(paymentRequests).where(and17(eq25(paymentRequests.businessCheckId, input.businessCheckId), eq25(paymentRequests.item, "current_state"), eq25(paymentRequests.status, "confirmed"))).limit(1))[0];
   if (!payment) throw new TRPCError18({ code: "NOT_FOUND", message: "This Business Review is not paid yet." });
   const result = await startEngagement(db, { businessCheckId: input.businessCheckId, paymentRequestId: payment.id, actorUserId: actor.id });
-  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq24(engagements.businessCheckId, input.businessCheckId)).limit(1))[0];
+  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(eq25(engagements.businessCheckId, input.businessCheckId)).limit(1))[0];
   return { engagementId: engagement.id, created: result.created };
 }
 async function linkEngagementToBusiness(db, input) {
-  await db.update(engagements).set({ businessId: input.businessId }).where(and16(eq24(engagements.businessCheckId, input.businessCheckId), isNull12(engagements.businessId)));
+  await db.update(engagements).set({ businessId: input.businessId }).where(and17(eq25(engagements.businessCheckId, input.businessCheckId), isNull13(engagements.businessId)));
 }
 var canSeeAll = (actor) => authorityAllows(actor.authority, "view_all_businesses");
 var canSeeAssigned = (actor) => authorityAllows(actor.authority, "view_assigned_businesses");
 async function assignedEngagementIds(db, userId) {
-  const rows = await db.select({ engagementId: engagementTeam.engagementId }).from(engagementTeam).where(eq24(engagementTeam.userId, userId));
+  const rows = await db.select({ engagementId: engagementTeam.engagementId }).from(engagementTeam).where(eq25(engagementTeam.userId, userId));
   return rows.map((row) => row.engagementId);
 }
 async function requireStaffEngagement(db, actor, engagementId) {
-  const engagement = (await db.select().from(engagements).where(eq24(engagements.id, engagementId)).limit(1))[0];
+  const engagement = (await db.select().from(engagements).where(eq25(engagements.id, engagementId)).limit(1))[0];
   if (!engagement) throw notFound4();
   if (canSeeAll(actor)) return engagement;
   if (canSeeAssigned(actor) && (await assignedEngagementIds(db, actor.id)).includes(engagementId)) return engagement;
@@ -12750,7 +13064,7 @@ function isOwnTask(task, actorId, ownerUserId, otherOwners = []) {
   return task.assigneeUserId === actorId || task.requestedByUserId === actorId || task.side === "ipf" && task.createdByUserId === actorId || ownerUserId === actorId || otherOwners.includes(actorId);
 }
 async function otherOwnersOf(db, where) {
-  const condition = where.taskId !== void 0 ? eq24(engagementTaskOwners.taskId, where.taskId) : where.engagementIds ? where.engagementIds.length ? inArray11(engagementTaskOwners.engagementId, where.engagementIds) : sql8`false` : eq24(engagementTaskOwners.engagementId, where.engagementId);
+  const condition = where.taskId !== void 0 ? eq25(engagementTaskOwners.taskId, where.taskId) : where.engagementIds ? where.engagementIds.length ? inArray12(engagementTaskOwners.engagementId, where.engagementIds) : sql8`false` : eq25(engagementTaskOwners.engagementId, where.engagementId);
   const rows = await db.select({ taskId: engagementTaskOwners.taskId, userId: engagementTaskOwners.userId }).from(engagementTaskOwners).where(condition);
   const map = /* @__PURE__ */ new Map();
   for (const row of rows) map.set(row.taskId, [...map.get(row.taskId) ?? [], row.userId]);
@@ -12778,7 +13092,7 @@ function mayTickOff(actor, team, task, others) {
   return authorityAllows(actor.authority, "review_assigned_items") && team.some((member) => member.userId === actor.id) && !ownersOfTask(team, task, others).includes(actor.id);
 }
 async function decisionsOf(db, engagementId) {
-  const rows = await db.select({ actorUserId: adminAccessAuditEvents.actorUserId, details: adminAccessAuditEvents.details, createdAt: adminAccessAuditEvents.createdAt }).from(adminAccessAuditEvents).where(and16(eq24(adminAccessAuditEvents.action, "engagement_task_reviewed"), like(adminAccessAuditEvents.details, `{"engagementId":${engagementId},%`))).orderBy(asc7(adminAccessAuditEvents.id));
+  const rows = await db.select({ actorUserId: adminAccessAuditEvents.actorUserId, details: adminAccessAuditEvents.details, createdAt: adminAccessAuditEvents.createdAt }).from(adminAccessAuditEvents).where(and17(eq25(adminAccessAuditEvents.action, "engagement_task_reviewed"), like(adminAccessAuditEvents.details, `{"engagementId":${engagementId},%`))).orderBy(asc8(adminAccessAuditEvents.id));
   const names = await namesOf2(db, rows.map((row) => row.actorUserId));
   const latest = /* @__PURE__ */ new Map();
   for (const row of rows) {
@@ -12791,28 +13105,28 @@ async function decisionsOf(db, engagementId) {
   return latest;
 }
 async function requireStaffTask(db, actor, taskId) {
-  const task = (await db.select().from(engagementTasks).where(eq24(engagementTasks.id, taskId)).limit(1))[0];
+  const task = (await db.select().from(engagementTasks).where(eq25(engagementTasks.id, taskId)).limit(1))[0];
   if (!task || task.status === "cancelled") throw notFound4();
   await requireStaffEngagement(db, actor, task.engagementId);
-  const team = await db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name }).from(engagementTeam).innerJoin(users, eq24(engagementTeam.userId, users.id)).where(eq24(engagementTeam.engagementId, task.engagementId));
+  const team = await db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name }).from(engagementTeam).innerJoin(users, eq25(engagementTeam.userId, users.id)).where(eq25(engagementTeam.engagementId, task.engagementId));
   const leads = await canReviewEngagement(db, actor, task.engagementId);
   const others = (await otherOwnersOf(db, { taskId: task.id })).get(task.id) ?? [];
   return { task, team, leads, others, own: isOwnTask(task, actor.id, ownerOfTask(team, task), others) };
 }
 async function todayFor(db, actor, now = Date.now()) {
-  const mine = await db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role }).from(engagementTeam).where(eq24(engagementTeam.userId, actor.id));
+  const mine = await db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role }).from(engagementTeam).where(eq25(engagementTeam.userId, actor.id));
   if (!mine.length) return [];
   const ids = mine.map((row) => row.engagementId);
   const leads = new Set(mine.filter((row) => ENGAGEMENT_REVIEW_ROLES.includes(row.role)).map((row) => row.engagementId));
   const [rows, team, tasks, sessions, deliverables, drops, matched, fees] = await Promise.all([
-    db.select().from(engagements).where(and16(inArray11(engagements.id, ids), ne3(engagements.stage, "closed"))),
-    db.select({ engagementId: engagementTeam.engagementId, userId: engagementTeam.userId, role: engagementTeam.role, name: users.name }).from(engagementTeam).innerJoin(users, eq24(engagementTeam.userId, users.id)).where(inArray11(engagementTeam.engagementId, ids)),
-    db.select().from(engagementTasks).where(and16(inArray11(engagementTasks.engagementId, ids), ne3(engagementTasks.status, "cancelled"))),
-    db.select().from(engagementSessions).where(and16(inArray11(engagementSessions.engagementId, ids), eq24(engagementSessions.status, "planned"))),
-    db.select({ id: engagementDeliverables.id, engagementId: engagementDeliverables.engagementId, title: engagementDeliverables.title, status: engagementDeliverables.status, kind: engagementDeliverables.kind, updatedAt: engagementDeliverables.updatedAt }).from(engagementDeliverables).where(and16(inArray11(engagementDeliverables.engagementId, ids), eq24(engagementDeliverables.status, "awaiting_approval"))),
-    db.select({ id: engagementFiles.id, engagementId: engagementFiles.engagementId }).from(engagementFiles).where(and16(inArray11(engagementFiles.engagementId, ids), isNull12(engagementFiles.taskId), isNull12(engagementFiles.deliverableId))),
-    db.select({ fileId: engagementFileMatches.fileId }).from(engagementFileMatches).innerJoin(engagementFiles, eq24(engagementFileMatches.fileId, engagementFiles.id)).where(inArray11(engagementFiles.engagementId, ids)),
-    db.select({ engagementId: engagementFeeLines.engagementId, dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and16(inArray11(engagementFeeLines.engagementId, ids), isNull12(engagementFeeLines.paidAt), isNull12(engagementFeeLines.writtenOffAt)))
+    db.select().from(engagements).where(and17(inArray12(engagements.id, ids), ne3(engagements.stage, "closed"))),
+    db.select({ engagementId: engagementTeam.engagementId, userId: engagementTeam.userId, role: engagementTeam.role, name: users.name }).from(engagementTeam).innerJoin(users, eq25(engagementTeam.userId, users.id)).where(inArray12(engagementTeam.engagementId, ids)),
+    db.select().from(engagementTasks).where(and17(inArray12(engagementTasks.engagementId, ids), ne3(engagementTasks.status, "cancelled"))),
+    db.select().from(engagementSessions).where(and17(inArray12(engagementSessions.engagementId, ids), eq25(engagementSessions.status, "planned"))),
+    db.select({ id: engagementDeliverables.id, engagementId: engagementDeliverables.engagementId, title: engagementDeliverables.title, status: engagementDeliverables.status, kind: engagementDeliverables.kind, updatedAt: engagementDeliverables.updatedAt }).from(engagementDeliverables).where(and17(inArray12(engagementDeliverables.engagementId, ids), eq25(engagementDeliverables.status, "awaiting_approval"))),
+    db.select({ id: engagementFiles.id, engagementId: engagementFiles.engagementId }).from(engagementFiles).where(and17(inArray12(engagementFiles.engagementId, ids), isNull13(engagementFiles.taskId), isNull13(engagementFiles.deliverableId))),
+    db.select({ fileId: engagementFileMatches.fileId }).from(engagementFileMatches).innerJoin(engagementFiles, eq25(engagementFileMatches.fileId, engagementFiles.id)).where(inArray12(engagementFiles.engagementId, ids)),
+    db.select({ engagementId: engagementFeeLines.engagementId, dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and17(inArray12(engagementFeeLines.engagementId, ids), isNull13(engagementFeeLines.paidAt), isNull13(engagementFeeLines.writtenOffAt)))
   ]);
   const today = lagosDay(now);
   const manages = authorityAllows(actor.authority, "manage_engagements");
@@ -12895,19 +13209,19 @@ async function listStaffEngagements(db, actor) {
     contactName: engagements.contactName,
     contactEmail: engagements.contactEmail,
     opensOnPayment: engagements.opensOnPayment
-  }).from(engagements).leftJoin(businessChecks, eq24(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq24(engagements.businessId, businesses.id)).where(scope ? inArray11(engagements.id, scope) : void 0).orderBy(desc8(engagements.id));
+  }).from(engagements).leftJoin(businessChecks, eq25(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq25(engagements.businessId, businesses.id)).where(scope ? inArray12(engagements.id, scope) : void 0).orderBy(desc8(engagements.id));
   if (!rows.length) return [];
   const ids = rows.map((row) => row.id);
   const [team, tasks, sessions, drops, matched, unpaidFees] = await Promise.all([
-    db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role, name: users.name, userId: engagementTeam.userId }).from(engagementTeam).innerJoin(users, eq24(engagementTeam.userId, users.id)).where(inArray11(engagementTeam.engagementId, ids)),
-    db.select({ engagementId: engagementTasks.engagementId, side: engagementTasks.side, status: engagementTasks.status, dueOn: engagementTasks.dueOn }).from(engagementTasks).where(inArray11(engagementTasks.engagementId, ids)),
-    db.select({ engagementId: engagementSessions.engagementId, title: engagementSessions.title, scheduledFor: engagementSessions.scheduledFor, status: engagementSessions.status }).from(engagementSessions).where(inArray11(engagementSessions.engagementId, ids)),
+    db.select({ engagementId: engagementTeam.engagementId, role: engagementTeam.role, name: users.name, userId: engagementTeam.userId }).from(engagementTeam).innerJoin(users, eq25(engagementTeam.userId, users.id)).where(inArray12(engagementTeam.engagementId, ids)),
+    db.select({ engagementId: engagementTasks.engagementId, side: engagementTasks.side, status: engagementTasks.status, dueOn: engagementTasks.dueOn }).from(engagementTasks).where(inArray12(engagementTasks.engagementId, ids)),
+    db.select({ engagementId: engagementSessions.engagementId, title: engagementSessions.title, scheduledFor: engagementSessions.scheduledFor, status: engagementSessions.status }).from(engagementSessions).where(inArray12(engagementSessions.engagementId, ids)),
     // Files in the drop box (on no request or deliverable yet), and which of them the team has matched.
-    db.select({ id: engagementFiles.id, engagementId: engagementFiles.engagementId }).from(engagementFiles).where(and16(inArray11(engagementFiles.engagementId, ids), isNull12(engagementFiles.taskId), isNull12(engagementFiles.deliverableId))),
-    db.select({ fileId: engagementFileMatches.fileId }).from(engagementFileMatches).innerJoin(engagementFiles, eq24(engagementFileMatches.fileId, engagementFiles.id)).where(inArray11(engagementFiles.engagementId, ids)),
+    db.select({ id: engagementFiles.id, engagementId: engagementFiles.engagementId }).from(engagementFiles).where(and17(inArray12(engagementFiles.engagementId, ids), isNull13(engagementFiles.taskId), isNull13(engagementFiles.deliverableId))),
+    db.select({ fileId: engagementFileMatches.fileId }).from(engagementFileMatches).innerJoin(engagementFiles, eq25(engagementFileMatches.fileId, engagementFiles.id)).where(inArray12(engagementFiles.engagementId, ids)),
     // Fees with something left to pay (not paid in full, not written off), for Late and Paused (D6): the team sees the
     // state, not the amounts.
-    db.select({ engagementId: engagementFeeLines.engagementId, dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and16(inArray11(engagementFeeLines.engagementId, ids), isNull12(engagementFeeLines.paidAt), isNull12(engagementFeeLines.writtenOffAt)))
+    db.select({ engagementId: engagementFeeLines.engagementId, dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and17(inArray12(engagementFeeLines.engagementId, ids), isNull13(engagementFeeLines.paidAt), isNull13(engagementFeeLines.writtenOffAt)))
   ]);
   const now = Date.now();
   const today = lagosDay(now);
@@ -12947,15 +13261,15 @@ async function listStaffEngagements(db, actor) {
 }
 async function getStaffEngagement(db, actor, engagementId) {
   const engagement = await requireStaffEngagement(db, actor, engagementId);
-  const check2 = engagement.businessCheckId !== null ? (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq24(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { id: null, fullName: engagement.contactName ?? "", email: engagement.contactEmail, whatsapp: null, businessName: null } : void 0;
+  const check2 = engagement.businessCheckId !== null ? (await db.select({ id: businessChecks.id, fullName: businessChecks.fullName, email: businessChecks.email, whatsapp: businessChecks.whatsapp, businessName: businessChecks.businessName }).from(businessChecks).where(eq25(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { id: null, fullName: engagement.contactName ?? "", email: engagement.contactEmail, whatsapp: null, businessName: null } : void 0;
   if (check2) await syncSessionBookings(db, engagement, check2.email);
-  const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq24(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
+  const business = engagement.businessId ? (await db.select({ id: businesses.id, name: businesses.name }).from(businesses).where(eq25(businesses.id, engagement.businessId)).limit(1))[0] ?? null : null;
   const [team, sessions, tasks, deliverables, comments, clientPeople, files, measure, checkins, matches, waiting] = await Promise.all([
-    db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq24(engagementTeam.userId, users.id)).where(eq24(engagementTeam.engagementId, engagementId)).orderBy(asc7(engagementTeam.id)),
-    db.select().from(engagementSessions).where(eq24(engagementSessions.engagementId, engagementId)).orderBy(asc7(engagementSessions.id)),
-    db.select().from(engagementTasks).where(eq24(engagementTasks.engagementId, engagementId)).orderBy(asc7(engagementTasks.id)),
-    db.select().from(engagementDeliverables).where(eq24(engagementDeliverables.engagementId, engagementId)).orderBy(asc7(engagementDeliverables.id)),
-    db.select({ id: engagementComments.id, deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq24(engagementComments.authorUserId, users.id)).where(eq24(engagementComments.engagementId, engagementId)).orderBy(asc7(engagementComments.id)),
+    db.select({ userId: engagementTeam.userId, role: engagementTeam.role, name: users.name, email: users.email, jobTitle: users.jobTitle }).from(engagementTeam).innerJoin(users, eq25(engagementTeam.userId, users.id)).where(eq25(engagementTeam.engagementId, engagementId)).orderBy(asc8(engagementTeam.id)),
+    db.select().from(engagementSessions).where(eq25(engagementSessions.engagementId, engagementId)).orderBy(asc8(engagementSessions.id)),
+    db.select().from(engagementTasks).where(eq25(engagementTasks.engagementId, engagementId)).orderBy(asc8(engagementTasks.id)),
+    db.select().from(engagementDeliverables).where(eq25(engagementDeliverables.engagementId, engagementId)).orderBy(asc8(engagementDeliverables.id)),
+    db.select({ id: engagementComments.id, deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq25(engagementComments.authorUserId, users.id)).where(eq25(engagementComments.engagementId, engagementId)).orderBy(asc8(engagementComments.id)),
     engagement.businessId ? clientPeopleOf(db, engagement.businessId) : Promise.resolve([]),
     filesOf(db, engagementId),
     measureOf(db, engagementId),
@@ -12963,7 +13277,7 @@ async function getStaffEngagement(db, actor, engagementId) {
     matchesOf(db, engagementId),
     // Fees with something left to pay: a second half not dated yet (sharing the main output dates it, R36), and Late
     // or Paused (D6).
-    db.select({ dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and16(eq24(engagementFeeLines.engagementId, engagementId), isNull12(engagementFeeLines.paidAt), isNull12(engagementFeeLines.writtenOffAt)))
+    db.select({ dueOn: engagementFeeLines.dueOn }).from(engagementFeeLines).where(and17(eq25(engagementFeeLines.engagementId, engagementId), isNull13(engagementFeeLines.paidAt), isNull13(engagementFeeLines.writtenOffAt)))
   ]);
   const [itemComments, askers, review] = await Promise.all([taskCommentsOf(db, engagementId), namesOf2(db, tasks.map((task) => task.requestedByUserId)), canReviewEngagement(db, actor, engagementId)]);
   const weekStart = (/* @__PURE__ */ new Date(`${weekStartOf(lagosDay())}T00:00:00+01:00`)).getTime();
@@ -13053,12 +13367,12 @@ async function getStaffEngagement(db, actor, engagementId) {
   };
 }
 async function clientPeopleOf(db, businessId) {
-  const rows = await db.select({ userId: users.id, name: users.name, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq24(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq24(businessMemberAccess.membershipId, businessMemberships.id)).where(and16(eq24(businessMemberships.businessId, businessId), eq24(businessMemberships.status, "active"))).orderBy(asc7(businessMemberships.id));
+  const rows = await db.select({ userId: users.id, name: users.name, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq25(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq25(businessMemberAccess.membershipId, businessMemberships.id)).where(and17(eq25(businessMemberships.businessId, businessId), eq25(businessMemberships.status, "active"))).orderBy(asc8(businessMemberships.id));
   return rows.map((row) => ({ userId: row.userId, name: row.name ?? "", role: row.role, access: row.role === "member" ? row.access ?? "full" : "full" }));
 }
 async function listAssignableStaff(db, actor) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
-  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, role: userPlatformRoles.role }).from(userPlatformRoles).innerJoin(users, eq24(userPlatformRoles.userId, users.id)).where(eq24(users.status, "active")).orderBy(asc7(users.name));
+  const rows = await db.select({ userId: users.id, name: users.name, email: users.email, role: userPlatformRoles.role }).from(userPlatformRoles).innerJoin(users, eq25(userPlatformRoles.userId, users.id)).where(eq25(users.status, "active")).orderBy(asc8(users.name));
   const people = /* @__PURE__ */ new Map();
   for (const row of rows) {
     const person = people.get(row.userId) ?? { userId: row.userId, name: row.name ?? "", email: row.email ?? "", roles: [] };
@@ -13083,12 +13397,12 @@ function sharedNoticeEmail(input) {
   };
 }
 async function clientRecipients(db, businessId, audience) {
-  const people = await db.select({ name: users.name, email: users.email, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq24(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq24(businessMemberAccess.membershipId, businessMemberships.id)).where(and16(eq24(businessMemberships.businessId, businessId), eq24(businessMemberships.status, "active"), eq24(users.status, "active")));
+  const people = await db.select({ name: users.name, email: users.email, role: businessMemberships.role, access: businessMemberAccess.access }).from(businessMemberships).innerJoin(users, eq25(businessMemberships.userId, users.id)).leftJoin(businessMemberAccess, eq25(businessMemberAccess.membershipId, businessMemberships.id)).where(and17(eq25(businessMemberships.businessId, businessId), eq25(businessMemberships.status, "active"), eq25(users.status, "active")));
   return people.filter((person) => person.email && clientCanSee(audience, person.role === "member" ? { kind: "member", access: person.access ?? "full", userId: 0 } : { kind: "owner" }));
 }
 async function notifyShared(db, engagementId, audience, what, title) {
   try {
-    const engagement = (await db.select({ businessId: engagements.businessId }).from(engagements).where(eq24(engagements.id, engagementId)).limit(1))[0];
+    const engagement = (await db.select({ businessId: engagements.businessId }).from(engagements).where(eq25(engagements.id, engagementId)).limit(1))[0];
     if (!engagement?.businessId) return;
     const url = `${getTrustedApplicationOrigin()}/dashboard`;
     for (const person of await clientRecipients(db, engagement.businessId, audience)) {
@@ -13103,18 +13417,18 @@ async function assignTeamMember(db, actor, input) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   if (!teamRolesFor(engagement.type).includes(input.role)) throw new TRPCError18({ code: "BAD_REQUEST", message: "The Digital Marketer and Content Producer roles are for Digital Marketing engagements." });
-  const staff2 = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq24(userPlatformRoles.userId, users.id)).where(and16(eq24(userPlatformRoles.userId, input.userId), eq24(users.status, "active"))).limit(1))[0];
+  const staff2 = (await db.select({ userId: userPlatformRoles.userId }).from(userPlatformRoles).innerJoin(users, eq25(userPlatformRoles.userId, users.id)).where(and17(eq25(userPlatformRoles.userId, input.userId), eq25(users.status, "active"))).limit(1))[0];
   if (!staff2) throw new TRPCError18({ code: "BAD_REQUEST", message: "Only IP Factory staff can join an engagement team." });
-  const existing = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and16(eq24(engagementTeam.engagementId, input.engagementId), eq24(engagementTeam.userId, input.userId))).limit(1))[0];
+  const existing = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and17(eq25(engagementTeam.engagementId, input.engagementId), eq25(engagementTeam.userId, input.userId))).limit(1))[0];
   await db.transaction(async (tx) => {
     await tx.insert(engagementTeam).values({ engagementId: input.engagementId, userId: input.userId, role: input.role, assignedByUserId: actor.id }).onConflictDoUpdate({ target: [engagementTeam.engagementId, engagementTeam.userId], set: { role: input.role, assignedByUserId: actor.id } });
     await recordAudit(tx, { action: "engagement_team_assigned", actorUserId: actor.id, details: { engagementId: input.engagementId, userId: input.userId, role: input.role, ...existing ? { previousRole: existing.role } : {} } });
   });
-  await db.update(engagementTasks).set({ assigneeUserId: input.userId }).where(and16(
-    eq24(engagementTasks.engagementId, input.engagementId),
-    eq24(engagementTasks.side, "ipf"),
-    isNull12(engagementTasks.assigneeUserId),
-    inArray11(engagementTasks.id, (await db.select({ id: engagementTasks.id, title: engagementTasks.title }).from(engagementTasks).where(and16(eq24(engagementTasks.engagementId, input.engagementId), eq24(engagementTasks.side, "ipf"), isNull12(engagementTasks.assigneeUserId)))).filter((row) => planRoleOf(engagement.type, row.title) === input.role).map((row) => row.id).concat(0))
+  await db.update(engagementTasks).set({ assigneeUserId: input.userId }).where(and17(
+    eq25(engagementTasks.engagementId, input.engagementId),
+    eq25(engagementTasks.side, "ipf"),
+    isNull13(engagementTasks.assigneeUserId),
+    inArray12(engagementTasks.id, (await db.select({ id: engagementTasks.id, title: engagementTasks.title }).from(engagementTasks).where(and17(eq25(engagementTasks.engagementId, input.engagementId), eq25(engagementTasks.side, "ipf"), isNull13(engagementTasks.assigneeUserId)))).filter((row) => planRoleOf(engagement.type, row.title) === input.role).map((row) => row.id).concat(0))
   ));
   const notified = existing?.role === input.role || input.userId === actor.id ? false : await notifyAssigned(db, input.engagementId, input.userId, input.role, Boolean(existing));
   return { success: true, added: !existing, notified };
@@ -13128,7 +13442,7 @@ async function reviewTask(db, actor, input) {
   const note = input.note?.trim() || null;
   if (input.decision === "more" && !note) throw new TRPCError18({ code: "BAD_REQUEST", message: "Say what is still needed: they see it." });
   const status = input.decision === "more" ? "needs_more" : task.side === "client" ? "accepted" : "done";
-  await db.update(engagementTasks).set({ status, statusNote: input.decision === "more" ? note : task.statusNote, ...arrivalFields(task, status, /* @__PURE__ */ new Date()), ...status === "done" || status === "accepted" ? { completedAt: /* @__PURE__ */ new Date() } : {} }).where(eq24(engagementTasks.id, task.id));
+  await db.update(engagementTasks).set({ status, statusNote: input.decision === "more" ? note : task.statusNote, ...arrivalFields(task, status, /* @__PURE__ */ new Date()), ...status === "done" || status === "accepted" ? { completedAt: /* @__PURE__ */ new Date() } : {} }).where(eq25(engagementTasks.id, task.id));
   await recordAudit(db, { action: "engagement_task_reviewed", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, decision: input.decision } });
   await sendReviewedEmails(db, { taskId: task.id, actorUserId: actor.id, decision: input.decision, note, to: ownersOfTask(team, task, others) });
   return { success: true, status };
@@ -13137,7 +13451,7 @@ async function reopenTask(db, actor, input) {
   const { task, team, leads, others } = await requireStaffTask(db, actor, input.taskId);
   if (!leads && reviewerOfTask(team, task) !== actor.id && !mayTickOff(actor, team, task, others)) throw new TRPCError18({ code: "FORBIDDEN", message: "The item's reviewer, or the lead, reopens it." });
   if (task.status !== "done" && task.status !== "accepted") throw new TRPCError18({ code: "BAD_REQUEST", message: "Only a completed item is reopened." });
-  await db.update(engagementTasks).set({ status: input.status, completedAt: null, ...arrivalFields(task, input.status, /* @__PURE__ */ new Date()) }).where(eq24(engagementTasks.id, task.id));
+  await db.update(engagementTasks).set({ status: input.status, completedAt: null, ...arrivalFields(task, input.status, /* @__PURE__ */ new Date()) }).where(eq25(engagementTasks.id, task.id));
   await recordAudit(db, { action: "engagement_task_reopened", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, status: input.status } });
   return { success: true, status: input.status };
 }
@@ -13147,14 +13461,14 @@ async function setContentTargets(db, actor, input) {
   const kinds = (DATED_TYPES[engagement.type]?.monthly ?? []).map((target) => target.label);
   if (!kinds.length) throw new TRPCError18({ code: "BAD_REQUEST", message: "Only a dated engagement has monthly content targets." });
   if (input.targets && input.targets.some((target) => !kinds.includes(target.label))) throw new TRPCError18({ code: "BAD_REQUEST", message: `The targets are for ${kinds.join(", ")}.` });
-  await db.update(engagements).set({ contentTargets: input.targets }).where(eq24(engagements.id, engagement.id));
+  await db.update(engagements).set({ contentTargets: input.targets }).where(eq25(engagements.id, engagement.id));
   await recordAudit(db, { action: "engagement_content_targets_set", actorUserId: actor.id, details: { engagementId: engagement.id, targets: input.targets } });
   return { success: true, targets: contentTargetsOf(engagement.type, input.targets) };
 }
 async function setTaskWork(db, actor, input) {
   const { task, leads } = await requireStaffTask(db, actor, input.taskId);
   if (!leads && !authorityAllows(actor.authority, "assign_engagements")) throw new TRPCError18({ code: "FORBIDDEN", message: "The lead sets an item's kind of work." });
-  await db.update(engagementTasks).set({ work: input.work }).where(eq24(engagementTasks.id, task.id));
+  await db.update(engagementTasks).set({ work: input.work }).where(eq25(engagementTasks.id, task.id));
   await recordAudit(db, { action: "engagement_task_work_set", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, work: input.work } });
   return { success: true };
 }
@@ -13162,7 +13476,7 @@ async function setTaskReviewer(db, actor, input) {
   const { task, team, leads } = await requireStaffTask(db, actor, input.taskId);
   if (!leads && !authorityAllows(actor.authority, "assign_engagements")) throw new TRPCError18({ code: "FORBIDDEN", message: "The lead names who reviews an item." });
   if (input.userId !== null && !team.some((member) => member.userId === input.userId)) throw new TRPCError18({ code: "BAD_REQUEST", message: "The reviewer must be on the engagement team." });
-  await db.update(engagementTasks).set({ reviewerUserId: input.userId }).where(eq24(engagementTasks.id, task.id));
+  await db.update(engagementTasks).set({ reviewerUserId: input.userId }).where(eq25(engagementTasks.id, task.id));
   await recordAudit(db, { action: "engagement_task_reviewer_set", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, reviewerUserId: input.userId } });
   return { success: true };
 }
@@ -13173,8 +13487,8 @@ async function setTaskOwners(db, actor, input) {
   const others = Array.from(new Set(input.otherUserIds.filter((id3) => id3 !== input.leadUserId)));
   if (![input.leadUserId, ...others].every((id3) => team.some((member) => member.userId === id3))) throw new TRPCError18({ code: "BAD_REQUEST", message: "Everyone who owns an item must be on the engagement team." });
   await db.transaction(async (tx) => {
-    if (task.side === "ipf") await tx.update(engagementTasks).set({ assigneeUserId: input.leadUserId }).where(eq24(engagementTasks.id, task.id));
-    await tx.delete(engagementTaskOwners).where(eq24(engagementTaskOwners.taskId, task.id));
+    if (task.side === "ipf") await tx.update(engagementTasks).set({ assigneeUserId: input.leadUserId }).where(eq25(engagementTasks.id, task.id));
+    await tx.delete(engagementTaskOwners).where(eq25(engagementTaskOwners.taskId, task.id));
     const shared = task.side === "ipf" ? others : Array.from(/* @__PURE__ */ new Set([input.leadUserId, ...others])).filter((id3) => id3 !== ownerOfTask(team, task));
     if (shared.length) await tx.insert(engagementTaskOwners).values(shared.map((userId) => ({ engagementId: task.engagementId, taskId: task.id, userId })));
     await recordAudit(tx, { action: "engagement_task_owners_set", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, leadUserId: input.leadUserId, otherUserIds: others } });
@@ -13184,16 +13498,16 @@ async function setTaskOwners(db, actor, input) {
 async function assignByRole(db, actor, input) {
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   if (!await canReviewEngagement(db, actor, engagement.id) && !authorityAllows(actor.authority, "assign_engagements")) throw new TRPCError18({ code: "FORBIDDEN", message: "The lead assigns the items." });
-  const team = await db.select({ userId: engagementTeam.userId, role: engagementTeam.role }).from(engagementTeam).where(eq24(engagementTeam.engagementId, engagement.id));
+  const team = await db.select({ userId: engagementTeam.userId, role: engagementTeam.role }).from(engagementTeam).where(eq25(engagementTeam.engagementId, engagement.id));
   if (!team.length) throw new TRPCError18({ code: "BAD_REQUEST", message: "Add the team first: then each item goes to the person in its role." });
-  const open = await db.select({ id: engagementTasks.id, title: engagementTasks.title }).from(engagementTasks).where(and16(eq24(engagementTasks.engagementId, engagement.id), eq24(engagementTasks.side, "ipf"), isNull12(engagementTasks.assigneeUserId), ne3(engagementTasks.status, "cancelled")));
+  const open = await db.select({ id: engagementTasks.id, title: engagementTasks.title }).from(engagementTasks).where(and17(eq25(engagementTasks.engagementId, engagement.id), eq25(engagementTasks.side, "ipf"), isNull13(engagementTasks.assigneeUserId), ne3(engagementTasks.status, "cancelled")));
   const main = followUpOwnerOf(team, { requestedByUserId: null, turnaround: null })?.userId ?? null;
   let assigned = 0;
   for (const item2 of open) {
     const role = planRoleOf(engagement.type, item2.title);
     const person = (role ? team.find((member) => member.role === role)?.userId : void 0) ?? main;
     if (person === null) continue;
-    await db.update(engagementTasks).set({ assigneeUserId: person }).where(eq24(engagementTasks.id, item2.id));
+    await db.update(engagementTasks).set({ assigneeUserId: person }).where(eq25(engagementTasks.id, item2.id));
     assigned += 1;
   }
   await recordAudit(db, { action: "engagement_items_assigned", actorUserId: actor.id, details: { engagementId: engagement.id, assigned } });
@@ -13216,9 +13530,9 @@ function assignedNoticeEmail(input) {
 }
 async function notifyAssigned(db, engagementId, userId, role, changed) {
   try {
-    const person = (await db.select({ name: users.name, email: users.email }).from(users).where(eq24(users.id, userId)).limit(1))[0];
+    const person = (await db.select({ name: users.name, email: users.email }).from(users).where(eq25(users.id, userId)).limit(1))[0];
     if (!person?.email) return false;
-    const row = (await db.select({ businessName: businesses.name, checkBusiness: businessChecks.businessName, ownerName: businessChecks.fullName }).from(engagements).leftJoin(businessChecks, eq24(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq24(engagements.businessId, businesses.id)).where(eq24(engagements.id, engagementId)).limit(1))[0];
+    const row = (await db.select({ businessName: businesses.name, checkBusiness: businessChecks.businessName, ownerName: businessChecks.fullName }).from(engagements).leftJoin(businessChecks, eq25(engagements.businessCheckId, businessChecks.id)).leftJoin(businesses, eq25(engagements.businessId, businesses.id)).where(eq25(engagements.id, engagementId)).limit(1))[0];
     const businessName = row?.businessName ?? row?.checkBusiness ?? row?.ownerName ?? "a client";
     const message = assignedNoticeEmail({ fullName: person.name ?? "", businessName, roleLabel: ENGAGEMENT_TEAM_ROLE_LABELS[role], changed, url: `${getTrustedApplicationOrigin()}/admin` });
     await deliverEmail({ to: person.email, subject: message.subject, body: message.body, sender: "business_support" });
@@ -13232,7 +13546,7 @@ async function removeTeamMember(db, actor, input) {
   requirePermission(actor, "assign_engagements", "Your role does not include assigning engagements.");
   await requireStaffEngagement(db, actor, input.engagementId);
   await db.transaction(async (tx) => {
-    await tx.delete(engagementTeam).where(and16(eq24(engagementTeam.engagementId, input.engagementId), eq24(engagementTeam.userId, input.userId)));
+    await tx.delete(engagementTeam).where(and17(eq25(engagementTeam.engagementId, input.engagementId), eq25(engagementTeam.userId, input.userId)));
     await recordAudit(tx, { action: "engagement_team_removed", actorUserId: actor.id, details: { engagementId: input.engagementId, userId: input.userId } });
   });
   return { success: true };
@@ -13248,7 +13562,7 @@ async function setEngagementStage(db, actor, input) {
       ...input.stage === "assessment" && !engagement.assessmentStartedAt ? { assessmentStartedAt: now } : {},
       ...input.stage === "fix" && !engagement.fixStartedAt ? { fixStartedAt: now } : {},
       ...input.stage === "closed" ? { closedAt: now } : { closedAt: null }
-    }).where(eq24(engagements.id, engagement.id));
+    }).where(eq25(engagements.id, engagement.id));
     await recordAudit(tx, { action: "engagement_stage_changed", actorUserId: actor.id, details: { engagementId: engagement.id, from: engagement.stage, to: input.stage } });
   });
   return { success: true, changed: true };
@@ -13256,7 +13570,7 @@ async function setEngagementStage(db, actor, input) {
 async function saveProblem(db, actor, input) {
   requireManage2(actor);
   await requireStaffEngagement(db, actor, input.engagementId);
-  await db.update(engagements).set({ problemArea: input.problemArea, subProblem: input.subProblem, problemStatement: input.problemStatement }).where(eq24(engagements.id, input.engagementId));
+  await db.update(engagements).set({ problemArea: input.problemArea, subProblem: input.subProblem, problemStatement: input.problemStatement }).where(eq25(engagements.id, input.engagementId));
   return { success: true };
 }
 async function saveSession(db, actor, input) {
@@ -13264,9 +13578,9 @@ async function saveSession(db, actor, input) {
   await requireStaffEngagement(db, actor, input.engagementId);
   const values2 = { kind: input.kind, title: input.title, scheduledFor: input.scheduledFor, durationMinutes: input.durationMinutes, meetingLink: input.meetingLink, agenda: input.agenda, status: input.status, ...input.weekNumber === void 0 ? {} : { weekNumber: input.weekNumber } };
   if (input.sessionId) {
-    const before = (await db.select().from(engagementSessions).where(and16(eq24(engagementSessions.id, input.sessionId), eq24(engagementSessions.engagementId, input.engagementId))).limit(1))[0];
+    const before = (await db.select().from(engagementSessions).where(and17(eq25(engagementSessions.id, input.sessionId), eq25(engagementSessions.engagementId, input.engagementId))).limit(1))[0];
     if (!before) throw notFound4();
-    const updated = await db.update(engagementSessions).set(values2).where(and16(eq24(engagementSessions.id, input.sessionId), eq24(engagementSessions.engagementId, input.engagementId))).returning({ id: engagementSessions.id });
+    const updated = await db.update(engagementSessions).set(values2).where(and17(eq25(engagementSessions.id, input.sessionId), eq25(engagementSessions.engagementId, input.engagementId))).returning({ id: engagementSessions.id });
     if (!updated.length) throw notFound4();
     const change2 = sessionChange(before, values2);
     if (change2) await sendSessionEmails(db, { sessionId: input.sessionId, change: change2, includeClient: true });
@@ -13286,7 +13600,7 @@ async function bookMeeting(db, actor, input) {
   if (starts[0].getTime() < now - 5 * 6e4) throw new TRPCError18({ code: "BAD_REQUEST", message: "That time has passed. Check the date in the invitation." });
   const type = meetingType(input.type);
   const zoomId = zoomMeetingIdOf(input.meetingLink);
-  const sessions = await db.select().from(engagementSessions).where(eq24(engagementSessions.engagementId, engagement.id)).orderBy(asc7(engagementSessions.weekNumber), asc7(engagementSessions.sortOrder), asc7(engagementSessions.id));
+  const sessions = await db.select().from(engagementSessions).where(eq25(engagementSessions.engagementId, engagement.id)).orderBy(asc8(engagementSessions.weekNumber), asc8(engagementSessions.sortOrder), asc8(engagementSessions.id));
   const weekOf = (start) => engagement.startedOn ? Math.min(13, Math.max(1, Math.floor((start.getTime() - Date.parse(`${engagement.startedOn}T00:00:00+01:00`)) / (7 * 864e5)) + 1)) : null;
   const same = zoomId ? sessions.filter((item2) => item2.status === "planned" && zoomMeetingIdOf(item2.meetingLink) === zoomId).sort((a, b) => (a.scheduledFor?.getTime() ?? 0) - (b.scheduledFor?.getTime() ?? 0)) : [];
   const fills = same.length ? same : sessions.filter((item2) => item2.status === "planned" && !item2.scheduledFor && (type.fills === "review" ? item2.kind === "review" : type.fills === "Session" ? item2.kind === "assessment_call" : type.fills !== null && item2.title.trim().toLowerCase() === type.fills.toLowerCase()));
@@ -13298,7 +13612,7 @@ async function bookMeeting(db, actor, input) {
       const existing = fills[index2];
       const values2 = { scheduledFor: start, meetingLink: input.meetingLink, durationMinutes: input.durationMinutes, ...input.agenda ? { agenda: input.agenda } : {} };
       if (existing) {
-        await tx.update(engagementSessions).set(values2).where(eq24(engagementSessions.id, existing.id));
+        await tx.update(engagementSessions).set(values2).where(eq25(engagementSessions.id, existing.id));
         changes.push({ sessionId: existing.id, before: existing });
       } else {
         const [created] = await tx.insert(engagementSessions).values({ engagementId: engagement.id, kind: type.kind, title: input.title.trim(), status: "planned", weekNumber: weekOf(start), sortOrder: 50, createdByUserId: actor.id, ...values2 }).returning({ id: engagementSessions.id });
@@ -13306,7 +13620,7 @@ async function bookMeeting(db, actor, input) {
       }
     }
     for (const left of same.slice(starts.length)) {
-      await tx.update(engagementSessions).set({ status: "cancelled" }).where(eq24(engagementSessions.id, left.id));
+      await tx.update(engagementSessions).set({ status: "cancelled" }).where(eq25(engagementSessions.id, left.id));
       dropped.push(left.id);
     }
     await recordAudit(tx, { action: "engagement_meeting_booked", actorUserId: actor.id, details: { engagementId: engagement.id, type: input.type, sessions: starts.length, filled: changes.filter((item2) => item2.before).length, moved: same.length > 0, cancelled: dropped.length } });
@@ -13314,7 +13628,7 @@ async function bookMeeting(db, actor, input) {
   for (const sessionId of dropped) await sendSessionEmails(db, { sessionId, change: "cancelled", includeClient: true });
   if (changes.length === 1) {
     const { sessionId, before } = changes[0];
-    const after = (await db.select().from(engagementSessions).where(eq24(engagementSessions.id, sessionId)).limit(1))[0];
+    const after = (await db.select().from(engagementSessions).where(eq25(engagementSessions.id, sessionId)).limit(1))[0];
     const change = sessionChange(before, after, now);
     if (change) await sendSessionEmails(db, { sessionId, change, includeClient: true, now });
   } else {
@@ -13323,7 +13637,7 @@ async function bookMeeting(db, actor, input) {
   return { booked: changes.length, filled: changes.filter((item2) => item2.before).length, cancelled: dropped.length };
 }
 async function requireStaffSession(db, actor, sessionId) {
-  const session = (await db.select().from(engagementSessions).where(eq24(engagementSessions.id, sessionId)).limit(1))[0];
+  const session = (await db.select().from(engagementSessions).where(eq25(engagementSessions.id, sessionId)).limit(1))[0];
   if (!session) throw notFound4();
   await requireStaffEngagement(db, actor, session.engagementId);
   return session;
@@ -13336,7 +13650,7 @@ async function markSessionHeld(db, actor, input) {
   if (session.scheduledFor === null || session.scheduledFor.getTime() > (input.now ?? Date.now())) throw new TRPCError18({ code: "BAD_REQUEST", message: "This Session has not started yet." });
   const status = input.held ? "held" : "cancelled";
   await db.transaction(async (tx) => {
-    await tx.update(engagementSessions).set({ status }).where(eq24(engagementSessions.id, session.id));
+    await tx.update(engagementSessions).set({ status }).where(eq25(engagementSessions.id, session.id));
     await recordAudit(tx, { action: "engagement_session_held", actorUserId: actor.id, details: { engagementId: session.engagementId, sessionId: session.id, held: input.held } });
   });
   return { success: true, status };
@@ -13344,7 +13658,7 @@ async function markSessionHeld(db, actor, input) {
 async function saveSessionNotes(db, actor, input) {
   requireManage2(actor);
   await requireStaffSession(db, actor, input.sessionId);
-  await db.update(engagementSessions).set({ clientNotes: input.clientNotes, internalNotes: input.internalNotes }).where(eq24(engagementSessions.id, input.sessionId));
+  await db.update(engagementSessions).set({ clientNotes: input.clientNotes, internalNotes: input.internalNotes }).where(eq25(engagementSessions.id, input.sessionId));
   return { success: true };
 }
 async function shareSessionNotes(db, actor, input) {
@@ -13352,7 +13666,7 @@ async function shareSessionNotes(db, actor, input) {
   const session = await requireStaffSession(db, actor, input.sessionId);
   if (!session.clientNotes?.trim()) throw new TRPCError18({ code: "BAD_REQUEST", message: "Write the client's version of the notes before sharing them." });
   await db.transaction(async (tx) => {
-    await tx.update(engagementSessions).set({ notesAudience: input.audience, notesSharedAt: /* @__PURE__ */ new Date(), notesSharedByUserId: actor.id }).where(eq24(engagementSessions.id, session.id));
+    await tx.update(engagementSessions).set({ notesAudience: input.audience, notesSharedAt: /* @__PURE__ */ new Date(), notesSharedByUserId: actor.id }).where(eq25(engagementSessions.id, session.id));
     await recordAudit(tx, { action: "engagement_notes_shared", actorUserId: actor.id, details: { engagementId: session.engagementId, sessionId: session.id, audience: input.audience } });
   });
   await notifyShared(db, session.engagementId, input.audience, "the Session notes", session.title);
@@ -13372,17 +13686,17 @@ async function saveTask(db, actor, input) {
   if (input.side === "ipf" && input.assigneeUserId === null && !authorityAllows(actor.authority, "manage_engagements")) input = { ...input, assigneeUserId: actor.id };
   if (input.side === "ipf" && input.assigneeUserId === null) throw new TRPCError18({ code: "BAD_REQUEST", message: "Choose who on the team does this item." });
   if (input.assigneeUserId !== null) {
-    const allowed = input.side === "client" ? engagement.businessId !== null && (await clientPeopleOf(db, engagement.businessId)).some((person) => person.userId === input.assigneeUserId) : (await db.select({ userId: engagementTeam.userId }).from(engagementTeam).where(and16(eq24(engagementTeam.engagementId, engagement.id), eq24(engagementTeam.userId, input.assigneeUserId))).limit(1)).length === 1;
+    const allowed = input.side === "client" ? engagement.businessId !== null && (await clientPeopleOf(db, engagement.businessId)).some((person) => person.userId === input.assigneeUserId) : (await db.select({ userId: engagementTeam.userId }).from(engagementTeam).where(and17(eq25(engagementTeam.engagementId, engagement.id), eq25(engagementTeam.userId, input.assigneeUserId))).limit(1)).length === 1;
     if (!allowed) throw new TRPCError18({ code: "BAD_REQUEST", message: input.side === "client" ? "That person is not part of the client's business." : "That person is not on the engagement team." });
   }
-  if (input.sessionId !== null && !(await db.select({ id: engagementSessions.id }).from(engagementSessions).where(and16(eq24(engagementSessions.id, input.sessionId), eq24(engagementSessions.engagementId, engagement.id))).limit(1)).length) throw notFound4();
+  if (input.sessionId !== null && !(await db.select({ id: engagementSessions.id }).from(engagementSessions).where(and17(eq25(engagementSessions.id, input.sessionId), eq25(engagementSessions.engagementId, engagement.id))).limit(1)).length) throw notFound4();
   const finished = input.status === "accepted" || input.status === "done";
   const values2 = { kind: input.kind, title: input.title, detail: input.detail, side: input.side, assigneeUserId: input.assigneeUserId, dueOn: input.dueOn, status: input.status, statusNote: input.statusNote, sessionId: input.sessionId, weekNumber: input.weekNumber, sortOrder: input.sortOrder, factor: input.factor, section: input.section ?? null, ref: input.ref ?? null, informs: input.informs ?? null, format: input.format ?? null, priority: input.priority ?? null, completedAt: finished ? /* @__PURE__ */ new Date() : null };
   if (input.taskId) {
-    const before = (await db.select().from(engagementTasks).where(and16(eq24(engagementTasks.id, input.taskId), eq24(engagementTasks.engagementId, engagement.id))).limit(1))[0];
+    const before = (await db.select().from(engagementTasks).where(and17(eq25(engagementTasks.id, input.taskId), eq25(engagementTasks.engagementId, engagement.id))).limit(1))[0];
     if (!before) throw notFound4();
     const arrival2 = arrivalFields({ ...before, side: input.side }, input.status);
-    await db.update(engagementTasks).set({ ...values2, ...arrival2 }).where(eq24(engagementTasks.id, before.id));
+    await db.update(engagementTasks).set({ ...values2, ...arrival2 }).where(eq25(engagementTasks.id, before.id));
     if (hasArrived(arrival2)) await sendReceivedEmail(db, { taskId: before.id, actorUserId: actor.id, how: "recorded by the team" });
     return { taskId: input.taskId };
   }
@@ -13394,7 +13708,7 @@ async function loadDataRequest(db, actor, input) {
   requireManage2(actor);
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   if (!input.items.length) throw new TRPCError18({ code: "BAD_REQUEST", message: "There is nothing to add." });
-  const existing = await db.select({ title: engagementTasks.title, sortOrder: engagementTasks.sortOrder }).from(engagementTasks).where(eq24(engagementTasks.engagementId, engagement.id));
+  const existing = await db.select({ title: engagementTasks.title, sortOrder: engagementTasks.sortOrder }).from(engagementTasks).where(eq25(engagementTasks.engagementId, engagement.id));
   const seen = new Set(existing.map((row) => row.title.trim().toLowerCase()));
   const today = input.today ?? new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Lagos" }).format(/* @__PURE__ */ new Date());
   let order = existing.reduce((max, row) => Math.max(max, row.sortOrder ?? 0), 0);
@@ -13441,15 +13755,15 @@ async function askClient(db, actor, input) {
   if (input.dueOn > addDays2(today, REQUEST_MAX_DAYS)) throw new TRPCError18({ code: "BAD_REQUEST", message: "Choose a day in the next six months." });
   if (!await canReviewEngagement(db, actor, engagement.id)) {
     const since = /* @__PURE__ */ new Date(`${weekStartOf(today)}T00:00:00+01:00`);
-    const asked = await db.select({ title: engagementTasks.title }).from(engagementTasks).where(and16(eq24(engagementTasks.engagementId, engagement.id), eq24(engagementTasks.requestedByUserId, actor.id), gte(engagementTasks.createdAt, since), ne3(engagementTasks.status, "cancelled"))).orderBy(desc8(engagementTasks.id));
+    const asked = await db.select({ title: engagementTasks.title }).from(engagementTasks).where(and17(eq25(engagementTasks.engagementId, engagement.id), eq25(engagementTasks.requestedByUserId, actor.id), gte2(engagementTasks.createdAt, since), ne3(engagementTasks.status, "cancelled"))).orderBy(desc8(engagementTasks.id));
     if (asked.length >= REQUESTS_PER_WEEK) {
       throw new TRPCError18({ code: "CONFLICT", message: `You have asked ${businessName} once this week already ("${asked[0].title}"). Add this to its conversation, or ask the engagement's lead to send it.` });
     }
   }
-  const orders = await db.select({ sortOrder: engagementTasks.sortOrder }).from(engagementTasks).where(eq24(engagementTasks.engagementId, engagement.id));
+  const orders = await db.select({ sortOrder: engagementTasks.sortOrder }).from(engagementTasks).where(eq25(engagementTasks.engagementId, engagement.id));
   const sortOrder = Math.min(999, orders.reduce((max, row) => Math.max(max, row.sortOrder ?? 0), 0) + 1);
   const weekNumber = engagement.startedOn ? Math.min(12, Math.max(1, Math.floor((Date.parse(`${input.dueOn}T12:00:00Z`) - Date.parse(`${engagement.startedOn}T12:00:00Z`)) / (7 * 864e5)) + 1)) : null;
-  const asker = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and16(eq24(engagementTeam.engagementId, engagement.id), eq24(engagementTeam.userId, actor.id))).limit(1))[0];
+  const asker = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and17(eq25(engagementTeam.engagementId, engagement.id), eq25(engagementTeam.userId, actor.id))).limit(1))[0];
   const taskId = await db.transaction(async (tx) => {
     const [created] = await tx.insert(engagementTasks).values({
       engagementId: engagement.id,
@@ -13494,12 +13808,12 @@ async function handInTask(db, actor, input) {
   const { task, team } = await requireStaffTask(db, actor, input.taskId);
   if (task.side !== "ipf" || ownerOfTask(team, task) !== actor.id && task.createdByUserId !== actor.id) throw new TRPCError18({ code: "FORBIDDEN", message: "Only the person the item is for hands it in." });
   if (!OPEN_TASK_STATUSES.includes(task.status)) throw new TRPCError18({ code: "CONFLICT", message: "This item is already handed in or done." });
-  await db.update(engagementTasks).set({ status: "received" }).where(eq24(engagementTasks.id, task.id));
+  await db.update(engagementTasks).set({ status: "received" }).where(eq25(engagementTasks.id, task.id));
   await recordAudit(db, { action: "engagement_task_handed_in", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id } });
   return { success: true, emailed: await sendReadyForReviewEmails(db, { taskId: task.id, authorUserId: actor.id, reviewerUserId: reviewerOfTask(team, task) }) };
 }
 async function clientTaskComment(db, session, input) {
-  const task = (await db.select().from(engagementTasks).where(eq24(engagementTasks.id, input.taskId)).limit(1))[0];
+  const task = (await db.select().from(engagementTasks).where(eq25(engagementTasks.id, input.taskId)).limit(1))[0];
   if (!task) throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, task.engagementId);
   if (task.side !== "client" || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound4();
@@ -13516,7 +13830,7 @@ async function followUpShared(db, actor, input) {
   const now = /* @__PURE__ */ new Date();
   const late = task.followUpDueAt !== null && now.getTime() > task.followUpDueAt.getTime();
   const shared = await db.transaction(async (tx) => {
-    const updated = await tx.update(engagementTasks).set({ followUpDoneAt: now }).where(and16(eq24(engagementTasks.id, task.id), isNull12(engagementTasks.followUpDoneAt))).returning({ id: engagementTasks.id });
+    const updated = await tx.update(engagementTasks).set({ followUpDoneAt: now }).where(and17(eq25(engagementTasks.id, task.id), isNull13(engagementTasks.followUpDoneAt))).returning({ id: engagementTasks.id });
     if (updated.length) await recordAudit(tx, { action: "engagement_follow_up_shared", actorUserId: actor.id, details: { engagementId: task.engagementId, taskId: task.id, turnaround: task.turnaround, late } });
     return updated.length > 0;
   });
@@ -13533,7 +13847,7 @@ async function taskCommentsOf(db, engagementId, options = {}) {
     authorUserId: engagementTaskComments.authorUserId,
     authorName: users.name,
     membershipId: businessMemberships.id
-  }).from(engagementTaskComments).innerJoin(users, eq24(engagementTaskComments.authorUserId, users.id)).innerJoin(engagements, eq24(engagementTaskComments.engagementId, engagements.id)).leftJoin(businessMemberships, and16(eq24(businessMemberships.userId, engagementTaskComments.authorUserId), eq24(businessMemberships.businessId, engagements.businessId))).where(and16(eq24(engagementTaskComments.engagementId, engagementId), options.forClient ? eq24(engagementTaskComments.internal, false) : void 0)).orderBy(asc7(engagementTaskComments.id));
+  }).from(engagementTaskComments).innerJoin(users, eq25(engagementTaskComments.authorUserId, users.id)).innerJoin(engagements, eq25(engagementTaskComments.engagementId, engagements.id)).leftJoin(businessMemberships, and17(eq25(businessMemberships.userId, engagementTaskComments.authorUserId), eq25(businessMemberships.businessId, engagements.businessId))).where(and17(eq25(engagementTaskComments.engagementId, engagementId), options.forClient ? eq25(engagementTaskComments.internal, false) : void 0)).orderBy(asc8(engagementTaskComments.id));
   return rows.map(({ membershipId, ...row }) => ({ ...row, authorName: row.authorName ?? "", fromClient: membershipId !== null }));
 }
 async function saveDeliverable(db, actor, input) {
@@ -13541,7 +13855,7 @@ async function saveDeliverable(db, actor, input) {
   await requireStaffEngagement(db, actor, input.engagementId);
   const values2 = { kind: input.kind, title: input.title, summary: input.summary };
   if (input.deliverableId) {
-    const updated = await db.update(engagementDeliverables).set({ ...values2, status: "draft", approvedAt: null, approvedByUserId: null, sharedAt: null, sharedByUserId: null, clientAcceptedAt: null, clientAcceptedByUserId: null }).where(and16(eq24(engagementDeliverables.id, input.deliverableId), eq24(engagementDeliverables.engagementId, input.engagementId))).returning({ id: engagementDeliverables.id });
+    const updated = await db.update(engagementDeliverables).set({ ...values2, status: "draft", approvedAt: null, approvedByUserId: null, sharedAt: null, sharedByUserId: null, clientAcceptedAt: null, clientAcceptedByUserId: null }).where(and17(eq25(engagementDeliverables.id, input.deliverableId), eq25(engagementDeliverables.engagementId, input.engagementId))).returning({ id: engagementDeliverables.id });
     if (!updated.length) throw notFound4();
     return { deliverableId: input.deliverableId };
   }
@@ -13549,14 +13863,14 @@ async function saveDeliverable(db, actor, input) {
   return { deliverableId: created.id };
 }
 async function requireStaffDeliverable(db, actor, deliverableId) {
-  const deliverable = (await db.select().from(engagementDeliverables).where(eq24(engagementDeliverables.id, deliverableId)).limit(1))[0];
+  const deliverable = (await db.select().from(engagementDeliverables).where(eq25(engagementDeliverables.id, deliverableId)).limit(1))[0];
   if (!deliverable) throw notFound4();
   await requireStaffEngagement(db, actor, deliverable.engagementId);
   return deliverable;
 }
 async function canReviewEngagement(db, actor, engagementId) {
   if (authorityAllows(actor.authority, "review_engagements")) return true;
-  const mine = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and16(eq24(engagementTeam.engagementId, engagementId), eq24(engagementTeam.userId, actor.id))).limit(1))[0];
+  const mine = (await db.select({ role: engagementTeam.role }).from(engagementTeam).where(and17(eq25(engagementTeam.engagementId, engagementId), eq25(engagementTeam.userId, actor.id))).limit(1))[0];
   return Boolean(mine && ENGAGEMENT_REVIEW_ROLES.includes(mine.role));
 }
 async function approveDeliverable(db, actor, input) {
@@ -13564,7 +13878,7 @@ async function approveDeliverable(db, actor, input) {
   if (!await canReviewEngagement(db, actor, deliverable.engagementId)) throw new TRPCError18({ code: "FORBIDDEN", message: "Only a Partner, Vice President or Senior Associate, or this engagement's Engagement Manager or Lead Consultant, can approve this." });
   if (deliverable.status === "shared") throw new TRPCError18({ code: "CONFLICT", message: "This is already shared." });
   await db.transaction(async (tx) => {
-    await tx.update(engagementDeliverables).set({ status: "approved", approvedAt: /* @__PURE__ */ new Date(), approvedByUserId: actor.id }).where(eq24(engagementDeliverables.id, deliverable.id));
+    await tx.update(engagementDeliverables).set({ status: "approved", approvedAt: /* @__PURE__ */ new Date(), approvedByUserId: actor.id }).where(eq25(engagementDeliverables.id, deliverable.id));
     await recordAudit(tx, { action: "engagement_deliverable_approved", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind } });
   });
   return { success: true };
@@ -13576,11 +13890,11 @@ async function shareDeliverable(db, actor, input) {
     throw new TRPCError18({ code: "FORBIDDEN", message: `Every ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]} is approved before the client sees it, by a Partner, Vice President or Senior Associate, or this engagement's lead.` });
   }
   await db.transaction(async (tx) => {
-    await tx.update(engagementDeliverables).set({ status: "shared", audience: input.audience, sharedAt: /* @__PURE__ */ new Date(), sharedByUserId: actor.id }).where(eq24(engagementDeliverables.id, deliverable.id));
+    await tx.update(engagementDeliverables).set({ status: "shared", audience: input.audience, sharedAt: /* @__PURE__ */ new Date(), sharedByUserId: actor.id }).where(eq25(engagementDeliverables.id, deliverable.id));
     await recordAudit(tx, { action: "engagement_deliverable_shared", actorUserId: actor.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id, kind: deliverable.kind, audience: input.audience } });
   });
   await notifyShared(db, deliverable.engagementId, input.audience, `your ${ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind]}`, deliverable.title);
-  const engagement = (await db.select({ type: engagements.type }).from(engagements).where(eq24(engagements.id, deliverable.engagementId)).limit(1))[0];
+  const engagement = (await db.select({ type: engagements.type }).from(engagements).where(eq25(engagements.id, deliverable.engagementId)).limit(1))[0];
   const balancesDated = engagement && isDelivery(engagement.type, deliverable.kind) ? await dateBalancesOnDelivery(db, { engagementId: deliverable.engagementId, deliverable: ENGAGEMENT_DELIVERABLE_KIND_LABELS[deliverable.kind], actorUserId: actor.id }).catch((error) => {
     console.error("[Engagement] The second half was not dated on delivery:", error instanceof Error ? error.message : "unknown error");
     return 0;
@@ -13596,7 +13910,7 @@ async function clientViewerFor(db, session, businessId) {
   const membership = session.memberships.find((item2) => item2.businessId === businessId);
   if (!membership) throw notFound4();
   if (membership.role !== "member") return { kind: "owner" };
-  const access = (await db.select({ access: businessMemberAccess.access }).from(businessMemberAccess).innerJoin(businessMemberships, eq24(businessMemberAccess.membershipId, businessMemberships.id)).where(and16(eq24(businessMemberships.businessId, businessId), eq24(businessMemberships.userId, session.user.id))).limit(1))[0];
+  const access = (await db.select({ access: businessMemberAccess.access }).from(businessMemberAccess).innerJoin(businessMemberships, eq25(businessMemberAccess.membershipId, businessMemberships.id)).where(and17(eq25(businessMemberships.businessId, businessId), eq25(businessMemberships.userId, session.user.id))).limit(1))[0];
   return { kind: "member", access: access?.access ?? "full", userId: session.user.id };
 }
 var lastSessionSync = /* @__PURE__ */ new Map();
@@ -13605,7 +13919,7 @@ async function syncSessionBookings(db, engagement, inviteeEmail, now = Date.now(
   if (!isSessionBookingConfigured() || !inviteeEmail) return 0;
   if (now - (lastSessionSync.get(engagement.id) ?? 0) < SESSION_SYNC_INTERVAL_MS) return 0;
   lastSessionSync.set(engagement.id, now);
-  const sessions = await db.select().from(engagementSessions).where(and16(eq24(engagementSessions.engagementId, engagement.id), eq24(engagementSessions.kind, "assessment_call"))).orderBy(asc7(engagementSessions.weekNumber), asc7(engagementSessions.sortOrder), asc7(engagementSessions.id));
+  const sessions = await db.select().from(engagementSessions).where(and17(eq25(engagementSessions.engagementId, engagement.id), eq25(engagementSessions.kind, "assessment_call"))).orderBy(asc8(engagementSessions.weekNumber), asc8(engagementSessions.sortOrder), asc8(engagementSessions.id));
   const waiting = sessions.filter((item2) => item2.status === "planned" && !item2.scheduledFor);
   if (!waiting.length) return 0;
   const timed = new Set(sessions.filter((item2) => item2.scheduledFor).map((item2) => item2.scheduledFor.getTime()));
@@ -13621,7 +13935,7 @@ async function syncSessionBookings(db, engagement, inviteeEmail, now = Date.now(
       scheduledFor: booking.start,
       ...minutes && minutes > 0 ? { durationMinutes: minutes } : {},
       ...booking.joinUrl && !session.meetingLink ? { meetingLink: booking.joinUrl } : {}
-    }).where(and16(eq24(engagementSessions.id, session.id), isNull12(engagementSessions.scheduledFor))).returning({ id: engagementSessions.id });
+    }).where(and17(eq25(engagementSessions.id, session.id), isNull13(engagementSessions.scheduledFor))).returning({ id: engagementSessions.id });
     await recordAudit(db, { action: "engagement_session_booked", actorUserId: null, details: { engagementId: engagement.id, sessionId: session.id, via: "calendly", scheduledFor: booking.start.toISOString() } });
     if (booked.length && booking.start.getTime() > now) await sendSessionEmails(db, { sessionId: session.id, change: "booked", includeClient: false, now });
     recorded += 1;
@@ -13639,7 +13953,7 @@ function parseJson(text4) {
 async function insightFor(db, businessCheckId, reportDelivered) {
   const report = reportDelivered ? await reportForCheck(db, businessCheckId) : null;
   if (report) return roomInsight({ report, result: null });
-  const check2 = (await db.select({ answersJson: businessChecks.answersJson, resultJson: businessChecks.resultJson }).from(businessChecks).where(eq24(businessChecks.id, businessCheckId)).limit(1))[0];
+  const check2 = (await db.select({ answersJson: businessChecks.answersJson, resultJson: businessChecks.resultJson }).from(businessChecks).where(eq25(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!check2) return null;
   const answers = parseJson(check2.answersJson);
   const stored = parseJson(check2.resultJson);
@@ -13655,7 +13969,7 @@ function bookingFor(sessions, viewer, owner) {
 async function getClientRoom(db, session, engagementId) {
   const business = session.activeBusiness;
   if (!business) return null;
-  const all = await db.select().from(engagements).where(eq24(engagements.businessId, business.businessId)).orderBy(desc8(engagements.id));
+  const all = await db.select().from(engagements).where(eq25(engagements.businessId, business.businessId)).orderBy(desc8(engagements.id));
   if (engagementId && !all.some((row) => row.id === engagementId)) throw notFound4();
   const engagement = engagementId ? all.find((row) => row.id === engagementId) : all.find((row) => row.stage !== "closed") ?? all[0];
   if (!engagement) return null;
@@ -13666,22 +13980,22 @@ var canPreviewAsClient = (actor) => authorityAllows(actor.authority, "manage_eng
 async function previewClientRoom(db, actor, input) {
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   if (!canPreviewAsClient(actor)) throw new TRPCError18({ code: "FORBIDDEN", message: "Preview as client is for the engagement's lead and the desk, not Specialists." });
-  const owner = engagement.businessId === null ? void 0 : (await db.select({ userId: businessMemberships.userId }).from(businessMemberships).where(and16(eq24(businessMemberships.businessId, engagement.businessId), eq24(businessMemberships.role, "owner"), eq24(businessMemberships.status, "active"))).limit(1))[0];
-  const business = engagement.businessId === null ? void 0 : (await db.select({ name: businesses.name }).from(businesses).where(eq24(businesses.id, engagement.businessId)).limit(1))[0];
-  const check2 = engagement.businessCheckId === null ? void 0 : (await db.select({ businessName: businessChecks.businessName, fullName: businessChecks.fullName }).from(businessChecks).where(eq24(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
+  const owner = engagement.businessId === null ? void 0 : (await db.select({ userId: businessMemberships.userId }).from(businessMemberships).where(and17(eq25(businessMemberships.businessId, engagement.businessId), eq25(businessMemberships.role, "owner"), eq25(businessMemberships.status, "active"))).limit(1))[0];
+  const business = engagement.businessId === null ? void 0 : (await db.select({ name: businesses.name }).from(businesses).where(eq25(businesses.id, engagement.businessId)).limit(1))[0];
+  const check2 = engagement.businessCheckId === null ? void 0 : (await db.select({ businessName: businessChecks.businessName, fullName: businessChecks.fullName }).from(businessChecks).where(eq25(businessChecks.id, engagement.businessCheckId)).limit(1))[0];
   const businessName = business?.name ?? check2?.businessName ?? check2?.fullName ?? engagement.contactName ?? "";
   await recordAudit(db, { action: "engagement_room_previewed", actorUserId: actor.id, details: { engagementId: engagement.id } });
   return buildClientRoom(db, engagement, { kind: "owner" }, owner?.userId ?? 0, businessName);
 }
 async function buildClientRoom(db, engagement, viewer, viewerUserId, businessName) {
-  const owner = engagement.businessCheckId !== null ? (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq24(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { email: engagement.contactEmail, fullName: engagement.contactName ?? "" } : void 0;
+  const owner = engagement.businessCheckId !== null ? (await db.select({ email: businessChecks.email, fullName: businessChecks.fullName }).from(businessChecks).where(eq25(businessChecks.id, engagement.businessCheckId)).limit(1))[0] : engagement.contactEmail ? { email: engagement.contactEmail, fullName: engagement.contactName ?? "" } : void 0;
   if (owner) await syncSessionBookings(db, engagement, owner.email);
   const [team, sessions, tasks, deliverables, comments, files, measure, checkins, matches] = await Promise.all([
-    db.select({ userId: engagementTeam.userId, name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle, whatsapp: users.whatsapp, whatsappConsentAt: users.whatsappConsentAt }).from(engagementTeam).innerJoin(users, eq24(engagementTeam.userId, users.id)).where(eq24(engagementTeam.engagementId, engagement.id)).orderBy(asc7(engagementTeam.id)),
-    db.select().from(engagementSessions).where(eq24(engagementSessions.engagementId, engagement.id)).orderBy(asc7(engagementSessions.id)),
-    db.select().from(engagementTasks).where(eq24(engagementTasks.engagementId, engagement.id)).orderBy(asc7(engagementTasks.id)),
-    db.select().from(engagementDeliverables).where(and16(eq24(engagementDeliverables.engagementId, engagement.id), eq24(engagementDeliverables.status, "shared"))).orderBy(asc7(engagementDeliverables.id)),
-    db.select({ deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq24(engagementComments.authorUserId, users.id)).where(eq24(engagementComments.engagementId, engagement.id)).orderBy(asc7(engagementComments.id)),
+    db.select({ userId: engagementTeam.userId, name: users.name, role: engagementTeam.role, jobTitle: users.jobTitle, whatsapp: users.whatsapp, whatsappConsentAt: users.whatsappConsentAt }).from(engagementTeam).innerJoin(users, eq25(engagementTeam.userId, users.id)).where(eq25(engagementTeam.engagementId, engagement.id)).orderBy(asc8(engagementTeam.id)),
+    db.select().from(engagementSessions).where(eq25(engagementSessions.engagementId, engagement.id)).orderBy(asc8(engagementSessions.id)),
+    db.select().from(engagementTasks).where(eq25(engagementTasks.engagementId, engagement.id)).orderBy(asc8(engagementTasks.id)),
+    db.select().from(engagementDeliverables).where(and17(eq25(engagementDeliverables.engagementId, engagement.id), eq25(engagementDeliverables.status, "shared"))).orderBy(asc8(engagementDeliverables.id)),
+    db.select({ deliverableId: engagementComments.deliverableId, body: engagementComments.body, createdAt: engagementComments.createdAt, authorName: users.name }).from(engagementComments).innerJoin(users, eq25(engagementComments.authorUserId, users.id)).where(eq25(engagementComments.engagementId, engagement.id)).orderBy(asc8(engagementComments.id)),
     filesOf(db, engagement.id),
     measureOf(db, engagement.id),
     checkinsOf(db, engagement.id),
@@ -13689,12 +14003,12 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
   ]);
   const [itemComments, askers] = await Promise.all([taskCommentsOf(db, engagement.id, { forClient: true }), namesOf2(db, tasks.map((task) => task.requestedByUserId))]);
   const assigneeIds = Array.from(new Set(tasks.map((task) => task.assigneeUserId).filter((value) => value !== null)));
-  const assigneeNames = new Map((assigneeIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray11(users.id, assigneeIds)) : []).map((row) => [row.id, row.name ?? ""]));
+  const assigneeNames = new Map((assigneeIds.length ? await db.select({ id: users.id, name: users.name }).from(users).where(inArray12(users.id, assigneeIds)) : []).map((row) => [row.id, row.name ?? ""]));
   const fullView = viewer.kind === "owner" || viewer.access === "full";
-  const projects = engagement.businessId === null ? [engagement] : await db.select().from(engagements).where(eq24(engagements.businessId, engagement.businessId)).orderBy(desc8(engagements.id));
+  const projects = engagement.businessId === null ? [engagement] : await db.select().from(engagements).where(eq25(engagements.businessId, engagement.businessId)).orderBy(desc8(engagements.id));
   const checkId = engagement.businessCheckId ?? projects.find((row) => row.businessCheckId !== null)?.businessCheckId ?? null;
-  const check2 = checkId === null ? void 0 : (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor }).from(businessChecks).where(eq24(businessChecks.id, checkId)).limit(1))[0];
-  const report = checkId === null ? null : (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq24(fullReports.businessCheckId, checkId)).limit(1))[0] ?? null;
+  const check2 = checkId === null ? void 0 : (await db.select({ primaryArea: businessChecks.primaryArea, readiness: businessChecks.readiness, completedAt: businessChecks.completedAt, reportRequestedAt: businessChecks.reportRequestedAt, callRequestedAt: businessChecks.callRequestedAt, callScheduledFor: businessChecks.callScheduledFor }).from(businessChecks).where(eq25(businessChecks.id, checkId)).limit(1))[0];
+  const report = checkId === null ? null : (await db.select({ deliveredAt: fullReports.deliveredAt, createdAt: fullReports.createdAt }).from(fullReports).where(eq25(fullReports.businessCheckId, checkId)).limit(1))[0] ?? null;
   const debrief = fullView && checkId !== null ? await sharedDebriefFor(db, checkId) : null;
   const insight = fullView && checkId !== null ? await insightFor(db, checkId, Boolean(report?.deliveredAt)) : null;
   const visibleDeliverables = deliverables.filter((item2) => clientCanSee(item2.audience, viewer));
@@ -13733,7 +14047,7 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
     /** Every engagement of the business, newest first, to move between them. */
     projects: projects.map((row) => ({ id: row.id, title: engagementTitle(row.type, row.service), stageLabel: engagementStageLabel(row, now), closed: row.stage === "closed", current: row.id === engagement.id })),
     /** "Fix the next problem": what the business has asked for that the desk has not handled yet. */
-    requests: engagement.businessId === null ? [] : (await db.select({ id: serviceRequests.id, service: serviceRequests.service, createdAt: serviceRequests.createdAt }).from(serviceRequests).where(and16(eq24(serviceRequests.businessId, engagement.businessId), eq24(serviceRequests.status, "open"))).orderBy(desc8(serviceRequests.id))).map((row) => ({ ...row, serviceName: PRODUCTS.find((product2) => product2.id === row.service)?.name ?? row.service })),
+    requests: engagement.businessId === null ? [] : (await db.select({ id: serviceRequests.id, service: serviceRequests.service, createdAt: serviceRequests.createdAt }).from(serviceRequests).where(and17(eq25(serviceRequests.businessId, engagement.businessId), eq25(serviceRequests.status, "open"))).orderBy(desc8(serviceRequests.id))).map((row) => ({ ...row, serviceName: PRODUCTS.find((product2) => product2.id === row.service)?.name ?? row.service })),
     startedOn: engagement.startedOn,
     uploadsEnabled: isFileStorageConfigured(),
     businessName,
@@ -13841,12 +14155,12 @@ async function buildClientRoom(db, engagement, viewer, viewerUserId, businessNam
 async function requireClientEngagement(db, session, engagementId) {
   const business = session.activeBusiness;
   if (!business) throw notFound4();
-  const engagement = (await db.select().from(engagements).where(and16(eq24(engagements.id, engagementId), eq24(engagements.businessId, business.businessId))).limit(1))[0];
+  const engagement = (await db.select().from(engagements).where(and17(eq25(engagements.id, engagementId), eq25(engagements.businessId, business.businessId))).limit(1))[0];
   if (!engagement || engagement.businessId === null) throw notFound4();
   return { engagement, viewer: await clientViewerFor(db, session, engagement.businessId) };
 }
 async function respondToTask(db, session, input) {
-  const task = (await db.select().from(engagementTasks).where(eq24(engagementTasks.id, input.taskId)).limit(1))[0];
+  const task = (await db.select().from(engagementTasks).where(eq25(engagementTasks.id, input.taskId)).limit(1))[0];
   if (!task) throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, task.engagementId);
   if (task.side !== "client" || !clientCanSeeTask(task, viewer)) throw notFound4();
@@ -13854,7 +14168,7 @@ async function respondToTask(db, session, input) {
   const status = task.kind === "data_request" ? "received" : "done";
   const arrival = arrivalFields(task, status);
   await db.transaction(async (tx) => {
-    await tx.update(engagementTasks).set({ status, statusNote: input.note, completedAt: status === "done" ? /* @__PURE__ */ new Date() : null, ...arrival }).where(eq24(engagementTasks.id, task.id));
+    await tx.update(engagementTasks).set({ status, statusNote: input.note, completedAt: status === "done" ? /* @__PURE__ */ new Date() : null, ...arrival }).where(eq25(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status } });
   });
   if (hasArrived(arrival)) await sendReceivedEmail(db, { taskId: task.id, actorUserId: session.user.id, how: status === "done" ? "marked done in the room" : "marked sent in the room" });
@@ -13863,7 +14177,7 @@ async function respondToTask(db, session, input) {
 async function answerWithLink(db, session, input) {
   const link = cleanResponseLink(input.url);
   if (!link) throw new TRPCError18({ code: "BAD_REQUEST", message: "Paste the full link to the folder, starting with https://." });
-  const task = (await db.select().from(engagementTasks).where(eq24(engagementTasks.id, input.taskId)).limit(1))[0];
+  const task = (await db.select().from(engagementTasks).where(eq25(engagementTasks.id, input.taskId)).limit(1))[0];
   if (!task) throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, task.engagementId);
   if (task.side !== "client" || !clientCanSeeTask(task, viewer)) throw notFound4();
@@ -13871,14 +14185,14 @@ async function answerWithLink(db, session, input) {
   const status = task.kind === "data_request" ? "received" : "done";
   const arrival = arrivalFields(task, status);
   await db.transaction(async (tx) => {
-    await tx.update(engagementTasks).set({ status, responseLink: link, statusNote: "Sent a link to a folder", completedAt: status === "done" ? /* @__PURE__ */ new Date() : null, ...arrival }).where(eq24(engagementTasks.id, task.id));
+    await tx.update(engagementTasks).set({ status, responseLink: link, statusNote: "Sent a link to a folder", completedAt: status === "done" ? /* @__PURE__ */ new Date() : null, ...arrival }).where(eq25(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status, via: "link" } });
   });
   if (hasArrived(arrival)) await sendReceivedEmail(db, { taskId: task.id, actorUserId: session.user.id, how: "a link to a shared folder" });
   return { success: true, status };
 }
 async function requireClientDeliverable(db, session, deliverableId) {
-  const deliverable = (await db.select().from(engagementDeliverables).where(eq24(engagementDeliverables.id, deliverableId)).limit(1))[0];
+  const deliverable = (await db.select().from(engagementDeliverables).where(eq25(engagementDeliverables.id, deliverableId)).limit(1))[0];
   if (!deliverable || deliverable.status !== "shared") throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, deliverable.engagementId);
   if (!clientCanSee(deliverable.audience, viewer)) throw notFound4();
@@ -13894,7 +14208,7 @@ async function acceptDeliverable(db, session, input) {
   if (viewer.kind !== "owner") throw new TRPCError18({ code: "FORBIDDEN", message: "Only the owner can sign this off." });
   if (deliverable.clientAcceptedAt) return { success: true, changed: false };
   await db.transaction(async (tx) => {
-    await tx.update(engagementDeliverables).set({ clientAcceptedAt: /* @__PURE__ */ new Date(), clientAcceptedByUserId: session.user.id }).where(eq24(engagementDeliverables.id, deliverable.id));
+    await tx.update(engagementDeliverables).set({ clientAcceptedAt: /* @__PURE__ */ new Date(), clientAcceptedByUserId: session.user.id }).where(eq25(engagementDeliverables.id, deliverable.id));
     await recordAudit(tx, { action: "engagement_deliverable_accepted", actorUserId: session.user.id, details: { engagementId: deliverable.engagementId, deliverableId: deliverable.id } });
   });
   return { success: true, changed: true };
@@ -13903,13 +14217,13 @@ async function setClientAudience(db, session, input) {
   if (input.item === "deliverable") {
     const { deliverable, viewer } = await requireClientDeliverable(db, session, input.id);
     if (viewer.kind !== "owner") throw new TRPCError18({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
-    await db.update(engagementDeliverables).set({ audience: input.audience }).where(eq24(engagementDeliverables.id, deliverable.id));
+    await db.update(engagementDeliverables).set({ audience: input.audience }).where(eq25(engagementDeliverables.id, deliverable.id));
   } else {
-    const item2 = (await db.select().from(engagementSessions).where(eq24(engagementSessions.id, input.id)).limit(1))[0];
+    const item2 = (await db.select().from(engagementSessions).where(eq25(engagementSessions.id, input.id)).limit(1))[0];
     if (!item2 || !item2.notesSharedAt) throw notFound4();
     const { viewer } = await requireClientEngagement(db, session, item2.engagementId);
     if (viewer.kind !== "owner") throw new TRPCError18({ code: "FORBIDDEN", message: "Only the owner decides who sees this." });
-    await db.update(engagementSessions).set({ notesAudience: input.audience }).where(eq24(engagementSessions.id, item2.id));
+    await db.update(engagementSessions).set({ notesAudience: input.audience }).where(eq25(engagementSessions.id, item2.id));
   }
   await recordAudit(db, { action: "engagement_audience_changed", actorUserId: session.user.id, details: { item: input.item, id: input.id, audience: input.audience } });
   return { success: true };
@@ -13950,12 +14264,12 @@ async function filesOf(db, engagementId) {
     createdAt: engagementFiles.createdAt,
     note: engagementFiles.note,
     membershipId: businessMemberships.id
-  }).from(engagementFiles).innerJoin(users, eq24(engagementFiles.uploadedByUserId, users.id)).innerJoin(engagements, eq24(engagementFiles.engagementId, engagements.id)).leftJoin(businessMemberships, and16(eq24(businessMemberships.userId, engagementFiles.uploadedByUserId), eq24(businessMemberships.businessId, engagements.businessId))).where(eq24(engagementFiles.engagementId, engagementId)).orderBy(asc7(engagementFiles.id));
+  }).from(engagementFiles).innerJoin(users, eq25(engagementFiles.uploadedByUserId, users.id)).innerJoin(engagements, eq25(engagementFiles.engagementId, engagements.id)).leftJoin(businessMemberships, and17(eq25(businessMemberships.userId, engagementFiles.uploadedByUserId), eq25(businessMemberships.businessId, engagements.businessId))).where(eq25(engagementFiles.engagementId, engagementId)).orderBy(asc8(engagementFiles.id));
   return rows.map(({ membershipId, ...row }) => ({ ...row, fromTeam: membershipId === null }));
 }
 var clientFileVisible = (file, viewer, userId) => file.uploadedByUserId === userId || clientCanSee(file.audience, viewer);
 async function requireClientTaskForUpload(db, session, taskId) {
-  const task = (await db.select().from(engagementTasks).where(eq24(engagementTasks.id, taskId)).limit(1))[0];
+  const task = (await db.select().from(engagementTasks).where(eq25(engagementTasks.id, taskId)).limit(1))[0];
   if (!task) throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, task.engagementId);
   if (task.side !== "client" || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound4();
@@ -13988,7 +14302,7 @@ async function clientConfirmUpload(db, session, input) {
       audience: "owner",
       uploadedByUserId: session.user.id
     }).returning({ id: engagementFiles.id });
-    if (open) await tx.update(engagementTasks).set({ status: "received", statusNote: input.note || "Uploaded to the room", ...arrival }).where(eq24(engagementTasks.id, task.id));
+    if (open) await tx.update(engagementTasks).set({ status: "received", statusNote: input.note || "Uploaded to the room", ...arrival }).where(eq25(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_file_uploaded", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, fileId: file.id, ...open ? { status: "received" } : {} } });
     return { success: true, fileId: file.id, status: open ? "received" : task.status };
   });
@@ -13998,21 +14312,21 @@ async function clientConfirmUpload(db, session, input) {
 }
 async function clientFileLink(db, session, input) {
   requireUploads();
-  const file = (await db.select().from(engagementFiles).where(eq24(engagementFiles.id, input.fileId)).limit(1))[0];
+  const file = (await db.select().from(engagementFiles).where(eq25(engagementFiles.id, input.fileId)).limit(1))[0];
   if (!file) throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, file.engagementId);
   if (!clientFileVisible(file, viewer, session.user.id)) throw notFound4();
   if (file.taskId !== null) {
-    const task = (await db.select().from(engagementTasks).where(eq24(engagementTasks.id, file.taskId)).limit(1))[0];
+    const task = (await db.select().from(engagementTasks).where(eq25(engagementTasks.id, file.taskId)).limit(1))[0];
     if (!task || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound4();
   } else if (file.deliverableId !== null) {
-    const deliverable = (await db.select().from(engagementDeliverables).where(eq24(engagementDeliverables.id, file.deliverableId)).limit(1))[0];
+    const deliverable = (await db.select().from(engagementDeliverables).where(eq25(engagementDeliverables.id, file.deliverableId)).limit(1))[0];
     if (!deliverable || deliverable.status !== "shared" || !clientCanSee(deliverable.audience, viewer)) throw notFound4();
   }
   return { url: await signedDownloadUrl(file.storageKey, file.fileName, void 0, input.mode) };
 }
 async function contentOf(db, engagementId) {
-  return db.select().from(engagementContentItems).where(eq24(engagementContentItems.engagementId, engagementId)).orderBy(asc7(engagementContentItems.month), asc7(engagementContentItems.sortOrder), asc7(engagementContentItems.id));
+  return db.select().from(engagementContentItems).where(eq25(engagementContentItems.engagementId, engagementId)).orderBy(asc8(engagementContentItems.month), asc8(engagementContentItems.sortOrder), asc8(engagementContentItems.id));
 }
 var clientContent = (item2) => ({
   id: item2.id,
@@ -14033,7 +14347,7 @@ async function saveContentItem(db, actor, input) {
   const engagement = await requireStaffEngagement(db, actor, input.engagementId);
   const values2 = { kind: input.kind, title: input.title.trim(), month: input.month, status: input.status, dueOn: input.dueOn, link: input.link, ...input.status === "published" ? { publishedAt: /* @__PURE__ */ new Date() } : {} };
   if (input.itemId) {
-    const updated = await db.update(engagementContentItems).set(values2).where(and16(eq24(engagementContentItems.id, input.itemId), eq24(engagementContentItems.engagementId, engagement.id))).returning({ id: engagementContentItems.id });
+    const updated = await db.update(engagementContentItems).set(values2).where(and17(eq25(engagementContentItems.id, input.itemId), eq25(engagementContentItems.engagementId, engagement.id))).returning({ id: engagementContentItems.id });
     if (!updated.length) throw notFound4();
     await recordAudit(db, { action: "engagement_content_saved", actorUserId: actor.id, details: { engagementId: engagement.id, itemId: input.itemId, status: input.status } });
     return { itemId: input.itemId };
@@ -14044,17 +14358,17 @@ async function saveContentItem(db, actor, input) {
 }
 async function deleteContentItem(db, actor, input) {
   requireManage2(actor);
-  const item2 = (await db.select().from(engagementContentItems).where(eq24(engagementContentItems.id, input.itemId)).limit(1))[0];
+  const item2 = (await db.select().from(engagementContentItems).where(eq25(engagementContentItems.id, input.itemId)).limit(1))[0];
   if (!item2) throw notFound4();
   await requireStaffEngagement(db, actor, item2.engagementId);
   await db.transaction(async (tx) => {
-    await tx.delete(engagementContentItems).where(eq24(engagementContentItems.id, item2.id));
+    await tx.delete(engagementContentItems).where(eq25(engagementContentItems.id, item2.id));
     await recordAudit(tx, { action: "engagement_content_deleted", actorUserId: actor.id, details: { engagementId: item2.engagementId, itemId: item2.id } });
   });
   return { success: true };
 }
 async function respondToContent(db, session, input) {
-  const item2 = (await db.select().from(engagementContentItems).where(eq24(engagementContentItems.id, input.itemId)).limit(1))[0];
+  const item2 = (await db.select().from(engagementContentItems).where(eq25(engagementContentItems.id, input.itemId)).limit(1))[0];
   if (!item2) throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, item2.engagementId);
   if (!(viewer.kind === "owner" || viewer.access === "full")) throw notFound4();
@@ -14062,19 +14376,19 @@ async function respondToContent(db, session, input) {
   if (!input.approve && !input.note?.trim()) throw new TRPCError18({ code: "BAD_REQUEST", message: "Say what to change." });
   const set = input.approve ? { status: "approved", approvedAt: /* @__PURE__ */ new Date(), approvedByUserId: session.user.id, clientNote: null } : { status: "changes_requested", clientNote: input.note.trim() };
   await db.transaction(async (tx) => {
-    await tx.update(engagementContentItems).set(set).where(eq24(engagementContentItems.id, item2.id));
+    await tx.update(engagementContentItems).set(set).where(eq25(engagementContentItems.id, item2.id));
     await recordAudit(tx, { action: input.approve ? "engagement_content_approved" : "engagement_content_changes_requested", actorUserId: session.user.id, details: { engagementId: item2.engagementId, itemId: item2.id } });
   });
   return { success: true, status: set.status };
 }
 var dropPrefix = (engagementId) => `engagements/${engagementId}/inbox/`;
 async function matchesOf(db, engagementId) {
-  return db.select({ fileId: engagementFileMatches.fileId, taskId: engagementFileMatches.taskId }).from(engagementFileMatches).innerJoin(engagementFiles, eq24(engagementFileMatches.fileId, engagementFiles.id)).where(eq24(engagementFiles.engagementId, engagementId));
+  return db.select({ fileId: engagementFileMatches.fileId, taskId: engagementFileMatches.taskId }).from(engagementFileMatches).innerJoin(engagementFiles, eq25(engagementFileMatches.fileId, engagementFiles.id)).where(eq25(engagementFiles.engagementId, engagementId));
 }
 async function requireClientRoomEngagement(db, session, engagementId) {
   const business = session.activeBusiness;
   if (!business) throw notFound4();
-  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(engagementId ? and16(eq24(engagements.businessId, business.businessId), eq24(engagements.id, engagementId)) : eq24(engagements.businessId, business.businessId)).orderBy(desc8(engagements.id)).limit(1))[0];
+  const engagement = (await db.select({ id: engagements.id }).from(engagements).where(engagementId ? and17(eq25(engagements.businessId, business.businessId), eq25(engagements.id, engagementId)) : eq25(engagements.businessId, business.businessId)).orderBy(desc8(engagements.id)).limit(1))[0];
   if (!engagement) throw notFound4();
   return engagement;
 }
@@ -14108,7 +14422,7 @@ async function clientConfirmDrop(db, session, input) {
   });
 }
 async function setNotAvailable(db, session, input) {
-  const task = (await db.select().from(engagementTasks).where(eq24(engagementTasks.id, input.taskId)).limit(1))[0];
+  const task = (await db.select().from(engagementTasks).where(eq25(engagementTasks.id, input.taskId)).limit(1))[0];
   if (!task) throw notFound4();
   const { viewer } = await requireClientEngagement(db, session, task.engagementId);
   if (task.side !== "client" || task.kind !== "data_request" || task.status === "cancelled" || !clientCanSeeTask(task, viewer)) throw notFound4();
@@ -14116,24 +14430,24 @@ async function setNotAvailable(db, session, input) {
   if (!input.unavailable && task.status !== "not_available") throw new TRPCError18({ code: "CONFLICT", message: "This is already with us." });
   const status = input.unavailable ? "not_available" : "open";
   await db.transaction(async (tx) => {
-    await tx.update(engagementTasks).set({ status, statusNote: input.unavailable ? input.note : null }).where(eq24(engagementTasks.id, task.id));
+    await tx.update(engagementTasks).set({ status, statusNote: input.unavailable ? input.note : null }).where(eq25(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_task_answered", actorUserId: session.user.id, details: { engagementId: task.engagementId, taskId: task.id, status } });
   });
   return { success: true, status };
 }
 async function matchFile(db, actor, input) {
   requireManage2(actor);
-  const file = (await db.select().from(engagementFiles).where(eq24(engagementFiles.id, input.fileId)).limit(1))[0];
+  const file = (await db.select().from(engagementFiles).where(eq25(engagementFiles.id, input.fileId)).limit(1))[0];
   if (!file || file.taskId !== null || file.deliverableId !== null) throw notFound4();
   await requireStaffEngagement(db, actor, file.engagementId);
   const wanted = Array.from(new Set(input.taskIds));
-  const requests = wanted.length ? await db.select().from(engagementTasks).where(and16(inArray11(engagementTasks.id, wanted), eq24(engagementTasks.engagementId, file.engagementId), eq24(engagementTasks.kind, "data_request"))) : [];
+  const requests = wanted.length ? await db.select().from(engagementTasks).where(and17(inArray12(engagementTasks.id, wanted), eq25(engagementTasks.engagementId, file.engagementId), eq25(engagementTasks.kind, "data_request"))) : [];
   if (requests.length !== wanted.length) throw new TRPCError18({ code: "BAD_REQUEST", message: "Match the file to this engagement's Data Requests only." });
   return db.transaction(async (tx) => {
-    await tx.delete(engagementFileMatches).where(eq24(engagementFileMatches.fileId, file.id));
+    await tx.delete(engagementFileMatches).where(eq25(engagementFileMatches.fileId, file.id));
     if (wanted.length) await tx.insert(engagementFileMatches).values(wanted.map((taskId) => ({ fileId: file.id, taskId, matchedByUserId: actor.id })));
     const waiting = requests.filter((task) => task.status === "open" || task.status === "needs_more" || task.status === "not_available");
-    for (const task of waiting) await tx.update(engagementTasks).set({ status: "received", statusNote: "From the files you sent", ...arrivalFields(task, "received") }).where(eq24(engagementTasks.id, task.id));
+    for (const task of waiting) await tx.update(engagementTasks).set({ status: "received", statusNote: "From the files you sent", ...arrivalFields(task, "received") }).where(eq25(engagementTasks.id, task.id));
     await recordAudit(tx, { action: "engagement_file_matched", actorUserId: actor.id, details: { engagementId: file.engagementId, fileId: file.id, taskIds: wanted } });
     return { success: true, moved: waiting.length, arrived: waiting.filter((task) => !task.receivedAt).map((task) => task.id) };
   }).then(async ({ arrived, ...result }) => {
@@ -14143,7 +14457,7 @@ async function matchFile(db, actor, input) {
 }
 async function requireStaffTarget(db, actor, engagementId, target) {
   await requireStaffEngagement(db, actor, engagementId);
-  const exists = target.kind === "task" ? await db.select({ id: engagementTasks.id }).from(engagementTasks).where(and16(eq24(engagementTasks.id, target.id), eq24(engagementTasks.engagementId, engagementId))).limit(1) : await db.select({ id: engagementDeliverables.id }).from(engagementDeliverables).where(and16(eq24(engagementDeliverables.id, target.id), eq24(engagementDeliverables.engagementId, engagementId))).limit(1);
+  const exists = target.kind === "task" ? await db.select({ id: engagementTasks.id }).from(engagementTasks).where(and17(eq25(engagementTasks.id, target.id), eq25(engagementTasks.engagementId, engagementId))).limit(1) : await db.select({ id: engagementDeliverables.id }).from(engagementDeliverables).where(and17(eq25(engagementDeliverables.id, target.id), eq25(engagementDeliverables.engagementId, engagementId))).limit(1);
   if (!exists.length) throw notFound4();
 }
 async function requireUploader(db, actor, engagementId, target, audience) {
@@ -14152,7 +14466,7 @@ async function requireUploader(db, actor, engagementId, target, audience) {
   if (!canContribute(actor)) return requireManage2(actor);
   if (target.kind === "deliverable" && (audience === null || audience === "team")) return;
   if (target.kind === "task" && audience !== "team") {
-    const task = (await db.select({ engagementId: engagementTasks.engagementId, requestedByUserId: engagementTasks.requestedByUserId }).from(engagementTasks).where(eq24(engagementTasks.id, target.id)).limit(1))[0];
+    const task = (await db.select({ engagementId: engagementTasks.engagementId, requestedByUserId: engagementTasks.requestedByUserId }).from(engagementTasks).where(eq25(engagementTasks.id, target.id)).limit(1))[0];
     if (task && task.engagementId === engagementId && task.requestedByUserId === actor.id) return;
   }
   throw new TRPCError18({ code: "FORBIDDEN", message: "You can attach files to any item and drafts to a Deliverable, for IP Factory only, and a brief to a request you sent. The lead shares the rest." });
@@ -14193,12 +14507,12 @@ async function staffConfirmUpload(db, actor, input) {
 }
 async function shareTeamFile(db, actor, input) {
   requireManage2(actor);
-  const file = (await db.select().from(engagementFiles).where(eq24(engagementFiles.id, input.fileId)).limit(1))[0];
+  const file = (await db.select().from(engagementFiles).where(eq25(engagementFiles.id, input.fileId)).limit(1))[0];
   if (!file) throw notFound4();
   await requireStaffEngagement(db, actor, file.engagementId);
   if (file.audience !== "team") throw new TRPCError18({ code: "BAD_REQUEST", message: "This file is already shared." });
   await db.transaction(async (tx) => {
-    await tx.update(engagementFiles).set({ audience: input.audience }).where(eq24(engagementFiles.id, file.id));
+    await tx.update(engagementFiles).set({ audience: input.audience }).where(eq25(engagementFiles.id, file.id));
     await recordAudit(tx, { action: "engagement_file_shared", actorUserId: actor.id, details: { engagementId: file.engagementId, fileId: file.id, audience: input.audience } });
   });
   return { success: true };
@@ -14210,13 +14524,13 @@ async function removeFile(db, file, by) {
     throw new TRPCError18({ code: "INTERNAL_SERVER_ERROR", message: "We could not remove the file just now. Try again in a moment." });
   }
   await db.transaction(async (tx) => {
-    await tx.delete(engagementFiles).where(eq24(engagementFiles.id, file.id));
+    await tx.delete(engagementFiles).where(eq25(engagementFiles.id, file.id));
     if (file.taskId !== null) {
-      const task = (await tx.select().from(engagementTasks).where(eq24(engagementTasks.id, file.taskId)).limit(1))[0];
-      const owner = (await tx.select({ businessId: engagements.businessId }).from(engagements).where(eq24(engagements.id, file.engagementId)).limit(1))[0];
-      const left = owner?.businessId == null ? [] : await tx.select({ id: engagementFiles.id }).from(engagementFiles).innerJoin(businessMemberships, and16(eq24(businessMemberships.userId, engagementFiles.uploadedByUserId), eq24(businessMemberships.businessId, owner.businessId))).where(eq24(engagementFiles.taskId, file.taskId)).limit(1);
+      const task = (await tx.select().from(engagementTasks).where(eq25(engagementTasks.id, file.taskId)).limit(1))[0];
+      const owner = (await tx.select({ businessId: engagements.businessId }).from(engagements).where(eq25(engagements.id, file.engagementId)).limit(1))[0];
+      const left = owner?.businessId == null ? [] : await tx.select({ id: engagementFiles.id }).from(engagementFiles).innerJoin(businessMemberships, and17(eq25(businessMemberships.userId, engagementFiles.uploadedByUserId), eq25(businessMemberships.businessId, owner.businessId))).where(eq25(engagementFiles.taskId, file.taskId)).limit(1);
       if (task && task.status === "received" && left.length === 0 && !task.responseLink) {
-        await tx.update(engagementTasks).set({ status: "open", statusNote: null, ...arrivalFields(task, "open") }).where(eq24(engagementTasks.id, task.id));
+        await tx.update(engagementTasks).set({ status: "open", statusNote: null, ...arrivalFields(task, "open") }).where(eq25(engagementTasks.id, task.id));
       }
     }
     await recordAudit(tx, { action: "engagement_file_removed", actorUserId: by.userId, details: { engagementId: file.engagementId, fileId: file.id, by: by.side, ...by.reason ? { reason: by.reason } : {} } });
@@ -14225,11 +14539,11 @@ async function removeFile(db, file, by) {
 }
 async function clientRemoveFile(db, session, input) {
   requireUploads();
-  const file = (await db.select().from(engagementFiles).where(eq24(engagementFiles.id, input.fileId)).limit(1))[0];
+  const file = (await db.select().from(engagementFiles).where(eq25(engagementFiles.id, input.fileId)).limit(1))[0];
   if (!file) throw notFound4();
   await requireClientEngagement(db, session, file.engagementId);
   if (file.uploadedByUserId !== session.user.id || file.deliverableId !== null) throw notFound4();
-  const checked = file.taskId === null ? (await db.select({ taskId: engagementFileMatches.taskId }).from(engagementFileMatches).where(eq24(engagementFileMatches.fileId, file.id)).limit(1)).length > 0 : !["open", "received", "needs_more"].includes((await db.select({ status: engagementTasks.status }).from(engagementTasks).where(eq24(engagementTasks.id, file.taskId)).limit(1))[0]?.status ?? "");
+  const checked = file.taskId === null ? (await db.select({ taskId: engagementFileMatches.taskId }).from(engagementFileMatches).where(eq25(engagementFileMatches.fileId, file.id)).limit(1)).length > 0 : !["open", "received", "needs_more"].includes((await db.select({ status: engagementTasks.status }).from(engagementTasks).where(eq25(engagementTasks.id, file.taskId)).limit(1))[0]?.status ?? "");
   if (checked) throw new TRPCError18({ code: "CONFLICT", message: "Your team has already taken this file in. Ask them on WhatsApp to remove it." });
   return removeFile(db, file, { userId: session.user.id, side: "client" });
 }
@@ -14238,14 +14552,14 @@ async function staffRemoveFile(db, actor, input) {
   requireManage2(actor);
   const reason = input.reason.trim();
   if (reason.length < 3) throw new TRPCError18({ code: "BAD_REQUEST", message: "Say why the file is removed." });
-  const file = (await db.select().from(engagementFiles).where(eq24(engagementFiles.id, input.fileId)).limit(1))[0];
+  const file = (await db.select().from(engagementFiles).where(eq25(engagementFiles.id, input.fileId)).limit(1))[0];
   if (!file) throw notFound4();
   await requireStaffEngagement(db, actor, file.engagementId);
   return removeFile(db, file, { userId: actor.id, side: "team", reason: reason.slice(0, 300) });
 }
 async function staffFileLink(db, actor, input) {
   requireUploads();
-  const file = (await db.select().from(engagementFiles).where(eq24(engagementFiles.id, input.fileId)).limit(1))[0];
+  const file = (await db.select().from(engagementFiles).where(eq25(engagementFiles.id, input.fileId)).limit(1))[0];
   if (!file) throw notFound4();
   await requireStaffEngagement(db, actor, file.engagementId);
   return { url: await signedDownloadUrl(file.storageKey, file.fileName, void 0, input.mode) };
@@ -14253,11 +14567,11 @@ async function staffFileLink(db, actor, input) {
 var asNumber = (value) => value === null ? null : Number(value);
 var asNumeric = (value) => value === null ? null : String(value);
 async function measureOf(db, engagementId) {
-  const row = (await db.select().from(engagementMeasures).where(eq24(engagementMeasures.engagementId, engagementId)).limit(1))[0];
+  const row = (await db.select().from(engagementMeasures).where(eq25(engagementMeasures.engagementId, engagementId)).limit(1))[0];
   return row ? { ...row, baselineValue: asNumber(row.baselineValue), targetValue: asNumber(row.targetValue) } : null;
 }
 async function checkinsOf(db, engagementId) {
-  const rows = await db.select().from(engagementCheckins).where(eq24(engagementCheckins.engagementId, engagementId)).orderBy(asc7(engagementCheckins.weekNumber));
+  const rows = await db.select().from(engagementCheckins).where(eq25(engagementCheckins.engagementId, engagementId)).orderBy(asc8(engagementCheckins.weekNumber));
   return rows.map((row) => ({ ...row, measureReading: asNumber(row.measureReading), hoursLead: asNumber(row.hoursLead), hoursAnalyst: asNumber(row.hoursAnalyst), hoursPartner: asNumber(row.hoursPartner) }));
 }
 function clientMeasure(measure, checkins) {
@@ -14279,7 +14593,7 @@ async function saveCheckin(db, actor, input) {
   requireManage2(actor);
   await requireStaffEngagement(db, actor, input.engagementId);
   if (input.weekNumber > 1) {
-    const previous = await db.select({ id: engagementCheckins.id }).from(engagementCheckins).where(and16(eq24(engagementCheckins.engagementId, input.engagementId), eq24(engagementCheckins.weekNumber, input.weekNumber - 1))).limit(1);
+    const previous = await db.select({ id: engagementCheckins.id }).from(engagementCheckins).where(and17(eq25(engagementCheckins.engagementId, input.engagementId), eq25(engagementCheckins.weekNumber, input.weekNumber - 1))).limit(1);
     if (!previous.length) throw new TRPCError18({ code: "CONFLICT", message: `Record week ${input.weekNumber - 1} first: a Weekly Check-in cannot start without last week's record.` });
   }
   const values2 = {
@@ -14307,7 +14621,7 @@ async function requestService(db, session, input) {
   const product2 = PRODUCTS.find((item2) => item2.id === input.service && item2.id !== "business_health_check");
   if (!product2) throw new TRPCError18({ code: "BAD_REQUEST", message: "Choose a service." });
   if (input.engagementId) await requireClientRoomEngagement(db, session, input.engagementId);
-  const open = (await db.select({ id: serviceRequests.id }).from(serviceRequests).where(and16(eq24(serviceRequests.businessId, business.businessId), eq24(serviceRequests.service, product2.id), eq24(serviceRequests.status, "open"))).limit(1))[0];
+  const open = (await db.select({ id: serviceRequests.id }).from(serviceRequests).where(and17(eq25(serviceRequests.businessId, business.businessId), eq25(serviceRequests.service, product2.id), eq25(serviceRequests.status, "open"))).limit(1))[0];
   if (open) return { success: true, requestId: open.id, already: true };
   const [created] = await db.insert(serviceRequests).values({ businessId: business.businessId, engagementId: input.engagementId ?? null, requestedByUserId: session.user.id, service: product2.id, note: input.note?.trim() || null }).returning({ id: serviceRequests.id });
   await recordAudit(db, { action: "service_requested", actorUserId: session.user.id, details: { requestId: created.id, businessId: business.businessId, service: product2.id } });
@@ -14329,7 +14643,7 @@ Confirm it with them, send the payment link, then open the engagement from the r
 }
 async function listServiceRequests(db, actor) {
   if (!canStart(actor)) return [];
-  const rows = await db.select({ id: serviceRequests.id, businessId: serviceRequests.businessId, businessName: businesses.name, service: serviceRequests.service, note: serviceRequests.note, createdAt: serviceRequests.createdAt, requestedBy: users.name }).from(serviceRequests).innerJoin(businesses, eq24(serviceRequests.businessId, businesses.id)).innerJoin(users, eq24(serviceRequests.requestedByUserId, users.id)).where(eq24(serviceRequests.status, "open")).orderBy(asc7(serviceRequests.id));
+  const rows = await db.select({ id: serviceRequests.id, businessId: serviceRequests.businessId, businessName: businesses.name, service: serviceRequests.service, note: serviceRequests.note, createdAt: serviceRequests.createdAt, requestedBy: users.name }).from(serviceRequests).innerJoin(businesses, eq25(serviceRequests.businessId, businesses.id)).innerJoin(users, eq25(serviceRequests.requestedByUserId, users.id)).where(eq25(serviceRequests.status, "open")).orderBy(asc8(serviceRequests.id));
   return rows.map((row) => {
     const product2 = PRODUCTS.find((item2) => item2.id === row.service);
     const type = product2 ? engagementTypeOf(product2) : "done_for_you";
@@ -14338,15 +14652,47 @@ async function listServiceRequests(db, actor) {
 }
 async function handleServiceRequest(db, actor, input) {
   requireStart(actor);
-  const updated = await db.update(serviceRequests).set({ status: input.status, handledByUserId: actor.id, handledAt: /* @__PURE__ */ new Date() }).where(and16(eq24(serviceRequests.id, input.requestId), eq24(serviceRequests.status, "open"))).returning({ id: serviceRequests.id });
+  const updated = await db.update(serviceRequests).set({ status: input.status, handledByUserId: actor.id, handledAt: /* @__PURE__ */ new Date() }).where(and17(eq25(serviceRequests.id, input.requestId), eq25(serviceRequests.status, "open"))).returning({ id: serviceRequests.id });
   if (!updated.length) throw notFound4();
   await recordAudit(db, { action: "service_request_handled", actorUserId: actor.id, details: { requestId: input.requestId, status: input.status } });
   return { success: true };
 }
 async function listClientBusinesses(db, actor) {
   if (!canStart(actor)) return [];
-  const rows = await db.selectDistinct({ id: businesses.id, name: businesses.name }).from(businesses).innerJoin(engagements, eq24(engagements.businessId, businesses.id)).orderBy(asc7(businesses.name));
+  const rows = await db.selectDistinct({ id: businesses.id, name: businesses.name }).from(businesses).innerJoin(engagements, eq25(engagements.businessId, businesses.id)).orderBy(asc8(businesses.name));
   return rows;
+}
+async function instagramStatus(db, actor, input) {
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  const [connection] = await db.select().from(socialConnections).where(and17(eq25(socialConnections.engagementId, engagement.id), eq25(socialConnections.platform, "instagram"))).limit(1);
+  const posts = connection ? await postsFor(db, engagement.id) : [];
+  return {
+    configured: instagramConfigured(),
+    connection: connection ? { username: connection.username, status: connection.status, lastSyncAt: connection.lastSyncAt, lastError: connection.lastError, tokenExpiresAt: connection.tokenExpiresAt } : null,
+    posts: posts.map((post) => ({ id: post.id, kind: post.kind, permalink: post.permalink, caption: post.caption, postedAt: post.postedAt, views: post.views, reach: post.reach, likes: post.likes, comments: post.comments, shares: post.shares, saves: post.saves, metricsAt: post.metricsAt, contentItemId: post.contentItemId }))
+  };
+}
+async function instagramConnectUrl(db, actor, input) {
+  requireManage2(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  if (!instagramConfigured()) throw new TRPCError18({ code: "PRECONDITION_FAILED", message: "Instagram is not set up on the server yet (INSTAGRAM_APP_ID and INSTAGRAM_APP_SECRET)." });
+  return { url: instagramAuthorizeUrl(engagement.id, actor.id) };
+}
+async function instagramSyncNow(db, actor, input) {
+  requireManage2(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  const [connection] = await db.select().from(socialConnections).where(and17(eq25(socialConnections.engagementId, engagement.id), eq25(socialConnections.platform, "instagram"))).limit(1);
+  if (!connection || connection.status === "disconnected") throw new TRPCError18({ code: "PRECONDITION_FAILED", message: "Connect Instagram first." });
+  const result = await syncInstagram(db, connection);
+  if (!result.ok) throw new TRPCError18({ code: "BAD_GATEWAY", message: result.tokenProblem ? "Instagram needs connecting again: the permission has ended or was removed." : `Instagram did not answer as expected: ${result.error}` });
+  return result;
+}
+async function instagramDisconnect(db, actor, input) {
+  requireManage2(actor);
+  const engagement = await requireStaffEngagement(db, actor, input.engagementId);
+  await db.update(socialConnections).set({ status: "disconnected", tokenSealed: "removed", tokenExpiresAt: null }).where(and17(eq25(socialConnections.engagementId, engagement.id), eq25(socialConnections.platform, "instagram")));
+  await recordAudit(db, { action: "social_account_disconnected", actorUserId: actor.id, details: { engagementId: engagement.id, platform: "instagram" } });
+  return { success: true };
 }
 
 // server/payments.ts
@@ -14438,7 +14784,7 @@ function paymentConfirmedEmail(input) {
 async function paymentRequestsFor(db, businessCheckIds) {
   if (businessCheckIds && !businessCheckIds.length) return [];
   const query = db.select().from(paymentRequests);
-  return (businessCheckIds ? query.where(inArray12(paymentRequests.businessCheckId, businessCheckIds)) : query).orderBy(paymentRequests.id);
+  return (businessCheckIds ? query.where(inArray13(paymentRequests.businessCheckId, businessCheckIds)) : query).orderBy(paymentRequests.id);
 }
 function isMissingPaymentTable(error) {
   const code = error?.code ?? error?.cause?.code;
@@ -14463,7 +14809,7 @@ async function paymentStatusesByCheck(db, businessCheckIds) {
   return byCheck;
 }
 async function loadCheck(db, businessCheckId) {
-  const check2 = (await db.select({ id: businessChecks.id, publicToken: businessChecks.publicToken, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq25(businessChecks.id, businessCheckId)).limit(1))[0];
+  const check2 = (await db.select({ id: businessChecks.id, publicToken: businessChecks.publicToken, fullName: businessChecks.fullName, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq26(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!check2) throw new TRPCError19({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   return check2;
 }
@@ -14471,7 +14817,7 @@ var BEFORE_OPPORTUNITY = ["lead", "qualified_lead", "call_booked"];
 async function requestPayment(db, input) {
   if (input.item === "current_state") return sendBusinessReviewLink(db, { businessCheckId: input.businessCheckId, actorUserId: input.actorUserId });
   const check2 = await loadCheck(db, input.businessCheckId);
-  const existing = (await db.select().from(paymentRequests).where(and17(eq25(paymentRequests.businessCheckId, check2.id), eq25(paymentRequests.item, input.item))).limit(1))[0];
+  const existing = (await db.select().from(paymentRequests).where(and18(eq26(paymentRequests.businessCheckId, check2.id), eq26(paymentRequests.item, input.item))).limit(1))[0];
   if (existing?.status === "confirmed") throw new TRPCError19({ code: "CONFLICT", message: "This has already been paid." });
   const reference2 = paymentReference(input.item, check2.id);
   const priced = resolveBusinessSupportPrice(input.item);
@@ -14480,7 +14826,7 @@ async function requestPayment(db, input) {
   const stageTo = check2.pipelineStage;
   const request = await db.transaction(async (tx) => {
     const [row] = await tx.insert(paymentRequests).values({ businessCheckId: check2.id, item: input.item, amountNaira, reference: reference2, requestedByUserId: input.actorUserId }).onConflictDoUpdate({ target: [paymentRequests.businessCheckId, paymentRequests.item], set: { amountNaira, requestedByUserId: input.actorUserId, requestedAt: /* @__PURE__ */ new Date() } }).returning();
-    if (stageTo !== check2.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq25(businessChecks.id, check2.id));
+    if (stageTo !== check2.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq26(businessChecks.id, check2.id));
     await recordAudit(tx, {
       action: "payment_details_sent",
       actorUserId: input.actorUserId,
@@ -14491,12 +14837,12 @@ async function requestPayment(db, input) {
   });
   const message = paymentDetailsEmail({ fullName: check2.fullName, item: input.item, reference: reference2, deadline: paymentDeadline(request.requestedAt), amountNaira: request.amountNaira, totalNaira: priced.amountNaira, online: onlinePaymentOffer(check2.publicToken, input.item) });
   const delivery = await deliverEmail({ to: check2.email, subject: message.subject, body: message.body, sender: "business_support", paymentRequestId: request.id, businessCheckId: check2.id, idempotencyKey: `payment_requests:${request.id}:details:${request.requestedAt.getTime()}` }).catch((error) => ({ status: "Failed", reason: error instanceof Error ? error.message : "Unknown error" }));
-  await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq25(paymentRequests.id, request.id));
+  await db.update(paymentRequests).set({ deliveryStatus: delivery.status }).where(eq26(paymentRequests.id, request.id));
   const deliveryProblem = delivery.status === "Failed" ? delivery.reason : null;
   return { paymentRequestId: request.id, reference: reference2, status: request.status, deliveryStatus: delivery.status, deliveryProblem, pipelineStage: stageTo, engagementId: null, feeLineId: null };
 }
 async function loadRequest(db, paymentRequestId) {
-  const request = (await db.select().from(paymentRequests).where(eq25(paymentRequests.id, paymentRequestId)).limit(1))[0];
+  const request = (await db.select().from(paymentRequests).where(eq26(paymentRequests.id, paymentRequestId)).limit(1))[0];
   if (!request) throw new TRPCError19({ code: "NOT_FOUND", message: "That payment request does not exist." });
   return request;
 }
@@ -14519,9 +14865,9 @@ async function confirmPayment(db, input) {
   let outcome;
   try {
     outcome = await db.transaction(async (tx) => {
-      const [claimed] = await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note }).where(and17(eq25(paymentRequests.id, request.id), ne4(paymentRequests.status, "confirmed"))).returning({ id: paymentRequests.id });
+      const [claimed] = await tx.update(paymentRequests).set({ status: "confirmed", confirmedAt: /* @__PURE__ */ new Date(), confirmedByUserId: input.actorUserId, note }).where(and18(eq26(paymentRequests.id, request.id), ne4(paymentRequests.status, "confirmed"))).returning({ id: paymentRequests.id });
       if (!claimed) return null;
-      if (stageTo !== check2.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq25(businessChecks.id, check2.id));
+      if (stageTo !== check2.pipelineStage) await tx.update(businessChecks).set({ pipelineStage: stageTo }).where(eq26(businessChecks.id, check2.id));
       await recordAudit(tx, {
         action: "payment_confirmed",
         actorUserId: input.actorUserId,
@@ -14599,7 +14945,7 @@ async function database(what) {
   return db;
 }
 async function findCheck(db, token3) {
-  const [check2] = await db.select().from(businessChecks).where(eq26(businessChecks.publicToken, token3)).limit(1);
+  const [check2] = await db.select().from(businessChecks).where(eq27(businessChecks.publicToken, token3)).limit(1);
   if (!check2) throw new TRPCError20({ code: "NOT_FOUND", message: "We could not find that Business Health Check. Kindly start again." });
   return check2;
 }
@@ -14621,7 +14967,7 @@ var businessCheckRouter = router({
       throw tooMany2("Kindly wait a few minutes before starting another Business Health Check.");
     }
     const db = await database("start your Business Health Check");
-    const token3 = randomBytes10(24).toString("base64url");
+    const token3 = randomBytes11(24).toString("base64url");
     await db.insert(businessChecks).values({
       publicToken: token3,
       pipelineStage: "lead",
@@ -14640,7 +14986,7 @@ var businessCheckRouter = router({
     const db = await database("save your progress");
     const check2 = await findCheck(db, input.token);
     if (check2.completedAt) return { saved: false };
-    await db.update(businessChecks).set(answerColumns(cleanAnswers(input.answers))).where(eq26(businessChecks.id, check2.id));
+    await db.update(businessChecks).set(answerColumns(cleanAnswers(input.answers))).where(eq27(businessChecks.id, check2.id));
     return { saved: true };
   }),
   /** Finishes the check: works out the result on the server, writes the summary and emails both sides once. */
@@ -14668,7 +15014,7 @@ var businessCheckRouter = router({
       summaryJson: JSON.stringify(summary),
       summarySource: source,
       completedAt: databaseNow()
-    }).where(and18(eq26(businessChecks.id, check2.id), isNull13(businessChecks.completedAt))).returning({ id: businessChecks.id });
+    }).where(and19(eq27(businessChecks.id, check2.id), isNull14(businessChecks.completedAt))).returning({ id: businessChecks.id });
     if (!claimed) {
       const recorded = await findCheck(db, input.token);
       return { token: recorded.publicToken, result: JSON.parse(recorded.resultJson ?? "null") ?? result, summary: JSON.parse(recorded.summaryJson ?? "null") ?? summary, summarySource: recorded.summarySource ?? source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: recorded.notificationStatus };
@@ -14680,7 +15026,7 @@ var businessCheckRouter = router({
       deliverEmail({ to: BUSINESS_SUPPORT_MAILBOX, subject: office.subject, body: office.body, sender: "business_support", businessCheckId: check2.id, idempotencyKey: `business_checks:${check2.id}:summary:office` }).catch(() => failed2),
       deliverEmail({ to: check2.email, subject: owner.subject, body: owner.body, sender: "business_support", businessCheckId: check2.id, idempotencyKey: `business_checks:${check2.id}:summary:owner` }).catch(() => failed2)
     ]);
-    await db.update(businessChecks).set({ notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent" }).where(eq26(businessChecks.id, check2.id));
+    await db.update(businessChecks).set({ notificationStatus: officeDelivery.status === "Failed" ? "Failed" : officeDelivery.status === "Simulated" ? "Simulated" : "Sent" }).where(eq27(businessChecks.id, check2.id));
     return { token: check2.publicToken, result, summary, summarySource: source, discoveryCallUrl: ENV.discoveryCallUrl, emailStatus: ownerDelivery.status === "Sent" ? "Sent" : ownerDelivery.status === "Failed" ? "Failed" : "Simulated" };
   }),
   /** The owner asks for the free call or the full report from the result screen. */
@@ -14701,12 +15047,12 @@ var businessCheckRouter = router({
     }
     const bookedFor = input.choice === "call" && input.calendlyEventUri ? await bookedCallTime(input.calendlyEventUri, check2.email) ?? await findBookedCall(check2.email) : null;
     if (bookedFor) {
-      await db.update(businessChecks).set({ callScheduledFor: bookedFor }).where(eq26(businessChecks.id, check2.id));
+      await db.update(businessChecks).set({ callScheduledFor: bookedFor }).where(eq27(businessChecks.id, check2.id));
       await recordAudit(db, { action: "business_check_call_booked", targetEmail: check2.email, details: { businessCheckId: check2.id, scheduledFor: bookedFor.toISOString(), source: "calendly" } });
     }
     const already = check2.callRequestedAt;
     if (!already) {
-      await db.update(businessChecks).set({ callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check2.pipelineStage, "call_booked") }).where(eq26(businessChecks.id, check2.id));
+      await db.update(businessChecks).set({ callRequestedAt: databaseNow(), pipelineStage: advancePipeline(check2.pipelineStage, "call_booked") }).where(eq27(businessChecks.id, check2.id));
       const what = "a free Discovery Call";
       await deliverEmail({
         sender: "business_support",
@@ -14735,7 +15081,7 @@ import { z as z10 } from "zod";
 
 // server/staffWhatsapp.ts
 import { TRPCError as TRPCError21 } from "@trpc/server";
-import { eq as eq27 } from "drizzle-orm";
+import { eq as eq28 } from "drizzle-orm";
 var clean = (value) => value.replace(/[\s()-]/g, "");
 function numberOf(value) {
   if (value === null || !value.trim()) return null;
@@ -14748,7 +15094,7 @@ var requireStaff = (session) => {
 };
 async function ownWhatsapp(db, session) {
   if (session.platformRoles.length === 0) return { staff: false, whatsapp: null, agreedAt: null };
-  const row = (await db.select({ whatsapp: users.whatsapp, agreedAt: users.whatsappConsentAt }).from(users).where(eq27(users.id, session.user.id)).limit(1))[0];
+  const row = (await db.select({ whatsapp: users.whatsapp, agreedAt: users.whatsappConsentAt }).from(users).where(eq28(users.id, session.user.id)).limit(1))[0];
   return { staff: true, whatsapp: row?.whatsapp ?? null, agreedAt: row?.agreedAt ?? null };
 }
 async function setOwnWhatsapp(db, session, input) {
@@ -14756,18 +15102,18 @@ async function setOwnWhatsapp(db, session, input) {
   const whatsapp = numberOf(input.whatsapp);
   const agreedAt = whatsapp && input.agree ? /* @__PURE__ */ new Date() : null;
   await db.transaction(async (tx) => {
-    await tx.update(users).set({ whatsapp, whatsappConsentAt: agreedAt }).where(eq27(users.id, session.user.id));
+    await tx.update(users).set({ whatsapp, whatsappConsentAt: agreedAt }).where(eq28(users.id, session.user.id));
     await recordAudit(tx, { action: "staff_whatsapp_set", actorUserId: session.user.id, targetEmail: session.user.email, details: { targetUserId: session.user.id, by: "self", number: whatsapp !== null, agreed: agreedAt !== null } });
   });
   return { success: true, whatsapp, agreedAt };
 }
 async function setStaffWhatsapp(db, actor, input) {
   const whatsapp = numberOf(input.whatsapp);
-  const target = (await db.select({ id: users.id, email: users.email, whatsapp: users.whatsapp, agreedAt: users.whatsappConsentAt }).from(users).where(eq27(users.id, input.userId)).limit(1))[0];
+  const target = (await db.select({ id: users.id, email: users.email, whatsapp: users.whatsapp, agreedAt: users.whatsappConsentAt }).from(users).where(eq28(users.id, input.userId)).limit(1))[0];
   if (!target) throw new TRPCError21({ code: "NOT_FOUND", message: "That person does not exist." });
   const agreedAt = whatsapp !== null && whatsapp === target.whatsapp ? target.agreedAt : null;
   await db.transaction(async (tx) => {
-    await tx.update(users).set({ whatsapp, whatsappConsentAt: agreedAt }).where(eq27(users.id, target.id));
+    await tx.update(users).set({ whatsapp, whatsappConsentAt: agreedAt }).where(eq28(users.id, target.id));
     await recordAudit(tx, { action: "staff_whatsapp_set", actorUserId: actor.id, targetEmail: target.email, details: { targetUserId: target.id, by: "manager", number: whatsapp !== null, agreed: agreedAt !== null } });
   });
   return { success: true, whatsapp, agreedAt };
@@ -14892,7 +15238,7 @@ function answerSheet(answers) {
 }
 
 // server/businessSupportAdmin.ts
-import { and as and19, desc as desc9, eq as eq28, inArray as inArray13, isNotNull as isNotNull3, isNull as isNull14, sql as sql9 } from "drizzle-orm";
+import { and as and20, desc as desc9, eq as eq29, inArray as inArray14, isNotNull as isNotNull3, isNull as isNull15, sql as sql9 } from "drizzle-orm";
 import { TRPCError as TRPCError25 } from "@trpc/server";
 async function requireDatabase2() {
   const db = await getDb();
@@ -14933,7 +15279,7 @@ async function syncCalendlyBookings(db, rows) {
     const time = await findBookedCall(row.email);
     if (!time) return;
     const stage = advancePipeline(row.pipelineStage, "call_booked");
-    const [saved] = await db.update(businessChecks).set({ callScheduledFor: time, callRequestedAt: row.callRequestedAt ?? databaseNow(), pipelineStage: stage }).where(and19(eq28(businessChecks.id, row.id), isNull14(businessChecks.callScheduledFor))).returning({ id: businessChecks.id });
+    const [saved] = await db.update(businessChecks).set({ callScheduledFor: time, callRequestedAt: row.callRequestedAt ?? databaseNow(), pipelineStage: stage }).where(and20(eq29(businessChecks.id, row.id), isNull15(businessChecks.callScheduledFor))).returning({ id: businessChecks.id });
     if (!saved) return;
     await recordAudit(db, { action: "business_check_call_booked", targetEmail: row.email, details: { businessCheckId: row.id, scheduledFor: time.toISOString(), source: "calendly_lookup", ...row.callRequestedAt ? {} : { requested: "calendly" } } });
     found.set(row.id, time);
@@ -14990,7 +15336,7 @@ async function getBusinessCheckDetail(db, businessCheckId) {
     answersJson: businessChecks.answersJson,
     resultJson: businessChecks.resultJson,
     summaryJson: businessChecks.summaryJson
-  }).from(businessChecks).where(eq28(businessChecks.id, businessCheckId)).limit(1))[0];
+  }).from(businessChecks).where(eq29(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!row) throw new TRPCError25({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   const { resultJson, summaryJson, answersJson, ...fields } = row;
   const result = parseJson2(resultJson);
@@ -15013,7 +15359,7 @@ async function getBusinessCheckDetail(db, businessCheckId) {
 }
 var HISTORY_ACTIONS = ["business_check_stage_changed", "business_check_call_outcome", "business_check_call_scheduled", "business_check_call_booked", "payment_details_sent", "payment_proof_received", "payment_confirmed", "payment_confirmation_sent", "full_report_link_sent", "full_report_delivered"];
 async function stageHistoryFor(db, businessCheckId) {
-  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq28(users.id, adminAccessAuditEvents.actorUserId)).where(and19(inArray13(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql9`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc9(adminAccessAuditEvents.createdAt), desc9(adminAccessAuditEvents.id)).limit(100);
+  const events = await db.select({ id: adminAccessAuditEvents.id, action: adminAccessAuditEvents.action, details: adminAccessAuditEvents.details, at: adminAccessAuditEvents.createdAt, by: users.name }).from(adminAccessAuditEvents).leftJoin(users, eq29(users.id, adminAccessAuditEvents.actorUserId)).where(and20(inArray14(adminAccessAuditEvents.action, [...HISTORY_ACTIONS]), sql9`${adminAccessAuditEvents.details}::jsonb ->> 'businessCheckId' = ${String(businessCheckId)}`)).orderBy(desc9(adminAccessAuditEvents.createdAt), desc9(adminAccessAuditEvents.id)).limit(100);
   return events.map((event) => {
     const details = parseJson2(event.details) ?? {};
     return { id: event.id, action: event.action, from: details.from ?? null, to: details.to ?? null, note: details.note ?? null, scheduledFor: details.scheduledFor ?? null, item: details.item ?? null, reference: details.reference ?? null, delivery: details.delivery ?? null, via: details.via === "paystack" ? "paystack" : null, by: event.by ?? null, at: event.at };
@@ -15021,12 +15367,12 @@ async function stageHistoryFor(db, businessCheckId) {
 }
 var SETTABLE_STAGES = PIPELINE_STAGES.filter((stage) => stage !== "lead" && stage !== "won");
 async function setPipelineStage(db, input) {
-  const check2 = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq28(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  const check2 = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage }).from(businessChecks).where(eq29(businessChecks.id, input.businessCheckId)).limit(1))[0];
   if (!check2) throw new TRPCError25({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   if (check2.pipelineStage === input.stage) return { success: true, pipelineStage: check2.pipelineStage, changed: false };
   if (check2.pipelineStage === "won") throw new TRPCError25({ code: "CONFLICT", message: "This business has already been won, so its stage can no longer be changed here." });
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ pipelineStage: input.stage }).where(eq28(businessChecks.id, check2.id));
+    await tx.update(businessChecks).set({ pipelineStage: input.stage }).where(eq29(businessChecks.id, check2.id));
     await recordAudit(tx, {
       action: "business_check_stage_changed",
       actorUserId: input.actorUserId,
@@ -15037,19 +15383,19 @@ async function setPipelineStage(db, input) {
   return { success: true, pipelineStage: input.stage, changed: true };
 }
 async function requestedCheck(db, businessCheckId) {
-  const check2 = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq28(businessChecks.id, businessCheckId)).limit(1))[0];
+  const check2 = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt }).from(businessChecks).where(eq29(businessChecks.id, businessCheckId)).limit(1))[0];
   if (!check2) throw new TRPCError25({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   if (!check2.callRequestedAt) throw new TRPCError25({ code: "BAD_REQUEST", message: "This Business Health Check has not asked for a Discovery Call." });
   if (check2.pipelineStage === "won") throw new TRPCError25({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call outcome can no longer be changed here." });
   return check2;
 }
 async function scheduleDiscoveryCall(db, input) {
-  const check2 = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt }).from(businessChecks).where(eq28(businessChecks.id, input.businessCheckId)).limit(1))[0];
+  const check2 = (await db.select({ id: businessChecks.id, email: businessChecks.email, pipelineStage: businessChecks.pipelineStage, callRequestedAt: businessChecks.callRequestedAt, completedAt: businessChecks.completedAt }).from(businessChecks).where(eq29(businessChecks.id, input.businessCheckId)).limit(1))[0];
   if (!check2) throw new TRPCError25({ code: "NOT_FOUND", message: "That Business Health Check does not exist." });
   if (!check2.completedAt) throw new TRPCError25({ code: "BAD_REQUEST", message: "This Business Health Check is not finished yet, so there is no Discovery Call to schedule." });
   if (check2.pipelineStage === "won") throw new TRPCError25({ code: "CONFLICT", message: "This business has already been won, so its Discovery Call can no longer be changed here." });
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, callRequestedAt: check2.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check2.pipelineStage, "call_booked") }).where(eq28(businessChecks.id, check2.id));
+    await tx.update(businessChecks).set({ callScheduledFor: input.scheduledFor, callRequestedAt: check2.callRequestedAt ?? databaseNow(), pipelineStage: advancePipeline(check2.pipelineStage, "call_booked") }).where(eq29(businessChecks.id, check2.id));
     await recordAudit(tx, { action: "business_check_call_scheduled", actorUserId: input.actorUserId, targetEmail: check2.email, details: { businessCheckId: check2.id, scheduledFor: input.scheduledFor.toISOString(), ...check2.callRequestedAt ? {} : { requested: "by_hand" } } });
   });
   return { success: true };
@@ -15060,7 +15406,7 @@ async function recordDiscoveryCallOutcome(db, input) {
   const check2 = await requestedCheck(db, input.businessCheckId);
   const stage = OUTCOME_STAGE[input.outcome];
   await db.transaction(async (tx) => {
-    await tx.update(businessChecks).set({ pipelineStage: stage }).where(eq28(businessChecks.id, check2.id));
+    await tx.update(businessChecks).set({ pipelineStage: stage }).where(eq29(businessChecks.id, check2.id));
     await recordAudit(tx, { action: "business_check_call_outcome", actorUserId: input.actorUserId, targetEmail: check2.email, details: { businessCheckId: check2.id, outcome: input.outcome, from: check2.pipelineStage, to: stage } });
   });
   return { success: true, pipelineStage: stage };
@@ -15078,24 +15424,24 @@ async function listClients(db) {
     membershipStatus: businessMemberships.status,
     joinedAt: businessMemberships.createdAt,
     businessCreatedAt: businesses.createdAt
-  }).from(businessMemberships).innerJoin(businesses, eq28(businessMemberships.businessId, businesses.id)).innerJoin(users, eq28(businessMemberships.userId, users.id)).orderBy(desc9(businesses.createdAt), businessMemberships.id).limit(500);
+  }).from(businessMemberships).innerJoin(businesses, eq29(businessMemberships.businessId, businesses.id)).innerJoin(users, eq29(businessMemberships.userId, users.id)).orderBy(desc9(businesses.createdAt), businessMemberships.id).limit(500);
 }
 async function businessSupportDb() {
   return requireDatabase2();
 }
 
 // server/emailAlerts.ts
-import { and as and20, desc as desc10, eq as eq29, gte as gte2, inArray as inArray14, sql as sql10 } from "drizzle-orm";
+import { and as and21, desc as desc10, eq as eq30, gte as gte3, inArray as inArray15, sql as sql10 } from "drizzle-orm";
 var FAILED_EMAIL_STATES = ["failed", "bounced", "suppressed"];
 var FAILED_EMAIL_WINDOW_DAYS = 30;
 var FAILED_EMAILS_SHOWN = 20;
-var DAY_MS = 864e5;
+var DAY_MS2 = 864e5;
 async function dealtWith(db, since) {
-  const rows = await db.select({ deliveryId: sql10`${adminAccessAuditEvents.details}::jsonb ->> 'deliveryId'` }).from(adminAccessAuditEvents).where(and20(eq29(adminAccessAuditEvents.action, "email_failure_dealt_with"), gte2(adminAccessAuditEvents.createdAt, since)));
+  const rows = await db.select({ deliveryId: sql10`${adminAccessAuditEvents.details}::jsonb ->> 'deliveryId'` }).from(adminAccessAuditEvents).where(and21(eq30(adminAccessAuditEvents.action, "email_failure_dealt_with"), gte3(adminAccessAuditEvents.createdAt, since)));
   return new Set(rows.map((row) => Number(row.deliveryId)));
 }
 async function failedEmails(db, now = Date.now()) {
-  const since = new Date(now - FAILED_EMAIL_WINDOW_DAYS * DAY_MS);
+  const since = new Date(now - FAILED_EMAIL_WINDOW_DAYS * DAY_MS2);
   const rows = await db.select({
     id: businessSupportEmailDeliveries.id,
     recipientEmail: businessSupportEmailDeliveries.recipientEmail,
@@ -15104,9 +15450,9 @@ async function failedEmails(db, now = Date.now()) {
     attemptedAt: businessSupportEmailDeliveries.attemptedAt,
     lastEventAt: businessSupportEmailDeliveries.lastEventAt,
     businessCheckId: businessSupportEmailDeliveries.businessCheckId
-  }).from(businessSupportEmailDeliveries).where(and20(
-    inArray14(businessSupportEmailDeliveries.latestState, [...FAILED_EMAIL_STATES]),
-    gte2(businessSupportEmailDeliveries.attemptedAt, since),
+  }).from(businessSupportEmailDeliveries).where(and21(
+    inArray15(businessSupportEmailDeliveries.latestState, [...FAILED_EMAIL_STATES]),
+    gte3(businessSupportEmailDeliveries.attemptedAt, since),
     // The office's own notices are not a client's email.
     sql10`lower(${businessSupportEmailDeliveries.recipientEmail}) <> ${BUSINESS_SUPPORT_MAILBOX.toLowerCase()}`
   )).orderBy(desc10(businessSupportEmailDeliveries.attemptedAt), desc10(businessSupportEmailDeliveries.id)).limit(500);
@@ -15114,7 +15460,7 @@ async function failedEmails(db, now = Date.now()) {
   const open = rows.filter((row) => !done.has(row.id));
   const shown = open.slice(0, FAILED_EMAILS_SHOWN);
   const checkIds = Array.from(new Set(shown.flatMap((row) => row.businessCheckId !== null ? [row.businessCheckId] : [])));
-  const checks = checkIds.length ? await db.select({ id: businessChecks.id, businessName: businessChecks.businessName, fullName: businessChecks.fullName }).from(businessChecks).where(inArray14(businessChecks.id, checkIds)) : [];
+  const checks = checkIds.length ? await db.select({ id: businessChecks.id, businessName: businessChecks.businessName, fullName: businessChecks.fullName }).from(businessChecks).where(inArray15(businessChecks.id, checkIds)) : [];
   return {
     total: open.length,
     emails: shown.map((row) => {
@@ -15131,9 +15477,9 @@ async function failedEmails(db, now = Date.now()) {
   };
 }
 async function markEmailsDealtWith(db, actorUserId, deliveryIds, now = Date.now()) {
-  const since = new Date(now - FAILED_EMAIL_WINDOW_DAYS * DAY_MS);
+  const since = new Date(now - FAILED_EMAIL_WINDOW_DAYS * DAY_MS2);
   const wanted = Array.from(new Set(deliveryIds));
-  const rows = await db.select({ id: businessSupportEmailDeliveries.id, recipientEmail: businessSupportEmailDeliveries.recipientEmail, latestState: businessSupportEmailDeliveries.latestState }).from(businessSupportEmailDeliveries).where(inArray14(businessSupportEmailDeliveries.id, wanted));
+  const rows = await db.select({ id: businessSupportEmailDeliveries.id, recipientEmail: businessSupportEmailDeliveries.recipientEmail, latestState: businessSupportEmailDeliveries.latestState }).from(businessSupportEmailDeliveries).where(inArray15(businessSupportEmailDeliveries.id, wanted));
   const done = await dealtWith(db, since);
   const marked = rows.filter((row) => FAILED_EMAIL_STATES.includes(row.latestState) && !done.has(row.id));
   for (const row of marked) {
@@ -15446,6 +15792,14 @@ var staffRouter = router({
     link: z15.string().trim().url("Paste the full link, starting https://").max(1024).nullable().or(z15.literal("").transform(() => null))
   })).mutation(async ({ ctx, input }) => guarded(async () => saveContentItem(await engagementDb(), ctx.actor, input))),
   deleteContent: staff.input(z15.object({ itemId: id })).mutation(async ({ ctx, input }) => guarded(async () => deleteContentItem(await engagementDb(), ctx.actor, input))),
+  /** Instagram on the Content board (R108): status and figures; connect (a link for the account owner); check now; disconnect. */
+  instagramStatus: staff.input(z15.object({ engagementId: id })).query(async ({ ctx, input }) => guarded(async () => instagramStatus(await engagementDb(), ctx.actor, input))),
+  instagramConnectUrl: staff.input(z15.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => instagramConnectUrl(await engagementDb(), ctx.actor, input))),
+  instagramSyncNow: staff.input(z15.object({ engagementId: id })).mutation(async ({ ctx, input }) => {
+    await enforceLimit(LIMITS.socialSync, `staff:${ctx.actor.id}`);
+    return guarded(async () => instagramSyncNow(await engagementDb(), ctx.actor, input));
+  }),
+  instagramDisconnect: staff.input(z15.object({ engagementId: id })).mutation(async ({ ctx, input }) => guarded(async () => instagramDisconnect(await engagementDb(), ctx.actor, input))),
   /** Sort a file the client dropped: the Data Requests it answers (an empty list clears the match). */
   matchFile: staff.input(z15.object({ fileId: id, taskIds: z15.array(id).max(50) })).mutation(async ({ ctx, input }) => guarded(async () => matchFile(await engagementDb(), ctx.actor, input))),
   saveMeasure: staff.input(z15.object({ engagementId: id, name: text3(160).min(1, "Name the number."), definition: optionalText2(2e3), unit: optionalText2(32), baselineValue: reading3, targetValue: reading3 })).mutation(async ({ ctx, input }) => guarded(async () => saveMeasure(await engagementDb(), ctx.actor, input))),
@@ -15649,7 +16003,7 @@ var onlinePaymentRouter = router({
 // server/routers/pulse.ts
 import { TRPCError as TRPCError31 } from "@trpc/server";
 import { randomInt } from "crypto";
-import { eq as eq30, sql as sql11 } from "drizzle-orm";
+import { eq as eq31, sql as sql11 } from "drizzle-orm";
 import { z as z19 } from "zod";
 
 // shared/pulse/method-v1.0.0.json
@@ -18615,7 +18969,7 @@ async function database7() {
   return db;
 }
 async function findSession(db, sessionId) {
-  const [session] = await db.select().from(pulseSessions).where(eq30(pulseSessions.sessionId, sessionId)).limit(1);
+  const [session] = await db.select().from(pulseSessions).where(eq31(pulseSessions.sessionId, sessionId)).limit(1);
   if (!session) throw new TRPCError31({ code: "NOT_FOUND", message: "We could not find that Pulse. Kindly start again." });
   return session;
 }
@@ -18626,7 +18980,7 @@ async function liveDraft(db, sessionId) {
   if (session.status === "completed") throw new TRPCError31({ code: "FORBIDDEN", message: "This Pulse is already complete." });
   if (session.status !== "draft") throw new TRPCError31({ code: "PRECONDITION_FAILED", message: expiredMessage });
   if (pastExpiry(session)) {
-    await db.update(pulseSessions).set({ status: "expired" }).where(eq30(pulseSessions.id, session.id));
+    await db.update(pulseSessions).set({ status: "expired" }).where(eq31(pulseSessions.id, session.id));
     throw new TRPCError31({ code: "PRECONDITION_FAILED", message: expiredMessage });
   }
   return session;
@@ -18643,7 +18997,7 @@ async function saveAnswers(db, pulseSessionId, answers) {
 async function uniqueShortCode(db) {
   for (let attempt = 0; attempt < 8; attempt += 1) {
     const code = pick(SHORT_CODE_LETTERS, 7);
-    const [taken] = await db.select({ id: pulseSessions.id }).from(pulseSessions).where(eq30(pulseSessions.shortCode, code)).limit(1);
+    const [taken] = await db.select({ id: pulseSessions.id }).from(pulseSessions).where(eq31(pulseSessions.shortCode, code)).limit(1);
     if (!taken) return code;
   }
   return `X${pick(SHORT_CODE_LETTERS, 6)}`;
@@ -18727,7 +19081,7 @@ var pulseRouter = router({
   getActiveVersion: publicProcedure.input(z19.object({ sessionId: sessionIdInput.optional() }).optional()).query(async ({ input }) => {
     if (!input?.sessionId) return renderProjection(PULSE_METHOD);
     const db = await getDb();
-    const [session] = db ? await db.select().from(pulseSessions).where(eq30(pulseSessions.sessionId, input.sessionId)).limit(1) : [];
+    const [session] = db ? await db.select().from(pulseSessions).where(eq31(pulseSessions.sessionId, input.sessionId)).limit(1) : [];
     return renderProjection(PULSE_METHOD, session ? { industry: session.industry, employeeRange: session.employeeRange } : void 0);
   }),
   /** The first screen: who is answering, with the privacy notice acknowledged, before the first question. */
@@ -18773,7 +19127,7 @@ var pulseRouter = router({
   resolveInviteCode: publicProcedure.input(z19.object({ code: z19.string().trim().min(5).max(12) })).query(async ({ input, ctx }) => {
     if (!await consumeLimit(LIMITS.publicLookup, (ctx.req.ip || "unknown").toLowerCase())) throw tooMany3("Too many lookups. Kindly try again later.");
     const db = await database7();
-    const [session] = await db.select({ sessionId: pulseSessions.sessionId }).from(pulseSessions).where(eq30(pulseSessions.shortCode, input.code.toUpperCase())).limit(1);
+    const [session] = await db.select({ sessionId: pulseSessions.sessionId }).from(pulseSessions).where(eq31(pulseSessions.shortCode, input.code.toUpperCase())).limit(1);
     return { sessionId: session?.sessionId ?? null };
   }),
   /** A session with its saved answers, so the respondent can carry on where they stopped. */
@@ -18781,10 +19135,10 @@ var pulseRouter = router({
     const db = await database7();
     const session = await findSession(db, input.sessionId);
     if (session.status === "draft" && pastExpiry(session)) {
-      await db.update(pulseSessions).set({ status: "expired" }).where(eq30(pulseSessions.id, session.id));
+      await db.update(pulseSessions).set({ status: "expired" }).where(eq31(pulseSessions.id, session.id));
       return { sessionId: session.sessionId, assessmentVersion: session.assessmentVersion, status: "expired", expired: true, answers: [] };
     }
-    const responses = await db.select().from(pulseResponses).where(eq30(pulseResponses.pulseSessionId, session.id));
+    const responses = await db.select().from(pulseResponses).where(eq31(pulseResponses.pulseSessionId, session.id));
     return {
       sessionId: session.sessionId,
       assessmentVersion: session.assessmentVersion,
@@ -18826,7 +19180,7 @@ var pulseRouter = router({
       classification: result.classification.label,
       result
     });
-    await db.update(pulseSessions).set({ status: "completed", completedAt: /* @__PURE__ */ new Date() }).where(eq30(pulseSessions.id, session.id));
+    await db.update(pulseSessions).set({ status: "completed", completedAt: /* @__PURE__ */ new Date() }).where(eq31(pulseSessions.id, session.id));
     await recordAudit(db, { action: "pulse_completed", targetEmail: session.email, details: { pulseSessionId: session.id, overallScore: result.overallScore, classification: result.classification.label } });
     const pathway = pathwayOf(PULSE_METHOD, result, session);
     await deliverEmail({
@@ -18855,7 +19209,7 @@ var pulseRouter = router({
     const db = await database7();
     const session = await findSession(db, input.sessionId);
     if (session.status !== "completed") throw new TRPCError31({ code: "PRECONDITION_FAILED", message: "This Pulse is not finished yet." });
-    const [stored] = await db.select().from(pulseResults).where(eq30(pulseResults.pulseSessionId, session.id)).limit(1);
+    const [stored] = await db.select().from(pulseResults).where(eq31(pulseResults.pulseSessionId, session.id)).limit(1);
     if (!stored) throw new TRPCError31({ code: "NOT_FOUND", message: "We could not find this result." });
     const result = stored.result;
     const labels = new Map(PULSE_METHOD.routes.map((r) => [r.route_id, r.label]));
@@ -18888,7 +19242,7 @@ var pulseRouter = router({
     const db = await database7();
     const session = await findSession(db, input.sessionId);
     if (session.status !== "completed") throw new TRPCError31({ code: "PRECONDITION_FAILED", message: "This Pulse is not finished yet." });
-    const [stored] = await db.select().from(pulseResults).where(eq30(pulseResults.pulseSessionId, session.id)).limit(1);
+    const [stored] = await db.select().from(pulseResults).where(eq31(pulseResults.pulseSessionId, session.id)).limit(1);
     await db.insert(pulseConsents).values({ pulseSessionId: session.id, privacyNoticeVersion: PULSE_PRIVACY_NOTICE_VERSION, marketingConsent: input.marketingConsent });
     const delivery = await deliverEmail({
       to: session.email,
@@ -18918,7 +19272,7 @@ var pulseRouter = router({
     const db = await database7();
     const session = await findSession(db, input.sessionId);
     if (session.status !== "completed") throw new TRPCError31({ code: "PRECONDITION_FAILED", message: "This Pulse is not finished yet." });
-    const [stored] = await db.select().from(pulseResults).where(eq30(pulseResults.pulseSessionId, session.id)).limit(1);
+    const [stored] = await db.select().from(pulseResults).where(eq31(pulseResults.pulseSessionId, session.id)).limit(1);
     const pathway = stored ? pathwayOf(PULSE_METHOD, stored.result, session) : null;
     const recommended = pathway?.paidNextStep?.productName ?? pathway?.primary?.label ?? null;
     const [lead] = await db.insert(pulseLeads).values({
@@ -18956,7 +19310,7 @@ var pulseRouter = router({
     if (old.status === "completed" || !(old.status === "expired" || pastExpiry(old))) {
       throw new TRPCError31({ code: "PRECONDITION_FAILED", message: "Only an expired draft can be started again." });
     }
-    if (old.status !== "expired") await db.update(pulseSessions).set({ status: "expired" }).where(eq30(pulseSessions.id, old.id));
+    if (old.status !== "expired") await db.update(pulseSessions).set({ status: "expired" }).where(eq31(pulseSessions.id, old.id));
     const newSessionId = newPulseSessionId();
     const draftExpiry = draftExpiryFromNow();
     const [session] = await db.insert(pulseSessions).values({
@@ -19008,7 +19362,7 @@ var appRouter = router({
 });
 
 // server/_core/context.ts
-import { eq as eq31 } from "drizzle-orm";
+import { eq as eq32 } from "drizzle-orm";
 async function createContext(opts) {
   let user = null;
   let authChannel;
@@ -19023,7 +19377,7 @@ async function createContext(opts) {
       const session = await resolveAccountSession(opts.req);
       if (session && session.authority.roles.length > 0) {
         const db = await getDb();
-        const row = db ? (await db.select().from(users).where(eq31(users.id, session.user.id)).limit(1))[0] : void 0;
+        const row = db ? (await db.select().from(users).where(eq32(users.id, session.user.id)).limit(1))[0] : void 0;
         if (row && row.status === "active") {
           user = row;
           authChannel = "account";
@@ -19060,8 +19414,8 @@ function healthReport(settings = ENV) {
 }
 
 // server/resendWebhook.ts
-import { createHmac as createHmac5, timingSafeEqual as timingSafeEqual6 } from "node:crypto";
-import { and as and21, eq as eq32, sql as sql12 } from "drizzle-orm";
+import { createHmac as createHmac6, timingSafeEqual as timingSafeEqual7 } from "node:crypto";
+import { and as and22, eq as eq33, sql as sql12 } from "drizzle-orm";
 var SUPPORTED = /* @__PURE__ */ new Set(["email.sent", "email.delivered", "email.delivery_delayed", "email.bounced", "email.complained", "email.failed", "email.suppressed"]);
 var MAX_SKEW_SECONDS = 5 * 60;
 function verifyResendWebhookSignature(input) {
@@ -19076,12 +19430,12 @@ function verifyResendWebhookSignature(input) {
     return false;
   }
   if (key.length === 0) return false;
-  const expected = createHmac5("sha256", key).update(`${input.id}.${input.timestamp}.${input.rawBody.toString("utf8")}`).digest();
+  const expected = createHmac6("sha256", key).update(`${input.id}.${input.timestamp}.${input.rawBody.toString("utf8")}`).digest();
   return input.signature.split(" ").some((candidate) => {
     const match = /^v1,([A-Za-z0-9+/=]+)$/.exec(candidate);
     if (!match) return false;
     const supplied = Buffer.from(match[1], "base64");
-    return supplied.length === expected.length && timingSafeEqual6(supplied, expected);
+    return supplied.length === expected.length && timingSafeEqual7(supplied, expected);
   });
 }
 function recipientOf2(value) {
@@ -19117,7 +19471,7 @@ async function handleResendWebhook(req, res) {
     await db.transaction(async (tx) => {
       const [inserted] = await tx.insert(resendEmailEvents).values({ eventId, providerMessageId, eventType: state, recipientEmail, happenedAt }).onConflictDoNothing({ target: resendEmailEvents.eventId }).returning({ id: resendEmailEvents.id });
       if (!inserted) return;
-      await tx.update(businessSupportEmailDeliveries).set({ latestState: state, lastEventAt: happenedAt }).where(and21(eq32(businessSupportEmailDeliveries.providerMessageId, providerMessageId), sql12`(${businessSupportEmailDeliveries.lastEventAt} is null or ${businessSupportEmailDeliveries.lastEventAt} < ${happenedAt})`));
+      await tx.update(businessSupportEmailDeliveries).set({ latestState: state, lastEventAt: happenedAt }).where(and22(eq33(businessSupportEmailDeliveries.providerMessageId, providerMessageId), sql12`(${businessSupportEmailDeliveries.lastEventAt} is null or ${businessSupportEmailDeliveries.lastEventAt} < ${happenedAt})`));
     });
     return res.status(200).json({ received: true });
   } catch (error) {
@@ -19127,8 +19481,8 @@ async function handleResendWebhook(req, res) {
 }
 
 // server/reminders.ts
-import { createHash as createHash2, timingSafeEqual as timingSafeEqual7 } from "node:crypto";
-import { and as and22, desc as desc12, eq as eq33, inArray as inArray15, ne as ne5 } from "drizzle-orm";
+import { createHash as createHash2, timingSafeEqual as timingSafeEqual8 } from "node:crypto";
+import { and as and23, desc as desc12, eq as eq34, inArray as inArray16, ne as ne5 } from "drizzle-orm";
 var QUIET_FROM_HOUR = 21;
 var QUIET_UNTIL_HOUR = 7;
 var HOUR3 = 36e5;
@@ -19242,7 +19596,7 @@ async function claim(db, key, kind, engagementId) {
   return rows.length > 0;
 }
 async function leadsOf(db, engagementId) {
-  const leads = await db.select({ email: users.email }).from(engagementTeam).innerJoin(users, eq33(engagementTeam.userId, users.id)).where(and22(eq33(engagementTeam.engagementId, engagementId), inArray15(engagementTeam.role, ["manager", "lead"]), eq33(users.status, "active")));
+  const leads = await db.select({ email: users.email }).from(engagementTeam).innerJoin(users, eq34(engagementTeam.userId, users.id)).where(and23(eq34(engagementTeam.engagementId, engagementId), inArray16(engagementTeam.role, ["manager", "lead"]), eq34(users.status, "active")));
   const emails = Array.from(new Set(leads.flatMap((lead) => lead.email ? [lead.email] : [])));
   return emails.length ? emails : [BUSINESS_SUPPORT_MAILBOX];
 }
@@ -19316,7 +19670,7 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
         }
         if (stage === "late_7") for (const to of await leadsOf(db, engagement.id)) counts.leads += await send(to, feePausedLeadEmail({ businessName: found.businessName, title: found.title, label: fee.label, left: fee.left, dueOn: fee.dueOn }), null);
       }
-      const tasks = await db.select().from(engagementTasks).where(and22(eq33(engagementTasks.engagementId, engagement.id), eq33(engagementTasks.side, "client")));
+      const tasks = await db.select().from(engagementTasks).where(and23(eq34(engagementTasks.engagementId, engagement.id), eq34(engagementTasks.side, "client")));
       const businessName = await businessNameOf(db, engagement);
       const title = engagementTitle(engagement.type, engagement.service);
       if (!engagement.opensOnPayment && engagement.businessId !== null) {
@@ -19368,7 +19722,7 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
         const to = Array.from(/* @__PURE__ */ new Set([...reviewer ? [reviewer.email] : [], ...stage === "review_late" || !reviewer ? await leadsOf(db, engagement.id) : []]));
         for (const address of to) counts.reviews += await send(address, reviewReminderEmail({ late: stage === "review_late", title: task.title, businessName, receivedAt: task.receivedAt }), null);
       }
-      const ours = await db.select().from(engagementTasks).where(and22(eq33(engagementTasks.engagementId, engagement.id), eq33(engagementTasks.side, "ipf"), inArray15(engagementTasks.status, [...OPEN_TASK_STATUSES])));
+      const ours = await db.select().from(engagementTasks).where(and23(eq34(engagementTasks.engagementId, engagement.id), eq34(engagementTasks.side, "ipf"), inArray16(engagementTasks.status, [...OPEN_TASK_STATUSES])));
       const crew = ours.length ? await teamOf(db, engagement.id, now.getTime()) : [];
       const extra = ours.length ? await otherOwnersOf(db, { engagementId: engagement.id }) : /* @__PURE__ */ new Map();
       for (const task of ours.filter((item2) => item2.dueOn && item2.dueOn < today)) {
@@ -19380,7 +19734,7 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
         if (stage === "team_late") for (const person of owners) counts.team += await send(person.email, teamItemLateEmail({ toLead: false, name: person.name, ownerName: person.name, title: task.title, businessName, dueOn: task.dueOn }), null);
         if (stage === "team_lead") for (const to of await leadsOf(db, engagement.id)) counts.team += await send(to, teamItemLateEmail({ toLead: true, name: "", ownerName: owner?.name ?? "", title: task.title, businessName, dueOn: task.dueOn }), null);
       }
-      const booked = await db.select().from(engagementSessions).where(and22(eq33(engagementSessions.engagementId, engagement.id), eq33(engagementSessions.status, "planned")));
+      const booked = await db.select().from(engagementSessions).where(and23(eq34(engagementSessions.engagementId, engagement.id), eq34(engagementSessions.status, "planned")));
       for (const session of booked) {
         if (!session.scheduledFor || session.scheduledFor.getTime() <= now.getTime()) continue;
         const day = lagosDay(session.scheduledFor);
@@ -19406,13 +19760,13 @@ async function runReminders(db, now = /* @__PURE__ */ new Date()) {
 function isCronRequest(authorization, secret3 = ENV.cronSecret) {
   if (!secret3) return false;
   const digest = (value) => createHash2("sha256").update(value).digest();
-  return timingSafeEqual7(digest(authorization ?? ""), digest(`Bearer ${secret3}`));
+  return timingSafeEqual8(digest(authorization ?? ""), digest(`Bearer ${secret3}`));
 }
 async function remindersStatus(db) {
   const configured = Boolean(ENV.cronSecret);
   if (!db) return { configured, lastRunAt: null };
   try {
-    const last = (await db.select({ createdAt: adminAccessAuditEvents.createdAt }).from(adminAccessAuditEvents).where(eq33(adminAccessAuditEvents.action, "reminders_run")).orderBy(desc12(adminAccessAuditEvents.id)).limit(1))[0];
+    const last = (await db.select({ createdAt: adminAccessAuditEvents.createdAt }).from(adminAccessAuditEvents).where(eq34(adminAccessAuditEvents.action, "reminders_run")).orderBy(desc12(adminAccessAuditEvents.id)).limit(1))[0];
     return { configured, lastRunAt: last?.createdAt ?? null };
   } catch {
     return { configured, lastRunAt: null };
@@ -19444,6 +19798,20 @@ function createApp() {
       res.status(500).json({ ok: false });
     }
   });
+  app.get("/api/scheduled/social", async (req, res) => {
+    if (!ENV.cronSecret) return void res.status(503).json({ ok: false, reason: "CRON_SECRET is not set." });
+    if (!isCronRequest(req.get("authorization"))) return void res.status(401).json({ ok: false });
+    const db = await getDb().catch(() => null);
+    if (!db) return void res.status(503).json({ ok: false, reason: "The database is not available." });
+    try {
+      const run = await runSocialSync(db);
+      res.json({ ok: true, accounts: run.accounts, failed: run.results.filter((result) => !result.ok).length });
+    } catch (error) {
+      console.error("[Social] The run failed:", error instanceof Error ? error.message : error);
+      res.status(500).json({ ok: false });
+    }
+  });
+  app.get(INSTAGRAM_CALLBACK_PATH, (req, res) => handleInstagramCallback(req, res));
   app.post(PAYSTACK_WEBHOOK_PATH, express.raw({ type: () => true, limit: "256kb" }), handlePaystackWebhook);
   app.post("/api/resend/webhook", express.raw({ type: () => true, limit: "256kb" }), handleResendWebhook);
   app.use(express.json({ limit: "1mb" }));

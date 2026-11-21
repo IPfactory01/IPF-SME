@@ -67,6 +67,7 @@ import { DetailField, DetailSection } from "./AdminPrimitives";
 import DeliveryShareNote from "./DeliveryShareNote";
 import { combineDateAndTime, formatDate, formatDateTime, toDateInput, toTimeInput, whatsappLink } from "./format";
 import { FeeHoldNote } from "./FeeHoldBadge";
+import InstagramPanel, { PostFigures, type InstagramPost } from "./InstagramPanel";
 import { ArrowLeft, Check, Download, Flag } from "lucide-react";
 import { openInNewTab } from "@/lib/openFile";
 import RoomTabs, { type RoomTab } from "@/components/room/RoomTabs";
@@ -1136,10 +1137,16 @@ function ContentTargets({ data, engagementId }: { data: Detail; engagementId: nu
 
 function ContentAdmin({ data, engagementId }: { data: Detail; engagementId: number }) {
   const [adding, setAdding] = useState(false);
+  // Instagram (R108): only for an engagement with a content plan (a dated type such as Digital Marketing).
+  const hasPlan = data.contentTargets.length > 0;
+  const instagram = trpc.engagement.staff.instagramStatus.useQuery({ engagementId }, { enabled: hasPlan });
+  const refresh = useRefresh(engagementId);
+  const postByItem = new Map((instagram.data?.posts ?? []).filter(post => post.contentItemId !== null).map(post => [post.contentItemId!, post]));
   const months = Array.from(new Set([1, 2, 3, ...data.content.map(item => item.month)])).sort((a, b) => a - b);
   return (
     <DetailSection title={`Content (${data.content.length})`}>
       {data.can.manage && data.contentTargets.length > 0 && <ContentTargets data={data} engagementId={engagementId} />}
+      {hasPlan && <InstagramPanel engagementId={engagementId} status={instagram.data} canManage={data.can.manage} onChanged={() => { void instagram.refetch(); refresh.onSuccess(); }} />}
       <p className="text-xs text-ink-muted">Reels, posts and stories by month. Move a piece to For approval when the client should see it; it counts once they approve it. Nothing is published without their yes.</p>
       {months.map(month => {
         const items = data.content.filter(item => item.month === month);
@@ -1147,7 +1154,7 @@ function ContentAdmin({ data, engagementId }: { data: Detail; engagementId: numb
         return (
           <div key={month} className="space-y-2">
             <p className={`${LABEL} mt-3`}>Month {month}</p>
-            {items.map(item => <ContentRow key={item.id} item={item} engagementId={engagementId} canManage={data.can.manage} />)}
+            {items.map(item => <ContentRow key={`${item.id}-${item.status}-${item.link ?? ""}`} item={item} engagementId={engagementId} canManage={data.can.manage} post={postByItem.get(item.id)} />)}
           </div>
         );
       })}
@@ -1156,7 +1163,7 @@ function ContentAdmin({ data, engagementId }: { data: Detail; engagementId: numb
   );
 }
 
-function ContentRow({ item, engagementId, canManage, onDone }: { item?: ContentItem; engagementId: number; canManage: boolean; onDone?: () => void }) {
+function ContentRow({ item, engagementId, canManage, onDone, post }: { item?: ContentItem; engagementId: number; canManage: boolean; onDone?: () => void; post?: InstagramPost }) {
   const refresh = useRefresh(engagementId);
   const [kind, setKind] = useState<ContentKind>(item?.kind ?? "reel");
   const [title, setTitle] = useState(item?.title ?? "");
@@ -1170,6 +1177,7 @@ function ContentRow({ item, engagementId, canManage, onDone }: { item?: ContentI
   return (
     <div className="space-y-2 border border-line bg-paper-raised p-3" aria-label={item?.title ?? "New piece of content"}>
       {item?.status === "changes_requested" && item.clientNote && <p className="text-xs text-danger">The client asked for changes: {item.clientNote}</p>}
+      {post && <PostFigures post={post} />}
       <div className="grid gap-2 sm:grid-cols-[7rem_minmax(0,1fr)_6rem]">
         <div><label className={LABEL} htmlFor={`content-kind-${id}`}>Kind</label><select id={`content-kind-${id}`} className={FIELD} disabled={!canManage} value={kind} onChange={event => setKind(event.target.value as ContentKind)}>{CONTENT_KINDS.map(value => <option key={value} value={value}>{CONTENT_KIND_LABELS[value]}</option>)}</select></div>
         <div><label className={LABEL} htmlFor={`content-title-${id}`}>Title</label><input id={`content-title-${id}`} className={FIELD} disabled={!canManage} value={title} onChange={event => setTitle(event.target.value)} /></div>

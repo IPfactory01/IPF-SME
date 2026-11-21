@@ -14,6 +14,7 @@ import { getDb } from "../db";
 import { handlePaystackWebhook } from "../onlinePayment";
 import { PAYSTACK_WEBHOOK_PATH } from "../paystack";
 import { handleResendWebhook } from "../resendWebhook";
+import { handleInstagramCallback, INSTAGRAM_CALLBACK_PATH, runSocialSync } from "../instagram";
 import { isCronRequest, remindersStatus, runReminders } from "../reminders";
 
 /**
@@ -48,6 +49,22 @@ export function createApp() {
       res.status(500).json({ ok: false });
     }
   });
+  // Instagram on the Content board (R108): twice a day (06:47 and 18:47 Lagos), so no Story is missed before it expires.
+  app.get("/api/scheduled/social", async (req, res) => {
+    if (!ENV.cronSecret) return void res.status(503).json({ ok: false, reason: "CRON_SECRET is not set." });
+    if (!isCronRequest(req.get("authorization"))) return void res.status(401).json({ ok: false });
+    const db = await getDb().catch(() => null);
+    if (!db) return void res.status(503).json({ ok: false, reason: "The database is not available." });
+    try {
+      const run = await runSocialSync(db as never);
+      res.json({ ok: true, accounts: run.accounts, failed: run.results.filter(result => !result.ok).length });
+    } catch (error) {
+      console.error("[Social] The run failed:", error instanceof Error ? error.message : error);
+      res.status(500).json({ ok: false });
+    }
+  });
+  // Instagram sends the account owner back here after they give (or refuse) permission.
+  app.get(INSTAGRAM_CALLBACK_PATH, (req, res) => handleInstagramCallback(req, res));
   // Paystack's signed webhook: before the JSON parser, so the signature is checked on the exact bytes Paystack sent,
   // and before the browser-origin guard, which exempts it (a server-to-server call has no Origin; the signature is the check).
   app.post(PAYSTACK_WEBHOOK_PATH, express.raw({ type: () => true, limit: "256kb" }), handlePaystackWebhook);

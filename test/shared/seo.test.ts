@@ -116,7 +116,7 @@ describe("how the build and the host serve those pages", () => {
 
   it("visits /api/health once a day, so the database is used and a free Supabase project is not paused for inactivity, and runs the reminders each morning at 07:31 Lagos (R12, R16)", () => {
     const vercel = JSON.parse(readFileSync(resolve(process.cwd(), "vercel.json"), "utf8")) as { crons?: { path: string; schedule: string }[] };
-    expect(vercel.crons).toEqual([{ path: "/api/health", schedule: "17 6 * * *" }, { path: "/api/scheduled/reminders", schedule: "31 6 * * *" }]);
+    expect(vercel.crons).toEqual([{ path: "/api/health", schedule: "17 6 * * *" }, { path: "/api/scheduled/reminders", schedule: "31 6 * * *" }, { path: "/api/scheduled/social?run=morning", schedule: "47 5 * * *" }, { path: "/api/scheduled/social?run=evening", schedule: "47 17 * * *" }]);
   });
 
   it("adds breadcrumbs Google can show: Home › Services › the service, and Home › the page", () => {

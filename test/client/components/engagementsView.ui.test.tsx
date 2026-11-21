@@ -9,6 +9,7 @@ import { MotionGlobalConfig } from "framer-motion";
 const api = vi.hoisted(() => ({
   list: { setUp: true, items: [] as unknown[] } as { setUp: boolean; items: unknown[] },
   detail: null as unknown,
+  instagram: undefined as unknown,
   awaiting: [] as unknown[],
   today: [] as unknown[],
   // The record's sections are the same in the drawer and the workspace (R82): most tests use the desk's drawer.
@@ -43,11 +44,12 @@ vi.mock("@/lib/trpc", () => ({
         awaitingStart: { useQuery: () => ({ data: api.failed.awaiting ? undefined : api.awaiting, error: api.failed.awaiting ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("awaiting"); } }) },
         storageStatus: { useQuery: () => ({ data: api.storageError ? undefined : api.storage, error: api.storageError, refetch: () => undefined }) },
         detail: { useQuery: () => ({ data: api.detail, isLoading: false, error: null }) },
+        instagramStatus: { useQuery: () => ({ data: api.instagram, refetch: () => undefined }) },
         assignableStaff: { useQuery: () => ({ data: [{ userId: 9, name: "Ola Analyst", email: "ola@example.test", roles: ["analyst"] }] }) },
         serviceRequests: { useQuery: () => ({ data: api.requests }) },
         clientBusinesses: { useQuery: () => ({ data: [{ id: 31, name: "Ada Foods" }, { id: 32, name: "Crown Studio" }] }) },
         fees: { useQuery: () => ({ data: api.failed.fees ? undefined : api.fees, error: api.failed.fees ? new Error("Failed to fetch") : null, refetch: () => { api.refetched.push("fees"); } }) },
-        ...Object.fromEntries(["handIn", "setOwners", "reviewTask", "reopenTask", "setContentTargets", "setReviewer", "setWork", "markHeld", "assignByRole", "start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "bookMeeting", "loadDataRequest", "saveContent", "deleteContent", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
+        ...Object.fromEntries(["handIn", "setOwners", "reviewTask", "reopenTask", "setContentTargets", "setReviewer", "setWork", "markHeld", "assignByRole", "start", "fileLink", "matchFile", "removeFile", "createDirect", "handleRequest", "saveFees", "sendFeeLink", "openRoomNow", "setFeeTiming", "addMissingPlan", "askClient", "taskComment", "followUpShared", "bookMeeting", "loadDataRequest", "saveContent", "deleteContent", "instagramConnectUrl", "instagramSyncNow", "instagramDisconnect", "requestUpload", "confirmUpload", "shareFile", "saveMeasure", "saveCheckin", "setStage", "assign", "removeMember", "saveProblem", "saveSession", "saveNotes", "shareNotes", "saveTask", "saveDeliverable", "approveDeliverable", "shareDeliverable", "comment"].map(name => [name, { useMutation: mutation(name) }])),
       },
     },
   },
@@ -1181,6 +1183,39 @@ describe("the content board on the team's side", () => {
     fireEvent.change(card.getByLabelText("Status"), { target: { value: "for_approval" } });
     fireEvent.click(card.getByRole("button", { name: "Save" }));
     expect(api.calls.saveContent).toEqual([{ engagementId: 4, itemId: undefined, kind: "reel", title: "Reel 7: silk press", month: 1, status: "for_approval", dueOn: null, link: null }]);
+  });
+
+  it("connects the client's Instagram, and shows each published item's figures once it is connected (R108)", () => {
+    const base = detail({ manage: true, assign: false, review: false }, []);
+    const item = { id: 7, engagementId: 4, kind: "reel", kindLabel: "Reel", title: "Reel 6", month: 1, status: "published", statusLabel: "Published", dueOn: "2026-11-20", link: "https://www.instagram.com/reel/AAA/", clientNote: null, approvedByUserId: null, approvedAt: null, publishedAt: new Date("2026-11-20T15:04:00Z"), sortOrder: 0, createdByUserId: 1, createdAt: new Date(), updatedAt: new Date() };
+    api.detail = { ...base, engagement: { ...base.engagement, type: "digital_marketing" }, contentTargets: [{ label: "Reels", count: 15 }], content: [item] };
+    api.instagram = { configured: true, connection: null, posts: [] };
+    api.calls = {};
+    const first = render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    let panel = within(within(screen.getByRole("dialog")).getByRole("region", { name: "Instagram" }));
+    fireEvent.click(panel.getByRole("button", { name: "Connect Instagram" }));
+    expect(api.calls.instagramConnectUrl).toEqual([{ engagementId: 4 }]);
+    first.unmount();
+
+    api.instagram = {
+      configured: true,
+      connection: { username: "fictional.studio", status: "connected", lastSyncAt: new Date("2026-11-21T17:47:00Z"), lastError: null, tokenExpiresAt: new Date("2027-01-15T00:00:00Z") },
+      posts: [{ id: 1, kind: "reel", permalink: item.link, caption: "Launch", postedAt: item.publishedAt, views: 5400, reach: 3800, likes: 120, comments: 9, shares: 31, saves: 4, metricsAt: new Date("2026-11-21T17:47:00Z"), contentItemId: 7 }],
+    };
+    render(<EngagementsView />);
+    fireEvent.click(screen.getByText("Ada Foods").closest("tr")!);
+    const dialog = within(screen.getByRole("dialog"));
+    panel = within(dialog.getByRole("region", { name: "Instagram" }));
+    expect(panel.getByText(/@fictional\.studio/)).toBeTruthy();
+    expect(panel.queryByRole("button", { name: "Connect Instagram" })).toBeNull();
+    fireEvent.click(panel.getByRole("button", { name: "Check now" }));
+    expect(api.calls.instagramSyncNow).toEqual([{ engagementId: 4 }]);
+    const figures = dialog.getByLabelText("Instagram figures").textContent!;
+    expect(figures).toContain("5,400 views");
+    expect(figures).toContain("120 likes");
+    expect(figures).toContain("31 shares");
+    api.instagram = undefined;
   });
 
   it("is not shown for a Business Review", () => {

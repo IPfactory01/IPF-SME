@@ -200,6 +200,20 @@ describe("the People panel", () => {
     expect(screen.queryByRole("form", { name: "Remove access" })).toBeNull();
   });
 
+  it("opens the confirmation right under the person's row, with the cursor in the reason box, so it is never out of sight (ET, 26 November 2026)", () => {
+    api.people = [lewis, kemi];
+    render(<Both />);
+    fireEvent.click(rowOf("Kemi Contractor").getByRole("button", { name: "Remove access" }));
+    const form = screen.getByRole("form", { name: "Remove access" });
+    const personRow = screen.getByText("Kemi Contractor").closest("tr")!;
+    expect(personRow.nextElementSibling?.contains(form)).toBe(true);
+    expect(document.activeElement).toBe(within(form).getByLabelText("Reason (kept in the audit log)"));
+    fireEvent.click(within(form).getByRole("button", { name: "Keep access" }));
+    fireEvent.click(rowOf("Kemi Contractor").getByRole("button", { name: "Suspend" }));
+    const suspend = screen.getByRole("form", { name: "Suspend account" });
+    expect(personRow.nextElementSibling?.contains(suspend)).toBe(true);
+  });
+
   it("offers a level only for staff, never for a client, and shows what the level gives", () => {
     api.people = [ada, { ...lewis, jobTitle: "Senior Associate" }];
     render(<Both />);

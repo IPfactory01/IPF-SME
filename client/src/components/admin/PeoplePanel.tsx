@@ -77,6 +77,36 @@ export default function PeoplePanel({ scope, previewer = false }: { scope: "team
     if (people.error) return <div className="border-b border-line p-6"><Failed error={people.error} onRetry={() => void people.refetch()} retrying={people.isFetching} /></div>;
     return people.isLoading ? <div className="border-b border-line p-6"><Loading label={scope === "team" ? "Loading the team" : "Loading the client accounts"} /></div> : null;
   }
+  // The confirmation opens under the person's own row, with the cursor in the reason box: at the top of the panel it was
+  // out of sight for anyone scrolled down to the person, so the button seemed to do nothing (ET, 26 November 2026).
+  const removeForm = removing && (
+        <form aria-label="Remove access" onSubmit={remove} className="space-y-2 border border-danger-line bg-danger-tint p-4 text-sm">
+          <p className="font-semibold">Remove all access for {removing.name}?</p>
+          <p className="text-ink-muted">This signs them out everywhere, takes away every role and engagement, and suspends the account. The Super Admins are told. You can reinstate the account later and give roles again.</p>
+          <div className="space-y-1">
+            <label htmlFor="remove-reason" className="text-sm text-ink-muted">Reason (kept in the audit log)</label>
+            <input id="remove-reason" autoFocus value={removeReason} onChange={event => setRemoveReason(event.target.value)} maxLength={500} className="w-full border border-line bg-white px-2 py-1" />
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" disabled={removeAccess.isPending || removeReason.trim().length < 3} className="rounded-none bg-danger text-xs text-white">Remove access now</Button>
+            <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => { setRemoving(null); setRemoveReason(""); }}>Keep access</Button>
+          </div>
+        </form>
+  );
+  const suspendForm = suspending && (
+        <form aria-label="Suspend account" onSubmit={suspend} className="space-y-2 border border-health-watch/40 bg-health-watch-tint p-4 text-sm">
+          <p className="font-semibold">Suspend {suspending.name}?</p>
+          <p className="text-ink-muted">They are signed out everywhere at once and cannot sign in until reinstated. Give the reason; it is recorded.</p>
+          <div className="space-y-1">
+            <label htmlFor="suspend-reason" className="text-sm text-ink-muted">Reason</label>
+            <input id="suspend-reason" autoFocus value={reason} onChange={event => setReason(event.target.value)} maxLength={500} className="w-full border border-line bg-white px-2 py-1" />
+          </div>
+          <div className="flex gap-2">
+            <Button type="submit" size="sm" disabled={setStatus.isPending || reason.trim().length < 3} className="rounded-none bg-brand text-xs text-white">Suspend</Button>
+            <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => { setSuspending(null); setReason(""); }}>Cancel</Button>
+          </div>
+        </form>
+  );
   return (
     <div className="space-y-5 border-b border-line p-6">
       <StaleLine read={people} />
@@ -91,34 +121,6 @@ export default function PeoplePanel({ scope, previewer = false }: { scope: "team
           <div className="flex items-center gap-2"><input readOnly aria-label="Reset link" className="w-full border border-line bg-white px-2 py-1 text-xs" value={issued.url} /><CopyButton value={issued.url} label="Copy the reset link" /><Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => setIssued(null)}>Hide</Button></div>
         </div>
       )}
-      {removing && (
-        <form aria-label="Remove access" onSubmit={remove} className="space-y-2 border border-danger-line bg-danger-tint p-4 text-sm">
-          <p className="font-semibold">Remove all access for {removing.name}?</p>
-          <p className="text-ink-muted">This signs them out everywhere, takes away every role and engagement, and suspends the account. The Super Admins are told. You can reinstate the account later and give roles again.</p>
-          <div className="space-y-1">
-            <label htmlFor="remove-reason" className="text-sm text-ink-muted">Reason (kept in the audit log)</label>
-            <input id="remove-reason" value={removeReason} onChange={event => setRemoveReason(event.target.value)} maxLength={500} className="w-full border border-line bg-white px-2 py-1" />
-          </div>
-          <div className="flex gap-2">
-            <Button type="submit" size="sm" disabled={removeAccess.isPending || removeReason.trim().length < 3} className="rounded-none bg-danger text-xs text-white">Remove access now</Button>
-            <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => { setRemoving(null); setRemoveReason(""); }}>Keep access</Button>
-          </div>
-        </form>
-      )}
-      {suspending && (
-        <form aria-label="Suspend account" onSubmit={suspend} className="space-y-2 border border-health-watch/40 bg-health-watch-tint p-4 text-sm">
-          <p className="font-semibold">Suspend {suspending.name}?</p>
-          <p className="text-ink-muted">They are signed out everywhere at once and cannot sign in until reinstated. Give the reason; it is recorded.</p>
-          <div className="space-y-1">
-            <label htmlFor="suspend-reason" className="text-sm text-ink-muted">Reason</label>
-            <input id="suspend-reason" value={reason} onChange={event => setReason(event.target.value)} maxLength={500} className="w-full border border-line bg-white px-2 py-1" />
-          </div>
-          <div className="flex gap-2">
-            <Button type="submit" size="sm" disabled={setStatus.isPending || reason.trim().length < 3} className="rounded-none bg-brand text-xs text-white">Suspend</Button>
-            <Button type="button" size="sm" variant="outline" className="rounded-none text-xs" onClick={() => { setSuspending(null); setReason(""); }}>Cancel</Button>
-          </div>
-        </form>
-      )}
       {[
         { staff: true, title: "IP Factory team", note: "Everyone with a level. The level sets their access; their function on a project is set in Engagements. Someone whose access was removed stays here without a level until given one.", rows: people.data.filter(person => person.roles.length > 0 || !person.businesses) },
         { staff: false, title: "Clients", note: "Business owners and their people. Clients never hold a role.", rows: people.data.filter(person => person.roles.length === 0 && person.businesses) },
@@ -130,7 +132,8 @@ export default function PeoplePanel({ scope, previewer = false }: { scope: "team
             <thead><tr className="border-b border-line"><th className={TH}>Person</th><th className={TH}>{staff ? "Level" : "Account"}</th><th className={TH}>Status</th><th className={TH}>Two-step</th><th className={TH}>Access ends</th><th className={TH}>Last signed in</th><th className={TH} /></tr></thead>
             <tbody>
               {rows.map(person => (
-                <tr key={person.id} className="border-b border-line-soft">
+                <React.Fragment key={person.id}>
+                <tr className="border-b border-line-soft">
                   <td className={TD}><span className="block font-medium">{person.name || "-"}</span><span className="block text-xs text-ink-muted">{person.email}</span>{staff && <WhatsappCell userId={person.id} name={person.name || person.email || "this person"} whatsapp={person.whatsapp ?? null} agreed={Boolean(person.whatsappAgreedAt)} onChanged={refresh} />}</td>
                   <td className={TD}>
                     {person.roles.length || !person.businesses ? <LevelEditor userId={person.id} name={person.name || person.email || "this person"} level={person.jobTitle ?? null} roles={person.roles} onChanged={refresh} /> : person.businesses ? "Client" : "-"}
@@ -150,6 +153,9 @@ export default function PeoplePanel({ scope, previewer = false }: { scope: "team
                     </div>
                   </td>
                 </tr>
+                {removing?.id === person.id && <tr><td colSpan={7} className="px-3 pb-3">{removeForm}</td></tr>}
+                {suspending?.id === person.id && <tr><td colSpan={7} className="px-3 pb-3">{suspendForm}</td></tr>}
+                </React.Fragment>
               ))}
               {people.data.length === 0 && <tr><td colSpan={7} className={TD}>Nobody has a password account yet.</td></tr>}
             </tbody>
